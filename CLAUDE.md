@@ -33,6 +33,8 @@ Never implement two goals at once. Never skip user testing before moving on.
 4. When ready: merge to main with a release commit (see Commits section below).
 
 ### Releasing
+Before merging, run `/code-review` on the development branch and fix any blockers found.
+
 ```bash
 git checkout main
 git merge --no-ff development -m "$(cat <<'EOF'
