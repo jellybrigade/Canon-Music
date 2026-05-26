@@ -461,6 +461,7 @@ button.primary:hover:not(:disabled) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   align-content: start;
+  align-items: start;
   gap: 1rem;
   padding: 1.25rem;
   overflow-y: auto;
