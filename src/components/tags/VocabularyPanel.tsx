@@ -133,7 +133,10 @@ function DetailPanel({ row, onClose }: DetailPanelProps) {
         <div className="vocab-detail-section">
           <button
             className="vocab-detail-danger"
-            onClick={() => void deleteMapping.mutateAsync({ rawValue: row.raw_value, kind: row.kind })}
+            onClick={() => {
+              if (!window.confirm(`Remove mapping for "${row.raw_value}"?`)) return;
+              void deleteMapping.mutateAsync({ rawValue: row.raw_value, kind: row.kind });
+            }}
             disabled={deleteMapping.isPending}
           >
             Remove mapping
