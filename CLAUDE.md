@@ -24,13 +24,10 @@ Never implement two goals at once. Never skip user testing before moving on.
 
 ### Branches
 - `main` — releases only. Never commit directly except the `Canon vX.Y.Z` release commit.
-- `dev/<feature>` — one branch per feature or workstream. Example: `dev/search-ui`, `dev/fix-settings-css`.
-- `fix/<what>` — hotfix off main.
+- `development` — all work happens here. Always be on this branch.
 
-Always create a branch before starting work: `git checkout -b dev/<name>`.
-
-### Dev branch: normal flow
-1. Work on `dev/<name>`.
+### Normal flow
+1. Work on `development`.
 2. The Stop hook auto-commits whenever uncommitted changes exist (90s cooldown).
 3. When ≥4 commits ahead of main, the hook outputs a release suggestion with version + changelog.
 4. When ready: merge to main with a release commit (see Commits section below).
@@ -38,7 +35,7 @@ Always create a branch before starting work: `git checkout -b dev/<name>`.
 ### Releasing
 ```bash
 git checkout main
-git merge --no-ff dev/<name> -m "$(cat <<'EOF'
+git merge --no-ff development -m "$(cat <<'EOF'
 Canon vX.Y.Z
 
 ### Added
@@ -51,9 +48,9 @@ Canon vX.Y.Z
 - ...
 EOF
 )"
-# PostToolUse hook auto-creates the annotated tag v X.Y.Z
+# PostToolUse hook auto-creates the annotated tag vX.Y.Z
 git push && git push --tags
-git branch -d dev/<name>
+git checkout development
 ```
 
 Semver rule: bugfixes only → patch, new features → minor, breaking changes → major.
