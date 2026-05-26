@@ -95,6 +95,12 @@ button {
   cursor: pointer;
 }
 
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
 button:hover:not(:disabled) {
   border-color: var(--accent);
 }
