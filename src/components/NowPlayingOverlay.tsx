@@ -296,7 +296,7 @@ export function NowPlayingOverlay({ serverWithCredential, onSelectAlbum, onSelec
                         onClick={() => void playFromQueueIndex(position)}
                       >
                         <span className="now-playing-up-next-indicator">
-                          {position === queueIndex ? "▶" : ""}
+                          {position === queueIndex ? <Play size={10} /> : null}
                         </span>
                         {track.artworkRef ? (
                           <img
