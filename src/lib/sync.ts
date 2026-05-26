@@ -84,10 +84,6 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
     }
   }
 
-  if (skippedAlbums > 0) {
-    console.log(`sync: skipped ${skippedAlbums} unchanged album(s)`);
-  }
-
   // Rebuild artists table from albums
   await db.execute("DELETE FROM artists WHERE server_id = ?", [server.id]);
   await db.execute(
