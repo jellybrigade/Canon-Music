@@ -1,0 +1,52 @@
+.settings-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem;
+  max-width: 560px;
+}
+
+.settings-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0 0 1.75rem;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+}
+
+.settings-section-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 0 0 0.875rem;
+}
+
+.settings-section-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0 0 0.875rem;
+  line-height: 1.5;
+}
+
+.settings-coming-soon {
+  font-style: italic;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.875rem;
+}
+
+.settings-field input {
+  width: 100%;
+  box-sizing: border-box;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
