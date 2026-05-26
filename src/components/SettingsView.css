@@ -44,7 +44,7 @@
   margin-bottom: 0.875rem;
 }
 
-.settings-field input {
+.settings-field input:disabled {
   width: 100%;
   box-sizing: border-box;
   opacity: 0.55;
