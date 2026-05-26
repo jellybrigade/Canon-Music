@@ -101,6 +101,17 @@ input:focus {
   box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
+input[type="range"] {
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+input[type="range"]:focus {
+  box-shadow: none;
+}
+
 button:hover:not(:disabled) {
   border-color: var(--accent);
 }
@@ -461,6 +472,7 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   border-radius: 6px;
   overflow: hidden;
+  aspect-ratio: 1;
 }
 
 .album-card:hover .album-overlay {
