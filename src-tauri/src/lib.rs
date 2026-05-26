@@ -4,8 +4,15 @@ use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::Emitter;
+
+fn http_client() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
+}
 
 struct PosTracker {
     play_start: Option<Instant>,
@@ -100,7 +107,7 @@ async fn audio_play(
         let bytes: Vec<u8> = if let Some(b) = cached_bytes {
             b
         } else {
-            match reqwest::blocking::get(&url).and_then(|r| r.bytes()) {
+            match http_client().get(&url).send().and_then(|r| r.bytes()) {
                 Ok(b) => b.to_vec(),
                 Err(e) => { eprintln!("audio_play fetch error: {e}"); return; }
             }
@@ -176,7 +183,7 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
 async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
     let cache_arc = Arc::clone(&state.prefetch_cache);
     std::thread::spawn(move || {
-        match reqwest::blocking::get(&url).and_then(|r| r.bytes()) {
+        match http_client().get(&url).send().and_then(|r| r.bytes()) {
             Ok(b) => { cache_arc.lock().unwrap().insert(url, b.to_vec()); }
             Err(e) => { eprintln!("audio_prefetch fetch error: {e}"); }
         }
