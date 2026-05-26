@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, List, Volume2, Loader,
@@ -30,19 +30,6 @@ export function PlayerBar() {
   const repeatLabel =
     repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
   const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
-
-  useEffect(() => {
-    if (!currentTrack) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: currentTrack.title,
-      artist: currentTrack.artist ?? undefined,
-    });
-    navigator.mediaSession.setActionHandler("play", resume);
-    navigator.mediaSession.setActionHandler("pause", pause);
-    navigator.mediaSession.setActionHandler("nexttrack", () => void next());
-    navigator.mediaSession.setActionHandler("previoustrack", () => void prev());
-  }, [currentTrack, resume, pause, next, prev]);
-
 
   function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!progressBarRef.current || duration <= 0) return;
