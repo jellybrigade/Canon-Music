@@ -90,10 +90,10 @@ export async function getRadioCandidates(
 
   if (combinedWeights.size === 0) return [];
 
-  const SAFE_ID = /^[a-zA-Z0-9_\-:.]+$/;
+  const SAFE_ID = /^[a-zA-Z0-9_\- :.]+$/;
   const cteParts = Array.from(combinedWeights.entries())
     .filter(([id]) => SAFE_ID.test(id))
-    .map(([id, w]) => `('${id}', ${w.toFixed(6)})`)
+    .map(([id, w]) => `('${id.replace(/'/g, "''")}', ${w.toFixed(6)})`)
     .join(", ");
 
   if (!cteParts) return [];
