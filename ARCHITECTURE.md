@@ -60,24 +60,13 @@ Canon/
 │   │   ├── AlbumGrid.tsx      Album card grid; hover heart; off-tree badge (AlertTriangle icon)
 │   │   ├── ArtistDetail.tsx   Blurred banner, album cards, top tracks
 │   │   ├── ArtistGrid.tsx     Artist cards with album count
-│   │   ├── GenreList.tsx      Genre list with counts → filtered album grid
 │   │   ├── NowPlayingOverlay.tsx  Full-screen now-playing: large art, controls, more-from-artist, synced/plain lyrics
 │   │   ├── PlayerBar.tsx      Fixed bottom bar: controls, progress, volume, thumb→overlay
 │   │   ├── PlaylistDetail.tsx  Playlist tracklist + play controls + remove-track context menu
 │   │   ├── PlaylistList.tsx   Playlist list + inline create form
 │   │   ├── QueuePanel.tsx     Right drawer: HTML5 drag-to-reorder, right-click context menu
-│   │   ├── RadioView.tsx      Radio Auto-DJ view: seed info, upcoming queue, stop button
 │   │   ├── SearchResults.tsx  Grouped Albums / Tracks / Artists with "Show all" toggles (up to 50)
-│   │   ├── SettingsView.tsx   Settings: Last.fm API key, staleness threshold, pull mode default, sidecar
-│   │   ├── SettingsView.css   Settings layout styles
-│   │   ├── TagIssuesView.tsx  Tag issues list grouped by type; dismiss per-issue or all; navigate to album
-│   │   ├── TagsView.tsx       Tags hub: Inbox / Vocabulary / Health tabs; inbox badge count
-│   │   ├── tags/
-│   │   │   ├── CanonCombobox.tsx   Tree-aware autocomplete for genre/mood; shows parent chain
-│   │   │   ├── HealthPanel.tsx     Stats tiles, batch Last.fm pull, stale album count
-│   │   │   ├── InboxCard.tsx       Per-album diff card: keep/drop per tag, Accept/Skip/Edit; InboxCardStack
-│   │   │   └── VocabularyPanel.tsx  Two-pane: virtual tag list + detail panel with rename + add-to-tree
-│   │   └── YearView.tsx       Albums grouped by decade → year → filtered grid
+│   │   └── SettingsView.tsx   Settings: Last.fm API key, staleness threshold, pull mode default, sidecar
 │   ├── types/
 │   │   └── server.ts          Server interface (+sidecar_url/secret_key/path_prefix fields)
 │   └── assets/
@@ -204,7 +193,7 @@ Credentials:
 |---|---|
 | `useAlbums.ts` | Albums from SQLite. `sort: AlbumSort` (artist/alphabetical/year/recently_added). `genres: string[]` — when non-empty, JOINs tracks and filters by genre. QueryKey includes both params. |
 | `useArtists.ts` | Artists from `artists` table (rebuilt by `syncLibrary` after every sync). |
-| `useGenres.ts` | `useGenres()` — all genres with track+album counts. `useAlbumsByGenre(genre)` — filtered album list. |
+| `useGenres.ts` | `useGenres()` — all genres with track+album counts. `useAlbumsByGenre(genre)` — filtered album list (orphaned; removal deferred to Phase 9). |
 | `useGlobalShortcuts.ts` | Global `keydown` listener (document). Keys: Space (play/pause), ←/→ (seek ±5s), Shift+←/→ (prev/next), ↑/↓ (volume ±5%), L (love). Suppressed when target is HTMLInputElement / textarea / contenteditable. |
 | `useLoved.ts` | `loved_tracks` + `loved_albums` from SQLite as `string[]` (converted to Set in hook body). Toggle: optimistic SQLite write → invalidate → fire-and-forget star/unstar API. |
 | `useLyrics.ts` | `useLyrics(track)` — React Query (`staleTime: Infinity`). Reads `lyrics` cache from SQLite first; on miss, calls `fetchLyrics` (LRClib), caches result. Returns `{ plain, synced, loading }`. |
@@ -215,7 +204,7 @@ Credentials:
 | `useSearch.ts` | FTS5 across `tracks_fts`. Debounced 200ms. Tokenizes into `"token"*` prefix expressions. Returns `{ albums, tracks, artists }`. LIMIT 50/group. |
 | `useServer.ts` | `useServers()` — all servers from SQLite. `useServerWithCredential()` — joins server row with keychain credential. Exports `ServerWithCredential` type. |
 | `useSetting.ts` | `useSetting(key, default)` — loads from `settings` table on mount. Returns `[value, updateFn]`. |
-| `useTagIssues.ts` | `useTagIssues()` — React Query over `tag_issues` (non-dismissed). `dismissIssue(id)` / `dismissAll()` mutations set `dismissed_at`. Returns `{ data, issueCount, isLoading, dismissIssue, dismissAll }`. |
+| `useTagIssues.ts` | `useTagIssues()` — React Query over `tag_issues` (non-dismissed). Orphaned (TagIssuesView deleted in Phase 1); removal deferred to Phase 9. |
 | `useTagMappings.ts` | `useTagMappings()` — `tag_mappings` CRUD. `saveMapping` also calls `stageGenreEditsForRawValue` to stage `pending_edits` for affected genre tracks. `useVocabulary()`, `useVocabAlbums(rawValue, kind)`, `useAddUserTreeNode()`. |
 | `useTagPull.ts` | `useTagPull()` — `pullForAlbum` + `canonizeAlbum`. `applyInboxItem` writes `track_tags` + `tag_mappings`, then calls `stageGenrePendingEdits` for genre kind. `useAcceptInboxItem()`. |
 | `useTrackEndedListener.ts` | Listens for Tauri `track-ended` event → calls `playerStore.next()`. |
@@ -236,30 +225,21 @@ Credentials:
 | `AddServerModal.tsx` | First-launch and add-server form. Writes to `servers` table + OS keychain. Calls ping to verify auth before saving. Optional sidecar section (URL, secret, path remap); secret stored in keychain at `canon.sidecar.{id}`. |
 | `AlbumDetail.tsx` | Full-album tracklist. "Play Album" button queues full album. "Last.fm" + "Canonize" album-level action buttons (pullForAlbum/canonizeAlbum mutations). Right-click track context menu (Play Next, Add to Queue, Add to Playlist). Per-track heart. Populates `CurrentTrack.album/albumId`. |
 | `AlbumGrid.tsx` | Album card grid. Lazy-loaded cover art. Hover heart. Off-tree badge (AlertTriangle, from `useOffTreeAlbumIds`). Click → onSelect. |
-| `ArtistDetail.tsx` | Blurred banner, album card grid, top tracks list. Last.fm bio/image fields deferred to T5. |
+| `ArtistDetail.tsx` | Blurred banner, album card grid, top tracks list. |
 | `ArtistGrid.tsx` | Artist cards with album count. |
-| `GenreList.tsx` | Genre list with track + album counts. Click genre → filtered album grid (useAlbumsByGenre). |
 | `NowPlayingOverlay.tsx` | Full-screen overlay (z-index 300). Large album art, track info, progress, controls, heart, volume. About tab: more-from-artist + top tracks. Lyrics tab: synced (auto-scrolling active line) or plain from LRClib; cache miss fetches on first open. ESC + click-backdrop dismiss. |
 | `PlayerBar.tsx` | Fixed bottom bar. Shuffle / prev / play-pause / next / repeat / queue toggle. Elapsed timer + clickable progress bar. Volume slider. Album art thumbnail → `toggleNowPlaying()`. |
 | `PlaylistDetail.tsx` | Playlist tracklist + play controls + delete + remove-track context menu. Populates `CurrentTrack.album/albumId`. |
 | `PlaylistList.tsx` | Playlist list + inline create form. |
 | `QueuePanel.tsx` | Fixed right drawer (z-index 50). Current queue in playback order. HTML5 drag-to-reorder (`draggable`, onDragStart/Over/Drop/End; drop-target highlight). Right-click context menu. |
-| `RadioView.tsx` | Radio Auto-DJ view. Shows seed track, upcoming queue from `useRadio` lookahead. "Stop Radio" button → `setRadioActive(false)`. "Start from current track" button when idle. |
-| `TagIssuesView.tsx` | Issue list grouped by type; collapsible sections; per-row dismiss (sets `dismissed_at`) and navigate-to-album. "Dismiss All" button. Badge in sidebar from `useTagIssues().issueCount`. |
 | `SearchResults.tsx` | Three groups: Albums / Tracks / Artists. Up to 50 per group (LIMIT 50 at source); "Show all N" toggle reveals up to 50. |
-| `SettingsView.tsx` | Settings: Last.fm API key (`lastfm.api_key`), staleness days (`tags.staleness_days`), pull mode default (`tags.pull_mode_default`), sidecar config (UI present but writes disabled pending T3 completion), servers. |
-| `TagsView.tsx` | Tags hub with three tabs: Inbox (InboxCardStack), Vocabulary (VocabularyPanel), Health (HealthPanel). Inbox badge count in tab. |
-| `tags/CanonCombobox.tsx` | Tree-aware autocomplete. Queries `getCanonTree()` via RQ (`staleTime: Infinity`). Filters by `kind`. Shows parent chain (`getParentChain`). Keyboard nav (↑/↓/Enter/Esc). |
-| `tags/HealthPanel.tsx` | Stats tiles (% canonical, off-tree count, stale album count). "Pull stale albums" CTA → PullModeModal → `pullForAlbum` batch. Links to Settings. |
-| `tags/InboxCard.tsx` | Per-album diff card. Shows genre + mood rows with match badge. Per-row keep/drop toggle. Edit row → CanonCombobox override. Accept → `useAcceptInboxItem`. InboxCardStack wraps the full Inbox tab. |
-| `tags/VocabularyPanel.tsx` | Two-pane. Left: hand-rolled virtual list of all `(kind, raw_value)` from `track_tags`. Right: detail panel with CanonCombobox rename, affected albums, add-to-canon-tree, remove-mapping. |
-| `YearView.tsx` | Albums grouped by decade → year → filtered grid. |
+| `SettingsView.tsx` | Settings: Last.fm API key (`lastfm.api_key`), staleness days (`tags.staleness_days`), pull mode default (`tags.pull_mode_default`), sidecar config, servers. |
 
 ### Other (`src/`)
 
 | File | Purpose |
 |---|---|
-| `App.tsx` | Root component. Views: library/artists/genres/years/playlists/radio/tags/issues/pending/settings. Sidebar nav with issue count badge. Sync trigger + query invalidation (including tag_issues). useMediaSession + useRadio + useScrobbleFlush + useGlobalShortcuts mounted here. |
+| `App.tsx` | Root component. Views: library/artists/playlists/settings. Sidebar nav (4 items). Sync trigger + query invalidation. useMediaSession + useRadio + useScrobbleFlush + useGlobalShortcuts mounted here. Genre filter chip in library header. |
 | `keychain.ts` | Thin wrapper: `keychain.set/get/delete` → Tauri `set_credential/get_credential/delete_credential` commands. Key formats: `canon.server.{id}` (Navidrome cred), `canon.sidecar.{id}` (sidecar secret). |
 | `types/server.ts` | `Server` interface: `id, type, url, display_name, username, created_at, sidecar_url, sidecar_secret_key, sidecar_path_prefix_from, sidecar_path_prefix_to`. |
 

@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Tags, Calendar, Settings, Heart, Search, X, ListMusic, FilePen, AlertTriangle, Radio } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic } from "lucide-react";
 import { AddServerModal } from "./components/AddServerModal";
 import { AlbumGrid } from "./components/AlbumGrid";
 import { AlbumDetail } from "./components/AlbumDetail";
 import { ArtistGrid } from "./components/ArtistGrid";
 import { ArtistDetail } from "./components/ArtistDetail";
-import { GenreList } from "./components/GenreList";
-import { YearView } from "./components/YearView";
 import { PlaylistList } from "./components/PlaylistList";
 import { PlaylistDetail } from "./components/PlaylistDetail";
 import { SearchResults } from "./components/SearchResults";
@@ -15,20 +13,15 @@ import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { NowPlayingOverlay } from "./components/NowPlayingOverlay";
 import { SettingsView } from "./components/SettingsView";
-import { PendingChangesView } from "./components/PendingChangesView";
-import { TagsView } from "./components/TagsView";
-import { TagIssuesView } from "./components/TagIssuesView";
-import { RadioView } from "./components/RadioView";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
 import { useArtists } from "./hooks/useArtists";
-import { useGenres, useAlbumsByGenre } from "./hooks/useGenres";
+import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
 import { useSearch } from "./hooks/useSearch";
 import { useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import type { PlaylistRow } from "./hooks/usePlaylists";
-import { useTagIssues } from "./hooks/useTagIssues";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
@@ -44,11 +37,10 @@ import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
 import type { ArtistRow } from "./hooks/useArtists";
-import type { GenreRow } from "./hooks/useGenres";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type View = "library" | "artists" | "genres" | "years" | "playlists" | "tags" | "pending" | "issues" | "radio" | "settings";
+type View = "library" | "artists" | "playlists" | "settings";
 
 export default function App() {
   useTrackEndedListener();
@@ -87,7 +79,6 @@ export default function App() {
   }, [genreDropdownOpen]);
 
   const [selectedArtist, setSelectedArtist] = useState<ArtistRow | null>(null);
-  const [selectedGenre, setSelectedGenre] = useState<GenreRow | null>(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistRow | null>(null);
   const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
 
@@ -138,11 +129,9 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   useGlobalShortcuts(serverWithCred);
   useScrobbleFlush(serverWithCred);
-  const { issueCount } = useTagIssues();
   const { data: albums } = useAlbums(sort, selectedGenreFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
-  const { data: genreAlbums } = useAlbumsByGenre(selectedGenre?.name ?? null);
 
   useEffect(() => {
     if (!serverWithCred) return;
@@ -153,16 +142,10 @@ export default function App() {
     });
   }, [serverWithCred, setStreamUrlFor]);
 
-  const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
+  const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
     { id: "library", label: "Library", icon: <Music size={18} /> },
     { id: "artists", label: "Artists", icon: <Users size={18} /> },
-    { id: "genres", label: "Genres", icon: <Tag size={18} /> },
-    { id: "years", label: "Years", icon: <Calendar size={18} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={18} /> },
-    { id: "radio", label: "Radio", icon: <Radio size={18} /> },
-    { id: "tags", label: "Tags", icon: <Tags size={18} /> },
-    { id: "issues", label: "Issues", icon: <AlertTriangle size={18} />, badge: issueCount > 0 ? issueCount : undefined },
-    { id: "pending", label: "Pending", icon: <FilePen size={18} /> },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
   ];
 
@@ -175,7 +158,6 @@ export default function App() {
     setView(v);
     setSelectedAlbum(null);
     setSelectedArtist(null);
-    setSelectedGenre(null);
     setSelectedPlaylist(null);
     setSelectedGenreFilters([]);
   }
@@ -509,65 +491,6 @@ export default function App() {
           </main>
         );
 
-      case "genres":
-        return (
-          <main className={`library${queueClass}`}>
-            {selectedAlbum && serverWithCred ? (
-              renderAlbumDetail()
-            ) : selectedGenre && serverWithCred ? (
-              <>
-                <header className="library-header">
-                  <button className="album-detail-back" onClick={() => setSelectedGenre(null)}>
-                    ← Genres
-                  </button>
-                  <h1>{selectedGenre.name}</h1>
-                </header>
-                <AlbumGrid
-                  albums={genreAlbums ?? []}
-                  serverWithCredential={serverWithCred}
-                  onSelect={setSelectedAlbum}
-                />
-              </>
-            ) : (
-              <>
-                <header className="library-header">
-                  <h1>Genres</h1>
-                  <span className="server-name">{server?.display_name}</span>
-                </header>
-                <GenreList
-                  genres={genres ?? []}
-                  onSelect={setSelectedGenre}
-                />
-              </>
-            )}
-          </main>
-        );
-
-      case "years":
-        return (
-          <main className={`library${queueClass}`}>
-            {selectedAlbum && serverWithCred ? (
-              renderAlbumDetail()
-            ) : (
-              <>
-                <header className="library-header">
-                  <h1>Years</h1>
-                  <span className="server-name">{server?.display_name}</span>
-                </header>
-                {serverWithCred ? (
-                  <YearView
-                    albums={albums ?? []}
-                    serverWithCredential={serverWithCred}
-                    onSelect={setSelectedAlbum}
-                  />
-                ) : (
-                  <p className="empty-state">Loading…</p>
-                )}
-              </>
-            )}
-          </main>
-        );
-
       case "playlists":
         return (
           <main className={`library${queueClass}`}>
@@ -602,39 +525,6 @@ export default function App() {
           </main>
         );
 
-      case "tags":
-        return (
-          <main className="content-main">
-            <TagsView onNavigateSettings={() => setView("settings")} />
-          </main>
-        );
-
-      case "issues":
-        return (
-          <TagIssuesView
-            onNavigateAlbum={(albumId) => {
-              void (async () => {
-                const db = await getDb();
-                type AlbumLookupRow = { id: string; server_id: string; name: string; artist: string | null; year: number | null; artwork_url: string | null };
-                const rows = await db.select<AlbumLookupRow[]>(
-                  "SELECT id, server_id, name, artist, year, artwork_url FROM albums WHERE id = ?",
-                  [albumId]
-                );
-                if (rows[0]) {
-                  setSelectedAlbum(rows[0] as AlbumRow);
-                  setView("library");
-                }
-              })();
-            }}
-          />
-        );
-
-      case "radio":
-        return <RadioView />;
-
-      case "pending":
-        return <PendingChangesView serverWithCredential={serverWithCred} />;
-
       case "settings":
         return (
           <main className="content-main">
@@ -648,7 +538,7 @@ export default function App() {
     <>
       <div className="app-layout">
         <nav className="sidebar">
-          {NAV_ITEMS.map(({ id, label, icon, badge }) => (
+          {NAV_ITEMS.map(({ id, label, icon }) => (
             <button
               key={id}
               className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
@@ -656,9 +546,6 @@ export default function App() {
               onClick={() => navigateTo(id)}
             >
               {icon}
-              {badge != null && badge > 0 && (
-                <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span>
-              )}
             </button>
           ))}
         </nav>

@@ -69,6 +69,11 @@
   --progress-track: rgba(0, 0, 0, 0.12);
 }
 
+.light-theme .sidebar-btn--active,
+.light-theme .sidebar-btn--active:hover:not(:disabled) {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
 html,
 body,
 #root {
@@ -247,7 +252,7 @@ button.primary:hover:not(:disabled) {
 .sidebar-btn {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: 9px;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -256,27 +261,24 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   font-size: 1rem;
   cursor: pointer;
-  opacity: 0.65;
+  color: var(--text-tertiary);
   padding: 0;
-  transition: opacity 0.15s, background-color 0.15s;
+  transition: color 0.12s, background-color 0.12s;
 }
 
 .sidebar-btn:hover:not(:disabled) {
-  opacity: 0.8;
+  color: var(--text-secondary);
   background-color: var(--bg-hover);
-  border-color: transparent;
 }
 
 .sidebar-btn--active {
-  opacity: 1;
-  color: var(--accent);
-  background-color: var(--accent-subtle);
-  box-shadow: inset 3px 0 0 0 var(--accent);
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 .sidebar-btn--active:hover:not(:disabled) {
-  background-color: var(--accent-subtle);
-  opacity: 1;
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ── Library view ── */
