@@ -86,7 +86,7 @@ button {
   font-family: inherit;
   color: var(--text-primary);
   background-color: var(--bg-input);
-  transition: border-color 0.15s, opacity 0.15s;
+  transition: border-color 0.15s, opacity 0.15s, background-color 0.15s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
   outline: none;
 }
@@ -108,6 +108,11 @@ button:hover:not(:disabled) {
 button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 button.primary {
