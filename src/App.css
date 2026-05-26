@@ -3282,6 +3282,26 @@ button.primary:hover:not(:disabled) {
 
 .vocab-detail-danger:disabled { opacity: 0.4; cursor: default; }
 
+.vocab-detail-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vocab-detail-confirm-label {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.vocab-detail-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 0.35rem 0.75rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
 .vocab-add-tree {
   display: flex;
   gap: 0.5rem;

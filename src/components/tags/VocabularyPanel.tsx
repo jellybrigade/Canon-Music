@@ -27,6 +27,7 @@ function DetailPanel({ row, onClose }: DetailPanelProps) {
   const [addToTreeName, setAddToTreeName] = useState("");
   const [showAddToTree, setShowAddToTree] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   async function handleRename() {
     if (!selectedNode) return;
@@ -131,16 +132,29 @@ function DetailPanel({ row, onClose }: DetailPanelProps) {
 
       {row.canonical_id && (
         <div className="vocab-detail-section">
-          <button
-            className="vocab-detail-danger"
-            onClick={() => {
-              if (!window.confirm(`Remove mapping for "${row.raw_value}"?`)) return;
-              void deleteMapping.mutateAsync({ rawValue: row.raw_value, kind: row.kind });
-            }}
-            disabled={deleteMapping.isPending}
-          >
-            Remove mapping
-          </button>
+          {confirmDelete ? (
+            <div className="vocab-detail-confirm-row">
+              <span className="vocab-detail-confirm-label">Remove mapping?</span>
+              <button
+                className="vocab-detail-danger"
+                onClick={() => { void deleteMapping.mutateAsync({ rawValue: row.raw_value, kind: row.kind }); }}
+                disabled={deleteMapping.isPending}
+              >
+                Remove
+              </button>
+              <button className="vocab-detail-cancel" onClick={() => setConfirmDelete(false)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              className="vocab-detail-danger"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteMapping.isPending}
+            >
+              Remove mapping
+            </button>
+          )}
         </div>
       )}
     </div>
