@@ -90,10 +90,13 @@ export async function getRadioCandidates(
 
   if (combinedWeights.size === 0) return [];
 
-  // Build inline VALUES CTE for SQLite scoring query
+  const SAFE_ID = /^[a-zA-Z0-9_\-:.]+$/;
   const cteParts = Array.from(combinedWeights.entries())
-    .map(([id, w]) => `('${id.replace(/'/g, "''")}', ${w.toFixed(6)})`)
+    .filter(([id]) => SAFE_ID.test(id))
+    .map(([id, w]) => `('${id}', ${w.toFixed(6)})`)
     .join(", ");
+
+  if (!cteParts) return [];
 
   type ScoredRow = {
     id: string;
