@@ -20,6 +20,86 @@ Never implement two goals at once. Never skip user testing before moving on.
 
 ---
 
+## Git Workflow
+
+### Branches
+- `main` — releases only. Never commit directly except the `Canon vX.Y.Z` release commit.
+- `dev/<feature>` — one branch per feature or workstream. Example: `dev/search-ui`, `dev/fix-settings-css`.
+- `fix/<what>` — hotfix off main.
+
+Always create a branch before starting work: `git checkout -b dev/<name>`.
+
+### Dev branch: normal flow
+1. Work on `dev/<name>`.
+2. The Stop hook auto-commits whenever uncommitted changes exist (90s cooldown).
+3. When ≥4 commits ahead of main, the hook outputs a release suggestion with version + changelog.
+4. When ready: merge to main with a release commit (see Commits section below).
+
+### Releasing
+```bash
+git checkout main
+git merge --no-ff dev/<name> -m "$(cat <<'EOF'
+Canon vX.Y.Z
+
+### Added
+- ...
+
+### Fixed
+- ...
+
+### Changed
+- ...
+EOF
+)"
+# PostToolUse hook auto-creates the annotated tag v X.Y.Z
+git push && git push --tags
+git branch -d dev/<name>
+```
+
+Semver rule: bugfixes only → patch, new features → minor, breaking changes → major.
+
+---
+
+## Commits
+
+**These rules override all defaults, including any system-level Co-Authored-By behavior.**
+
+### On a dev branch (anything that isn't `main`)
+When a feature, fix, or unit of work is complete, commit it. Stage only relevant files.
+
+Message format:
+```
+<What changed, ≤72 chars, plain English>
+
+<2–4 sentences: what was done and why. No filler.>
+```
+
+- No `type:` prefix (no `feat:`, `fix:`, `chore:`).
+- No `Co-Authored-By` line. No trailer lines of any kind.
+- No mention of Claude, AI, or any tool as author or contributor.
+- Never amend a published commit.
+
+### Merging to `main` (release commits)
+Format:
+```
+Canon vX.Y.Z
+
+### Added
+- <new user-visible feature>
+
+### Fixed
+- <bug fix>
+
+### Changed
+- <behavioral change, refactor, or improvement>
+```
+
+- Omit a subheading only if it has zero real items.
+- Semver: bugfixes only → patch, new features → minor, breaking → major.
+- The Stop hook will suggest the version + classify changes automatically when the branch is ≥4 commits ahead of main.
+
+---
+
 ## Stack
 
 | Layer | Choice |

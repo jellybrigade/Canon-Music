@@ -24,3 +24,9 @@ src-tauri/target
 *.sln
 *.sw?
 reference-projects
+
+# Claude local settings (permissions, per-machine config)
+.claude/settings.local.json
+
+# Scratch files
+what-to-do.txt
