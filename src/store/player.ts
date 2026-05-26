@@ -76,6 +76,7 @@ interface PlayerState {
   streamUrlFor: ((track: CurrentTrack) => string) | null;
   playStartedAt: number;
   radioActive: boolean;
+  radioSeed: CurrentTrack | null;
 
   isQueueOpen: boolean;
   isNowPlayingOpen: boolean;
@@ -93,6 +94,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
   setRadioActive: (active: boolean) => void;
+  startRadio: (seed: CurrentTrack) => void;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -153,6 +155,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
+  async function persistRadioState() {
+    try {
+      const { radioActive, radioSeed } = get();
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
+        [radioActive ? "1" : "0"]
+      );
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_seed', ?)",
+        [radioSeed ? JSON.stringify(radioSeed) : ""]
+      );
+    } catch (e) {
+      console.error("Failed to persist radio state:", e);
+    }
+  }
+
   async function persistQueueState() {
     try {
       const { queue, queueIndex, shuffleOrder, isShuffled, currentTrack } = get();
@@ -183,6 +202,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     streamUrlFor: null,
     playStartedAt: 0,
     radioActive: false,
+    radioSeed: null,
     isQueueOpen: false,
     isNowPlayingOpen: false,
 
@@ -337,7 +357,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     setRadioActive: (active: boolean) => {
-      set({ radioActive: active });
+      set({ radioActive: active, ...(!active ? { radioSeed: null } : {}) });
+      void persistRadioState();
+    },
+
+    startRadio: (seed: CurrentTrack) => {
+      set({ radioActive: true, radioSeed: seed });
+      void persistRadioState();
     },
 
     addToQueue: (track, streamUrlFn) => {
@@ -448,7 +474,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed')",
           []
         );
         for (const row of rows) {
@@ -477,6 +503,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               }
             } catch {
               // malformed snapshot, ignore
+            }
+          } else if (row.key === "radio_active") {
+            set({ radioActive: row.value === "1" });
+          } else if (row.key === "radio_seed") {
+            if (row.value) {
+              try {
+                const seed = JSON.parse(row.value) as CurrentTrack;
+                set({ radioSeed: seed });
+              } catch {
+                // malformed seed, ignore
+              }
             }
           }
         }

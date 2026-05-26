@@ -1,27 +1,32 @@
+import { useState } from "react";
 import { Heart, AlertTriangle } from "lucide-react";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { ContextMenu } from "./ContextMenu";
 
 interface Props {
   albums: AlbumRow[];
   serverWithCredential: ServerWithCredential;
   onSelect: (album: AlbumRow) => void;
+  onStartRadio?: (album: AlbumRow) => void;
 }
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const { data: offTreeIds } = useOffTreeAlbumIds();
   const offTreeSet = new Set(offTreeIds ?? []);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
 
   if (albums.length === 0) {
     return <p className="empty-state">No albums yet. Syncing…</p>;
   }
 
   return (
+    <>
     <div className="album-grid">
       {albums.map((album) => (
         <div
@@ -31,6 +36,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect }: Props) {
           role="button"
           tabIndex={0}
           onKeyDown={(e) => e.key === "Enter" && onSelect(album)}
+          onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, album }); }}
         >
           {album.artwork_url ? (
             <img
@@ -67,5 +73,17 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect }: Props) {
         </div>
       ))}
     </div>
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
+          <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
+            Open album
+          </button>
+          {onStartRadio && (
+            <button onClick={() => { onStartRadio(contextMenu.album); setContextMenu(null); }}>
+              Start radio from this
+            </button>
+          )}
+        </ContextMenu>
+      )}
   );
 }

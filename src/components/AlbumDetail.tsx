@@ -1,5 +1,6 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, Fragment } from "react";
 import { Heart, RefreshCw, Wand2, Play, ChevronRight } from "lucide-react";
+import { ContextMenu } from "./ContextMenu";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { TrackRow } from "../hooks/useTracks";
@@ -68,9 +69,11 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
+  const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
@@ -108,23 +111,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
   const [editingTrackId, setEditingTrackId] = useState<string | null>(null);
   const [editFields, setEditFields] = useState<EditFields>({ title: "", artist: "", album_artist: "", genre: "", track_number: "", disc_number: "", year: "", comment: "" });
   const [editSaveMsg, setEditSaveMsg] = useState<string>("");
-
-  useEffect(() => {
-    if (!contextMenu) {
-      setContextMenuMode("main");
-      return;
-    }
-    const close = () => setContextMenu(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [contextMenu]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [contextMenu]);
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -337,10 +323,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
       </div>
 
       {contextMenu && (
-        <div
-          className="context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => { setContextMenu(null); setContextMenuMode("main"); }}
         >
           {contextMenuMode === "main" ? (
             <>
@@ -352,6 +338,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
               </button>
               <button onClick={() => { addToQueue(buildTrackObj(contextMenu.track), streamUrlFor); setContextMenu(null); }}>
                 Add to Queue
+              </button>
+              <button onClick={() => {
+                const track = buildTrackObj(contextMenu.track);
+                void play(track, streamUrlFor(track));
+                startRadio(track);
+                setContextMenu(null);
+              }}>
+                Start radio from this
               </button>
               {playlists && playlists.length > 0 && (
                 <button onClick={() => setContextMenuMode("playlist")}>
@@ -388,7 +382,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
               ))}
             </>
           )}
-        </div>
+        </ContextMenu>
       )}
     </div>
   );

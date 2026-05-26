@@ -4,6 +4,7 @@ import {
   Shuffle, Repeat, Repeat1, List, Volume2, Loader,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
+import { RadioChip } from "./RadioChip";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -59,6 +60,7 @@ export function PlayerBar() {
               <span className="player-artist">{currentTrack.artist}</span>
             )}
           </div>
+          <RadioChip />
         </div>
 
         <div className="player-section player-section--center">
