@@ -26,6 +26,11 @@
 
   --player-bar-height: 72px;
 
+  --z-panel:     50;
+  --z-dropdown: 100;
+  --z-overlay:  200;
+  --z-modal:    300;
+
   /* Typography */
   --font-body:    'Inter', system-ui, sans-serif;
   --font-display: 'Inter', system-ui, sans-serif;
@@ -380,7 +385,7 @@ button.primary:hover:not(:disabled) {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -826,7 +831,7 @@ button.primary:hover:not(:disabled) {
   padding: 0 1.25rem;
   background-color: var(--bg-player);
   border-top: 1px solid var(--border);
-  z-index: 100;
+  z-index: var(--z-dropdown);
 }
 
 .player-section {
@@ -1035,7 +1040,7 @@ button.primary:hover:not(:disabled) {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.82);
-  z-index: 300;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1700,7 +1705,7 @@ button.primary:hover:not(:disabled) {
 /* ── Context menu ── */
 .context-menu {
   position: fixed;
-  z-index: 200;
+  z-index: var(--z-overlay);
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -1745,7 +1750,7 @@ button.primary:hover:not(:disabled) {
   width: 280px;
   background-color: var(--bg-elevated);
   border-left: 1px solid var(--border);
-  z-index: 50;
+  z-index: var(--z-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2477,7 +2482,7 @@ button.primary:hover:not(:disabled) {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
-  z-index: 300;
+  z-index: var(--z-modal);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3021,7 +3026,7 @@ button.primary:hover:not(:disabled) {
   list-style: none;
   margin: 0;
   padding: 0.25rem 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   box-shadow: 0 8px 24px rgba(0,0,0,0.25);
   max-height: 280px;
   overflow-y: auto;
@@ -3394,7 +3399,7 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 200;
+  z-index: var(--z-overlay);
 }
 
 .pull-mode-modal {
