@@ -7,7 +7,13 @@ import { scanForIssues } from "./tagIssues";
 
 export async function syncLibrary(server: Server): Promise<{ failedAlbums: number; failedPlaylists: number; skippedAlbums: number }> {
   const credJson = await keychain.get(`canon.server.${server.id}`, "credential");
-  const credential = JSON.parse(credJson) as NavidromeCredential;
+  if (!credJson) throw new Error(`No credentials found for server ${server.id}`);
+  let credential: NavidromeCredential;
+  try {
+    credential = JSON.parse(credJson) as NavidromeCredential;
+  } catch {
+    throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
+  }
 
   const albums = await fetchAllAlbums(server.url, server.username, credential);
 
