@@ -249,7 +249,7 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   font-size: 1rem;
   cursor: pointer;
-  opacity: 0.4;
+  opacity: 0.65;
   padding: 0;
   transition: opacity 0.15s, background-color 0.15s;
 }
