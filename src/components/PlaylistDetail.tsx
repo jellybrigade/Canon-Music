@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Trash2 } from "lucide-react";
+import { Play, Trash2 } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../hooks/usePlaylistTracks";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
@@ -111,7 +111,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                 disabled={!tracks || tracks.length === 0}
                 aria-label="Play playlist"
               >
-                ▶ Play All
+                <Play size={14} /> Play All
               </button>
               <button
                 className="playlist-delete-btn"
@@ -150,7 +150,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   >
                     <td className="track-number">
                       {isCurrentlyPlaying
-                        ? <span className="track-playing-indicator">▶</span>
+                        ? <span className="track-playing-indicator"><Play size={10} /></span>
                         : track.position + 1}
                     </td>
                     <td className="track-title">{track.title}</td>
