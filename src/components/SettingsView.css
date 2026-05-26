@@ -31,9 +31,6 @@
   line-height: 1.5;
 }
 
-.settings-coming-soon {
-  font-style: italic;
-}
 
 .settings-field {
   display: flex;
@@ -42,11 +39,4 @@
   font-size: 0.875rem;
   font-weight: 500;
   margin-bottom: 0.875rem;
-}
-
-.settings-field input:disabled {
-  width: 100%;
-  box-sizing: border-box;
-  opacity: 0.55;
-  cursor: not-allowed;
 }

@@ -63,35 +63,7 @@ export function SettingsView() {
         </div>
       </section>
 
-      <section className="settings-section">
-        <h3 className="settings-section-title">Sidecar</h3>
-        <p className="settings-section-desc">
-          Optional: run the Canon sidecar on your server to enable tag writes.
-        </p>
-        <label className="settings-field">
-          <span>Sidecar URL</span>
-          <input type="text" placeholder="http://your-server:5000" disabled />
-        </label>
-        <label className="settings-field">
-          <span>Shared Secret</span>
-          <input type="password" placeholder="••••••••" disabled />
-        </label>
-        <label className="settings-field">
-          <span>Path prefix (server)</span>
-          <input type="text" placeholder="/music" disabled />
-        </label>
-        <label className="settings-field">
-          <span>Path prefix (sidecar mount)</span>
-          <input type="text" placeholder="/data/music" disabled />
-        </label>
-      </section>
 
-      <section className="settings-section">
-        <h3 className="settings-section-title">Servers</h3>
-        <p className="settings-section-desc settings-coming-soon">
-          Server management coming in Goal 7c.
-        </p>
-      </section>
     </div>
   );
 }
