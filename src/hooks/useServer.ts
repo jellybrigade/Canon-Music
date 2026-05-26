@@ -35,7 +35,15 @@ export function useServerWithCredential(serverId: string | undefined) {
         `canon.server.${server.id}`,
         "credential"
       );
-      const credential = JSON.parse(credJson) as NavidromeCredential;
+      if (!credJson) {
+        throw new Error(`No credentials found for server ${server.id} — re-enter in Settings`);
+      }
+      let credential: NavidromeCredential;
+      try {
+        credential = JSON.parse(credJson) as NavidromeCredential;
+      } catch {
+        throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
+      }
       return { server, credential };
     },
   });

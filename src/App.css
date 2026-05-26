@@ -472,12 +472,17 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   border-radius: 6px;
   overflow: hidden;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 190px;
 }
 
-.album-card::before {
-  content: "";
-  display: block;
-  padding-top: 100%;
+@supports not (aspect-ratio: 1 / 1) {
+  .album-card::before {
+    content: "";
+    display: block;
+    padding-top: 100%;
+  }
 }
 
 .album-card:hover .album-overlay {
@@ -501,7 +506,7 @@ button.primary:hover:not(:disabled) {
   opacity: 0.88;
 }
 
-.album-art--placeholder {
+.album-card .album-art--placeholder {
   position: absolute;
   top: 0;
   left: 0;
@@ -510,6 +515,10 @@ button.primary:hover:not(:disabled) {
   background-color: var(--bg-card);
   display: block;
   border-radius: 6px;
+}
+
+.album-detail-art.album-art--placeholder {
+  background-color: var(--bg-card);
 }
 
 .album-overlay {
