@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { Heart, RefreshCw, Wand2 } from "lucide-react";
+import { Heart, RefreshCw, Wand2, Play, ChevronRight } from "lucide-react";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { TrackRow } from "../hooks/useTracks";
@@ -208,7 +208,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
               disabled={!tracks || tracks.length === 0}
               aria-label="Play album"
             >
-              ▶ Play Album
+              <Play size={14} /> Play Album
             </button>
             <div className="album-tag-actions">
               <button
@@ -261,7 +261,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
                     >
                       <td className="track-number">
                         {isCurrentlyPlaying
-                          ? <span className="track-playing-indicator">▶</span>
+                          ? <span className="track-playing-indicator"><Play size={10} /></span>
                           : (track.track_number ?? "—")}
                       </td>
                       <td className="track-title">
@@ -355,7 +355,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose }: Props) {
               </button>
               {playlists && playlists.length > 0 && (
                 <button onClick={() => setContextMenuMode("playlist")}>
-                  Add to Playlist ▶
+                  Add to Playlist <ChevronRight size={14} />
                 </button>
               )}
               {server.sidecar_url ? (

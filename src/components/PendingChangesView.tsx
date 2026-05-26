@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { X } from "lucide-react";
 import { checkSidecarHealth } from "../lib/sidecar";
 import { keychain } from "../keychain";
 import { usePendingEdits } from "../hooks/usePendingEdits";
@@ -167,7 +168,7 @@ export function PendingChangesView({ serverWithCredential }: Props) {
                             onClick={() => void deletePendingEdit.mutateAsync(row.id)}
                             title="Reject this field change"
                           >
-                            ✕
+                            <X size={14} />
                           </button>
                         </td>
                       </tr>

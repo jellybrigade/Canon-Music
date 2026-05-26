@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { X, GripVertical, Play } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 
 type ContextMenu = { x: number; y: number; position: number } | null;
@@ -77,7 +78,7 @@ export function QueuePanel() {
       <div className="queue-panel-header">
         <span className="queue-panel-title">Queue ({queue.length})</span>
         <button className="queue-panel-close" onClick={toggleQueue} aria-label="Close queue">
-          ✕
+          <X size={14} />
         </button>
       </div>
       <div className="queue-list">
@@ -102,9 +103,9 @@ export function QueuePanel() {
               setContextMenu({ x: e.clientX, y: e.clientY, position });
             }}
           >
-            <span className="queue-row-drag-handle" aria-hidden>⠿</span>
+            <span className="queue-row-drag-handle" aria-hidden><GripVertical size={14} /></span>
             <span className="queue-row-indicator">
-              {position === queueIndex ? "▶" : ""}
+              {position === queueIndex ? <Play size={10} /> : ""}
             </span>
             <span className="queue-row-num">{position + 1}</span>
             <div className="queue-row-info">
