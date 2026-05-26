@@ -33,7 +33,7 @@ export function SettingsView() {
             max={9999}
             value={stalenessDays}
             onChange={(e) => void setStalenessDays(e.target.value)}
-            style={{ width: 80 }}
+            className="settings-staleness-input"
           />
         </label>
         <div className="settings-field">

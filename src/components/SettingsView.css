@@ -40,3 +40,7 @@
   font-weight: 500;
   margin-bottom: 0.875rem;
 }
+
+.settings-staleness-input {
+  width: 5rem;
+}
