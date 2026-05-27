@@ -222,10 +222,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         position = 0;
       }
 
-      set({ queue: tracks, queueIndex: position, streamUrlFor, shuffleOrder });
+      set({ queue: tracks, queueIndex: position, streamUrlFor, shuffleOrder, radioActive: false, radioSeed: null });
       const track = resolveTrack(tracks, shuffleOrder, isShuffled, position);
       if (track) await playTrack(track, streamUrlFor(track));
       void persistQueueState();
+      void persistRadioState();
     },
 
     next: async () => {

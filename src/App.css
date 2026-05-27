@@ -470,7 +470,9 @@ button.primary:hover:not(:disabled) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   align-content: start;
-  gap: 1rem;
+  align-items: start;
+  column-gap: 1rem;
+  row-gap: 1.5rem;
   padding: 1.25rem;
   overflow-y: auto;
   flex: 1;
@@ -481,9 +483,7 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   border-radius: 6px;
   overflow: hidden;
-  width: 100%;
   aspect-ratio: 1 / 1;
-  min-height: 190px;
 }
 
 @supports not (aspect-ratio: 1 / 1) {
@@ -1737,6 +1737,23 @@ button.primary:hover:not(:disabled) {
 
 .context-menu-danger {
   color: var(--danger) !important;
+}
+
+/* ── Radio chip ── */
+.radio-chip-btn {
+  background: none;
+  border: 1px solid var(--accent, #e06c75);
+  color: var(--accent, #e06c75);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.radio-chip-btn:hover {
+  background: color-mix(in srgb, var(--accent, #e06c75) 15%, transparent);
 }
 
 /* ── Queue panel ── */

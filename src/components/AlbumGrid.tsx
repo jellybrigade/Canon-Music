@@ -73,17 +73,18 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         </div>
       ))}
     </div>
-      {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
-            Open album
+    {contextMenu && (
+      <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
+        <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
+          Open album
+        </button>
+        {onStartRadio && (
+          <button onClick={() => { onStartRadio(contextMenu.album); setContextMenu(null); }}>
+            Start radio from this
           </button>
-          {onStartRadio && (
-            <button onClick={() => { onStartRadio(contextMenu.album); setContextMenu(null); }}>
-              Start radio from this
-            </button>
-          )}
-        </ContextMenu>
-      )}
+        )}
+      </ContextMenu>
+    )}
+    </>
   );
 }

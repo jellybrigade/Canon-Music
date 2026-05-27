@@ -121,6 +121,7 @@ export default function App() {
   }, [searchRaw, searchOpen, clearSearch]);
 
   const play = usePlayerStore((s) => s.play);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -186,6 +187,51 @@ export default function App() {
       : null;
     const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     await play({ id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: artworkUrl, album: albumData?.name ?? null, albumId: t.album_id }, streamUrl);
+  }
+
+  async function handleStartRadioFromAlbum(album: AlbumRow) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
+    const rows = await db.select<TrackRow[]>(
+      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY track_number ASC, id ASC LIMIT 1",
+      [album.id]
+    );
+    const t = rows[0];
+    if (!t) return;
+    const navTrackId = stripServerPrefix(t.id, srv.id);
+    const coverArtUrl = album.artwork_url
+      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
+      : null;
+    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+    await play(track, streamUrl);
+    startRadio(track);
+  }
+
+  async function handleStartRadioFromArtist(artist: ArtistRow) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    const rows = await db.select<TrackRow[]>(
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+       FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
+       WHERE t.artist = ? OR a.artist = ?
+       ORDER BY random() LIMIT 1`,
+      [artist.name, artist.name]
+    );
+    const t = rows[0];
+    if (!t) return;
+    const navTrackId = stripServerPrefix(t.id, srv.id);
+    const coverArtUrl = t.artwork_url
+      ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
+      : null;
+    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
+    await play(track, streamUrl);
+    startRadio(track);
   }
 
   function runSync(s: Server) {
@@ -276,6 +322,7 @@ export default function App() {
         albums={visibleAlbums}
         serverWithCredential={serverWithCred}
         onSelect={setSelectedAlbum}
+        onStartRadio={(album) => { void handleStartRadioFromAlbum(album); }}
       />
     );
   }
@@ -482,6 +529,7 @@ export default function App() {
                     artists={artists ?? []}
                     serverWithCredential={serverWithCred}
                     onSelect={setSelectedArtist}
+                    onStartRadio={(artist) => { void handleStartRadioFromArtist(artist); }}
                   />
                 ) : (
                   <p className="empty-state">Loading…</p>
