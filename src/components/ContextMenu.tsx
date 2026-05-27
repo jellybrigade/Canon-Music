@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 
 interface Props {
@@ -9,16 +9,19 @@ interface Props {
 }
 
 export function ContextMenu({ x, y, onClose, children }: Props) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
-    const onClickOutside = () => onClose();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const onClickOutside = () => onCloseRef.current();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
     document.addEventListener("click", onClickOutside);
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("click", onClickOutside);
       document.removeEventListener("keydown", onKey);
     };
-  }, [onClose]);
+  }, []);
 
   return createPortal(
     <div
