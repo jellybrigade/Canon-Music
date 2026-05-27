@@ -35,6 +35,8 @@ Never implement two goals at once. Never skip user testing before moving on.
 ### Releasing
 Before merging, run `/code-review` on the development branch and fix any blockers found.
 
+Run `git describe --tags --abbrev=0` to get the last released version, then apply the semver rule to compute X.Y.Z. Never guess the version from commit count.
+
 ```bash
 git checkout main
 git merge --no-ff development -m "$(cat <<'EOF'
