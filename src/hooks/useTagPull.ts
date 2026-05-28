@@ -86,7 +86,7 @@ async function buildInboxItem(
 
   // Sort: exact first, then fuzzy, then none
   tagRows.sort((a, b) => {
-    const order = { mapping: 0, exact: 1, fuzzy: 2, none: 3 };
+    const order = { mapping: 0, exact: 1, "cross-type": 2, fuzzy: 3, none: 4 };
     return order[a.findResult.matchType] - order[b.findResult.matchType];
   });
 
@@ -116,10 +116,12 @@ async function applyInboxItem(item: InboxItem): Promise<void> {
 
     // Upsert tag_mappings if we have a canonical
     if (canonicalId) {
+      const mt = tag.findResult.matchType;
+      const matchType = mt === "exact" || mt === "fuzzy" ? mt : null;
       await db.execute(
-        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, created_at)
-         VALUES (?, ?, ?, datetime('now'))`,
-        [tag.rawValue, tag.kind, canonicalId]
+        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
+         VALUES (?, ?, ?, 'manual', ?, datetime('now'))`,
+        [tag.rawValue, tag.kind, canonicalId, matchType]
       );
     }
 

@@ -2,7 +2,7 @@ import canonTreeData from "../assets/canon-tree.json";
 import { getDb } from "../db";
 
 export type TagKind = "genre" | "mood";
-export type MatchType = "exact" | "fuzzy" | "mapping" | "none";
+export type MatchType = "exact" | "fuzzy" | "mapping" | "cross-type" | "none";
 
 export type NodeSection = "genres" | "descriptors" | "scenes-and-movements";
 
@@ -129,7 +129,7 @@ export async function findCanonical(
 
   // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
   const crossType = tree.nodes.find((n) => n.canonical_key === key);
-  if (crossType) return { node: crossType, matchType: "exact" };
+  if (crossType) return { node: crossType, matchType: "cross-type" };
 
   // Fuzzy Levenshtein ≤ 2 (skip short strings to avoid false positives)
   if (key.length >= 5) {
@@ -173,7 +173,7 @@ export function findCanonicalSync(
 
   // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
   const crossType = tree.nodes.find((n) => n.canonical_key === key);
-  if (crossType) return { node: crossType, matchType: "exact" };
+  if (crossType) return { node: crossType, matchType: "cross-type" };
 
   if (key.length >= 5) {
     let bestNode: TreeNode | null = null;

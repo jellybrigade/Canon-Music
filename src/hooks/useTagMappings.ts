@@ -140,7 +140,7 @@ export function useVocabulary() {
            tt.raw_value,
            tt.kind,
            COUNT(DISTINCT tt.track_id) AS track_count,
-           MAX(tt.canonical_id) AS canonical_id,
+           tm.canonical_id AS canonical_id,
            tm.source AS mapping_source,
            tm.match_type AS mapping_match_type
          FROM track_tags tt
@@ -168,18 +168,10 @@ export function useAutoMapExact() {
       for (const { raw_value, kind } of all) {
         const result = findCanonicalSync(raw_value, kind as TagKind, tree);
         if (result.node && result.matchType === "exact") {
-          // Insert mapping for unmapped rows
           await db.execute(
             `INSERT OR IGNORE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
              VALUES (?, ?, ?, 'auto', ?, datetime('now'))`,
             [raw_value, kind, result.node.id, result.matchType]
-          );
-          // Retroactively mark source='auto' where canonical_id still matches what we'd auto-pick
-          // (safe: only touches rows where user didn't override to a different canonical)
-          await db.execute(
-            `UPDATE tag_mappings SET source='auto', match_type=?
-             WHERE raw_value=? AND kind=? AND canonical_id=? AND source='manual'`,
-            [result.matchType, raw_value, kind, result.node.id]
           );
           await db.execute(
             "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ? AND canonical_id IS NULL",
@@ -227,7 +219,7 @@ export function useRapToHipHop() {
       const rows = await db.select<{ value: string }[]>(
         "SELECT value FROM settings WHERE key = 'tags.rap_to_hiphop'"
       );
-      return rows[0]?.value !== "false";
+      return rows[0]?.value === "true";
     },
   });
 
@@ -243,7 +235,7 @@ export function useRapToHipHop() {
           "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'))"
         );
         await db.execute(
-          "UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id IS NULL"
+          "UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'"
         );
       } else {
         const rows = await db.select<{ canonical_id: string }[]>(
@@ -267,7 +259,7 @@ export function useRapToHipHop() {
     },
   });
 
-  return { enabled: enabled ?? true, toggle };
+  return { enabled: enabled ?? false, toggle };
 }
 
 export function useAddUserTreeNode() {
