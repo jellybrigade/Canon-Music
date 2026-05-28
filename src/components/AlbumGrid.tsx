@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Heart, AlertTriangle } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow } from "../hooks/useAlbums";
@@ -25,7 +25,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const { data: offTreeIds } = useOffTreeAlbumIds();
-  const offTreeSet = new Set(offTreeIds ?? []);
+  const offTreeSet = useMemo(() => new Set(offTreeIds ?? []), [offTreeIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
