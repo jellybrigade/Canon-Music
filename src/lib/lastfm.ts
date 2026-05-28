@@ -92,6 +92,33 @@ export async function fetchSimilarArtists(artist: string): Promise<string[]> {
   return (data.similarartists?.artist ?? []).map((a) => a.name);
 }
 
+export async function fetchArtistImage(artist: string): Promise<string | null> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+  try {
+    await rateLimit();
+    const url = new URL(LASTFM_BASE);
+    url.searchParams.set("method", "artist.getInfo");
+    url.searchParams.set("artist", artist);
+    url.searchParams.set("api_key", apiKey);
+    url.searchParams.set("format", "json");
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      artist?: { image?: Array<{ "#text": string; size: string }> };
+      error?: number;
+    };
+    if (data.error || !data.artist?.image) return null;
+    const images = data.artist.image.filter((img) => img["#text"]);
+    const extralarge = images.find((img) => img.size === "extralarge");
+    const large = images.find((img) => img.size === "large");
+    const chosen = extralarge ?? large ?? images[images.length - 1];
+    return chosen?.["#text"] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Classify a raw Last.fm tag as genre or mood based on canon tree lookup
 export async function classifyTag(rawTag: string): Promise<TagKind> {
   const { getCanonTree } = await import("./canonicalize");

@@ -57,9 +57,10 @@ Canon/
 │   │   └── tags.ts            Zustand: inboxItems (in-memory per session); addInboxItem, removeInboxItem, updateTagRow
 │   ├── components/
 │   │   ├── AddServerModal.tsx  First-launch + add-server form; optional sidecar config section
-│   │   ├── AlbumDetail.tsx    Tracklist, Play Album button, tag actions (Last.fm pull, Canonize), context menu
+│   │   ├── AlbumDetail.tsx    Hero (blurred bg + 240px art), three-column tag band (useNormalizeAlbum), tracklist, right-click → Show tags / Start radio / playlist
 │   │   ├── AlbumGrid.tsx      Album card grid; hover heart; off-tree badge (AlertTriangle icon)
-│   │   ├── ArtistDetail.tsx   Blurred banner, album cards, top tracks
+│   │   ├── ArtistDetail.tsx   Blurred banner (local art or Last.fm image), album grid, top tracks
+│   │   ├── TagDrawer.tsx      Sliding right drawer: normalized tag source/confidence per bucket; Override → pending_edits (track-scoped only)
 │   │   ├── ArtistGrid.tsx     Artist cards with album count
 │   │   ├── NowPlayingOverlay.tsx  Full-screen now-playing: large art, controls, more-from-artist, synced/plain lyrics
 │   │   ├── PlayerBar.tsx      Fixed bottom bar: controls, progress, volume, thumb→overlay
@@ -188,7 +189,7 @@ Credentials:
 | File | Purpose |
 |---|---|
 | `ids.ts` | `stripServerPrefix(id, serverId)` — removes `"{serverId}:"` prefix from composite IDs. Throws if prefix is missing (catches colon-in-ID bugs). Use instead of `id.slice(server.id.length + 1)`. |
-| `lastfm.ts` | Last.fm API. `fetchAlbumTags(artist, album)`, `classifyTag(raw)`, `fetchSimilarArtists(artist)`. Rate-limited to 4 req/s. API key from `settings['lastfm.api_key']`. |
+| `lastfm.ts` | Last.fm API. `fetchAlbumTags(artist, album)`, `fetchArtistImage(artist)`, `classifyTag(raw)`, `fetchSimilarArtists(artist)`. Rate-limited to 4 req/s. API key from `settings['lastfm.api_key']`. |
 | `lrclib.ts` | LRClib public API. `fetchLyrics({artist, album, title, durationSec})` → `LrclibResult | null` (404 = no lyrics). `parseLrc(lrc)` → `LrcLine[]` sorted by timeSec. |
 | `navidrome.ts` | OpenSubsonic client. MD5 token + salt auth (`c=canon`, `v=1.16.1`). `NavidromeAlbum.songCount?: number` for incremental sync. `scrobbleTrack(url, username, cred, nativeId, timestampMs)`. Functions: `authenticate`, `fetchAllAlbums`, `fetchAlbumTracks`, `fetchStarred2`, `fetchPlaylists`, `fetchPlaylistTracks`, `createNavidromePlaylist`, `deleteNavidromePlaylist`, `addTrackToNavidromePlaylist`, `removeTrackFromNavidromePlaylist`, `starTrack/Album`, `unstarTrack/Album`, `getStreamUrl`, `getCoverArtUrl`. |
 | `radio.ts` | Radio engine. `buildAncestorWeights(nodeId, byId, maxDepth=4)` → BFS weight map (weight = 1/2^depth). `getRadioCandidates(seedTrackId, excludeIds, similarArtists)` → scored candidates using SQL CTE (inline VALUES); mood weight 0.4; falls back to random 20 if no seed tags. Final score = 0.6 * normalizedTree + 0.4 * lastfmBoost. |
@@ -235,9 +236,10 @@ Credentials:
 | File | Purpose |
 |---|---|
 | `AddServerModal.tsx` | First-launch and add-server form. Writes to `servers` table + OS keychain. Calls ping to verify auth before saving. Optional sidecar section (URL, secret, path remap); secret stored in keychain at `canon.sidecar.{id}`. |
-| `AlbumDetail.tsx` | Full-album tracklist. "Play Album" button queues full album. "Last.fm" + "Canonize" album-level action buttons (pullForAlbum/canonizeAlbum mutations). Right-click track context menu (Play Next, Add to Queue, Add to Playlist). Per-track heart. Populates `CurrentTrack.album/albumId`. |
+| `AlbumDetail.tsx` | Hero with full-bleed blurred cover bg + 240px thumbnail. Three-column tag band from `useNormalizeAlbum` (genres/descriptors/scenes chips). Tracklist with play, queue, radio, playlist, and Show tags actions. Right-click chip → album-level TagDrawer; right-click track → track-scoped TagDrawer. No inline tag editor. |
+| `TagDrawer.tsx` | Right-side overlay drawer. Shows normalized tag buckets (source badge + confidence %). If `trackId` provided: also shows raw file tags and Override button (queues `pending_edits` for genre field). Escape / click-outside closes. |
 | `AlbumGrid.tsx` | Album card grid. Lazy-loaded cover art. Hover heart. Off-tree badge (AlertTriangle, from `useOffTreeAlbumIds`). Click → onSelect. |
-| `ArtistDetail.tsx` | Blurred banner, album card grid, top tracks list. |
+| `ArtistDetail.tsx` | Blurred banner (local artwork_url → fallback Last.fm `artist.getInfo` image), album card grid, top tracks list. |
 | `ArtistGrid.tsx` | Artist cards with album count. |
 | `NowPlayingOverlay.tsx` | Full-screen overlay (z-index 300). Large album art, track info, progress, controls, heart, volume. About tab: more-from-artist + top tracks. Lyrics tab: synced (auto-scrolling active line) or plain from LRClib; cache miss fetches on first open. ESC + click-backdrop dismiss. |
 | `PlayerBar.tsx` | Fixed bottom bar. Shuffle / prev / play-pause / next / repeat / queue toggle. Elapsed timer + clickable progress bar. Volume slider. Album art thumbnail → `toggleNowPlaying()`. |

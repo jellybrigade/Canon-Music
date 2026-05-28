@@ -5,6 +5,7 @@ import type { ArtistRow } from "../hooks/useArtists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { fetchArtistImage } from "../lib/lastfm";
 
 interface Props {
   artist: ArtistRow;
@@ -69,9 +70,18 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: albums } = useArtistAlbums(artist.name);
   const { data: topTracks } = useArtistTopTracks(artist.name);
 
-  const bannerUrl = artist.artwork_url
+  const localBannerUrl = artist.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 600)
     : null;
+
+  const { data: lastfmImageUrl } = useQuery({
+    queryKey: ["artist-image", artist.name],
+    queryFn: () => fetchArtistImage(artist.name),
+    staleTime: 7 * 24 * 60 * 60 * 1000,
+    enabled: !localBannerUrl,
+  });
+
+  const bannerUrl = localBannerUrl ?? lastfmImageUrl ?? null;
 
   return (
     <div className="artist-detail">
