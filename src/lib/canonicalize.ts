@@ -4,12 +4,15 @@ import { getDb } from "../db";
 export type TagKind = "genre" | "mood";
 export type MatchType = "exact" | "fuzzy" | "mapping" | "none";
 
+export type NodeSection = "genres" | "descriptors" | "scenes-and-movements";
+
 export interface TreeNode {
   id: string;
   name: string;
   type: string;
   canonical_key: string;
   parents: string[];
+  section?: NodeSection;
 }
 
 export interface CanonTree {

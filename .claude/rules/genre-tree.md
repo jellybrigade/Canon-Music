@@ -11,9 +11,11 @@ paths:
 
 The Canon genre tree (`canon-tree.json`) is a **directed acyclic graph**. Genres can have multiple parents. Do not flatten to single-parent. Do not add tree-assumption shortcuts.
 
-Node format: `{ id, name, type: "genre" | "mood", parents: string[] }`
+Node format: `{ id, name, type: "genre" | "mood" | "category", canonical_key: string, parents: string[], section: "genres" | "descriptors" | "scenes-and-movements" }`
 
-Source: `RateYourMusic Hierarchy.txt` → `scripts/parse-rym.ts` → `src/assets/canon-tree.json`
+- `section` reflects the RYM top-level header the node was parsed under. Set on creation; not overwritten if a node appears under multiple parents (DAG). Used by `bucketize()` in `src/lib/tag-buckets.ts` to split tags into three display columns.
+
+Source: `scripts/data/rym-hierarchy.txt` → `scripts/parse-rym.mjs` → `src/assets/canon-tree.json`
 
 ## User Override
 

@@ -240,4 +240,11 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 11,
+    sql: `
+      ALTER TABLE albums ADD COLUMN normalized_tags_json TEXT;
+      ALTER TABLE albums ADD COLUMN computed_at INTEGER;
+    `,
+  },
 ];

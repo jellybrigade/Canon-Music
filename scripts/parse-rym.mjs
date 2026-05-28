@@ -2,12 +2,13 @@
 /**
  * Parse RateYourMusic Hierarchy.txt into canon-tree.json
  *
- * Input:  "RateYourMusic Hierarchy.txt" (project root)
+ * Input:  scripts/data/rym-hierarchy.txt
  * Output: src/assets/canon-tree.json
  *
- * Node format: { id, name, type, canonical_key, parents }
+ * Node format: { id, name, type, canonical_key, parents, section }
  *   type: "genre" | "mood" | "category"
- *   parents: direct parent ids (empty for top-level genres)
+ *   section: "genres" | "descriptors" | "scenes-and-movements"
+ *   parents: direct parent ids (empty for top-level nodes)
  */
 
 import { readFileSync, writeFileSync } from "fs";
@@ -16,8 +17,14 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const INPUT = join(ROOT, "RateYourMusic Hierarchy.txt");
+const INPUT = join(ROOT, "scripts", "data", "rym-hierarchy.txt");
 const OUTPUT = join(ROOT, "src", "assets", "canon-tree.json");
+
+const SECTION_SLUGS = {
+  Descriptors: "descriptors",
+  Genres: "genres",
+  "Scenes & Movements": "scenes-and-movements",
+};
 
 function slugify(name) {
   return name
@@ -44,6 +51,7 @@ const lines = readFileSync(INPUT, "utf8").split("\n");
 const nodesById = new Map();
 // Stack entries: { depth, id, name }
 const stack = [];
+let currentSection = "genres";
 
 for (const raw of lines) {
   if (!raw.trim()) continue;
@@ -55,6 +63,7 @@ for (const raw of lines) {
 
   // Depth 0 = section header (Descriptors / Genres / Scenes & Movements)
   if (depth === 0) {
+    currentSection = SECTION_SLUGS[trimmed] ?? "genres";
     stack.length = 0;
     continue;
   }
@@ -110,6 +119,7 @@ for (const raw of lines) {
       type,
       canonical_key: canonicalKey(name),
       parents: parentId ? [parentId] : [],
+      section: currentSection,
     };
     nodesById.set(id, node);
     stack.push({ depth, id, name });

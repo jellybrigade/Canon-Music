@@ -9,14 +9,14 @@ cd "$REPO"
 
 # Only dev branches
 BRANCH=$(git branch --show-current 2>/dev/null || true)
-[[ -z "$BRANCH" || "$BRANCH" == "main" ]] && exit 0
+if [[ -z "$BRANCH" || "$BRANCH" == "main" ]]; then exit 0; fi
 
 # Skip if tree is already clean
-git diff --quiet HEAD 2>/dev/null && exit 0
+if git diff --quiet HEAD 2>/dev/null; then exit 0; fi
 
 # Cooldown: skip if last commit was less than 90 seconds ago (prevents mid-task churn)
 LAST_COMMIT_AGE=$(( $(date +%s) - $(git log -1 --format=%ct 2>/dev/null || echo 0) ))
-[[ "$LAST_COMMIT_AGE" -lt 90 ]] && exit 0
+if [[ "$LAST_COMMIT_AGE" -lt 90 ]]; then exit 0; fi
 
 # Build context for message generation (skip lockfiles/build artifacts)
 STAT=$(git diff HEAD --stat 2>/dev/null)
@@ -50,7 +50,7 @@ echo "auto-committed: $TITLE"
 
 # ── Release suggestion ────────────────────────────────────────────────────────
 AHEAD=$(git rev-list --count main..HEAD 2>/dev/null || echo 0)
-[[ "$AHEAD" -lt 4 ]] && exit 0
+if [[ "$AHEAD" -lt 4 ]]; then exit 0; fi
 
 COMMITS=$(git log main..HEAD --oneline 2>/dev/null)
 LAST_VER=$(git describe --tags --abbrev=0 2>/dev/null | grep -oP '[0-9]+\.[0-9]+\.[0-9]+' || true)
