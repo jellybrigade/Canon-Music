@@ -4,6 +4,7 @@ import type { SearchAlbum, SearchTrack, SearchArtist } from "../hooks/useSearch"
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl } from "../lib/navidrome";
+import "./SearchResults.css";
 
 interface Props {
   albums: SearchAlbum[];

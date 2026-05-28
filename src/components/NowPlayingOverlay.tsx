@@ -12,6 +12,7 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import { parseLrc } from "../lib/lrclib";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import "./NowPlayingOverlay.css";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -103,6 +104,23 @@ export function NowPlayingOverlay({ serverWithCredential, onSelectAlbum, onSelec
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
     : currentTrack?.coverArtUrl ?? null;
 
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!largeArtUrl) { setAccentColor(null); return; }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+      setAccentColor(`rgb(${r},${g},${b})`);
+    };
+    img.src = largeArtUrl;
+  }, [largeArtUrl]);
+
   // Build ordered queue (respects shuffle)
   const orderedTracks = Array.from({ length: queue.length }, (_, pos) => {
     const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
@@ -141,7 +159,11 @@ export function NowPlayingOverlay({ serverWithCredential, onSelectAlbum, onSelec
   if (!isNowPlayingOpen || !currentTrack) return null;
 
   return (
-    <div className="now-playing-overlay" onClick={toggleNowPlaying}>
+    <div
+      className="now-playing-overlay"
+      style={accentColor ? { "--accent-now-playing": accentColor } as React.CSSProperties : undefined}
+      onClick={toggleNowPlaying}
+    >
       {largeArtUrl && (
         <div
           className="now-playing-backdrop"

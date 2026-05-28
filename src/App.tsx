@@ -38,6 +38,9 @@ import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
 import type { ArtistRow } from "./hooks/useArtists";
+import "./styles/tokens.css";
+import "./styles/library.css";
+import "./styles/base.css";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";

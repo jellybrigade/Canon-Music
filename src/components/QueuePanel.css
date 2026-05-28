@@ -1,0 +1,136 @@
+/* ── Queue panel ── */
+.library--queue-open {
+  margin-right: 280px;
+}
+
+.queue-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 72px;
+  width: 280px;
+  background-color: var(--bg-elevated);
+  border-left: 1px solid var(--border);
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.queue-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.queue-panel-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.queue-panel-close {
+  font-size: 0.75rem;
+  padding: 0.2em 0.5em;
+  box-shadow: none;
+  line-height: 1;
+  opacity: 0.6;
+}
+
+.queue-panel-close:hover {
+  opacity: 1;
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0;
+}
+
+.queue-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  cursor: default;
+  user-select: none;
+}
+
+.queue-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.queue-row--active {
+  color: var(--accent);
+}
+
+.queue-row-indicator {
+  font-size: 0.625rem;
+  width: 0.875rem;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.queue-row-num {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  width: 1.5rem;
+  text-align: right;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.queue-row--active .queue-row-num {
+  color: var(--accent);
+}
+
+.queue-row-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.queue-row-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-row-artist {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
+/* ── Queue drag-and-drop ── */
+.queue-row {
+  cursor: grab;
+}
+
+.queue-row--drop-target {
+  border-top: 2px solid var(--accent);
+}
+
+.queue-row-drag-handle {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  padding-right: 4px;
+  cursor: grab;
+  user-select: none;
+}
+

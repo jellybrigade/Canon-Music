@@ -13,6 +13,7 @@ import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
+import "./AlbumDetail.css";
 
 const SECONDS_PER_MINUTE = 60;
 

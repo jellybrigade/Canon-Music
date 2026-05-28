@@ -6,6 +6,7 @@ import { useLoved } from "../hooks/useLoved";
 import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
+import "./AlbumGrid.css";
 
 interface Props {
   albums: AlbumRow[];

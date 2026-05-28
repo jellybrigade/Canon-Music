@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { usePendingEdits } from "../hooks/usePendingEdits";
 import type { NormalizedTag } from "../lib/tag-normalize";
+import "./TagDrawer.css";
 
 interface Props {
   albumId: string;

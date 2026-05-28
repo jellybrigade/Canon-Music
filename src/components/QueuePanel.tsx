@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { X, GripVertical, Play } from "lucide-react";
 import { usePlayerStore } from "../store/player";
+import "./QueuePanel.css";
 
 type ContextMenu = { x: number; y: number; position: number } | null;
 

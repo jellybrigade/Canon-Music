@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Plus } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { ServerWithCredential } from "../hooks/useServer";
+import "./PlaylistList.css";
 
 interface Props {
   playlists: PlaylistRow[];

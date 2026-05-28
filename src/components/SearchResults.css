@@ -1,0 +1,148 @@
+/* ── Search results ── */
+.search-results {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.search-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+
+.search-group-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 0.625rem;
+}
+
+.search-album-list,
+.search-track-list,
+.search-artist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.search-album-row,
+.search-track-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  transition: background-color 0.1s;
+  width: 100%;
+}
+
+.search-album-row:hover,
+.search-track-row:hover {
+  background: var(--bg-hover);
+  border: none;
+}
+
+.search-album-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.search-album-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.search-album-info,
+.search-track-info,
+.search-artist-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.search-item-primary {
+  font-size: 0.875rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-item-secondary {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.search-track-duration {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.search-artist-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+}
+
+.search-artist-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.search-show-all {
+  margin-top: 0.375rem;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0.25em 0.5em;
+  font-size: 0.75rem;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.search-show-all:hover {
+  border: none;
+  color: var(--accent-hover);
+}
+

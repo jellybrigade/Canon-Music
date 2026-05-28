@@ -6,6 +6,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { fetchArtistImage } from "../lib/lastfm";
+import "./ArtistDetail.css";
 
 interface Props {
   artist: ArtistRow;

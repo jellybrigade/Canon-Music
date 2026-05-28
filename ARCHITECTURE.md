@@ -15,13 +15,14 @@ Canon/
 │   └── tauri.conf.json        App config, bundle, plugin allowlist
 ├── src/                       React + TypeScript frontend
 │   ├── App.tsx                Root: routing, sidebar nav, sync trigger, search bar, keymap
-│   ├── App.css                Global CSS variables, layout, utility classes
-│   ├── main.tsx               React entry, QueryClientProvider
+│   ├── App.css                Design tokens (color vars, z-index, typography), global element resets, animations, sidebar (215 LOC)
+│   ├── main.tsx               React entry, QueryClientProvider; imports tokens.css, base.css, library.css
 │   ├── keychain.ts            Thin invoke wrapper for set/get/delete_credential Tauri commands
 │   ├── db/
 │   │   ├── index.ts           getDb() promise-cached singleton
 │   │   └── migrations.ts      All schema versions (v1–v11), runs on every getDb() call
 │   ├── lib/
+│   │   ├── cx.ts              cx(...classes) helper for joining conditional class names
 │   │   ├── ids.ts             stripServerPrefix(id, serverId) — strips "{serverId}:" prefix
 │   │   ├── canonicalize.ts    Canon tree loader, canonicalKey(), findCanonical(), findCanonicalSync(); exports TreeNode (with section field)
 │   │   ├── tag-buckets.ts     bucketize(tagIds) — splits mapped tag IDs into { genres, descriptors, scenes } using node.section
@@ -69,6 +70,10 @@ Canon/
 │   │   ├── QueuePanel.tsx     Right drawer: HTML5 drag-to-reorder, right-click context menu
 │   │   ├── SearchResults.tsx  Grouped Albums / Tracks / Artists with "Show all" toggles (up to 50)
 │   │   └── SettingsView.tsx   Settings: Last.fm API key, staleness threshold, pull mode default, sidecar
+│   ├── styles/
+│   │   ├── tokens.css         New design tokens: --radius-sm/md/lg, --motion-fast/med/slow, --shadow-1/2
+│   │   ├── base.css           Global resets: box-sizing, html/body/root, scrollbars
+│   │   └── library.css        Library view shell CSS (imported by App.tsx); sort bar, genre filter, search bar
 │   ├── types/
 │   │   └── server.ts          Server interface (+sidecar_url/secret_key/path_prefix fields)
 │   └── assets/

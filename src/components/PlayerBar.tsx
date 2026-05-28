@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { RadioChip } from "./RadioChip";
+import "./PlayerBar.css";
 
 const SECONDS_PER_MINUTE = 60;
 

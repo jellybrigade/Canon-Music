@@ -1,0 +1,17 @@
+/* ── Radio chip ── */
+.radio-chip-btn {
+  background: none;
+  border: 1px solid var(--accent, #e06c75);
+  color: var(--accent, #e06c75);
+  border-radius: 10px;
+  padding: 1px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.radio-chip-btn:hover {
+  background: color-mix(in srgb, var(--accent, #e06c75) 15%, transparent);
+}
+

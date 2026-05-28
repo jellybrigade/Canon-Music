@@ -5,6 +5,7 @@ import type { NavidromeCredential } from "../lib/navidrome";
 import { checkSidecarHealth } from "../lib/sidecar";
 import { keychain } from "../keychain";
 import type { Server } from "../types/server";
+import "./AddServerModal.css";
 
 interface Props {
   onSuccess: (server: Server) => void;
