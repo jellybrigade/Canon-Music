@@ -125,7 +125,13 @@ Playback path:
            prefetches next track at 80% elapsed via invoke("audio_prefetch")
            listens for track-ended Tauri event → next()
 
-Tag pipeline:
+Tag normalization pipeline (display-only):
+  useNormalizeAlbum / useBackgroundNormalizer → tag-normalize.ts → normalizeAlbum()
+    → track_tags JOIN tracks (file tags) + fetchAlbumTags (Last.fm)
+    → dedup by canonicalKey → findCanonicalSync → bucketize by section
+    → cap (genres≤6, descriptors≤6, scenes≤4) → albums.normalized_tags_json + computed_at
+
+Tag inbox pipeline (legacy, file-write path):
   Last.fm pull → lastfm.ts → raw tags → canonicalize.ts → InboxItem (in-memory)
                → user reviews InboxCard → Accept → track_tags + tag_mappings (SQLite)
                → stageGenrePendingEdits: pending_edits row per track ("; "-joined canonical genres)
@@ -188,6 +194,7 @@ Credentials:
 | `radio.ts` | Radio engine. `buildAncestorWeights(nodeId, byId, maxDepth=4)` → BFS weight map (weight = 1/2^depth). `getRadioCandidates(seedTrackId, excludeIds, similarArtists)` → scored candidates using SQL CTE (inline VALUES); mood weight 0.4; falls back to random 20 if no seed tags. Final score = 0.6 * normalizedTree + 0.4 * lastfmBoost. |
 | `sidecar.ts` | HTTP client for the Python sidecar. `checkSidecarHealth(url, secret)` → `SidecarHealth`. `writeTags(url, secret, {filePath, tags, dryRun}, pathPrefixFrom, pathPrefixTo)` → `WriteDryRunResult | void`. Path remap applied before send. |
 | `sync.ts` | `syncLibrary(server)` → `{ failedAlbums, failedPlaylists, skippedAlbums }`. Incremental skip: compares `navidrome_created` + `songCount` before fetching tracks. Per-album error catch (continues loop). Rebuilds `artists` table after album loop. Calls `scanForIssues(server.id)` at end. |
+| `tag-normalize.ts` | Normalization pipeline. `normalizeAlbum(albumId, artist, album)`: pull file tags (track_tags JOIN tracks) + Last.fm tags → merge/dedup → map via `findCanonicalSync` → `bucketize` by section → cap (6/6/4) → persist `normalized_tags_json` + `computed_at` on `albums`. Also exports `readNormalizedTags(albumId)` and `isStale(tags)`. |
 | `tagIssues.ts` | `scanForIssues(serverId)`. Deletes non-dismissed issues for server, then INSERTs for: `missing_genre`, `missing_artist`, `suspicious_genre` (http/long), `inconsistent_album_artist`, `duplicate_album`. `INSERT OR IGNORE` preserves dismissed rows across rescans. |
 
 ### Hooks (`src/hooks/`)
@@ -210,6 +217,8 @@ Credentials:
 | `useTagIssues.ts` | `useTagIssues()` — React Query over `tag_issues` (non-dismissed). Orphaned (TagIssuesView deleted in Phase 1); removal deferred to Phase 9. |
 | `useTagMappings.ts` | `useTagMappings()` — `tag_mappings` CRUD. `saveMapping` also calls `stageGenreEditsForRawValue` to stage `pending_edits` for affected genre tracks. `useVocabulary()`, `useVocabAlbums(rawValue, kind)`, `useAddUserTreeNode()`. |
 | `useTagPull.ts` | `useTagPull()` — `pullForAlbum` + `canonizeAlbum`. `applyInboxItem` writes `track_tags` + `tag_mappings`, then calls `stageGenrePendingEdits` for genre kind. `useAcceptInboxItem()`. |
+| `useBackgroundNormalizer.ts` | `useBackgroundNormalizer()` — mounted in App. On launch, queries albums with stale `computed_at` (>30 days or NULL), processes them sequentially at 1/2s. Cancelled when component unmounts or `tags.auto_refresh` is off. |
+| `useNormalizeAlbum.ts` | `useNormalizeAlbum(albumId, artist, album)` — React Query over `normalized_tags_json`. If data is missing or stale (>30 days), fires `normalizeAlbum()` in background and invalidates query on completion. Returns `{ data: NormalizedTags | null, isLoading }`. |
 | `useTrackEndedListener.ts` | Listens for Tauri `track-ended` event → calls `playerStore.next()`. |
 | `useTrackTags.ts` | `useTrackTagsForAlbum(albumId)` — tags for album. `useOffTreeAlbumIds()`. `useTrackTagMutations()`. `useTagStats()`. `useStaleAlbums(days)`. |
 | `useTracks.ts` | Tracks for a given `albumId` from SQLite. `enabled` when albumId non-null. |
@@ -236,13 +245,13 @@ Credentials:
 | `PlaylistList.tsx` | Playlist list + inline create form. |
 | `QueuePanel.tsx` | Fixed right drawer (z-index 50). Current queue in playback order. HTML5 drag-to-reorder (`draggable`, onDragStart/Over/Drop/End; drop-target highlight). Right-click context menu. |
 | `SearchResults.tsx` | Three groups: Albums / Tracks / Artists. Up to 50 per group (LIMIT 50 at source); "Show all N" toggle reveals up to 50. |
-| `SettingsView.tsx` | Settings: Last.fm API key (`lastfm.api_key`), staleness days (`tags.staleness_days`), pull mode default (`tags.pull_mode_default`), sidecar config, servers. |
+| `SettingsView.tsx` | Settings: Last.fm API key, staleness days, pull mode, sidecar. Tag automation section: `tags.auto_refresh` toggle, "Refresh now" button with progress counter (`N / total`), last-refreshed timestamp from `MAX(computed_at)`. |
 
 ### Other (`src/`)
 
 | File | Purpose |
 |---|---|
-| `App.tsx` | Root component. Views: library/artists/playlists/settings. Sidebar nav (4 items). Sync trigger + query invalidation. useMediaSession + useRadio + useScrobbleFlush + useGlobalShortcuts mounted here. Genre filter chip in library header. |
+| `App.tsx` | Root component. Views: library/artists/playlists/settings. Sidebar nav (4 items). Sync trigger + query invalidation. useMediaSession + useRadio + useBackgroundNormalizer + useScrobbleFlush + useGlobalShortcuts mounted here. Genre filter chip in library header. |
 | `keychain.ts` | Thin wrapper: `keychain.set/get/delete` → Tauri `set_credential/get_credential/delete_credential` commands. Key formats: `canon.server.{id}` (Navidrome cred), `canon.sidecar.{id}` (sidecar secret). |
 | `types/server.ts` | `Server` interface: `id, type, url, display_name, username, created_at, sidecar_url, sidecar_secret_key, sidecar_path_prefix_from, sidecar_path_prefix_to`. |
 
@@ -265,7 +274,7 @@ Credentials:
 
 | Table | Purpose |
 |---|---|
-| `albums` | id, server_id, server_type, name, artist, album_artist, year, artwork_url, navidrome_created, tags_refreshed_at, created_at |
+| `albums` | id, server_id, server_type, name, artist, album_artist, year, artwork_url, navidrome_created, tags_refreshed_at, **normalized_tags_json** (v11), **computed_at** (v11, unix timestamp), created_at |
 | `tracks` | id, server_id, server_type, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, last_modified, file_path, created_at |
 | `track_tags` | id, track_id, kind (genre\|mood), raw_value, canonical_id (NULL = off-tree), source (server\|lastfm\|manual), created_at — UNIQUE(track_id, kind, raw_value, source) |
 | `tag_mappings` | raw_value, kind, canonical_id, created_at — PRIMARY KEY (raw_value, kind) |
@@ -274,7 +283,7 @@ Credentials:
 | `artists` | id, server_id, server_type, name, **album_count** (v10), created_at — rebuilt on every sync |
 | `lyrics` | track_id (PK), plain, synced, source, fetched_at — cache for LRClib results |
 | `servers` | id, type, url, display_name, username, sidecar_url, sidecar_secret_key, sidecar_path_prefix_from, sidecar_path_prefix_to, created_at |
-| `settings` | key TEXT PRIMARY KEY, value TEXT — volume, repeat, library_sort, queue_state, **lastfm.api_key, tags.staleness_days, tags.pull_mode_default** |
+| `settings` | key TEXT PRIMARY KEY, value TEXT — volume, repeat, library_sort, queue_state, **lastfm.api_key, tags.staleness_days, tags.pull_mode_default, tags.auto_refresh** |
 | `loved_tracks` | track_id TEXT PRIMARY KEY, loved_at TEXT |
 | `loved_albums` | album_id TEXT PRIMARY KEY, loved_at TEXT |
 | `tracks_fts` | FTS5: id UNINDEXED, title, artist, album, genre — bulk-rebuilt after each sync |

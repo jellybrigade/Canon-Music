@@ -25,6 +25,7 @@ import type { PlaylistRow } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
+import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { syncLibrary } from "./lib/sync";
 import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
 import { stripServerPrefix } from "./lib/ids";
@@ -46,6 +47,7 @@ export default function App() {
   useTrackEndedListener();
   useMediaSession();
   useRadio();
+  useBackgroundNormalizer();
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const elapsed = usePlayerStore((s) => s.elapsed);
