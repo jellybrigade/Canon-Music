@@ -28,6 +28,21 @@ function applyPathRemap(filePath: string, from: string | null, to: string | null
   return filePath;
 }
 
+const SIDECAR_PROBE_PORTS = [8765, 4533, 3000];
+
+export async function probeSidecar(host: string): Promise<{ url: string; health: SidecarHealth }> {
+  for (const port of SIDECAR_PROBE_PORTS) {
+    const url = `http://${host}:${port}`;
+    try {
+      const health = await checkSidecarHealth(url, "");
+      return { url, health };
+    } catch {
+      // try next port
+    }
+  }
+  throw new Error(`No sidecar found on ${host} (tried ports ${SIDECAR_PROBE_PORTS.join(", ")})`);
+}
+
 export async function checkSidecarHealth(url: string, secret: string): Promise<SidecarHealth> {
   const res = await fetch(`${url}/health`, {
     headers: { Authorization: `Bearer ${secret}` },

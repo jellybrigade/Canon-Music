@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic } from "lucide-react";
-import { AddServerModal } from "./components/AddServerModal";
+import { Wizard } from "./components/setup/Wizard";
 import { AlbumGrid } from "./components/AlbumGrid";
 import { AlbumDetail } from "./components/AlbumDetail";
 import { ArtistGrid } from "./components/ArtistGrid";
@@ -158,6 +158,7 @@ export default function App() {
   const syncedRef = useRef<string | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumRow | null>(null);
 
   function navigateTo(v: View) {
@@ -246,6 +247,7 @@ export default function App() {
       .then(({ failedAlbums, failedPlaylists }) => {
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
+        setLastSyncedAt(Date.now());
         if (hasPartialFailure) {
           const parts = [];
           if (failedAlbums > 0) parts.push(`${failedAlbums} album${failedAlbums > 1 ? "s" : ""}`);
@@ -280,7 +282,7 @@ export default function App() {
 
   if (!servers || servers.length === 0) {
     return (
-      <AddServerModal
+      <Wizard
         onSuccess={(newServer: Server) => {
           queryClient.setQueryData(["servers"], [newServer]);
         }}
@@ -581,7 +583,15 @@ export default function App() {
       case "settings":
         return (
           <main className="content-main">
-            <SettingsView />
+            <SettingsView
+              syncStatus={syncStatus}
+              syncError={syncError}
+              lastSyncedAt={lastSyncedAt}
+              serverWithCredential={serverWithCred}
+              onRemoveServer={() => {
+                queryClient.setQueryData(["servers"], []);
+              }}
+            />
           </main>
         );
     }

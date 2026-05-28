@@ -30,7 +30,7 @@ Canon/
 │   │   ├── lrclib.ts          LRClib lyrics fetch: fetchLyrics(), parseLrc(); public API, no auth
 │   │   ├── navidrome.ts       OpenSubsonic API client; scrobbleTrack()
 │   │   ├── radio.ts           Radio scoring engine: buildAncestorWeights(), getRadioCandidates()
-│   │   ├── sidecar.ts         checkSidecarHealth() + writeTags() HTTP client wrappers
+│   │   ├── sidecar.ts         checkSidecarHealth() + probeSidecar(host) + writeTags() HTTP client wrappers
 │   │   ├── sync.ts            syncLibrary(): albums+tracks+FTS+starred+playlists+artists+tag_issues; incremental skip
 │   │   └── tagIssues.ts       scanForIssues(serverId): detects 5 issue types, INSERT OR IGNORE preserves dismissed
 │   ├── hooks/
@@ -57,7 +57,9 @@ Canon/
 │   │   ├── player.ts          Zustand: queue, shuffle, repeat, volume, elapsed, isNowPlayingOpen, actions
 │   │   └── tags.ts            Zustand: inboxItems (in-memory per session); addInboxItem, removeInboxItem, updateTagRow
 │   ├── components/
-│   │   ├── AddServerModal.tsx  First-launch + add-server form; optional sidecar config section
+│   │   ├── setup/
+│   │   │   ├── Wizard.tsx     4-step onboarding wizard (replaces AddServerModal); server connect + optional sidecar + auto-detect
+│   │   │   └── Wizard.css     Wizard layout, step dots, form + action styles
 │   │   ├── AlbumDetail.tsx    Hero (blurred bg + 240px art), three-column tag band (useNormalizeAlbum), tracklist, right-click → Show tags / Start radio / playlist
 │   │   ├── AlbumGrid.tsx      Album card grid; hover heart; off-tree badge (AlertTriangle icon)
 │   │   ├── ArtistDetail.tsx   Blurred banner (local art or Last.fm image), album grid, top tracks
@@ -166,7 +168,7 @@ Lyrics path:
                    → cache result → parseLrc → NowPlayingOverlay synced/plain display
 
 Credentials:
-  AddServerModal → invoke("set_credential") → OS keychain
+  setup/Wizard → invoke("set_credential") → OS keychain
   useServer → invoke("get_credential") → decoded NavidromeCredential
   Never in SQLite, localStorage, or Zustand
 ```
@@ -240,7 +242,7 @@ Credentials:
 
 | File | Purpose |
 |---|---|
-| `AddServerModal.tsx` | First-launch and add-server form. Writes to `servers` table + OS keychain. Calls ping to verify auth before saving. Optional sidecar section (URL, secret, path remap); secret stored in keychain at `canon.sidecar.{id}`. |
+| `setup/Wizard.tsx` | 4-step onboarding wizard (shown when no servers configured). Step 1: welcome. Step 2: server URL/credentials + inline test. Step 3: optional sidecar (auto-detect via `probeSidecar`, manual, or skip). Step 4: done → calls `onSuccess(server)`. Writes to `servers` table + OS keychain. |
 | `AlbumDetail.tsx` | Hero with full-bleed blurred cover bg + 240px thumbnail. Three-column tag band from `useNormalizeAlbum` (genres/descriptors/scenes chips). Tracklist with play, queue, radio, playlist, and Show tags actions. Right-click chip → album-level TagDrawer; right-click track → track-scoped TagDrawer. No inline tag editor. |
 | `TagDrawer.tsx` | Right-side overlay drawer. Shows normalized tag buckets (source badge + confidence %). If `trackId` provided: also shows raw file tags and Override button (queues `pending_edits` for genre field). Escape / click-outside closes. |
 | `AlbumGrid.tsx` | Album card grid. Lazy-loaded cover art. Hover heart. Off-tree badge (AlertTriangle, from `useOffTreeAlbumIds`). Click → onSelect. |
@@ -252,7 +254,7 @@ Credentials:
 | `PlaylistList.tsx` | Playlist list + inline create form. |
 | `QueuePanel.tsx` | Fixed right drawer (z-index 50). Current queue in playback order. HTML5 drag-to-reorder (`draggable`, onDragStart/Over/Drop/End; drop-target highlight). Right-click context menu. |
 | `SearchResults.tsx` | Three groups: Albums / Tracks / Artists. Up to 50 per group (LIMIT 50 at source); "Show all N" toggle reveals up to 50. |
-| `SettingsView.tsx` | Settings: Last.fm API key, staleness days, pull mode, sidecar. Tag automation section: `tags.auto_refresh` toggle, "Refresh now" button with progress counter (`N / total`), last-refreshed timestamp from `MAX(computed_at)`. |
+| `SettingsView.tsx` | Settings: Server panel (show/edit/remove server + sidecar config), Last.fm API key, Tags (staleness/pull mode), Tag automation (auto-refresh toggle, Refresh now, last-refreshed timestamp), Diagnostics (sync status, scrobble queue count, sidecar ping). Accepts `syncStatus`, `syncError`, `lastSyncedAt`, `serverWithCredential`, `onRemoveServer` props from App. |
 
 ### Other (`src/`)
 
