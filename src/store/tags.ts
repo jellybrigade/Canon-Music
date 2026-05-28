@@ -24,6 +24,8 @@ interface TagsState {
   removeInboxItem: (albumId: string) => void;
   updateTagRow: (albumId: string, rawValue: string, kind: TagKind, patch: Partial<InboxTagRow>) => void;
   clearInbox: () => void;
+  pullProgress: { done: number; total: number } | null;
+  setPullProgress: (p: { done: number; total: number } | null) => void;
 }
 
 export const useTagsStore = create<TagsState>()((set) => ({
@@ -52,4 +54,7 @@ export const useTagsStore = create<TagsState>()((set) => ({
     })),
 
   clearInbox: () => set({ inboxItems: [] }),
+
+  pullProgress: null,
+  setPullProgress: (p) => set({ pullProgress: p }),
 }));

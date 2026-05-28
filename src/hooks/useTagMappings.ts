@@ -21,7 +21,11 @@ async function stageGenreEditsForRawValue(rawValue: string): Promise<void> {
       [trackId]
     );
     const names = tagRows
-      .map((r) => tree.byId.get(r.canonical_id)?.name ?? null)
+      .map((r) => {
+        if (r.canonical_id === "__accepted__") return rawValue;
+        if (r.canonical_id === "__ignored__") return null;
+        return tree.byId.get(r.canonical_id)?.name ?? null;
+      })
       .filter((n): n is string => n !== null)
       .sort();
     if (names.length === 0) continue;
@@ -47,6 +51,8 @@ export interface TagMappingRow {
   raw_value: string;
   kind: TagKind;
   canonical_id: string;
+  source: "auto" | "manual";
+  match_type: "exact" | "fuzzy" | null;
   created_at: string;
 }
 
@@ -55,6 +61,8 @@ export interface VocabRow {
   kind: TagKind;
   track_count: number;
   canonical_id: string | null;
+  mapping_source: "auto" | "manual" | null;
+  mapping_match_type: "exact" | "fuzzy" | null;
 }
 
 export function useTagMappings() {
@@ -71,12 +79,18 @@ export function useTagMappings() {
   });
 
   const saveMapping = useMutation({
-    mutationFn: async ({ rawValue, kind, canonicalId }: { rawValue: string; kind: TagKind; canonicalId: string }) => {
+    mutationFn: async ({ rawValue, kind, canonicalId, source = "manual", matchType = null }: {
+      rawValue: string;
+      kind: TagKind;
+      canonicalId: string;
+      source?: "auto" | "manual";
+      matchType?: "exact" | "fuzzy" | null;
+    }) => {
       const db = await getDb();
       await db.execute(
-        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, created_at)
-         VALUES (?, ?, ?, datetime('now'))`,
-        [rawValue, kind, canonicalId]
+        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        [rawValue, kind, canonicalId, source, matchType]
       );
       await db.execute(
         "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?",
@@ -126,11 +140,58 @@ export function useVocabulary() {
            tt.raw_value,
            tt.kind,
            COUNT(DISTINCT tt.track_id) AS track_count,
-           MAX(tt.canonical_id) AS canonical_id
+           MAX(tt.canonical_id) AS canonical_id,
+           tm.source AS mapping_source,
+           tm.match_type AS mapping_match_type
          FROM track_tags tt
+         LEFT JOIN tag_mappings tm ON tm.raw_value = tt.raw_value AND tm.kind = tt.kind
          GROUP BY tt.raw_value, tt.kind
          ORDER BY track_count DESC, tt.raw_value`
       );
+    },
+  });
+}
+
+export function useAutoMapExact() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const db = await getDb();
+      const { getCanonTree, findCanonicalSync } = await import("../lib/canonicalize");
+      const tree = await getCanonTree();
+
+      type Row = { raw_value: string; kind: string };
+      const all = await db.select<Row[]>(
+        `SELECT DISTINCT raw_value, kind FROM track_tags`
+      );
+
+      for (const { raw_value, kind } of all) {
+        const result = findCanonicalSync(raw_value, kind as TagKind, tree);
+        if (result.node && result.matchType === "exact") {
+          // Insert mapping for unmapped rows
+          await db.execute(
+            `INSERT OR IGNORE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
+             VALUES (?, ?, ?, 'auto', ?, datetime('now'))`,
+            [raw_value, kind, result.node.id, result.matchType]
+          );
+          // Retroactively mark source='auto' where canonical_id still matches what we'd auto-pick
+          // (safe: only touches rows where user didn't override to a different canonical)
+          await db.execute(
+            `UPDATE tag_mappings SET source='auto', match_type=?
+             WHERE raw_value=? AND kind=? AND canonical_id=? AND source='manual'`,
+            [result.matchType, raw_value, kind, result.node.id]
+          );
+          await db.execute(
+            "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ? AND canonical_id IS NULL",
+            [result.node.id, raw_value, kind]
+          );
+        }
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
     },
   });
 }
@@ -154,6 +215,59 @@ export function useVocabAlbums(rawValue: string, kind: TagKind) {
     },
     enabled: !!rawValue,
   });
+}
+
+export function useRapToHipHop() {
+  const queryClient = useQueryClient();
+
+  const { data: enabled } = useQuery({
+    queryKey: ["settings", "tags.rap_to_hiphop"],
+    queryFn: async () => {
+      const db = await getDb();
+      const rows = await db.select<{ value: string }[]>(
+        "SELECT value FROM settings WHERE key = 'tags.rap_to_hiphop'"
+      );
+      return rows[0]?.value !== "false";
+    },
+  });
+
+  const toggle = useMutation({
+    mutationFn: async (enable: boolean) => {
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)",
+        [enable ? "true" : "false"]
+      );
+      if (enable) {
+        await db.execute(
+          "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'))"
+        );
+        await db.execute(
+          "UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id IS NULL"
+        );
+      } else {
+        const rows = await db.select<{ canonical_id: string }[]>(
+          "SELECT canonical_id FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'"
+        );
+        if (rows[0]?.canonical_id === "hip-hop") {
+          await db.execute(
+            "DELETE FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'"
+          );
+          await db.execute(
+            "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id = 'hip-hop'"
+          );
+        }
+      }
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["settings", "tags.rap_to_hiphop"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
+      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
+    },
+  });
+
+  return { enabled: enabled ?? true, toggle };
 }
 
 export function useAddUserTreeNode() {

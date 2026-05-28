@@ -37,8 +37,13 @@ function useTrackRawTags(trackId: string | undefined) {
   });
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  lastfm: "last.fm",
+  file: "file tag",
+};
+
 function SourceBadge({ source }: { source: string }) {
-  const label = source === "lastfm" ? "last.fm" : source;
+  const label = SOURCE_LABELS[source] ?? source;
   return <span className={`tag-source-badge tag-source-badge--${source}`}>{label}</span>;
 }
 

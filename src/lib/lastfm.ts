@@ -9,6 +9,7 @@ export interface LastfmTagResult {
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const MAX_TAGS = 10;
+const MIN_TAG_COUNT_DEFAULT = 25;
 const REQUEST_INTERVAL_MS = 250; // ≤ 4 req/s to stay well within rate limit
 
 let lastRequestAt = 0;
@@ -28,7 +29,24 @@ async function getApiKey(): Promise<string | null> {
   return rows[0]?.value ?? null;
 }
 
-async function fetchTags(method: string, params: Record<string, string>, apiKey: string): Promise<string[]> {
+export async function getMinTagCount(): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key = 'lastfm.min_tag_count'"
+  );
+  const val = parseInt(rows[0]?.value ?? "", 10);
+  return isNaN(val) ? MIN_TAG_COUNT_DEFAULT : val;
+}
+
+export async function setMinTagCount(count: number): Promise<void> {
+  const db = await getDb();
+  await db.execute(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastfm.min_tag_count', ?)",
+    [String(count)]
+  );
+}
+
+async function fetchTags(method: string, params: Record<string, string>, apiKey: string, minCount: number): Promise<string[]> {
   await rateLimit();
   const url = new URL(LASTFM_BASE);
   url.searchParams.set("method", method);
@@ -46,16 +64,20 @@ async function fetchTags(method: string, params: Record<string, string>, apiKey:
   };
 
   if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
-  return (data.toptags?.tag ?? []).map((t) => t.name).slice(0, MAX_TAGS);
+  return (data.toptags?.tag ?? [])
+    .filter((t) => (t.count ?? 0) >= minCount)
+    .map((t) => t.name)
+    .slice(0, MAX_TAGS);
 }
 
 export async function fetchAlbumTags(artist: string, album: string): Promise<LastfmTagResult> {
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error("Last.fm API key not configured");
+  const minCount = await getMinTagCount();
 
   const [albumTags, artistTags] = await Promise.allSettled([
-    fetchTags("album.getTopTags", { artist, album }, apiKey),
-    fetchTags("artist.getTopTags", { artist }, apiKey),
+    fetchTags("album.getTopTags", { artist, album }, apiKey, minCount),
+    fetchTags("artist.getTopTags", { artist }, apiKey, minCount),
   ]);
 
   const allTags = [

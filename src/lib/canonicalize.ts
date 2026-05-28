@@ -125,10 +125,11 @@ export async function findCanonical(
 
   // Exact canonical_key match
   const exact = kindNodes.find((n) => n.canonical_key === key);
-  if (exact) {
-    if (exact.name === rawValue) return { node: exact, matchType: "none" };
-    return { node: exact, matchType: "exact" };
-  }
+  if (exact) return { node: exact, matchType: "exact" };
+
+  // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
+  const crossType = tree.nodes.find((n) => n.canonical_key === key);
+  if (crossType) return { node: crossType, matchType: "exact" };
 
   // Fuzzy Levenshtein ≤ 2 (skip short strings to avoid false positives)
   if (key.length >= 5) {
@@ -141,7 +142,7 @@ export async function findCanonical(
         bestNode = node;
       }
     }
-    if (bestNode && bestNode.name !== rawValue) {
+    if (bestNode) {
       return { node: bestNode, matchType: "fuzzy" };
     }
   }
@@ -168,10 +169,11 @@ export function findCanonicalSync(
   const kindNodes = tree.nodes.filter((n) => n.type === kind);
 
   const exact = kindNodes.find((n) => n.canonical_key === key);
-  if (exact) {
-    if (exact.name === rawValue) return { node: exact, matchType: "none" };
-    return { node: exact, matchType: "exact" };
-  }
+  if (exact) return { node: exact, matchType: "exact" };
+
+  // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
+  const crossType = tree.nodes.find((n) => n.canonical_key === key);
+  if (crossType) return { node: crossType, matchType: "exact" };
 
   if (key.length >= 5) {
     let bestNode: TreeNode | null = null;
@@ -183,7 +185,7 @@ export function findCanonicalSync(
         bestNode = node;
       }
     }
-    if (bestNode && bestNode.name !== rawValue) {
+    if (bestNode) {
       return { node: bestNode, matchType: "fuzzy" };
     }
   }

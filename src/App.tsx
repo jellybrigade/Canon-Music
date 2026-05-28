@@ -10,6 +10,7 @@ const PlaylistList = lazy(() => import("./components/PlaylistList").then((m) => 
 const PlaylistDetail = lazy(() => import("./components/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
 const SearchResults  = lazy(() => import("./components/SearchResults").then((m) => ({ default: m.SearchResults })));
 const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
+const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { NowPlayingOverlay } from "./components/NowPlayingOverlay";
@@ -23,6 +24,7 @@ import { useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import type { PlaylistRow } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
+import { useVocabulary } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
@@ -44,7 +46,7 @@ import "./styles/base.css";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type View = "library" | "artists" | "playlists" | "settings";
+type View = "library" | "artists" | "playlists" | "tags" | "settings";
 
 export default function App() {
   useTrackEndedListener();
@@ -69,6 +71,7 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
   const [selectedGenreFilters, setSelectedGenreFilters] = useState<string[]>([]);
+  const [canonicalIdFilters, setCanonicalIdFilters] = useState<string[]>([]);
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -135,9 +138,11 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   useGlobalShortcuts(serverWithCred);
   useScrobbleFlush(serverWithCred);
-  const { data: albums } = useAlbums(sort, selectedGenreFilters);
+  const { data: albums } = useAlbums(sort, selectedGenreFilters, canonicalIdFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
+  const { data: vocab } = useVocabulary();
+  const unmappedCount = vocab?.filter((r) => !r.canonical_id).length ?? 0;
 
   useEffect(() => {
     if (!serverWithCred) return;
@@ -148,10 +153,11 @@ export default function App() {
     });
   }, [serverWithCred, setStreamUrlFor]);
 
-  const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode }[] = [
+  const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "library", label: "Library", icon: <Music size={18} /> },
     { id: "artists", label: "Artists", icon: <Users size={18} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={18} /> },
+    { id: "tags", label: "Tags", icon: <Tag size={18} />, badge: unmappedCount || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={18} /> },
   ];
 
@@ -167,6 +173,7 @@ export default function App() {
     setSelectedArtist(null);
     setSelectedPlaylist(null);
     setSelectedGenreFilters([]);
+    setCanonicalIdFilters([]);
   }
 
   async function handlePlayTrack(trackId: string) {
@@ -306,6 +313,7 @@ export default function App() {
           album={selectedAlbum}
           serverWithCredential={serverWithCred}
           onClose={() => setSelectedAlbum(null)}
+          onTagFilter={(id) => { setCanonicalIdFilters([id]); setSelectedAlbum(null); }}
         />
       );
     }
@@ -349,6 +357,7 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
+        onTagFilter={(id) => { setCanonicalIdFilters([id]); setSelectedAlbum(null); }}
       />
     );
   }
@@ -497,6 +506,16 @@ export default function App() {
                   )}
                 </div>
               )}
+              {canonicalIdFilters.length > 0 && (
+                <button
+                  className="genre-filter-btn genre-filter-btn--active"
+                  onClick={() => setCanonicalIdFilters([])}
+                  title="Clear tag filter"
+                >
+                  <X size={12} />
+                  Tag filter
+                </button>
+              )}
               <button
                 className={`loved-filter-btn${lovedOnly ? " loved-filter-btn--active" : ""}`}
                 onClick={() => setLovedOnly((v) => !v)}
@@ -586,6 +605,13 @@ export default function App() {
           </main>
         );
 
+      case "tags":
+        return (
+          <Suspense fallback={null}>
+            <TagsView />
+          </Suspense>
+        );
+
       case "settings":
         return (
           <main className="content-main">
@@ -607,14 +633,17 @@ export default function App() {
     <Suspense fallback={null}>
       <div className="app-layout">
         <nav className="sidebar">
-          {NAV_ITEMS.map(({ id, label, icon }) => (
+          {NAV_ITEMS.map(({ id, label, icon, badge }) => (
             <button
               key={id}
               className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
-              title={label}
+              title={badge ? `${label} (${badge} unmapped)` : label}
               onClick={() => navigateTo(id)}
             >
-              {icon}
+              <span className="sidebar-btn-icon">
+                {icon}
+                {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
+              </span>
             </button>
           ))}
         </nav>

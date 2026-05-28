@@ -225,7 +225,7 @@ Credentials:
 | `useTagIssues.ts` | `useTagIssues()` — React Query over `tag_issues` (non-dismissed). Orphaned (TagIssuesView deleted in Phase 1); removal deferred to Phase 9. |
 | `useTagMappings.ts` | `useTagMappings()` — `tag_mappings` CRUD. `saveMapping` also calls `stageGenreEditsForRawValue` to stage `pending_edits` for affected genre tracks. `useVocabulary()`, `useVocabAlbums(rawValue, kind)`, `useAddUserTreeNode()`. |
 | `useTagPull.ts` | `useTagPull()` — `pullForAlbum` + `canonizeAlbum`. `applyInboxItem` writes `track_tags` + `tag_mappings`, then calls `stageGenrePendingEdits` for genre kind. `useAcceptInboxItem()`. |
-| `useBackgroundNormalizer.ts` | `useBackgroundNormalizer()` — mounted in App. On launch, queries albums with stale `computed_at` (>30 days or NULL), processes them sequentially at 1/2s. Cancelled when component unmounts or `tags.auto_refresh` is off. |
+| `useBackgroundNormalizer.ts` | `useBackgroundNormalizer()` — mounted in App. On launch, queries albums with stale `computed_at` (>30 days or NULL), processes them sequentially at 1/2s. Writes `pullProgress` to `useTagsStore` so `PlayerBar` can show a persistent progress indicator. Cancelled when component unmounts or `tags.auto_refresh` is off. |
 | `useNormalizeAlbum.ts` | `useNormalizeAlbum(albumId, artist, album)` — React Query over `normalized_tags_json`. If data is missing or stale (>30 days), fires `normalizeAlbum()` in background and invalidates query on completion. Returns `{ data: NormalizedTags | null, isLoading }`. |
 | `useTrackEndedListener.ts` | Listens for Tauri `track-ended` event → calls `playerStore.next()`. |
 | `useTrackTags.ts` | `useTrackTagsForAlbum(albumId)` — tags for album. `useOffTreeAlbumIds()`. `useTrackTagMutations()`. `useTagStats()`. `useStaleAlbums(days)`. |
@@ -249,18 +249,19 @@ Credentials:
 | `ArtistDetail.tsx` | Blurred banner (local artwork_url → fallback Last.fm `artist.getInfo` image), album card grid, top tracks list. |
 | `ArtistGrid.tsx` | Artist cards with album count. |
 | `NowPlayingOverlay.tsx` | Full-screen overlay (z-index 300). Large album art, track info, progress, controls, heart, volume. About tab: more-from-artist + top tracks. Lyrics tab: synced (auto-scrolling active line) or plain from LRClib; cache miss fetches on first open. ESC + click-backdrop dismiss. |
-| `PlayerBar.tsx` | Fixed bottom bar. Shuffle / prev / play-pause / next / repeat / queue toggle. Elapsed timer + clickable progress bar. Volume slider. Album art thumbnail → `toggleNowPlaying()`. |
+| `PlayerBar.tsx` | Fixed bottom bar. Shuffle / prev / play-pause / next / repeat / queue toggle. Elapsed timer + clickable progress bar. Volume slider. Album art thumbnail → `toggleNowPlaying()`. Also renders a persistent `.normalizing-bar` above the player when `useTagsStore.pullProgress` is non-null (visible even when no track is playing). |
 | `PlaylistDetail.tsx` | Playlist tracklist + play controls + delete + remove-track context menu. Populates `CurrentTrack.album/albumId`. |
 | `PlaylistList.tsx` | Playlist list + inline create form. |
 | `QueuePanel.tsx` | Fixed right drawer (z-index 50). Current queue in playback order. HTML5 drag-to-reorder (`draggable`, onDragStart/Over/Drop/End; drop-target highlight). Right-click context menu. |
 | `SearchResults.tsx` | Three groups: Albums / Tracks / Artists. Up to 50 per group (LIMIT 50 at source); "Show all N" toggle reveals up to 50. |
 | `SettingsView.tsx` | Settings: Server panel (show/edit/remove server + sidecar config), Last.fm API key, Tags (staleness/pull mode), Tag automation (auto-refresh toggle, Refresh now, last-refreshed timestamp), Diagnostics (sync status, scrobble queue count, sidecar ping). Accepts `syncStatus`, `syncError`, `lastSyncedAt`, `serverWithCredential`, `onRemoveServer` props from App. |
+| `TagsView.tsx` | Tag vocabulary view (sidebar "Tags" item). Table of all raw tag values with track count and canon tree mapping. Unmapped rows shown by default (toggle to show all). Inline combobox searches canon tree nodes; selecting a node calls `saveMapping()`. Clear button calls `deleteMapping()`. Sidebar badge shows unmapped count. |
 
 ### Other (`src/`)
 
 | File | Purpose |
 |---|---|
-| `App.tsx` | Root component. Views: library/artists/playlists/settings. Sidebar nav (4 items). Sync trigger + query invalidation. useMediaSession + useRadio + useBackgroundNormalizer + useScrobbleFlush + useGlobalShortcuts mounted here. Genre filter chip in library header. |
+| `App.tsx` | Root component. Views: library/artists/playlists/tags/settings. Sidebar nav (5 items, Tags badge = unmapped count). Sync trigger + query invalidation. useMediaSession + useRadio + useBackgroundNormalizer + useScrobbleFlush + useGlobalShortcuts mounted here. Genre filter + canonical tag filter chips in library header. Tag chip clicks in AlbumDetail set `canonicalIdFilters` and navigate back to library grid. |
 | `keychain.ts` | Thin wrapper: `keychain.set/get/delete` → Tauri `set_credential/get_credential/delete_credential` commands. Key formats: `canon.server.{id}` (Navidrome cred), `canon.sidecar.{id}` (sidecar secret). |
 | `types/server.ts` | `Server` interface: `id, type, url, display_name, username, created_at, sidecar_url, sidecar_secret_key, sidecar_path_prefix_from, sidecar_path_prefix_to`. |
 

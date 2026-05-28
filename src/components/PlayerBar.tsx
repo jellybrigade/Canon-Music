@@ -3,6 +3,7 @@ import {
   Shuffle, Repeat, Repeat1, List, Volume2, Loader,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
+import { useTagsStore } from "../store/tags";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import "./PlayerBar.css";
@@ -26,16 +27,20 @@ export function PlayerBar() {
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
   const toggleNowPlaying = usePlayerStore((s) => s.toggleNowPlaying);
+  const pullProgress = useTagsStore((s) => s.pullProgress);
 
   const repeatLabel =
     repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
   const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
 
-  if (!currentTrack) return null;
-
   return (
     <>
-      <div className="player-bar">
+      {pullProgress && (
+        <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
+          Normalizing tags… {pullProgress.done} / {pullProgress.total}
+        </div>
+      )}
+      {!currentTrack ? null : <div className="player-bar">
         <div className="player-section player-section--left">
           <button
             className="player-thumb"
@@ -131,7 +136,7 @@ export function PlayerBar() {
             />
           </div>
         </div>
-      </div>
+      </div>}
 
     </>
   );

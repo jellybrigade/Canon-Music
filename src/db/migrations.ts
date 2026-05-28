@@ -256,4 +256,11 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
     `,
   },
+  {
+    version: 13,
+    sql: `
+      ALTER TABLE tag_mappings ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE tag_mappings ADD COLUMN match_type TEXT;
+    `,
+  },
 ];

@@ -2,7 +2,7 @@
 .now-playing-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.82);
+  background: rgba(0, 0, 0, 0.65);
   z-index: var(--z-modal);
   display: flex;
   align-items: center;
@@ -16,9 +16,9 @@
   inset: -10%;
   background-size: cover;
   background-position: center;
-  filter: blur(40px);
+  filter: blur(60px);
   transform: scale(1.1);
-  opacity: 0.35;
+  opacity: 0.6;
   pointer-events: none;
   z-index: 0;
   background-color: var(--accent-now-playing, transparent);
@@ -34,18 +34,18 @@
 }
 
 .now-playing-content--expanded {
-  width: min(1400px, 95vw);
+  width: min(1600px, 96vw);
   max-width: none;
-  height: min(920px, 95vh);
+  height: min(960px, 96vh);
   max-height: none;
   position: relative;
   z-index: 1;
   padding: 2rem 1.5rem 1.5rem;
-  background: rgba(20, 20, 20, 0.88);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(12, 12, 12, 0.72);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-radius: 16px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -300,33 +300,38 @@
 }
 
 .now-playing-tab-btn {
-  background: none;
-  border: none;
-  box-shadow: none;
+  background: none !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
   color: var(--text-tertiary);
   font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   padding: 0.5rem 1rem 0.625rem;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 0.15s, border-bottom-color 0.15s;
 }
 
-.now-playing-tab-btn:hover {
+.now-playing-tab-btn:hover,
+.now-playing-tab-btn:hover:not(:disabled) {
+  background: none !important;
+  border: none !important;
+  border-bottom: 2px solid var(--border) !important;
+  box-shadow: none !important;
   color: var(--text-secondary);
-  border: none;
-  border-bottom: 2px solid var(--border);
 }
 
-.now-playing-tab-btn--active {
+.now-playing-tab-btn--active,
+.now-playing-tab-btn--active:hover,
+.now-playing-tab-btn--active:hover:not(:disabled) {
+  background: none !important;
+  border: none !important;
+  border-bottom: 2px solid var(--accent) !important;
+  box-shadow: none !important;
   color: var(--text-primary);
-  border-bottom: 2px solid var(--accent);
-}
-
-.now-playing-tab-btn--active:hover {
-  border-bottom: 2px solid var(--accent);
 }
 
 .now-playing-tab-panel {

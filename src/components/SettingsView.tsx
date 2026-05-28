@@ -6,8 +6,11 @@ import { normalizeAlbum } from "../lib/tag-normalize";
 import { authenticate } from "../lib/navidrome";
 import type { NavidromeCredential } from "../lib/navidrome";
 import { checkSidecarHealth } from "../lib/sidecar";
+import { getMinTagCount, setMinTagCount } from "../lib/lastfm";
 import { keychain } from "../keychain";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { useTagsStore } from "../store/tags";
+import { useRapToHipHop } from "../hooks/useTagMappings";
 import "./SettingsView.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
@@ -51,7 +54,13 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "90");
   const [pullMode, setPullMode] = useSetting("tags.pull_mode_default", "review");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
-  const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
+  const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
+  const { data: minTagCount } = useQuery({
+    queryKey: ["settings", "lastfm.min_tag_count"],
+    queryFn: getMinTagCount,
+  });
+  const pullProgress = useTagsStore((s) => s.pullProgress);
+  const setPullProgress = useTagsStore((s) => s.setPullProgress);
   const { data: lastRefreshedAt, refetch: refetchLastRefreshed } = useLastRefreshed();
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount();
   const queryClient = useQueryClient();
@@ -94,7 +103,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
     const db = await getDb();
     type Row = { id: string; artist: string | null; name: string };
     const albums = await db.select<Row[]>("SELECT id, artist, name FROM albums ORDER BY name");
-    setRefreshProgress({ done: 0, total: albums.length });
+    setPullProgress({ done: 0, total: albums.length });
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i]!;
       try {
@@ -102,12 +111,12 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
       } catch (e) {
         console.warn("Refresh failed for:", album.name, e);
       }
-      setRefreshProgress({ done: i + 1, total: albums.length });
+      setPullProgress({ done: i + 1, total: albums.length });
     }
     await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
     void refetchLastRefreshed();
-    setRefreshProgress(null);
-  }, [refetchLastRefreshed, queryClient]);
+    setPullProgress(null);
+  }, [refetchLastRefreshed, queryClient, setPullProgress]);
 
   function beginEditServer() {
     if (!server) return;
@@ -482,6 +491,25 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             onChange={(e) => void setLastfmKey(e.target.value)}
           />
         </label>
+        <label className="settings-field">
+          <span>Min tag popularity (0–100)</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={5}
+            value={minTagCount ?? 25}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              if (!isNaN(v) && v >= 0 && v <= 100) {
+                void setMinTagCount(v).then(() => {
+                  void queryClient.invalidateQueries({ queryKey: ["settings", "lastfm.min_tag_count"] });
+                });
+              }
+            }}
+            className="settings-staleness-input"
+          />
+        </label>
       </section>
 
       {/* ── Tags ── */}
@@ -523,6 +551,14 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             </label>
           </div>
         </div>
+        <label className="settings-field settings-field--inline">
+          <input
+            type="checkbox"
+            checked={rapToHipHop}
+            onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
+          />
+          <span>Map "Rap" to Hip Hop</span>
+        </label>
       </section>
 
       {/* ── Tag automation ── */}
@@ -540,13 +576,13 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           <button
             className="settings-btn"
             onClick={() => { void handleRefreshNow(); }}
-            disabled={refreshProgress !== null}
+            disabled={pullProgress !== null}
           >
-            {refreshProgress
-              ? `Refreshing… ${refreshProgress.done} / ${refreshProgress.total}`
+            {pullProgress
+              ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}`
               : "Refresh now"}
           </button>
-          {lastRefreshedAt && refreshProgress === null && (
+          {lastRefreshedAt && pullProgress === null && (
             <span className="settings-hint">
               Last refreshed {new Date(lastRefreshedAt * 1000).toLocaleDateString()}
             </span>

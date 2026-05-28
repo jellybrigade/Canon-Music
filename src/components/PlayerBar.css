@@ -215,3 +215,24 @@
   cursor: pointer;
 }
 
+
+.normalizing-bar {
+  position: fixed;
+  bottom: 72px;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-player);
+  border-top: 1px solid var(--border);
+  font-size: 0.6875rem;
+  color: var(--text-muted, rgba(255,255,255,0.45));
+  letter-spacing: 0.01em;
+  z-index: var(--z-dropdown);
+}
+
+.normalizing-bar--above-player {
+  bottom: 72px;
+}
