@@ -3,17 +3,18 @@ import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { useSetting } from "./useSetting";
 
-const STALE_DAYS = 30;
 const INTERVAL_MS = 2000;
 
 export function useBackgroundNormalizer() {
   const [autoRefresh] = useSetting("tags.auto_refresh", "true");
+  const [stalenessDays] = useSetting("tags.staleness_days", "30");
   const runningRef = useRef(false);
 
   useEffect(() => {
     if (autoRefresh !== "true") return;
     if (runningRef.current) return;
 
+    const staleDays = Number(stalenessDays) || 30;
     let cancelled = false;
     runningRef.current = true;
 
@@ -25,7 +26,7 @@ export function useBackgroundNormalizer() {
          WHERE computed_at IS NULL
             OR computed_at < unixepoch('now', '-' || ? || ' days')
          ORDER BY name`,
-        [STALE_DAYS]
+        [staleDays]
       );
 
       for (const album of stale) {
@@ -42,5 +43,5 @@ export function useBackgroundNormalizer() {
 
     void run();
     return () => { cancelled = true; };
-  }, [autoRefresh]);
+  }, [autoRefresh, stalenessDays]);
 }

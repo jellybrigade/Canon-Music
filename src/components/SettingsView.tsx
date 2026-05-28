@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSetting } from "../hooks/useSetting";
 import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
@@ -24,6 +24,7 @@ export function SettingsView() {
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
   const [refreshProgress, setRefreshProgress] = useState<{ done: number; total: number } | null>(null);
   const { data: lastRefreshedAt, refetch: refetchLastRefreshed } = useLastRefreshed();
+  const queryClient = useQueryClient();
 
   const handleRefreshNow = useCallback(async () => {
     const db = await getDb();
@@ -39,9 +40,10 @@ export function SettingsView() {
       }
       setRefreshProgress({ done: i + 1, total: albums.length });
     }
+    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
     void refetchLastRefreshed();
     setRefreshProgress(null);
-  }, [refetchLastRefreshed]);
+  }, [refetchLastRefreshed, queryClient]);
 
   return (
     <div className="settings-view">
@@ -108,7 +110,7 @@ export function SettingsView() {
             checked={autoRefresh === "true"}
             onChange={(e) => void setAutoRefresh(e.target.checked ? "true" : "false")}
           />
-          <span>Auto-refresh tags on launch (30-day staleness)</span>
+          <span>Auto-refresh tags on launch</span>
         </label>
         <div className="settings-field settings-field--row">
           <button

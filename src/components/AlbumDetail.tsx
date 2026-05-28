@@ -345,6 +345,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           albumArtist={album.artist ?? ""}
           albumName={album.name}
           trackId={drawerState.trackId}
+          hasSidecar={!!server.sidecar_url}
           onClose={() => setDrawerState(null)}
         />
       )}

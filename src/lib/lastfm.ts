@@ -16,8 +16,8 @@ let lastRequestAt = 0;
 async function rateLimit(): Promise<void> {
   const now = Date.now();
   const wait = REQUEST_INTERVAL_MS - (now - lastRequestAt);
+  lastRequestAt = now + Math.max(0, wait);
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastRequestAt = Date.now();
 }
 
 async function getApiKey(): Promise<string | null> {

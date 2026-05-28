@@ -17,7 +17,7 @@ export interface NormalizedTags {
   computed_at: number;
 }
 
-const STALE_DAYS = 30;
+export const STALE_DAYS_DEFAULT = 30;
 const CAPS = { genres: 6, descriptors: 6, scenes: 4 };
 
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {
@@ -32,12 +32,23 @@ export async function readNormalizedTags(albumId: string): Promise<NormalizedTag
   return JSON.parse(json) as NormalizedTags;
 }
 
-export function isStale(tags: NormalizedTags | null): boolean {
+export function isStale(tags: NormalizedTags | null, staleDays = STALE_DAYS_DEFAULT): boolean {
   if (!tags) return true;
-  return Date.now() - tags.computed_at * 1000 > STALE_DAYS * 24 * 60 * 60 * 1000;
+  return Date.now() - tags.computed_at * 1000 > staleDays * 24 * 60 * 60 * 1000;
 }
 
+const inFlightPromises = new Map<string, Promise<NormalizedTags>>();
+
 export async function normalizeAlbum(albumId: string, artist: string, album: string): Promise<NormalizedTags> {
+  const existing = inFlightPromises.get(albumId);
+  if (existing) return existing;
+  const promise = _doNormalizeAlbum(albumId, artist, album)
+    .finally(() => inFlightPromises.delete(albumId));
+  inFlightPromises.set(albumId, promise);
+  return promise;
+}
+
+async function _doNormalizeAlbum(albumId: string, artist: string, album: string): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
 
@@ -83,13 +94,15 @@ export async function normalizeAlbum(albumId: string, artist: string, album: str
     }
   }
 
-  const buckets = bucketize(mapped.map((t) => t.id!));
+  const buckets = bucketize(mapped.map((t) => t.id!), tree);
+
+  const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
     const file: NormalizedTag[] = [];
     const lastfm: NormalizedTag[] = [];
     for (const id of ids) {
-      const tag = mapped.find((t) => t.id === id);
+      const tag = mappedById.get(id);
       if (!tag) continue;
       if (tag.source === "file") file.push(tag);
       else lastfm.push(tag);
@@ -98,11 +111,10 @@ export async function normalizeAlbum(albumId: string, artist: string, album: str
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);
-  const unmappedSorted = [...unmapped].sort((a, b) => {
-    if (a.source === b.source) return 0;
-    return a.source === "file" ? -1 : 1;
-  });
-  const unmappedFill = unmappedSorted.slice(0, Math.max(0, CAPS.genres - genreTags.length));
+  const unmappedFill = [...unmapped]
+    .filter((t) => t.source === "file")
+    .sort((a, b) => (a.source === b.source ? 0 : a.source === "file" ? -1 : 1))
+    .slice(0, Math.max(0, CAPS.genres - genreTags.length));
 
   const normalizedTags: NormalizedTags = {
     genres: [...genreTags, ...unmappedFill],

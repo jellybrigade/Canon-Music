@@ -12,6 +12,7 @@ interface Props {
   albumArtist: string;
   albumName: string;
   trackId?: string;
+  hasSidecar?: boolean;
   onClose: () => void;
 }
 
@@ -45,11 +46,13 @@ function TagSection({
   title,
   tags,
   trackId,
+  hasSidecar,
   onOverride,
 }: {
   title: string;
   tags: NormalizedTag[];
   trackId?: string;
+  hasSidecar?: boolean;
   onOverride: (tag: NormalizedTag) => void;
 }) {
   if (tags.length === 0) return null;
@@ -61,7 +64,7 @@ function TagSection({
           <span className="tag-drawer-name">{tag.name}</span>
           <SourceBadge source={tag.source} />
           <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
-          {trackId && (
+          {trackId && hasSidecar && (
             <button className="tag-drawer-override" onClick={() => onOverride(tag)}>
               Override
             </button>
@@ -72,7 +75,7 @@ function TagSection({
   );
 }
 
-export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
+export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar, onClose }: Props) {
   const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
   const { addPendingEdits } = usePendingEdits();
   const { data: rawTrackTags } = useTrackRawTags(trackId);
@@ -118,18 +121,21 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
                 title="Genres"
                 tags={normalizedTags.genres}
                 trackId={trackId}
+                hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
               />
               <TagSection
                 title="Descriptors"
                 tags={normalizedTags.descriptors}
                 trackId={trackId}
+                hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
               />
               <TagSection
                 title="Scenes & Movements"
                 tags={normalizedTags.scenes}
                 trackId={trackId}
+                hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
               />
               {trackId && rawTrackTags && rawTrackTags.length > 0 && (
