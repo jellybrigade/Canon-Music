@@ -94,9 +94,9 @@ export function NowPlayingOverlay({ serverWithCredential, onSelectAlbum, onSelec
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
   const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
 
-  const { data: artistAlbums } = useArtistAlbumsForOverlay(currentTrack?.artist ?? null);
-  const { data: topTracks } = useArtistTopTracksForOverlay(currentTrack?.artist ?? null);
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(currentTrack);
+  const { data: artistAlbums } = useArtistAlbumsForOverlay(isNowPlayingOpen ? (currentTrack?.artist ?? null) : null);
+  const { data: topTracks } = useArtistTopTracksForOverlay(isNowPlayingOpen ? (currentTrack?.artist ?? null) : null);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(isNowPlayingOpen ? currentTrack : null);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
 

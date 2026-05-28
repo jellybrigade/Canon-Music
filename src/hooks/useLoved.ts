@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
@@ -32,8 +33,8 @@ export function useLoved() {
     },
   });
 
-  const lovedTrackIds = new Set(lovedTrackArray);
-  const lovedAlbumIds = new Set(lovedAlbumArray);
+  const lovedTrackIds = useMemo(() => new Set(lovedTrackArray), [lovedTrackArray]);
+  const lovedAlbumIds = useMemo(() => new Set(lovedAlbumArray), [lovedAlbumArray]);
 
   async function toggleTrackLove(trackId: string, serverWithCred: ServerWithCredential) {
     const { server, credential } = serverWithCred;

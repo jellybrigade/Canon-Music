@@ -247,4 +247,13 @@ export const migrations: Migration[] = [
       ALTER TABLE albums ADD COLUMN computed_at INTEGER;
     `,
   },
+  {
+    version: 12,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_tracks_album_id ON tracks(album_id);
+      CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
+      CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist);
+      CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
+    `,
+  },
 ];

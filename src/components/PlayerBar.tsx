@@ -1,44 +1,35 @@
-import { useRef } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, List, Volume2, Loader,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
+import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import "./PlayerBar.css";
 
-const SECONDS_PER_MINUTE = 60;
-
-function formatDuration(seconds: number): string {
-  const total = Math.floor(seconds);
-  const m = Math.floor(total / SECONDS_PER_MINUTE);
-  const s = total % SECONDS_PER_MINUTE;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
 export function PlayerBar() {
-  const {
-    currentTrack, isPlaying, isLoading, elapsed, volume,
-    queue, queueIndex, repeat, isShuffled, isQueueOpen,
-    pause, resume, next, prev, setVolume, seek,
-    toggleRepeat, toggleShuffle, toggleQueue, toggleNowPlaying,
-  } = usePlayerStore();
-
-  const progressBarRef = useRef<HTMLDivElement>(null);
-
-  const duration = currentTrack?.duration ?? 0;
-  const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
+  const currentTrack  = usePlayerStore((s) => s.currentTrack);
+  const isPlaying     = usePlayerStore((s) => s.isPlaying);
+  const isLoading     = usePlayerStore((s) => s.isLoading);
+  const volume        = usePlayerStore((s) => s.volume);
+  const queue         = usePlayerStore((s) => s.queue);
+  const queueIndex    = usePlayerStore((s) => s.queueIndex);
+  const repeat        = usePlayerStore((s) => s.repeat);
+  const isShuffled    = usePlayerStore((s) => s.isShuffled);
+  const isQueueOpen   = usePlayerStore((s) => s.isQueueOpen);
+  const pause         = usePlayerStore((s) => s.pause);
+  const resume        = usePlayerStore((s) => s.resume);
+  const next          = usePlayerStore((s) => s.next);
+  const prev          = usePlayerStore((s) => s.prev);
+  const setVolume     = usePlayerStore((s) => s.setVolume);
+  const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
+  const toggleNowPlaying = usePlayerStore((s) => s.toggleNowPlaying);
 
   const repeatLabel =
     repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
   const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
-
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!progressBarRef.current || duration <= 0) return;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    void seek(ratio * duration);
-  }
 
   if (!currentTrack) return null;
 
@@ -114,22 +105,7 @@ export function PlayerBar() {
             </button>
           </div>
 
-          <div className="player-progress">
-            <span className="player-elapsed">{formatDuration(elapsed)}</span>
-            <div
-              ref={progressBarRef}
-              className="player-progress-bar"
-              role="progressbar"
-              aria-valuenow={Math.round(progress * 100)}
-              onClick={handleProgressClick}
-              style={{ cursor: duration > 0 ? "pointer" : "default" }}
-            >
-              <div className="player-progress-fill" style={{ width: `${progress * 100}%` }} />
-            </div>
-            <span className="player-duration">
-              {duration > 0 ? formatDuration(duration) : ""}
-            </span>
-          </div>
+          <PlayerProgress />
         </div>
 
         <div className="player-section player-section--right">

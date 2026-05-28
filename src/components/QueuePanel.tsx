@@ -6,16 +6,14 @@ import "./QueuePanel.css";
 type ContextMenu = { x: number; y: number; position: number } | null;
 
 export function QueuePanel() {
-  const {
-    queue,
-    queueIndex,
-    isShuffled,
-    shuffleOrder,
-    isQueueOpen,
-    toggleQueue,
-    removeFromQueue,
-    moveQueueItem,
-  } = usePlayerStore();
+  const queue          = usePlayerStore((s) => s.queue);
+  const queueIndex     = usePlayerStore((s) => s.queueIndex);
+  const isShuffled     = usePlayerStore((s) => s.isShuffled);
+  const shuffleOrder   = usePlayerStore((s) => s.shuffleOrder);
+  const isQueueOpen    = usePlayerStore((s) => s.isQueueOpen);
+  const toggleQueue    = usePlayerStore((s) => s.toggleQueue);
+  const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const moveQueueItem  = usePlayerStore((s) => s.moveQueueItem);
 
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);

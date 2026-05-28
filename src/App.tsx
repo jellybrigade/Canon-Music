@@ -1,18 +1,18 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic } from "lucide-react";
-import { Wizard } from "./components/setup/Wizard";
 import { AlbumGrid } from "./components/AlbumGrid";
-import { AlbumDetail } from "./components/AlbumDetail";
-import { ArtistGrid } from "./components/ArtistGrid";
-import { ArtistDetail } from "./components/ArtistDetail";
-import { PlaylistList } from "./components/PlaylistList";
-import { PlaylistDetail } from "./components/PlaylistDetail";
-import { SearchResults } from "./components/SearchResults";
+const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
+const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
+const ArtistGrid   = lazy(() => import("./components/ArtistGrid").then((m) => ({ default: m.ArtistGrid })));
+const ArtistDetail = lazy(() => import("./components/ArtistDetail").then((m) => ({ default: m.ArtistDetail })));
+const PlaylistList = lazy(() => import("./components/PlaylistList").then((m) => ({ default: m.PlaylistList })));
+const PlaylistDetail = lazy(() => import("./components/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
+const SearchResults  = lazy(() => import("./components/SearchResults").then((m) => ({ default: m.SearchResults })));
+const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { NowPlayingOverlay } from "./components/NowPlayingOverlay";
-import { SettingsView } from "./components/SettingsView";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
 import { useArtists } from "./hooks/useArtists";
@@ -254,15 +254,19 @@ export default function App() {
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
           setSyncError(`Sync partial — failed to fetch tracks for ${parts.join(" and ")}.`);
         }
-        return Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["albums"] }),
-          queryClient.invalidateQueries({ queryKey: ["artists"] }),
-          queryClient.invalidateQueries({ queryKey: ["genres"] }),
-          queryClient.invalidateQueries({ queryKey: ["loved_tracks"] }),
-          queryClient.invalidateQueries({ queryKey: ["loved_albums"] }),
-          queryClient.invalidateQueries({ queryKey: ["playlists"] }),
-          queryClient.invalidateQueries({ queryKey: ["tag_issues"] }),
-        ]);
+        void queryClient.invalidateQueries({ queryKey: ["albums"] });
+        setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["artists"] });
+          void queryClient.invalidateQueries({ queryKey: ["genres"] });
+        }, 300);
+        setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["loved_tracks"] });
+          void queryClient.invalidateQueries({ queryKey: ["loved_albums"] });
+          void queryClient.invalidateQueries({ queryKey: ["playlists"] });
+        }, 600);
+        setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["tag_issues"] });
+        }, 1000);
       })
       .catch((err: unknown) => {
         setSyncStatus("error");
@@ -282,11 +286,13 @@ export default function App() {
 
   if (!servers || servers.length === 0) {
     return (
-      <Wizard
-        onSuccess={(newServer: Server) => {
-          queryClient.setQueryData(["servers"], [newServer]);
-        }}
-      />
+      <Suspense fallback={null}>
+        <Wizard
+          onSuccess={(newServer: Server) => {
+            queryClient.setQueryData(["servers"], [newServer]);
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -598,7 +604,7 @@ export default function App() {
   }
 
   return (
-    <>
+    <Suspense fallback={null}>
       <div className="app-layout">
         <nav className="sidebar">
           {NAV_ITEMS.map(({ id, label, icon }) => (
@@ -629,6 +635,6 @@ export default function App() {
           }}
         />
       )}
-    </>
+    </Suspense>
   );
 }
