@@ -35,7 +35,7 @@ Never implement two goals at once. Never skip user testing before moving on.
 ### Releasing
 Before merging, run `/code-review` on the development branch and fix any blockers found.
 
-Run `git describe --tags --abbrev=0` to get the last released version, then apply the semver rule to compute X.Y.Z. Never guess the version from commit count.
+Run `git log --oneline main | grep "Canon v" | head -5` to see all existing release commits, and `git tag --sort=-version:refname | head -5` to see all existing tags. Use the highest version present in **either** list as the base, then apply the semver rule to compute X.Y.Z. Never guess the version from commit count. Never use a version that already appears in either list.
 
 ```bash
 git checkout main
