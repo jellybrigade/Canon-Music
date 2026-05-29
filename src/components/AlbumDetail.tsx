@@ -14,6 +14,7 @@ import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
+import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import "./AlbumDetail.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -51,6 +52,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
+  const genreMappings = useGenreMappings();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TrackRow } | null>(null);
   const [contextMenuMode, setContextMenuMode] = useState<"main" | "playlist">("main");
@@ -235,11 +237,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     <td className="track-title">{track.title}</td>
                     <td className="track-artist">{track.artist ?? ""}</td>
                     <td className="track-genre">
-                      {track.genre
-                        ? track.genre.split(",").map((g) => g.trim()).filter(Boolean).map((g, i) => (
-                            <span key={i} className="track-genre-chip">{g}</span>
-                          ))
-                        : null}
+                      {applyGenreMappings(track.genre, genreMappings).map((g, i) => (
+                        <span key={i} className="track-genre-chip">{g}</span>
+                      ))}
                     </td>
                     <td className="track-duration">
                       {track.duration ? formatDuration(track.duration) : ""}

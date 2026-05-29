@@ -75,8 +75,8 @@
 }
 
 .artist-top-tracks {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 2px;
   padding: 0 0.75rem 1.25rem;
 }
@@ -88,10 +88,23 @@
   padding: 0.45rem 0.5rem;
   border-radius: 6px;
   transition: background-color 0.1s;
+  cursor: pointer;
+  min-width: 0;
 }
 
-.artist-track-row:hover {
+.artist-track-row--playable:hover {
   background-color: var(--bg-hover);
+}
+
+.artist-track-row--active .artist-track-title {
+  color: var(--accent);
+}
+
+.artist-track-playing-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
 }
 
 .artist-track-num {

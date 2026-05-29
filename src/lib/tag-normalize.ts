@@ -61,6 +61,13 @@ async function _doNormalizeAlbum(albumId: string, artist: string, album: string)
     [albumId]
   );
 
+  // Manual mappings override auto tree-matching
+  type MappingRow = { raw_value: string; canonical_id: string };
+  const manualRows = await db.select<MappingRow[]>(
+    "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'"
+  );
+  const manualMap = new Map(manualRows.map((r) => [canonicalKey(r.raw_value), r.canonical_id]));
+
   let lastfmRaw: string[] = [];
   try {
     const result = await fetchAlbumTags(artist, album);
@@ -84,13 +91,26 @@ async function _doNormalizeAlbum(albumId: string, artist: string, album: string)
   const unmapped: NormalizedTag[] = [];
 
   for (const entry of byKey.values()) {
-    const match = findCanonicalSync(entry.name, "genre", tree);
+    const manualId = manualMap.get(canonicalKey(entry.name));
     const confidence = entry.source === "file" ? 1.0 : 0.8;
-    if (match.node && !seenIds.has(match.node.id)) {
-      seenIds.add(match.node.id);
-      mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
-    } else if (!match.node) {
-      unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
+
+    if (manualId === "__ignored__") continue;
+
+    if (manualId && manualId !== "__accepted__") {
+      // Manual mapping overrides auto tree-matching
+      const node = tree.byId.get(manualId);
+      if (node && !seenIds.has(node.id)) {
+        seenIds.add(node.id);
+        mapped.push({ id: node.id, name: node.name, source: entry.source, confidence });
+      }
+    } else {
+      const match = findCanonicalSync(entry.name, "genre", tree);
+      if (match.node && !seenIds.has(match.node.id)) {
+        seenIds.add(match.node.id);
+        mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
+      } else if (!match.node) {
+        unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
+      }
     }
   }
 

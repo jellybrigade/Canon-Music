@@ -63,6 +63,7 @@ export interface VocabRow {
   canonical_id: string | null;
   mapping_source: "auto" | "manual" | null;
   mapping_match_type: "exact" | "fuzzy" | null;
+  locked: number;
 }
 
 export function useTagMappings() {
@@ -87,6 +88,13 @@ export function useTagMappings() {
       matchType?: "exact" | "fuzzy" | null;
     }) => {
       const db = await getDb();
+      const existing = await db.select<{ locked: number }[]>(
+        "SELECT locked FROM tag_mappings WHERE raw_value = ? AND kind = ?",
+        [rawValue, kind]
+      );
+      if (existing[0]?.locked === 1) {
+        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
+      }
       await db.execute(
         `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
          VALUES (?, ?, ?, ?, ?, datetime('now'))`,
@@ -111,6 +119,13 @@ export function useTagMappings() {
   const deleteMapping = useMutation({
     mutationFn: async ({ rawValue, kind }: { rawValue: string; kind: TagKind }) => {
       const db = await getDb();
+      const existing = await db.select<{ locked: number }[]>(
+        "SELECT locked FROM tag_mappings WHERE raw_value = ? AND kind = ?",
+        [rawValue, kind]
+      );
+      if (existing[0]?.locked === 1) {
+        throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
+      }
       await db.execute(
         "DELETE FROM tag_mappings WHERE raw_value = ? AND kind = ?",
         [rawValue, kind]
@@ -127,7 +142,22 @@ export function useTagMappings() {
     },
   });
 
-  return { data: query.data, isLoading: query.isLoading, saveMapping, deleteMapping };
+  const lockMapping = useMutation({
+    mutationFn: async ({ rawValue, kind, locked }: { rawValue: string; kind: TagKind; locked: boolean }) => {
+      const db = await getDb();
+      await db.execute(
+        "UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?",
+        [locked ? 1 : 0, rawValue, kind]
+      );
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
+    },
+  });
+
+  return { data: query.data, isLoading: query.isLoading, saveMapping, deleteMapping, lockMapping };
 }
 
 export function useVocabulary() {
@@ -142,7 +172,8 @@ export function useVocabulary() {
            COUNT(DISTINCT tt.track_id) AS track_count,
            tm.canonical_id AS canonical_id,
            tm.source AS mapping_source,
-           tm.match_type AS mapping_match_type
+           tm.match_type AS mapping_match_type,
+           COALESCE(tm.locked, 0) AS locked
          FROM track_tags tt
          LEFT JOIN tag_mappings tm ON tm.raw_value = tt.raw_value AND tm.kind = tt.kind
          GROUP BY tt.raw_value, tt.kind
@@ -160,12 +191,20 @@ export function useAutoMapExact() {
       const { getCanonTree, findCanonicalSync } = await import("../lib/canonicalize");
       const tree = await getCanonTree();
 
+      // Collect locked raw values to skip
+      type LockedRow = { raw_value: string; kind: string };
+      const lockedRows = await db.select<LockedRow[]>(
+        "SELECT raw_value, kind FROM tag_mappings WHERE locked = 1"
+      );
+      const lockedSet = new Set(lockedRows.map((r) => `${r.kind}:${r.raw_value}`));
+
       type Row = { raw_value: string; kind: string };
       const all = await db.select<Row[]>(
         `SELECT DISTINCT raw_value, kind FROM track_tags`
       );
 
       for (const { raw_value, kind } of all) {
+        if (lockedSet.has(`${kind}:${raw_value}`)) continue;
         const result = findCanonicalSync(raw_value, kind as TagKind, tree);
         if (result.node && result.matchType === "exact") {
           await db.execute(

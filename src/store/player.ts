@@ -391,9 +391,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const newQueue = [...queue, track];
       const newTrackIdx = queue.length;
       if (isShuffled) {
-        set({ queue: newQueue, shuffleOrder: [...shuffleOrder, newTrackIdx], streamUrlFor: streamUrlFor ?? streamUrlFn });
+        set({ queue: newQueue, shuffleOrder: [...shuffleOrder, newTrackIdx], streamUrlFor: streamUrlFn ?? streamUrlFor });
       } else {
-        set({ queue: newQueue, streamUrlFor: streamUrlFor ?? streamUrlFn });
+        set({ queue: newQueue, streamUrlFor: streamUrlFn ?? streamUrlFor });
       }
       void persistQueueState();
     },
@@ -405,11 +405,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         const newTrackIdx = queue.length;
         const newOrder = [...shuffleOrder];
         newOrder.splice(queueIndex + 1, 0, newTrackIdx);
-        set({ queue: newQueue, shuffleOrder: newOrder, streamUrlFor: streamUrlFor ?? streamUrlFn });
+        set({ queue: newQueue, shuffleOrder: newOrder, streamUrlFor: streamUrlFn ?? streamUrlFor });
       } else {
         const newQueue = [...queue];
         newQueue.splice(queueIndex + 1, 0, track);
-        set({ queue: newQueue, streamUrlFor: streamUrlFor ?? streamUrlFn });
+        set({ queue: newQueue, streamUrlFor: streamUrlFn ?? streamUrlFor });
       }
       void persistQueueState();
     },

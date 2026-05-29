@@ -676,7 +676,9 @@ export default function App() {
         {renderContent()}
       </div>
       <QueuePanel serverWithCred={serverWithCred ?? undefined} />
-      <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} serverWithCred={serverWithCred ?? undefined} />
+      {view !== "nowplaying" && (
+        <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} serverWithCred={serverWithCred ?? undefined} />
+      )}
     </Suspense>
   );
 }

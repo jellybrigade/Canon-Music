@@ -263,4 +263,10 @@ export const migrations: Migration[] = [
       ALTER TABLE tag_mappings ADD COLUMN match_type TEXT;
     `,
   },
+  {
+    version: 14,
+    sql: `
+      ALTER TABLE tag_mappings ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];

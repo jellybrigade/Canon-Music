@@ -8,6 +8,7 @@ import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
+import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -33,6 +34,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
+  const genreMappings = useGenreMappings();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: PlaylistTrackRow } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -155,7 +157,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                     </td>
                     <td className="track-title">{track.title}</td>
                     <td className="track-artist">{track.artist ?? ""}</td>
-                    <td className="track-genre">{track.genre ?? ""}</td>
+                    <td className="track-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</td>
                     <td className="track-duration">
                       {track.duration ? formatDuration(track.duration) : ""}
                     </td>

@@ -190,7 +190,7 @@ Credentials:
 | File | Purpose |
 |---|---|
 | `index.ts` | `getDb()` — promise-cached singleton. Safe to call concurrently. Runs all migrations on first call. |
-| `migrations.ts` | Schema v1–v11. Tables: `tracks` (+`file_path` v8), `albums` (+`navidrome_created` v6, +`normalized_tags_json`/`computed_at` v11), `artists`, `servers` (+sidecar columns v8), `settings`, `pending_edits`, `edit_history`, `scrobble_queue`, `scrobble_history`, `loved_tracks`, `loved_albums`, `tracks_fts` (FTS5, v5), `playlists`, `playlist_tracks` (v7), `genre_mappings`, `tag_issues` (v8), `lyrics` (v10). |
+| `migrations.ts` | Schema v1–v14. Tables: `tracks` (+`file_path` v8), `albums` (+`navidrome_created` v6, +`normalized_tags_json`/`computed_at` v11), `artists`, `servers` (+sidecar columns v8), `settings`, `pending_edits`, `edit_history`, `scrobble_queue`, `scrobble_history`, `loved_tracks`, `loved_albums`, `tracks_fts` (FTS5, v5), `playlists`, `playlist_tracks` (v7), `genre_mappings`, `tag_issues` (v8), `lyrics` (v10), `track_tags`+`tag_mappings`+`user_tree_nodes`+`tag_inbox` (v9), `tag_mappings` +`source`/`match_type` (v13), +`locked` (v14). |
 
 ### API clients & sync (`src/lib/`)
 
@@ -291,7 +291,7 @@ Credentials:
 | `albums` | id, server_id, server_type, name, artist, album_artist, year, artwork_url, navidrome_created, tags_refreshed_at, **normalized_tags_json** (v11), **computed_at** (v11, unix timestamp), created_at |
 | `tracks` | id, server_id, server_type, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, last_modified, file_path, created_at |
 | `track_tags` | id, track_id, kind (genre\|mood), raw_value, canonical_id (NULL = off-tree), source (server\|lastfm\|manual), created_at — UNIQUE(track_id, kind, raw_value, source) |
-| `tag_mappings` | raw_value, kind, canonical_id, created_at — PRIMARY KEY (raw_value, kind) |
+| `tag_mappings` | raw_value, kind, canonical_id, source, match_type, locked, created_at — PRIMARY KEY (raw_value, kind). `locked=1` prevents auto-map overwrite and save/delete mutations. |
 | `tag_issues` | id, track_id, issue_type, details, detected_at, **dismissed_at** (v10, NULL = active) |
 | `user_tree_nodes` | id, name, type, canonical_key, parent_ids (JSON array) |
 | `artists` | id, server_id, server_type, name, **album_count** (v10), created_at — rebuilt on every sync |

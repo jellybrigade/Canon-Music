@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { Lock, Unlock } from "lucide-react";
 import { useVocabulary, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
 import { getCanonTree, canonicalKey } from "../lib/canonicalize";
 import type { TreeNode } from "../lib/canonicalize";
@@ -118,10 +119,15 @@ function mappingDot(row: VocabRow, nodeById: Map<string, TreeNode>): { color: st
   return { color: "orange", title: `Auto-mapped — "${row.raw_value}" → "${node?.name ?? row.canonical_id}"` };
 }
 
+/** Normalize tree section names to a consistent singular form for display badges. */
 function resolvedSection(row: VocabRow, nodeById: Map<string, TreeNode>): string {
   if (!row.canonical_id || row.canonical_id === ACCEPTED || row.canonical_id === IGNORED) return row.kind;
   const section = nodeById.get(row.canonical_id)?.section ?? row.kind;
-  return section === "genres" ? "genre" : section;
+  // Normalize all section names to singular for consistent badge display
+  if (section === "genres") return "genre";
+  if (section === "descriptors") return "descriptor";
+  if (section === "scenes-and-movements") return "scene";
+  return section;
 }
 
 function isTrivialExactMatch(row: VocabRow, nodeById: Map<string, TreeNode>): boolean {
@@ -131,9 +137,22 @@ function isTrivialExactMatch(row: VocabRow, nodeById: Map<string, TreeNode>): bo
   return node ? canonicalKey(row.raw_value) === canonicalKey(node.name) : false;
 }
 
+function groupByFirstLetter(rows: VocabRow[]): Array<{ letter: string; rows: VocabRow[] }> {
+  const groups: Record<string, VocabRow[]> = {};
+  for (const row of rows) {
+    const first = row.raw_value[0]?.toUpperCase() ?? "#";
+    const key = /[A-Z]/.test(first) ? first : "#";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(row);
+  }
+  return Object.entries(groups)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([letter, letterRows]) => ({ letter, rows: letterRows }));
+}
+
 export function TagsView() {
   const { data: vocab } = useVocabulary();
-  const { saveMapping, deleteMapping } = useTagMappings();
+  const { saveMapping, deleteMapping, lockMapping } = useTagMappings();
   const autoMapExact = useAutoMapExact();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [showAll, setShowAll] = useState(false);
@@ -170,10 +189,120 @@ export function TagsView() {
     return filtered;
   }, [vocab, showAll, showTrivial, search, nodeById]);
 
+  // When showing all, sort A–Z for alpha grouping; otherwise keep frequency order
+  const sortedRows = useMemo(() => {
+    if (!showAll) return rows;
+    return [...rows].sort((a, b) =>
+      a.raw_value.localeCompare(b.raw_value, undefined, { sensitivity: "base" })
+    );
+  }, [rows, showAll]);
+
+  const alphaGroups = useMemo(
+    () => showAll ? groupByFirstLetter(sortedRows) : null,
+    [showAll, sortedRows]
+  );
+
   const unmappedCount = useMemo(
     () => vocab?.filter((r) => !r.canonical_id || r.canonical_id === ACCEPTED || r.canonical_id === IGNORED).length ?? 0,
     [vocab]
   );
+
+  function renderRow(row: VocabRow) {
+    const dot = mappingDot(row, nodeById);
+    const section = resolvedSection(row, nodeById);
+    const isLocked = row.locked === 1;
+    const isMapped = row.canonical_id && row.canonical_id !== ACCEPTED && row.canonical_id !== IGNORED;
+
+    return (
+      <tr key={`${row.raw_value}:${row.kind}`} className={row.canonical_id ? "" : "tags-row--unmapped"}>
+        <td
+          className="tags-cell-raw tags-cell-raw--clickable"
+          onClick={() => setSearch(row.raw_value)}
+          title="Filter to this tag"
+        >{row.raw_value}</td>
+        <td>{<span className={`tags-kind-badge tags-kind-badge--${section}`}>{section}</span>}</td>
+        <td className="tags-cell-count">{row.track_count}</td>
+        <td className="tags-cell-dot">
+          {dot && <span className={`tags-dot tags-dot--${dot.color}`} title={dot.title} />}
+        </td>
+        <td className="tags-cell-mapping">
+          {row.canonical_id === ACCEPTED ? (
+            <div className="tags-mapped">
+              <span className="tags-mapped-name tags-mapped-accepted">Accepted as-is</span>
+              {!isLocked && (
+                <button
+                  className="tags-clear-btn"
+                  onClick={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })}
+                  title="Remove acceptance"
+                >×</button>
+              )}
+            </div>
+          ) : row.canonical_id === IGNORED ? (
+            <div className="tags-mapped">
+              <span className="tags-mapped-name tags-mapped-ignored">Ignored</span>
+              {!isLocked && (
+                <button
+                  className="tags-clear-btn"
+                  onClick={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })}
+                  title="Remove ignore"
+                >×</button>
+              )}
+            </div>
+          ) : (
+            <div className="tags-cell-mapping-row">
+              {isLocked ? (
+                <span className="tags-mapped-name">{nodeById.get(row.canonical_id ?? "")?.name ?? row.canonical_id}</span>
+              ) : (
+                <CanonCombobox
+                  treeNodes={treeNodes}
+                  currentId={row.canonical_id}
+                  onSelect={(canonicalId) =>
+                    saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId })
+                  }
+                  onClear={() =>
+                    deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })
+                  }
+                />
+              )}
+              {!row.canonical_id && !isLocked && (
+                <>
+                  <button
+                    className="tags-accept-btn"
+                    onClick={() =>
+                      saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId: ACCEPTED })
+                    }
+                    title="Accept this tag as-is"
+                  >
+                    Accept
+                  </button>
+                  <button
+                    className="tags-accept-btn tags-ignore-btn"
+                    onClick={() =>
+                      saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId: IGNORED })
+                    }
+                    title="Ignore this tag — exclude from genre output"
+                  >
+                    Ignore
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </td>
+        <td className="tags-cell-lock">
+          {isMapped && (
+            <button
+              className={`tags-lock-btn${isLocked ? " tags-lock-btn--locked" : ""}`}
+              title={isLocked ? "Unlock mapping" : "Lock mapping (prevents auto-map overwrite)"}
+              onClick={() => lockMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, locked: !isLocked })}
+            >
+              {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+            </button>
+          )}
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <main className="tags-view">
@@ -213,82 +342,22 @@ export function TagsView() {
               <th>Tracks</th>
               <th></th>
               <th>Maps to</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
-              const dot = mappingDot(row, nodeById);
-              return (
-              <tr key={`${row.raw_value}:${row.kind}`} className={row.canonical_id ? "" : "tags-row--unmapped"}>
-                <td
-                  className="tags-cell-raw tags-cell-raw--clickable"
-                  onClick={() => setSearch(row.raw_value)}
-                  title="Filter to this tag"
-                >{row.raw_value}</td>
-                <td>{(() => { const s = resolvedSection(row, nodeById); return <span className={`tags-kind-badge tags-kind-badge--${s}`}>{s}</span>; })()}</td>
-                <td className="tags-cell-count">{row.track_count}</td>
-                <td className="tags-cell-dot">
-                  {dot && <span className={`tags-dot tags-dot--${dot.color}`} title={dot.title} />}
-                </td>
-                <td className="tags-cell-mapping">
-                  {row.canonical_id === ACCEPTED ? (
-                    <div className="tags-mapped">
-                      <span className="tags-mapped-name tags-mapped-accepted">Accepted as-is</span>
-                      <button
-                        className="tags-clear-btn"
-                        onClick={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })}
-                        title="Remove acceptance"
-                      >×</button>
-                    </div>
-                  ) : row.canonical_id === IGNORED ? (
-                    <div className="tags-mapped">
-                      <span className="tags-mapped-name tags-mapped-ignored">Ignored</span>
-                      <button
-                        className="tags-clear-btn"
-                        onClick={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })}
-                        title="Remove ignore"
-                      >×</button>
-                    </div>
-                  ) : (
-                    <div className="tags-cell-mapping-row">
-                      <CanonCombobox
-                        treeNodes={treeNodes}
-                        currentId={row.canonical_id}
-                        onSelect={(canonicalId) =>
-                          saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId })
-                        }
-                        onClear={() =>
-                          deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind })
-                        }
-                      />
-                      {!row.canonical_id && (
-                        <>
-                          <button
-                            className="tags-accept-btn"
-                            onClick={() =>
-                              saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId: ACCEPTED })
-                            }
-                            title="Accept this tag as-is"
-                          >
-                            Accept
-                          </button>
-                          <button
-                            className="tags-accept-btn tags-ignore-btn"
-                            onClick={() =>
-                              saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, canonicalId: IGNORED })
-                            }
-                            title="Ignore this tag — exclude from genre output"
-                          >
-                            Ignore
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </td>
-              </tr>
-              );
-            })}
+            {alphaGroups ? (
+              alphaGroups.map(({ letter, rows: letterRows }) => (
+                <>
+                  <tr key={`alpha-${letter}`} className="tags-alpha-header">
+                    <td colSpan={6}>{letter}</td>
+                  </tr>
+                  {letterRows.map((row) => renderRow(row))}
+                </>
+              ))
+            ) : (
+              sortedRows.map((row) => renderRow(row))
+            )}
           </tbody>
         </table>
       )}

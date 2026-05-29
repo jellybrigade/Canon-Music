@@ -1,3 +1,23 @@
+Radio bug — every track plays first track's audio: when radio queue starts, all tracks after the
+  first play the same audio as track 1. Non-radio playback unaffected.
+  Already tried: flipped `addToQueue` and `playNext` from `streamUrlFor ?? streamUrlFn` to
+  `streamUrlFn ?? streamUrlFor` (src/store/player.ts:394–396, 408, 412) — did not fix it.
+  Root cause still unknown. Suspect: `streamUrlFor` closure captured at `play()` call time
+  (line 224: `() => streamUrl`) is not actually the path used during radio track advancement,
+  OR the radio hook passes the same URL for all tracks when building the queue, OR `next()`
+  resolves stream URL before the queue update lands. Needs deeper trace of radio queue build
+  + `next()` → `streamUrlFor(track)` call path.
+
+UI too small — text, icons, everything: overall scale feels cramped. All text and icons should be
+  at minimum 110% of current size, ideally larger. Do a global pass on font sizes, icon sizes,
+  padding, and touch targets.
+
+Context menu flipping: right-clicking near bottom of screen clips the menu instead of flipping it
+  (menu should open upward when near viewport bottom). Applies to submenus too — submenus that would
+  extend off-screen should flip to open leftward or upward as needed.
+Radio mode indicator should show in queue panel (currently only visible elsewhere).
+Queue should auto-close when entering the NowPlaying fullscreen view.
+
 Fullscreen player bugs:
 - Bottom bar (player controls) should not exist separately — fullscreen view must contain all controls itself
 - Responsive layout breaks on height reduction: at some breakpoint, player shifts to top + tabs (up next/about/lyrics)
@@ -21,6 +41,14 @@ NowPlaying view layout broken: everything squished to left side, content cramped
 Album cover (small) -> click -> show album art enlarged as popover in bottom-left corner (above track/artist
   info in the player bar), NOT fullscreen — rest of player stays usable [in progress, old lightbox removed]
 Queue -> album art not showing for tracks in the queue panel
+
+--- Genre Tag / Filter Bugs ---
+- Album view: Static Age (Misfits) shows genre "Hardcore [Punk]" on the album card, but clicking
+  that genre chip filters to 2 albums — Static Age is NOT among them. Either the genre stored in
+  SQLite doesn't match the chip label exactly (e.g. display normalizes brackets but filter queries
+  raw value), or the album's genre tag wasn't written/read correctly and the chip is showing a
+  derived/display value that doesn't round-trip to the filter query. Investigate tag read path +
+  how genre chip onClick constructs the filter vs what's in SQLite.
 
 --- Empty State Copy ---
 - "No albums yet. Syncing…" shows when filter returns zero results (e.g. filtering by Loved with no loved albums).

@@ -9,7 +9,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: var(--player-bar-height);
   background: #0c0c0c;
 }
 
@@ -68,13 +67,14 @@
   justify-content: center;
   gap: 1.25rem;
   padding: 2.5rem 2.25rem;
-  overflow: hidden;
+  overflow-y: auto;
   min-height: 0;
 }
 
 .now-playing-art {
   width: 100%;
   max-width: min(420px, 32vw);
+  max-height: min(420px, 42vh);
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 16px;
@@ -82,7 +82,7 @@
     0 32px 90px rgba(0, 0, 0, 0.9),
     0 8px 28px rgba(0, 0, 0, 0.55),
     0 0 0 1px rgba(255, 255, 255, 0.07);
-  flex-shrink: 0;
+  flex-shrink: 1;
   display: block;
   transition: box-shadow 0.5s ease;
 }
@@ -90,6 +90,7 @@
 .now-playing-art--placeholder {
   background: rgba(255, 255, 255, 0.05);
   max-width: min(420px, 32vw);
+  max-height: min(420px, 42vh);
   width: 100%;
 }
 
@@ -657,6 +658,35 @@
 
   .now-playing-right {
     padding: 1.25rem 1.5rem;
+  }
+}
+
+/* Short: ≤680px window height — compress art + padding so controls stay visible */
+@media (max-height: 680px) {
+  .now-playing-left {
+    padding: 1rem 2rem;
+    gap: 0.75rem;
+    justify-content: flex-start;
+  }
+
+  .now-playing-art,
+  .now-playing-art--placeholder {
+    max-width: min(260px, 28vw);
+    max-height: min(260px, 28vh);
+  }
+}
+
+/* Very short: ≤520px window height — minimal art, tight gaps */
+@media (max-height: 520px) {
+  .now-playing-left {
+    padding: 0.5rem 2rem;
+    gap: 0.5rem;
+  }
+
+  .now-playing-art,
+  .now-playing-art--placeholder {
+    max-width: min(160px, 20vw);
+    max-height: min(160px, 20vh);
   }
 }
 
