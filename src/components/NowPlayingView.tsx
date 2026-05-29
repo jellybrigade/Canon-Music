@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -11,7 +11,8 @@ import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import { parseLrc } from "../lib/lrclib";
-import { fetchSimilarArtists } from "../lib/lastfm";
+import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
+import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
@@ -70,6 +71,30 @@ function useArtistTopTracks(artistName: string | null) {
     queryFn: async (): Promise<TopTrack[]> => {
       if (!artistName) return [];
       const db = await getDb();
+
+      // Try Last.fm global popularity ranking first
+      const trackNames = await fetchArtistTopTracks(artistName);
+      if (trackNames.length > 0) {
+        const localTracks = await db.select<TopTrack[]>(
+          `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
+                  t.album_id, a.artwork_url
+           FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
+           WHERE t.artist = ?`,
+          [artistName]
+        );
+        const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
+        const matched: TopTrack[] = [];
+        for (const name of trackNames) {
+          const track = byTitle.get(name.toLowerCase());
+          if (track && !matched.some((m) => m.id === track.id)) {
+            matched.push(track);
+            if (matched.length >= 10) break;
+          }
+        }
+        if (matched.length > 0) return matched;
+      }
+
+      // Fallback: local library ordering
       return db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
                 t.album_id, a.artwork_url
@@ -81,6 +106,7 @@ function useArtistTopTracks(artistName: string | null) {
       );
     },
     enabled: !!artistName,
+    staleTime: 30 * 60 * 1000,
   });
 }
 
@@ -127,6 +153,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const progressBarRef = useRef<HTMLDivElement>(null);
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
+  const [volumeOpen, setVolumeOpen] = useState(false);
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
@@ -144,6 +171,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(currentTrack ?? null);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
+  const [accent, setAccent] = useState<string | null>(null);
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
@@ -155,6 +183,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   });
 
   const otherAlbums = artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [];
+
+  useEffect(() => {
+    setAccent(null);
+    if (!largeArtUrl) return;
+    let cancelled = false;
+    void extractAccent(largeArtUrl).then((color) => {
+      if (!cancelled) setAccent(color);
+    });
+    return () => { cancelled = true; };
+  }, [largeArtUrl]);
 
   useEffect(() => {
     if (tab !== "up-next" || !upNextRef.current) return;
@@ -221,7 +259,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const topRight = topTracks?.slice(5, 10) ?? [];
 
   return (
-    <div className="now-playing-view">
+    <div
+      className="now-playing-view"
+      style={{
+        ...(largeArtUrl ? { '--art-bg': `url(${largeArtUrl})` } : {}),
+        ...(accent ? { '--accent': accent, '--accent-hover': accent } : {}),
+      } as React.CSSProperties}
+    >
       <div className="now-playing-main">
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
@@ -232,7 +276,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           )}
 
           <div className="now-playing-info">
-            <p className="now-playing-title">{currentTrack.title}</p>
+            <div className="now-playing-title-row">
+              <p className="now-playing-title">{currentTrack.title}</p>
+              <button
+                className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
+                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
+                title={isLoved ? "Unlove" : "Love"}
+              >
+                <Heart size={15} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+              </button>
+            </div>
             {currentTrack.artist && (
               onSelectArtist ? (
                 <button
@@ -306,24 +359,28 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           </div>
 
           <div className="now-playing-extras">
-            <button
-              className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
-              onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
-              title={isLoved ? "Unlove" : "Love"}
-            >
-              <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-            </button>
-            <div className="now-playing-volume">
-              <input
-                type="range"
-                className="player-volume-slider"
-                min={0}
-                max={1}
-                step={0.01}
-                value={volume}
-                onChange={(e) => void setVolume(parseFloat(e.target.value))}
-                aria-label="Volume"
-              />
+            <div className="now-playing-volume-wrap">
+              {volumeOpen && (
+                <div className="now-playing-volume-popover">
+                  <input
+                    type="range"
+                    className="player-volume-slider now-playing-volume-slider"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={volume}
+                    onChange={(e) => void setVolume(parseFloat(e.target.value))}
+                    aria-label="Volume"
+                  />
+                </div>
+              )}
+              <button
+                className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
+                onClick={() => setVolumeOpen((o) => !o)}
+                title="Volume"
+              >
+                <Volume2 size={16} />
+              </button>
             </div>
           </div>
         </div>
@@ -474,43 +531,47 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 {suggestedTracks && suggestedTracks.length > 0 && (
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">Suggested</h3>
-                    <div className="now-playing-top-tracks-col">
-                      {suggestedTracks.map((track) => (
-                        <div key={track.id} className="now-playing-track-row">
-                          <div className="now-playing-track-info">
-                            <span className="now-playing-track-title">{track.title}</span>
-                            <span className="now-playing-track-album">
-                              {[track.artist, track.album_name].filter(Boolean).join(" — ")}
-                            </span>
-                          </div>
-                          {track.duration && (
-                            <span className="now-playing-track-duration">
-                              {formatDuration(track.duration)}
-                            </span>
-                          )}
-                          <div className="now-playing-track-actions">
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play now"
-                              onClick={() => handlePlayTrack(track)}
-                            >
-                              <PlayCircle size={14} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play next"
-                              onClick={() => handlePlayNext(track)}
-                            >
-                              <Play size={12} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Add to queue"
-                              onClick={() => handleAddToQueue(track)}
-                            >
-                              <ListEnd size={14} />
-                            </button>
-                          </div>
+                    <div className="now-playing-top-tracks-grid">
+                      {[suggestedTracks.slice(0, 5), suggestedTracks.slice(5, 10)].map((col, ci) => (
+                        <div key={ci} className="now-playing-top-tracks-col">
+                          {col.map((track) => (
+                            <div key={track.id} className="now-playing-track-row">
+                              <div className="now-playing-track-info">
+                                <span className="now-playing-track-title">{track.title}</span>
+                                <span className="now-playing-track-album">
+                                  {[track.artist, track.album_name].filter(Boolean).join(" — ")}
+                                </span>
+                              </div>
+                              {track.duration && (
+                                <span className="now-playing-track-duration">
+                                  {formatDuration(track.duration)}
+                                </span>
+                              )}
+                              <div className="now-playing-track-actions">
+                                <button
+                                  className="now-playing-track-action-btn"
+                                  title="Play now"
+                                  onClick={() => handlePlayTrack(track)}
+                                >
+                                  <PlayCircle size={14} />
+                                </button>
+                                <button
+                                  className="now-playing-track-action-btn"
+                                  title="Play next"
+                                  onClick={() => handlePlayNext(track)}
+                                >
+                                  <Play size={12} />
+                                </button>
+                                <button
+                                  className="now-playing-track-action-btn"
+                                  title="Add to queue"
+                                  onClick={() => handleAddToQueue(track)}
+                                >
+                                  <ListEnd size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ))}
                     </div>
