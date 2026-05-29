@@ -5,7 +5,7 @@
 cd /home/mschachner/Projects/Canon || exit 0
 
 BRANCH=$(git branch --show-current 2>/dev/null || true)
-[[ "$BRANCH" != "main" ]] && exit 0
+[[ "$BRANCH" != "main" && "$BRANCH" != "release" ]] && exit 0
 
 TITLE=$(git log -1 --format=%s 2>/dev/null || true)
 VERSION=$(printf '%s' "$TITLE" | grep -oP '(?<=Canon v)[0-9]+\.[0-9]+\.[0-9]+' || true)

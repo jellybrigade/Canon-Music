@@ -23,23 +23,37 @@ Never implement two goals at once. Never skip user testing before moving on.
 ## Git Workflow
 
 ### Branches
-- `main` — releases only. Never commit directly except the `Canon vX.Y.Z` release commit.
-- `development` — all work happens here. Always be on this branch.
+- `development` — all work happens here. Always be on this branch. Canon-Development has no other permanent branches.
 
 ### Normal flow
 1. Work on `development`.
 2. The Stop hook auto-commits whenever uncommitted changes exist (90s cooldown).
-3. When ≥4 commits ahead of main, the hook outputs a release suggestion with version + changelog.
-4. When ready: merge to main with a release commit (see Commits section below).
+3. When ready to release, run `/commit`.
 
 ### Releasing
-Before merging, run `/code-review` on the development branch and fix any blockers found.
+Before releasing, run `/code-review` on development and fix any blockers.
 
-Run `git log --oneline main | grep "Canon v" | head -5` to see all existing release commits, and `git tag --sort=-version:refname | head -5` to see all existing tags. Use the highest version present in **either** list as the base, then apply the semver rule to compute X.Y.Z. Never guess the version from commit count. Never use a version that already appears in either list.
+**Two remotes:** `origin` = Canon-Development (private), `public` = Canon-Music (public releases). One-time setup: `git remote add public git@github.com:jellybrigade/Canon-Music.git`
 
+**Determine next version** from Canon-Music — not local tags:
 ```bash
-git checkout main
-git merge --no-ff development -m "$(cat <<'EOF'
+git ls-remote --tags public | grep -oP 'refs/tags/v\K[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1
+```
+If empty → `v0.1.0`. Apply semver to the highest version found. Never reuse a version.
+
+**Bump versions** on `development` first — both files must match the release version:
+```bash
+# Edit "version": "X.Y.Z" in src-tauri/tauri.conf.json and package.json
+git add src-tauri/tauri.conf.json package.json
+git commit -m "Bump version to X.Y.Z"
+git push origin development
+```
+
+**Create release** via ephemeral local `release` branch — stripped of internal files, never pushed to Canon-Development:
+```bash
+git checkout -b release
+git rm -r --cached .claude .vscode CLAUDE.md ARCHITECTURE.md audit.md HANDOFF.md plan.md v2-redesign.md what-to-do.txt reference-projects/ 2>/dev/null || true
+git commit -m "$(cat <<'EOF'
 Canon vX.Y.Z
 
 ### Added
@@ -53,8 +67,9 @@ Canon vX.Y.Z
 EOF
 )"
 # PostToolUse hook auto-creates the annotated tag vX.Y.Z
-git push && git push --tags
+git push public release:main && git push public --tags
 git checkout development
+git branch -d release
 ```
 
 Semver rule: bugfixes only → patch, new features → minor, breaking changes → major.
