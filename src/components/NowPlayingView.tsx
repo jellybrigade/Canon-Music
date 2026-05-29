@@ -174,6 +174,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const [accent, setAccent] = useState<string | null>(null);
 
   const largeArtUrl = currentTrack?.artworkRef
@@ -210,8 +211,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     );
     if (activeIndex === activeLyricIndexRef.current) return;
     activeLyricIndexRef.current = activeIndex;
-    if (activeLyricRef.current) {
-      activeLyricRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (activeLyricRef.current && lyricsContainerRef.current) {
+      const container = lyricsContainerRef.current;
+      const line = activeLyricRef.current;
+      const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+      container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
     }
   }, [tab, elapsed, lyricsLines]);
 
@@ -610,7 +614,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             )}
 
             {tab === "lyrics" && (
-              <div className="now-playing-lyrics">
+              <div className="now-playing-lyrics" ref={lyricsContainerRef}>
                 {lyricsLoading ? (
                   <p className="now-playing-empty">Loading lyrics…</p>
                 ) : lyricsLines && lyricsLines.length > 0 ? (
