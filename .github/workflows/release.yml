@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 jobs:
   release:
@@ -24,6 +24,35 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Read version from tauri.conf.json
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag (once, on Linux runner)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG" || echo "Tag already exists, skipping"
+          git push origin "$TAG" || echo "Tag already pushed, skipping"
+
+      - name: Extract release notes from commit message
+        id: notes
+        shell: bash
+        run: |
+          BODY=$(git log -1 --format=%B | tail -n +3)
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -58,17 +87,6 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Extract release notes from merge commit
-        id: notes
-        shell: bash
-        run: |
-          # Get the full commit message for the tagged commit, strip the first line (title)
-          BODY=$(git log -1 --format=%B "${{ github.ref_name }}" | tail -n +3)
-          # GitHub Actions multiline output
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
-
       - name: Install frontend dependencies
         run: pnpm install
 
@@ -76,8 +94,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Canon ${{ github.ref_name }}
+          tagName: ${{ steps.version.outputs.tag }}
+          releaseName: Canon ${{ steps.version.outputs.tag }}
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false

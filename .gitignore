@@ -26,8 +26,7 @@ lerna-debug.log*
 # OS
 .DS_Store
 
-# Internal dev files — not for the public repo
-.claude/
+# Local-only
+.claude/settings.local.json
 instructions/
-CLAUDE.md
 reference-projects/
