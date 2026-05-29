@@ -303,7 +303,7 @@ export function TagsView() {
               title={isLocked ? "Unlock mapping" : "Lock mapping (prevents auto-map overwrite)"}
               onClick={() => lockMapping.mutate({ rawValue: row.raw_value, kind: row.kind as TagKind, locked: !isLocked })}
             >
-              {isLocked ? <Lock size={12} /> : <Unlock size={12} />}
+              {isLocked ? <Lock size={14} /> : <Unlock size={14} />}
             </button>
           )}
         </td>

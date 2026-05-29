@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart,
@@ -39,6 +39,8 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const [artOpen, setArtOpen] = useState(false);
+  const artPopoverRef = useRef<HTMLDivElement>(null);
+  const artThumbRef = useRef<HTMLButtonElement>(null);
 
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
 
@@ -47,6 +49,18 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
+  }, [artOpen]);
+
+  useEffect(() => {
+    if (!artOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (artPopoverRef.current?.contains(target)) return;
+      if (artThumbRef.current?.contains(target)) return;
+      setArtOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
   }, [artOpen]);
 
   const repeatLabel =
@@ -63,9 +77,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
       {!currentTrack ? null : <div className="player-bar">
         <div className="player-section player-section--left">
           <button
+            ref={artThumbRef}
             className="player-thumb"
             onClick={() => setArtOpen((v) => !v)}
-            aria-label="Enlarge album art"
+            aria-label={artOpen ? "Hide album art" : "Show album art"}
           >
             {currentTrack.coverArtUrl && (
               <img src={currentTrack.coverArtUrl} alt="" />
@@ -88,7 +103,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               title="Shuffle"
               aria-label="Shuffle"
             >
-              <Shuffle size={17} />
+              <Shuffle size={20} />
             </button>
             <button
               className="player-btn"
@@ -96,7 +111,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               disabled={queue.length === 0}
               aria-label="Previous"
             >
-              <SkipBack size={20} />
+              <SkipBack size={24} />
             </button>
             <button
               className="player-btn player-btn--play"
@@ -105,10 +120,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading
-                ? <Loader size={18} className="player-spin" />
+                ? <Loader size={22} className="player-spin" />
                 : isPlaying
-                  ? <Pause size={18} fill="currentColor" strokeWidth={0} />
-                  : <Play size={18} fill="currentColor" strokeWidth={0} />}
+                  ? <Pause size={22} fill="currentColor" strokeWidth={0} />
+                  : <Play size={22} fill="currentColor" strokeWidth={0} />}
             </button>
             <button
               className="player-btn"
@@ -116,7 +131,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               disabled={nextDisabled}
               aria-label="Next"
             >
-              <SkipForward size={20} />
+              <SkipForward size={24} />
             </button>
             <button
               className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
@@ -125,8 +140,8 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label={repeatLabel}
             >
               {repeat === "repeat-one"
-                ? <Repeat1 size={17} />
-                : <Repeat size={17} />}
+                ? <Repeat1 size={20} />
+                : <Repeat size={20} />}
             </button>
           </div>
 
@@ -141,7 +156,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               title={isLoved ? "Unlove" : "Love"}
               aria-label={isLoved ? "Unlove" : "Love"}
             >
-              <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+              <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
             </button>
           )}
           <button
@@ -150,7 +165,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             title="Now playing"
             aria-label="Now playing"
           >
-            <Headphones size={18} />
+            <Headphones size={22} />
           </button>
           <button
             className={`player-btn player-btn--icon${isQueueOpen ? " player-btn--active" : ""}`}
@@ -158,10 +173,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             title="Queue"
             aria-label="Queue"
           >
-            <List size={18} />
+            <List size={22} />
           </button>
           <div className="player-volume">
-            <Volume2 size={16} className="player-volume-icon" aria-hidden />
+            <Volume2 size={18} className="player-volume-icon" aria-hidden />
             <input
               type="range"
               className="player-volume-slider"
@@ -181,7 +196,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, currentTrack.artworkRef, 400)
           : currentTrack.coverArtUrl;
         return popoverUrl ? (
-          <div className="art-popover" onClick={() => setArtOpen(false)}>
+          <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>
             <img src={popoverUrl} alt={currentTrack.title} />
           </div>
         ) : null;

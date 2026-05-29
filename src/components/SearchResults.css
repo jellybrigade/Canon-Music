@@ -58,8 +58,8 @@
 }
 
 .search-album-thumb {
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
   border-radius: 4px;
   background: var(--bg-card);
   flex-shrink: 0;
@@ -118,8 +118,8 @@
 }
 
 .search-artist-icon {
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
   background: var(--bg-card);
   flex-shrink: 0;

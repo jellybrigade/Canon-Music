@@ -70,7 +70,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
         <span className="queue-panel-title">Queue ({queue.length})</span>
         <RadioChip />
         <button className="queue-panel-close" onClick={toggleQueue} aria-label="Close queue">
-          <X size={14} />
+          <X size={16} />
         </button>
       </div>
       <div className="queue-list">
@@ -96,9 +96,9 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
               setContextMenu({ x: e.clientX, y: e.clientY, position });
             }}
           >
-            <span className="queue-row-drag-handle" aria-hidden><GripVertical size={14} /></span>
+            <span className="queue-row-drag-handle" aria-hidden><GripVertical size={16} /></span>
             <span className="queue-row-num">
-              {position === queueIndex ? <Play size={10} /> : position + 1}
+              {position === queueIndex ? <Play size={12} /> : position + 1}
             </span>
             {(() => {
               const artUrl = track.coverArtUrl

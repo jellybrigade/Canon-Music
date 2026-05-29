@@ -79,7 +79,7 @@ export function SearchResults({
                       alt={album.name}
                     />
                   ) : (
-                    <Music size={16} />
+                    <Music size={18} />
                   )}
                 </div>
                 <div className="search-album-info">
@@ -136,7 +136,7 @@ export function SearchResults({
             {visibleArtists.map((artist) => (
               <div key={artist.name} className="search-artist-row">
                 <div className="search-artist-icon">
-                  <User size={14} />
+                  <User size={16} />
                 </div>
                 <div className="search-artist-info">
                   <span className="search-item-primary">{artist.name}</span>

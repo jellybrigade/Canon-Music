@@ -190,7 +190,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                     <span className="artist-track-num">
                       {isCurrentlyPlaying ? (
                         <span className="artist-track-playing-indicator">
-                          <Play size={10} />
+                          <Play size={12} />
                         </span>
                       ) : (
                         i + 1

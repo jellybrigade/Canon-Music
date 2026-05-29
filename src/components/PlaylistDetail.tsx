@@ -113,7 +113,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                 disabled={!tracks || tracks.length === 0}
                 aria-label="Play playlist"
               >
-                <Play size={14} /> Play All
+                <Play size={16} /> Play All
               </button>
               <button
                 className="playlist-delete-btn"
@@ -122,7 +122,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                 aria-label="Delete playlist"
                 title="Delete playlist"
               >
-                <Trash2 size={14} />
+                <Trash2 size={16} />
               </button>
             </div>
           </div>
@@ -152,7 +152,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   >
                     <td className="track-number">
                       {isCurrentlyPlaying
-                        ? <span className="track-playing-indicator"><Play size={10} /></span>
+                        ? <span className="track-playing-indicator"><Play size={12} /></span>
                         : track.position + 1}
                     </td>
                     <td className="track-title">{track.title}</td>

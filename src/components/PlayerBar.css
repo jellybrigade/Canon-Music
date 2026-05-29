@@ -39,8 +39,8 @@
 }
 
 .player-thumb {
-  width: 46px;
-  height: 46px;
+  width: 54px;
+  height: 54px;
   border-radius: 5px;
   background-color: var(--bg-card);
   flex-shrink: 0;
@@ -126,8 +126,8 @@
 }
 
 .player-btn--play {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -218,7 +218,7 @@
 
 .normalizing-bar {
   position: fixed;
-  bottom: 72px;
+  bottom: var(--player-bar-height);
   left: 0;
   right: 0;
   height: 24px;
@@ -234,12 +234,12 @@
 }
 
 .normalizing-bar--above-player {
-  bottom: 72px;
+  bottom: var(--player-bar-height);
 }
 
 .art-popover {
   position: fixed;
-  bottom: 80px;
+  bottom: 92px;
   left: 1.25rem;
   width: 260px;
   border-radius: 10px;

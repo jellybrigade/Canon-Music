@@ -50,7 +50,7 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
           onClick={() => setCreating((v) => !v)}
           title="New playlist"
         >
-          <Plus size={14} />
+          <Plus size={16} />
           New Playlist
         </button>
       </div>

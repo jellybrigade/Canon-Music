@@ -135,7 +135,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               disabled={!tracks || tracks.length === 0}
               aria-label="Play album"
             >
-              <Play size={14} /> Play Album
+              <Play size={16} /> Play Album
             </button>
           </div>
         </div>
@@ -227,7 +227,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     <td className="track-number">
                       {isCurrentlyPlaying ? (
                         <span className="track-playing-indicator">
-                          <Play size={10} />
+                          <Play size={12} />
                         </span>
                       ) : (
                         track.track_number ?? "—"
@@ -253,7 +253,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                         }}
                       >
                         <Heart
-                          size={13}
+                          size={15}
                           fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"}
                           strokeWidth={2}
                         />
@@ -320,7 +320,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               </button>
               {playlists && playlists.length > 0 && (
                 <button onClick={() => setContextMenuMode("playlist")}>
-                  Add to Playlist <ChevronRight size={14} />
+                  Add to Playlist <ChevronRight size={16} />
                 </button>
               )}
             </>

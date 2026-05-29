@@ -283,7 +283,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     >
       {onBack && (
         <button className="now-playing-back-btn player-btn player-btn--icon" onClick={onBack} title="Back">
-          <ChevronLeft size={18} />
+          <ChevronLeft size={22} />
         </button>
       )}
       <div className="now-playing-main">
@@ -298,13 +298,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           <div className="now-playing-info">
             <div className="now-playing-title-row">
               <p className="now-playing-title">{currentTrack.title}</p>
-              <button
-                className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
-                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
-                title={isLoved ? "Unlove" : "Love"}
-              >
-                <Heart size={15} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-              </button>
             </div>
             {currentTrack.artist && (
               onSelectArtist ? (
@@ -358,14 +351,14 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               onClick={toggleShuffle}
               title="Shuffle"
             >
-              <Shuffle size={16} />
+              <Shuffle size={18} />
             </button>
             <button
               className="player-btn"
               onClick={() => void prev()}
               disabled={queue.length === 0}
             >
-              <SkipBack size={22} />
+              <SkipBack size={26} />
             </button>
             <button
               className="player-btn player-btn--play player-btn--play-large"
@@ -373,29 +366,37 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               disabled={isLoading}
             >
               {isLoading
-                ? <Loader size={20} className="player-spin" />
+                ? <Loader size={24} className="player-spin" />
                 : isPlaying
-                  ? <Pause size={20} fill="currentColor" strokeWidth={0} />
-                  : <Play size={20} fill="currentColor" strokeWidth={0} />}
+                  ? <Pause size={24} fill="currentColor" strokeWidth={0} />
+                  : <Play size={24} fill="currentColor" strokeWidth={0} />}
             </button>
             <button
               className="player-btn"
               onClick={() => void next()}
               disabled={nextDisabled}
             >
-              <SkipForward size={22} />
+              <SkipForward size={26} />
             </button>
             <button
               className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
             >
-              {repeat === "repeat-one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
+              {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>
           </div>
 
           <div className="now-playing-extras">
             <RadioChip />
+            <button
+              className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
+              onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
+              title={isLoved ? "Unlove" : "Love"}
+              aria-label={isLoved ? "Unlove" : "Love"}
+            >
+              <Heart size={22} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+            </button>
             <div className="now-playing-volume-wrap">
               {volumeOpen && (
                 <div className="now-playing-volume-popover">
@@ -416,7 +417,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 onClick={() => setVolumeOpen((o) => !o)}
                 title="Volume"
               >
-                <Volume2 size={16} />
+                <Volume2 size={18} />
               </button>
             </div>
           </div>
@@ -455,7 +456,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       onClick={() => void playFromQueueIndex(position)}
                     >
                       <span className="now-playing-up-next-indicator">
-                        {position === queueIndex ? <Play size={10} /> : null}
+                        {position === queueIndex ? <Play size={12} /> : null}
                       </span>
                       {track.artworkRef ? (
                         <img
@@ -538,21 +539,21 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                               title="Play now"
                               onClick={(e) => { e.stopPropagation(); handlePlayTrack(track); }}
                             >
-                              <PlayCircle size={14} />
+                              <PlayCircle size={16} />
                             </button>
                             <button
                               className="now-playing-track-action-btn"
                               title="Play next"
                               onClick={(e) => { e.stopPropagation(); handlePlayNext(track); }}
                             >
-                              <Play size={12} />
+                              <Play size={14} />
                             </button>
                             <button
                               className="now-playing-track-action-btn"
                               title="Add to queue"
                               onClick={(e) => { e.stopPropagation(); handleAddToQueue(track); }}
                             >
-                              <ListEnd size={14} />
+                              <ListEnd size={16} />
                             </button>
                           </div>
                         </div>
@@ -584,21 +585,21 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                               title="Play now"
                               onClick={() => handlePlayTrack(track)}
                             >
-                              <PlayCircle size={14} />
+                              <PlayCircle size={16} />
                             </button>
                             <button
                               className="now-playing-track-action-btn"
                               title="Play next"
                               onClick={() => handlePlayNext(track)}
                             >
-                              <Play size={12} />
+                              <Play size={14} />
                             </button>
                             <button
                               className="now-playing-track-action-btn"
                               title="Add to queue"
                               onClick={() => handleAddToQueue(track)}
                             >
-                              <ListEnd size={14} />
+                              <ListEnd size={16} />
                             </button>
                           </div>
                         </div>

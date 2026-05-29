@@ -10,7 +10,7 @@
   color: var(--accent, #e06c75);
   border-radius: 10px;
   padding: 1px 8px;
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
 }

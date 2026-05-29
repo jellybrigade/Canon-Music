@@ -168,14 +168,14 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                       onClick={(e) => { e.stopPropagation(); void toggleAlbumLove(album.id, serverWithCredential); }}
                     >
                       <Heart
-                        size={14}
+                        size={16}
                         fill={lovedAlbumIds.has(album.id) ? "currentColor" : "none"}
                         strokeWidth={2}
                       />
                     </button>
                     {offTreeSet.has(album.id) && (
                       <div className="album-off-tree-badge" title="Has off-tree tags">
-                        <AlertTriangle size={11} />
+                        <AlertTriangle size={13} />
                       </div>
                     )}
                     <div className="album-overlay">

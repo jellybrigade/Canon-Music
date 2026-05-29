@@ -157,12 +157,12 @@ export default function App() {
   }, [serverWithCred, setStreamUrlFor]);
 
   const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: "nowplaying", label: "Now Playing", icon: <Headphones size={20} /> },
-    { id: "library", label: "Library", icon: <Music size={20} /> },
-    { id: "artists", label: "Artists", icon: <Users size={20} /> },
-    { id: "playlists", label: "Playlists", icon: <ListMusic size={20} /> },
-    { id: "tags", label: "Tags", icon: <Tag size={20} />, badge: unmappedCount || undefined },
-    { id: "settings", label: "Settings", icon: <Settings size={20} /> },
+    { id: "nowplaying", label: "Now Playing", icon: <Headphones size={24} /> },
+    { id: "library", label: "Library", icon: <Music size={24} /> },
+    { id: "artists", label: "Artists", icon: <Users size={24} /> },
+    { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
+    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: unmappedCount || undefined },
+    { id: "settings", label: "Settings", icon: <Settings size={24} /> },
   ];
 
   const syncedRef = useRef<string | null>(null);
@@ -390,7 +390,7 @@ export default function App() {
   function renderSearchBar() {
     return (
       <div className="search-bar">
-        <Search size={13} className="search-bar-icon" />
+        <Search size={15} className="search-bar-icon" />
         <input
           ref={searchInputRef}
           type="text"
@@ -401,7 +401,7 @@ export default function App() {
         />
         {searchRaw && (
           <button className="search-bar-clear" onClick={clearSearch} title="Clear search">
-            <X size={12} />
+            <X size={14} />
           </button>
         )}
       </div>
@@ -417,7 +417,7 @@ export default function App() {
             <span className="server-name">{server?.display_name}</span>
             {renderSearchBar()}
             <button className="search-bar-clear" onClick={clearSearch} title="Close search" style={{ marginLeft: "auto" }}>
-              <X size={13} />
+              <X size={15} />
             </button>
           </header>
           {serverWithCred && searchResults && searchQuery ? (
@@ -447,7 +447,7 @@ export default function App() {
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => navigateTo("library", { album })}
+                onSelectAlbum={(album) => { setSelectedAlbum(album); setView("library"); }}
                 onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
                 onBack={() => navigateTo("library")}
               />
@@ -495,7 +495,7 @@ export default function App() {
                 onClick={() => { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); }}
                 title="Search (Ctrl+F)"
               >
-                <Search size={13} />
+                <Search size={15} />
                 Search…
               </button>
               {genres && genres.length > 0 && (
@@ -505,7 +505,7 @@ export default function App() {
                     onClick={() => setGenreDropdownOpen((v) => !v)}
                     title="Filter by genre"
                   >
-                    <Tag size={12} />
+                    <Tag size={14} />
                     {selectedGenreFilters.length > 0 ? `Genre (${selectedGenreFilters.length})` : "Genre"}
                   </button>
                   {genreDropdownOpen && (
@@ -538,7 +538,7 @@ export default function App() {
                   onClick={() => setCanonicalIdFilters([])}
                   title="Clear tag filter"
                 >
-                  <X size={12} />
+                  <X size={14} />
                   Tag filter
                 </button>
               )}
@@ -547,7 +547,7 @@ export default function App() {
                 onClick={() => setLovedOnly((v) => !v)}
                 title={lovedOnly ? "Show all albums" : "Show loved albums"}
               >
-                <Heart size={12} fill={lovedOnly ? "currentColor" : "none"} strokeWidth={2} />
+                <Heart size={14} fill={lovedOnly ? "currentColor" : "none"} strokeWidth={2} />
                 Loved
               </button>
               {server && (
