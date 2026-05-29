@@ -1,0 +1,286 @@
+/**
+ * MusicBrainz metadata client.
+ *
+ * Uses @tauri-apps/plugin-http (not browser fetch) so that a proper
+ * User-Agent header can be set — required by MB's usage policy.
+ *
+ * Rate limit: ≥ 1 req/sec (MB enforces this server-side; we use 1100 ms).
+ *
+ * Genre note: MB stores community-voted genres at both Release Group and
+ * Release level. Combined genres = union(RG genres, matched-release genres).
+ * We do NOT fetch every pressing's genres — MB's 1 req/sec makes a
+ * full-catalog union prohibitively slow.
+ */
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { makeRateLimiter } from "./rate-limiter";
+
+const MB_BASE = "https://musicbrainz.org/ws/2/";
+// Kept in sync with tauri.conf.json / package.json version
+const APP_VERSION = "0.1.0";
+const USER_AGENT = `Canon/${APP_VERSION} ( https://github.com/jellybrigade/canon )`;
+
+// MB enforces ≤ 1 req/sec; use 1100 ms for safe margin
+const rateLimit = makeRateLimiter(1100);
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+export interface MbGenre {
+  name: string;
+  count: number;
+}
+
+export interface MbReleaseGroupCandidate {
+  id: string;
+  title: string;
+  firstReleaseDate: string | null;
+  primaryType: string | null;
+  artistName: string;
+  artistMbid: string | null;
+  /** MB's own Lucene relevance score (0–100). Tiebreaker only — use our fuzzy score as primary. */
+  score: number | null;
+}
+
+export interface MbReleaseGroupDetail {
+  id: string;
+  title: string;
+  firstReleaseDate: string | null;
+  primaryType: string | null;
+  artistName: string;
+  artistMbid: string | null;
+  genres: MbGenre[];
+  releases: MbReleaseSummary[];
+}
+
+export interface MbReleaseSummary {
+  id: string;
+  title: string;
+  date: string | null;
+  country: string | null;
+}
+
+export interface MbReleaseDetail {
+  id: string;
+  title: string;
+  date: string | null;
+  country: string | null;
+  label: string | null;
+  catalogNumber: string | null;
+  barcode: string | null;
+  genres: MbGenre[];
+}
+
+export interface MbArtistCandidate {
+  id: string;
+  name: string;
+  disambiguation: string | null;
+  country: string | null;
+}
+
+export interface MbArtistDetail {
+  id: string;
+  name: string;
+  disambiguation: string | null;
+  country: string | null;
+  genres: MbGenre[];
+}
+
+// ── HTTP helper ───────────────────────────────────────────────────────────────
+
+async function mbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  await rateLimit();
+  const url = new URL(path, MB_BASE);
+  url.searchParams.set("fmt", "json");
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+  const res = await tauriFetch(url.toString(), {
+    method: "GET",
+    headers: { "User-Agent": USER_AGENT },
+  });
+
+  if (!res.ok) {
+    throw new Error(`MusicBrainz ${path} returned ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+// ── Release Group search ───────────────────────────────────────────────────────
+
+interface MbSearchRGResponse {
+  "release-groups"?: Array<{
+    id: string;
+    title: string;
+    score?: number;
+    "first-release-date"?: string;
+    "primary-type"?: string;
+    "artist-credit"?: Array<{
+      artist?: { id: string; name: string };
+    }>;
+  }>;
+}
+
+export async function searchReleaseGroups(
+  artist: string,
+  album: string
+): Promise<MbReleaseGroupCandidate[]> {
+  const query = `release:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
+  const data = await mbGet<MbSearchRGResponse>("release-group", {
+    query,
+    limit: "10",
+  });
+
+  return (data["release-groups"] ?? []).map((rg) => {
+    const credit = rg["artist-credit"]?.[0]?.artist;
+    return {
+      id: rg.id,
+      title: rg.title,
+      firstReleaseDate: rg["first-release-date"] ?? null,
+      primaryType: rg["primary-type"] ?? null,
+      artistName: credit?.name ?? artist,
+      artistMbid: credit?.id ?? null,
+      score: rg.score ?? null,
+    };
+  });
+}
+
+// ── Release Group lookup ───────────────────────────────────────────────────────
+
+interface MbLookupRGResponse {
+  id: string;
+  title: string;
+  "first-release-date"?: string;
+  "primary-type"?: string;
+  "artist-credit"?: Array<{ artist?: { id: string; name: string } }>;
+  genres?: Array<{ name: string; count: number }>;
+  releases?: Array<{
+    id: string;
+    title: string;
+    date?: string;
+    country?: string;
+  }>;
+}
+
+export async function lookupReleaseGroup(rgMbid: string): Promise<MbReleaseGroupDetail> {
+  const data = await mbGet<MbLookupRGResponse>(`release-group/${rgMbid}`, {
+    inc: "genres+releases+artist-credits",
+  });
+
+  const credit = data["artist-credit"]?.[0]?.artist;
+  return {
+    id: data.id,
+    title: data.title,
+    firstReleaseDate: data["first-release-date"] ?? null,
+    primaryType: data["primary-type"] ?? null,
+    artistName: credit?.name ?? "",
+    artistMbid: credit?.id ?? null,
+    genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+    releases: (data.releases ?? []).map((r) => ({
+      id: r.id,
+      title: r.title,
+      date: r.date ?? null,
+      country: r.country ?? null,
+    })),
+  };
+}
+
+// ── Release lookup ─────────────────────────────────────────────────────────────
+
+interface MbLookupReleaseResponse {
+  id: string;
+  title: string;
+  date?: string;
+  country?: string;
+  barcode?: string;
+  genres?: Array<{ name: string; count: number }>;
+  "label-info"?: Array<{
+    label?: { name: string };
+    "catalog-number"?: string;
+  }>;
+}
+
+export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetail> {
+  const data = await mbGet<MbLookupReleaseResponse>(`release/${releaseMbid}`, {
+    inc: "genres+labels",
+  });
+
+  const labelInfo = data["label-info"]?.[0];
+  return {
+    id: data.id,
+    title: data.title,
+    date: data.date ?? null,
+    country: data.country ?? null,
+    label: labelInfo?.label?.name ?? null,
+    catalogNumber: labelInfo?.["catalog-number"] ?? null,
+    barcode: data.barcode ?? null,
+    genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+  };
+}
+
+// ── Artist search ──────────────────────────────────────────────────────────────
+
+interface MbSearchArtistResponse {
+  artists?: Array<{
+    id: string;
+    name: string;
+    disambiguation?: string;
+    country?: string;
+  }>;
+}
+
+export async function searchArtists(name: string): Promise<MbArtistCandidate[]> {
+  const data = await mbGet<MbSearchArtistResponse>("artist", {
+    query: `artist:${JSON.stringify(name)}`,
+    limit: "10",
+  });
+
+  return (data.artists ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    disambiguation: a.disambiguation ?? null,
+    country: a.country ?? null,
+  }));
+}
+
+// ── Artist lookup ──────────────────────────────────────────────────────────────
+
+interface MbLookupArtistResponse {
+  id: string;
+  name: string;
+  disambiguation?: string;
+  country?: string;
+  genres?: Array<{ name: string; count: number }>;
+}
+
+export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> {
+  const data = await mbGet<MbLookupArtistResponse>(`artist/${artistMbid}`, {
+    inc: "genres",
+  });
+
+  return {
+    id: data.id,
+    name: data.name,
+    disambiguation: data.disambiguation ?? null,
+    country: data.country ?? null,
+    genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+  };
+}
+
+// ── Genre utilities ────────────────────────────────────────────────────────────
+
+/**
+ * Combine genres from Release Group and a specific Release.
+ * Deduped (case-insensitive name), sorted descending by combined vote count.
+ * RG genres = aggregate community view; release genres = pressing-specific.
+ */
+export function combineGenres(rgGenres: MbGenre[], releaseGenres: MbGenre[]): MbGenre[] {
+  const byName = new Map<string, MbGenre>();
+  for (const g of [...rgGenres, ...releaseGenres]) {
+    const key = g.name.toLowerCase();
+    const existing = byName.get(key);
+    if (existing) {
+      byName.set(key, { name: existing.name, count: existing.count + g.count });
+    } else {
+      byName.set(key, { ...g });
+    }
+  }
+  return [...byName.values()].sort((a, b) => b.count - a.count);
+}

@@ -1,0 +1,93 @@
+/**
+ * Core MB auto-identify logic as a plain async function — no React hooks.
+ * Used by useAutoIdentifyAlbum (per-album, on mount) and bulk sync (SettingsView).
+ */
+import {
+  searchReleaseGroups,
+  lookupReleaseGroup,
+  lookupRelease,
+  combineGenres,
+  type MbReleaseGroupDetail,
+  type MbReleaseDetail,
+  type MbGenre,
+  type MbReleaseGroupCandidate,
+} from "./musicbrainz";
+import { rankCandidates } from "./fuzzy-match";
+
+export type AutoDecision =
+  | "auto_confirmed"
+  | "not_found"
+  | "ambiguous"
+  | "needs_review"
+  | "error";
+
+export interface AutoIdentifyResult {
+  decision: AutoDecision;
+  score: number;
+  top: MbReleaseGroupCandidate | null;
+  detail: MbReleaseGroupDetail | null;
+  release: MbReleaseDetail | null;
+  combinedGenres: MbGenre[];
+  error: string | null;
+}
+
+const AUTO_CONFIRM_THRESHOLD = 0.80;
+const MIN_SCORE_GAP = 0.10;
+
+export async function autoIdentifyAlbum({ artist, album }: { artist: string; album: string }): Promise<AutoIdentifyResult> {
+  try {
+    const candidates = await searchReleaseGroups(artist, album);
+
+    if (candidates.length === 0) {
+      return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], error: null };
+    }
+
+    const ranked = rankCandidates(candidates, artist, album);
+    const top = ranked[0]!;
+    const second = ranked[1];
+    const gap = second ? top.score - second.score : Infinity;
+
+    if (top.score < AUTO_CONFIRM_THRESHOLD || gap < MIN_SCORE_GAP) {
+      const decision = top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous";
+      return { decision, score: top.score, top: top.candidate, detail: null, release: null, combinedGenres: [], error: null };
+    }
+
+    const rgDetail = await lookupReleaseGroup(top.candidate.id);
+
+    const releaseId =
+      rgDetail.releases.find((r) => r.date)?.id ??
+      rgDetail.releases[0]?.id ??
+      null;
+
+    let releaseDetail: MbReleaseDetail | null = null;
+    if (releaseId) {
+      try {
+        releaseDetail = await lookupRelease(releaseId);
+      } catch {
+        // Non-fatal: RG data alone is still useful
+      }
+    }
+
+    const combinedGenres = combineGenres(rgDetail.genres, releaseDetail?.genres ?? []);
+
+    return {
+      decision: "auto_confirmed",
+      score: top.score,
+      top: top.candidate,
+      detail: rgDetail,
+      release: releaseDetail,
+      combinedGenres,
+      error: null,
+    };
+  } catch (e) {
+    return {
+      decision: "error",
+      score: 0,
+      top: null,
+      detail: null,
+      release: null,
+      combinedGenres: [],
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}

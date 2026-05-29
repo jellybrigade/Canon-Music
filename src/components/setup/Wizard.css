@@ -1,0 +1,175 @@
+.wizard-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-0);
+}
+
+.wizard {
+  width: 420px;
+  padding: 2rem 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.wizard-step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  transition: background var(--motion-fast) ease-out;
+}
+
+.wizard-step-dot--active {
+  background: var(--accent);
+}
+
+.wizard-step-dot--done {
+  background: var(--text-tertiary);
+}
+
+.wizard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.wizard-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.wizard-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.wizard-server-types {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.wizard-server-type {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wizard-server-type--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface-1);
+}
+
+.wizard-server-type:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.wizard-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.wizard-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.wizard-form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.wizard-sidecar-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.wizard-path-remap {
+  font-size: 0.875rem;
+}
+
+.wizard-path-remap summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+
+.wizard-path-remap label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-top: 0.625rem;
+}
+
+.wizard-docker-hint {
+  font-size: 0.875rem;
+}
+
+.wizard-docker-hint summary {
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 0.8125rem;
+}
+
+.wizard-docker-cmd {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  background: var(--surface-2);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--text-secondary);
+  overflow-x: auto;
+}
+
+.wizard-skip-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.wizard-actions {
+  display: flex;
+  gap: 0.625rem;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+.wizard-error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.wizard-success {
+  color: #27ae60;
+  font-size: 0.875rem;
+  margin: 0;
+}
