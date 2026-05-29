@@ -119,15 +119,22 @@ function mappingDot(row: VocabRow, nodeById: Map<string, TreeNode>): { color: st
   return { color: "orange", title: `Auto-mapped — "${row.raw_value}" → "${node?.name ?? row.canonical_id}"` };
 }
 
-/** Normalize tree section names to a consistent singular form for display badges. */
+/** Normalize section/kind strings to consistent singular badge labels. */
+function normalizeSection(s: string): string {
+  if (s === "genres" || s === "genre") return "genre";
+  if (s === "descriptors" || s === "descriptor") return "descriptor";
+  if (s === "scenes-and-movements" || s === "scene") return "scene";
+  if (s === "mood" || s === "moods") return "descriptor";
+  return s;
+}
+
+/** Resolve the badge label for a vocab row. */
 function resolvedSection(row: VocabRow, nodeById: Map<string, TreeNode>): string {
-  if (!row.canonical_id || row.canonical_id === ACCEPTED || row.canonical_id === IGNORED) return row.kind;
+  if (!row.canonical_id || row.canonical_id === ACCEPTED || row.canonical_id === IGNORED) {
+    return normalizeSection(row.kind);
+  }
   const section = nodeById.get(row.canonical_id)?.section ?? row.kind;
-  // Normalize all section names to singular for consistent badge display
-  if (section === "genres") return "genre";
-  if (section === "descriptors") return "descriptor";
-  if (section === "scenes-and-movements") return "scene";
-  return section;
+  return normalizeSection(section);
 }
 
 function isTrivialExactMatch(row: VocabRow, nodeById: Map<string, TreeNode>): boolean {

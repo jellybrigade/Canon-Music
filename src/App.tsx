@@ -171,11 +171,11 @@ export default function App() {
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumRow | null>(null);
 
-  function navigateTo(v: View) {
+  function navigateTo(v: View, select?: { album?: AlbumRow; artist?: ArtistRow }) {
     if (v === "nowplaying" && isQueueOpen) toggleQueue();
     setView(v);
-    setSelectedAlbum(null);
-    setSelectedArtist(null);
+    setSelectedAlbum(select?.album ?? null);
+    setSelectedArtist(select?.artist ?? null);
     setSelectedPlaylist(null);
     setSelectedGenreFilters([]);
     setCanonicalIdFilters([]);
@@ -447,11 +447,8 @@ export default function App() {
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => { setSelectedAlbum(album); navigateTo("library"); }}
-                onSelectArtist={(artistName) => {
-                  setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null });
-                  navigateTo("artists");
-                }}
+                onSelectAlbum={(album) => navigateTo("library", { album })}
+                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
                 onBack={() => navigateTo("library")}
               />
             ) : <main className="content-main" />}

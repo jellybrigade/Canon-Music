@@ -141,11 +141,6 @@
   color: #a5b4fc;
 }
 
-.tags-kind-badge--mood {
-  background: rgba(244,114,182,0.2);
-  color: #f9a8d4;
-}
-
 /* Mapped state */
 .tags-mapped {
   display: flex;

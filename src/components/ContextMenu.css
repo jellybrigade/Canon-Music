@@ -75,3 +75,8 @@
   right: 100%;
 }
 
+.context-submenu-content--flip-up {
+  top: auto;
+  bottom: -4px;
+}
+

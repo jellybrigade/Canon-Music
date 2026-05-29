@@ -17,16 +17,29 @@ interface SubmenuProps {
 export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
   const [open, setOpen] = useState(false);
   const [flipLeft, setFlipLeft] = useState(false);
+  const [flipUp, setFlipUp] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   function handleMouseEnter() {
     setOpen(true);
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      // 180px = submenu min-width; flip left if it would overflow the right edge
       setFlipLeft(rect.right + 180 > window.innerWidth);
     }
   }
+
+  useLayoutEffect(() => {
+    if (!open || !contentRef.current) return;
+    const rect = contentRef.current.getBoundingClientRect();
+    setFlipUp(rect.bottom > window.innerHeight);
+  }, [open]);
+
+  const cls = [
+    "context-submenu-content",
+    flipLeft ? "context-submenu-content--flip" : "",
+    flipUp ? "context-submenu-content--flip-up" : "",
+  ].filter(Boolean).join(" ");
 
   return (
     <div
@@ -37,7 +50,7 @@ export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
     >
       <button className="context-submenu-trigger">{label} ▸</button>
       {open && (
-        <div className={`context-submenu-content${flipLeft ? " context-submenu-content--flip" : ""}`}>
+        <div className={cls} ref={contentRef}>
           {children}
         </div>
       )}
