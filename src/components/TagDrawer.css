@@ -85,6 +85,32 @@
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tag-level-badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1em 0.4em;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.tag-level-badge--album {
+  background: rgba(57, 108, 216, 0.06);
+  border-color: rgba(57, 108, 216, 0.2);
+  color: var(--accent);
+}
+
+.tag-level-badge--track {
+  background: rgba(120, 120, 120, 0.08);
 }
 
 .tag-drawer-row {

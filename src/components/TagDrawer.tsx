@@ -50,20 +50,38 @@ function SourceBadge({ source }: { source: string }) {
 function TagSection({
   title,
   tags,
+  level,
+  emptyMessage,
   trackId,
   hasSidecar,
   onOverride,
 }: {
   title: string;
   tags: NormalizedTag[];
+  level: "album" | "track";
+  emptyMessage?: string;
   trackId?: string;
   hasSidecar?: boolean;
   onOverride: (tag: NormalizedTag) => void;
 }) {
-  if (tags.length === 0) return null;
+  if (tags.length === 0) {
+    if (!emptyMessage) return null;
+    return (
+      <div className="tag-drawer-section">
+        <h3 className="tag-drawer-section-title">
+          {title}
+          <span className={`tag-level-badge tag-level-badge--${level}`}>{level}</span>
+        </h3>
+        <p className="tag-drawer-empty">{emptyMessage}</p>
+      </div>
+    );
+  }
   return (
     <div className="tag-drawer-section">
-      <h3 className="tag-drawer-section-title">{title}</h3>
+      <h3 className="tag-drawer-section-title">
+        {title}
+        <span className={`tag-level-badge tag-level-badge--${level}`}>{level}</span>
+      </h3>
       {tags.map((tag) => (
         <div key={tag.id ?? tag.name} className="tag-drawer-row">
           <span className="tag-drawer-name">{tag.name}</span>
@@ -125,6 +143,8 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar
               <TagSection
                 title="Genres"
                 tags={normalizedTags.genres}
+                level="album"
+                emptyMessage="No genres identified — try syncing in Settings."
                 trackId={trackId}
                 hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
@@ -132,6 +152,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar
               <TagSection
                 title="Descriptors"
                 tags={normalizedTags.descriptors}
+                level="album"
                 trackId={trackId}
                 hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
@@ -139,13 +160,17 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar
               <TagSection
                 title="Scenes & Movements"
                 tags={normalizedTags.scenes}
+                level="album"
                 trackId={trackId}
                 hasSidecar={hasSidecar}
                 onOverride={(tag) => void handleOverride(tag)}
               />
               {trackId && rawTrackTags && rawTrackTags.length > 0 && (
                 <div className="tag-drawer-section tag-drawer-section--raw">
-                  <h3 className="tag-drawer-section-title">Raw file tags</h3>
+                  <h3 className="tag-drawer-section-title">
+                    Raw file tags
+                    <span className="tag-level-badge tag-level-badge--track">track</span>
+                  </h3>
                   {rawTrackTags.map((t) => (
                     <div key={t.raw_value} className="tag-drawer-row">
                       <span className="tag-drawer-name">{t.raw_value}</span>
