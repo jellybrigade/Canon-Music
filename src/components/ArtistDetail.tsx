@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Play } from "lucide-react";
+import { Play, Disc } from "lucide-react";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
+import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { ArtistRow } from "../hooks/useArtists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
@@ -10,6 +12,7 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import { fetchArtistImage, fetchArtistTopTracks } from "../lib/lastfm";
+import { useArtistIdentity } from "../hooks/useArtistIdentity";
 import "./ArtistDetail.css";
 
 interface Props {
@@ -99,7 +102,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { server, credential } = serverWithCredential;
   const { data: albums } = useArtistAlbums(artist.name);
   const { data: rawTracks } = useArtistTopTracks(artist.name);
-  const { data: lastfmTitles } = useLastfmTopTracks(artist.name);
+  const { data: artistIdentity } = useArtistIdentity(artist.name);
+  const [showIdentify, setShowIdentify] = useState(false);
+
+  // Use confirmed Last.fm name override when fetching Last.fm data
+  const lastfmName = artistIdentity?.lastfm_artist_name ?? artist.name;
+  const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -114,8 +122,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     : null;
 
   const { data: lastfmImageUrl } = useQuery({
-    queryKey: ["artist-image", artist.name],
-    queryFn: () => fetchArtistImage(artist.name),
+    queryKey: ["artist-image", lastfmName],
+    queryFn: () => fetchArtistImage(lastfmName),
     staleTime: 7 * 24 * 60 * 60 * 1000,
     enabled: !localBannerUrl,
   });
@@ -164,9 +172,24 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             ← Artists
           </button>
           <h1 className="artist-banner-name">{artist.name}</h1>
-          <span className="artist-banner-meta">
-            {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
-          </span>
+          <div className="artist-banner-meta-row">
+            <span className="artist-banner-meta">
+              {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+            </span>
+            {artistIdentity?.confirmed_at && (
+              <span className="mb-verified-badge">
+                <Disc size={11} /> MB verified
+              </span>
+            )}
+            <button
+              className="album-identify-btn"
+              onClick={() => setShowIdentify(true)}
+              aria-label="Identify artist on MusicBrainz"
+              title="Identify on MusicBrainz"
+            >
+              <Disc size={14} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -221,6 +244,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </section>
         )}
       </div>
+
+      {showIdentify && (
+        <ArtistIdentifyDialog
+          artistName={artist.name}
+          onClose={() => setShowIdentify(false)}
+        />
+      )}
     </div>
   );
 }

@@ -358,3 +358,33 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+.tags-review-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+}
+
+.tags-review-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text, #fff);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tags-review-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted, rgba(255,255,255,0.5));
+  margin: 0;
+}
+
+.tags-cell-sources {
+  font-size: 0.72rem;
+  color: var(--text-muted, rgba(255,255,255,0.4));
+  white-space: nowrap;
+}

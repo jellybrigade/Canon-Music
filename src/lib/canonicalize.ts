@@ -70,6 +70,11 @@ export function canonicalKey(name: string): string {
     .trim();
 }
 
+/** Synthetic canonical_id for unmatched tags stored in album_genres. */
+export function rawGenreId(tagName: string): string {
+  return `raw:${canonicalKey(tagName)}`;
+}
+
 function levenshtein(a: string, b: string, maxDist: number): number {
   if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
   const prev = Array.from({ length: b.length + 1 }, (_, i) => i) as number[];
@@ -102,6 +107,29 @@ export function getParentChain(node: TreeNode, byId: Map<string, TreeNode>, maxD
     current = parent;
   }
   return chain;
+}
+
+/**
+ * BFS over all parent edges in the DAG, returning every ancestor id of `node`
+ * (not including `node.id` itself). Cycle-safe.
+ */
+export function getAncestorIds(node: TreeNode, byId: Map<string, TreeNode>): string[] {
+  const visited = new Set<string>([node.id]);
+  const queue: string[] = [...node.parents];
+  const result: string[] = [];
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (visited.has(id)) continue;
+    visited.add(id);
+    result.push(id);
+    const parent = byId.get(id);
+    if (parent) {
+      for (const pid of parent.parents) {
+        if (!visited.has(pid)) queue.push(pid);
+      }
+    }
+  }
+  return result;
 }
 
 export async function findCanonical(

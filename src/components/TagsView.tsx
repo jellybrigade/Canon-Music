@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Lock, Unlock } from "lucide-react";
-import { useVocabulary, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
+import { useVocabulary, useTagMappings, useAutoMapExact, useUnresolvedGenres } from "../hooks/useTagMappings";
+import type { UnresolvedGenreRow } from "../hooks/useTagMappings";
 import { getCanonTree, canonicalKey } from "../lib/canonicalize";
 import type { TreeNode } from "../lib/canonicalize";
 import type { TagKind } from "../lib/canonicalize";
@@ -159,6 +160,7 @@ function groupByFirstLetter(rows: VocabRow[]): Array<{ letter: string; rows: Voc
 
 export function TagsView() {
   const { data: vocab } = useVocabulary();
+  const { data: unresolvedGenres } = useUnresolvedGenres();
   const { saveMapping, deleteMapping, lockMapping } = useTagMappings();
   const autoMapExact = useAutoMapExact();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
@@ -213,6 +215,43 @@ export function TagsView() {
     () => vocab?.filter((r) => !r.canonical_id || r.canonical_id === ACCEPTED || r.canonical_id === IGNORED).length ?? 0,
     [vocab]
   );
+
+  function renderUnresolvedRow(row: UnresolvedGenreRow) {
+    return (
+      <tr key={`unresolved-${row.raw_value}:${row.kind}`} className="tags-row--unmapped">
+        <td className="tags-cell-raw">{row.raw_value}</td>
+        <td><span className={`tags-kind-badge tags-kind-badge--${row.kind}`}>{row.kind}</span></td>
+        <td className="tags-cell-count">{row.album_count} {row.album_count === 1 ? "album" : "albums"}</td>
+        <td className="tags-cell-sources">{row.sources}</td>
+        <td className="tags-cell-mapping" colSpan={2}>
+          <div className="tags-cell-mapping-row">
+            <CanonCombobox
+              treeNodes={treeNodes}
+              currentId={null}
+              onSelect={(canonicalId) =>
+                saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind, canonicalId })
+              }
+              onClear={() => {}}
+            />
+            <button
+              className="tags-accept-btn"
+              onClick={() => saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind, canonicalId: ACCEPTED })}
+              title="Accept this tag as-is"
+            >
+              Accept
+            </button>
+            <button
+              className="tags-accept-btn tags-ignore-btn"
+              onClick={() => saveMapping.mutate({ rawValue: row.raw_value, kind: row.kind, canonicalId: IGNORED })}
+              title="Ignore this tag — exclude from genre output"
+            >
+              Ignore
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   function renderRow(row: VocabRow) {
     const dot = mappingDot(row, nodeById);
@@ -335,6 +374,32 @@ export function TagsView() {
           </button>
         </div>
       </header>
+
+      {unresolvedGenres && unresolvedGenres.length > 0 && (
+        <section className="tags-review-section">
+          <h2 className="tags-review-title">
+            Needs Review
+            <span className="tags-unmapped-badge">{unresolvedGenres.length}</span>
+          </h2>
+          <p className="tags-review-desc">
+            These tags came from Last.fm or MusicBrainz but couldn&apos;t be matched to the canon tree. Map them to a canon node, accept as-is, or ignore.
+          </p>
+          <table className="tags-table">
+            <thead>
+              <tr>
+                <th>Raw value</th>
+                <th>Kind</th>
+                <th>Albums</th>
+                <th>Source</th>
+                <th colSpan={2}>Maps to</th>
+              </tr>
+            </thead>
+            <tbody>
+              {unresolvedGenres.map((row) => renderUnresolvedRow(row))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {rows.length === 0 ? (
         <p className="tags-empty">

@@ -1,8 +1,9 @@
-import { useState } from "react";
-import { Heart, Play, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
+import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { TrackRow } from "../hooks/useTracks";
@@ -10,8 +11,12 @@ import { useTracks } from "../hooks/useTracks";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
+import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
+import { useSetting } from "../hooks/useSetting";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
+import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
@@ -30,7 +35,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onClose: () => void;
   onSelectArtist?: (artistName: string) => void;
-  onTagFilter?: (filter: { canonicalId: string } | { rawGenre: string }) => void;
+  onTagFilter?: (canonicalId: string) => void;
 }
 
 interface DrawerState {
@@ -53,9 +58,53 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
 
+  const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
+  const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
+
+  const saveIdentity = useSaveAlbumIdentity();
+  const recordFailed = useRecordFailedLookup();
+
+  const { data: autoResult } = useAutoIdentifyAlbum({
+    albumId: album.id,
+    artist: album.artist ?? "",
+    album: album.name,
+    mbAutoIdentify,
+    existingIdentity: albumIdentity,
+    identityLoaded,
+  });
+
+  useEffect(() => {
+    if (!autoResult) return;
+    const { decision, score, detail, release, combinedGenres } = autoResult;
+
+    if (decision === "auto_confirmed" && detail) {
+      saveIdentity.mutate({
+        albumId: album.id,
+        mbReleaseGroupId: detail.id,
+        mbReleaseId: release?.id ?? null,
+        mbArtistId: detail.artistMbid,
+        lastfmArtistName: null,
+        lastfmAlbumName: null,
+        lastfmMatchConfirmed: false,
+        combinedGenres,
+        label: release?.label ?? null,
+        country: release?.country ?? null,
+        catalogNumber: release?.catalogNumber ?? null,
+        barcode: release?.barcode ?? null,
+        releaseDate: release?.date ?? detail.firstReleaseDate ?? null,
+        autoMatched: true,
+        matchScore: Math.round(score * 100),
+      });
+    } else if (decision !== "error") {
+      recordFailed.mutate({ albumId: album.id, matchScore: Math.round(score * 100) });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoResult?.decision, album.id]);
+
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TrackRow } | null>(null);
   const [contextMenuMode, setContextMenuMode] = useState<"main" | "playlist">("main");
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
+  const [showIdentify, setShowIdentify] = useState(false);
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -129,14 +178,46 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               )
             )}
             {album.year && <p className="album-detail-year">{album.year}</p>}
-            <button
-              className="play-album-btn"
-              onClick={handlePlayAlbum}
-              disabled={!tracks || tracks.length === 0}
-              aria-label="Play album"
-            >
-              <Play size={16} /> Play Album
-            </button>
+            {albumIdentity?.confirmed_at ? (
+              (albumIdentity.release_date || albumIdentity.label || albumIdentity.country) && (
+                <div className="album-detail-identity">
+                  <p className="mb-verified-facts">
+                    {albumIdentity.release_date && (
+                      <span>{albumIdentity.release_date.slice(0, 4)}</span>
+                    )}
+                    {albumIdentity.label && <span>{albumIdentity.label}</span>}
+                    {albumIdentity.country && <span>{albumIdentity.country}</span>}
+                    {albumIdentity.catalog_number && <span>{albumIdentity.catalog_number}</span>}
+                  </p>
+                </div>
+              )
+            ) : mbAutoIdentify === "true" && identityLoaded ? (
+              <button
+                className="album-unidentified-badge"
+                onClick={() => setShowIdentify(true)}
+                title="Album not identified on MusicBrainz — click to identify"
+              >
+                <HelpCircle size={12} /> Unidentified
+              </button>
+            ) : null}
+            <div className="album-detail-actions">
+              <button
+                className="play-album-btn"
+                onClick={handlePlayAlbum}
+                disabled={!tracks || tracks.length === 0}
+                aria-label="Play album"
+              >
+                <Play size={16} /> Play Album
+              </button>
+              <button
+                className="album-identify-btn"
+                onClick={() => setShowIdentify(true)}
+                aria-label="Identify album"
+                title="Identify on MusicBrainz"
+              >
+                <Disc size={14} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -150,7 +231,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id !== null ? { canonicalId: tag.id } : { rawGenre: tag.name })}
+                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -168,7 +249,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => tag.id !== null && onTagFilter?.({ canonicalId: tag.id })}
+                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -186,7 +267,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => tag.id !== null && onTagFilter?.({ canonicalId: tag.id })}
+                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -351,6 +432,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           trackId={drawerState.trackId}
           hasSidecar={!!server.sidecar_url}
           onClose={() => setDrawerState(null)}
+        />
+      )}
+
+      {showIdentify && (
+        <AlbumIdentifyDialog
+          albumId={album.id}
+          artist={album.artist ?? ""}
+          album={album.name}
+          onClose={() => setShowIdentify(false)}
         />
       )}
     </div>

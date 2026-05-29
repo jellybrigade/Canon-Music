@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Heart, AlertTriangle } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
@@ -15,8 +16,6 @@ const PADDING = 20;
 const COL_GAP = 16;
 const ROW_GAP = 24;
 const CARD_MIN = 190;
-
-const scrollMemory = new Map<string, number>();
 
 interface Props {
   albums: AlbumRow[];
@@ -49,18 +48,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     return () => obs.disconnect();
   }, []);
 
-  // Restore saved scroll position on mount; save it on unmount.
-  const scrollKeyRef = useRef(scrollKey);
-  scrollKeyRef.current = scrollKey;
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!scrollKeyRef.current || !el) return;
-    const saved = scrollMemory.get(scrollKeyRef.current);
-    if (saved != null) el.scrollTop = saved;
-    return () => {
-      if (scrollKeyRef.current && el) scrollMemory.set(scrollKeyRef.current, el.scrollTop);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useScrollMemory(scrollKey, containerRef);
 
   // Re-measure when albums transition from empty to non-empty — stale containerWidth
   // from the empty state can leave cols=1 and produce full-width stacked images.

@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSetting } from "../hooks/useSetting";
 import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
+import { autoIdentifyAlbum } from "../lib/album-identify";
+import { persistAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { authenticate } from "../lib/navidrome";
 import type { NavidromeCredential } from "../lib/navidrome";
 import { checkSidecarHealth } from "../lib/sidecar";
@@ -54,6 +56,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "90");
   const [pullMode, setPullMode] = useSetting("tags.pull_mode_default", "review");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
+  const [mbAutoIdentify, setMbAutoIdentify] = useSetting("mb.auto_identify", "false");
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
   const { data: minTagCount } = useQuery({
     queryKey: ["settings", "lastfm.min_tag_count"],
@@ -110,6 +113,107 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
         await normalizeAlbum(album.id, album.artist ?? "", album.name);
       } catch (e) {
         console.warn("Refresh failed for:", album.name, e);
+      }
+      setPullProgress({ done: i + 1, total: albums.length });
+    }
+    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
+    void refetchLastRefreshed();
+    setPullProgress(null);
+  }, [refetchLastRefreshed, queryClient, setPullProgress]);
+
+  // Bulk MB genre sync: identify unmatched albums, save confirmed, then normalize
+  const handleSyncAllMb = useCallback(async () => {
+    const db = await getDb();
+    type Row = { id: string; artist: string | null; name: string };
+    // Skip confirmed albums; retry previously-failed stubs so a re-run after an
+    // outage doesn't leave those albums permanently suppressed.
+    const albums = await db.select<Row[]>(
+      `SELECT a.id, a.artist, a.name FROM albums a
+       WHERE NOT EXISTS (
+         SELECT 1 FROM album_identity ai
+         WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
+       )
+       ORDER BY a.name`
+    );
+    if (albums.length === 0) { setPullProgress(null); return; }
+    setPullProgress({ done: 0, total: albums.length });
+    for (let i = 0; i < albums.length; i++) {
+      const album = albums[i]!;
+      try {
+        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name });
+        if (result.decision === "auto_confirmed" && result.detail) {
+          const now = Math.floor(Date.now() / 1000);
+          await persistAlbumIdentity({
+            albumId: album.id,
+            mbReleaseGroupId: result.detail.id,
+            mbReleaseId: result.release?.id ?? null,
+            mbArtistId: result.detail.artistMbid ?? null,
+            lastfmArtistName: null,
+            lastfmAlbumName: null,
+            lastfmMatchConfirmed: false,
+            combinedGenres: result.combinedGenres,
+            label: result.release?.label ?? null,
+            country: result.release?.country ?? null,
+            catalogNumber: result.release?.catalogNumber ?? null,
+            barcode: result.release?.barcode ?? null,
+            releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+            autoMatched: true,
+            matchScore: Math.round(result.score * 100),
+            confirmedAt: now,
+          });
+          await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+            combinedMbGenres: result.combinedGenres,
+          });
+        } else {
+          // Record the attempt so it won't be retried on next bulk run
+          const now = Math.floor(Date.now() / 1000);
+          await db.execute(
+            `INSERT OR IGNORE INTO album_identity
+               (album_id, auto_matched, match_score, looked_up_at)
+             VALUES (?, 0, ?, ?)`,
+            [album.id, Math.round(result.score * 100), now]
+          );
+        }
+      } catch (e) {
+        console.warn("MB sync failed for:", album.name, e);
+      }
+      setPullProgress({ done: i + 1, total: albums.length });
+    }
+    await queryClient.invalidateQueries({ queryKey: ["album-identity"] });
+    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
+    void refetchLastRefreshed();
+    setPullProgress(null);
+  }, [refetchLastRefreshed, queryClient, setPullProgress]);
+
+  // Identity-aware Last.fm tag refresh: passes confirmed identity strings + MB genres to normalizeAlbum
+  const handleSyncAllLastfm = useCallback(async () => {
+    const db = await getDb();
+    type Row = {
+      id: string; artist: string | null; name: string;
+      lastfm_artist_name: string | null; lastfm_album_name: string | null;
+      combined_genres_json: string | null;
+    };
+    const albums = await db.select<Row[]>(
+      `SELECT a.id, a.artist, a.name,
+              ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json
+       FROM albums a
+       LEFT JOIN album_identity ai ON ai.album_id = a.id
+       ORDER BY a.name`
+    );
+    setPullProgress({ done: 0, total: albums.length });
+    for (let i = 0; i < albums.length; i++) {
+      const album = albums[i]!;
+      try {
+        const combinedMbGenres = album.combined_genres_json
+          ? (JSON.parse(album.combined_genres_json) as Array<{ name: string; count: number }>)
+          : null;
+        await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+          lastfmArtistName: album.lastfm_artist_name,
+          lastfmAlbumName: album.lastfm_album_name,
+          combinedMbGenres,
+        });
+      } catch (e) {
+        console.warn("Last.fm sync failed for:", album.name, e);
       }
       setPullProgress({ done: i + 1, total: albums.length });
     }
@@ -512,6 +616,45 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
         </label>
       </section>
 
+      {/* ── MusicBrainz ── */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">MusicBrainz</h3>
+        <p className="settings-section-desc">
+          No API key required. Metadata fetches include a{" "}
+          <code>User-Agent</code> header identifying this app, per MB policy.
+          Rate-limited to 1 request/second.
+        </p>
+        <p className="settings-section-desc">
+          Use the <strong>Identify…</strong> button on any album or artist page to
+          look up and confirm MusicBrainz IDs. Confirmed identity enriches genres,
+          label, country, and release date, and overrides Last.fm string matching.
+        </p>
+        <label className="settings-field settings-field--inline">
+          <input
+            type="checkbox"
+            checked={mbAutoIdentify === "true"}
+            onChange={(e) => void setMbAutoIdentify(e.target.checked ? "true" : "false")}
+          />
+          <span>Auto-identify albums when opened</span>
+        </label>
+        <p className="settings-section-desc">
+          When enabled, albums are silently matched to MusicBrainz on first open.
+          High-confidence matches confirm automatically; ambiguous or low-confidence
+          albums show an "Unidentified" badge instead.
+        </p>
+        <div className="settings-field settings-field--row">
+          <button
+            className="settings-btn"
+            onClick={() => { void handleSyncAllMb(); }}
+            disabled={pullProgress !== null}
+            title="Identify all unmatched albums against MusicBrainz and pull genres"
+          >
+            {pullProgress ? `Syncing MB… ${pullProgress.done} / ${pullProgress.total}` : "Sync all MB genres"}
+          </button>
+          <span className="settings-hint">Only runs on albums not yet attempted. Rate-limited; may take a while.</span>
+        </div>
+      </section>
+
       {/* ── Tags ── */}
       <section className="settings-section">
         <h3 className="settings-section-title">Tags</h3>
@@ -581,6 +724,14 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             {pullProgress
               ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}`
               : "Refresh now"}
+          </button>
+          <button
+            className="settings-btn"
+            onClick={() => { void handleSyncAllLastfm(); }}
+            disabled={pullProgress !== null}
+            title="Re-normalize all albums using confirmed Last.fm identity strings"
+          >
+            {pullProgress ? `Syncing… ${pullProgress.done} / ${pullProgress.total}` : "Sync all Last.fm tags"}
           </button>
           {lastRefreshedAt && pullProgress === null && (
             <span className="settings-hint">

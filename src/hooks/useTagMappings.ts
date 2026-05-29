@@ -113,6 +113,7 @@ export function useTagMappings() {
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
       void queryClient.invalidateQueries({ queryKey: ["pending_edits"] });
+      void queryClient.invalidateQueries({ queryKey: ["unresolved-genres"] });
     },
   });
 
@@ -323,6 +324,33 @@ export function useAddUserTreeNode() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
+    },
+  });
+}
+
+export interface UnresolvedGenreRow {
+  raw_value: string;
+  kind: TagKind;
+  album_count: number;
+  sources: string;
+}
+
+export function useUnresolvedGenres() {
+  return useQuery({
+    queryKey: ["unresolved-genres"],
+    queryFn: async (): Promise<UnresolvedGenreRow[]> => {
+      const db = await getDb();
+      return db.select<UnresolvedGenreRow[]>(`
+        SELECT aug.raw_value, aug.kind, COUNT(DISTINCT aug.album_id) AS album_count,
+               GROUP_CONCAT(DISTINCT aug.source) AS sources
+        FROM album_unresolved_genres aug
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tag_mappings tm
+          WHERE tm.raw_value = aug.raw_value AND tm.kind = aug.kind
+        )
+        GROUP BY aug.raw_value, aug.kind
+        ORDER BY album_count DESC, aug.raw_value
+      `);
     },
   });
 }

@@ -71,7 +71,6 @@ export default function App() {
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
-  const [selectedGenreFilters, setSelectedGenreFilters] = useState<string[]>([]);
   const [canonicalIdFilters, setCanonicalIdFilters] = useState<string[]>([]);
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
@@ -141,7 +140,7 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   useGlobalShortcuts(serverWithCred);
   useScrobbleFlush(serverWithCred);
-  const { data: albums } = useAlbums(sort, selectedGenreFilters, canonicalIdFilters);
+  const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
   const { data: vocab } = useVocabulary();
@@ -177,7 +176,6 @@ export default function App() {
     setSelectedAlbum(select?.album ?? null);
     setSelectedArtist(select?.artist ?? null);
     setSelectedPlaylist(null);
-    setSelectedGenreFilters([]);
     setCanonicalIdFilters([]);
   }
 
@@ -316,7 +314,7 @@ export default function App() {
           album={selectedAlbum}
           serverWithCredential={serverWithCred}
           onClose={() => setSelectedAlbum(null)}
-          onTagFilter={(filter) => { if ("rawGenre" in filter) { setSelectedGenreFilters([filter.rawGenre]); setCanonicalIdFilters([]); } else { setCanonicalIdFilters([filter.canonicalId]); setSelectedGenreFilters([]); } setSelectedAlbum(null); }}
+          onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); }}
         />
       );
     }
@@ -341,7 +339,7 @@ export default function App() {
     const visibleAlbums = lovedOnly
       ? albums.filter((a) => lovedAlbumIds.has(a.id))
       : albums;
-    const filtersActive = lovedOnly || selectedGenreFilters.length > 0 || canonicalIdFilters.length > 0;
+    const filtersActive = lovedOnly || canonicalIdFilters.length > 0;
     const emptyMessage = lovedOnly
       ? "No loved albums"
       : filtersActive
@@ -354,7 +352,7 @@ export default function App() {
         onSelect={setSelectedAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
         emptyMessage={emptyMessage}
-        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${selectedGenreFilters.join(",")}-${canonicalIdFilters.join(",")}`}
+        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}`}
         sort={sort}
       />
     );
@@ -369,7 +367,7 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
-        onTagFilter={(filter) => { if ("rawGenre" in filter) { setSelectedGenreFilters([filter.rawGenre]); setCanonicalIdFilters([]); } else { setCanonicalIdFilters([filter.canonicalId]); setSelectedGenreFilters([]); } setSelectedAlbum(null); }}
+        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); }}
       />
     );
   }
@@ -381,9 +379,9 @@ export default function App() {
     { value: "year", label: "Year" },
   ];
 
-  function toggleGenreFilter(name: string) {
-    setSelectedGenreFilters((prev) =>
-      prev.includes(name) ? prev.filter((g) => g !== name) : [...prev, name]
+  function toggleGenreFilter(id: string) {
+    setCanonicalIdFilters((prev) =>
+      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
     );
   }
 
@@ -447,7 +445,7 @@ export default function App() {
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => { setSelectedAlbum(album); setView("library"); }}
+                onSelectAlbum={(album) => navigateTo("library", { album })}
                 onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
                 onBack={() => navigateTo("library")}
               />
@@ -501,28 +499,28 @@ export default function App() {
               {genres && genres.length > 0 && (
                 <div className="genre-filter" ref={genreDropdownRef}>
                   <button
-                    className={`genre-filter-btn${selectedGenreFilters.length > 0 ? " genre-filter-btn--active" : ""}`}
+                    className={`genre-filter-btn${canonicalIdFilters.length > 0 ? " genre-filter-btn--active" : ""}`}
                     onClick={() => setGenreDropdownOpen((v) => !v)}
                     title="Filter by genre"
                   >
                     <Tag size={14} />
-                    {selectedGenreFilters.length > 0 ? `Genre (${selectedGenreFilters.length})` : "Genre"}
+                    {canonicalIdFilters.length > 0 ? `Genre (${canonicalIdFilters.length})` : "Genre"}
                   </button>
                   {genreDropdownOpen && (
                     <div className="genre-dropdown">
-                      {selectedGenreFilters.length > 0 && (
+                      {canonicalIdFilters.length > 0 && (
                         <button
                           className="genre-dropdown-clear"
-                          onClick={() => setSelectedGenreFilters([])}
+                          onClick={() => setCanonicalIdFilters([])}
                         >
                           Clear
                         </button>
                       )}
                       {genres.map((g) => (
                         <button
-                          key={g.name}
-                          className={`genre-dropdown-item${selectedGenreFilters.includes(g.name) ? " genre-dropdown-item--active" : ""}`}
-                          onClick={() => toggleGenreFilter(g.name)}
+                          key={g.canonical_id}
+                          className={`genre-dropdown-item${canonicalIdFilters.includes(g.canonical_id) ? " genre-dropdown-item--active" : ""}`}
+                          onClick={() => toggleGenreFilter(g.canonical_id)}
                         >
                           <span className="genre-dropdown-name">{g.name}</span>
                           <span className="genre-dropdown-count">{g.album_count}</span>

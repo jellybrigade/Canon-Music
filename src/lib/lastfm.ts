@@ -1,6 +1,7 @@
 import { getDb } from "../db";
 import { canonicalKey } from "./canonicalize";
 import type { TagKind } from "./canonicalize";
+import { makeRateLimiter } from "./rate-limiter";
 
 export interface LastfmTagResult {
   genres: string[];
@@ -10,16 +11,8 @@ export interface LastfmTagResult {
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const MAX_TAGS = 10;
 const MIN_TAG_COUNT_DEFAULT = 25;
-const REQUEST_INTERVAL_MS = 250; // ≤ 4 req/s to stay well within rate limit
-
-let lastRequestAt = 0;
-
-async function rateLimit(): Promise<void> {
-  const now = Date.now();
-  const wait = REQUEST_INTERVAL_MS - (now - lastRequestAt);
-  lastRequestAt = now + Math.max(0, wait);
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-}
+// ≤ 4 req/s to stay well within Last.fm rate limit
+const rateLimit = makeRateLimiter(250);
 
 async function getApiKey(): Promise<string | null> {
   const db = await getDb();

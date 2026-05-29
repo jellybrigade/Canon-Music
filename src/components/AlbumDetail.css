@@ -78,7 +78,7 @@
 }
 
 .play-album-btn {
-  margin-top: 0.5rem;
+  margin-top: 0;
   align-self: flex-start;
   font-size: 0.8125rem;
   padding: 0.4em 1.1em;
@@ -91,6 +91,41 @@
 .play-album-btn:hover:not(:disabled) {
   background-color: var(--accent-hover);
   border-color: transparent;
+}
+
+.album-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.album-identify-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  box-shadow: none;
+}
+
+.album-identify-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary, #fff);
+}
+
+.album-detail-identity {
+  margin-top: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .album-tag-band {
@@ -266,3 +301,28 @@
   letter-spacing: 0.01em;
 }
 
+
+
+/* ── Unidentified album badge (shown when MB auto-identify is on and album has no confirmed identity) ── */
+.album-unidentified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.45));
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  box-shadow: none;
+}
+
+.album-unidentified-badge:hover {
+  color: var(--text-primary, rgba(255, 255, 255, 0.85));
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}

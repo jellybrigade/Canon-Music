@@ -269,4 +269,61 @@ export const migrations: Migration[] = [
       ALTER TABLE tag_mappings ADD COLUMN locked INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 15,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_identity (
+        album_id TEXT PRIMARY KEY,
+        mb_release_group_id TEXT,
+        mb_release_id TEXT,
+        mb_artist_id TEXT,
+        lastfm_artist_name TEXT,
+        lastfm_album_name TEXT,
+        lastfm_match_confirmed INTEGER NOT NULL DEFAULT 0,
+        combined_genres_json TEXT,
+        label TEXT,
+        country TEXT,
+        catalog_number TEXT,
+        barcode TEXT,
+        release_date TEXT,
+        confirmed_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS artist_identity (
+        artist_name TEXT PRIMARY KEY,
+        mb_artist_id TEXT,
+        lastfm_artist_name TEXT,
+        confirmed_at INTEGER
+      );
+    `,
+  },
+  {
+    version: 16,
+    sql: `
+      ALTER TABLE album_identity ADD COLUMN auto_matched INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE album_identity ADD COLUMN match_score INTEGER;
+      ALTER TABLE album_identity ADD COLUMN looked_up_at INTEGER;
+    `,
+  },
+  {
+    version: 17,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_genres (
+        album_id     TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        relation     TEXT NOT NULL CHECK (relation IN ('direct','ancestor')),
+        section      TEXT,
+        name         TEXT NOT NULL,
+        PRIMARY KEY (album_id, canonical_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_album_genres_canonical ON album_genres(canonical_id);
+
+      CREATE TABLE IF NOT EXISTS album_unresolved_genres (
+        album_id  TEXT NOT NULL,
+        raw_value TEXT NOT NULL,
+        kind      TEXT NOT NULL DEFAULT 'genre',
+        source    TEXT NOT NULL,
+        PRIMARY KEY (album_id, raw_value, kind)
+      );
+    `,
+  },
 ];

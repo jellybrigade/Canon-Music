@@ -1,3 +1,63 @@
+--- Genre Overhaul ---
+
+GOAL: Albums always have normalized, canon-tree-resolved genres sourced from MB + Last.fm,
+with unresolvable tags flagged for manual matching.
+
+## Trigger points
+- Album detail opens → background-fetch MB + Last.fm genres for that album
+- Settings "Sync all MB" → bulk background fetch MB genres for all albums in library
+- Settings "Sync all Last.fm" → bulk background fetch Last.fm tags for all albums in library
+  (these already exist as buttons; they need genre-resolution wired in)
+
+## MB auto-identify
+- On album open, if MB search returns top candidate with confidence >80% (title + artist fuzzy
+  match), auto-confirm identity silently (same logic already noted in auto-verify note below)
+- Genres come from the confirmed MB Release Group + Release combined (already implemented in
+  useAlbumIdentity / combineGenres — just need to wire it to the auto-identify trigger)
+
+## Genre normalization pipeline (for BOTH MB and Last.fm genres)
+1. Receive raw genre strings (e.g. "j-euro", "Hip-Hop", "post-punk")
+2. Fuzzy-match each against canon-tree.json nodes (canonical_key, Levenshtein ≤2)
+3. If matched → resolve to canonical node + walk full ancestor chain up the DAG
+   Example: "j-euro" → J-Euro + Wa Euro + J-Pop (all ancestors included, not just leaf)
+4. Store resolved set (leaf + all ancestors) in album_identity or new genre_resolved table
+5. If not matched → add to genre_mappings queue as "needs review" — surface in tag mapping UI
+   so user can manually map it to the right canon node (or mark as unmappable)
+
+## Display
+- Album detail shows resolved genres (the normalized + expanded set)
+- Genre chips use canonical names (J-Euro, not j-euro)
+- Ancestor genres visible — so clicking "J-Pop" finds all J-Euro albums too (already how
+  filter should work if genres stored correctly)
+
+## Unmatched genre flow
+- Genres that couldn't be resolved appear in a "tag mapping" view (the tagging menu)
+- User picks the correct canon-tree node (or creates a new mapping)
+- Approval writes to genre_mappings table → re-run normalization for affected albums
+
+## What needs building
+- Auto-identify trigger on album open (background, silent if confident)
+- Genre normalization function: raw string → canonical node + ancestors via canon-tree DAG walk
+- Storage: where resolved genres live (extend album_identity.combined_genres_json, or new table)
+- Wire "Sync all MB" + "Sync all Last.fm" buttons to run normalization pipeline after fetch
+- Tag mapping UI to handle unmatched genres (may reuse/extend existing genre_unifier flow)
+- AlbumDetail renders resolved genres from the new source instead of raw file tags
+
+---
+
+--- MusicBrainz Identify — Direction Notes (post-implementation) ---
+- Auto-verify on album open: when album detail loads, run MB search automatically. If top
+  candidate score >80% confidence (title + artist fuzzy match, similar to beets' autotag),
+  silently confirm identity without requiring user action. Only surface the popup when
+  confidence is <80% or result is ambiguous.
+- Badge logic inverted: do NOT show a "MB verified" badge on matched albums — that's the
+  normal/expected state. Instead show an "unidentified" badge on albums that couldn't be
+  matched automatically (or were never looked up). The badge = something needs attention,
+  not a trophy for a match.
+- Identify button still useful for manual correction when auto-match was wrong.
+- Think about where the unidentified badge lives: album card in grid? album detail header?
+  both? Should be low-noise — maybe only show it if user has MB lookup enabled in settings.
+
 UI too small — text, icons, everything: overall scale feels cramped. All text and icons should be
   at minimum 110% of current size, ideally larger. Do a global pass on font sizes, icon sizes,
   padding, and touch targets.
@@ -60,6 +120,22 @@ Album cover (small) -> click -> show album art enlarged as popover in bottom-lef
     album_identity(album_id, mb_release_group_id, mb_release_id, mb_artist_id, lastfm_match_confirmed)
   Overrides auto-lookup. Feeds tag-write flow via pending_edits.
 - Same popup (or variant) should work on Artist page for artist MBID correction
+
+--- In-App Updates ---
+- Tauri has tauri-plugin-updater (not electron-only). Already distributes via GitHub Releases,
+  which is the exact target the updater needs. CLAUDE.md distribution row already lists
+  "Tauri auto-updater" as planned.
+- What's needed:
+    1. Add tauri-plugin-updater to src-tauri/Cargo.toml + register in lib.rs
+    2. Sign releases (updater requires signature — Tauri generates a keypair, public key goes in
+       tauri.conf.json, private key used during `tauri build` via TAURI_SIGNING_PRIVATE_KEY env var)
+    3. release.yml already builds all platforms — add signature step there
+    4. Add UI: Settings > "Check for updates" button + badge/banner when update available
+    5. Flow: check GitHub releases endpoint → compare semver → download in background → prompt to
+       restart and install (or auto-install on next launch)
+- Risk: signature key management. If private key is lost, existing installs can never auto-update.
+  Store key in GitHub Actions secret immediately.
+- No architecture changes needed — updater is thin Rust plugin, UI lives in Settings panel.
 
 --- NowPlaying Layout ---
 - "Up Next" tab wastes space: huge gap between track title and duration, row feels mostly empty.

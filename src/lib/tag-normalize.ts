@@ -1,7 +1,8 @@
 import { getDb } from "../db";
-import { getCanonTree, canonicalKey, findCanonicalSync } from "./canonicalize";
+import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds } from "./canonicalize";
 import { bucketize } from "./tag-buckets";
 import { fetchAlbumTags } from "./lastfm";
+import type { MbGenre } from "./musicbrainz";
 
 export interface NormalizedTag {
   id: string | null;
@@ -39,16 +40,26 @@ export function isStale(tags: NormalizedTags | null, staleDays = STALE_DAYS_DEFA
 
 const inFlightPromises = new Map<string, Promise<NormalizedTags>>();
 
-export async function normalizeAlbum(albumId: string, artist: string, album: string): Promise<NormalizedTags> {
+export async function normalizeAlbum(
+  albumId: string,
+  artist: string,
+  album: string,
+  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null }
+): Promise<NormalizedTags> {
   const existing = inFlightPromises.get(albumId);
   if (existing) return existing;
-  const promise = _doNormalizeAlbum(albumId, artist, album)
+  const promise = _doNormalizeAlbum(albumId, artist, album, identity)
     .finally(() => inFlightPromises.delete(albumId));
   inFlightPromises.set(albumId, promise);
   return promise;
 }
 
-async function _doNormalizeAlbum(albumId: string, artist: string, album: string): Promise<NormalizedTags> {
+async function _doNormalizeAlbum(
+  albumId: string,
+  artist: string,
+  album: string,
+  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null }
+): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
 
@@ -68,12 +79,23 @@ async function _doNormalizeAlbum(albumId: string, artist: string, album: string)
   );
   const manualMap = new Map(manualRows.map((r) => [canonicalKey(r.raw_value), r.canonical_id]));
 
+  // Use confirmed identity strings for Last.fm lookup if available
+  const lfmArtist = identity?.lastfmArtistName ?? artist;
+  const lfmAlbum = identity?.lastfmAlbumName ?? album;
+
   let lastfmRaw: string[] = [];
   try {
-    const result = await fetchAlbumTags(artist, album);
+    const result = await fetchAlbumTags(lfmArtist, lfmAlbum);
     lastfmRaw = result.genres;
   } catch (e) {
-    console.warn(`normalizeAlbum: Last.fm fetch failed for "${artist} — ${album}":`, e);
+    console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} — ${lfmAlbum}":`, e);
+  }
+
+  // Inject MB genres as additional lastfm-source candidates (community-voted)
+  if (identity?.combinedMbGenres?.length) {
+    for (const g of identity.combinedMbGenres) {
+      lastfmRaw.push(g.name);
+    }
   }
 
   type RawEntry = { name: string; source: "file" | "lastfm" };
@@ -142,6 +164,60 @@ async function _doNormalizeAlbum(albumId: string, artist: string, album: string)
     scenes: fromIds(buckets.scenes, CAPS.scenes),
     computed_at: Math.floor(Date.now() / 1000),
   };
+
+  // --- Write album_genres (leaf + full DAG ancestors) and album_unresolved_genres ---
+
+  // Build the resolved rows: direct leaves first
+  type AlbumGenreRow = { canonical_id: string; relation: "direct" | "ancestor"; section: string | null; name: string };
+  const genreRows: AlbumGenreRow[] = [];
+  const seenGenreIds = new Set<string>();
+
+  for (const tag of mapped) {
+    if (!tag.id) continue;
+    const node = tree.byId.get(tag.id);
+    if (!node) continue;
+
+    if (!seenGenreIds.has(tag.id)) {
+      seenGenreIds.add(tag.id);
+      genreRows.push({ canonical_id: tag.id, relation: "direct", section: node.section ?? null, name: node.name });
+    }
+
+    for (const ancestorId of getAncestorIds(node, tree.byId)) {
+      if (seenGenreIds.has(ancestorId)) continue;
+      seenGenreIds.add(ancestorId);
+      const ancestor = tree.byId.get(ancestorId);
+      if (!ancestor) continue;
+      genreRows.push({ canonical_id: ancestorId, relation: "ancestor", section: ancestor.section ?? null, name: ancestor.name });
+    }
+  }
+
+  // Unmapped raw tags get a synthetic raw: id so they're filterable
+  for (const tag of unmapped) {
+    const syntheticId = rawGenreId(tag.name);
+    if (!seenGenreIds.has(syntheticId)) {
+      seenGenreIds.add(syntheticId);
+      genreRows.push({ canonical_id: syntheticId, relation: "direct", section: null, name: tag.name });
+    }
+  }
+
+  // Atomically replace album_genres and album_unresolved_genres for this album
+  await db.execute("DELETE FROM album_genres WHERE album_id = ?", [albumId]);
+  for (const row of genreRows) {
+    await db.execute(
+      "INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES (?, ?, ?, ?, ?)",
+      [albumId, row.canonical_id, row.relation, row.section, row.name]
+    );
+  }
+
+  await db.execute("DELETE FROM album_unresolved_genres WHERE album_id = ?", [albumId]);
+  for (const tag of unmapped) {
+    await db.execute(
+      "INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES (?, ?, 'genre', ?)",
+      [albumId, tag.name, tag.source]
+    );
+  }
+
+  // --- End album_genres write ---
 
   await db.execute(
     "UPDATE albums SET normalized_tags_json = ?, computed_at = ? WHERE id = ?",

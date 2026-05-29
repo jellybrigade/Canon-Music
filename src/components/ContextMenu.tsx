@@ -19,21 +19,16 @@ export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
   const [flipLeft, setFlipLeft] = useState(false);
   const [flipUp, setFlipUp] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   function handleMouseEnter() {
-    setOpen(true);
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
       setFlipLeft(rect.right + 180 > window.innerWidth);
+      // 220px covers 8-item radio submenus; avoids two-phase render flash
+      setFlipUp(rect.bottom + 220 > window.innerHeight);
     }
+    setOpen(true);
   }
-
-  useLayoutEffect(() => {
-    if (!open || !contentRef.current) return;
-    const rect = contentRef.current.getBoundingClientRect();
-    setFlipUp(rect.bottom > window.innerHeight);
-  }, [open]);
 
   const cls = [
     "context-submenu-content",
@@ -50,7 +45,7 @@ export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
     >
       <button className="context-submenu-trigger">{label} ▸</button>
       {open && (
-        <div className={cls} ref={contentRef}>
+        <div className={cls}>
           {children}
         </div>
       )}
