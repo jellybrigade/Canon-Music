@@ -7,13 +7,16 @@ import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
+import { getCoverArtUrl } from "../lib/navidrome";
+import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
 interface Props {
   onNowPlaying: () => void;
+  serverWithCred?: ServerWithCredential;
 }
 
-export function PlayerBar({ onNowPlaying }: Props) {
+export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
@@ -159,11 +162,16 @@ export function PlayerBar({ onNowPlaying }: Props) {
         </div>
       </div>}
 
-      {artOpen && currentTrack?.coverArtUrl && (
-        <div className="art-popover" onClick={() => setArtOpen(false)}>
-          <img src={currentTrack.coverArtUrl} alt={currentTrack.title} />
-        </div>
-      )}
+      {artOpen && currentTrack && (currentTrack.artworkRef || currentTrack.coverArtUrl) && (() => {
+        const popoverUrl = serverWithCred && currentTrack.artworkRef
+          ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, currentTrack.artworkRef, 400)
+          : currentTrack.coverArtUrl;
+        return popoverUrl ? (
+          <div className="art-popover" onClick={() => setArtOpen(false)}>
+            <img src={popoverUrl} alt={currentTrack.title} />
+          </div>
+        ) : null;
+      })()}
     </>
   );
 }
