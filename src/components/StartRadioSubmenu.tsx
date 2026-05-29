@@ -1,16 +1,6 @@
+import { RADIO_MODES } from "../store/player";
 import type { RadioMode } from "../store/player";
 import { ContextMenuSubmenu } from "./ContextMenu";
-
-const RADIO_MODES: { mode: RadioMode; label: string }[] = [
-  { mode: "curated",          label: "Curated" },
-  { mode: "same-genre",       label: "Same Genre" },
-  { mode: "similar-artists",  label: "Similar Artists" },
-  { mode: "same-artist",      label: "Same Artist" },
-  { mode: "same-album",       label: "Same Album" },
-  { mode: "era",              label: "Same Era" },
-  { mode: "loved",            label: "Loved Tracks" },
-  { mode: "random",           label: "Random" },
-];
 
 interface Props {
   onSelect: (mode: RadioMode) => void;

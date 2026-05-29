@@ -4,6 +4,7 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
 import { RadioChip } from "./RadioChip";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
@@ -22,6 +23,8 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const toggleQueue    = usePlayerStore((s) => s.toggleQueue);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
   const moveQueueItem  = usePlayerStore((s) => s.moveQueueItem);
+  const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
+  const startRadio     = usePlayerStore((s) => s.startRadio);
 
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
@@ -87,16 +90,16 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
             onDragOver={(e) => handleDragOver(e, position)}
             onDrop={(e) => handleDrop(e, position)}
             onDragEnd={handleDragEnd}
+            onClick={() => void playFromQueueIndex(position)}
             onContextMenu={(e) => {
               e.preventDefault();
               setContextMenu({ x: e.clientX, y: e.clientY, position });
             }}
           >
             <span className="queue-row-drag-handle" aria-hidden><GripVertical size={14} /></span>
-            <span className="queue-row-indicator">
-              {position === queueIndex ? <Play size={10} /> : ""}
+            <span className="queue-row-num">
+              {position === queueIndex ? <Play size={10} /> : position + 1}
             </span>
-            <span className="queue-row-num">{position + 1}</span>
             {(() => {
               const artUrl = track.coverArtUrl
                 ?? (track.artworkRef && serverWithCred
@@ -146,6 +149,17 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
               Move to Bottom
             </button>
           )}
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              const entry = orderedTracks.find((t) => t.position === contextMenu.position);
+              if (entry) {
+                void playFromQueueIndex(contextMenu.position).then(() => {
+                  startRadio(entry.track, mode);
+                });
+              }
+              setContextMenu(null);
+            }}
+          />
           <button
             className="context-menu-danger"
             onClick={() => {

@@ -1,18 +1,6 @@
-import { useState } from "react";
-import { usePlayerStore } from "../store/player";
-import type { RadioMode } from "../store/player";
+import { useEffect, useRef, useState } from "react";
+import { usePlayerStore, RADIO_MODES } from "../store/player";
 import "./RadioChip.css";
-
-const RADIO_MODES: { mode: RadioMode; label: string }[] = [
-  { mode: "curated",          label: "Curated" },
-  { mode: "same-genre",       label: "Same Genre" },
-  { mode: "similar-artists",  label: "Similar Artists" },
-  { mode: "same-artist",      label: "Same Artist" },
-  { mode: "same-album",       label: "Same Album" },
-  { mode: "era",              label: "Same Era" },
-  { mode: "loved",            label: "Loved Tracks" },
-  { mode: "random",           label: "Random" },
-];
 
 export function RadioChip() {
   const radioActive = usePlayerStore((s) => s.radioActive);
@@ -21,13 +9,25 @@ export function RadioChip() {
   const setRadioActive = usePlayerStore((s) => s.setRadioActive);
   const setRadioMode = usePlayerStore((s) => s.setRadioMode);
   const [open, setOpen] = useState(false);
+  const chipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleOutside(e: MouseEvent) {
+      if (chipRef.current && !chipRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, [open]);
 
   if (!radioActive) return null;
 
   const modeLabel = RADIO_MODES.find((m) => m.mode === radioMode)?.label ?? "Radio";
 
   return (
-    <div className="radio-chip" onMouseLeave={() => setOpen(false)}>
+    <div className="radio-chip" ref={chipRef}>
       <button
         className="radio-chip-btn"
         onClick={() => setOpen((v) => !v)}

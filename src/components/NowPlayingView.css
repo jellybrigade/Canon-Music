@@ -136,6 +136,7 @@
 }
 
 .now-playing-artist--link {
+  display: block;
   background: none;
   border: none;
   box-shadow: none;
@@ -158,6 +159,26 @@
   margin: 0.25rem 0 0;
   font-weight: 400;
   letter-spacing: 0.01em;
+}
+
+.now-playing-album--link {
+  display: block;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.32);
+  margin: 0.25rem 0 0;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  transition: color 0.15s;
+}
+
+.now-playing-album--link:hover {
+  color: rgba(255, 255, 255, 0.7);
+  border: none;
 }
 
 /* ── Progress bar ── */
@@ -484,8 +505,8 @@
 /* ── Top tracks grid — auto-fill so columns always stretch to panel width ── */
 .now-playing-top-tracks-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 0 1rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0 0.5rem;
   width: 100%;
 }
 

@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
+import { useLoved } from "../hooks/useLoved";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -35,8 +36,11 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
   const pullProgress  = useTagsStore((s) => s.pullProgress);
+  const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const [artOpen, setArtOpen] = useState(false);
+
+  const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
 
   useEffect(() => {
     if (!artOpen) return;
@@ -130,6 +134,16 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
         </div>
 
         <div className="player-section player-section--right">
+          {currentTrack && serverWithCred && (
+            <button
+              className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
+              onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+              title={isLoved ? "Unlove" : "Love"}
+              aria-label={isLoved ? "Unlove" : "Love"}
+            >
+              <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+            </button>
+          )}
           <button
             className="player-btn player-btn--icon"
             onClick={onNowPlaying}

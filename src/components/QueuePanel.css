@@ -73,20 +73,16 @@
   color: var(--accent);
 }
 
-.queue-row-indicator {
-  font-size: 0.625rem;
-  width: 0.875rem;
-  flex-shrink: 0;
-  text-align: center;
-}
-
 .queue-row-num {
   font-size: 0.75rem;
   color: var(--text-tertiary);
   width: 1.5rem;
-  text-align: right;
+  text-align: center;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .queue-row--active .queue-row-num {

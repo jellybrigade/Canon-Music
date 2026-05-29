@@ -9,6 +9,7 @@ import { useLyrics } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
+import { RadioChip } from "./RadioChip";
 import { stripServerPrefix } from "../lib/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
@@ -314,7 +315,23 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               )
             )}
             {currentTrack.album && (
-              <p className="now-playing-album">{currentTrack.album}</p>
+              currentTrack.albumId ? (
+                <button
+                  className="now-playing-album now-playing-album--link"
+                  onClick={() => onSelectAlbum({
+                    id: currentTrack.albumId!,
+                    server_id: serverWithCredential.server.id,
+                    name: currentTrack.album!,
+                    artist: currentTrack.artist ?? null,
+                    year: null,
+                    artwork_url: currentTrack.artworkRef ?? null,
+                  })}
+                >
+                  {currentTrack.album}
+                </button>
+              ) : (
+                <p className="now-playing-album">{currentTrack.album}</p>
+              )
             )}
           </div>
 
@@ -374,6 +391,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           </div>
 
           <div className="now-playing-extras">
+            <RadioChip />
             <div className="now-playing-volume-wrap">
               {volumeOpen && (
                 <div className="now-playing-volume-popover">

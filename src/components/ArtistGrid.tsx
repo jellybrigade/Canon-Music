@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../hooks/useArtists";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -12,14 +12,17 @@ const COL_GAP = 16;
 const ROW_GAP = 24;
 const CARD_MIN = 190;
 
+const scrollMemory = new Map<string, number>();
+
 interface Props {
   artists: ArtistRow[];
   serverWithCredential: ServerWithCredential;
   onSelect: (artist: ArtistRow) => void;
   onStartRadio?: (artist: ArtistRow, mode: RadioMode) => void;
+  scrollKey?: string;
 }
 
-export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio }: Props) {
+export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, scrollKey }: Props) {
   const { server, credential } = serverWithCredential;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
 
@@ -36,6 +39,18 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!scrollKeyRef.current || !el) return;
+    const saved = scrollMemory.get(scrollKeyRef.current);
+    if (saved != null) el.scrollTop = saved;
+    return () => {
+      if (scrollKeyRef.current && el) scrollMemory.set(scrollKeyRef.current, el.scrollTop);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));

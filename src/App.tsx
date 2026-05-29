@@ -354,6 +354,8 @@ export default function App() {
         onSelect={setSelectedAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
         emptyMessage={emptyMessage}
+        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${selectedGenreFilters.join(",")}-${canonicalIdFilters.join(",")}`}
+        sort={sort}
       />
     );
   }
@@ -589,6 +591,7 @@ export default function App() {
                     serverWithCredential={serverWithCred}
                     onSelect={setSelectedArtist}
                     onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+                    scrollKey="artists"
                   />
                 ) : (
                   <p className="empty-state">Loading…</p>

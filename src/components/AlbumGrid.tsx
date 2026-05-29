@@ -1,7 +1,7 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Heart, AlertTriangle } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
@@ -16,15 +16,19 @@ const COL_GAP = 16;
 const ROW_GAP = 24;
 const CARD_MIN = 190;
 
+const scrollMemory = new Map<string, number>();
+
 interface Props {
   albums: AlbumRow[];
   serverWithCredential: ServerWithCredential;
   onSelect: (album: AlbumRow) => void;
   onStartRadio?: (album: AlbumRow, mode: RadioMode) => void;
   emptyMessage?: string;
+  scrollKey?: string;
+  sort?: AlbumSort;
 }
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const { data: offTreeIds } = useOffTreeAlbumIds();
@@ -44,6 +48,19 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
+  // Restore saved scroll position on mount; save it on unmount.
+  const scrollKeyRef = useRef(scrollKey);
+  scrollKeyRef.current = scrollKey;
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!scrollKeyRef.current || !el) return;
+    const saved = scrollMemory.get(scrollKeyRef.current);
+    if (saved != null) el.scrollTop = saved;
+    return () => {
+      if (scrollKeyRef.current && el) scrollMemory.set(scrollKeyRef.current, el.scrollTop);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-measure when albums transition from empty to non-empty — stale containerWidth
   // from the empty state can leave cols=1 and produce full-width stacked images.
@@ -78,8 +95,31 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     }
   }, [cols, virtualizer]);
 
+  const scrubberSections = useMemo(() => {
+    if (!sort || sort === "recently_added" || cols === 0) return [];
+    const seen = new Set<string>();
+    const sections: { label: string; rowIndex: number }[] = [];
+    for (let i = 0; i < albums.length; i++) {
+      const album = albums[i]!;
+      let label: string;
+      if (sort === "year") {
+        label = album.year ? `${Math.floor(album.year / 10) * 10}s` : "?";
+      } else {
+        const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
+        const stripped = src.replace(/^(The |A |An )/i, "");
+        const ch = stripped[0]?.toUpperCase() ?? "#";
+        label = /[A-Z]/.test(ch) ? ch : "#";
+      }
+      if (!seen.has(label)) {
+        seen.add(label);
+        sections.push({ label, rowIndex: Math.floor(i / cols) });
+      }
+    }
+    return sections;
+  }, [albums, sort, cols]);
+
   return (
-    <>
+    <div className="album-grid-wrapper">
       <div ref={containerRef} className="album-grid-scroller">
         {albums.length === 0 ? (
           <p className="empty-state">{emptyMessage ?? "No albums"}</p>
@@ -152,6 +192,19 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         </div>
         )}
       </div>
+      {scrubberSections.length > 1 && (
+        <div className="album-grid-scrubber">
+          {scrubberSections.map(({ label, rowIndex }) => (
+            <button
+              key={label}
+              className="album-grid-scrubber-item"
+              onClick={() => virtualizer.scrollToIndex(rowIndex, { align: "start" })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
           <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
@@ -164,6 +217,6 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           )}
         </ContextMenu>
       )}
-    </>
+    </div>
   );
 }

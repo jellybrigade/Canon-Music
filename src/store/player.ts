@@ -25,6 +25,17 @@ export type RadioMode =
   | "loved"
   | "random";
 
+export const RADIO_MODES: { mode: RadioMode; label: string }[] = [
+  { mode: "curated",          label: "Curated" },
+  { mode: "same-genre",       label: "Same Genre" },
+  { mode: "similar-artists",  label: "Similar Artists" },
+  { mode: "same-artist",      label: "Same Artist" },
+  { mode: "same-album",       label: "Same Album" },
+  { mode: "era",              label: "Same Era" },
+  { mode: "loved",            label: "Loved Tracks" },
+  { mode: "random",           label: "Random" },
+];
+
 const PREV_RESTART_THRESHOLD_S = 3;
 
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {

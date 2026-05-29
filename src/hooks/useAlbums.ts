@@ -43,6 +43,9 @@ export function useAlbums(sort: AlbumSort = "artist", genres: string[] = [], can
         );
       }
       const placeholders = genres.map(() => "?").join(", ");
+      // Exact-match against the full stored genre string (e.g. "Rock, Pop").
+      // Safe as long as chip onClick passes the raw stored value, not a tokenized label.
+      // If genre storage ever switches to individual tokens, replace with LIKE/INSTR.
       return db.select<AlbumRow[]>(
         `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url
          FROM albums a

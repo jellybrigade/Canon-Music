@@ -1,12 +1,5 @@
-Radio bug — every track plays first track's audio: when radio queue starts, all tracks after the
-  first play the same audio as track 1. Non-radio playback unaffected.
-  Already tried: flipped `addToQueue` and `playNext` from `streamUrlFor ?? streamUrlFn` to
-  `streamUrlFn ?? streamUrlFor` (src/store/player.ts:394–396, 408, 412) — did not fix it.
-  Root cause still unknown. Suspect: `streamUrlFor` closure captured at `play()` call time
-  (line 224: `() => streamUrl`) is not actually the path used during radio track advancement,
-  OR the radio hook passes the same URL for all tracks when building the queue, OR `next()`
-  resolves stream URL before the queue update lands. Needs deeper trace of radio queue build
-  + `next()` → `streamUrlFor(track)` call path.
+Radio bug — every track plays first track's audio [DONE — fixed in commit f29d8ba, all radio
+  entry points now use playQueue with per-track streamUrlFn instead of play() constant closure]
 
 UI too small — text, icons, everything: overall scale feels cramped. All text and icons should be
   at minimum 110% of current size, ideally larger. Do a global pass on font sizes, icon sizes,
@@ -16,6 +9,12 @@ Context menu flipping: right-clicking near bottom of screen clips the menu inste
   (menu should open upward when near viewport bottom). Applies to submenus too — submenus that would
   extend off-screen should flip to open leftward or upward as needed.
 Radio mode indicator should show in queue panel (currently only visible elsewhere).
+Radio mode popup closes too eagerly [DONE — switched to click-toggle + outside-click close]
+Radio mode selector should also appear in the NowPlaying fullscreen view [DONE]
+Queue sidebar: clicking a track should jump to it and start playing [DONE]
+Queue sidebar: currently-playing track shows a play icon AND keeps its number, adding extra width.
+  Play icon should replace the track number, not sit beside it [DONE]
+Start radio from queue/Up Next: right-click a track in the queue → "Start Radio from this track" [DONE]
 Queue should auto-close when entering the NowPlaying fullscreen view.
 
 Fullscreen player bugs:
@@ -30,8 +29,14 @@ NowPlaying right panel too narrow: fixed 400px right panel makes 2-column top tr
   right panel wider (500-600px), or use a different content layout (single column with more info,
   or a wider fluid approach). Left panel keeps the atmospheric art treatment; right panel needs
   enough room to actually display track grids legibly.
-NowPlaying About tab — Top Tracks + Suggested don't fill panel width: both 2-column grids stop
-  short of the right edge, leaving a visible gap. Columns should stretch to fill available width.
+NowPlaying About tab — Top Tracks + Suggested don't fill panel width [DONE — grid-template-columns: repeat(2,1fr)]
+NowPlaying About tab — Suggested track/album names overflow instead of truncating [DONE — truncation was already on track-title/track-album]
+NowPlaying — clicking artist name navigates to Artists list view, not the specific artist page.
+NowPlaying — album title not clickable; should navigate to that album's detail view [DONE]
+NowPlaying — heart/love button should sit next to the volume control in the bottom bar, not buried
+  in the main panel [DONE — heart added to PlayerBar right section]
+NowPlaying About tab — clicking an album in "More From [Artist]" navigates to the album grid view
+  (filtered by that artist?) instead of the specific album's detail page.
 NowPlaying view redesign: current layout looks bad — needs a proper visual design pass.
   Ideas: blurred art background (done properly this time), better typography hierarchy,
   accent color extraction from art, smoother layout proportions, less "plain dark panel" feel.
@@ -40,7 +45,7 @@ NowPlaying view layout broken: everything squished to left side, content cramped
   is just blurred album art — layout/grid/sizing is wrong, needs urgent fix [DONE but broken]
 Album cover (small) -> click -> show album art enlarged as popover in bottom-left corner (above track/artist
   info in the player bar), NOT fullscreen — rest of player stays usable [in progress, old lightbox removed]
-Queue -> album art not showing for tracks in the queue panel
+Queue -> album art not showing for tracks in the queue panel [already implemented per code review — verify in app]
 
 --- Genre Tag / Filter Bugs ---
 - Album view: Static Age (Misfits) shows genre "Hardcore [Punk]" on the album card, but clicking
@@ -49,6 +54,13 @@ Queue -> album art not showing for tracks in the queue panel
   raw value), or the album's genre tag wasn't written/read correctly and the chip is showing a
   derived/display value that doesn't round-trip to the filter query. Investigate tag read path +
   how genre chip onClick constructs the filter vs what's in SQLite.
+
+--- Navigation / Scroll ---
+- Scroll position should be preserved when navigating away and back [DONE — module-level scrollMemory
+  Map in AlbumGrid + ArtistGrid, keyed by scrollKey prop from App]
+- Album grid sorted by A-Z / Artist / Year should show a sticky alpha/index scrubber on the right
+  edge (like iOS contacts sidebar) so users can jump to a letter or decade directly [DONE — alpha/decade
+  scrubber in AlbumGrid, visible for alphabetical/artist/year sorts]
 
 --- Empty State Copy ---
 - "No albums yet. Syncing…" shows when filter returns zero results (e.g. filtering by Loved with no loved albums).
@@ -125,3 +137,13 @@ Current radio = genre tree (60%) + Last.fm similar artists (25% boost). Add sele
     album_identity(album_id, mb_release_group_id, mb_release_id, mb_artist_id, lastfm_match_confirmed)
   Overrides auto-lookup. Feeds tag-write flow via pending_edits.
 - Same popup (or variant) should work on Artist page for artist MBID correction
+
+--- Code Quality ---
+- rawGenre IN filter fragile: useAlbums.ts:50 does exact-match WHERE t.genre IN (?) against the
+  full stored genre string. Currently safe because unmapped chips pass the full raw_value (e.g.
+  "Rock, Pop") which matches exactly. But if any layer ever tokenises the chip name before passing
+  rawGenre, the filter silently returns 0 results. Fix: either store genres as individual tokens
+  in SQLite, or use a LIKE/INSTR query instead of IN for the raw genre path.
+- RADIO_MODES constant duplicated: identical 8-entry array defined in both RadioChip.tsx (line 6)
+  and StartRadioSubmenu.tsx (line 4). Extract to a shared constant in store/player.ts (where
+  RadioMode type lives) and import from both files.
