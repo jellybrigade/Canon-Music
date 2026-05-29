@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -13,7 +13,7 @@ const SettingsView   = lazy(() => import("./components/SettingsView").then((m) =
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
-import { NowPlayingOverlay } from "./components/NowPlayingOverlay";
+const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m) => ({ default: m.NowPlayingView })));
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
 import { useArtists } from "./hooks/useArtists";
@@ -46,7 +46,7 @@ import "./styles/base.css";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type View = "library" | "artists" | "playlists" | "tags" | "settings";
+type View = "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
 
 export default function App() {
   useTrackEndedListener();
@@ -154,6 +154,7 @@ export default function App() {
   }, [serverWithCred, setStreamUrlFor]);
 
   const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
+    { id: "nowplaying", label: "Now Playing", icon: <Headphones size={18} /> },
     { id: "library", label: "Library", icon: <Music size={18} /> },
     { id: "artists", label: "Artists", icon: <Users size={18} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={18} /> },
@@ -429,6 +430,22 @@ export default function App() {
     }
 
     switch (view) {
+      case "nowplaying":
+        return (
+          <Suspense fallback={null}>
+            {serverWithCred ? (
+              <NowPlayingView
+                serverWithCredential={serverWithCred}
+                onSelectAlbum={(album) => { setSelectedAlbum(album); navigateTo("library"); }}
+                onSelectArtist={(artistName) => {
+                  setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null });
+                  navigateTo("artists");
+                }}
+              />
+            ) : <main className="content-main" />}
+          </Suspense>
+        );
+
       case "library":
         return (
           <main className={`library${queueClass}`}>
@@ -650,20 +667,7 @@ export default function App() {
         {renderContent()}
       </div>
       <QueuePanel />
-      <PlayerBar />
-      {serverWithCred && (
-        <NowPlayingOverlay
-          serverWithCredential={serverWithCred}
-          onSelectAlbum={(album) => {
-            setSelectedAlbum(album);
-            setView("library");
-          }}
-          onSelectArtist={(artistName) => {
-            setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null });
-            setView("artists");
-          }}
-        />
-      )}
+      <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} />
     </Suspense>
   );
 }

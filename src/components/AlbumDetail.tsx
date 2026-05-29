@@ -233,7 +233,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     </td>
                     <td className="track-title">{track.title}</td>
                     <td className="track-artist">{track.artist ?? ""}</td>
-                    <td className="track-genre">{track.genre ?? ""}</td>
+                    <td className="track-genre">
+                      {track.genre
+                        ? track.genre.split(",").map((g) => g.trim()).filter(Boolean).map((g, i) => (
+                            <span key={i} className="track-genre-chip">{g}</span>
+                          ))
+                        : null}
+                    </td>
                     <td className="track-duration">
                       {track.duration ? formatDuration(track.duration) : ""}
                     </td>

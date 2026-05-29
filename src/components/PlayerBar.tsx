@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -8,7 +9,11 @@ import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import "./PlayerBar.css";
 
-export function PlayerBar() {
+interface Props {
+  onNowPlaying: () => void;
+}
+
+export function PlayerBar({ onNowPlaying }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
@@ -26,8 +31,16 @@ export function PlayerBar() {
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
-  const toggleNowPlaying = usePlayerStore((s) => s.toggleNowPlaying);
-  const pullProgress = useTagsStore((s) => s.pullProgress);
+  const pullProgress  = useTagsStore((s) => s.pullProgress);
+
+  const [artOpen, setArtOpen] = useState(false);
+
+  useEffect(() => {
+    if (!artOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [artOpen]);
 
   const repeatLabel =
     repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
@@ -44,8 +57,8 @@ export function PlayerBar() {
         <div className="player-section player-section--left">
           <button
             className="player-thumb"
-            onClick={toggleNowPlaying}
-            aria-label="Now playing"
+            onClick={() => setArtOpen((v) => !v)}
+            aria-label="Enlarge album art"
           >
             {currentTrack.coverArtUrl && (
               <img src={currentTrack.coverArtUrl} alt="" />
@@ -115,6 +128,14 @@ export function PlayerBar() {
 
         <div className="player-section player-section--right">
           <button
+            className="player-btn player-btn--icon"
+            onClick={onNowPlaying}
+            title="Now playing"
+            aria-label="Now playing"
+          >
+            <Headphones size={16} />
+          </button>
+          <button
             className={`player-btn player-btn--icon${isQueueOpen ? " player-btn--active" : ""}`}
             onClick={toggleQueue}
             title="Queue"
@@ -138,6 +159,11 @@ export function PlayerBar() {
         </div>
       </div>}
 
+      {artOpen && currentTrack?.coverArtUrl && (
+        <div className="art-popover" onClick={() => setArtOpen(false)}>
+          <img src={currentTrack.coverArtUrl} alt={currentTrack.title} />
+        </div>
+      )}
     </>
   );
 }

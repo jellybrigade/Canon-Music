@@ -142,7 +142,7 @@ export async function getRadioCandidates(
         artworkRef: r.artwork_url,
         albumId: r.album_id,
         albumName: r.album_name,
-        score: 0.6 * normalizedTree + 0.4 * lastfmBoost,
+        score: normalizedTree * (1 + 0.25 * lastfmBoost),
       };
     })
     .sort((a, b) => b.score - a.score);

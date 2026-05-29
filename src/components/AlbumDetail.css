@@ -93,6 +93,51 @@
   border-color: transparent;
 }
 
+.album-tag-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.25rem;
+  padding: 0.625rem 1.25rem 0.625rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.album-tag-column {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.album-tag-column-title {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0.2rem 0 0;
+  white-space: nowrap;
+}
+
+.album-tag-chip {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.album-tag-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
 .album-tag-actions {
   display: flex;
   align-items: center;
@@ -194,11 +239,22 @@
 }
 
 .track-genre {
-  color: var(--text-tertiary);
-  font-size: 0.75rem;
-  font-weight: 400;
-  letter-spacing: 0.02em;
   width: 20%;
+}
+
+.track-genre-chip {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.track-genre-chip:not(:last-child)::after {
+  content: "·";
+  margin: 0 0.3rem;
+  opacity: 0.4;
 }
 
 .track-duration {

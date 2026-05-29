@@ -236,3 +236,22 @@
 .normalizing-bar--above-player {
   bottom: 72px;
 }
+
+.art-popover {
+  position: fixed;
+  bottom: 80px;
+  left: 1.25rem;
+  width: 260px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: var(--z-overlay);
+  cursor: pointer;
+}
+
+.art-popover img {
+  width: 100%;
+  display: block;
+  aspect-ratio: 1;
+  object-fit: cover;
+}

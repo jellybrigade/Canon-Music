@@ -1,2 +1,74 @@
-Spacebar -> Pause
-Album cover (small) ->p ress -> not open in middle but bottom ledt corner
+NowPlaying view redesign: current layout looks bad — needs a proper visual design pass.
+  Ideas: blurred art background (done properly this time), better typography hierarchy,
+  accent color extraction from art, smoother layout proportions, less "plain dark panel" feel.
+Spacebar -> Pause [DONE]
+NowPlaying view layout broken: everything squished to left side, content cramped together, rest of screen
+  is just blurred album art — layout/grid/sizing is wrong, needs urgent fix [DONE but broken]
+Album cover (small) -> click -> show album art enlarged as popover in bottom-left corner (above track/artist
+  info in the player bar), NOT fullscreen — rest of player stays usable [in progress, old lightbox removed]
+Queue -> album art not showing for tracks in the queue panel
+
+--- Tag Mapping Bugs ---
+- "Rap" mapped to "Hip Hop" but still shows up on tracks (e.g. Take Care by Drake has Pop, Hip Hop, Rap).
+  Mapping should suppress/replace the raw tag with the canonical one — investigate why raw tag still renders
+- Manual genre/descriptor/scenes+movements editor: view and edit existing canonical tag entries, lock
+  individual entries to prevent Last.fm troll tags from polluting the vocabulary
+  (e.g. nonsensical tags that got pulled in and mapped incorrectly)
+
+--- Artist Page Overhaul ---
+- Tracks: clicking a track row does nothing — wire onClick to playQueue (same pattern as AlbumDetail)
+  extend TopTrack query to include album_id + artwork_url; build CurrentTrack; add streamUrlFor
+- Track list: 2-3 column grid instead of single long list
+- Pull top tracks from Last.fm (not just local library tracks)
+- Artist "correction" / merging: if two artist entries overlap (e.g. "The Beatles" vs "Beatles"),
+  allow user to merge/alias them so they resolve to one canonical artist
+  (think: how does this interact with pending_edits and tag writes?)
+
+--- Radio Modes ---
+Current radio = genre tree (60%) + Last.fm similar artists (25% boost). Add selectable modes:
+- Same Genre: genre tree only, no Last.fm artist boost
+- Same Artist: tracks by the seed track's artist only, no scoring
+- Random: no weighting, pure random from library (exclude recently played)
+- More ideas to consider:
+    Similar Artists Only: Last.fm similar artists only, no genre tree
+    Same Album: rest of the album, then similar
+    Era/Decade: tracks from same decade as seed (need year tag)
+    Loved Tracks: weighted toward loved/starred tracks
+
+--- Tag Vocabulary View bugs ---
+- Showing all mapped genres (trivial matches visible): scroll cuts off before reaching the end —
+  fix with pagination sorted by first letter (A–Z sections or paginated alpha groups)
+- Two section headers visible: "GENRES" and a separate blue "GENRE" — duplicate/stray label, investigate
+
+--- Tag Clarity ---
+- UX is confusing: which tags belong to a track vs album vs artist?
+  e.g. is "genre" a track tag or album tag? is "year" on the track or the album?
+  Need clear UI indication of tag ownership level (track / album / artist)
+- Missing tags: what should the app show/do when a tag is absent at any level?
+  (empty field? placeholder? warning? auto-inherit from album/artist?)
+
+--- MusicBrainz Tagging ---
+- Use MusicBrainz as additional metadata source alongside Last.fm
+  e.g. official release date, label, catalog number, MBID, country, barcode
+- MB data more authoritative for album-level facts; Last.fm better for popularity/tags
+- Think: fetch on album open? background sync? only on manual "enrich" action?
+- MBIDs anchor the album linking flow below
+
+--- Album Identification / Right-Click Lookup Popup ---
+- Right-click album → context menu → "Album Info / Identify..."
+- Opens modal showing auto-detected match status for MusicBrainz + Last.fm:
+    MusicBrainz: found ✓ / not found ✗ / ambiguous ? + key facts (title, artist, year, label)
+    Last.fm: found ✓ / not found ✗ + key facts (play count, tags)
+- Two MB ID levels matter:
+    Release Group MBID = the abstract album (e.g. "Kind of Blue" regardless of edition) — primary anchor
+    Release MBID = specific pressing (catalog #, barcode, country) — optional, for exact tag writes
+- Last.fm has no stable album ID — it matches by artist name + album name strings.
+  "Correction" for Last.fm = fix the name strings used to query it, not paste an ID.
+  (Last.fm also returns MBIDs in responses — so a confirmed MB Release Group MBID serves as Last.fm anchor too)
+- Editable fields in popup: MB Release Group MBID, MB Release MBID (optional), MB Artist MBID
+  + corrected artist name / album name strings for Last.fm fallback
+- "Re-fetch with these IDs" action re-runs both lookups with the corrected values
+- Confirmed identity persists to new SQLite table:
+    album_identity(album_id, mb_release_group_id, mb_release_id, mb_artist_id, lastfm_match_confirmed)
+  Overrides auto-lookup. Feeds tag-write flow via pending_edits.
+- Same popup (or variant) should work on Artist page for artist MBID correction

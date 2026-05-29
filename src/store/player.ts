@@ -79,7 +79,6 @@ interface PlayerState {
   radioSeed: CurrentTrack | null;
 
   isQueueOpen: boolean;
-  isNowPlayingOpen: boolean;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
@@ -99,7 +98,6 @@ interface PlayerState {
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
-  toggleNowPlaying: () => void;
   removeFromQueue: (position: number) => Promise<void>;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
@@ -204,7 +202,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioActive: false,
     radioSeed: null,
     isQueueOpen: false,
-    isNowPlayingOpen: false,
 
     play: async (track, streamUrl) => {
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });
@@ -397,10 +394,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     toggleQueue: () => {
       set((s) => ({ isQueueOpen: !s.isQueueOpen }));
-    },
-
-    toggleNowPlaying: () => {
-      set((s) => ({ isNowPlayingOpen: !s.isNowPlayingOpen }));
     },
 
     removeFromQueue: async (position) => {
