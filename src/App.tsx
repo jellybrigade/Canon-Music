@@ -133,6 +133,7 @@ export default function App() {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
+  const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
@@ -156,12 +157,12 @@ export default function App() {
   }, [serverWithCred, setStreamUrlFor]);
 
   const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: "nowplaying", label: "Now Playing", icon: <Headphones size={18} /> },
-    { id: "library", label: "Library", icon: <Music size={18} /> },
-    { id: "artists", label: "Artists", icon: <Users size={18} /> },
-    { id: "playlists", label: "Playlists", icon: <ListMusic size={18} /> },
-    { id: "tags", label: "Tags", icon: <Tag size={18} />, badge: unmappedCount || undefined },
-    { id: "settings", label: "Settings", icon: <Settings size={18} /> },
+    { id: "nowplaying", label: "Now Playing", icon: <Headphones size={20} /> },
+    { id: "library", label: "Library", icon: <Music size={20} /> },
+    { id: "artists", label: "Artists", icon: <Users size={20} /> },
+    { id: "playlists", label: "Playlists", icon: <ListMusic size={20} /> },
+    { id: "tags", label: "Tags", icon: <Tag size={20} />, badge: unmappedCount || undefined },
+    { id: "settings", label: "Settings", icon: <Settings size={20} /> },
   ];
 
   const syncedRef = useRef<string | null>(null);
@@ -171,6 +172,7 @@ export default function App() {
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumRow | null>(null);
 
   function navigateTo(v: View) {
+    if (v === "nowplaying" && isQueueOpen) toggleQueue();
     setView(v);
     setSelectedAlbum(null);
     setSelectedArtist(null);

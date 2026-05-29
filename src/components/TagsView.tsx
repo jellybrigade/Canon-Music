@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Lock, Unlock } from "lucide-react";
 import { useVocabulary, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
@@ -348,12 +348,12 @@ export function TagsView() {
           <tbody>
             {alphaGroups ? (
               alphaGroups.map(({ letter, rows: letterRows }) => (
-                <>
-                  <tr key={`alpha-${letter}`} className="tags-alpha-header">
+                <Fragment key={`alpha-${letter}`}>
+                  <tr className="tags-alpha-header">
                     <td colSpan={6}>{letter}</td>
                   </tr>
                   {letterRows.map((row) => renderRow(row))}
-                </>
+                </Fragment>
               ))
             ) : (
               sortedRows.map((row) => renderRow(row))

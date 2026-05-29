@@ -83,6 +83,13 @@
   font-size: 0.8125rem;
 }
 
+.tags-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-base, #0a0a0f);
+}
+
 .tags-table th {
   text-align: left;
   font-size: 0.6875rem;

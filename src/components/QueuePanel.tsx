@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { X, GripVertical, Play } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { ContextMenu } from "./ContextMenu";
+import { RadioChip } from "./RadioChip";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
@@ -24,25 +26,6 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
-  const contextMenuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    function onClickOutside(e: MouseEvent) {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
-        setContextMenu(null);
-      }
-    }
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") setContextMenu(null);
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", onClickOutside);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [contextMenu]);
 
   if (!isQueueOpen) return null;
 
@@ -82,6 +65,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
     <div className="queue-panel">
       <div className="queue-panel-header">
         <span className="queue-panel-title">Queue ({queue.length})</span>
+        <RadioChip />
         <button className="queue-panel-close" onClick={toggleQueue} aria-label="Close queue">
           <X size={14} />
         </button>
@@ -131,11 +115,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
       </div>
 
       {contextMenu && (
-        <div
-          ref={contextMenuRef}
-          className="context-menu"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
-        >
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
           {contextMenu.position !== 0 && (
             <button
               onClick={() => {
@@ -175,7 +155,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
           >
             Remove
           </button>
-        </div>
+        </ContextMenu>
       )}
     </div>
   );

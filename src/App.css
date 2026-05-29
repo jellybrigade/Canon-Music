@@ -24,7 +24,7 @@
 
   --progress-track: rgba(255, 255, 255, 0.12);
 
-  --player-bar-height: 72px;
+  --player-bar-height: 80px;
 
   --z-panel:     50;
   --z-dropdown: 100;
@@ -36,7 +36,7 @@
   --font-display: 'Inter', system-ui, sans-serif;
 
   font-family: var(--font-body);
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.5;
   font-weight: 400;
   color: var(--text-primary);

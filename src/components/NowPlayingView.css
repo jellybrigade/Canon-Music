@@ -55,7 +55,7 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(480px, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(520px, 1.5fr);
   overflow: hidden;
 }
 
@@ -481,16 +481,12 @@
   color: var(--text-tertiary);
 }
 
-/* ── Top tracks 2-column grid ── */
+/* ── Top tracks grid — auto-fill so columns always stretch to panel width ── */
 .now-playing-top-tracks-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 0 1rem;
-}
-
-.now-playing-top-tracks-col {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
 }
 
 /* ── Track rows ── */
@@ -621,12 +617,8 @@
    Responsive breakpoints
    ═══════════════════════════════════ */
 
-/* Wide: ≥1500px — 3-column track grids, larger art */
+/* Wide: ≥1500px — larger art */
 @media (min-width: 1500px) {
-  .now-playing-top-tracks-grid {
-    grid-template-columns: 1fr 1fr 1fr;
-  }
-
   .now-playing-art,
   .now-playing-art--placeholder {
     max-width: min(460px, 34vw);
@@ -641,11 +633,12 @@
   }
 }
 
-/* Mid: ≤1100px — single-column track grids, smaller art */
+/* Mid: ≤1100px — force single-column track grids, smaller art */
 @media (max-width: 1100px) {
   .now-playing-top-tracks-grid {
     grid-template-columns: 1fr;
   }
+
 
   .now-playing-art,
   .now-playing-art--placeholder {
@@ -702,6 +695,10 @@
     padding: 2rem 1.5rem 1.25rem;
     gap: 1rem;
     justify-content: flex-start;
+    /* Clamp top section so it never pushes the tab panel off screen */
+    max-height: min(50vh, 400px);
+    overflow-y: auto;
+    flex-shrink: 0;
   }
 
   .now-playing-art,
@@ -716,6 +713,7 @@
   .now-playing-right {
     border-left: none;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
-    min-height: 400px;
+    /* Adapt min-height to viewport so it doesn't overflow at short heights */
+    min-height: min(400px, 45vh);
   }
 }

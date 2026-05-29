@@ -60,6 +60,7 @@
   position: absolute;
   top: -4px;
   left: 100%;
+  right: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -67,5 +68,10 @@
   padding: 4px 0;
   min-width: 160px;
   z-index: var(--z-overlay);
+}
+
+.context-submenu-content--flip {
+  left: auto;
+  right: 100%;
 }
 

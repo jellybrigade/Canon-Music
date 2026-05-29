@@ -84,7 +84,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               title="Shuffle"
               aria-label="Shuffle"
             >
-              <Shuffle size={15} />
+              <Shuffle size={17} />
             </button>
             <button
               className="player-btn"
@@ -92,7 +92,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               disabled={queue.length === 0}
               aria-label="Previous"
             >
-              <SkipBack size={18} />
+              <SkipBack size={20} />
             </button>
             <button
               className="player-btn player-btn--play"
@@ -101,10 +101,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading
-                ? <Loader size={16} className="player-spin" />
+                ? <Loader size={18} className="player-spin" />
                 : isPlaying
-                  ? <Pause size={16} fill="currentColor" strokeWidth={0} />
-                  : <Play size={16} fill="currentColor" strokeWidth={0} />}
+                  ? <Pause size={18} fill="currentColor" strokeWidth={0} />
+                  : <Play size={18} fill="currentColor" strokeWidth={0} />}
             </button>
             <button
               className="player-btn"
@@ -112,7 +112,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               disabled={nextDisabled}
               aria-label="Next"
             >
-              <SkipForward size={18} />
+              <SkipForward size={20} />
             </button>
             <button
               className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
@@ -121,8 +121,8 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label={repeatLabel}
             >
               {repeat === "repeat-one"
-                ? <Repeat1 size={15} />
-                : <Repeat size={15} />}
+                ? <Repeat1 size={17} />
+                : <Repeat size={17} />}
             </button>
           </div>
 
@@ -136,7 +136,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             title="Now playing"
             aria-label="Now playing"
           >
-            <Headphones size={16} />
+            <Headphones size={18} />
           </button>
           <button
             className={`player-btn player-btn--icon${isQueueOpen ? " player-btn--active" : ""}`}
@@ -144,10 +144,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             title="Queue"
             aria-label="Queue"
           >
-            <List size={16} />
+            <List size={18} />
           </button>
           <div className="player-volume">
-            <Volume2 size={14} className="player-volume-icon" aria-hidden />
+            <Volume2 size={16} className="player-volume-icon" aria-hidden />
             <input
               type="range"
               className="player-volume-slider"

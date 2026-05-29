@@ -267,8 +267,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     );
   }
 
-  const topLeft = topTracks?.slice(0, 5) ?? [];
-  const topRight = topTracks?.slice(5, 10) ?? [];
 
   return (
     <div
@@ -498,47 +496,43 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">Top tracks — {currentTrack.artist}</h3>
                     <div className="now-playing-top-tracks-grid">
-                      {[topLeft, topRight].map((col, ci) => (
-                        <div key={ci} className="now-playing-top-tracks-col">
-                          {col.map((track, i) => (
-                            <div key={track.id} className="now-playing-track-row">
-                              <span className="now-playing-track-num">{ci * 5 + i + 1}</span>
-                              <div className="now-playing-track-info">
-                                <span className="now-playing-track-title">{track.title}</span>
-                                {track.album_name && (
-                                  <span className="now-playing-track-album">{track.album_name}</span>
-                                )}
-                              </div>
-                              {track.duration && (
-                                <span className="now-playing-track-duration">
-                                  {formatDuration(track.duration)}
-                                </span>
-                              )}
-                              <div className="now-playing-track-actions">
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Play now"
-                                  onClick={(e) => { e.stopPropagation(); handlePlayTrack(track); }}
-                                >
-                                  <PlayCircle size={14} />
-                                </button>
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Play next"
-                                  onClick={(e) => { e.stopPropagation(); handlePlayNext(track); }}
-                                >
-                                  <Play size={12} />
-                                </button>
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Add to queue"
-                                  onClick={(e) => { e.stopPropagation(); handleAddToQueue(track); }}
-                                >
-                                  <ListEnd size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                      {topTracks.slice(0, 10).map((track, i) => (
+                        <div key={track.id} className="now-playing-track-row">
+                          <span className="now-playing-track-num">{i + 1}</span>
+                          <div className="now-playing-track-info">
+                            <span className="now-playing-track-title">{track.title}</span>
+                            {track.album_name && (
+                              <span className="now-playing-track-album">{track.album_name}</span>
+                            )}
+                          </div>
+                          {track.duration && (
+                            <span className="now-playing-track-duration">
+                              {formatDuration(track.duration)}
+                            </span>
+                          )}
+                          <div className="now-playing-track-actions">
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Play now"
+                              onClick={(e) => { e.stopPropagation(); handlePlayTrack(track); }}
+                            >
+                              <PlayCircle size={14} />
+                            </button>
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Play next"
+                              onClick={(e) => { e.stopPropagation(); handlePlayNext(track); }}
+                            >
+                              <Play size={12} />
+                            </button>
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Add to queue"
+                              onClick={(e) => { e.stopPropagation(); handleAddToQueue(track); }}
+                            >
+                              <ListEnd size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -549,46 +543,42 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">Suggested</h3>
                     <div className="now-playing-top-tracks-grid">
-                      {[suggestedTracks.slice(0, 5), suggestedTracks.slice(5, 10)].map((col, ci) => (
-                        <div key={ci} className="now-playing-top-tracks-col">
-                          {col.map((track) => (
-                            <div key={track.id} className="now-playing-track-row">
-                              <div className="now-playing-track-info">
-                                <span className="now-playing-track-title">{track.title}</span>
-                                <span className="now-playing-track-album">
-                                  {[track.artist, track.album_name].filter(Boolean).join(" — ")}
-                                </span>
-                              </div>
-                              {track.duration && (
-                                <span className="now-playing-track-duration">
-                                  {formatDuration(track.duration)}
-                                </span>
-                              )}
-                              <div className="now-playing-track-actions">
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Play now"
-                                  onClick={() => handlePlayTrack(track)}
-                                >
-                                  <PlayCircle size={14} />
-                                </button>
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Play next"
-                                  onClick={() => handlePlayNext(track)}
-                                >
-                                  <Play size={12} />
-                                </button>
-                                <button
-                                  className="now-playing-track-action-btn"
-                                  title="Add to queue"
-                                  onClick={() => handleAddToQueue(track)}
-                                >
-                                  <ListEnd size={14} />
-                                </button>
-                              </div>
-                            </div>
-                          ))}
+                      {suggestedTracks.slice(0, 10).map((track) => (
+                        <div key={track.id} className="now-playing-track-row">
+                          <div className="now-playing-track-info">
+                            <span className="now-playing-track-title">{track.title}</span>
+                            <span className="now-playing-track-album">
+                              {[track.artist, track.album_name].filter(Boolean).join(" — ")}
+                            </span>
+                          </div>
+                          {track.duration && (
+                            <span className="now-playing-track-duration">
+                              {formatDuration(track.duration)}
+                            </span>
+                          )}
+                          <div className="now-playing-track-actions">
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Play now"
+                              onClick={() => handlePlayTrack(track)}
+                            >
+                              <PlayCircle size={14} />
+                            </button>
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Play next"
+                              onClick={() => handlePlayNext(track)}
+                            >
+                              <Play size={12} />
+                            </button>
+                            <button
+                              className="now-playing-track-action-btn"
+                              title="Add to queue"
+                              onClick={() => handleAddToQueue(track)}
+                            >
+                              <ListEnd size={14} />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
