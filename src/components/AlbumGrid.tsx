@@ -45,6 +45,18 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     return () => obs.disconnect();
   }, []);
 
+  // Re-measure when albums transition from empty to non-empty — stale containerWidth
+  // from the empty state can leave cols=1 and produce full-width stacked images.
+  const prevAlbumsLen = useRef(albums.length);
+  useLayoutEffect(() => {
+    const wasEmpty = prevAlbumsLen.current === 0;
+    prevAlbumsLen.current = albums.length;
+    if (wasEmpty && albums.length > 0) {
+      const el = containerRef.current;
+      if (el) setContainerWidth(el.offsetWidth);
+    }
+  }, [albums.length]);
+
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
   const cardWidth = available > 0 ? (available - COL_GAP * (cols - 1)) / cols : CARD_MIN;

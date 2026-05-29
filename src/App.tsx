@@ -36,7 +36,7 @@ import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
-import type { RadioMode } from "./store/player";
+import type { RadioMode, CurrentTrack } from "./store/player";
 import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
@@ -130,6 +130,7 @@ export default function App() {
   }, [searchRaw, searchOpen, clearSearch]);
 
   const play = usePlayerStore((s) => s.play);
+  const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
 
@@ -215,13 +216,12 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
-    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
-    await play(track, streamUrl);
+    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    await playQueue([track], streamUrlFn, 0);
     startRadio(track, mode);
   }
 
@@ -239,13 +239,12 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = t.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
       : null;
-    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
-    await play(track, streamUrl);
+    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    await playQueue([track], streamUrlFn, 0);
     startRadio(track, mode);
   }
 
@@ -315,7 +314,7 @@ export default function App() {
           album={selectedAlbum}
           serverWithCredential={serverWithCred}
           onClose={() => setSelectedAlbum(null)}
-          onTagFilter={(id) => { setCanonicalIdFilters([id]); setSelectedAlbum(null); }}
+          onTagFilter={(filter) => { if ("rawGenre" in filter) { setSelectedGenreFilters([filter.rawGenre]); setCanonicalIdFilters([]); } else { setCanonicalIdFilters([filter.canonicalId]); setSelectedGenreFilters([]); } setSelectedAlbum(null); }}
         />
       );
     }
@@ -366,7 +365,7 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
-        onTagFilter={(id) => { setCanonicalIdFilters([id]); setSelectedAlbum(null); }}
+        onTagFilter={(filter) => { if ("rawGenre" in filter) { setSelectedGenreFilters([filter.rawGenre]); setCanonicalIdFilters([]); } else { setCanonicalIdFilters([filter.canonicalId]); setSelectedGenreFilters([]); } setSelectedAlbum(null); }}
       />
     );
   }

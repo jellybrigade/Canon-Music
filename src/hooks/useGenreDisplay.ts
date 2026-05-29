@@ -63,7 +63,7 @@ export function applyGenreMappings(
   if (!rawGenreString) return [];
   const seen = new Set<string>();
   const result: string[] = [];
-  for (const raw of rawGenreString.split(",").map((g) => g.trim()).filter(Boolean)) {
+  for (const raw of rawGenreString.split(/[,;]/).map((g) => g.trim()).filter(Boolean)) {
     if (!mappings.has(raw)) {
       if (!seen.has(raw)) { seen.add(raw); result.push(raw); }
     } else {

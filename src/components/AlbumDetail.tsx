@@ -30,7 +30,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onClose: () => void;
   onSelectArtist?: (artistName: string) => void;
-  onTagFilter?: (tagId: string) => void;
+  onTagFilter?: (filter: { canonicalId: string } | { rawGenre: string }) => void;
 }
 
 interface DrawerState {
@@ -42,7 +42,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
-  const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -151,7 +150,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id ?? tag.name)}
+                  onClick={() => onTagFilter?.(tag.id !== null ? { canonicalId: tag.id } : { rawGenre: tag.name })}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -169,7 +168,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id ?? tag.name)}
+                  onClick={() => tag.id !== null && onTagFilter?.({ canonicalId: tag.id })}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -187,7 +186,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id ?? tag.name)}
+                  onClick={() => tag.id !== null && onTagFilter?.({ canonicalId: tag.id })}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setDrawerState({ albumId: album.id });
@@ -306,7 +305,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               <StartRadioSubmenu
                 onSelect={(mode) => {
                   const track = buildTrackObj(contextMenu.track);
-                  void play(track, streamUrlFor(track));
+                  void playQueue([track], streamUrlFor, 0);
                   startRadio(track, mode);
                   setContextMenu(null);
                 }}
