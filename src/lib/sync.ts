@@ -167,7 +167,7 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i]!;
       await db.execute(
-        "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+        "INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
         [plDbId, `${server.id}:${t.id}`, i]
       );
     }
