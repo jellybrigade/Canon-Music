@@ -1,3 +1,10 @@
+# Dependencies and build output
+node_modules
+dist
+dist-ssr
+src-tauri/target
+*.local
+
 # Logs
 logs
 *.log
@@ -7,26 +14,20 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-src-tauri/target
-*.local
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
+# Editor directories
+.vscode/
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-reference-projects
 
-# Claude local settings (permissions, per-machine config)
-.claude/settings.local.json
+# OS
+.DS_Store
 
-# Scratch files
-what-to-do.txt
+# Internal dev files — not for the public repo
+.claude/
+instructions/
+CLAUDE.md
+reference-projects/
