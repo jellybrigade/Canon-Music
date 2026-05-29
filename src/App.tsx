@@ -441,6 +441,7 @@ export default function App() {
                   setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null });
                   navigateTo("artists");
                 }}
+                onBack={() => navigateTo("library")}
               />
             ) : <main className="content-main" />}
           </Suspense>
@@ -666,7 +667,7 @@ export default function App() {
         </nav>
         {renderContent()}
       </div>
-      <QueuePanel />
+      <QueuePanel serverWithCred={serverWithCred ?? undefined} />
       <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} serverWithCred={serverWithCred ?? undefined} />
     </Suspense>
   );

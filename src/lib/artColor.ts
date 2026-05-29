@@ -3,6 +3,7 @@
 // display <img> so display always renders even if CORS extraction fails.
 
 const CANVAS_SIZE = 32;
+const accentCache = new Map<string, string | null>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
@@ -28,6 +29,7 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
 }
 
 export function extractAccent(imageUrl: string): Promise<string | null> {
+  if (accentCache.has(imageUrl)) return Promise.resolve(accentCache.get(imageUrl)!);
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -38,7 +40,7 @@ export function extractAccent(imageUrl: string): Promise<string | null> {
         canvas.width = CANVAS_SIZE;
         canvas.height = CANVAS_SIZE;
         const ctx = canvas.getContext("2d");
-        if (!ctx) { resolve(null); return; }
+        if (!ctx) { accentCache.set(imageUrl, null); resolve(null); return; }
 
         ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
         const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
@@ -68,20 +70,21 @@ export function extractAccent(imageUrl: string): Promise<string | null> {
           }
         }
 
-        if (bestScore < 0) { resolve(null); return; }
+        if (bestScore < 0) { accentCache.set(imageUrl, null); resolve(null); return; }
 
         // Lift lightness so result is readable against a dark background
         const finalL = Math.max(bestL, MIN_LIGHTNESS_FOR_UI);
-        resolve(
-          `hsl(${Math.round(bestH)}, ${Math.round(bestS * 100)}%, ${Math.round(finalL * 100)}%)`
-        );
+        const color = `hsl(${Math.round(bestH)}, ${Math.round(bestS * 100)}%, ${Math.round(finalL * 100)}%)`;
+        accentCache.set(imageUrl, color);
+        resolve(color);
       } catch {
         // SecurityError from CORS-tainted canvas, or any other failure — fail silently
+        accentCache.set(imageUrl, null);
         resolve(null);
       }
     };
 
-    img.onerror = () => resolve(null);
+    img.onerror = () => { accentCache.set(imageUrl, null); resolve(null); };
     img.src = imageUrl;
   });
 }

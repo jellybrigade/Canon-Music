@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { X, GripVertical, Play } from "lucide-react";
 import { usePlayerStore } from "../store/player";
+import { getCoverArtUrl } from "../lib/navidrome";
+import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
 type ContextMenu = { x: number; y: number; position: number } | null;
 
-export function QueuePanel() {
+interface QueuePanelProps {
+  serverWithCred?: ServerWithCredential;
+}
+
+export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const queue          = usePlayerStore((s) => s.queue);
   const queueIndex     = usePlayerStore((s) => s.queueIndex);
   const isShuffled     = usePlayerStore((s) => s.isShuffled);
@@ -107,10 +113,15 @@ export function QueuePanel() {
               {position === queueIndex ? <Play size={10} /> : ""}
             </span>
             <span className="queue-row-num">{position + 1}</span>
-            {track.coverArtUrl
-              ? <img src={track.coverArtUrl} alt="" className="queue-row-art" />
-              : <div className="queue-row-art queue-row-art--placeholder" />
-            }
+            {(() => {
+              const artUrl = track.coverArtUrl
+                ?? (track.artworkRef && serverWithCred
+                  ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, track.artworkRef, 64)
+                  : null);
+              return artUrl
+                ? <img src={artUrl} alt="" className="queue-row-art" />
+                : <div className="queue-row-art queue-row-art--placeholder" />;
+            })()}
             <div className="queue-row-info">
               <span className="queue-row-title">{track.title}</span>
               {track.artist && <span className="queue-row-artist">{track.artist}</span>}

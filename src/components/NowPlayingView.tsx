@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft,
 } from "lucide-react";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore, type CurrentTrack } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -50,7 +50,7 @@ interface SuggestedTrack {
 
 function useArtistAlbums(artistName: string | null) {
   return useQuery({
-    queryKey: ["artist-albums", artistName],
+    queryKey: ["nowplaying-albums", artistName],
     queryFn: async (): Promise<AlbumRow[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -67,7 +67,7 @@ function useArtistAlbums(artistName: string | null) {
 
 function useArtistTopTracks(artistName: string | null) {
   return useQuery({
-    queryKey: ["artist-top-tracks", artistName],
+    queryKey: ["nowplaying-top-tracks", artistName],
     queryFn: async (): Promise<TopTrack[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -112,7 +112,7 @@ function useArtistTopTracks(artistName: string | null) {
 
 function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
   return useQuery({
-    queryKey: ["suggested-tracks", artistName],
+    queryKey: ["suggested-tracks", artistName, currentTrackId],
     queryFn: async (): Promise<SuggestedTrack[]> => {
       if (!artistName) return [];
       const similarArtists = await fetchSimilarArtists(artistName);
@@ -139,15 +139,16 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (artistName: string) => void;
+  onBack?: () => void;
 }
 
-export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist }: Props) {
+export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onBack }: Props) {
   const {
     currentTrack, isPlaying, isLoading, elapsed, volume,
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
     pause, resume, next, prev, seek, setVolume,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
-    playQueue, addToQueue, playNext,
+    addToQueue, playNext,
   } = usePlayerStore();
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -171,6 +172,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(currentTrack ?? null);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
+  const activeLyricIndexRef = useRef<number>(-1);
   const [accent, setAccent] = useState<string | null>(null);
 
   const largeArtUrl = currentTrack?.artworkRef
@@ -201,9 +203,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   }, [tab]);
 
   useEffect(() => {
-    if (tab !== "lyrics" || !activeLyricRef.current) return;
-    activeLyricRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
-  }, [tab, elapsed]);
+    if (tab !== "lyrics" || !lyricsLines) return;
+    const activeIndex = lyricsLines.findIndex((line, i) =>
+      elapsed >= line.timeSec && (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec)
+    );
+    if (activeIndex === activeLyricIndexRef.current) return;
+    activeLyricIndexRef.current = activeIndex;
+    if (activeLyricRef.current) {
+      activeLyricRef.current.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+  }, [tab, elapsed, lyricsLines]);
 
   function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!progressBarRef.current || duration <= 0) return;
@@ -234,7 +243,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   function handlePlayTrack(t: TopTrack | SuggestedTrack) {
     const { track } = buildTrack(t);
-    void playQueue([track], (ct) => getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id)), 0);
+    const streamUrlFn = (ct: CurrentTrack) =>
+      getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id));
+    playNext(track, streamUrlFn);
+    void next();
   }
 
   function handleAddToQueue(t: TopTrack | SuggestedTrack) {
@@ -262,10 +274,15 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     <div
       className="now-playing-view"
       style={{
-        ...(largeArtUrl ? { '--art-bg': `url(${largeArtUrl})` } : {}),
+        ...(largeArtUrl ? { '--art-bg': `url("${largeArtUrl.replace(/"/g, '%22')}")` } : {}),
         ...(accent ? { '--accent': accent, '--accent-hover': accent } : {}),
       } as React.CSSProperties}
     >
+      {onBack && (
+        <button className="now-playing-back-btn player-btn player-btn--icon" onClick={onBack} title="Back">
+          <ChevronLeft size={18} />
+        </button>
+      )}
       <div className="now-playing-main">
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
