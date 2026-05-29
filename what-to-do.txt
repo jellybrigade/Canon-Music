@@ -61,6 +61,12 @@ Album cover (small) -> click -> show album art enlarged as popover in bottom-lef
   Overrides auto-lookup. Feeds tag-write flow via pending_edits.
 - Same popup (or variant) should work on Artist page for artist MBID correction
 
+--- NowPlaying Layout ---
+- "Up Next" tab wastes space: huge gap between track title and duration, row feels mostly empty.
+  Tighten the row layout — reduce gap, maybe add secondary info to fill horizontal space.
+- Lyrics tab also sparse — either fill the space or shrink the container.
+- Consider animated height: NowPlaying panel dynamically shrinks/expands based on active tab content density.
+
 --- Code Quality ---
 - rawGenre IN filter fragile: useAlbums.ts does exact-match WHERE t.genre IN (?) against the
   full stored genre string. Currently safe because unmapped chips pass the full raw_value (e.g.

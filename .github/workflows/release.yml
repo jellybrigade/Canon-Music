@@ -58,6 +58,17 @@ jobs:
         with:
           workspaces: src-tauri
 
+      - name: Extract release notes from merge commit
+        id: notes
+        shell: bash
+        run: |
+          # Get the full commit message for the tagged commit, strip the first line (title)
+          BODY=$(git log -1 --format=%B "${{ github.ref_name }}" | tail -n +3)
+          # GitHub Actions multiline output
+          echo "body<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$BODY" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Install frontend dependencies
         run: pnpm install
 
@@ -67,7 +78,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Canon ${{ github.ref_name }}
-          releaseBody: See the commit log for changes in this release.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
