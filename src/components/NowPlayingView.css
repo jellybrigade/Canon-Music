@@ -146,6 +146,8 @@
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
   transition: color 0.15s;
+  text-align: center;
+  width: 100%;
 }
 
 .now-playing-artist--link:hover {
@@ -174,6 +176,8 @@
   font-weight: 400;
   letter-spacing: 0.01em;
   transition: color 0.15s;
+  text-align: center;
+  width: 100%;
 }
 
 .now-playing-album--link:hover {

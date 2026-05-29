@@ -34,15 +34,29 @@ export interface AutoIdentifyResult {
 const AUTO_CONFIRM_THRESHOLD = 0.80;
 const MIN_SCORE_GAP = 0.10;
 
+function stripTrailingBrackets(title: string): string | null {
+  const stripped = title.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
+  return stripped !== title && stripped.length > 0 ? stripped : null;
+}
+
 export async function autoIdentifyAlbum({ artist, album }: { artist: string; album: string }): Promise<AutoIdentifyResult> {
   try {
-    const candidates = await searchReleaseGroups(artist, album);
+    let candidates = await searchReleaseGroups(artist, album);
+    let searchTitle = album;
+
+    if (candidates.length === 0) {
+      const stripped = stripTrailingBrackets(album);
+      if (stripped) {
+        candidates = await searchReleaseGroups(artist, stripped);
+        if (candidates.length > 0) searchTitle = stripped;
+      }
+    }
 
     if (candidates.length === 0) {
       return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], error: null };
     }
 
-    const ranked = rankCandidates(candidates, artist, album);
+    const ranked = rankCandidates(candidates, artist, searchTitle);
     const top = ranked[0]!;
     const second = ranked[1];
     const gap = second ? top.score - second.score : Infinity;

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Heart, Play, ChevronRight, Disc, HelpCircle } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -62,7 +62,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const saveIdentity = useSaveAlbumIdentity();
   const recordFailed = useRecordFailedLookup();
 
-  const { data: autoResult } = useAutoIdentifyAlbum({
+  const { data: autoResult, isFetching: autoIdentifyFetching } = useAutoIdentifyAlbum({
     albumId: album.id,
     artist: album.artist ?? "",
     album: album.name,
@@ -137,11 +137,24 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     playQueue(tracks.map(buildTrackObj), streamUrlFor, 0);
   }
 
-  const hasTags = normalizedTags && (
-    normalizedTags.genres.length > 0 ||
-    normalizedTags.descriptors.length > 0 ||
-    normalizedTags.scenes.length > 0
-  );
+  const displayGenres = useMemo((): Array<{ id: string | null; name: string }> => {
+    if (normalizedTags?.genres.length) return normalizedTags.genres;
+    if (!tracks) return [];
+    const seen = new Set<string>();
+    const result: Array<{ id: null; name: string }> = [];
+    for (const t of tracks) {
+      if (t.genre && !seen.has(t.genre)) {
+        seen.add(t.genre);
+        result.push({ id: null, name: t.genre });
+      }
+    }
+    return result;
+  }, [normalizedTags, tracks]);
+
+  const hasTags =
+    displayGenres.length > 0 ||
+    (normalizedTags?.descriptors?.length ?? 0) > 0 ||
+    (normalizedTags?.scenes?.length ?? 0) > 0;
 
   return (
     <div className="album-detail">
@@ -189,7 +202,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   </p>
                 </div>
               )
-            ) : mbAutoIdentify === "true" && identityLoaded ? (
+            ) : mbAutoIdentify === "true" && identityLoaded && !autoIdentifyFetching ? (
               <button
                 className="album-unidentified-badge"
                 onClick={() => setShowIdentify(true)}
@@ -222,10 +235,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
       {hasTags && (
         <section className="album-tag-band">
-          {normalizedTags.genres.length > 0 && (
+          {displayGenres.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Genres</h3>
-              {normalizedTags.genres.map((tag) => (
+              {displayGenres.map((tag) => (
                 <button
                   key={tag.id ?? tag.name}
                   className="album-tag-chip"
@@ -240,7 +253,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               ))}
             </div>
           )}
-          {normalizedTags.descriptors.length > 0 && (
+          {normalizedTags && normalizedTags.descriptors.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Descriptors</h3>
               {normalizedTags.descriptors.map((tag) => (
@@ -258,7 +271,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               ))}
             </div>
           )}
-          {normalizedTags.scenes.length > 0 && (
+          {normalizedTags && normalizedTags.scenes.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Scenes & Movements</h3>
               {normalizedTags.scenes.map((tag) => (
