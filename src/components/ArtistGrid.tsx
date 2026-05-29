@@ -4,6 +4,8 @@ import type { ArtistRow } from "../hooks/useArtists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import type { RadioMode } from "../store/player";
 
 const PADDING = 20;
 const COL_GAP = 16;
@@ -14,7 +16,7 @@ interface Props {
   artists: ArtistRow[];
   serverWithCredential: ServerWithCredential;
   onSelect: (artist: ArtistRow) => void;
-  onStartRadio?: (artist: ArtistRow) => void;
+  onStartRadio?: (artist: ArtistRow, mode: RadioMode) => void;
 }
 
 export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio }: Props) {
@@ -125,9 +127,9 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
             Open artist
           </button>
           {onStartRadio && (
-            <button onClick={() => { onStartRadio(contextMenu.artist); setContextMenu(null); }}>
-              Start radio from this
-            </button>
+            <StartRadioSubmenu
+              onSelect={(mode) => { onStartRadio(contextMenu.artist, mode); setContextMenu(null); }}
+            />
           )}
         </ContextMenu>
       )}

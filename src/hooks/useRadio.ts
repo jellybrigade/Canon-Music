@@ -29,7 +29,7 @@ function pickFromTop(candidates: { id: string; score: number }[]): { id: string;
 }
 
 export function useRadio() {
-  const { currentTrack, queue, queueIndex, radioActive, addToQueue, streamUrlFor } = usePlayerStore();
+  const { currentTrack, queue, queueIndex, radioActive, radioMode, addToQueue, streamUrlFor } = usePlayerStore();
   const fillingRef = useRef(false);
 
   useEffect(() => {
@@ -48,12 +48,23 @@ export function useRadio() {
         const recentIds = await getRecentlyPlayedIds(serverId);
         for (const id of recentIds) excludeIds.add(id);
 
-        const similarArtists = currentTrack.artist
+        const needsSimilarArtists = radioMode === "curated" || radioMode === "similar-artists";
+        const similarArtists = needsSimilarArtists && currentTrack.artist
           ? await fetchSimilarArtists(currentTrack.artist).catch(() => [])
           : [];
 
-        const candidates = await getRadioCandidates(currentTrack.id, excludeIds, similarArtists);
-        const pick = pickFromTop(candidates);
+        const candidates = await getRadioCandidates({
+          seedTrackId: currentTrack.id,
+          mode: radioMode,
+          excludeIds,
+          similarArtists,
+        });
+
+        // same-album mode: picks in track order — take first candidate directly
+        const pick = radioMode === "same-album"
+          ? (candidates[0] ?? null)
+          : pickFromTop(candidates);
+
         if (!pick) return;
 
         const db = await getDb();
@@ -87,5 +98,5 @@ export function useRadio() {
         fillingRef.current = false;
       }
     })();
-  }, [radioActive, currentTrack, queue, queueIndex, addToQueue]);
+  }, [radioActive, radioMode, currentTrack, queue, queueIndex, addToQueue]);
 }

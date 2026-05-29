@@ -36,6 +36,7 @@ import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
+import type { RadioMode } from "./store/player";
 import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
@@ -203,7 +204,7 @@ export default function App() {
     await play({ id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: artworkUrl, album: albumData?.name ?? null, albumId: t.album_id }, streamUrl);
   }
 
-  async function handleStartRadioFromAlbum(album: AlbumRow) {
+  async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
@@ -221,10 +222,10 @@ export default function App() {
     const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
     await play(track, streamUrl);
-    startRadio(track);
+    startRadio(track, mode);
   }
 
-  async function handleStartRadioFromArtist(artist: ArtistRow) {
+  async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
@@ -245,7 +246,7 @@ export default function App() {
     const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
     await play(track, streamUrl);
-    startRadio(track);
+    startRadio(track, mode);
   }
 
   function runSync(s: Server) {
@@ -339,12 +340,19 @@ export default function App() {
     const visibleAlbums = lovedOnly
       ? albums.filter((a) => lovedAlbumIds.has(a.id))
       : albums;
+    const filtersActive = lovedOnly || selectedGenreFilters.length > 0 || canonicalIdFilters.length > 0;
+    const emptyMessage = lovedOnly
+      ? "No loved albums"
+      : filtersActive
+        ? "No albums match this filter"
+        : "No albums yet. Syncing…";
     return (
       <AlbumGrid
         albums={visibleAlbums}
         serverWithCredential={serverWithCred}
         onSelect={setSelectedAlbum}
-        onStartRadio={(album) => { void handleStartRadioFromAlbum(album); }}
+        onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+        emptyMessage={emptyMessage}
       />
     );
   }
@@ -579,7 +587,7 @@ export default function App() {
                     artists={artists ?? []}
                     serverWithCredential={serverWithCred}
                     onSelect={setSelectedArtist}
-                    onStartRadio={(artist) => { void handleStartRadioFromArtist(artist); }}
+                    onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
                   />
                 ) : (
                   <p className="empty-state">Loading…</p>

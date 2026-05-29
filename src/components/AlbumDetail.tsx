@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Heart, Play, ChevronRight } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -302,16 +303,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               >
                 Add to Queue
               </button>
-              <button
-                onClick={() => {
+              <StartRadioSubmenu
+                onSelect={(mode) => {
                   const track = buildTrackObj(contextMenu.track);
                   void play(track, streamUrlFor(track));
-                  startRadio(track);
+                  startRadio(track, mode);
                   setContextMenu(null);
                 }}
-              >
-                Start radio from this
-              </button>
+              />
               <button
                 onClick={() => {
                   setDrawerState({ albumId: album.id, trackId: contextMenu.track.id });

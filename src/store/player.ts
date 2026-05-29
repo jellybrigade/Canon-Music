@@ -15,6 +15,16 @@ export interface CurrentTrack {
 
 export type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
+export type RadioMode =
+  | "curated"
+  | "same-genre"
+  | "similar-artists"
+  | "same-artist"
+  | "same-album"
+  | "era"
+  | "loved"
+  | "random";
+
 const PREV_RESTART_THRESHOLD_S = 3;
 
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
@@ -77,6 +87,7 @@ interface PlayerState {
   playStartedAt: number;
   radioActive: boolean;
   radioSeed: CurrentTrack | null;
+  radioMode: RadioMode;
 
   isQueueOpen: boolean;
 
@@ -93,7 +104,8 @@ interface PlayerState {
   toggleShuffle: () => void;
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
   setRadioActive: (active: boolean) => void;
-  startRadio: (seed: CurrentTrack) => void;
+  startRadio: (seed: CurrentTrack, mode?: RadioMode) => void;
+  setRadioMode: (mode: RadioMode) => void;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -155,7 +167,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   async function persistRadioState() {
     try {
-      const { radioActive, radioSeed } = get();
+      const { radioActive, radioSeed, radioMode } = get();
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
@@ -164,6 +176,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_seed', ?)",
         [radioSeed ? JSON.stringify(radioSeed) : ""]
+      );
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_mode', ?)",
+        [radioMode]
       );
     } catch (e) {
       console.error("Failed to persist radio state:", e);
@@ -201,6 +217,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     playStartedAt: 0,
     radioActive: false,
     radioSeed: null,
+    radioMode: "curated",
     isQueueOpen: false,
 
     play: async (track, streamUrl) => {
@@ -359,8 +376,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistRadioState();
     },
 
-    startRadio: (seed: CurrentTrack) => {
-      set({ radioActive: true, radioSeed: seed });
+    startRadio: (seed: CurrentTrack, mode?: RadioMode) => {
+      set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}) });
+      void persistRadioState();
+    },
+
+    setRadioMode: (mode: RadioMode) => {
+      set({ radioMode: mode });
       void persistRadioState();
     },
 
@@ -508,6 +530,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               } catch {
                 // malformed seed, ignore
               }
+            }
+          } else if (row.key === "radio_mode") {
+            const VALID_MODES: RadioMode[] = ["curated", "same-genre", "similar-artists", "same-artist", "same-album", "era", "loved", "random"];
+            if (VALID_MODES.includes(row.value as RadioMode)) {
+              set({ radioMode: row.value as RadioMode });
             }
           }
         }

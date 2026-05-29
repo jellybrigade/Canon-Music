@@ -7,6 +7,8 @@ import { useLoved } from "../hooks/useLoved";
 import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import type { RadioMode } from "../store/player";
 import "./AlbumGrid.css";
 
 const PADDING = 20;
@@ -18,10 +20,11 @@ interface Props {
   albums: AlbumRow[];
   serverWithCredential: ServerWithCredential;
   onSelect: (album: AlbumRow) => void;
-  onStartRadio?: (album: AlbumRow) => void;
+  onStartRadio?: (album: AlbumRow, mode: RadioMode) => void;
+  emptyMessage?: string;
 }
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const { data: offTreeIds } = useOffTreeAlbumIds();
@@ -63,13 +66,12 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     }
   }, [cols, virtualizer]);
 
-  if (albums.length === 0) {
-    return <p className="empty-state">No albums yet. Syncing…</p>;
-  }
-
   return (
     <>
       <div ref={containerRef} className="album-grid-scroller">
+        {albums.length === 0 ? (
+          <p className="empty-state">{emptyMessage ?? "No albums yet. Syncing…"}</p>
+        ) : (
         <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const rowStart = virtualRow.index * cols;
@@ -136,6 +138,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
             );
           })}
         </div>
+        )}
       </div>
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
@@ -143,9 +146,9 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
             Open album
           </button>
           {onStartRadio && (
-            <button onClick={() => { onStartRadio(contextMenu.album); setContextMenu(null); }}>
-              Start radio from this
-            </button>
+            <StartRadioSubmenu
+              onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
+            />
           )}
         </ContextMenu>
       )}

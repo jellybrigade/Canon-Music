@@ -1,4 +1,9 @@
 /* ── Radio chip ── */
+.radio-chip {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .radio-chip-btn {
   background: none;
   border: 1px solid var(--accent, #e06c75);
@@ -8,10 +13,52 @@
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .radio-chip-btn:hover {
   background: color-mix(in srgb, var(--accent, #e06c75) 15%, transparent);
 }
 
+.radio-chip-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  padding: 4px 0;
+  min-width: 148px;
+  z-index: var(--z-overlay);
+}
+
+.radio-chip-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.4em 1em;
+  border: none;
+  background: transparent;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--text-primary);
+  border-radius: 0;
+}
+
+.radio-chip-menu-item:hover {
+  background: var(--bg-hover-strong);
+}
+
+.radio-chip-menu-item--active {
+  color: var(--accent, #e06c75);
+}
+
+.radio-chip-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 4px 0;
+}
+
+.radio-chip-menu-item--stop {
+  color: var(--text-secondary);
+}

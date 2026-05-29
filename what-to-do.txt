@@ -1,3 +1,17 @@
+Fullscreen player bugs:
+- Bottom bar (player controls) should not exist separately — fullscreen view must contain all controls itself
+- Responsive layout breaks on height reduction: at some breakpoint, player shifts to top + tabs (up next/about/lyrics)
+  below (good), but shrinking further causes lower section to overlay upper section. Volume, then controls, then
+  progress bar get hidden under the overlapping content. Lower section must never overlap upper controls — either
+  scroll the lower section, clamp its height, or use a flex layout that compresses gracefully.
+
+NowPlaying right panel too narrow: fixed 400px right panel makes 2-column top tracks / suggested
+  layouts completely unusable — columns are ~170px each. Need to rethink the split: either make
+  right panel wider (500-600px), or use a different content layout (single column with more info,
+  or a wider fluid approach). Left panel keeps the atmospheric art treatment; right panel needs
+  enough room to actually display track grids legibly.
+NowPlaying About tab — Top Tracks + Suggested don't fill panel width: both 2-column grids stop
+  short of the right edge, leaving a visible gap. Columns should stretch to fill available width.
 NowPlaying view redesign: current layout looks bad — needs a proper visual design pass.
   Ideas: blurred art background (done properly this time), better typography hierarchy,
   accent color extraction from art, smoother layout proportions, less "plain dark panel" feel.
@@ -7,6 +21,13 @@ NowPlaying view layout broken: everything squished to left side, content cramped
 Album cover (small) -> click -> show album art enlarged as popover in bottom-left corner (above track/artist
   info in the player bar), NOT fullscreen — rest of player stays usable [in progress, old lightbox removed]
 Queue -> album art not showing for tracks in the queue panel
+
+--- Empty State Copy ---
+- "No albums yet. Syncing…" shows when filter returns zero results (e.g. filtering by Loved with no loved albums).
+  "Syncing…" is wrong — there is no sync happening, the list is just empty. Fix copy to be context-aware:
+  show "No loved albums" (or equivalent) when a filter is active and returns nothing, not a sync message.
+- Loved filter toggle bug: click Loved (filters to empty), click again to deactivate — view breaks completely.
+  Albums render as giant stacked full-width images instead of grid. Layout state corrupted on filter deactivate.
 
 --- Tag Mapping Bugs ---
 - "Rap" mapped to "Hip Hop" but still shows up on tracks (e.g. Take Care by Drake has Pop, Hip Hop, Rap).
@@ -20,6 +41,10 @@ Queue -> album art not showing for tracks in the queue panel
   extend TopTrack query to include album_id + artwork_url; build CurrentTrack; add streamUrlFor
 - Track list: 2-3 column grid instead of single long list
 - Pull top tracks from Last.fm (not just local library tracks)
+- Top tracks ranking: what is it based on? Currently likely play count from local library,
+  which skews toward recently-added or heavily-ripped albums (e.g. Donda Chant as a top Ye track).
+  Should rank by Last.fm global play count or user scrobble count — investigate current source
+  and replace with something that reflects actual track popularity/significance
 - Artist "correction" / merging: if two artist entries overlap (e.g. "The Beatles" vs "Beatles"),
   allow user to merge/alias them so they resolve to one canonical artist
   (think: how does this interact with pending_edits and tag writes?)
