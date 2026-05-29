@@ -107,6 +107,10 @@ export function QueuePanel() {
               {position === queueIndex ? <Play size={10} /> : ""}
             </span>
             <span className="queue-row-num">{position + 1}</span>
+            {track.coverArtUrl
+              ? <img src={track.coverArtUrl} alt="" className="queue-row-art" />
+              : <div className="queue-row-art queue-row-art--placeholder" />
+            }
             <div className="queue-row-info">
               <span className="queue-row-title">{track.title}</span>
               {track.artist && <span className="queue-row-artist">{track.artist}</span>}

@@ -120,7 +120,8 @@ function mappingDot(row: VocabRow, nodeById: Map<string, TreeNode>): { color: st
 
 function resolvedSection(row: VocabRow, nodeById: Map<string, TreeNode>): string {
   if (!row.canonical_id || row.canonical_id === ACCEPTED || row.canonical_id === IGNORED) return row.kind;
-  return nodeById.get(row.canonical_id)?.section ?? row.kind;
+  const section = nodeById.get(row.canonical_id)?.section ?? row.kind;
+  return section === "genres" ? "genre" : section;
 }
 
 function isTrivialExactMatch(row: VocabRow, nodeById: Map<string, TreeNode>): boolean {
