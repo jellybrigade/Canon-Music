@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { getDb } from "../db";
 
@@ -182,15 +183,45 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         }
         return;
       }
-      const peaks = await invoke<number[]>("audio_extract_waveform", { url });
-      if (get().currentTrack?.id === trackId) {
-        set({ waveformPeaks: peaks });
-      }
-      const now = Math.floor(Date.now() / 1000);
-      await db.execute(
-        "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
-        [trackId, JSON.stringify(peaks), now]
+
+      // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
+      const rawPeaks = new Array<number>(200).fill(0);
+      let runningMax = 0;
+
+      const unlistenChunk = await listen<{ track_id: string; offset: number; peaks: number[] }>(
+        "waveform_chunk",
+        (event) => {
+          if (event.payload.track_id !== trackId) return;
+          const { offset, peaks } = event.payload;
+          for (let i = 0; i < peaks.length; i++) {
+            const v = peaks[i] ?? 0;
+            rawPeaks[offset + i] = v;
+            if (v > runningMax) runningMax = v;
+          }
+          if (get().currentTrack?.id !== trackId) return;
+          const normalized = runningMax > 0 ? rawPeaks.map((p) => p / runningMax) : rawPeaks.slice();
+          set({ waveformPeaks: normalized });
+        }
       );
+
+      const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>(
+        "waveform_complete",
+        async (event) => {
+          unlistenChunk();
+          unlistenComplete();
+          if (event.payload.track_id !== trackId) return;
+          if (get().currentTrack?.id === trackId) {
+            set({ waveformPeaks: event.payload.peaks });
+          }
+          const now = Math.floor(Date.now() / 1000);
+          await db.execute(
+            "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
+            [trackId, JSON.stringify(event.payload.peaks), now]
+          );
+        }
+      );
+
+      void invoke("audio_extract_waveform", { trackId, url, durationSecs: get().currentTrack?.duration ?? 0 });
     } catch (e) {
       console.error("Failed to fetch waveform:", e);
     }

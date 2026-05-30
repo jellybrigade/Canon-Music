@@ -1,9 +1,9 @@
 use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
-use std::io::Cursor;
+use std::io::{Cursor, Read, Seek};
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 
@@ -12,6 +12,32 @@ fn http_client() -> reqwest::blocking::Client {
         .timeout(Duration::from_secs(30))
         .build()
         .expect("failed to build HTTP client")
+}
+
+/// Wraps a growing temp file so the decoder blocks instead of getting premature EOF.
+/// When the download thread is still writing, reads that hit EOF retry until data arrives.
+struct GrowingFileReader {
+    file: std::fs::File,
+    download_done: Arc<AtomicBool>,
+}
+
+impl Read for GrowingFileReader {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        loop {
+            match self.file.read(buf) {
+                Ok(0) if !self.download_done.load(Ordering::Acquire) => {
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                other => return other,
+            }
+        }
+    }
+}
+
+impl Seek for GrowingFileReader {
+    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
+        self.file.seek(pos)
+    }
 }
 
 struct PosTracker {
@@ -228,50 +254,173 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
 }
 
 #[tauri::command]
-async fn audio_extract_waveform(url: String) -> Result<Vec<f32>, String> {
-    tokio::task::spawn_blocking(move || -> Result<Vec<f32>, String> {
-        let bytes = http_client()
-            .get(&url)
-            .send()
-            .and_then(|r| r.bytes())
-            .map_err(|e| e.to_string())?
-            .to_vec();
+async fn audio_extract_waveform(
+    app: tauri::AppHandle,
+    track_id: String,
+    url: String,
+    duration_secs: f64,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        const BUCKET_COUNT: usize = 200;
 
-        let source = Decoder::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
-        let channels = source.channels() as usize;
-        let samples: Vec<i16> = source.collect();
+        // Sanitize track_id for use as a filename component
+        let safe_id: String = track_id
+            .chars()
+            .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
+            .collect();
+        let temp_path = std::env::temp_dir().join(format!("canon_wf_{}.tmp", safe_id));
+        let temp_path_dl = temp_path.clone();
 
-        if samples.is_empty() || channels == 0 {
-            return Ok(vec![0.0; 200]);
-        }
+        let download_done = Arc::new(AtomicBool::new(false));
+        let download_done_dl = download_done.clone();
+        let download_err: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+        let download_err_dl = download_err.clone();
 
-        let total_frames = samples.len() / channels;
-        let bucket_count = 200usize;
-        let bucket_size = (total_frames / bucket_count).max(1);
-
-        let mut peaks = Vec::with_capacity(bucket_count);
-        for b in 0..bucket_count {
-            let start = b * bucket_size * channels;
-            let end = ((b + 1) * bucket_size * channels).min(samples.len());
-            if start >= end {
-                peaks.push(0.0f32);
-                continue;
+        // Stream HTTP response bytes into the temp file concurrently with analysis
+        let dl_handle = std::thread::spawn(move || {
+            let result = (|| -> Result<(), String> {
+                let mut response = reqwest::blocking::Client::builder()
+                    .timeout(Duration::from_secs(300))
+                    .build()
+                    .map_err(|e| e.to_string())?
+                    .get(&url)
+                    .send()
+                    .map_err(|e| e.to_string())?;
+                let mut file = std::fs::File::create(&temp_path_dl).map_err(|e| e.to_string())?;
+                std::io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
+                Ok(())
+            })();
+            if let Err(e) = result {
+                *download_err_dl.lock().unwrap() = Some(e);
             }
-            let sum_sq: f32 = samples[start..end]
-                .iter()
-                .map(|&s| { let f = s as f32 / i16::MAX as f32; f * f })
-                .sum();
-            peaks.push((sum_sq / (end - start) as f32).sqrt());
+            download_done_dl.store(true, Ordering::Release);
+        });
+
+        // Wait until enough bytes are written for format probing (64 KB), or download finishes
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let size = std::fs::metadata(&temp_path).map(|m| m.len()).unwrap_or(0);
+            if size >= 65536 || download_done.load(Ordering::Acquire) {
+                break;
+            }
+            if Instant::now() > deadline {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
         }
 
-        let max_peak = peaks.iter().cloned().fold(0.0f32, f32::max);
+        if let Some(e) = download_err.lock().unwrap().take() {
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(e);
+        }
+
+        let reader = GrowingFileReader {
+            file: match std::fs::File::open(&temp_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = dl_handle.join();
+                    let _ = std::fs::remove_file(&temp_path);
+                    return Err(e.to_string());
+                }
+            },
+            download_done: download_done.clone(),
+        };
+
+        let source = match Decoder::new(reader) {
+            Ok(s) => s,
+            Err(e) => {
+                let _ = dl_handle.join();
+                let _ = std::fs::remove_file(&temp_path);
+                return Err(e.to_string());
+            }
+        };
+
+        let channels = source.channels() as usize;
+        let sample_rate = source.sample_rate() as f64;
+
+        if channels == 0 {
+            let _ = dl_handle.join();
+            let _ = std::fs::remove_file(&temp_path);
+            return Err("no audio channels".into());
+        }
+
+        // Compute bucket size from known track duration; fall back to 30-min estimate
+        let estimated_frames = if duration_secs > 0.0 {
+            (duration_secs * sample_rate) as usize
+        } else {
+            30 * 60 * 44100
+        };
+        let bucket_size = (estimated_frames / BUCKET_COUNT).max(1);
+
+        let mut raw_peaks: Vec<f32> = Vec::with_capacity(BUCKET_COUNT);
+        let mut bucket_sum_sq = 0.0f32;
+        let mut bucket_count = 0usize;
+        let mut chan_idx = 0usize;
+        let mut frame_sum = 0.0f32;
+
+        for sample in source {
+            // Mix channels down to mono as we go
+            frame_sum += sample as f32 / i16::MAX as f32;
+            chan_idx += 1;
+
+            if chan_idx == channels {
+                let mono_val = frame_sum / channels as f32;
+                frame_sum = 0.0;
+                chan_idx = 0;
+
+                bucket_sum_sq += mono_val * mono_val;
+                bucket_count += 1;
+
+                if bucket_count >= bucket_size {
+                    let rms = (bucket_sum_sq / bucket_count as f32).sqrt();
+                    raw_peaks.push(rms);
+                    bucket_sum_sq = 0.0;
+                    bucket_count = 0;
+
+                    // Emit one bucket at a time so bars grow left-to-right while downloading
+                    let _ = app.emit("waveform_chunk", serde_json::json!({
+                        "track_id": track_id,
+                        "offset": raw_peaks.len() - 1,
+                        "peaks": [rms]
+                    }));
+
+                    if raw_peaks.len() >= BUCKET_COUNT {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Flush any partial final bucket
+        if bucket_count > 0 && raw_peaks.len() < BUCKET_COUNT {
+            let rms = (bucket_sum_sq / bucket_count as f32).sqrt();
+            raw_peaks.push(rms);
+            let _ = app.emit("waveform_chunk", serde_json::json!({
+                "track_id": track_id,
+                "offset": raw_peaks.len() - 1,
+                "peaks": [rms]
+            }));
+        }
+        while raw_peaks.len() < BUCKET_COUNT {
+            raw_peaks.push(0.0);
+        }
+
+        // Normalize then emit complete set for caching
+        let max_peak = raw_peaks.iter().cloned().fold(0.0f32, f32::max);
         if max_peak > 0.0 {
-            for p in &mut peaks {
+            for p in &mut raw_peaks {
                 *p /= max_peak;
             }
         }
+        let _ = app.emit("waveform_complete", serde_json::json!({
+            "track_id": track_id,
+            "peaks": raw_peaks
+        }));
 
-        Ok(peaks)
+        let _ = dl_handle.join();
+        let _ = std::fs::remove_file(&temp_path);
+
+        Ok(())
     })
     .await
     .map_err(|e| e.to_string())?
