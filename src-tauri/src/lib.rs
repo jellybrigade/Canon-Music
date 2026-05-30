@@ -15,7 +15,8 @@ fn http_client() -> reqwest::blocking::Client {
 }
 
 /// Wraps a growing temp file so the decoder blocks instead of getting premature EOF.
-/// When the download thread is still writing, reads that hit EOF retry until data arrives.
+/// When the download thread is still writing, checks available bytes before reading to
+/// avoid hitting EOF — only waits when not enough data is available yet.
 struct GrowingFileReader {
     file: std::fs::File,
     download_done: Arc<AtomicBool>,
@@ -24,12 +25,23 @@ struct GrowingFileReader {
 impl Read for GrowingFileReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         loop {
-            match self.file.read(buf) {
-                Ok(0) if !self.download_done.load(Ordering::Acquire) => {
-                    std::thread::sleep(Duration::from_millis(20));
-                }
-                other => return other,
+            if self.download_done.load(Ordering::Acquire) {
+                return self.file.read(buf);
             }
+
+            // Compute how many bytes are safely readable without risking EOF.
+            // Leave an 8 KB margin to match Supersonic's approach.
+            let current_pos = self.file.seek(std::io::SeekFrom::Current(0))?;
+            let file_size = self.file.metadata().map(|m| m.len()).unwrap_or(0);
+            let safe_bytes = file_size.saturating_sub(current_pos + 8192) as usize;
+
+            if safe_bytes == 0 {
+                std::thread::sleep(Duration::from_millis(10));
+                continue;
+            }
+
+            let read_len = buf.len().min(safe_bytes);
+            return self.file.read(&mut buf[..read_len]);
         }
     }
 }
@@ -306,7 +318,7 @@ async fn audio_extract_waveform(
             if Instant::now() > deadline {
                 break;
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
         if let Some(e) = download_err.lock().unwrap().take() {
@@ -352,11 +364,15 @@ async fn audio_extract_waveform(
         };
         let bucket_size = (estimated_frames / BUCKET_COUNT).max(1);
 
+        const EMIT_BATCH: usize = 10; // emit every N bars to reduce IPC round-trips
+
         let mut raw_peaks: Vec<f32> = Vec::with_capacity(BUCKET_COUNT);
         let mut bucket_sum_sq = 0.0f32;
         let mut bucket_count = 0usize;
         let mut chan_idx = 0usize;
         let mut frame_sum = 0.0f32;
+        let mut pending_batch: Vec<f32> = Vec::with_capacity(EMIT_BATCH);
+        let mut batch_offset = 0usize;
 
         for sample in source {
             // Mix channels down to mono as we go
@@ -374,21 +390,34 @@ async fn audio_extract_waveform(
                 if bucket_count >= bucket_size {
                     let rms = (bucket_sum_sq / bucket_count as f32).sqrt();
                     raw_peaks.push(rms);
+                    pending_batch.push(rms);
                     bucket_sum_sq = 0.0;
                     bucket_count = 0;
 
-                    // Emit one bucket at a time so bars grow left-to-right while downloading
-                    let _ = app.emit("waveform_chunk", serde_json::json!({
-                        "track_id": track_id,
-                        "offset": raw_peaks.len() - 1,
-                        "peaks": [rms]
-                    }));
+                    if pending_batch.len() >= EMIT_BATCH {
+                        let _ = app.emit("waveform_chunk", serde_json::json!({
+                            "track_id": track_id,
+                            "offset": batch_offset,
+                            "peaks": pending_batch
+                        }));
+                        batch_offset = raw_peaks.len();
+                        pending_batch.clear();
+                    }
 
                     if raw_peaks.len() >= BUCKET_COUNT {
                         break;
                     }
                 }
             }
+        }
+
+        // Flush remaining batch
+        if !pending_batch.is_empty() {
+            let _ = app.emit("waveform_chunk", serde_json::json!({
+                "track_id": track_id,
+                "offset": batch_offset,
+                "peaks": pending_batch
+            }));
         }
 
         // Flush any partial final bucket

@@ -221,7 +221,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         }
       );
 
-      void invoke("audio_extract_waveform", { trackId, url, durationSecs: get().currentTrack?.duration ?? 0 });
+      // Request low-bitrate audio for analysis — Navidrome transcodes to ~64kbps mono,
+      // 4-8x less data to download and decode vs full-quality stream.
+      const waveformUrl = (() => {
+        try {
+          const u = new URL(url);
+          u.searchParams.set("maxBitRate", "32");
+          u.searchParams.set("format", "mp3");
+          return u.toString();
+        } catch {
+          return url;
+        }
+      })();
+      void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 });
     } catch (e) {
       console.error("Failed to fetch waveform:", e);
     }
