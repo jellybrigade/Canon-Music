@@ -1,0 +1,249 @@
+.home-view {
+  overflow-y: auto;
+  height: 100%;
+  padding-bottom: 120px;
+}
+
+/* ── Suggestion Grid ──────────────────────────────── */
+
+.suggestion-grid {
+  display: flex;
+  gap: 3px;
+  height: 220px;
+  flex-shrink: 0;
+}
+
+.suggestion-card {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.suggestion-card__bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.14);
+  filter: blur(28px);
+  opacity: 0.82;
+  pointer-events: none;
+  transition: transform 0.4s ease, filter 0.25s;
+}
+
+.suggestion-card:hover .suggestion-card__bg {
+  transform: scale(1.18);
+  filter: blur(28px) brightness(0.8);
+}
+
+.suggestion-card__overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.44);
+  pointer-events: none;
+  transition: background 0.2s;
+}
+
+.suggestion-card:hover .suggestion-card__overlay {
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.suggestion-card__chip {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.3);
+  border-left: 2px solid var(--chip-accent, #396cd8);
+  border-radius: 3px;
+  padding: 3px 7px 3px 6px;
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.suggestion-card__content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: 11px;
+  padding: 14px;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.6) 0%, transparent 100%);
+}
+
+.suggestion-card__art {
+  width: 68px;
+  height: 68px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65));
+  display: block;
+}
+
+.suggestion-card__art--placeholder {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.suggestion-card__meta {
+  min-width: 0;
+  padding-bottom: 2px;
+}
+
+.suggestion-card__title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+
+.suggestion-card__artist {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.62);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Carousel section ─────────────────────────────── */
+
+.home-section {
+  padding: 32px 48px 0;
+}
+
+.home-section__title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 14px;
+  opacity: 0.85;
+}
+
+.album-carousel {
+  position: relative;
+}
+
+.album-carousel__track {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  padding-bottom: 4px;
+}
+
+.album-carousel__track::-webkit-scrollbar {
+  display: none;
+}
+
+.album-carousel__arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(calc(-50% - 16px));
+  background: var(--color-surface, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 2;
+  backdrop-filter: blur(10px);
+}
+
+.album-carousel:hover .album-carousel__arrow {
+  opacity: 1;
+}
+
+.album-carousel__arrow:hover {
+  background: var(--color-surface-raised, #2a2a2a);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.album-carousel__arrow--prev { left: -14px; }
+.album-carousel__arrow--next { right: -14px; }
+
+/* ── Cards ────────────────────────────────────────── */
+
+.carousel-card {
+  flex-shrink: 0;
+  width: 160px;
+  cursor: pointer;
+}
+
+.carousel-card:hover .carousel-card__art {
+  filter: brightness(0.85);
+}
+
+.carousel-card__art {
+  width: 160px;
+  height: 160px;
+  object-fit: cover;
+  border-radius: 4px;
+  display: block;
+  transition: filter 0.2s;
+}
+
+.carousel-card__art--placeholder {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.carousel-card__name {
+  font-size: 0.82rem;
+  margin-top: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.carousel-card__artist {
+  font-size: 0.75rem;
+  opacity: 0.55;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Skeleton shimmer ─────────────────────────────── */
+
+.carousel-card--skeleton .carousel-card__art {
+  background: rgba(255, 255, 255, 0.07);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.carousel-card--skeleton .carousel-card__name,
+.carousel-card--skeleton .carousel-card__artist {
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.07);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  color: transparent;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
