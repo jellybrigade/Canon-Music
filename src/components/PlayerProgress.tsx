@@ -28,6 +28,17 @@ export function PlayerProgress() {
     void seek(ratio * duration);
   }
 
+  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (duration <= 0) return;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+      e.preventDefault();
+      void seek(Math.min(duration, elapsed + duration * 0.05));
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+      e.preventDefault();
+      void seek(Math.max(0, elapsed - duration * 0.05));
+    }
+  }
+
   const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
 
   return (
@@ -36,9 +47,14 @@ export function PlayerProgress() {
       <div
         ref={progressBarRef}
         className={`player-progress-bar${useWaveform ? " player-progress-bar--waveform" : ""}`}
-        role="progressbar"
+        role="slider"
+        aria-label="Seek"
         aria-valuenow={Math.round(progress * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        tabIndex={duration > 0 ? 0 : -1}
         onClick={handleProgressClick}
+        onKeyDown={handleProgressKeyDown}
         style={{ cursor: duration > 0 ? "pointer" : "default" }}
       >
         {useWaveform ? (

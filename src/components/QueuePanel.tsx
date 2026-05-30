@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { X, GripVertical, Play } from "lucide-react";
+import { useRef, useState } from "react";
+import { X, GripVertical, Play, Search } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
@@ -29,6 +29,8 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [filter, setFilter] = useState("");
+  const filterInputRef = useRef<HTMLInputElement>(null);
 
   if (!isQueueOpen) return null;
 
@@ -38,6 +40,14 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   });
 
   const lastPosition = queue.length - 1;
+
+  const filterLower = filter.toLowerCase();
+  const visibleTracks = filter
+    ? orderedTracks.filter(({ track }) =>
+        track.title.toLowerCase().includes(filterLower) ||
+        (track.artist ?? "").toLowerCase().includes(filterLower)
+      )
+    : orderedTracks;
 
   function handleDragStart(e: React.DragEvent, position: number) {
     setDragFrom(position);
@@ -73,11 +83,32 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
           <X size={16} />
         </button>
       </div>
-      <div className="queue-list">
-        {orderedTracks.length === 0 && (
-          <p className="queue-empty">No tracks in queue</p>
+      <div className="queue-filter">
+        <Search size={13} className="queue-filter-icon" aria-hidden />
+        <input
+          ref={filterInputRef}
+          className="queue-filter-input"
+          type="text"
+          placeholder="Filter queue…"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          aria-label="Filter queue"
+        />
+        {filter && (
+          <button
+            className="queue-filter-clear"
+            onClick={() => { setFilter(""); filterInputRef.current?.focus(); }}
+            aria-label="Clear filter"
+          >
+            <X size={12} />
+          </button>
         )}
-        {orderedTracks.map(({ position, track }) => (
+      </div>
+      <div className="queue-list">
+        {visibleTracks.length === 0 && (
+          <p className="queue-empty">{filter ? "No matches" : "No tracks in queue"}</p>
+        )}
+        {visibleTracks.map(({ position, track }) => (
           <div
             key={`${track.id}-${position}`}
             className={[
@@ -85,11 +116,11 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
               position === queueIndex ? "queue-row--active" : "",
               dropTarget === position && dragFrom !== position ? "queue-row--drop-target" : "",
             ].filter(Boolean).join(" ")}
-            draggable
-            onDragStart={(e) => handleDragStart(e, position)}
-            onDragOver={(e) => handleDragOver(e, position)}
-            onDrop={(e) => handleDrop(e, position)}
-            onDragEnd={handleDragEnd}
+            draggable={!filter}
+            onDragStart={filter ? undefined : (e) => handleDragStart(e, position)}
+            onDragOver={filter ? undefined : (e) => handleDragOver(e, position)}
+            onDrop={filter ? undefined : (e) => handleDrop(e, position)}
+            onDragEnd={filter ? undefined : handleDragEnd}
             onClick={() => void playFromQueueIndex(position)}
             onContextMenu={(e) => {
               e.preventDefault();

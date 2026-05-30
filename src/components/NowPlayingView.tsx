@@ -616,6 +616,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                         key={i}
                         ref={isActive ? activeLyricRef : undefined}
                         className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+                        onClick={() => void seek(line.timeSec)}
+                        style={{ cursor: "pointer" }}
                       >
                         {line.text || " "}
                       </div>

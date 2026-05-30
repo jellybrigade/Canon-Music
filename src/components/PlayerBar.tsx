@@ -179,7 +179,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           >
             <List size={22} />
           </button>
-          <div className="player-volume">
+          <div
+            className="player-volume"
+            onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
+          >
             <Volume2 size={18} className="player-volume-icon" aria-hidden />
             <input
               type="range"
