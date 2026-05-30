@@ -101,6 +101,7 @@ interface PlayerState {
   radioMode: RadioMode;
 
   isQueueOpen: boolean;
+  accentColor: string | null;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
@@ -122,6 +123,7 @@ interface PlayerState {
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
+  setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
 }
@@ -230,6 +232,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioSeed: null,
     radioMode: "curated",
     isQueueOpen: false,
+    accentColor: null,
 
     play: async (track, streamUrl) => {
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });
@@ -427,6 +430,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     toggleQueue: () => {
       set((s) => ({ isQueueOpen: !s.isQueueOpen }));
+    },
+
+    setAccentColor: (color) => {
+      set({ accentColor: color });
     },
 
     removeFromQueue: async (position) => {

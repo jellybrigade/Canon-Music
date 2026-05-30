@@ -37,6 +37,7 @@ import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
 import type { RadioMode, CurrentTrack } from "./store/player";
+import { extractAccent } from "./lib/artColor";
 import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
@@ -128,6 +129,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [searchRaw, searchOpen, clearSearch]);
 
+  const setAccentColor = usePlayerStore((s) => s.setAccentColor);
+
   const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -154,6 +157,16 @@ export default function App() {
       return getStreamUrl(srv.url, srv.username, credential, navTrackId);
     });
   }, [serverWithCred, setStreamUrlFor]);
+
+  useEffect(() => {
+    const artUrl = currentTrack?.coverArtUrl ?? null;
+    if (!artUrl) { setAccentColor(null); return; }
+    let cancelled = false;
+    void extractAccent(artUrl).then((color) => {
+      if (!cancelled) setAccentColor(color);
+    });
+    return () => { cancelled = true; };
+  }, [currentTrack?.coverArtUrl, setAccentColor]);
 
   const NAV_ITEMS: { id: View; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: "nowplaying", label: "Now Playing", icon: <Headphones size={24} /> },

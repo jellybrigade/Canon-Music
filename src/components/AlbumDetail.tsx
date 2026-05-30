@@ -188,7 +188,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <p className="album-detail-artist">{album.artist}</p>
               )
             )}
-            {album.year && <p className="album-detail-year">{album.year}</p>}
+            {album.year && !(albumIdentity?.confirmed_at && albumIdentity.release_date) && (
+              <p className="album-detail-year">{album.year}</p>
+            )}
             {albumIdentity?.confirmed_at ? (
               (albumIdentity.release_date || albumIdentity.label || albumIdentity.country) && (
                 <div className="album-detail-identity">
