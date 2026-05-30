@@ -102,6 +102,7 @@ interface PlayerState {
 
   isQueueOpen: boolean;
   accentColor: string | null;
+  waveformPeaks: number[] | null;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
@@ -126,6 +127,7 @@ interface PlayerState {
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
+  setWaveformPeaks: (peaks: number[] | null) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
@@ -166,13 +168,42 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
+  async function fetchWaveform(trackId: string, url: string) {
+    try {
+      const db = await getDb();
+      type Row = { peaks_json: string };
+      const rows = await db.select<Row[]>(
+        "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
+        [trackId]
+      );
+      if (rows[0]) {
+        if (get().currentTrack?.id === trackId) {
+          set({ waveformPeaks: JSON.parse(rows[0].peaks_json) as number[] });
+        }
+        return;
+      }
+      const peaks = await invoke<number[]>("audio_extract_waveform", { url });
+      if (get().currentTrack?.id === trackId) {
+        set({ waveformPeaks: peaks });
+      }
+      const now = Math.floor(Date.now() / 1000);
+      await db.execute(
+        "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
+        [trackId, JSON.stringify(peaks), now]
+      );
+    } catch (e) {
+      console.error("Failed to fetch waveform:", e);
+    }
+  }
+
   async function playTrack(track: CurrentTrack, url: string) {
-    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now() });
+    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null });
     stopElapsedTimer();
     try {
       await invoke("audio_play", { url });
       set({ isPlaying: true, isLoading: false });
       startElapsedTimer();
+      void fetchWaveform(track.id, url);
     } catch (e) {
       set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -233,6 +264,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioMode: "curated",
     isQueueOpen: false,
     accentColor: null,
+    waveformPeaks: null,
+
+    setWaveformPeaks: (peaks) => {
+      set({ waveformPeaks: peaks });
+    },
 
     play: async (track, streamUrl) => {
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });

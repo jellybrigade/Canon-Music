@@ -1,5 +1,5 @@
 use keyring::Entry;
-use rodio::{Decoder, OutputStreamHandle, Sink};
+use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
@@ -227,6 +227,56 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
     pos.offset = 0.0;
 }
 
+#[tauri::command]
+async fn audio_extract_waveform(url: String) -> Result<Vec<f32>, String> {
+    tokio::task::spawn_blocking(move || -> Result<Vec<f32>, String> {
+        let bytes = http_client()
+            .get(&url)
+            .send()
+            .and_then(|r| r.bytes())
+            .map_err(|e| e.to_string())?
+            .to_vec();
+
+        let source = Decoder::new(Cursor::new(bytes)).map_err(|e| e.to_string())?;
+        let channels = source.channels() as usize;
+        let samples: Vec<i16> = source.collect();
+
+        if samples.is_empty() || channels == 0 {
+            return Ok(vec![0.0; 200]);
+        }
+
+        let total_frames = samples.len() / channels;
+        let bucket_count = 200usize;
+        let bucket_size = (total_frames / bucket_count).max(1);
+
+        let mut peaks = Vec::with_capacity(bucket_count);
+        for b in 0..bucket_count {
+            let start = b * bucket_size * channels;
+            let end = ((b + 1) * bucket_size * channels).min(samples.len());
+            if start >= end {
+                peaks.push(0.0f32);
+                continue;
+            }
+            let sum_sq: f32 = samples[start..end]
+                .iter()
+                .map(|&s| { let f = s as f32 / i16::MAX as f32; f * f })
+                .sum();
+            peaks.push((sum_sq / (end - start) as f32).sqrt());
+        }
+
+        let max_peak = peaks.iter().cloned().fold(0.0f32, f32::max);
+        if max_peak > 0.0 {
+            for p in &mut peaks {
+                *p /= max_peak;
+            }
+        }
+
+        Ok(peaks)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Spawn a thread to own OutputStream so it stays alive for the process lifetime.
@@ -274,6 +324,7 @@ pub fn run() {
             audio_get_pos,
             audio_volume,
             audio_seek,
+            audio_extract_waveform,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

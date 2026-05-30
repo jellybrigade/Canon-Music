@@ -53,6 +53,7 @@ function useScrobbleQueueCount() {
 
 export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer }: Props) {
   const [lastfmKey, setLastfmKey] = useSetting("lastfm.api_key", "");
+  const [showWaveform, setShowWaveform] = useSetting("player.show_waveform", "false");
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "90");
   const [pullMode, setPullMode] = useSetting("tags.pull_mode_default", "review");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
@@ -653,6 +654,22 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </button>
           <span className="settings-hint">Only runs on albums not yet attempted. Rate-limited; may take a while.</span>
         </div>
+      </section>
+
+      {/* ── Playback ── */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">Playback</h3>
+        <label className="settings-field settings-field--inline">
+          <input
+            type="checkbox"
+            checked={showWaveform === "true"}
+            onChange={(e) => void setShowWaveform(e.target.checked ? "true" : "false")}
+          />
+          <span>Show waveform progress bar</span>
+        </label>
+        <p className="settings-section-desc">
+          Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally.
+        </p>
       </section>
 
       {/* ── Tags ── */}
