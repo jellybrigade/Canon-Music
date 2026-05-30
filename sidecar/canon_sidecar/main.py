@@ -8,10 +8,10 @@ Env vars:
   CANON_SIDECAR_PORT      Optional. Bind port (default 8765).
 """
 
-import os
-import shutil
-import secrets
+import json
 import logging
+import os
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -65,12 +65,14 @@ def _resolve_path(file_path: str) -> Path:
     return resolved
 
 
-def _backup(path: Path) -> Path:
+def _backup(path: Path, old_tags: dict[str, str | None]) -> Path:
+    """Save pre-write tag values as a tiny JSON file — not a full file copy."""
     backup_dir = path.parent / ".canon-backup"
     backup_dir.mkdir(exist_ok=True)
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup_path = backup_dir / f"{path.name}.{timestamp}"
-    shutil.copy2(path, backup_path)
+    backup_path = backup_dir / f"{path.name}.{timestamp}.json"
+    record = {"file": str(path), "timestamp": timestamp, "tags": old_tags}
+    backup_path.write_text(json.dumps(record, indent=2))
     return backup_path
 
 
@@ -164,7 +166,8 @@ async def write_tags(request: Request, body: WriteRequest, authorization: str | 
         return JSONResponse({"resolved_path": str(resolved), "diff": diff})
 
     if diff:
-        backup_path = _backup(resolved)
+        old_tags = {d["field"]: d["old_value"] for d in diff}
+        backup_path = _backup(resolved, old_tags)
         logger.info("Backup created: %s", backup_path)
         for field, new_value in body.tags.items():
             _write_tag(f, field, new_value)
