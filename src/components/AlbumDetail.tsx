@@ -58,6 +58,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
   const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
+  const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
   const recordFailed = useRecordFailedLookup();
@@ -134,7 +135,17 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   function handlePlayAlbum() {
     if (!tracks || tracks.length === 0) return;
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, 0);
+    const trackObjs = tracks.map(buildTrackObj);
+    if (playAction === "queue_last") {
+      for (const t of trackObjs) addToQueue(t, streamUrlFor);
+    } else if (playAction === "queue_next") {
+      for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
+    } else if (playAction === "shuffle") {
+      const shuffled = [...trackObjs].sort(() => Math.random() - 0.5);
+      void playQueue(shuffled, streamUrlFor, 0);
+    } else {
+      void playQueue(trackObjs, streamUrlFor, 0);
+    }
   }
 
   const displayGenres = useMemo((): Array<{ id: string | null; name: string }> => {

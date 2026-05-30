@@ -8,9 +8,10 @@
 
 .suggestion-grid {
   display: flex;
-  gap: 3px;
-  height: 220px;
+  gap: 10px;
+  height: 280px;
   flex-shrink: 0;
+  padding: 20px 24px 0;
 }
 
 .suggestion-card {
@@ -19,6 +20,17 @@
   overflow: hidden;
   cursor: pointer;
   min-width: 0;
+  border-radius: 10px;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.suggestion-card:first-child {
+  flex: 1.8;
+}
+
+.suggestion-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 .suggestion-card__bg {
@@ -56,16 +68,16 @@
   top: 12px;
   left: 12px;
   z-index: 2;
-  font-size: 0.5rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: #fff;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.35);
   border-left: 2px solid var(--chip-accent, #396cd8);
-  border-radius: 3px;
-  padding: 3px 7px 3px 6px;
-  backdrop-filter: blur(6px);
+  border-radius: 4px;
+  padding: 4px 8px 4px 7px;
+  backdrop-filter: blur(8px);
   pointer-events: none;
   white-space: nowrap;
 }
