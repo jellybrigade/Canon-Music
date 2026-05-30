@@ -9,6 +9,7 @@ const ArtistDetail = lazy(() => import("./components/ArtistDetail").then((m) => 
 const PlaylistList = lazy(() => import("./components/PlaylistList").then((m) => ({ default: m.PlaylistList })));
 const PlaylistDetail = lazy(() => import("./components/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
 const SearchResults  = lazy(() => import("./components/SearchResults").then((m) => ({ default: m.SearchResults })));
+const CommandPalette = lazy(() => import("./components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
 const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
@@ -98,6 +99,7 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: searchResults } = useSearch(searchQuery);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchRaw(value);
@@ -114,6 +116,11 @@ export default function App() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setCommandPaletteOpen((open) => !open);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         setSearchOpen(true);
@@ -696,6 +703,7 @@ export default function App() {
                 {icon}
                 {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
               </span>
+              <span className="sidebar-btn-label">{label}</span>
             </button>
           ))}
         </nav>
@@ -705,6 +713,14 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} serverWithCred={serverWithCred ?? undefined} />
       )}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
+        onSelectAlbum={(album) => { setSelectedAlbum(album); navigateTo("library"); setCommandPaletteOpen(false); }}
+        onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
+        serverWithCredential={serverWithCred ?? undefined}
+      />
     </Suspense>
   );
 }
