@@ -32575,6 +32575,67 @@
       "canonical_key": "zimdancehall",
       "parents": [],
       "section": "scenes-and-movements"
+    },
+    {
+      "id": "classic-rock",
+      "name": "Classic Rock",
+      "type": "genre",
+      "canonical_key": "classic rock",
+      "parents": [
+        "rock"
+      ],
+      "section": "genres"
+    },
+    {
+      "id": "indie",
+      "name": "Indie",
+      "type": "genre",
+      "canonical_key": "indie",
+      "parents": [
+        "rock"
+      ],
+      "section": "genres"
+    },
+    {
+      "id": "deutschrap",
+      "name": "Deutschrap",
+      "type": "genre",
+      "canonical_key": "deutschrap",
+      "parents": [
+        "hip-hop"
+      ],
+      "section": "genres"
+    },
+    {
+      "id": "j-rock",
+      "name": "J-Rock",
+      "type": "genre",
+      "canonical_key": "j-rock",
+      "parents": [
+        "rock"
+      ],
+      "section": "genres"
+    },
+    {
+      "id": "progressive-death-metal",
+      "name": "Progressive Death Metal",
+      "type": "genre",
+      "canonical_key": "progressive death metal",
+      "parents": [
+        "death-metal",
+        "progressive-metal"
+      ],
+      "section": "genres"
+    },
+    {
+      "id": "contemporary-classical",
+      "name": "Contemporary Classical",
+      "type": "genre",
+      "canonical_key": "contemporary classical",
+      "parents": [
+        "western-classical-music"
+      ],
+      "section": "genres"
     }
   ]
 }
