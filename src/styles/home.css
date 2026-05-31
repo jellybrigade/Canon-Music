@@ -9,9 +9,45 @@
 .home-greeting {
   padding: 36px 28px 28px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+
+.home-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 0.3em 0.6em;
+  width: 440px;
+  transition: border-color 0.2s, width 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.2s;
+}
+
+.home-search-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.35);
+  width: 560px;
+}
+
+.home-search-kbd {
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.home-search-bar:focus-within .home-search-kbd {
+  opacity: 0;
 }
 
 .home-greeting__text {

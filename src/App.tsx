@@ -468,6 +468,7 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={(album) => navigateTo("library", { album })}
+                onPlayTrack={(id) => { void handlePlayTrack(id); }}
               />
             ) : <main className="content-main" />}
           </Suspense>
