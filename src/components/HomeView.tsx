@@ -122,7 +122,7 @@ function buildForYouGroups(
   };
 
   if (recentItems) {
-    groupFrom("Jump back in", recentItems.filter(a => a.artwork_url));
+    groupFrom("Jump back in", recentItems);
   }
   groupFrom("On repeat", onRepeat as AlbumRow[]);
   groupFrom("Rediscover", rediscover as AlbumRow[]);
@@ -136,7 +136,7 @@ function buildForYouGroups(
   }
 
   if (lovedSource) {
-    groupFrom("Loved", lovedSource.filter(a => a.artwork_url));
+    groupFrom("Loved", lovedSource);
   }
 
   return groups;
@@ -237,10 +237,9 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
       </div>
       <div className="home-suggestion-grid">
         {groups.map(group => {
-          const kickerColorKey = Object.keys(KICKER_COLORS).find(
-            k => k !== "_default" && group.kicker.startsWith(k)
-          ) ?? "_default";
-          const kickerColor = KICKER_COLORS[kickerColorKey] ?? KICKER_COLORS._default;
+          const kickerColor = KICKER_COLORS[group.kicker]
+            ?? (group.kicker.startsWith("More from") ? KICKER_COLORS["More from"] : undefined)
+            ?? KICKER_COLORS._default;
           return (
             <div
               key={group.kicker}
