@@ -261,11 +261,14 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                       onClick={() => onSelectAlbum(album)}
                       role="button"
                       tabIndex={0}
-                      title={album.artist ? `${album.name} · ${album.artist}` : album.name}
                       onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} />
+                        <div className="album-overlay">
+                          <span className="album-name">{album.name}</span>
+                          {album.artist && <span className="album-artist">{album.artist}</span>}
+                        </div>
                         <button
                           className="suggestion-card__play"
                           onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -282,7 +285,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
               {group.albums.length > 2 && (
                 <div className="suggestion-card__row suggestion-card__row--bottom">
                   {group.albums.slice(2, 6).map(album => {
-                    const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 160);
+                    const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                     return (
                       <div
                         key={album.id}
@@ -294,7 +297,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                         onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
