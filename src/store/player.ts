@@ -133,6 +133,7 @@ interface PlayerState {
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let elapsedInterval: ReturnType<typeof setInterval> | null = null;
+  let cancelWaveform: (() => void) | null = null;
 
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
@@ -170,8 +171,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   }
 
   async function fetchWaveform(trackId: string, url: string) {
+    // Cancel any in-flight extraction from the previous track before registering new listeners
+    cancelWaveform?.();
+    cancelWaveform = null;
+
     try {
       const db = await getDb();
+
+      const settingRows = await db.select<{ value: string }[]>(
+        "SELECT value FROM settings WHERE key = 'player.show_waveform'",
+        []
+      );
+      if ((settingRows[0]?.value ?? "false") !== "true") return;
+
       type Row = { peaks_json: string };
       const rows = await db.select<Row[]>(
         "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
@@ -207,9 +219,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>(
         "waveform_complete",
         async (event) => {
+          // Guard before unlisten: a stale event from a prior track must not kill the current track's listeners
+          if (event.payload.track_id !== trackId) return;
           unlistenChunk();
           unlistenComplete();
-          if (event.payload.track_id !== trackId) return;
+          cancelWaveform = null;
           if (get().currentTrack?.id === trackId) {
             set({ waveformPeaks: event.payload.peaks });
           }
@@ -220,6 +234,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           );
         }
       );
+
+      // Hold references so a future track can cancel these listeners if it starts before waveform_complete fires
+      cancelWaveform = () => {
+        unlistenChunk();
+        unlistenComplete();
+      };
 
       // Request low-bitrate audio for analysis — Navidrome transcodes to ~64kbps mono,
       // 4-8x less data to download and decode vs full-quality stream.

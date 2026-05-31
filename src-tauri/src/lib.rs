@@ -14,6 +14,13 @@ fn http_client() -> reqwest::blocking::Client {
         .expect("failed to build HTTP client")
 }
 
+fn http_client_long() -> reqwest::blocking::Client {
+    reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(300))
+        .build()
+        .expect("failed to build HTTP client")
+}
+
 /// Wraps a growing temp file so the decoder blocks instead of getting premature EOF.
 /// When the download thread is still writing, checks available bytes before reading to
 /// avoid hitting EOF — only waits when not enough data is available yet.
@@ -291,10 +298,7 @@ async fn audio_extract_waveform(
         // Stream HTTP response bytes into the temp file concurrently with analysis
         let dl_handle = std::thread::spawn(move || {
             let result = (|| -> Result<(), String> {
-                let mut response = reqwest::blocking::Client::builder()
-                    .timeout(Duration::from_secs(300))
-                    .build()
-                    .map_err(|e| e.to_string())?
+                let mut response = http_client_long()
                     .get(&url)
                     .send()
                     .map_err(|e| e.to_string())?;

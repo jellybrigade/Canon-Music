@@ -6,7 +6,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import "./CommandPalette.css";
 
-type View = "home" | "library" | "artists" | "playlists" | "settings" | "nowplaying";
+type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
 
 interface NavCommand {
   kind: "nav";
@@ -99,7 +99,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPla
         year: null,
         artwork_url: item.artwork_url,
       });
-      onNavigate("library");
+      // onSelectAlbum already calls navigateTo("library") and closes the palette
     } else if (item.kind === "track") {
       onPlayTrack(item.id);
     } else if (item.kind === "artist") {

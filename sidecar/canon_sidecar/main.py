@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import secrets
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -66,10 +67,12 @@ def _resolve_path(file_path: str) -> Path:
 
 
 def _backup(path: Path, old_tags: dict[str, str | None]) -> Path:
-    """Save pre-write tag values as a tiny JSON file — not a full file copy."""
+    """Copy the audio file and save pre-write tag values for recovery."""
     backup_dir = path.parent / ".canon-backup"
     backup_dir.mkdir(exist_ok=True)
     timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    # Full file copy — restores audio data if the write corrupts the file
+    shutil.copy2(path, backup_dir / f"{path.name}.{timestamp}.bak")
     backup_path = backup_dir / f"{path.name}.{timestamp}.json"
     record = {"file": str(path), "timestamp": timestamp, "tags": old_tags}
     backup_path.write_text(json.dumps(record, indent=2))
