@@ -139,7 +139,10 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
   }
 
   // Sync playlists — collect all track lists before deleting to avoid wipe on partial failure
-  const playlists = await fetchPlaylists(server.url, server.username, credential);
+  // Deduplicate by id: Navidrome can return shared playlists twice (own + shared view)
+  const rawPlaylists = await fetchPlaylists(server.url, server.username, credential);
+  const seen = new Set<string>();
+  const playlists = rawPlaylists.filter(pl => { if (seen.has(pl.id)) return false; seen.add(pl.id); return true; });
   let failedPlaylists = 0;
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
   const playlistsWithTracks: PlaylistWithTracks[] = [];
