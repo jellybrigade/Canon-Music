@@ -19,9 +19,16 @@ Release Canon to main. Run these steps in order — do not skip any.
    ```
 
 4. **Merge to main**:
+
+   These branches have unrelated histories, so `--allow-unrelated-histories` is required and will produce add/add conflicts on every file. Resolve all conflicts by taking development's version, then write the commit message explicitly with `--no-edit` forbidden — use `-m` instead. **Never use `git commit --no-edit` after resolving conflicts**: git appends a `# Conflicts:` block to `MERGE_MSG` that ends up in the stored commit message.
+
    ```bash
    git checkout main
-   git merge --no-ff development -m "$(cat <<'EOF'
+   git merge --no-ff --allow-unrelated-histories development
+   # Merge will fail with add/add conflicts on every file — that's expected
+   git checkout --theirs -- .
+   git add -A
+   git commit -m "$(cat <<'EOF'
    Canon vX.Y.Z
 
    ### Added

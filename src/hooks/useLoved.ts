@@ -17,6 +17,7 @@ export function useLoved() {
   // updates after the first render never propagate.
   const { data: lovedTrackArray = [] } = useQuery({
     queryKey: ["loved_tracks"],
+    staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<IdRow[]>("SELECT track_id as id FROM loved_tracks");
@@ -26,6 +27,7 @@ export function useLoved() {
 
   const { data: lovedAlbumArray = [] } = useQuery({
     queryKey: ["loved_albums"],
+    staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<IdRow[]>("SELECT album_id as id FROM loved_albums");
@@ -33,8 +35,21 @@ export function useLoved() {
     },
   });
 
+  const { data: lovedTrackAlbumArray = [] } = useQuery({
+    queryKey: ["loved_track_albums"],
+    staleTime: Infinity,
+    queryFn: async () => {
+      const db = await getDb();
+      const rows = await db.select<IdRow[]>(
+        "SELECT DISTINCT t.album_id as id FROM tracks t INNER JOIN loved_tracks lt ON lt.track_id = t.id WHERE t.album_id IS NOT NULL"
+      );
+      return rows.map((r) => r.id);
+    },
+  });
+
   const lovedTrackIds = useMemo(() => new Set(lovedTrackArray), [lovedTrackArray]);
   const lovedAlbumIds = useMemo(() => new Set(lovedAlbumArray), [lovedAlbumArray]);
+  const lovedTrackAlbumIds = useMemo(() => new Set(lovedTrackAlbumArray), [lovedTrackAlbumArray]);
 
   async function toggleTrackLove(trackId: string, serverWithCred: ServerWithCredential) {
     const { server, credential } = serverWithCred;
@@ -80,5 +95,5 @@ export function useLoved() {
     }
   }
 
-  return { lovedTrackIds, lovedAlbumIds, toggleTrackLove, toggleAlbumLove };
+  return { lovedTrackIds, lovedAlbumIds, lovedTrackAlbumIds, toggleTrackLove, toggleAlbumLove };
 }

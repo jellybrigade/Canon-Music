@@ -296,7 +296,10 @@ export async function fetchPlaylists(
   if (response.status !== "ok") {
     throw new Error(response.error?.message ?? "getPlaylists failed");
   }
-  return response.playlists?.playlist ?? [];
+  // Navidrome returns shared playlists twice (owner view + shared view); deduplicate by id.
+  const raw = response.playlists?.playlist ?? [];
+  const seen = new Set<string>();
+  return raw.filter(pl => { if (seen.has(pl.id)) return false; seen.add(pl.id); return true; });
 }
 
 export async function fetchPlaylistTracks(
