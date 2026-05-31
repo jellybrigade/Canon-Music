@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { usePlayerStore } from "../store/player";
+import { useSetting } from "../hooks/useSetting";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -14,6 +15,8 @@ export function PlayerProgress() {
   const elapsed = usePlayerStore((s) => s.elapsed);
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
   const seek = usePlayerStore((s) => s.seek);
+  const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
+  const [showWaveform] = useSetting("player.show_waveform", "false");
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
@@ -25,18 +28,46 @@ export function PlayerProgress() {
     void seek(ratio * duration);
   }
 
+  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (duration <= 0) return;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+      e.preventDefault();
+      void seek(Math.min(duration, elapsed + duration * 0.05));
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+      e.preventDefault();
+      void seek(Math.max(0, elapsed - duration * 0.05));
+    }
+  }
+
+  const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
+
   return (
     <div className="player-progress">
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
         ref={progressBarRef}
-        className="player-progress-bar"
-        role="progressbar"
+        className={`player-progress-bar${useWaveform ? " player-progress-bar--waveform" : ""}`}
+        role="slider"
+        aria-label="Seek"
         aria-valuenow={Math.round(progress * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        tabIndex={duration > 0 ? 0 : -1}
         onClick={handleProgressClick}
+        onKeyDown={handleProgressKeyDown}
         style={{ cursor: duration > 0 ? "pointer" : "default" }}
       >
-        <div className="player-progress-fill" style={{ width: `${progress * 100}%` }} />
+        {useWaveform ? (
+          waveformPeaks.map((peak, i) => (
+            <div
+              key={i}
+              className={`waveform-bar${i / waveformPeaks.length < progress ? " waveform-bar--filled" : ""}`}
+              style={{ "--peak": peak } as React.CSSProperties}
+            />
+          ))
+        ) : (
+          <div className="player-progress-fill" style={{ width: `${progress * 100}%` }} />
+        )}
       </div>
       <span className="player-duration">
         {duration > 0 ? formatDuration(duration) : ""}

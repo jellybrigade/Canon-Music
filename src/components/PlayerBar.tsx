@@ -27,10 +27,12 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const repeat        = usePlayerStore((s) => s.repeat);
   const isShuffled    = usePlayerStore((s) => s.isShuffled);
   const isQueueOpen   = usePlayerStore((s) => s.isQueueOpen);
+  const accentColor   = usePlayerStore((s) => s.accentColor);
   const pause         = usePlayerStore((s) => s.pause);
   const resume        = usePlayerStore((s) => s.resume);
   const next          = usePlayerStore((s) => s.next);
   const prev          = usePlayerStore((s) => s.prev);
+  const seek          = usePlayerStore((s) => s.seek);
   const setVolume     = usePlayerStore((s) => s.setVolume);
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
@@ -42,7 +44,41 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const artPopoverRef = useRef<HTMLDivElement>(null);
   const artThumbRef = useRef<HTMLButtonElement>(null);
 
+  const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevHoldFired = useRef(false);
+
+  const handlePrevPointerDown = () => {
+    prevHoldFired.current = false;
+    prevHoldTimer.current = setTimeout(() => {
+      prevHoldFired.current = true;
+      void seek(0);
+    }, 400);
+  };
+
+  const handlePrevPointerUp = () => {
+    if (prevHoldTimer.current) {
+      clearTimeout(prevHoldTimer.current);
+      prevHoldTimer.current = null;
+    }
+    if (!prevHoldFired.current) {
+      void prev();
+    }
+  };
+
+  const handlePrevPointerLeave = () => {
+    if (prevHoldTimer.current) {
+      clearTimeout(prevHoldTimer.current);
+      prevHoldTimer.current = null;
+    }
+  };
+
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
+
+  useEffect(() => {
+    return () => {
+      if (prevHoldTimer.current) clearTimeout(prevHoldTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!artOpen) return;
@@ -74,7 +110,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           Normalizing tags… {pullProgress.done} / {pullProgress.total}
         </div>
       )}
-      {!currentTrack ? null : <div className="player-bar">
+      {!currentTrack ? null : <div
+        className="player-bar"
+        style={accentColor ? { '--accent': accentColor, '--accent-hover': accentColor } as React.CSSProperties : undefined}
+      >
         <div className="player-section player-section--left">
           <button
             ref={artThumbRef}
@@ -107,7 +146,9 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             </button>
             <button
               className="player-btn"
-              onClick={() => void prev()}
+              onPointerDown={handlePrevPointerDown}
+              onPointerUp={handlePrevPointerUp}
+              onPointerLeave={handlePrevPointerLeave}
               disabled={queue.length === 0}
               aria-label="Previous"
             >
@@ -175,7 +216,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           >
             <List size={22} />
           </button>
-          <div className="player-volume">
+          <div
+            className="player-volume"
+            onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
+          >
             <Volume2 size={18} className="player-volume-icon" aria-hidden />
             <input
               type="range"

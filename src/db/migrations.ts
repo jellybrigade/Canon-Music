@@ -326,4 +326,14 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 18,
+    sql: `
+      CREATE TABLE IF NOT EXISTS waveform_cache (
+        track_id   TEXT PRIMARY KEY,
+        peaks_json TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];

@@ -13,6 +13,20 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.album-detail-hero-bg {
+  position: absolute;
+  inset: -40px;
+  background-size: cover;
+  background-position: center top;
+  filter: blur(55px) saturate(1.7) brightness(0.35);
+  opacity: 0.75;
+  z-index: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
 }
 
 .album-detail-back {
@@ -21,6 +35,8 @@
   padding: 0.2em 0.65em;
   box-shadow: none;
   opacity: 0.7;
+  position: relative;
+  z-index: 1;
 }
 
 .album-detail-back:hover {
@@ -31,6 +47,8 @@
   display: flex;
   gap: 1.25rem;
   align-items: flex-end;
+  position: relative;
+  z-index: 1;
 }
 
 .album-detail-art {
@@ -122,10 +140,26 @@
 }
 
 .album-detail-identity {
-  margin-top: 0.25rem;
+  margin: 0;
+}
+
+.mb-verified-facts {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.4em;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.mb-verified-facts span + span::before {
+  content: "·";
+  margin-right: 0.4em;
+  opacity: 0.5;
 }
 
 .album-tag-band {

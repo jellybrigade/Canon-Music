@@ -1,61 +1,172 @@
 # Canon Sidecar
 
-Tag-writing service for Canon. Runs on your music server (or local machine). Writes audio file tags via mutagen after creating a backup.
+Tag-writing service for Canon. Runs on your music server. Writes audio file tags via mutagen, saving a small JSON backup of old values before every write (no full-file copies).
 
-## Requirements
+---
 
-- Python 3.11+
-- `uv` or `pip`
+## Setup options
 
-## Run locally
+Pick the one that matches how you run your server.
 
-```bash
-cd sidecar
+---
 
-# With uv (recommended)
-uv run --extra dev uvicorn canon_sidecar.main:app --host 0.0.0.0 --port 8765 --reload
+### Option A — Docker Compose alongside Navidrome (most common)
 
-# With pip
-pip install -e ".[dev]"
-uvicorn canon_sidecar.main:app --host 0.0.0.0 --port 8765 --reload
+Add the sidecar service to your existing `docker-compose.yml`. It needs read-write access to the same music volume Navidrome uses.
+
+```yaml
+services:
+  navidrome:
+    image: deluan/navidrome:latest
+    ports:
+      - "4533:4533"
+    volumes:
+      - /path/to/music:/music:ro   # read-only is fine for Navidrome
+    environment:
+      ND_MUSICFOLDER: /music
+
+  canon-sidecar:
+    image: ghcr.io/jellybrigade/canon-sidecar:latest
+    ports:
+      - "8765:8765"
+    volumes:
+      - /path/to/music:/music:rw   # needs write access
+    environment:
+      CANON_SIDECAR_SECRET: your-secret-here
+      CANON_SIDECAR_MUSIC_ROOT: /music
+    restart: unless-stopped
 ```
 
-Required env vars:
+```bash
+docker compose up -d
+curl http://localhost:8765/health   # should return {"status":"ok","version":"..."}
+```
 
-| Var | Description |
+---
+
+### Option B — Docker Compose, standalone (no Navidrome in compose)
+
+If Navidrome runs elsewhere (bare metal, separate compose stack, etc.):
+
+```yaml
+services:
+  canon-sidecar:
+    image: ghcr.io/jellybrigade/canon-sidecar:latest
+    ports:
+      - "8765:8765"
+    volumes:
+      - /path/to/music:/music:rw
+    environment:
+      CANON_SIDECAR_SECRET: your-secret-here
+      CANON_SIDECAR_MUSIC_ROOT: /music
+    restart: unless-stopped
+```
+
+---
+
+### Option C — Unraid
+
+1. Install **Community Applications** if not already.
+2. Search for **Canon Sidecar** in the Apps tab (or add manually via Docker tab → Add Container).
+3. Set:
+   - Repository: `ghcr.io/jellybrigade/canon-sidecar:latest`
+   - Port: `8765 → 8765`
+   - Volume: your music share path → `/music` (read/write)
+   - Variables: `CANON_SIDECAR_SECRET` and `CANON_SIDECAR_MUSIC_ROOT=/music`
+
+---
+
+### Option D — TrueNAS Scale
+
+Use **Apps → Custom App** (or the Docker Compose UI in TrueNAS 24.10+):
+
+```yaml
+services:
+  canon-sidecar:
+    image: ghcr.io/jellybrigade/canon-sidecar:latest
+    ports:
+      - "8765:8765"
+    volumes:
+      - /mnt/pool/music:/music:rw
+    environment:
+      CANON_SIDECAR_SECRET: your-secret-here
+      CANON_SIDECAR_MUSIC_ROOT: /music
+    restart: unless-stopped
+```
+
+Map the dataset that holds your music to `/music`.
+
+---
+
+### Option E — Bare metal (systemd)
+
+```bash
+# Install
+pip install "canon-sidecar @ git+https://github.com/jellybrigade/canon.git#subdirectory=sidecar"
+
+# Create service
+sudo tee /etc/systemd/system/canon-sidecar.service > /dev/null <<EOF
+[Unit]
+Description=Canon Sidecar
+After=network.target
+
+[Service]
+User=your-user
+Environment=CANON_SIDECAR_SECRET=your-secret-here
+Environment=CANON_SIDECAR_MUSIC_ROOT=/path/to/music
+ExecStart=uvicorn canon_sidecar.main:app --host 0.0.0.0 --port 8765
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl enable --now canon-sidecar
+```
+
+---
+
+## Configure Canon
+
+Once the sidecar is running, open Canon → **Settings → Server** and fill in:
+
+| Field | Value |
 |---|---|
-| `CANON_SIDECAR_SECRET` | Shared secret — must match what you configure in Canon |
-| `CANON_SIDECAR_MUSIC_ROOT` | Absolute path to your music directory |
+| Sidecar URL | `http://your-server-ip:8765` |
+| Secret | Same value as `CANON_SIDECAR_SECRET` |
 
-Optional:
+Hit **Test connection** — Canon calls `/health` and confirms it can reach the sidecar.
 
-| Var | Default | Description |
-|---|---|---|
-| `CANON_SIDECAR_HOST` | `0.0.0.0` | Bind host |
-| `CANON_SIDECAR_PORT` | `8765` | Bind port |
+### Path remapping
 
-## Docker
+If Navidrome and the sidecar see your music at different paths (common when one runs in Docker and one doesn't), set a path remap in the same settings panel:
 
-```bash
-docker build -t canon-sidecar .
+- **From**: the path Navidrome reports (e.g. `/mnt/data/music`)
+- **To**: the path the sidecar sees (e.g. `/music`)
 
-docker run -d \
-  -p 8765:8765 \
-  -v /path/to/music:/music:rw \
-  -e CANON_SIDECAR_SECRET=your-secret-here \
-  -e CANON_SIDECAR_MUSIC_ROOT=/music \
-  canon-sidecar
-```
+Canon applies the remap before sending write requests.
+
+---
+
+## Env vars
+
+| Var | Required | Default | Description |
+|---|---|---|---|
+| `CANON_SIDECAR_SECRET` | Yes | — | Bearer token, must match Canon settings |
+| `CANON_SIDECAR_MUSIC_ROOT` | Yes | — | Absolute path to music directory on the sidecar's filesystem |
+| `CANON_SIDECAR_HOST` | No | `0.0.0.0` | Bind host |
+| `CANON_SIDECAR_PORT` | No | `8765` | Bind port |
+
+---
 
 ## API
 
 ### `GET /health`
-Returns `{ status: "ok", version: "..." }`. No auth required.
+Returns `{ "status": "ok", "version": "..." }`. No auth required. Use this to verify the sidecar is reachable.
 
 ### `POST /write`
 Writes tags to a file. Requires `Authorization: Bearer <secret>`.
 
-Body:
 ```json
 {
   "file_path": "/music/Artist/Album/01 Track.mp3",
@@ -67,7 +178,10 @@ Body:
 }
 ```
 
-With `?dry_run=true`: returns diff without writing. Response:
+Set `genre` (or any field) to `null` to remove that tag.
+
+Add `?dry_run=true` to preview the diff without writing:
+
 ```json
 {
   "resolved_path": "/music/Artist/Album/01 Track.mp3",
@@ -77,23 +191,28 @@ With `?dry_run=true`: returns diff without writing. Response:
 }
 ```
 
-Supported tag fields: `title`, `artist`, `album`, `album_artist`, `genre`, `year`, `track_number`, `disc_number`, `comment`.
+Supported fields: `title`, `artist`, `album`, `album_artist`, `genre`, `year`, `track_number`, `disc_number`, `comment`.
 
-## Path remapping
-
-If Canon runs on a different machine than the sidecar, file paths from Navidrome may not match the sidecar's filesystem. Configure path remapping in Canon's server settings:
-
-- **From**: `/mnt/data/music` (path as Navidrome sees it)
-- **To**: `/music` (path as the sidecar sees it)
-
-Canon applies the remap before sending to the sidecar.
+---
 
 ## Security
 
 - All write endpoints require `Authorization: Bearer <secret>`.
-- Requests whose resolved path escapes `CANON_SIDECAR_MUSIC_ROOT` are rejected (HTTP 400).
+- Paths that escape `CANON_SIDECAR_MUSIC_ROOT` are rejected (HTTP 400) — no directory traversal.
 - Symlinks that resolve outside the music root are rejected.
-- Original file is backed up to `{file_dir}/.canon-backup/` before every write.
+- Before every write, old tag values are saved as a small JSON file in `{file_dir}/.canon-backup/` (not a full file copy — negligible storage cost).
+
+---
+
+## Build from source
+
+```bash
+git clone https://github.com/jellybrigade/canon.git
+cd canon/sidecar
+docker build -t canon-sidecar .
+```
+
+---
 
 ## Tests
 

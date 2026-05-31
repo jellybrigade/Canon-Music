@@ -13,7 +13,6 @@ import { RadioChip } from "./RadioChip";
 import { stripServerPrefix } from "../lib/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
-import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
@@ -175,7 +174,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const [accent, setAccent] = useState<string | null>(null);
+  const accent = usePlayerStore((s) => s.accentColor);
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
@@ -187,16 +186,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   });
 
   const otherAlbums = artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [];
-
-  useEffect(() => {
-    setAccent(null);
-    if (!largeArtUrl) return;
-    let cancelled = false;
-    void extractAccent(largeArtUrl).then((color) => {
-      if (!cancelled) setAccent(color);
-    });
-    return () => { cancelled = true; };
-  }, [largeArtUrl]);
 
   useEffect(() => {
     if (tab !== "up-next" || !upNextRef.current) return;
@@ -627,6 +616,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                         key={i}
                         ref={isActive ? activeLyricRef : undefined}
                         className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+                        onClick={() => void seek(line.timeSec)}
+                        style={{ cursor: "pointer" }}
                       >
                         {line.text || " "}
                       </div>

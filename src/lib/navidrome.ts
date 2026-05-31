@@ -97,6 +97,37 @@ export async function fetchAllAlbums(
   return albums;
 }
 
+export async function fetchAlbumListByType(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  type: "recent" | "frequent" | "newest",
+  size = 20
+): Promise<NavidromeAlbum[]> {
+  const params = buildAuthParams(username, credential);
+  params.set("type", type);
+  params.set("size", String(size));
+
+  const url = `${normalizeUrl(baseUrl)}/rest/getAlbumList2?${params.toString()}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
+
+  const data = (await res.json()) as {
+    "subsonic-response": {
+      status: string;
+      error?: { code: number; message: string };
+      albumList2?: { album?: NavidromeAlbum[] };
+    };
+  };
+
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "Failed to fetch album list");
+  }
+
+  return response.albumList2?.album ?? [];
+}
+
 export interface NavidromeTrack {
   id: string;
   title: string;

@@ -27,4 +27,5 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rodio = { version = "0.19", features = ["symphonia-all"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
+tokio = { version = "1", features = ["rt"] }
 

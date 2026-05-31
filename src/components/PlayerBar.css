@@ -198,6 +198,31 @@
   transition: width 0.5s linear;
 }
 
+.player-progress-bar--waveform {
+  height: 28px;
+  background: transparent;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  border-radius: 0;
+}
+
+.player-progress-bar--waveform:hover {
+  height: 28px;
+}
+
+.waveform-bar {
+  flex: 1;
+  height: calc(max(var(--peak, 0.05) * 28px, 2px));
+  background-color: var(--progress-track);
+  border-radius: 1px;
+}
+
+.waveform-bar--filled {
+  background-color: var(--accent);
+}
+
 .player-volume {
   display: flex;
   align-items: center;
