@@ -43,6 +43,50 @@
   opacity: 1;
 }
 
+.queue-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.queue-filter-icon {
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.queue-filter-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.queue-filter-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.queue-filter-clear {
+  background: none;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.queue-filter-clear:hover {
+  color: var(--text-primary);
+}
+
 .queue-list {
   flex: 1;
   overflow-y: auto;

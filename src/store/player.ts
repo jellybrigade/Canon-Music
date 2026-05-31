@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { getDb } from "../db";
 
@@ -101,6 +102,8 @@ interface PlayerState {
   radioMode: RadioMode;
 
   isQueueOpen: boolean;
+  accentColor: string | null;
+  waveformPeaks: number[] | null;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
@@ -122,12 +125,15 @@ interface PlayerState {
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
+  setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
+  setWaveformPeaks: (peaks: number[] | null) => void;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let elapsedInterval: ReturnType<typeof setInterval> | null = null;
+  let cancelWaveform: (() => void) | null = null;
 
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
@@ -164,13 +170,103 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
+  async function fetchWaveform(trackId: string, url: string) {
+    // Cancel any in-flight extraction from the previous track before registering new listeners
+    cancelWaveform?.();
+    cancelWaveform = null;
+
+    try {
+      const db = await getDb();
+
+      const settingRows = await db.select<{ value: string }[]>(
+        "SELECT value FROM settings WHERE key = 'player.show_waveform'",
+        []
+      );
+      if ((settingRows[0]?.value ?? "false") !== "true") return;
+
+      type Row = { peaks_json: string };
+      const rows = await db.select<Row[]>(
+        "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
+        [trackId]
+      );
+      if (rows[0]) {
+        if (get().currentTrack?.id === trackId) {
+          set({ waveformPeaks: JSON.parse(rows[0].peaks_json) as number[] });
+        }
+        return;
+      }
+
+      // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
+      const rawPeaks = new Array<number>(200).fill(0);
+      let runningMax = 0;
+
+      const unlistenChunk = await listen<{ track_id: string; offset: number; peaks: number[] }>(
+        "waveform_chunk",
+        (event) => {
+          if (event.payload.track_id !== trackId) return;
+          const { offset, peaks } = event.payload;
+          for (let i = 0; i < peaks.length; i++) {
+            const v = peaks[i] ?? 0;
+            rawPeaks[offset + i] = v;
+            if (v > runningMax) runningMax = v;
+          }
+          if (get().currentTrack?.id !== trackId) return;
+          const normalized = runningMax > 0 ? rawPeaks.map((p) => p / runningMax) : rawPeaks.slice();
+          set({ waveformPeaks: normalized });
+        }
+      );
+
+      const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>(
+        "waveform_complete",
+        async (event) => {
+          // Guard before unlisten: a stale event from a prior track must not kill the current track's listeners
+          if (event.payload.track_id !== trackId) return;
+          unlistenChunk();
+          unlistenComplete();
+          cancelWaveform = null;
+          if (get().currentTrack?.id === trackId) {
+            set({ waveformPeaks: event.payload.peaks });
+          }
+          const now = Math.floor(Date.now() / 1000);
+          await db.execute(
+            "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
+            [trackId, JSON.stringify(event.payload.peaks), now]
+          );
+        }
+      );
+
+      // Hold references so a future track can cancel these listeners if it starts before waveform_complete fires
+      cancelWaveform = () => {
+        unlistenChunk();
+        unlistenComplete();
+      };
+
+      // Request low-bitrate audio for analysis — Navidrome transcodes to ~64kbps mono,
+      // 4-8x less data to download and decode vs full-quality stream.
+      const waveformUrl = (() => {
+        try {
+          const u = new URL(url);
+          u.searchParams.set("maxBitRate", "32");
+          u.searchParams.set("format", "mp3");
+          return u.toString();
+        } catch {
+          return url;
+        }
+      })();
+      void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 });
+    } catch (e) {
+      console.error("Failed to fetch waveform:", e);
+    }
+  }
+
   async function playTrack(track: CurrentTrack, url: string) {
-    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now() });
+    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null });
     stopElapsedTimer();
     try {
       await invoke("audio_play", { url });
       set({ isPlaying: true, isLoading: false });
       startElapsedTimer();
+      void fetchWaveform(track.id, url);
     } catch (e) {
       set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -230,6 +326,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioSeed: null,
     radioMode: "curated",
     isQueueOpen: false,
+    accentColor: null,
+    waveformPeaks: null,
+
+    setWaveformPeaks: (peaks) => {
+      set({ waveformPeaks: peaks });
+    },
 
     play: async (track, streamUrl) => {
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });
@@ -427,6 +529,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     toggleQueue: () => {
       set((s) => ({ isQueueOpen: !s.isQueueOpen }));
+    },
+
+    setAccentColor: (color) => {
+      set({ accentColor: color });
     },
 
     removeFromQueue: async (position) => {
