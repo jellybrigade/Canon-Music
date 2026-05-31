@@ -202,6 +202,15 @@ interface ForYouRailProps {
   onRefresh: () => void;
 }
 
+const KICKER_COLORS: Record<string, string> = {
+  "On repeat":        "#3b82f6",
+  "Rediscover":       "#f59e0b",
+  "Long time no hear":"#8b5cf6",
+  "New to library":   "#10b981",
+  "More from":        "#f43f5e",
+  _default:           "#6b7280",
+};
+
 function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefresh }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   if (groups.length === 0) return null;
@@ -214,44 +223,56 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
           <RefreshCw size={11} />
         </button>
       </div>
-      <div className="home-rail__track">
-        {groups.map((group, gi) => (
-          <div key={group.kicker} className={`home-rail__group${gi > 0 ? " home-rail__group--separated" : ""}`}>
-            <p className="home-rail__kicker">{group.kicker}</p>
-            <div className="home-rail__tiles">
-              {group.albums.map(album => {
-                const artUrl = album.artwork_url
-                  ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
-                  : null;
-                return (
-                  <div
-                    key={album.id}
-                    className="home-rail__tile"
-                    onClick={() => onSelectAlbum(album)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+      <div className="home-suggestion-grid">
+        {groups.map(group => {
+          const album = group.albums[0];
+          if (!album) return null;
+          const artUrl = album.artwork_url
+            ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
+            : null;
+          const kickerColorKey = Object.keys(KICKER_COLORS).find(
+            k => k !== "_default" && group.kicker.startsWith(k)
+          ) ?? "_default";
+          const kickerColor = KICKER_COLORS[kickerColorKey] ?? KICKER_COLORS._default;
+          return (
+            <div
+              key={group.kicker}
+              className="suggestion-card"
+              style={{ "--kicker-color": kickerColor } as React.CSSProperties}
+              onClick={() => onSelectAlbum(album)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+            >
+              {artUrl && (
+                <div
+                  className="suggestion-card__blur"
+                  style={{ backgroundImage: `url(${artUrl})` }}
+                />
+              )}
+              <div className="suggestion-card__overlay" />
+              <div className="suggestion-card__content">
+                <span className="suggestion-card__kicker">{group.kicker}</span>
+                <div className="suggestion-card__art-wrap">
+                  {artUrl
+                    ? <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
+                    : <div className="suggestion-card__art suggestion-card__art--placeholder" />}
+                  <button
+                    className="suggestion-card__play"
+                    onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                    aria-label={`Play ${album.name}`}
                   >
-                    <div className="home-rail__art-wrap">
-                      {artUrl
-                        ? <img className="home-rail__art" src={artUrl} alt={album.name} loading="lazy" />
-                        : <div className="home-rail__art" />}
-                      <button
-                        className="home-rail__play"
-                        onClick={e => { e.stopPropagation(); playAlbum(album); }}
-                        aria-label={`Play ${album.name}`}
-                      >
-                        <Play size={13} fill="currentColor" />
-                      </button>
-                    </div>
-                    <p className="home-rail__name">{album.name}</p>
-                    {album.artist && <p className="home-rail__artist">{album.artist}</p>}
-                  </div>
-                );
-              })}
+                    <Play size={14} fill="currentColor" />
+                  </button>
+                </div>
+                <div className="suggestion-card__meta">
+                  <p className="suggestion-card__name">{album.name}</p>
+                  {album.artist && <p className="suggestion-card__artist">{album.artist}</p>}
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
@@ -269,7 +290,7 @@ interface AlbumCarouselProps {
   playAlbum: (album: AlbumRow) => void;
 }
 
-const CARD_WIDTH = 160 + 14;
+const CARD_WIDTH = 168 + 14;
 
 function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
