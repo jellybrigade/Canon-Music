@@ -226,96 +226,70 @@
 
 .home-suggestion-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 10px;
-  padding: 0 28px;
 }
 
 /* ── Suggestion Card ──────────────────────────────────────────────────────── */
 
 .suggestion-card {
-  position: relative;
-  height: 196px;
   border-radius: 10px;
   overflow: hidden;
-  isolation: isolate;
-  cursor: pointer;
-  background: var(--bg-elevated, #141414);
-  transition: transform var(--motion-med, 200ms ease-out);
-}
-
-.suggestion-card:hover {
-  transform: translateY(-2px);
-}
-
-.suggestion-card__blur {
-  position: absolute;
-  inset: -14px;
-  background-size: cover;
-  background-position: center;
-  filter: blur(22px);
-  opacity: 0.72;
-  z-index: 0;
-}
-
-.suggestion-card__overlay {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    160deg,
-    rgba(0, 0, 0, 0.32) 0%,
-    rgba(0, 0, 0, 0.58) 100%
-  );
-  z-index: 1;
-}
-
-.suggestion-card__content {
-  position: relative;
-  z-index: 2;
+  background: var(--bg-card, #1c1c1c);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  box-shadow: var(--shadow-1, 0 2px 8px rgba(0,0,0,0.28));
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 10px 12px;
-  height: 100%;
+}
+
+.suggestion-card__header {
+  padding: 8px 10px 6px;
 }
 
 .suggestion-card__kicker {
-  align-self: flex-start;
-  display: inline-block;
-  font-size: 0.545rem;
+  font-size: 0.525rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--kicker-color, #6b7280);
-  background: color-mix(in srgb, var(--kicker-color, #6b7280) 16%, rgba(0, 0, 0, 0.35));
-  border: 1px solid color-mix(in srgb, var(--kicker-color, #6b7280) 40%, transparent);
-  border-radius: 4px;
-  padding: 2px 6px;
-  max-width: 100%;
-  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Top row: 2 equal tiles */
+.suggestion-card__row--top {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+}
+
+/* Bottom row: 4 equal tiles */
+.suggestion-card__row--bottom {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.suggestion-card__tile {
+  cursor: pointer;
   overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.45;
-  backdrop-filter: blur(6px);
+}
+
+.suggestion-card__tile:focus-visible {
+  outline: 2px solid var(--accent, #396cd8);
+  outline-offset: -2px;
 }
 
 .suggestion-card__art-wrap {
   position: relative;
-  width: 86px;
-  height: 86px;
-  flex-shrink: 0;
-  border-radius: 6px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--bg-elevated, #141414);
   overflow: hidden;
-  background: var(--bg-card, #1c1c1c);
-  box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.65),
-    0 3px 8px rgba(0, 0, 0, 0.45);
-  transition: transform var(--motion-med, 200ms ease-out);
 }
 
-.suggestion-card:hover .suggestion-card__art-wrap {
-  transform: scale(1.04);
+.suggestion-card__tile:hover .suggestion-card__art-wrap {
+  filter: brightness(0.72);
 }
 
 .suggestion-card__art {
@@ -326,21 +300,14 @@
   transition: filter var(--motion-med, 200ms ease-out);
 }
 
-.suggestion-card:hover .suggestion-card__art {
-  filter: brightness(0.72);
-}
-
-.suggestion-card__art--placeholder {
-  background: var(--bg-card, #1c1c1c);
-}
-
+/* Play button fades in on tile hover */
 .suggestion-card__play {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) scale(0.72);
-  width: 32px;
-  height: 32px;
+  transform: translate(-50%, -50%) scale(0.75);
+  width: 30px;
+  height: 30px;
   padding: 0;
   border-radius: 50%;
   background: var(--accent, #396cd8);
@@ -355,10 +322,10 @@
     opacity var(--motion-med, 200ms ease-out),
     transform var(--motion-med, 200ms ease-out),
     background var(--motion-fast, 120ms ease-out);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.55);
 }
 
-.suggestion-card:hover .suggestion-card__play {
+.suggestion-card__tile:hover .suggestion-card__play {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
@@ -367,31 +334,9 @@
   background: var(--accent-hover, #2d5bbf);
 }
 
-.suggestion-card__meta {
-  width: 100%;
-  text-align: center;
-}
-
-.suggestion-card__name {
-  font-size: 0.775rem;
-  font-weight: 600;
-  color: #fff;
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.suggestion-card__artist {
-  font-size: 0.695rem;
-  color: rgba(255, 255, 255, 0.6);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
-  margin: 2px 0 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.suggestion-card__play--sm {
+  width: 22px;
+  height: 22px;
 }
 
 /* ── Carousel Sections ────────────────────────────────────────────────────── */

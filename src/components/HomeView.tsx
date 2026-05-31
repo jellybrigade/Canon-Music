@@ -98,19 +98,22 @@ function buildForYouGroups(
   vault: AlbumStatRow[],
   allAlbums: AlbumRow[] | undefined,
   recentNavIds: Set<string>,
+  recentItems: AlbumRow[] | undefined,
+  lovedSource: AlbumRow[] | undefined,
   serverId: string,
   seed: number,
-  perCategory = 2,
+  perCategory = 4,
 ): ForYouGroup[] {
   const groups: ForYouGroup[] = [];
   const used = new Set<string>(spotlightId ? [spotlightId] : []);
 
   const groupFrom = (kicker: string, source: AlbumRow[]) => {
-    if (source.length === 0) return;
-    const start = source.length > perCategory ? seed % (source.length - perCategory + 1) : 0;
+    const withArt = source.filter(a => a.artwork_url);
+    if (withArt.length === 0) return;
+    const start = withArt.length > perCategory ? seed % (withArt.length - perCategory + 1) : 0;
     const albums: AlbumRow[] = [];
-    for (let i = 0; i < source.length && albums.length < perCategory; i++) {
-      const a = source[(start + i) % source.length]!;
+    for (let i = 0; i < withArt.length && albums.length < perCategory; i++) {
+      const a = withArt[(start + i) % withArt.length]!;
       if (used.has(a.id)) continue;
       used.add(a.id);
       albums.push(a);
@@ -118,8 +121,11 @@ function buildForYouGroups(
     if (albums.length > 0) groups.push({ kicker, albums });
   };
 
-  groupFrom("Rediscover", rediscover as AlbumRow[]);
+  if (recentItems) {
+    groupFrom("Jump back in", recentItems.filter(a => a.artwork_url));
+  }
   groupFrom("On repeat", onRepeat as AlbumRow[]);
+  groupFrom("Rediscover", rediscover as AlbumRow[]);
   groupFrom("Long time no hear", vault as AlbumRow[]);
 
   if (allAlbums) {
@@ -127,6 +133,10 @@ function buildForYouGroups(
       a => a.artwork_url && !recentNavIds.has(stripPrefix(a.id, serverId))
     );
     groupFrom("New to library", unheard);
+  }
+
+  if (lovedSource) {
+    groupFrom("Loved", lovedSource.filter(a => a.artwork_url));
   }
 
   return groups;
@@ -203,10 +213,12 @@ interface ForYouRailProps {
 }
 
 const KICKER_COLORS: Record<string, string> = {
-  "On repeat":        "#3b82f6",
+  "Jump back in":     "#3b82f6",
+  "On repeat":        "#6366f1",
   "Rediscover":       "#f59e0b",
   "Long time no hear":"#8b5cf6",
   "New to library":   "#10b981",
+  "Loved":            "#ec4899",
   "More from":        "#f43f5e",
   _default:           "#6b7280",
 };
@@ -225,11 +237,6 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
       </div>
       <div className="home-suggestion-grid">
         {groups.map(group => {
-          const album = group.albums[0];
-          if (!album) return null;
-          const artUrl = album.artwork_url
-            ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
-            : null;
           const kickerColorKey = Object.keys(KICKER_COLORS).find(
             k => k !== "_default" && group.kicker.startsWith(k)
           ) ?? "_default";
@@ -239,37 +246,68 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
               key={group.kicker}
               className="suggestion-card"
               style={{ "--kicker-color": kickerColor } as React.CSSProperties}
-              onClick={() => onSelectAlbum(album)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
             >
-              {artUrl && (
-                <div
-                  className="suggestion-card__blur"
-                  style={{ backgroundImage: `url(${artUrl})` }}
-                />
-              )}
-              <div className="suggestion-card__overlay" />
-              <div className="suggestion-card__content">
+              <div className="suggestion-card__header">
                 <span className="suggestion-card__kicker">{group.kicker}</span>
-                <div className="suggestion-card__art-wrap">
-                  {artUrl
-                    ? <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
-                    : <div className="suggestion-card__art suggestion-card__art--placeholder" />}
-                  <button
-                    className="suggestion-card__play"
-                    onClick={e => { e.stopPropagation(); playAlbum(album); }}
-                    aria-label={`Play ${album.name}`}
-                  >
-                    <Play size={14} fill="currentColor" />
-                  </button>
-                </div>
-                <div className="suggestion-card__meta">
-                  <p className="suggestion-card__name">{album.name}</p>
-                  {album.artist && <p className="suggestion-card__artist">{album.artist}</p>}
-                </div>
               </div>
+              {/* Top row — 2 larger tiles */}
+              <div className="suggestion-card__row suggestion-card__row--top">
+                {group.albums.slice(0, 2).map(album => {
+                  const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
+                  return (
+                    <div
+                      key={album.id}
+                      className="suggestion-card__tile"
+                      onClick={() => onSelectAlbum(album)}
+                      role="button"
+                      tabIndex={0}
+                      title={album.artist ? `${album.name} · ${album.artist}` : album.name}
+                      onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+                    >
+                      <div className="suggestion-card__art-wrap">
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
+                        <button
+                          className="suggestion-card__play"
+                          onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                          aria-label={`Play ${album.name}`}
+                        >
+                          <Play size={13} fill="currentColor" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {/* Bottom row — 4 smaller tiles */}
+              {group.albums.length > 2 && (
+                <div className="suggestion-card__row suggestion-card__row--bottom">
+                  {group.albums.slice(2, 6).map(album => {
+                    const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 160);
+                    return (
+                      <div
+                        key={album.id}
+                        className="suggestion-card__tile"
+                        onClick={() => onSelectAlbum(album)}
+                        role="button"
+                        tabIndex={0}
+                        title={album.artist ? `${album.name} · ${album.artist}` : album.name}
+                        onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+                      >
+                        <div className="suggestion-card__art-wrap">
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" />
+                          <button
+                            className="suggestion-card__play suggestion-card__play--sm"
+                            onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                            aria-label={`Play ${album.name}`}
+                          >
+                            <Play size={10} fill="currentColor" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
@@ -377,11 +415,16 @@ export function HomeView({ serverWithCredential, onSelectAlbum }: Props) {
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
   const { onRepeat, rediscover, vault } = useListeningStats();
-  const { lovedAlbumIds } = useLoved();
+  const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
   const recentNavIds = useMemo(
     () => new Set(recentRaw?.slice(0, 20).map(a => a.id) ?? []),
     [recentRaw]
+  );
+
+  const recentItems = useMemo(
+    () => recentRaw?.map(a => naviToAlbumRow(a, server.id)),
+    [recentRaw, server.id]
   );
 
   const spotlight = useMemo(
@@ -393,23 +436,29 @@ export function HomeView({ serverWithCredential, onSelectAlbum }: Props) {
     [currentTrack, onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id]
   );
 
-  const forYouGroups = useMemo(
-    () => buildForYouGroups(
-      spotlight?.album.id ?? null,
-      onRepeat, rediscover, vault, allAlbums, recentNavIds, server.id, forYouSeed,
-    ),
-    [spotlight, onRepeat, rediscover, vault, allAlbums, recentNavIds, server.id, forYouSeed]
-  );
-
-  const recentItems = useMemo(
-    () => recentRaw?.map(a => naviToAlbumRow(a, server.id)),
-    [recentRaw, server.id]
-  );
-  const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const lovedItems = useMemo(
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
     [allAlbums, lovedAlbumIds]
   );
+  const lovedSource = useMemo(() => {
+    if (!allAlbums) return undefined;
+    const seen = new Set<string>();
+    return allAlbums.filter(a => {
+      if (!lovedAlbumIds.has(a.id) && !lovedTrackAlbumIds.has(a.id)) return false;
+      if (seen.has(a.id)) return false;
+      seen.add(a.id);
+      return true;
+    });
+  }, [allAlbums, lovedAlbumIds, lovedTrackAlbumIds]);
+
+  const forYouGroups = useMemo(
+    () => buildForYouGroups(
+      spotlight?.album.id ?? null,
+      onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed, 6,
+    ),
+    [spotlight, onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed]
+  );
+  const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const vaultItems = useMemo(() => vault.slice(0, 20) as AlbumRow[], [vault]);
 
