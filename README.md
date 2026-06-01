@@ -16,11 +16,22 @@ A desktop music player and tag management tool for self-hosted music servers. Cu
 
 ## Installation
 
-Download the latest release for your platform from the [Releases](../../releases) page:
+**Linux / macOS**
 
-- **Linux** — `.AppImage`
-- **macOS** — `.dmg` (universal, Intel + Apple Silicon)
-- **Windows** — `.exe` installer
+```sh
+curl -fsSL https://raw.githubusercontent.com/jellybrigade/Canon-Music/main/install.sh | sh
+```
+
+Or download directly from the [Releases](../../releases) page:
+
+| Platform | File | Notes |
+|---|---|---|
+| Linux | `.deb` | Debian / Ubuntu |
+| Linux | `.rpm` | Fedora / RHEL |
+| Linux | `.AppImage` | Portable, any distro |
+| macOS | `.dmg` | Universal (Intel + Apple Silicon) |
+| Windows | `-setup.exe` | NSIS installer |
+| Windows | `.msi` | MSI package |
 
 ## Building from source
 

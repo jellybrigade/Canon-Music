@@ -15,6 +15,7 @@ export interface NavidromeAlbum {
   starred?: string;
   created?: string;
   songCount?: number;
+  playCount?: number;
 }
 
 function generateSalt(): string {
