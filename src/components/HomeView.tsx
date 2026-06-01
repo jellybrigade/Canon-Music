@@ -22,6 +22,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   onPlayTrack: (trackId: string) => void;
+  onOpenCommandPalette: () => void;
 }
 
 interface SpotlightPick {
@@ -266,7 +267,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                       onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
                         <div className="album-overlay">
                           <span className="album-name">{album.name}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
@@ -299,7 +300,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                         onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -383,7 +384,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} loading="lazy" decoding="async" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"
@@ -409,7 +410,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack, onOpenCommandPalette }: Props) {
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
@@ -499,7 +500,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack }: P
               <X size={13} />
             </button>
           ) : (
-            <kbd className="home-search-kbd">Ctrl+K</kbd>
+            <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette — search tracks, artists, albums, and navigate anywhere">
+              <kbd>⌘K</kbd>
+            </button>
           )}
         </div>
         {allAlbums != null && !isSearching && (
@@ -518,7 +521,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack }: P
             onPlayTrack={onPlayTrack}
           />
         ) : (
-          <p className="empty-state">{searchQuery ? "Searching…" : "Start typing to search"}</p>
+          <p className="empty-state">Searching…</p>
         )
       ) : (
         <>

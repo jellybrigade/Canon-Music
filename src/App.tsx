@@ -468,6 +468,7 @@ export default function App() {
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
+                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
               />
             ) : <main className="content-main" />}
           </Suspense>
@@ -715,7 +716,7 @@ export default function App() {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
-        onSelectAlbum={(album) => { setSelectedAlbum(album); navigateTo("library"); setCommandPaletteOpen(false); }}
+        onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

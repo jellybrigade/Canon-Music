@@ -145,6 +145,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                         className="album-art"
                         src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url)}
                         alt={album.name}
+                        loading="lazy"
                         decoding="async"
                       />
                     ) : (
