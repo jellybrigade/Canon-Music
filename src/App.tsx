@@ -102,6 +102,13 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: searchResults } = useSearch(searchQuery);
+
+  const [homeSearchRaw, setHomeSearchRaw] = useState("");
+  const [homeSearchQuery, setHomeSearchQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setHomeSearchQuery(homeSearchRaw), 200);
+    return () => clearTimeout(t);
+  }, [homeSearchRaw]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
@@ -476,6 +483,9 @@ export default function App() {
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+                homeSearchRaw={homeSearchRaw}
+                homeSearchQuery={homeSearchQuery}
+                onHomeSearchRawChange={setHomeSearchRaw}
               />
             ) : <main className="content-main" />}
           </Suspense>

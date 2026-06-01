@@ -30,6 +30,9 @@ interface Props {
   onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
   onPlayTrack: (trackId: string) => void;
   onOpenCommandPalette: () => void;
+  homeSearchRaw: string;
+  homeSearchQuery: string;
+  onHomeSearchRawChange: (v: string) => void;
 }
 
 interface SpotlightPick {
@@ -630,7 +633,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onPlayTrack, onOpenCommandPalette }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
@@ -656,14 +659,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     setContextMenu({ x: e.clientX, y: e.clientY, album });
   }, []);
 
-  const [searchRaw, setSearchRaw] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(searchRaw), 200);
-    return () => clearTimeout(t);
-  }, [searchRaw]);
-  const { data: searchResults } = useSearch(searchQuery);
+  const { data: searchResults } = useSearch(homeSearchQuery);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
@@ -733,7 +730,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
 
   const play = (album: AlbumRow) => void playAlbum(album);
 
-  const isSearching = searchRaw.length > 0;
+  const isSearching = homeSearchRaw.length > 0;
 
   return (
     <div className="home-view">
@@ -746,11 +743,11 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             type="text"
             className="search-bar-input"
             placeholder="Search…"
-            value={searchRaw}
-            onChange={(e) => setSearchRaw(e.target.value)}
+            value={homeSearchRaw}
+            onChange={(e) => onHomeSearchRawChange(e.target.value)}
           />
-          {searchRaw ? (
-            <button className="search-bar-clear" onClick={() => { setSearchRaw(""); setSearchQuery(""); }} title="Clear">
+          {homeSearchRaw ? (
+            <button className="search-bar-clear" onClick={() => onHomeSearchRawChange("")} title="Clear">
               <X size={13} />
             </button>
           ) : (
@@ -765,14 +762,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       </header>
 
       {isSearching ? (
-        searchResults && searchQuery ? (
+        searchResults && homeSearchQuery ? (
           <SearchResults
             albums={searchResults.albums}
             tracks={searchResults.tracks}
             artists={searchResults.artists}
             serverWithCredential={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
-            onSelectArtist={(name) => { setSearchRaw(""); setSearchQuery(""); onSelectArtist?.(name); }}
+            onSelectArtist={(name) => { onHomeSearchRawChange(""); onSelectArtist?.(name); }}
             onPlayTrack={onPlayTrack}
           />
         ) : (
