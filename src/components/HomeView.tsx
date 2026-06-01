@@ -218,6 +218,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum, onCardConte
 
 interface ForYouRailProps {
   groups: ForYouGroup[];
+  isLoading?: boolean;
   serverWithCred: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
@@ -236,9 +237,35 @@ const KICKER_COLORS: Record<string, string> = {
   _default:           "#6b7280",
 };
 
-function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu }: ForYouRailProps) {
+function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
-  if (groups.length === 0) return null;
+  if (groups.length === 0 && !isLoading) return null;
+  if (groups.length === 0 && isLoading) {
+    return (
+      <section className="home-rail">
+        <div className="home-rail__header">
+          <p className="home-section-label" style={{ margin: 0 }}>For You</p>
+        </div>
+        <div className="home-suggestion-grid">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="suggestion-card suggestion-card--skeleton">
+              <div className="suggestion-card__header">
+                <span className="suggestion-card__kicker-skel" />
+              </div>
+              <div className="suggestion-card__row suggestion-card__row--top">
+                <div className="suggestion-card__tile"><div className="suggestion-card__art-wrap" /></div>
+              </div>
+              <div className="suggestion-card__row suggestion-card__row--bottom">
+                {Array.from({ length: 3 }).map((_, j) => (
+                  <div key={j} className="suggestion-card__tile"><div className="suggestion-card__art-wrap" /></div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="home-rail">
@@ -262,9 +289,9 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
               <div className="suggestion-card__header">
                 <span className="suggestion-card__kicker">{group.kicker}</span>
               </div>
-              {/* Top row — 2 larger tiles */}
+              {/* Top row — 1 large tile */}
               <div className="suggestion-card__row suggestion-card__row--top">
-                {group.albums.slice(0, 2).map(album => {
+                {group.albums.slice(0, 1).map(album => {
                   const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                   return (
                     <div
@@ -294,10 +321,10 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                   );
                 })}
               </div>
-              {/* Bottom row — 4 smaller tiles */}
-              {group.albums.length > 2 && (
+              {/* Bottom row — 3 smaller tiles */}
+              {group.albums.length > 1 && (
                 <div className="suggestion-card__row suggestion-card__row--bottom">
-                  {group.albums.slice(2, 6).map(album => {
+                  {group.albums.slice(1, 4).map(album => {
                     const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                     return (
                       <div
@@ -447,7 +474,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { onRepeat, rediscover, vault } = useListeningStats();
+  const { onRepeat, rediscover, vault, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
   const recentNavIds = useMemo(
@@ -487,7 +514,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
   const forYouGroups = useMemo(
     () => buildForYouGroups(
       spotlight?.album.id ?? null,
-      onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed, 6,
+      onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed, 4,
     ),
     [spotlight, onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed]
   );
@@ -556,6 +583,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
           <ForYouRail
             key={forYouSeed}
             groups={forYouGroups}
+            isLoading={statsLoading || recentLoading || allLoading}
             serverWithCred={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
