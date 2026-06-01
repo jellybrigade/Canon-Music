@@ -1,13 +1,13 @@
 ---
 name: next
-description: Pick 1-3 items from what-to-do.txt, plan and implement them, then commit. Use when user says "next", "what's next", "do the next thing", or invokes /next.
+description: Pick 1-3 items from what-to-do.md, plan and implement them, then commit. Use when user says "next", "what's next", "do the next thing", or invokes /next.
 ---
 
 You are invoked in plan mode. Work through these phases in order.
 
 ## Phase 1 — Read the backlog
 
-Read `what-to-do.txt` in the project root.
+Read `instructions/what-to-do.md`.
 
 ## Phase 2 — Pick work
 
@@ -34,12 +34,12 @@ Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md an
 
 ## Phase 5 — Commit
 
-When implementation is complete, invoke the `/commit` skill. It will handle staging, cleanup of what-to-do.txt, and the commit message.
+When implementation is complete, invoke the `/commit` skill. It will handle staging and the commit message. Before invoking `/commit`, remove the completed items from `instructions/what-to-do.md`: delete each item's row from the table AND its detail section.
 
 ## Phase 6 — Release suggestion
 
 After the commit, assess whether a release is warranted:
 - **Suggest `/release`** if the work fixes a user-visible bug or completes a meaningful feature
-- **Don't suggest** for internal refactors, partial work, or if other important items remain in what-to-do.txt that belong in the same release
+- **Don't suggest** for internal refactors, partial work, or if other important items remain in what-to-do.md that belong in the same release
 
 State the suggestion in one sentence.
