@@ -41,9 +41,9 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
 
     // Always upsert album row (keeps cover art ID and metadata fresh)
     await db.execute(
-      `INSERT OR REPLACE INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null]
+      `INSERT OR REPLACE INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0]
     );
 
     if (skipTracks) {

@@ -15,12 +15,20 @@ export function useListeningStats() {
       const db = await getDb();
       return db.select<AlbumStatRow[]>(
         `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
-                COUNT(*) AS plays, MAX(sh.scrobbled_at) AS last_played
+                a.play_count + COALESCE(q.pending, 0) AS plays,
+                COALESCE(MAX(sh.scrobbled_at), '') AS last_played
          FROM albums a
-         JOIN tracks t ON t.album_id = a.id
-         JOIN scrobble_history sh ON sh.track_id = t.id
+         LEFT JOIN tracks t ON t.album_id = a.id
+         LEFT JOIN scrobble_history sh ON sh.track_id = t.id
+         LEFT JOIN (
+           SELECT t2.album_id AS album_id, COUNT(*) AS pending
+           FROM scrobble_queue sq
+           JOIN tracks t2 ON t2.id = sq.track_id
+           GROUP BY t2.album_id
+         ) q ON q.album_id = a.id
          WHERE a.artwork_url IS NOT NULL
          GROUP BY a.id
+         HAVING plays > 0
          ORDER BY plays DESC`,
         []
       );

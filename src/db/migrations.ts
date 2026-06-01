@@ -336,4 +336,8 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 19,
+    sql: `ALTER TABLE albums ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];
