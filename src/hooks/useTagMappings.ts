@@ -2,51 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { TagKind } from "../lib/canonicalize";
 
-async function stageGenreEditsForRawValue(rawValue: string): Promise<void> {
-  const db = await getDb();
-  const { getCanonTree } = await import("../lib/canonicalize");
-  const tree = await getCanonTree();
-
-  type TrackRow = { id: string };
-  const tracks = await db.select<TrackRow[]>(
-    `SELECT DISTINCT t.id FROM track_tags tt JOIN tracks t ON tt.track_id = t.id
-     WHERE tt.raw_value = ? AND tt.kind = 'genre'`,
-    [rawValue]
-  );
-
-  for (const { id: trackId } of tracks) {
-    type TagRow = { canonical_id: string };
-    const tagRows = await db.select<TagRow[]>(
-      "SELECT DISTINCT canonical_id FROM track_tags WHERE track_id = ? AND kind = 'genre' AND canonical_id IS NOT NULL",
-      [trackId]
-    );
-    const names = tagRows
-      .map((r) => {
-        if (r.canonical_id === "__accepted__") return rawValue;
-        if (r.canonical_id === "__ignored__") return null;
-        return tree.byId.get(r.canonical_id)?.name ?? null;
-      })
-      .filter((n): n is string => n !== null)
-      .sort();
-    if (names.length === 0) continue;
-    const newValue = names.join("; ");
-
-    type GenreRow = { genre: string | null };
-    const trackGenre = await db.select<GenreRow[]>("SELECT genre FROM tracks WHERE id = ?", [trackId]);
-    const oldValue = trackGenre[0]?.genre ?? null;
-    if (newValue === oldValue) continue;
-
-    await db.execute(
-      "DELETE FROM pending_edits WHERE track_id = ? AND field = 'genre'",
-      [trackId]
-    );
-    await db.execute(
-      "INSERT INTO pending_edits (track_id, field, old_value, new_value, source, created_at) VALUES (?, 'genre', ?, ?, 'manual', datetime('now'))",
-      [trackId, oldValue, newValue]
-    );
-  }
-}
-
 export interface TagMappingRow {
   raw_value: string;
   kind: TagKind;
@@ -104,15 +59,11 @@ export function useTagMappings() {
         "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?",
         [canonicalId, rawValue, kind]
       );
-      if (kind === "genre") {
-        await stageGenreEditsForRawValue(rawValue);
-      }
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["pending_edits"] });
       void queryClient.invalidateQueries({ queryKey: ["unresolved-genres"] });
     },
   });

@@ -102,6 +102,13 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: searchResults } = useSearch(searchQuery);
+
+  const [homeSearchRaw, setHomeSearchRaw] = useState("");
+  const [homeSearchQuery, setHomeSearchQuery] = useState("");
+  useEffect(() => {
+    const t = setTimeout(() => setHomeSearchQuery(homeSearchRaw), 200);
+    return () => clearTimeout(t);
+  }, [homeSearchRaw]);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
@@ -345,10 +352,8 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
-          onSelectAlbum={(album) => {
-            clearSearch();
-            setSelectedAlbum(album);
-          }}
+          onSelectAlbum={(album) => { setSelectedAlbum(album); }}
+          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
       );
@@ -387,7 +392,8 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
-        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); }}
+        onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
+        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); setView("library"); }}
       />
     );
   }
@@ -454,10 +460,8 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
-              onSelectAlbum={(album) => {
-                clearSearch();
-                setSelectedAlbum(album);
-              }}
+              onSelectAlbum={(album) => { setSelectedAlbum(album); }}
+              onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (
@@ -475,9 +479,13 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
+                onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
+                homeSearchRaw={homeSearchRaw}
+                homeSearchQuery={homeSearchQuery}
+                onHomeSearchRawChange={setHomeSearchRaw}
               />
             ) : <main className="content-main" />}
           </Suspense>

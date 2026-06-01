@@ -85,53 +85,86 @@ export async function fetchAlbumTags(artist: string, album: string): Promise<Las
   return { genres: allTags, moods: [] };
 }
 
-export async function fetchSimilarArtists(artist: string): Promise<string[]> {
+export interface LastfmArtistInfo {
+  bio: string | null;
+  listeners: number | null;
+  playcount: number | null;
+  similar: string[];
+  topTags: string[];
+  imageUrl: string | null;
+}
+
+// Hash of Last.fm's "missing artist" placeholder image — reject it everywhere
+export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
+
+function pickImage(images: Array<{ "#text": string; size: string }>): string | null {
+  const filtered = images.filter(
+    (img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER)
+  );
+  const extralarge = filtered.find((img) => img.size === "extralarge");
+  const large = filtered.find((img) => img.size === "large");
+  const chosen = extralarge ?? large ?? filtered[filtered.length - 1];
+  return chosen?.["#text"] ?? null;
+}
+
+function stripBioBoilerplate(html: string): string {
+  // Strip Last.fm "Read more on Last.fm" link and surrounding whitespace
+  return html
+    .replace(/<a[^>]*>Read more on Last\.fm<\/a>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .trim();
+}
+
+export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo> {
   const apiKey = await getApiKey();
-  if (!apiKey) return [];
+  if (!apiKey) {
+    return { bio: null, listeners: null, playcount: null, similar: [], topTags: [], imageUrl: null };
+  }
   await rateLimit();
   const url = new URL(LASTFM_BASE);
-  url.searchParams.set("method", "artist.getSimilar");
+  url.searchParams.set("method", "artist.getInfo");
   url.searchParams.set("artist", artist);
-  url.searchParams.set("limit", "20");
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("format", "json");
 
-  const res = await fetch(url.toString());
-  if (!res.ok) return [];
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`Last.fm artist.getInfo returned ${res.status}`);
+    const data = (await res.json()) as {
+      artist?: {
+        bio?: { content?: string };
+        stats?: { listeners?: string; playcount?: string };
+        similar?: { artist?: Array<{ name: string }> };
+        tags?: { tag?: Array<{ name: string }> };
+        image?: Array<{ "#text": string; size: string }>;
+      };
+      error?: number;
+      message?: string;
+    };
+    if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
+    const a = data.artist;
+    if (!a) throw new Error("No artist data");
+    return {
+      bio: a.bio?.content ? stripBioBoilerplate(a.bio.content) || null : null,
+      listeners: a.stats?.listeners ? parseInt(a.stats.listeners, 10) || null : null,
+      playcount: a.stats?.playcount ? parseInt(a.stats.playcount, 10) || null : null,
+      similar: (a.similar?.artist ?? []).map((x) => x.name).slice(0, 10),
+      topTags: (a.tags?.tag ?? []).map((t) => t.name).slice(0, 10),
+      imageUrl: a.image ? pickImage(a.image) : null,
+    };
+  } catch {
+    return { bio: null, listeners: null, playcount: null, similar: [], topTags: [], imageUrl: null };
+  }
+}
 
-  const data = (await res.json()) as {
-    similarartists?: { artist?: Array<{ name: string }> };
-    error?: number;
-  };
-  if (data.error) return [];
-  return (data.similarartists?.artist ?? []).map((a) => a.name);
+export async function fetchSimilarArtists(artist: string): Promise<string[]> {
+  const info = await fetchArtistInfo(artist);
+  return info.similar;
 }
 
 export async function fetchArtistImage(artist: string): Promise<string | null> {
-  const apiKey = await getApiKey();
-  if (!apiKey) return null;
-  try {
-    await rateLimit();
-    const url = new URL(LASTFM_BASE);
-    url.searchParams.set("method", "artist.getInfo");
-    url.searchParams.set("artist", artist);
-    url.searchParams.set("api_key", apiKey);
-    url.searchParams.set("format", "json");
-    const res = await fetch(url.toString());
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      artist?: { image?: Array<{ "#text": string; size: string }> };
-      error?: number;
-    };
-    if (data.error || !data.artist?.image) return null;
-    const images = data.artist.image.filter((img) => img["#text"]);
-    const extralarge = images.find((img) => img.size === "extralarge");
-    const large = images.find((img) => img.size === "large");
-    const chosen = extralarge ?? large ?? images[images.length - 1];
-    return chosen?.["#text"] ?? null;
-  } catch {
-    return null;
-  }
+  const info = await fetchArtistInfo(artist);
+  return info.imageUrl;
 }
 
 export async function fetchArtistTopTracks(artist: string): Promise<string[]> {

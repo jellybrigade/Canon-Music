@@ -47,10 +47,10 @@ To release, run `/commit`. That skill handles code review, version bump, merge, 
 Canonical map of every file, its purpose, data flow, and key invariants. Any change that adds, moves, deletes, or substantially repurposes a file must update `ARCHITECTURE.md` in the same commit. New Tauri commands, new migrations, and new architectural invariants belong there too. Part of "done".
 
 ### Rust stays thin
-Only `#[tauri::command]` for: audio control, file reads/writes via sidecar, OS keychain access. No business logic in Rust. See `.claude/rules/audio-playback.md`.
+Only `#[tauri::command]` for: audio control, OS keychain access. No business logic in Rust. See `.claude/rules/audio-playback.md`.
 
-### Tag writes always go through the diff flow
-Never write tags directly. All edits → `pending_edits` → diff review → sidecar. See `.claude/rules/tag-editing.md`.
+### Enrichment is local-only — no file writes
+Metadata enrichment (Last.fm tags, artist bio/stats/similar, MusicBrainz identity) writes only to SQLite. Canon never modifies the user's music files. The sidecar file-write subsystem was removed; `pending_edits` / `edit_history` tables and `servers.sidecar_*` columns are inert legacy schema. File-write design is TBD for a future version.
 
 ### Genre tree is a DAG
 Do not flatten to single-parent. Do not merge `canon-tree.json` and `user-tree.json`. See `.claude/rules/genre-tree.md`.
@@ -59,19 +59,21 @@ Do not flatten to single-parent. Do not merge `canon-tree.json` and `user-tree.j
 
 ## Status
 
-**v0.1.0 — feature-complete.** Schema v10, all workstreams shipped:
+**v0.5.x — active development.** Schema v20, all workstreams shipped:
 
 - Full library sync (incremental, artists table, tag issues scan)
 - Scrobble queue + flush to Navidrome (`useScrobbleFlush`)
-- Tag writes end-to-end: inbox accept / vocab save → `pending_edits` → Review & Apply → sidecar
+- Local tag normalization: Last.fm + MusicBrainz genres → canon tree → `album_genres` / `album_unresolved_genres`
+- Artist enrichment: bio, stats, similar artists persisted to `artist_identity` (schema v20); on-open + background
 - Tag issue detection + `TagIssuesView` with dismiss + sidebar badge
 - Shuffle re-seeds on repeat-all wrap
 - Drag-to-reorder queue (HTML5 DnD)
 - OS media keys (`navigator.mediaSession`, exposes MPRIS on Linux)
 - Radio Auto-DJ: canon tree ancestor scoring + Last.fm similar artists; 10-track lookahead
 - Lyrics: LRClib fetch + SQLite cache + synced auto-scroll in NowPlayingOverlay
+- Settings: centered layout, unified "Metadata & Tags" section
 
-**Not in scope:** AcoustID fingerprinting, true sample-accurate gapless, streaming HTTP seek, Jellyfin webhooks, package manager distribution, MusicBrainz submission, light theme, undo via `edit_history`.
+**Not in scope / TBD:** Writing tags back to music files (removed; to be re-designed), AcoustID fingerprinting, true sample-accurate gapless, streaming HTTP seek, Jellyfin webhooks, package manager distribution, MusicBrainz submission, light theme.
 
 ---
 
@@ -82,7 +84,7 @@ Do not flatten to single-parent. Do not merge `canon-tree.json` and `user-tree.j
 | `.claude/rules/coding-standards.md` | always |
 | `.claude/rules/state-management.md` | always |
 | `.claude/rules/audio-playback.md` | `src-tauri/**`, `src/store/player.ts` |
-| `.claude/rules/tag-editing.md` | `src/db/**`, `src/components/AlbumDetail.tsx`, `sidecar/**` |
+| `.claude/rules/tag-editing.md` | `src/db/**`, `src/components/AlbumDetail.tsx` |
 | `.claude/rules/genre-tree.md` | `src/assets/**`, `scripts/**` |
 | `.claude/rules/sync.md` | `src/lib/**`, `src/hooks/use*.ts` |
 | `.claude/rules/server-auth.md` | `src/keychain.ts`, `src/hooks/useServer.ts`, `src/lib/navidrome.ts` |

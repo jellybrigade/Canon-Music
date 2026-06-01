@@ -40,6 +40,19 @@ function toFtsQuery(q: string): string {
     .join(" ");
 }
 
+// Score how well a field matches the query.
+// Tiers: exact > starts-with > word-starts-with > substring > no match.
+function scoreMatch(field: string | null, query: string): number {
+  if (!field || !query) return 0;
+  const f = field.toLowerCase();
+  const q = query.toLowerCase();
+  if (f === q) return 1000;
+  if (f.startsWith(q)) return 800;
+  if (f.split(/\s+/).some(t => t.startsWith(q))) return 600;
+  if (f.includes(q)) return 300;
+  return 0;
+}
+
 async function runSearch(query: string): Promise<SearchResults> {
   const fts = toFtsQuery(query);
   const db = await getDb();
@@ -50,7 +63,7 @@ async function runSearch(query: string): Promise<SearchResults> {
      JOIN tracks t ON t.id = fts.id
      JOIN albums a ON a.id = t.album_id
      WHERE tracks_fts MATCH ?
-     LIMIT 50`,
+     LIMIT 200`,
     [fts]
   );
 
@@ -60,7 +73,7 @@ async function runSearch(query: string): Promise<SearchResults> {
      JOIN tracks t ON t.id = fts.id
      LEFT JOIN albums a ON a.id = t.album_id
      WHERE tracks_fts MATCH ?
-     LIMIT 50`,
+     LIMIT 200`,
     [fts]
   );
 
@@ -70,11 +83,33 @@ async function runSearch(query: string): Promise<SearchResults> {
      JOIN tracks t ON t.id = fts.id
      WHERE tracks_fts MATCH ? AND t.artist IS NOT NULL
      GROUP BY t.artist
-     LIMIT 50`,
+     LIMIT 200`,
     [fts]
   );
 
-  return { albums: albumRows, tracks: trackRows, artists: artistRows };
+  // Re-rank results in JS. FTS5 gives recall; scoring gives relevance.
+  // Albums: primary field = title, secondary = artist (weighted 0.6×).
+  // Tracks: same. Albums matched only via genre/album-title score 0 and are dropped.
+  // Artists: primary field = name only; artist scoring 0 means FTS matched a track field, not the name.
+  const albums: SearchAlbum[] = albumRows
+    .map(a => ({ item: a, s: Math.max(scoreMatch(a.name, query), Math.floor(scoreMatch(a.artist, query) * 0.6)) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || a.item.name.localeCompare(b.item.name))
+    .map(x => x.item);
+
+  const tracks: SearchTrack[] = trackRows
+    .map(t => ({ item: t, s: Math.max(scoreMatch(t.title, query), Math.floor(scoreMatch(t.artist, query) * 0.6)) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || a.item.title.localeCompare(b.item.title))
+    .map(x => x.item);
+
+  const artists: SearchArtist[] = artistRows
+    .map(a => ({ item: a, s: scoreMatch(a.name, query) }))
+    .filter(x => x.s > 0)
+    .sort((a, b) => b.s - a.s || b.item.album_count - a.item.album_count)
+    .map(x => x.item);
+
+  return { albums, tracks, artists };
 }
 
 export function useSearch(query: string) {

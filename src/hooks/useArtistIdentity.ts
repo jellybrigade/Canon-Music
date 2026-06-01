@@ -121,9 +121,13 @@ export function useSaveArtistIdentity() {
     mutationFn: async (input: SaveArtistIdentityInput) => {
       const db = await getDb();
       await db.execute(
-        `INSERT OR REPLACE INTO artist_identity
-           (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at)
-         VALUES (?, ?, ?, ?)`,
+        `INSERT INTO artist_identity (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(artist_name) DO UPDATE SET
+           mb_artist_id       = excluded.mb_artist_id,
+           lastfm_artist_name = excluded.lastfm_artist_name,
+           confirmed_at       = excluded.confirmed_at,
+           enriched_at        = NULL`,
         [
           input.artistName,
           input.mbArtistId,
@@ -135,6 +139,9 @@ export function useSaveArtistIdentity() {
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({
         queryKey: ["artist-identity", input.artistName],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["artist-enrichment", input.artistName],
       });
       void queryClient.invalidateQueries({
         queryKey: ["artist-image", input.lastfmArtistName ?? input.artistName],

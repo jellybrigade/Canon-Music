@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
-import { usePendingEdits } from "../hooks/usePendingEdits";
 import type { NormalizedTag } from "../lib/tag-normalize";
 import "./TagDrawer.css";
 
@@ -12,7 +11,6 @@ interface Props {
   albumArtist: string;
   albumName: string;
   trackId?: string;
-  hasSidecar?: boolean;
   onClose: () => void;
 }
 
@@ -52,17 +50,11 @@ function TagSection({
   tags,
   level,
   emptyMessage,
-  trackId,
-  hasSidecar,
-  onOverride,
 }: {
   title: string;
   tags: NormalizedTag[];
   level: "album" | "track";
   emptyMessage?: string;
-  trackId?: string;
-  hasSidecar?: boolean;
-  onOverride: (tag: NormalizedTag) => void;
 }) {
   if (tags.length === 0) {
     if (!emptyMessage) return null;
@@ -87,20 +79,14 @@ function TagSection({
           <span className="tag-drawer-name">{tag.name}</span>
           <SourceBadge source={tag.source} />
           <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
-          {trackId && hasSidecar && (
-            <button className="tag-drawer-override" onClick={() => onOverride(tag)}>
-              Override
-            </button>
-          )}
         </div>
       ))}
     </div>
   );
 }
 
-export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar, onClose }: Props) {
+export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
   const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
-  const { addPendingEdits } = usePendingEdits();
   const { data: rawTrackTags } = useTrackRawTags(trackId);
 
   useEffect(() => {
@@ -110,16 +96,6 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
-
-  async function handleOverride(tag: NormalizedTag) {
-    if (!trackId) return;
-    const newValue = window.prompt(`Override "${tag.name}" with:`, tag.name);
-    if (!newValue || newValue.trim() === tag.name) return;
-    await addPendingEdits.mutateAsync({
-      trackId,
-      fieldChanges: [{ field: "genre", oldValue: tag.name, newValue: newValue.trim() }],
-    });
-  }
 
   return createPortal(
     <div className="tag-drawer-overlay" onClick={onClose}>
@@ -145,25 +121,16 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, hasSidecar
                 tags={normalizedTags.genres}
                 level="album"
                 emptyMessage="No genres identified — try syncing in Settings."
-                trackId={trackId}
-                hasSidecar={hasSidecar}
-                onOverride={(tag) => void handleOverride(tag)}
               />
               <TagSection
                 title="Descriptors"
                 tags={normalizedTags.descriptors}
                 level="album"
-                trackId={trackId}
-                hasSidecar={hasSidecar}
-                onOverride={(tag) => void handleOverride(tag)}
               />
               <TagSection
                 title="Scenes & Movements"
                 tags={normalizedTags.scenes}
                 level="album"
-                trackId={trackId}
-                hasSidecar={hasSidecar}
-                onOverride={(tag) => void handleOverride(tag)}
               />
               {trackId && rawTrackTags && rawTrackTags.length > 0 && (
                 <div className="tag-drawer-section tag-drawer-section--raw">

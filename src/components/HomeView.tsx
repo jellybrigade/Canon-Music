@@ -26,9 +26,13 @@ import "../styles/home.css";
 interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist?: (name: string) => void;
   onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
   onPlayTrack: (trackId: string) => void;
   onOpenCommandPalette: () => void;
+  homeSearchRaw: string;
+  homeSearchQuery: string;
+  onHomeSearchRawChange: (v: string) => void;
 }
 
 interface SpotlightPick {
@@ -138,6 +142,20 @@ function buildSpotlight(
   return null;
 }
 
+// Deterministic Fisher-Yates shuffle using a seed. Same seed = same order.
+function seededShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = (seed ^ 0xdeadbeef) >>> 0;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = Math.imul(s ^ (s >>> 17), 0x45d9f3b) >>> 0;
+    s = Math.imul(s ^ (s >>> 15), 0x45d9f3b) >>> 0;
+    s = (s ^ (s >>> 16)) >>> 0;
+    const j = s % (i + 1);
+    [result[i], result[j]] = [result[j]!, result[i]!];
+  }
+  return result;
+}
+
 function buildForYouGroups(
   spotlightId: string | null,
   sources: Record<string, AlbumRow[]>,
@@ -148,13 +166,16 @@ function buildForYouGroups(
   const groups: ForYouGroup[] = [];
   const used = new Set<string>(spotlightId ? [spotlightId] : []);
 
+  let catIdx = 0;
   const groupFrom = (kicker: string, source: AlbumRow[]) => {
     const withArt = source.filter(a => a.artwork_url);
-    if (withArt.length === 0) return;
-    const start = withArt.length > perCategory ? seed % (withArt.length - perCategory + 1) : 0;
+    if (withArt.length === 0) { catIdx++; return; }
+    // Shuffle with a per-category seed so different categories pick independently.
+    const shuffled = seededShuffle(withArt, seed * 31 + catIdx);
+    catIdx++;
     const albums: AlbumRow[] = [];
-    for (let i = 0; i < withArt.length && albums.length < perCategory; i++) {
-      const a = withArt[(start + i) % withArt.length]!;
+    for (const a of shuffled) {
+      if (albums.length >= perCategory) break;
       if (used.has(a.id)) continue;
       used.add(a.id);
       albums.push(a);
@@ -177,11 +198,12 @@ interface SpotlightProps {
   pick: SpotlightPick;
   serverWithCred: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist?: (name: string) => void;
   playAlbum: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
-function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu }: SpotlightProps) {
+function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const [accentColor, setAccentColor] = useState<string | null>(null);
 
@@ -197,8 +219,6 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum, onCardConte
     });
     return () => { cancelled = true; };
   }, [artUrl]);
-
-  const meta = [pick.album.artist, pick.album.year].filter(Boolean).join(" · ");
 
   return (
     <section
@@ -219,7 +239,17 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum, onCardConte
         <div className="home-spotlight__top">
           <span className="home-spotlight__kicker">{pick.kicker}</span>
           <h2 className="home-spotlight__title">{pick.album.name}</h2>
-          {meta && <p className="home-spotlight__meta">{meta}</p>}
+          {(pick.album.artist || pick.album.year) && (
+            <p className="home-spotlight__meta">
+              {pick.album.artist && onSelectArtist ? (
+                <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
+                  {pick.album.artist}
+                </button>
+              ) : pick.album.artist}
+              {pick.album.artist && pick.album.year && " · "}
+              {pick.album.year}
+            </p>
+          )}
         </div>
         <div className="home-spotlight__actions">
           <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
@@ -603,7 +633,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, onPlayTrack, onOpenCommandPalette }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
@@ -629,14 +659,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
     setContextMenu({ x: e.clientX, y: e.clientY, album });
   }, []);
 
-  const [searchRaw, setSearchRaw] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    const t = setTimeout(() => setSearchQuery(searchRaw), 200);
-    return () => clearTimeout(t);
-  }, [searchRaw]);
-  const { data: searchResults } = useSearch(searchQuery);
+  const { data: searchResults } = useSearch(homeSearchQuery);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
@@ -706,7 +730,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
 
   const play = (album: AlbumRow) => void playAlbum(album);
 
-  const isSearching = searchRaw.length > 0;
+  const isSearching = homeSearchRaw.length > 0;
 
   return (
     <div className="home-view">
@@ -719,11 +743,11 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
             type="text"
             className="search-bar-input"
             placeholder="Search…"
-            value={searchRaw}
-            onChange={(e) => setSearchRaw(e.target.value)}
+            value={homeSearchRaw}
+            onChange={(e) => onHomeSearchRawChange(e.target.value)}
           />
-          {searchRaw ? (
-            <button className="search-bar-clear" onClick={() => { setSearchRaw(""); setSearchQuery(""); }} title="Clear">
+          {homeSearchRaw ? (
+            <button className="search-bar-clear" onClick={() => onHomeSearchRawChange("")} title="Clear">
               <X size={13} />
             </button>
           ) : (
@@ -738,13 +762,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
       </header>
 
       {isSearching ? (
-        searchResults && searchQuery ? (
+        searchResults && homeSearchQuery ? (
           <SearchResults
             albums={searchResults.albums}
             tracks={searchResults.tracks}
             artists={searchResults.artists}
             serverWithCredential={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
+            onSelectArtist={(artist) => { onHomeSearchRawChange(""); onSelectArtist?.(artist.name); }}
             onPlayTrack={onPlayTrack}
           />
         ) : (
@@ -757,6 +782,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
               pick={spotlight}
               serverWithCred={serverWithCredential}
               onSelectAlbum={onSelectAlbum}
+              onSelectArtist={onSelectArtist}
               playAlbum={play}
               onCardContextMenu={openCardContextMenu}
             />
