@@ -1,0 +1,71 @@
+.update-prompt-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.update-prompt {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 1.5rem 1.75rem;
+  min-width: 280px;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.update-prompt-title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.update-prompt-version {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.update-prompt-error {
+  font-size: 0.8125rem;
+  color: var(--color-error, #e05050);
+  margin: 0;
+}
+
+.update-prompt-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 0.75rem;
+}
+
+.update-prompt-btn {
+  padding: 0.375rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.update-prompt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.update-prompt-btn--primary {
+  background: var(--accent, var(--surface-3));
+  border-color: transparent;
+  color: var(--text-on-accent, var(--text-primary));
+}

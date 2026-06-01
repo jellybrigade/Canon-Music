@@ -40,6 +40,9 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
 import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
+import { checkForUpdate } from "./lib/updater";
+import { UpdatePrompt } from "./components/UpdatePrompt";
+import type { Update } from "@tauri-apps/plugin-updater";
 import type { Server } from "./types/server";
 import type { AlbumRow } from "./hooks/useAlbums";
 import type { AlbumSort } from "./hooks/useAlbums";
@@ -100,6 +103,11 @@ export default function App() {
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: searchResults } = useSearch(searchQuery);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  useEffect(() => {
+    void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
+  }, []);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchRaw(value);
@@ -720,6 +728,12 @@ export default function App() {
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />
+      {pendingUpdate && (
+        <UpdatePrompt
+          update={pendingUpdate}
+          onDismiss={() => setPendingUpdate(null)}
+        />
+      )}
     </Suspense>
   );
 }

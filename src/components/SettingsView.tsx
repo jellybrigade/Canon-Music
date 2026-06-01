@@ -1,5 +1,8 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getVersion } from "@tauri-apps/api/app";
+import { checkForUpdate, installAndRestart } from "../lib/updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 import { useSetting } from "../hooks/useSetting";
 import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
@@ -101,6 +104,13 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
 
   // Remove server confirm
   const [removeConfirm, setRemoveConfirm] = useState(false);
+
+  // About / update state
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [updateCheckState, setUpdateCheckState] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">("idle");
+  const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  const [updateInstalling, setUpdateInstalling] = useState(false);
+  useEffect(() => { void getVersion().then(setAppVersion); }, []);
 
   const { server, credential } = serverWithCredential ?? {};
 
@@ -771,6 +781,56 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             <span className="settings-hint">
               Last refreshed {new Date(lastRefreshedAt * 1000).toLocaleDateString()}
             </span>
+          )}
+        </div>
+      </section>
+
+      {/* ── About ── */}
+      <section className="settings-section">
+        <h3 className="settings-section-title">About</h3>
+        <div className="settings-diag-row">
+          <span className="settings-diag-label">Version</span>
+          <span className="settings-diag-value">{appVersion ?? "…"}</span>
+        </div>
+        <div className="settings-field settings-field--row" style={{ marginTop: "0.75rem" }}>
+          {updateCheckState !== "available" ? (
+            <button
+              className="settings-btn"
+              disabled={updateCheckState === "checking" || updateInstalling}
+              onClick={() => {
+                setUpdateCheckState("checking");
+                setPendingUpdate(null);
+                void checkForUpdate().then((u) => {
+                  if (u) { setPendingUpdate(u); setUpdateCheckState("available"); }
+                  else setUpdateCheckState("up-to-date");
+                }).catch(() => setUpdateCheckState("error"));
+              }}
+            >
+              {updateCheckState === "checking" ? "Checking…" : "Check for updates"}
+            </button>
+          ) : null}
+          {updateCheckState === "up-to-date" && (
+            <span className="settings-hint">You're up to date.</span>
+          )}
+          {updateCheckState === "error" && (
+            <span className="settings-hint" style={{ color: "var(--color-error, #e05050)" }}>
+              Couldn't check for updates.
+            </span>
+          )}
+          {updateCheckState === "available" && pendingUpdate && (
+            <>
+              <span className="settings-hint">Update available: {pendingUpdate.version}</span>
+              <button
+                className="settings-btn primary"
+                disabled={updateInstalling}
+                onClick={() => {
+                  setUpdateInstalling(true);
+                  void installAndRestart(pendingUpdate).catch(() => setUpdateInstalling(false));
+                }}
+              >
+                {updateInstalling ? "Installing…" : "Install & Restart"}
+              </button>
+            </>
           )}
         </div>
       </section>
