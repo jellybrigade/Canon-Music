@@ -137,7 +137,8 @@ export function useEnrichArtist(artistName: string) {
       await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
       await queryClient.invalidateQueries({ queryKey: ["artist-enrichment", artistName] });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Refresh failed");
+      console.error("[useEnrichArtist] refresh failed:", e);
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRefreshing(false);
     }

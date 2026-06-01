@@ -14,6 +14,7 @@
     - Artists pinned to top of results
     - Layout fills the search window — use a multi-column or card-based layout that takes advantage of the full width
     - "More" fallback only for truly long tails, not for the primary 5-10 results
+    - Artist results are not clickable — clicking an artist in search results should navigate to that artist's page
 
 - Clicking a genre tag on an album (opened from Home) navigates to Home instead of Library filtered by that genre
 

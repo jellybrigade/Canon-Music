@@ -35,7 +35,13 @@ async function runMigrations(database: Database): Promise<void> {
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
       for (const statement of statements) {
-        await database.execute(statement);
+        try {
+          await database.execute(statement);
+        } catch (e) {
+          // Ignore "duplicate column name" — ALTER TABLE ADD COLUMN on an already-existing column.
+          // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
+          if (!(e instanceof Error) || !e.message.includes("duplicate column name")) throw e;
+        }
       }
       await database.execute(
         "INSERT INTO schema_migrations (version) VALUES (?)",
