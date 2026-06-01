@@ -277,7 +277,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                       onContextMenu={e => onCardContextMenu(e, album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
                         <div className="album-overlay">
                           <span className="album-name">{album.name}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
@@ -311,7 +311,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                         onContextMenu={e => onCardContextMenu(e, album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -397,7 +397,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} loading="lazy" decoding="async" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"
