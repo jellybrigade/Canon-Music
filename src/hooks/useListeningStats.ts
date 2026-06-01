@@ -99,6 +99,7 @@ export function useListeningStats() {
 
   return {
     ...query,
+    isLoading: query.isLoading || finishQuery.isLoading,
     stats,
     onRepeat,
     rediscover,

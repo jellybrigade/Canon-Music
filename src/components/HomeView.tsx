@@ -302,7 +302,10 @@ function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustom
       className="for-you-popup"
       style={{ top: position.top, left: position.left }}
       onMouseDown={e => e.stopPropagation()}
-      onDragLeave={() => setDropAt(null)}
+      onDragLeave={e => {
+        // Only clear when leaving the popup entirely, not on child-to-child transitions
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
+      }}
     >
       <p className="for-you-popup__title">Customize</p>
       {config.map((cat, i) => (
