@@ -1,3 +1,10 @@
+- Clicking a genre tag on an album (opened from Home) navigates to Home instead of Library filtered by that genre
+
+- For You cards (all except Jump Back In and On Repeat) don't pick fresh albums on refresh — they just shift the queue by one
+  - e.g. refresh 1: [A1, A2, A3, A4] → refresh 2: [A2, A3, A4, A5] → refresh 3: [A3, A4, A5, A6]
+  - Should pick 4 genuinely new albums each refresh, not advance a sliding window
+
+- Clicking artist name in Album detail view should navigate to that artist's page
 - Custom For You categories: let user create their own card via filter builder in the Customize popup
   - Needs design work: which filters to expose (genre? decade? play count range? loved? unplayed? artist?), which to skip (too granular / redundant with built-ins)
   - Needs design work: how filters combine (AND? tag-style multi-select?)

@@ -340,4 +340,16 @@ export const migrations: Migration[] = [
     version: 19,
     sql: `ALTER TABLE albums ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    version: 20,
+    sql: `
+      ALTER TABLE artist_identity ADD COLUMN bio TEXT;
+      ALTER TABLE artist_identity ADD COLUMN listeners INTEGER;
+      ALTER TABLE artist_identity ADD COLUMN playcount INTEGER;
+      ALTER TABLE artist_identity ADD COLUMN similar_json TEXT;
+      ALTER TABLE artist_identity ADD COLUMN top_tags_json TEXT;
+      ALTER TABLE artist_identity ADD COLUMN lastfm_image_url TEXT;
+      ALTER TABLE artist_identity ADD COLUMN enriched_at INTEGER;
+    `,
+  },
 ];

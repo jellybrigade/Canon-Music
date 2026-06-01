@@ -154,3 +154,115 @@
   flex-shrink: 0;
 }
 
+/* ── Enrichment meta line ── */
+.artist-enrichment-line {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.artist-enrichment-refresh {
+  background: none;
+  border: none;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.artist-enrichment-refresh:hover {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.artist-enrichment-error {
+  color: var(--color-error, #e05050);
+  font-size: 0.75rem;
+}
+
+/* ── Artist stats row ── */
+.artist-stats-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  padding: 0 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.artist-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.artist-stat-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.artist-stat-label {
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Bio ── */
+.artist-bio {
+  padding: 0 1.25rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.artist-bio--expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+.artist-bio-toggle {
+  background: none;
+  border: none;
+  padding: 0.15rem 1.25rem 0;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── Similar artists ── */
+.artist-similar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0 1.25rem;
+}
+
+.artist-similar-chip {
+  font-size: 0.8125rem;
+  padding: 0.25em 0.65em;
+  border-radius: 999px;
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: background-color 0.1s, color 0.1s;
+  white-space: nowrap;
+}
+
+.artist-similar-chip:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+}
+

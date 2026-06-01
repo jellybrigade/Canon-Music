@@ -6,47 +6,6 @@ import { useTagsStore } from "../store/tags";
 import type { InboxItem, InboxTagRow } from "../store/tags";
 import type { AlbumRow } from "./useAlbums";
 
-async function stageGenrePendingEdits(
-  trackIds: string[],
-  source: "lastfm" | "manual"
-): Promise<void> {
-  const db = await getDb();
-  const tree = await getCanonTree();
-
-  for (const trackId of trackIds) {
-    type GenreTagRow = { canonical_id: string };
-    const tagRows = await db.select<GenreTagRow[]>(
-      "SELECT DISTINCT canonical_id FROM track_tags WHERE track_id = ? AND kind = 'genre' AND canonical_id IS NOT NULL",
-      [trackId]
-    );
-
-    const names = tagRows
-      .map((r) => tree.byId.get(r.canonical_id)?.name ?? null)
-      .filter((n): n is string => n !== null)
-      .sort();
-
-    if (names.length === 0) continue;
-    const newValue = names.join("; ");
-
-    type GenreRow = { genre: string | null };
-    const trackRow = await db.select<GenreRow[]>(
-      "SELECT genre FROM tracks WHERE id = ?",
-      [trackId]
-    );
-    const oldValue = trackRow[0]?.genre ?? null;
-    if (newValue === oldValue) continue;
-
-    await db.execute(
-      "DELETE FROM pending_edits WHERE track_id = ? AND field = 'genre'",
-      [trackId]
-    );
-    await db.execute(
-      "INSERT INTO pending_edits (track_id, field, old_value, new_value, source, created_at) VALUES (?, 'genre', ?, ?, ?, datetime('now'))",
-      [trackId, oldValue, newValue, source]
-    );
-  }
-}
-
 export type PullMode = "silent" | "review";
 
 async function buildInboxItem(
@@ -149,9 +108,6 @@ async function applyInboxItem(item: InboxItem): Promise<void> {
     "UPDATE albums SET tags_refreshed_at = datetime('now') WHERE id = ?",
     [item.albumId]
   );
-
-  const genreSource = item.source === "lastfm" ? "lastfm" : "manual";
-  await stageGenrePendingEdits(trackRows.map((r) => r.id), genreSource);
 }
 
 export function useTagPull() {
@@ -174,7 +130,6 @@ export function useTagPull() {
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
       void queryClient.invalidateQueries({ queryKey: ["albums"] });
-      void queryClient.invalidateQueries({ queryKey: ["pending_edits"] });
     },
   });
 
@@ -205,7 +160,6 @@ export function useTagPull() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["pending_edits"] });
     },
   });
 
@@ -226,7 +180,6 @@ export function useAcceptInboxItem() {
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
       void queryClient.invalidateQueries({ queryKey: ["albums"] });
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["pending_edits"] });
     },
   });
 }

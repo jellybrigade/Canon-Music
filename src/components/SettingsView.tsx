@@ -10,7 +10,6 @@ import { autoIdentifyAlbum } from "../lib/album-identify";
 import { persistAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { authenticate } from "../lib/navidrome";
 import type { NavidromeCredential } from "../lib/navidrome";
-import { checkSidecarHealth } from "../lib/sidecar";
 import { getMinTagCount, setMinTagCount } from "../lib/lastfm";
 import { keychain } from "../keychain";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -58,8 +57,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [lastfmKey, setLastfmKey] = useSetting("lastfm.api_key", "");
   const [showWaveform, setShowWaveform] = useSetting("player.show_waveform", "false");
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
-  const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "90");
-  const [pullMode, setPullMode] = useSetting("tags.pull_mode_default", "review");
+  const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
   const [mbAutoIdentify, setMbAutoIdentify] = useSetting("mb.auto_identify", "false");
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
@@ -86,22 +84,6 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [serverSaving, setServerSaving] = useState(false);
   const [serverSaveError, setServerSaveError] = useState("");
 
-  // Sidecar edit state
-  const [sidecarEditing, setSidecarEditing] = useState(false);
-  const [editSidecarUrl, setEditSidecarUrl] = useState("");
-  const [editSidecarSecret, setEditSidecarSecret] = useState("");
-  const [editSidecarPathFrom, setEditSidecarPathFrom] = useState("");
-  const [editSidecarPathTo, setEditSidecarPathTo] = useState("");
-  const [sidecarTestState, setSidecarTestState] = useState<TestState>("idle");
-  const [sidecarTestError, setSidecarTestError] = useState("");
-  const [sidecarSaving, setSidecarSaving] = useState(false);
-  const [sidecarSaveError, setSidecarSaveError] = useState("");
-
-  // Diagnostics sidecar ping
-  const [sidecarPingState, setSidecarPingState] = useState<TestState>("idle");
-  const [sidecarPingError, setSidecarPingError] = useState("");
-  const [sidecarPingTime, setSidecarPingTime] = useState<number | null>(null);
-
   // Remove server confirm
   const [removeConfirm, setRemoveConfirm] = useState(false);
 
@@ -114,32 +96,13 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
 
   const { server, credential } = serverWithCredential ?? {};
 
-  const handleRefreshNow = useCallback(async () => {
+  // Unified "Refresh all" — MB identify unmatched, then Last.fm re-normalize all
+  const handleRefreshAll = useCallback(async () => {
     const db = await getDb();
     type Row = { id: string; artist: string | null; name: string };
-    const albums = await db.select<Row[]>("SELECT id, artist, name FROM albums ORDER BY name");
-    setPullProgress({ done: 0, total: albums.length });
-    for (let i = 0; i < albums.length; i++) {
-      const album = albums[i]!;
-      try {
-        await normalizeAlbum(album.id, album.artist ?? "", album.name);
-      } catch (e) {
-        console.warn("Refresh failed for:", album.name, e);
-      }
-      setPullProgress({ done: i + 1, total: albums.length });
-    }
-    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
-    void refetchLastRefreshed();
-    setPullProgress(null);
-  }, [refetchLastRefreshed, queryClient, setPullProgress]);
 
-  // Bulk MB genre sync: identify unmatched albums, save confirmed, then normalize
-  const handleSyncAllMb = useCallback(async () => {
-    const db = await getDb();
-    type Row = { id: string; artist: string | null; name: string };
-    // Skip confirmed albums; retry previously-failed stubs so a re-run after an
-    // outage doesn't leave those albums permanently suppressed.
-    const albums = await db.select<Row[]>(
+    // Step 1: MB identify unmatched albums
+    const unmatched = await db.select<Row[]>(
       `SELECT a.id, a.artist, a.name FROM albums a
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
@@ -147,65 +110,55 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
        )
        ORDER BY a.name`
     );
-    if (albums.length === 0) { setPullProgress(null); return; }
-    setPullProgress({ done: 0, total: albums.length });
-    for (let i = 0; i < albums.length; i++) {
-      const album = albums[i]!;
-      try {
-        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name });
-        if (result.decision === "auto_confirmed" && result.detail) {
-          const now = Math.floor(Date.now() / 1000);
-          await persistAlbumIdentity({
-            albumId: album.id,
-            mbReleaseGroupId: result.detail.id,
-            mbReleaseId: result.release?.id ?? null,
-            mbArtistId: result.detail.artistMbid ?? null,
-            lastfmArtistName: null,
-            lastfmAlbumName: null,
-            lastfmMatchConfirmed: false,
-            combinedGenres: result.combinedGenres,
-            label: result.release?.label ?? null,
-            country: result.release?.country ?? null,
-            catalogNumber: result.release?.catalogNumber ?? null,
-            barcode: result.release?.barcode ?? null,
-            releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
-            autoMatched: true,
-            matchScore: Math.round(result.score * 100),
-            confirmedAt: now,
-          });
-          await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-            combinedMbGenres: result.combinedGenres,
-          });
-        } else {
-          // Record the attempt so it won't be retried on next bulk run
-          const now = Math.floor(Date.now() / 1000);
-          await db.execute(
-            `INSERT OR IGNORE INTO album_identity
-               (album_id, auto_matched, match_score, looked_up_at)
-             VALUES (?, 0, ?, ?)`,
-            [album.id, Math.round(result.score * 100), now]
-          );
+    if (unmatched.length > 0) {
+      setPullProgress({ done: 0, total: unmatched.length });
+      for (let i = 0; i < unmatched.length; i++) {
+        const album = unmatched[i]!;
+        try {
+          const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name });
+          if (result.decision === "auto_confirmed" && result.detail) {
+            const now = Math.floor(Date.now() / 1000);
+            await persistAlbumIdentity({
+              albumId: album.id,
+              mbReleaseGroupId: result.detail.id,
+              mbReleaseId: result.release?.id ?? null,
+              mbArtistId: result.detail.artistMbid ?? null,
+              lastfmArtistName: null,
+              lastfmAlbumName: null,
+              lastfmMatchConfirmed: false,
+              combinedGenres: result.combinedGenres,
+              label: result.release?.label ?? null,
+              country: result.release?.country ?? null,
+              catalogNumber: result.release?.catalogNumber ?? null,
+              barcode: result.release?.barcode ?? null,
+              releaseDate: result.release?.date ?? result.detail.firstReleaseDate ?? null,
+              autoMatched: true,
+              matchScore: Math.round(result.score * 100),
+              confirmedAt: now,
+            });
+          } else {
+            const now = Math.floor(Date.now() / 1000);
+            await db.execute(
+              `INSERT OR IGNORE INTO album_identity (album_id, auto_matched, match_score, looked_up_at)
+               VALUES (?, 0, ?, ?)`,
+              [album.id, Math.round(result.score * 100), now]
+            );
+          }
+        } catch (e) {
+          console.warn("MB sync failed for:", album.name, e);
         }
-      } catch (e) {
-        console.warn("MB sync failed for:", album.name, e);
+        setPullProgress({ done: i + 1, total: unmatched.length });
       }
-      setPullProgress({ done: i + 1, total: albums.length });
+      await queryClient.invalidateQueries({ queryKey: ["album-identity"] });
     }
-    await queryClient.invalidateQueries({ queryKey: ["album-identity"] });
-    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
-    void refetchLastRefreshed();
-    setPullProgress(null);
-  }, [refetchLastRefreshed, queryClient, setPullProgress]);
 
-  // Identity-aware Last.fm tag refresh: passes confirmed identity strings + MB genres to normalizeAlbum
-  const handleSyncAllLastfm = useCallback(async () => {
-    const db = await getDb();
-    type Row = {
+    // Step 2: Last.fm normalize all albums (using identity strings when available)
+    type FullRow = {
       id: string; artist: string | null; name: string;
       lastfm_artist_name: string | null; lastfm_album_name: string | null;
       combined_genres_json: string | null;
     };
-    const albums = await db.select<Row[]>(
+    const albums = await db.select<FullRow[]>(
       `SELECT a.id, a.artist, a.name,
               ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json
        FROM albums a
@@ -229,6 +182,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
       }
       setPullProgress({ done: i + 1, total: albums.length });
     }
+
     await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
     void refetchLastRefreshed();
     setPullProgress(null);
@@ -319,92 +273,6 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
     onRemoveServer();
   }
 
-  function beginEditSidecar() {
-    if (!server) return;
-    setEditSidecarUrl(server.sidecar_url ?? "");
-    setEditSidecarSecret("");
-    setEditSidecarPathFrom(server.sidecar_path_prefix_from ?? "");
-    setEditSidecarPathTo(server.sidecar_path_prefix_to ?? "");
-    setSidecarTestState("idle");
-    setSidecarTestError("");
-    setSidecarSaveError("");
-    setSidecarEditing(true);
-  }
-
-  async function handleSidecarTest() {
-    if (!editSidecarUrl.trim() || !editSidecarSecret.trim()) return;
-    setSidecarTestState("testing");
-    setSidecarTestError("");
-    try {
-      await checkSidecarHealth(editSidecarUrl.trim(), editSidecarSecret.trim());
-      setSidecarTestState("ok");
-    } catch (err) {
-      setSidecarTestState("error");
-      setSidecarTestError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function handleSaveSidecar() {
-    if (!server) return;
-    setSidecarSaving(true);
-    setSidecarSaveError("");
-    try {
-      const hasSidecar = editSidecarUrl.trim() !== "" && editSidecarSecret.trim() !== "";
-      if (hasSidecar) {
-        await keychain.set(`canon.sidecar.${server.id}`, "secret", editSidecarSecret.trim());
-      } else if (server.sidecar_secret_key) {
-        try { await keychain.delete(server.sidecar_secret_key, "secret"); } catch { /* ok */ }
-      }
-      const db = await getDb();
-      await db.execute(
-        "UPDATE servers SET sidecar_url=?, sidecar_secret_key=?, sidecar_path_prefix_from=?, sidecar_path_prefix_to=? WHERE id=?",
-        [
-          hasSidecar ? editSidecarUrl.trim() : null,
-          hasSidecar ? `canon.sidecar.${server.id}` : null,
-          editSidecarPathFrom.trim() || null,
-          editSidecarPathTo.trim() || null,
-          server.id,
-        ]
-      );
-      await queryClient.invalidateQueries({ queryKey: ["servers"] });
-      await queryClient.invalidateQueries({ queryKey: ["server-credential", server.id] });
-      setSidecarEditing(false);
-    } catch (err) {
-      setSidecarSaveError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSidecarSaving(false);
-    }
-  }
-
-  async function handleRemoveSidecar() {
-    if (!server) return;
-    if (server.sidecar_secret_key) {
-      try { await keychain.delete(server.sidecar_secret_key, "secret"); } catch { /* ok */ }
-    }
-    const db = await getDb();
-    await db.execute(
-      "UPDATE servers SET sidecar_url=NULL, sidecar_secret_key=NULL, sidecar_path_prefix_from=NULL, sidecar_path_prefix_to=NULL WHERE id=?",
-      [server.id]
-    );
-    await queryClient.invalidateQueries({ queryKey: ["servers"] });
-    await queryClient.invalidateQueries({ queryKey: ["server-credential", server.id] });
-  }
-
-  async function handleSidecarPing() {
-    if (!server?.sidecar_url || !server.sidecar_secret_key) return;
-    setSidecarPingState("testing");
-    setSidecarPingError("");
-    try {
-      const secret = await keychain.get(server.sidecar_secret_key, "secret");
-      await checkSidecarHealth(server.sidecar_url, secret);
-      setSidecarPingState("ok");
-      setSidecarPingTime(Date.now());
-    } catch (err) {
-      setSidecarPingState("error");
-      setSidecarPingError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
   function syncStatusLabel() {
     switch (syncStatus) {
       case "syncing": return "Syncing…";
@@ -419,465 +287,309 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
 
   return (
     <div className="settings-view">
-      <h2 className="settings-title">Settings</h2>
+      <div className="settings-inner">
+        <h2 className="settings-title">Settings</h2>
 
-      {/* ── Server ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Server</h3>
-        {server ? (
-          <>
-            {!serverEditing ? (
-              <div className="settings-server-card">
-                <div className="settings-server-info">
-                  <span className="settings-server-name">{server.display_name}</span>
-                  <span className="settings-server-meta">{server.url} · {server.username}</span>
+        {/* ── Server ── */}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Server</h3>
+          {server ? (
+            <>
+              {!serverEditing ? (
+                <div className="settings-server-card">
+                  <div className="settings-server-info">
+                    <span className="settings-server-name">{server.display_name}</span>
+                    <span className="settings-server-meta">{server.url} · {server.username}</span>
+                  </div>
+                  <button className="settings-btn" onClick={beginEditServer}>Edit</button>
                 </div>
-                <button className="settings-btn" onClick={beginEditServer}>Edit</button>
-              </div>
-            ) : (
-              <div className="settings-server-edit">
-                <label className="settings-field">
-                  <span>Server URL</span>
-                  <input
-                    type="url"
-                    value={editUrl}
-                    onChange={(e) => handleEditCredentialChange("url", e.target.value)}
-                  />
-                </label>
-                <label className="settings-field">
-                  <span>Display name</span>
-                  <input
-                    type="text"
-                    value={editDisplayName}
-                    onChange={(e) => setEditDisplayName(e.target.value)}
-                  />
-                </label>
-                <label className="settings-field">
-                  <span>Username</span>
-                  <input
-                    type="text"
-                    autoComplete="username"
-                    value={editUsername}
-                    onChange={(e) => handleEditCredentialChange("username", e.target.value)}
-                  />
-                </label>
-                <label className="settings-field">
-                  <span>Password</span>
-                  <input
-                    type="password"
-                    autoComplete="current-password"
-                    placeholder="Enter password to re-test"
-                    value={editPassword}
-                    onChange={(e) => handleEditCredentialChange("password", e.target.value)}
-                  />
-                </label>
-                {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
-                {serverTestState === "ok" && serverSnapshotMatch && <p className="settings-success">Connection successful.</p>}
-                {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
-                <div className="settings-field--row">
-                  <button className="settings-btn" onClick={() => setServerEditing(false)}>Cancel</button>
-                  <button
-                    className="settings-btn"
-                    onClick={() => { void handleServerTest(); }}
-                    disabled={!editUrl.trim() || !editUsername.trim() || !editPassword.trim() || serverTestState === "testing"}
-                  >
-                    {serverTestState === "testing" ? "Testing…" : "Test connection"}
-                  </button>
-                  <button
-                    className="settings-btn primary"
-                    onClick={() => { void handleSaveServer(); }}
-                    disabled={!canSaveServer}
-                  >
-                    {serverSaving ? "Saving…" : "Save"}
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Sidecar subsection */}
-            <div className="settings-sidecar">
-              <div className="settings-sidecar-header">
-                <span className="settings-section-desc" style={{ margin: 0 }}>
-                  {server.sidecar_url ? `Sidecar: ${server.sidecar_url}` : "No sidecar configured — tag editing disabled"}
-                </span>
-                <div className="settings-sidecar-actions">
-                  {server.sidecar_url && (
-                    <button className="settings-btn" onClick={() => { void handleRemoveSidecar(); }}>Remove</button>
-                  )}
-                  <button className="settings-btn" onClick={beginEditSidecar}>
-                    {server.sidecar_url ? "Edit" : "Set up sidecar"}
-                  </button>
-                </div>
-              </div>
-
-              {sidecarEditing && (
-                <div className="settings-server-edit" style={{ marginTop: "0.75rem" }}>
+              ) : (
+                <div className="settings-server-edit">
                   <label className="settings-field">
-                    <span>Sidecar URL</span>
+                    <span>Server URL</span>
                     <input
                       type="url"
-                      placeholder="http://localhost:8765"
-                      value={editSidecarUrl}
-                      onChange={(e) => { setEditSidecarUrl(e.target.value); setSidecarTestState("idle"); }}
+                      value={editUrl}
+                      onChange={(e) => handleEditCredentialChange("url", e.target.value)}
                     />
                   </label>
                   <label className="settings-field">
-                    <span>Shared secret</span>
+                    <span>Display name</span>
+                    <input
+                      type="text"
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                    />
+                  </label>
+                  <label className="settings-field">
+                    <span>Username</span>
+                    <input
+                      type="text"
+                      autoComplete="username"
+                      value={editUsername}
+                      onChange={(e) => handleEditCredentialChange("username", e.target.value)}
+                    />
+                  </label>
+                  <label className="settings-field">
+                    <span>Password</span>
                     <input
                       type="password"
-                      autoComplete="off"
-                      placeholder="Enter secret to re-test"
-                      value={editSidecarSecret}
-                      onChange={(e) => { setEditSidecarSecret(e.target.value); setSidecarTestState("idle"); }}
+                      autoComplete="current-password"
+                      placeholder="Enter password to re-test"
+                      value={editPassword}
+                      onChange={(e) => handleEditCredentialChange("password", e.target.value)}
                     />
                   </label>
-                  <label className="settings-field">
-                    <span>Path remap: from</span>
-                    <input
-                      type="text"
-                      placeholder="/mnt/music"
-                      value={editSidecarPathFrom}
-                      onChange={(e) => setEditSidecarPathFrom(e.target.value)}
-                    />
-                  </label>
-                  <label className="settings-field">
-                    <span>Path remap: to</span>
-                    <input
-                      type="text"
-                      placeholder="/music"
-                      value={editSidecarPathTo}
-                      onChange={(e) => setEditSidecarPathTo(e.target.value)}
-                    />
-                  </label>
-                  {sidecarTestState === "error" && <p className="settings-error">{sidecarTestError}</p>}
-                  {sidecarTestState === "ok" && <p className="settings-success">Sidecar reachable.</p>}
-                  {sidecarSaveError && <p className="settings-error">{sidecarSaveError}</p>}
+                  {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
+                  {serverTestState === "ok" && serverSnapshotMatch && <p className="settings-success">Connection successful.</p>}
+                  {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
                   <div className="settings-field--row">
-                    <button className="settings-btn" onClick={() => setSidecarEditing(false)}>Cancel</button>
+                    <button className="settings-btn" onClick={() => setServerEditing(false)}>Cancel</button>
                     <button
                       className="settings-btn"
-                      onClick={() => { void handleSidecarTest(); }}
-                      disabled={!editSidecarUrl.trim() || !editSidecarSecret.trim() || sidecarTestState === "testing"}
+                      onClick={() => { void handleServerTest(); }}
+                      disabled={!editUrl.trim() || !editUsername.trim() || !editPassword.trim() || serverTestState === "testing"}
                     >
-                      {sidecarTestState === "testing" ? "Testing…" : "Test sidecar"}
+                      {serverTestState === "testing" ? "Testing…" : "Test connection"}
                     </button>
                     <button
                       className="settings-btn primary"
-                      onClick={() => { void handleSaveSidecar(); }}
-                      disabled={sidecarSaving}
+                      onClick={() => { void handleSaveServer(); }}
+                      disabled={!canSaveServer}
                     >
-                      {sidecarSaving ? "Saving…" : "Save"}
+                      {serverSaving ? "Saving…" : "Save"}
                     </button>
                   </div>
                 </div>
               )}
-            </div>
 
-            {/* Remove server */}
-            <div className="settings-remove-server">
-              {!removeConfirm ? (
-                <button className="settings-btn settings-btn--danger" onClick={() => setRemoveConfirm(true)}>
-                  Remove server
-                </button>
-              ) : (
-                <div className="settings-remove-confirm">
-                  <span className="settings-error">Remove server and return to setup?</span>
-                  <button className="settings-btn" onClick={() => setRemoveConfirm(false)}>Cancel</button>
-                  <button className="settings-btn settings-btn--danger" onClick={() => { void handleRemoveServer(); }}>
-                    Remove
+              {/* Remove server */}
+              <div className="settings-remove-server">
+                {!removeConfirm ? (
+                  <button className="settings-btn settings-btn--danger" onClick={() => setRemoveConfirm(true)}>
+                    Remove server
                   </button>
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <p className="settings-section-desc">No server configured.</p>
-        )}
-      </section>
-
-      {/* ── Last.fm ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Last.fm</h3>
-        <label className="settings-field">
-          <span>API Key</span>
-          <input
-            type="text"
-            placeholder="Paste your Last.fm API key"
-            value={lastfmKey}
-            onChange={(e) => void setLastfmKey(e.target.value)}
-          />
-        </label>
-        <label className="settings-field">
-          <span>Min tag popularity (0–100)</span>
-          <input
-            type="number"
-            min={0}
-            max={100}
-            step={5}
-            value={minTagCount ?? 25}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10);
-              if (!isNaN(v) && v >= 0 && v <= 100) {
-                void setMinTagCount(v).then(() => {
-                  void queryClient.invalidateQueries({ queryKey: ["settings", "lastfm.min_tag_count"] });
-                });
-              }
-            }}
-            className="settings-staleness-input"
-          />
-        </label>
-      </section>
-
-      {/* ── MusicBrainz ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">MusicBrainz</h3>
-        <p className="settings-section-desc">
-          No API key required. Metadata fetches include a{" "}
-          <code>User-Agent</code> header identifying this app, per MB policy.
-          Rate-limited to 1 request/second.
-        </p>
-        <p className="settings-section-desc">
-          Use the <strong>Identify…</strong> button on any album or artist page to
-          look up and confirm MusicBrainz IDs. Confirmed identity enriches genres,
-          label, country, and release date, and overrides Last.fm string matching.
-        </p>
-        <label className="settings-field settings-field--inline">
-          <input
-            type="checkbox"
-            checked={mbAutoIdentify === "true"}
-            onChange={(e) => void setMbAutoIdentify(e.target.checked ? "true" : "false")}
-          />
-          <span>Auto-identify albums when opened</span>
-        </label>
-        <p className="settings-section-desc">
-          When enabled, albums are silently matched to MusicBrainz on first open.
-          High-confidence matches confirm automatically; ambiguous or low-confidence
-          albums show an "Unidentified" badge instead.
-        </p>
-        <div className="settings-field settings-field--row">
-          <button
-            className="settings-btn"
-            onClick={() => { void handleSyncAllMb(); }}
-            disabled={pullProgress !== null}
-            title="Identify all unmatched albums against MusicBrainz and pull genres"
-          >
-            {pullProgress ? `Syncing MB… ${pullProgress.done} / ${pullProgress.total}` : "Sync all MB genres"}
-          </button>
-          <span className="settings-hint">Only runs on albums not yet attempted. Rate-limited; may take a while.</span>
-        </div>
-      </section>
-
-      {/* ── Playback ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Playback</h3>
-        <label className="settings-field settings-field--inline">
-          <input
-            type="checkbox"
-            checked={showWaveform === "true"}
-            onChange={(e) => void setShowWaveform(e.target.checked ? "true" : "false")}
-          />
-          <span>Show waveform progress bar</span>
-        </label>
-        <p className="settings-section-desc">
-          Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally.
-        </p>
-        <label className="settings-field">
-          <span>Play album action</span>
-          <select
-            value={playAction}
-            onChange={(e) => void setPlayAction(e.target.value)}
-            className="settings-select"
-          >
-            <option value="replace">Replace queue</option>
-            <option value="queue_next">Play next</option>
-            <option value="queue_last">Add to end</option>
-            <option value="shuffle">Shuffle &amp; play</option>
-          </select>
-        </label>
-        <p className="settings-section-desc">
-          What clicking ▶ Play Album does to the current queue.
-        </p>
-      </section>
-
-      {/* ── Tags ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Tags</h3>
-        <label className="settings-field">
-          <span>Staleness threshold (days)</span>
-          <input
-            type="number"
-            min={1}
-            max={9999}
-            value={stalenessDays}
-            onChange={(e) => void setStalenessDays(e.target.value)}
-            className="settings-staleness-input"
-          />
-        </label>
-        <div className="settings-field">
-          <span>Default pull mode</span>
-          <div className="settings-radio-group">
-            <label>
-              <input
-                type="radio"
-                name="pull_mode"
-                value="review"
-                checked={pullMode === "review"}
-                onChange={() => void setPullMode("review")}
-              />
-              Review in Inbox
-            </label>
-            <label>
-              <input
-                type="radio"
-                name="pull_mode"
-                value="silent"
-                checked={pullMode === "silent"}
-                onChange={() => void setPullMode("silent")}
-              />
-              Silent
-            </label>
-          </div>
-        </div>
-        <label className="settings-field settings-field--inline">
-          <input
-            type="checkbox"
-            checked={rapToHipHop}
-            onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
-          />
-          <span>Map "Rap" to Hip Hop</span>
-        </label>
-      </section>
-
-      {/* ── Tag automation ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Tag automation</h3>
-        <label className="settings-field settings-field--inline">
-          <input
-            type="checkbox"
-            checked={autoRefresh === "true"}
-            onChange={(e) => void setAutoRefresh(e.target.checked ? "true" : "false")}
-          />
-          <span>Auto-refresh tags on launch</span>
-        </label>
-        <div className="settings-field settings-field--row">
-          <button
-            className="settings-btn"
-            onClick={() => { void handleRefreshNow(); }}
-            disabled={pullProgress !== null}
-          >
-            {pullProgress
-              ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}`
-              : "Refresh now"}
-          </button>
-          <button
-            className="settings-btn"
-            onClick={() => { void handleSyncAllLastfm(); }}
-            disabled={pullProgress !== null}
-            title="Re-normalize all albums using confirmed Last.fm identity strings"
-          >
-            {pullProgress ? `Syncing… ${pullProgress.done} / ${pullProgress.total}` : "Sync all Last.fm tags"}
-          </button>
-          {lastRefreshedAt && pullProgress === null && (
-            <span className="settings-hint">
-              Last refreshed {new Date(lastRefreshedAt * 1000).toLocaleDateString()}
-            </span>
+                ) : (
+                  <div className="settings-remove-confirm">
+                    <span className="settings-error">Remove server and return to setup?</span>
+                    <button className="settings-btn" onClick={() => setRemoveConfirm(false)}>Cancel</button>
+                    <button className="settings-btn settings-btn--danger" onClick={() => { void handleRemoveServer(); }}>
+                      Remove
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <p className="settings-section-desc">No server configured.</p>
           )}
-        </div>
-      </section>
+        </section>
 
-      {/* ── About ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">About</h3>
-        <div className="settings-diag-row">
-          <span className="settings-diag-label">Version</span>
-          <span className="settings-diag-value">{appVersion ?? "…"}</span>
-        </div>
-        <div className="settings-field settings-field--row" style={{ marginTop: "0.75rem" }}>
-          {updateCheckState !== "available" ? (
+        {/* ── Metadata & Tags ── */}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Metadata &amp; Tags</h3>
+          <p className="settings-section-desc">
+            Canon keeps tags clean and enriched automatically. Genres and artist metadata are pulled from
+            Last.fm and MusicBrainz in the background. Nothing is written to your files.
+          </p>
+
+          <label className="settings-field">
+            <span>Last.fm API key</span>
+            <input
+              type="text"
+              placeholder="Paste your Last.fm API key"
+              value={lastfmKey}
+              onChange={(e) => void setLastfmKey(e.target.value)}
+            />
+          </label>
+          <label className="settings-field">
+            <span>Min tag popularity (0–100)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={5}
+              value={minTagCount ?? 25}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 0 && v <= 100) {
+                  void setMinTagCount(v).then(() => {
+                    void queryClient.invalidateQueries({ queryKey: ["settings", "lastfm.min_tag_count"] });
+                  });
+                }
+              }}
+              className="settings-staleness-input"
+            />
+          </label>
+
+          <p className="settings-section-desc" style={{ marginTop: "0.25rem" }}>
+            <strong>MusicBrainz</strong> — no API key required. Use the{" "}
+            <strong>Identify…</strong> button on any album or artist to confirm MusicBrainz IDs.
+            Confirmed identity enriches genres, label, country, and release date.
+          </p>
+          <label className="settings-field settings-field--inline">
+            <input
+              type="checkbox"
+              checked={mbAutoIdentify === "true"}
+              onChange={(e) => void setMbAutoIdentify(e.target.checked ? "true" : "false")}
+            />
+            <span>Auto-identify albums when opened</span>
+          </label>
+
+          <label className="settings-field settings-field--inline" style={{ marginTop: "0.5rem" }}>
+            <input
+              type="checkbox"
+              checked={autoRefresh === "true"}
+              onChange={(e) => void setAutoRefresh(e.target.checked ? "true" : "false")}
+            />
+            <span>Auto-refresh metadata on launch</span>
+          </label>
+          <label className="settings-field">
+            <span>Stale after (days)</span>
+            <input
+              type="number"
+              min={1}
+              max={9999}
+              value={stalenessDays}
+              onChange={(e) => void setStalenessDays(e.target.value)}
+              className="settings-staleness-input"
+            />
+          </label>
+          <label className="settings-field settings-field--inline">
+            <input
+              type="checkbox"
+              checked={rapToHipHop}
+              onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
+            />
+            <span>Map &ldquo;Rap&rdquo; to Hip Hop</span>
+          </label>
+
+          <div className="settings-field settings-field--row" style={{ marginTop: "0.25rem" }}>
             <button
               className="settings-btn"
-              disabled={updateCheckState === "checking" || updateInstalling}
-              onClick={() => {
-                setUpdateCheckState("checking");
-                setPendingUpdate(null);
-                void checkForUpdate().then((u) => {
-                  if (u) { setPendingUpdate(u); setUpdateCheckState("available"); }
-                  else setUpdateCheckState("up-to-date");
-                }).catch(() => setUpdateCheckState("error"));
-              }}
+              onClick={() => { void handleRefreshAll(); }}
+              disabled={pullProgress !== null}
+              title="Identify unmatched albums on MusicBrainz, then re-pull all Last.fm tags"
             >
-              {updateCheckState === "checking" ? "Checking…" : "Check for updates"}
+              {pullProgress
+                ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}`
+                : "Refresh all now"}
             </button>
-          ) : null}
-          {updateCheckState === "up-to-date" && (
-            <span className="settings-hint">You're up to date.</span>
-          )}
-          {updateCheckState === "error" && (
-            <span className="settings-hint" style={{ color: "var(--color-error, #e05050)" }}>
-              Couldn't check for updates.
-            </span>
-          )}
-          {updateCheckState === "available" && pendingUpdate && (
-            <>
-              <span className="settings-hint">Update available: {pendingUpdate.version}</span>
+            {lastRefreshedAt && pullProgress === null && (
+              <span className="settings-hint">
+                Last refreshed {new Date(lastRefreshedAt * 1000).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+        </section>
+
+        {/* ── Playback ── */}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Playback</h3>
+          <label className="settings-field settings-field--inline">
+            <input
+              type="checkbox"
+              checked={showWaveform === "true"}
+              onChange={(e) => void setShowWaveform(e.target.checked ? "true" : "false")}
+            />
+            <span>Show waveform progress bar</span>
+          </label>
+          <p className="settings-section-desc">
+            Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally.
+          </p>
+          <label className="settings-field">
+            <span>Play album action</span>
+            <select
+              value={playAction}
+              onChange={(e) => void setPlayAction(e.target.value)}
+              className="settings-select"
+            >
+              <option value="replace">Replace queue</option>
+              <option value="queue_next">Play next</option>
+              <option value="queue_last">Add to end</option>
+              <option value="shuffle">Shuffle &amp; play</option>
+            </select>
+          </label>
+          <p className="settings-section-desc">
+            What clicking ▶ Play Album does to the current queue.
+          </p>
+        </section>
+
+        {/* ── About ── */}
+        <section className="settings-section">
+          <h3 className="settings-section-title">About</h3>
+          <div className="settings-diag-row">
+            <span className="settings-diag-label">Version</span>
+            <span className="settings-diag-value">{appVersion ?? "…"}</span>
+          </div>
+          <div className="settings-field settings-field--row" style={{ marginTop: "0.75rem" }}>
+            {updateCheckState !== "available" ? (
               <button
-                className="settings-btn primary"
-                disabled={updateInstalling}
+                className="settings-btn"
+                disabled={updateCheckState === "checking" || updateInstalling}
                 onClick={() => {
-                  setUpdateInstalling(true);
-                  void installAndRestart(pendingUpdate).catch(() => setUpdateInstalling(false));
+                  setUpdateCheckState("checking");
+                  setPendingUpdate(null);
+                  void checkForUpdate().then((u) => {
+                    if (u) { setPendingUpdate(u); setUpdateCheckState("available"); }
+                    else setUpdateCheckState("up-to-date");
+                  }).catch(() => setUpdateCheckState("error"));
                 }}
               >
-                {updateInstalling ? "Installing…" : "Install & Restart"}
+                {updateCheckState === "checking" ? "Checking…" : "Check for updates"}
               </button>
-            </>
-          )}
-        </div>
-      </section>
+            ) : null}
+            {updateCheckState === "up-to-date" && (
+              <span className="settings-hint">You're up to date.</span>
+            )}
+            {updateCheckState === "error" && (
+              <span className="settings-hint" style={{ color: "var(--color-error, #e05050)" }}>
+                Couldn't check for updates.
+              </span>
+            )}
+            {updateCheckState === "available" && pendingUpdate && (
+              <>
+                <span className="settings-hint">Update available: {pendingUpdate.version}</span>
+                <button
+                  className="settings-btn primary"
+                  disabled={updateInstalling}
+                  onClick={() => {
+                    setUpdateInstalling(true);
+                    void installAndRestart(pendingUpdate).catch(() => setUpdateInstalling(false));
+                  }}
+                >
+                  {updateInstalling ? "Installing…" : "Install & Restart"}
+                </button>
+              </>
+            )}
+          </div>
+        </section>
 
-      {/* ── Diagnostics ── */}
-      <section className="settings-section">
-        <h3 className="settings-section-title">Diagnostics</h3>
+        {/* ── Diagnostics ── */}
+        <section className="settings-section">
+          <h3 className="settings-section-title">Diagnostics</h3>
 
-        <div className="settings-diag-row">
-          <span className="settings-diag-label">Sync</span>
-          <span className={`settings-diag-value${syncStatus === "error" || syncStatus === "partial" ? " settings-diag-value--error" : ""}`}>
-            {syncStatusLabel()}
-          </span>
-        </div>
-
-        <div className="settings-diag-row">
-          <span className="settings-diag-label">Scrobble queue</span>
-          <span className="settings-diag-value">
-            {scrobbleCount ?? "—"} pending
-          </span>
-          <button
-            className="settings-btn"
-            onClick={() => { void refetchScrobbleCount(); }}
-          >
-            Refresh
-          </button>
-        </div>
-
-        {server?.sidecar_url && (
           <div className="settings-diag-row">
-            <span className="settings-diag-label">Sidecar</span>
-            <span className={`settings-diag-value${sidecarPingState === "error" ? " settings-diag-value--error" : sidecarPingState === "ok" ? " settings-diag-value--ok" : ""}`}>
-              {sidecarPingState === "idle" && "—"}
-              {sidecarPingState === "testing" && "Checking…"}
-              {sidecarPingState === "ok" && `Reachable${sidecarPingTime ? ` · ${new Date(sidecarPingTime).toLocaleTimeString()}` : ""}`}
-              {sidecarPingState === "error" && `Unreachable — ${sidecarPingError}`}
+            <span className="settings-diag-label">Sync</span>
+            <span className={`settings-diag-value${syncStatus === "error" || syncStatus === "partial" ? " settings-diag-value--error" : ""}`}>
+              {syncStatusLabel()}
+            </span>
+          </div>
+
+          <div className="settings-diag-row">
+            <span className="settings-diag-label">Scrobble queue</span>
+            <span className="settings-diag-value">
+              {scrobbleCount ?? "—"} pending
             </span>
             <button
               className="settings-btn"
-              onClick={() => { void handleSidecarPing(); }}
-              disabled={sidecarPingState === "testing"}
+              onClick={() => { void refetchScrobbleCount(); }}
             >
-              Check
+              Refresh
             </button>
           </div>
-        )}
-      </section>
+        </section>
+      </div>
     </div>
   );
 }

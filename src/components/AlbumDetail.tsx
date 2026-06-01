@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Heart, Play, ChevronRight, Disc, HelpCircle } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -11,6 +12,7 @@ import { useTracks } from "../hooks/useTracks";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useSetting } from "../hooks/useSetting";
@@ -53,11 +55,32 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
+  const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
   const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
+
+  const [isTagRefreshing, setIsTagRefreshing] = useState(false);
+  const refreshTags = useCallback(async () => {
+    if (isTagRefreshing) return;
+    setIsTagRefreshing(true);
+    try {
+      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
+        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
+        combinedMbGenres: albumIdentity?.combined_genres_json
+          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
+          : null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+    } catch {
+      // silent
+    } finally {
+      setIsTagRefreshing(false);
+    }
+  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient]);
   const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
@@ -228,6 +251,22 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 <HelpCircle size={12} /> Unidentified
               </button>
             ) : null}
+            <div className="album-meta-refresh-line">
+              {normalizedTags?.computed_at ? (
+                <span className="album-meta-refresh-hint">
+                  Tags updated {Math.floor((Date.now() / 1000 - normalizedTags.computed_at) / 86400) === 0
+                    ? "today"
+                    : `${Math.floor((Date.now() / 1000 - normalizedTags.computed_at) / 86400)}d ago`}
+                </span>
+              ) : null}
+              <button
+                className="album-meta-refresh-btn"
+                onClick={() => { void refreshTags(); }}
+                disabled={isTagRefreshing}
+              >
+                {isTagRefreshing ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
             <div className="album-detail-actions">
               <button
                 className="play-album-btn"
@@ -453,7 +492,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           albumArtist={album.artist ?? ""}
           albumName={album.name}
           trackId={drawerState.trackId}
-          hasSidecar={!!server.sidecar_url}
           onClose={() => setDrawerState(null)}
         />
       )}

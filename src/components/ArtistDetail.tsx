@@ -11,8 +11,8 @@ import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
-import { fetchArtistImage, fetchArtistTopTracks } from "../lib/lastfm";
-import { useArtistIdentity } from "../hooks/useArtistIdentity";
+import { fetchArtistTopTracks } from "../lib/lastfm";
+import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import "./ArtistDetail.css";
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onClose: () => void;
   onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist?: (artistName: string) => void;
 }
 
 interface TopTrack {
@@ -98,15 +99,28 @@ function rankByLastfm(tracks: TopTrack[], lastfmTitles: string[]): TopTrack[] {
   });
 }
 
-export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAlbum }: Props) {
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function timeAgo(unixSecs: number): string {
+  const diffDays = Math.floor((Date.now() / 1000 - unixSecs) / 86400);
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  return `${diffDays}d ago`;
+}
+
+export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: albums } = useArtistAlbums(artist.name);
   const { data: rawTracks } = useArtistTopTracks(artist.name);
-  const { data: artistIdentity } = useArtistIdentity(artist.name);
+  const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name);
   const [showIdentify, setShowIdentify] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
 
-  // Use confirmed Last.fm name override when fetching Last.fm data
-  const lastfmName = artistIdentity?.lastfm_artist_name ?? artist.name;
+  const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
   const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -121,14 +135,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 600)
     : null;
 
-  const { data: lastfmImageUrl } = useQuery({
-    queryKey: ["artist-image", lastfmName],
-    queryFn: () => fetchArtistImage(lastfmName),
-    staleTime: 7 * 24 * 60 * 60 * 1000,
-    enabled: !localBannerUrl,
-  });
+  const bannerUrl = localBannerUrl ?? enrichment?.lastfm_image_url ?? null;
 
-  const bannerUrl = localBannerUrl ?? lastfmImageUrl ?? null;
+  const similar: string[] = enrichment?.similar_json
+    ? (JSON.parse(enrichment.similar_json) as string[])
+    : [];
+  const bio = enrichment?.bio ?? null;
 
   function buildTrackObj(track: TopTrack): CurrentTrack {
     const artworkRef = track.artwork_url ?? null;
@@ -176,7 +188,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             <span className="artist-banner-meta">
               {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
             </span>
-            {artistIdentity?.confirmed_at && (
+            {enrichment?.confirmed_at && (
               <span className="mb-verified-badge">
                 <Disc size={11} /> MB verified
               </span>
@@ -190,10 +202,76 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               <Disc size={14} />
             </button>
           </div>
+          <div className="artist-enrichment-line">
+            {enrichment?.enriched_at ? (
+              <span>Last.fm updated {timeAgo(enrichment.enriched_at)}</span>
+            ) : (
+              <span>Last.fm not yet loaded</span>
+            )}
+            <button
+              className="artist-enrichment-refresh"
+              onClick={() => { void refresh(); }}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? "Refreshing…" : "Refresh"}
+            </button>
+            {enrichError && <span className="artist-enrichment-error">{enrichError}</span>}
+          </div>
         </div>
       </div>
 
       <div className="artist-detail-body">
+        {/* Stats */}
+        {(enrichment?.listeners || enrichment?.playcount) && (
+          <section className="artist-section">
+            <div className="artist-stats-row">
+              {enrichment.listeners !== null && enrichment.listeners !== undefined && (
+                <div className="artist-stat">
+                  <span className="artist-stat-value">{formatCount(enrichment.listeners)}</span>
+                  <span className="artist-stat-label">Listeners</span>
+                </div>
+              )}
+              {enrichment.playcount !== null && enrichment.playcount !== undefined && (
+                <div className="artist-stat">
+                  <span className="artist-stat-value">{formatCount(enrichment.playcount)}</span>
+                  <span className="artist-stat-label">Plays</span>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Bio */}
+        {bio && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">About</h2>
+            <p className={`artist-bio${bioExpanded ? " artist-bio--expanded" : ""}`}>{bio}</p>
+            {bio.length > 200 && (
+              <button className="artist-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
+                {bioExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </section>
+        )}
+
+        {/* Similar artists */}
+        {similar.length > 0 && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">Similar Artists</h2>
+            <div className="artist-similar-chips">
+              {similar.map((name) => (
+                <button
+                  key={name}
+                  className="artist-similar-chip"
+                  onClick={() => onSelectArtist?.(name)}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {topTracks.length > 0 && (
           <section className="artist-section">
             <h2 className="artist-section-title">Tracks</h2>
