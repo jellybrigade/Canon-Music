@@ -98,6 +98,22 @@
   margin: 0;
 }
 
+.album-detail-artist--link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.album-detail-artist--link:hover {
+  color: var(--text-primary);
+}
+
 .album-detail-year {
   font-size: 0.75rem;
   font-weight: 400;

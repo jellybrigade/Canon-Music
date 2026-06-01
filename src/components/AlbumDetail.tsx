@@ -216,12 +216,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
             <h2 className="album-detail-title">{album.name}</h2>
             {album.artist && (
               onSelectArtist ? (
-                <button
+                <span
                   className="album-detail-artist album-detail-artist--link"
                   onClick={() => onSelectArtist(album.artist!)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && onSelectArtist(album.artist!)}
                 >
                   {album.artist}
-                </button>
+                </span>
               ) : (
                 <p className="album-detail-artist">{album.artist}</p>
               )
