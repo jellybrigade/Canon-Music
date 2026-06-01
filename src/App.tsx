@@ -330,16 +330,6 @@ export default function App() {
     if (!serverWithCred || albums === undefined) {
       return <p className="empty-state">Loading…</p>;
     }
-    if (selectedAlbum) {
-      return (
-        <AlbumDetail
-          album={selectedAlbum}
-          serverWithCredential={serverWithCred}
-          onClose={() => setSelectedAlbum(null)}
-          onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); }}
-        />
-      );
-    }
     if (searchQuery && searchResults) {
       return (
         <SearchResults
@@ -429,6 +419,16 @@ export default function App() {
   }
 
   function renderContent() {
+    // Global album-detail guard — renders AlbumDetail over any origin view so Back
+    // returns to wherever the user came from (Home, Now Playing, Artists, etc.)
+    if (selectedAlbum && serverWithCred) {
+      return (
+        <main className={`library${queueClass}`}>
+          {renderAlbumDetail()}
+        </main>
+      );
+    }
+
     if (searchOpen || searchQuery) {
       return (
         <main className={`library${queueClass}`}>
@@ -449,7 +449,6 @@ export default function App() {
               onSelectAlbum={(album) => {
                 clearSearch();
                 setSelectedAlbum(album);
-                setView("library");
               }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
@@ -467,7 +466,9 @@ export default function App() {
             {serverWithCred ? (
               <HomeView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => navigateTo("library", { album })}
+                onSelectAlbum={setSelectedAlbum}
+                onPlayTrack={(id) => { void handlePlayTrack(id); }}
+                onOpenCommandPalette={() => setCommandPaletteOpen(true)}
               />
             ) : <main className="content-main" />}
           </Suspense>
@@ -479,7 +480,7 @@ export default function App() {
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => navigateTo("library", { album })}
+                onSelectAlbum={setSelectedAlbum}
                 onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
                 onBack={() => navigateTo("library")}
               />
@@ -599,9 +600,7 @@ export default function App() {
       case "artists":
         return (
           <main className={`library${queueClass}`}>
-            {selectedAlbum && serverWithCred ? (
-              renderAlbumDetail()
-            ) : selectedArtist && serverWithCred ? (
+            {selectedArtist && serverWithCred ? (
               <ArtistDetail
                 artist={selectedArtist}
                 serverWithCredential={serverWithCred}
@@ -717,7 +716,7 @@ export default function App() {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
-        onSelectAlbum={(album) => { setSelectedAlbum(album); navigateTo("library"); setCommandPaletteOpen(false); }}
+        onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

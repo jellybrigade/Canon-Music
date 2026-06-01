@@ -98,11 +98,9 @@
   display: block;
   border-radius: 6px;
   background-color: var(--bg-card);
-  transition: opacity 0.2s ease;
-}
-
-.album-card:hover .album-art {
-  opacity: 0.88;
+  /* Stable GPU layer: prevents WebKitGTK from re-rasterizing on sibling/hover repaints */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .album-card .album-art--placeholder {

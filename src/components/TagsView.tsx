@@ -198,6 +198,13 @@ export function TagsView() {
     return filtered;
   }, [vocab, showAll, showTrivial, search, nodeById]);
 
+  const filteredUnresolvedGenres = useMemo(() => {
+    if (!unresolvedGenres) return [];
+    if (!search.trim()) return unresolvedGenres;
+    const q = search.toLowerCase();
+    return unresolvedGenres.filter((r) => r.raw_value.toLowerCase().includes(q));
+  }, [unresolvedGenres, search]);
+
   // When showing all, sort A–Z for alpha grouping; otherwise keep frequency order
   const sortedRows = useMemo(() => {
     if (!showAll) return rows;
@@ -375,11 +382,11 @@ export function TagsView() {
         </div>
       </header>
 
-      {unresolvedGenres && unresolvedGenres.length > 0 && (
+      {filteredUnresolvedGenres.length > 0 && (
         <section className="tags-review-section">
           <h2 className="tags-review-title">
             Needs Review
-            <span className="tags-unmapped-badge">{unresolvedGenres.length}</span>
+            <span className="tags-unmapped-badge">{filteredUnresolvedGenres.length}</span>
           </h2>
           <p className="tags-review-desc">
             These tags came from Last.fm or MusicBrainz but couldn&apos;t be matched to the canon tree. Map them to a canon node, accept as-is, or ignore.
@@ -395,7 +402,7 @@ export function TagsView() {
               </tr>
             </thead>
             <tbody>
-              {unresolvedGenres.map((row) => renderUnresolvedRow(row))}
+              {filteredUnresolvedGenres.map((row) => renderUnresolvedRow(row))}
             </tbody>
           </table>
         </section>
