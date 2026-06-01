@@ -383,7 +383,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} loading="lazy" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"

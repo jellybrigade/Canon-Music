@@ -325,8 +325,18 @@
   overflow: hidden;
 }
 
-.suggestion-card__tile:hover .suggestion-card__art-wrap {
-  filter: brightness(0.72);
+/* Dim overlay via ::after — keeps filter off the <img> to avoid WebKitGTK flicker */
+.suggestion-card__art-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--motion-med, 200ms ease-out);
+  pointer-events: none;
+}
+
+.suggestion-card__tile:hover .suggestion-card__art-wrap::after {
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .suggestion-card__art {
@@ -334,7 +344,8 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: filter var(--motion-med, 200ms ease-out);
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 /* Play button fades in on tile hover */
@@ -481,11 +492,22 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: filter var(--motion-med, 200ms ease-out);
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
-.carousel-card:hover .carousel-card__art {
-  filter: brightness(0.72);
+/* Dim overlay via ::after — keeps filter off the <img> to avoid WebKitGTK flicker */
+.carousel-card__art-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0);
+  transition: background var(--motion-med, 200ms ease-out);
+  pointer-events: none;
+}
+
+.carousel-card:hover .carousel-card__art-wrap::after {
+  background: rgba(0, 0, 0, 0.28);
 }
 
 .carousel-card__play {
