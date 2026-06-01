@@ -345,10 +345,7 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
-          onSelectAlbum={(album) => {
-            clearSearch();
-            setSelectedAlbum(album);
-          }}
+          onSelectAlbum={(album) => { setSelectedAlbum(album); }}
           onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
@@ -456,10 +453,7 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
-              onSelectAlbum={(album) => {
-                clearSearch();
-                setSelectedAlbum(album);
-              }}
+              onSelectAlbum={(album) => { setSelectedAlbum(album); }}
               onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />

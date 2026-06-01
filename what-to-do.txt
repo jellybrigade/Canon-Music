@@ -1,3 +1,5 @@
+- For You rail: cap card size when few categories are enabled — if only 1-2 categories are on, cards currently stretch to fill the rail height; they should have a max size regardless of how many categories are showing
+
 - Custom For You categories: let user create their own card via filter builder in the Customize popup
   - Needs design work: which filters to expose (genre? decade? play count range? loved? unplayed? artist?), which to skip (too granular / redundant with built-ins)
   - Needs design work: how filters combine (AND? tag-style multi-select?)
