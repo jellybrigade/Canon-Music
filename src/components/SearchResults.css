@@ -26,16 +26,30 @@
   margin: 0 0 0.625rem;
 }
 
-.search-album-list,
-.search-track-list,
+/* Artists: compact grid — 3+ columns on wide windows */
 .search-artist-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 4px;
+}
+
+/* Albums: 2-column grid */
+.search-album-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 4px;
+}
+
+/* Tracks: 2-column grid */
+.search-track-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 2px;
 }
 
 .search-album-row,
-.search-track-row {
+.search-track-row,
+.search-artist-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -52,7 +66,8 @@
 }
 
 .search-album-row:hover,
-.search-track-row:hover {
+.search-track-row:hover,
+.search-artist-row:hover {
   background: var(--bg-hover);
   border: none;
 }
@@ -109,17 +124,9 @@
   flex-shrink: 0;
 }
 
-.search-artist-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 6px;
-}
-
 .search-artist-icon {
-  width: 46px;
-  height: 46px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   background: var(--bg-card);
   flex-shrink: 0;
@@ -145,4 +152,3 @@
   border: none;
   color: var(--accent-hover);
 }
-

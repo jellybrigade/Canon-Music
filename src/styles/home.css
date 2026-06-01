@@ -237,6 +237,24 @@
   margin: 0;
 }
 
+.home-spotlight__artist-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s;
+}
+
+.home-spotlight__artist-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+  border: none;
+}
+
 .home-spotlight__actions {
   display: flex;
   gap: 10px;

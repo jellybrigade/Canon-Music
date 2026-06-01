@@ -349,6 +349,7 @@ export default function App() {
             clearSearch();
             setSelectedAlbum(album);
           }}
+          onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
       );
@@ -387,7 +388,8 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
-        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); }}
+        onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
+        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); setView("library"); }}
       />
     );
   }
@@ -458,6 +460,7 @@ export default function App() {
                 clearSearch();
                 setSelectedAlbum(album);
               }}
+              onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (
@@ -475,6 +478,7 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
+                onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
