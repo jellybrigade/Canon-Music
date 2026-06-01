@@ -353,7 +353,7 @@ export default function App() {
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
           onSelectAlbum={(album) => { setSelectedAlbum(album); }}
-          onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
+          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
       );
@@ -461,7 +461,7 @@ export default function App() {
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
               onSelectAlbum={(album) => { setSelectedAlbum(album); }}
-              onSelectArtist={(name) => { clearSearch(); navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } }); }}
+              onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (

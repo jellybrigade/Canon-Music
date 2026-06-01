@@ -9,6 +9,7 @@ const INTERVAL_MS = 2000;
 
 async function enrichArtistBackground(artistName: string, lastfmName: string): Promise<void> {
   const info = await fetchArtistInfo(lastfmName);
+  const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
   const db = await getDb();
   await db.execute(
     `INSERT INTO artist_identity
@@ -22,7 +23,7 @@ async function enrichArtistBackground(artistName: string, lastfmName: string): P
        similar_json = excluded.similar_json,
        top_tags_json = excluded.top_tags_json,
        lastfm_image_url = excluded.lastfm_image_url,
-       enriched_at = excluded.enriched_at`,
+       enriched_at = CASE WHEN ? THEN excluded.enriched_at ELSE artist_identity.enriched_at END`,
     [
       artistName,
       info.bio,
@@ -31,7 +32,8 @@ async function enrichArtistBackground(artistName: string, lastfmName: string): P
       info.similar.length > 0 ? JSON.stringify(info.similar) : null,
       info.topTags.length > 0 ? JSON.stringify(info.topTags) : null,
       info.imageUrl,
-      Math.floor(Date.now() / 1000),
+      gotData ? Math.floor(Date.now() / 1000) : null,
+      gotData ? 1 : 0,
     ]
   );
 }

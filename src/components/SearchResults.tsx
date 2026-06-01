@@ -12,7 +12,7 @@ interface Props {
   artists: SearchArtist[];
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
-  onSelectArtist: (name: string) => void;
+  onSelectArtist: (artist: SearchArtist) => void;
   onPlayTrack: (trackId: string) => void;
 }
 
@@ -65,7 +65,7 @@ export function SearchResults({
               <button
                 key={artist.name}
                 className="search-artist-row"
-                onClick={() => onSelectArtist(artist.name)}
+                onClick={() => onSelectArtist(artist)}
               >
                 <div className="search-artist-icon">
                   <User size={16} />

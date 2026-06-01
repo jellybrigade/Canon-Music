@@ -356,8 +356,4 @@ export const migrations: Migration[] = [
     version: 21,
     sql: `ALTER TABLE artist_identity ADD COLUMN wikidata_image_url TEXT;`,
   },
-  {
-    version: 22,
-    sql: `ALTER TABLE artist_identity ADD COLUMN wikidata_image_url TEXT;`,
-  },
 ];

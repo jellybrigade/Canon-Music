@@ -769,7 +769,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             artists={searchResults.artists}
             serverWithCredential={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
-            onSelectArtist={(name) => { onHomeSearchRawChange(""); onSelectArtist?.(name); }}
+            onSelectArtist={(artist) => { onHomeSearchRawChange(""); onSelectArtist?.(artist.name); }}
             onPlayTrack={onPlayTrack}
           />
         ) : (
