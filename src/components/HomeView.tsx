@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Play, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, X } from "lucide-react";
 import { getCoverArtUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -12,6 +12,8 @@ import { useLoved } from "../hooks/useLoved";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
 import { usePlayerStore } from "../store/player";
 import { extractAccent } from "../lib/artColor";
+import { useSearch } from "../hooks/useSearch";
+import { SearchResults } from "./SearchResults";
 import "../styles/home.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -19,6 +21,8 @@ import "../styles/home.css";
 interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
+  onPlayTrack: (trackId: string) => void;
+  onOpenCommandPalette: () => void;
 }
 
 interface SpotlightPick {
@@ -263,7 +267,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                       onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
                         <div className="album-overlay">
                           <span className="album-name">{album.name}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
@@ -296,7 +300,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                         onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -380,7 +384,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} loading="lazy" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} loading="lazy" decoding="async" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"
@@ -406,12 +410,21 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack, onOpenCommandPalette }: Props) {
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(0);
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
+
+  const [searchRaw, setSearchRaw] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const t = setTimeout(() => setSearchQuery(searchRaw), 200);
+    return () => clearTimeout(t);
+  }, [searchRaw]);
+  const { data: searchResults } = useSearch(searchQuery);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
@@ -466,38 +479,77 @@ export function HomeView({ serverWithCredential, onSelectAlbum }: Props) {
 
   const play = (album: AlbumRow) => void playAlbum(album);
 
+  const isSearching = searchRaw.length > 0;
+
   return (
     <div className="home-view">
       <header className="home-greeting">
         <h1 className="home-greeting__text">{getGreeting()}</h1>
-        {allAlbums != null && (
+        <div className="home-search-bar">
+          <Search size={13} className="search-bar-icon" />
+          <input
+            ref={searchInputRef}
+            type="text"
+            className="search-bar-input"
+            placeholder="Search…"
+            value={searchRaw}
+            onChange={(e) => setSearchRaw(e.target.value)}
+          />
+          {searchRaw ? (
+            <button className="search-bar-clear" onClick={() => { setSearchRaw(""); setSearchQuery(""); }} title="Clear">
+              <X size={13} />
+            </button>
+          ) : (
+            <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette — search tracks, artists, albums, and navigate anywhere">
+              <kbd>⌘K</kbd>
+            </button>
+          )}
+        </div>
+        {allAlbums != null && !isSearching && (
           <span className="home-greeting__sub">{allAlbums.length.toLocaleString()} albums</span>
         )}
       </header>
 
-      {spotlight && (
-        <Spotlight
-          pick={spotlight}
-          serverWithCred={serverWithCredential}
-          onSelectAlbum={onSelectAlbum}
-          playAlbum={play}
-        />
+      {isSearching ? (
+        searchResults && searchQuery ? (
+          <SearchResults
+            albums={searchResults.albums}
+            tracks={searchResults.tracks}
+            artists={searchResults.artists}
+            serverWithCredential={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            onPlayTrack={onPlayTrack}
+          />
+        ) : (
+          <p className="empty-state">Searching…</p>
+        )
+      ) : (
+        <>
+          {spotlight && (
+            <Spotlight
+              pick={spotlight}
+              serverWithCred={serverWithCredential}
+              onSelectAlbum={onSelectAlbum}
+              playAlbum={play}
+            />
+          )}
+
+          <ForYouRail
+            key={forYouSeed}
+            groups={forYouGroups}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onRefresh={refreshForYou}
+          />
+
+          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+        </>
       )}
-
-      <ForYouRail
-        key={forYouSeed}
-        groups={forYouGroups}
-        serverWithCred={serverWithCredential}
-        onSelectAlbum={onSelectAlbum}
-        playAlbum={play}
-        onRefresh={refreshForYou}
-      />
-
-      <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-      <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-      <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-      <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-      <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
     </div>
   );
 }
