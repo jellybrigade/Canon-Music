@@ -11,9 +11,12 @@ import type { AlbumStatRow } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
 import { usePlayerStore } from "../store/player";
+import type { RadioMode } from "../store/player";
 import { extractAccent } from "../lib/artColor";
 import { useSearch } from "../hooks/useSearch";
 import { SearchResults } from "./SearchResults";
+import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "../styles/home.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -21,6 +24,7 @@ import "../styles/home.css";
 interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
+  onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
   onPlayTrack: (trackId: string) => void;
   onOpenCommandPalette: () => void;
 }
@@ -153,9 +157,10 @@ interface SpotlightProps {
   serverWithCred: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
+  onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
-function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum }: SpotlightProps) {
+function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const [accentColor, setAccentColor] = useState<string | null>(null);
 
@@ -181,7 +186,10 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, playAlbum }: Spotlight
     >
       <div className="home-spotlight__wash" />
       <div className="home-spotlight__rule" />
-      <div className="home-spotlight__art-wrap">
+      <div
+        className="home-spotlight__art-wrap"
+        onContextMenu={(e) => onCardContextMenu(e, pick.album)}
+      >
         {artUrl
           ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
@@ -214,6 +222,7 @@ interface ForYouRailProps {
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
   onRefresh: () => void;
+  onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
 const KICKER_COLORS: Record<string, string> = {
@@ -227,7 +236,7 @@ const KICKER_COLORS: Record<string, string> = {
   _default:           "#6b7280",
 };
 
-function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefresh }: ForYouRailProps) {
+function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   if (groups.length === 0) return null;
 
@@ -265,6 +274,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                       role="button"
                       tabIndex={0}
                       onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+                      onContextMenu={e => onCardContextMenu(e, album)}
                     >
                       <div className="suggestion-card__art-wrap">
                         <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
@@ -298,6 +308,7 @@ function ForYouRail({ groups, serverWithCred, onSelectAlbum, playAlbum, onRefres
                         tabIndex={0}
                         title={album.artist ? `${album.name} · ${album.artist}` : album.name}
                         onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+                        onContextMenu={e => onCardContextMenu(e, album)}
                       >
                         <div className="suggestion-card__art-wrap">
                           <img className="suggestion-card__art" src={artUrl} alt={album.name} loading="lazy" decoding="async" />
@@ -332,11 +343,12 @@ interface AlbumCarouselProps {
   serverWithCred: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
+  onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
 const CARD_WIDTH = 168 + 14;
 
-function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum }: AlbumCarouselProps) {
+function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
 
@@ -381,6 +393,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                     role="button"
                     tabIndex={0}
                     onKeyDown={e => e.key === "Enter" && onSelectAlbum(item)}
+                    onContextMenu={e => onCardContextMenu(e, item)}
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
@@ -410,12 +423,17 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack, onOpenCommandPalette }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, onPlayTrack, onOpenCommandPalette }: Props) {
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(0);
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
+  const openCardContextMenu = useCallback((e: React.MouseEvent, album: AlbumRow) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, album });
+  }, []);
 
   const [searchRaw, setSearchRaw] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -531,6 +549,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack, onO
               serverWithCred={serverWithCredential}
               onSelectAlbum={onSelectAlbum}
               playAlbum={play}
+              onCardContextMenu={openCardContextMenu}
             />
           )}
 
@@ -541,14 +560,25 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onPlayTrack, onO
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
             onRefresh={refreshForYou}
+            onCardContextMenu={openCardContextMenu}
           />
 
-          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} />
+          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
         </>
+      )}
+      {contextMenu && (
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
+          <button onClick={() => { onSelectAlbum(contextMenu.album); setContextMenu(null); }}>
+            Open album
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
+          />
+        </ContextMenu>
       )}
     </div>
   );

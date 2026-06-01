@@ -475,6 +475,7 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
+                onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
               />

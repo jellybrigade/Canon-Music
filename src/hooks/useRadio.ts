@@ -9,6 +9,10 @@ const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
 const CANDIDATE_SAMPLE = 50;
 const TOP_PICK_WINDOW = 5;
+const MAX_PER_ARTIST = 3;
+const MAX_PER_ALBUM = 2;
+
+const UNCAPPED_MODES = new Set(["same-artist", "same-album"]);
 
 async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   const db = await getDb();
@@ -61,9 +65,56 @@ export function useRadio() {
         });
 
         // same-album mode: picks in track order — take first candidate directly
-        const pick = radioMode === "same-album"
-          ? (candidates[0] ?? null)
-          : pickFromTop(candidates);
+        if (radioMode === "same-album") {
+          const pick = candidates[0] ?? null;
+          if (!pick) return;
+
+          const db2 = await getDb();
+          type TrackRow2 = {
+            id: string; title: string; artist: string | null;
+            duration: number | null; artwork_url: string | null;
+            album_id: string | null; album_name: string | null;
+          };
+          const rows2 = await db2.select<TrackRow2[]>(
+            `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name
+             FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
+             WHERE t.id = ?`,
+            [pick.id]
+          );
+          const row2 = rows2[0];
+          if (!row2) return;
+          const track2: CurrentTrack = {
+            id: row2.id, title: row2.title, artist: row2.artist, duration: row2.duration,
+            artworkRef: row2.artwork_url, albumId: row2.album_id, album: row2.album_name, coverArtUrl: null,
+          };
+          const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
+          addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
+          return;
+        }
+
+        // For all other modes, enforce per-artist and per-album caps over the lookahead window.
+        let capped = candidates;
+        if (!UNCAPPED_MODES.has(radioMode)) {
+          const upcoming = queue.slice(queueIndex);
+          const artistCounts = new Map<string, number>();
+          const albumCounts = new Map<string, number>();
+          for (const t of upcoming) {
+            if (t.artist) {
+              const k = t.artist.toLowerCase();
+              artistCounts.set(k, (artistCounts.get(k) ?? 0) + 1);
+            }
+            if (t.albumId) albumCounts.set(t.albumId, (albumCounts.get(t.albumId) ?? 0) + 1);
+          }
+          const filtered = candidates.filter(c => {
+            const ak = (c.artist ?? "").toLowerCase();
+            if (ak && (artistCounts.get(ak) ?? 0) >= MAX_PER_ARTIST) return false;
+            if (c.albumId && (albumCounts.get(c.albumId) ?? 0) >= MAX_PER_ALBUM) return false;
+            return true;
+          });
+          capped = filtered.length > 0 ? filtered : candidates;
+        }
+
+        const pick = pickFromTop(capped);
 
         if (!pick) return;
 

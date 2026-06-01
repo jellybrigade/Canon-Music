@@ -1,32 +1,3 @@
-## Radio: Curated Radio Lacks Variety
-
-Curated Radio over-concentrates on a single artist and album. Example: seeding with
-"XS" by Rina Sawayama produced 9 consecutive tracks from Jessie Ware, all from the
-same album. Root cause likely in the candidate scoring / deduplication step — no
-per-artist or per-album cap enforced on the lookahead queue.
-
-Should enforce hard limits: e.g. max 3 tracks per artist and 2 tracks per album within
-any 10-track lookahead window.
-
-### Files likely involved
-  - src/hooks/useRadio.ts or wherever the radio queue is built
-  - src/lib/radio.ts or the scoring/candidate selection logic
-
----
-
-## Bug: Right-Click on Album in Home View Shows Browser Context Menu
-
-Right-clicking an album cover in Home view triggers the browser's native image context
-menu ("Open image in new tab", "Save image as…") instead of the app's album context
-menu. The `onContextMenu` handler is either missing or being swallowed by the `<img>`
-element before it bubbles up.
-
-### Files likely involved
-  - src/components/HomeView.tsx or the album card component it renders
-  - Wherever the album context menu is defined/triggered
-
----
-
 ## HomeView: On Repeat / Most Played Accuracy
 
 The "On Repeat" carousel (and most-played ranking generally) relies only on Navidrome's
