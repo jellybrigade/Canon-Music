@@ -1,5 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { useSetting } from "../hooks/useSetting";
 import { getCoverArtUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -39,6 +41,47 @@ interface ForYouGroup {
   albums: AlbumRow[];
 }
 
+interface ForYouCategoryConfig {
+  key: string;
+  kicker: string;
+  enabled: boolean;
+}
+
+const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
+  { key: "jump-back-in",     kicker: "Jump back in",     desc: "Recently played" },
+  { key: "on-repeat",        kicker: "On repeat",        desc: "Played most in the last 30 days" },
+  { key: "rediscover",       kicker: "Rediscover",       desc: "Favorites you haven't played recently" },
+  { key: "finish-the-album", kicker: "Finish the album", desc: "Albums you've only partially heard" },
+  { key: "hidden-gem",       kicker: "Hidden gem",       desc: "Albums with just 1–3 plays" },
+  { key: "loved",            kicker: "Loved",            desc: "Albums and tracks you've starred" },
+  { key: "unplayed",         kicker: "Unplayed",         desc: "Never played in your library" },
+];
+
+const DEFAULT_FOR_YOU_ENABLED = new Set([
+  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved",
+]);
+
+const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES.map(c => ({
+  ...c,
+  enabled: DEFAULT_FOR_YOU_ENABLED.has(c.key),
+}));
+
+const DEFAULT_FOR_YOU_CONFIG_JSON = JSON.stringify(DEFAULT_FOR_YOU_CONFIG);
+
+const FOR_YOU_CATEGORY_DESC: Record<string, string> = Object.fromEntries(
+  FOR_YOU_CATEGORIES.map(c => [c.key, c.desc])
+);
+
+/** Merges a saved config with the canonical category list so newly-added categories
+ *  always appear (appended, using their default enabled state). */
+function mergeForYouConfig(saved: ForYouCategoryConfig[]): ForYouCategoryConfig[] {
+  const savedKeys = new Set(saved.map(c => c.key));
+  const added = FOR_YOU_CATEGORIES
+    .filter(c => !savedKeys.has(c.key))
+    .map(c => ({ ...c, enabled: DEFAULT_FOR_YOU_ENABLED.has(c.key) }));
+  return [...saved, ...added];
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getGreeting(): string {
@@ -59,10 +102,6 @@ function naviToAlbumRow(album: NavidromeAlbum, serverId: string): AlbumRow {
   };
 }
 
-function stripPrefix(id: string, serverId: string): string {
-  const prefix = `${serverId}:`;
-  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
-}
 
 function buildSpotlight(
   currentArtist: string | null,
@@ -101,14 +140,8 @@ function buildSpotlight(
 
 function buildForYouGroups(
   spotlightId: string | null,
-  onRepeat: AlbumStatRow[],
-  rediscover: AlbumStatRow[],
-  vault: AlbumStatRow[],
-  allAlbums: AlbumRow[] | undefined,
-  recentNavIds: Set<string>,
-  recentItems: AlbumRow[] | undefined,
-  lovedSource: AlbumRow[] | undefined,
-  serverId: string,
+  sources: Record<string, AlbumRow[]>,
+  config: ForYouCategoryConfig[],
   seed: number,
   perCategory = 4,
 ): ForYouGroup[] {
@@ -129,22 +162,10 @@ function buildForYouGroups(
     if (albums.length > 0) groups.push({ kicker, albums });
   };
 
-  if (recentItems) {
-    groupFrom("Jump back in", recentItems);
-  }
-  groupFrom("On repeat", onRepeat as AlbumRow[]);
-  groupFrom("Rediscover", rediscover as AlbumRow[]);
-  groupFrom("Long time no hear", vault as AlbumRow[]);
-
-  if (allAlbums) {
-    const unheard = allAlbums.filter(
-      a => a.artwork_url && !recentNavIds.has(stripPrefix(a.id, serverId))
-    );
-    groupFrom("New to library", unheard);
-  }
-
-  if (lovedSource) {
-    groupFrom("Loved", lovedSource);
+  for (const cat of config) {
+    if (!cat.enabled) continue;
+    const source = sources[cat.key] ?? [];
+    groupFrom(cat.kicker, source);
   }
 
   return groups;
@@ -224,21 +245,139 @@ interface ForYouRailProps {
   playAlbum: (album: AlbumRow) => void;
   onRefresh: () => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
+  config: ForYouCategoryConfig[];
+  onConfigChange: (config: ForYouCategoryConfig[]) => void;
+}
+
+// ── For You Customize Popup ───────────────────────────────────────────────────
+
+const FOR_YOU_POPUP_WIDTH = 180;
+
+interface ForYouCustomizePopupProps {
+  config: ForYouCategoryConfig[];
+  onConfigChange: (config: ForYouCategoryConfig[]) => void;
+  position: { top: number; left: number };
+}
+
+function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustomizePopupProps) {
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  // dropAt is an insertion slot: 0 = before first row, n = after last row
+  const [dropAt, setDropAt] = useState<number | null>(null);
+
+  function handleDragStart(e: React.DragEvent, index: number) {
+    setDragFrom(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  }
+  function handleDragOver(e: React.DragEvent, rowIndex: number) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDropAt(e.clientY < rect.top + rect.height / 2 ? rowIndex : rowIndex + 1);
+  }
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (dragFrom !== null && dropAt !== null) {
+      const effectiveSlot = dropAt > dragFrom ? dropAt - 1 : dropAt;
+      if (effectiveSlot !== dragFrom) {
+        const next = [...config];
+        const [item] = next.splice(dragFrom, 1);
+        next.splice(effectiveSlot, 0, item!);
+        onConfigChange(next);
+      }
+    }
+    setDragFrom(null);
+    setDropAt(null);
+  }
+  function handleDragEnd() {
+    setDragFrom(null);
+    setDropAt(null);
+  }
+  function toggleEnabled(index: number) {
+    onConfigChange(config.map((c, i) => i === index ? { ...c, enabled: !c.enabled } : c));
+  }
+
+  return createPortal(
+    <div
+      className="for-you-popup"
+      style={{ top: position.top, left: position.left }}
+      onMouseDown={e => e.stopPropagation()}
+      onDragLeave={() => setDropAt(null)}
+    >
+      <p className="for-you-popup__title">Customize</p>
+      {config.map((cat, i) => (
+        <div key={cat.key}>
+          {dropAt === i && <div className="for-you-popup__drop-line" />}
+          <div
+            className="for-you-popup__row"
+            onDragOver={e => handleDragOver(e, i)}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+          >
+            <span
+              className="for-you-popup__drag-handle"
+              aria-hidden="true"
+              draggable
+              onDragStart={e => handleDragStart(e, i)}
+            >⠿</span>
+            <input
+              type="checkbox"
+              id={`fycat-${cat.key}`}
+              checked={cat.enabled}
+              onChange={() => toggleEnabled(i)}
+              className="for-you-popup__checkbox"
+            />
+            <label htmlFor={`fycat-${cat.key}`} className="for-you-popup__label">
+              {cat.kicker}
+              <span className="for-you-popup__label-desc">{FOR_YOU_CATEGORY_DESC[cat.key]}</span>
+            </label>
+          </div>
+        </div>
+      ))}
+      {dropAt === config.length && <div className="for-you-popup__drop-line" />}
+    </div>,
+    document.body,
+  );
 }
 
 const KICKER_COLORS: Record<string, string> = {
   "Jump back in":     "#3b82f6",
   "On repeat":        "#6366f1",
   "Rediscover":       "#f59e0b",
-  "Long time no hear":"#8b5cf6",
-  "New to library":   "#10b981",
+  "Finish the album": "#14b8a6",
+  "Hidden gem":       "#a855f7",
   "Loved":            "#ec4899",
+  "Unplayed":         "#64748b",
   "More from":        "#f43f5e",
   _default:           "#6b7280",
 };
 
-function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu }: ForYouRailProps) {
+function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
+  const [showCustomize, setShowCustomize] = useState(false);
+  const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
+  const customizeButtonRef = useRef<HTMLButtonElement>(null);
+
+  function handleCustomizeClick() {
+    if (!showCustomize && customizeButtonRef.current) {
+      const rect = customizeButtonRef.current.getBoundingClientRect();
+      setPopupPos({
+        top: rect.bottom + 6,
+        left: rect.right - FOR_YOU_POPUP_WIDTH,
+      });
+    }
+    setShowCustomize(s => !s);
+  }
+
+  useEffect(() => {
+    if (!showCustomize) return;
+    function handleClickOutside() {
+      setShowCustomize(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showCustomize]);
+
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
     return (
@@ -274,6 +413,17 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         <button className="home-rail__refresh" onClick={onRefresh} aria-label="Refresh suggestions">
           <RefreshCw size={11} />
         </button>
+        <button
+          ref={customizeButtonRef}
+          className={`home-rail__customize${showCustomize ? " home-rail__customize--active" : ""}`}
+          onClick={handleCustomizeClick}
+          aria-label="Customize For You categories"
+        >
+          <SlidersHorizontal size={11} />
+        </button>
+        {showCustomize && (
+          <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} />
+        )}
       </div>
       <div className="home-suggestion-grid">
         {groups.map(group => {
@@ -456,6 +606,20 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(0);
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
+
+  const [rawCategoryConfig, setRawCategoryConfig] = useSetting("for_you_categories", DEFAULT_FOR_YOU_CONFIG_JSON);
+  const categoryConfig = useMemo<ForYouCategoryConfig[]>(() => {
+    try {
+      const parsed = JSON.parse(rawCategoryConfig) as ForYouCategoryConfig[];
+      if (!Array.isArray(parsed)) return DEFAULT_FOR_YOU_CONFIG;
+      return mergeForYouConfig(parsed);
+    } catch {
+      return DEFAULT_FOR_YOU_CONFIG;
+    }
+  }, [rawCategoryConfig]);
+  const handleForYouConfigChange = useCallback((config: ForYouCategoryConfig[]) => {
+    void setRawCategoryConfig(JSON.stringify(config));
+  }, [setRawCategoryConfig]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const openCardContextMenu = useCallback((e: React.MouseEvent, album: AlbumRow) => {
     e.preventDefault();
@@ -474,13 +638,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { onRepeat, rediscover, vault, isLoading: statsLoading } = useListeningStats();
+  const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
-
-  const recentNavIds = useMemo(
-    () => new Set(recentRaw?.slice(0, 20).map(a => a.id) ?? []),
-    [recentRaw]
-  );
 
   const recentItems = useMemo(
     () => recentRaw?.map(a => naviToAlbumRow(a, server.id)),
@@ -500,23 +659,43 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
     [allAlbums, lovedAlbumIds]
   );
+  // Loved-sort fix: explicitly-loved albums come before track-only-loved albums
   const lovedSource = useMemo(() => {
     if (!allAlbums) return undefined;
     const seen = new Set<string>();
-    return allAlbums.filter(a => {
-      if (!lovedAlbumIds.has(a.id) && !lovedTrackAlbumIds.has(a.id)) return false;
-      if (seen.has(a.id)) return false;
-      seen.add(a.id);
-      return true;
-    });
+    const albumLoved: AlbumRow[] = [];
+    const trackOnly: AlbumRow[] = [];
+    for (const a of allAlbums) {
+      if (seen.has(a.id)) continue;
+      if (lovedAlbumIds.has(a.id)) {
+        seen.add(a.id);
+        albumLoved.push(a);
+      } else if (lovedTrackAlbumIds.has(a.id)) {
+        seen.add(a.id);
+        trackOnly.push(a);
+      }
+    }
+    return [...albumLoved, ...trackOnly];
   }, [allAlbums, lovedAlbumIds, lovedTrackAlbumIds]);
 
+  const unplayed = useMemo(
+    () => allAlbums?.filter(a => a.artwork_url && !playedAlbumIds.has(a.id)),
+    [allAlbums, playedAlbumIds]
+  );
+
+  const forYouSources = useMemo<Record<string, AlbumRow[]>>(() => ({
+    "jump-back-in":     recentItems ?? [],
+    "on-repeat":        onRepeat as AlbumRow[],
+    "rediscover":       rediscover as AlbumRow[],
+    "finish-the-album": finishTheAlbum as AlbumRow[],
+    "hidden-gem":       hiddenGem as AlbumRow[],
+    "loved":            lovedSource ?? [],
+    "unplayed":         unplayed ?? [],
+  }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayed]);
+
   const forYouGroups = useMemo(
-    () => buildForYouGroups(
-      spotlight?.album.id ?? null,
-      onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed, 4,
-    ),
-    [spotlight, onRepeat, rediscover, vault, allAlbums, recentNavIds, recentItems, lovedSource, server.id, forYouSeed]
+    () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 4),
+    [spotlight, forYouSources, categoryConfig, forYouSeed]
   );
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
@@ -589,6 +768,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onStartRadio, on
             playAlbum={play}
             onRefresh={refreshForYou}
             onCardContextMenu={openCardContextMenu}
+            config={categoryConfig}
+            onConfigChange={handleForYouConfigChange}
           />
 
           <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />

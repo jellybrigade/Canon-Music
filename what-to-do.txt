@@ -1,0 +1,5 @@
+- Custom For You categories: let user create their own card via filter builder in the Customize popup
+  - Needs design work: which filters to expose (genre? decade? play count range? loved? unplayed? artist?), which to skip (too granular / redundant with built-ins)
+  - Needs design work: how filters combine (AND? tag-style multi-select?)
+  - Needs design work: UX for adding — button in popup opens a builder, user names it, picks filters, saves as a new entry alongside built-ins
+  - Custom categories stored in settings (extend for_you_categories JSON with a filters field on each entry; built-ins have no filters)

@@ -319,6 +319,99 @@
   transform: rotate(180deg);
 }
 
+.home-rail__customize {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-tertiary, #666);
+  cursor: pointer;
+  padding: 2px;
+  line-height: 0;
+  transition: color var(--motion-fast, 120ms ease-out);
+}
+
+.home-rail__customize:hover,
+.home-rail__customize--active {
+  color: var(--text-secondary, #999);
+}
+
+/* ── For You Customize Popup ─────────────────────────────────────────────── */
+
+
+.for-you-popup {
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-popover, #242424);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  padding: 10px 0 8px;
+  min-width: 180px;
+}
+
+.for-you-popup__title {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary, #666);
+  margin: 0 12px 8px;
+}
+
+.for-you-popup__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  user-select: none;
+  border-radius: 4px;
+  transition: background var(--motion-fast, 120ms ease-out);
+}
+
+.for-you-popup__row:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+
+.for-you-popup__drop-line {
+  height: 2px;
+  margin: 1px 12px;
+  border-radius: 1px;
+  background: var(--accent, #6366f1);
+  pointer-events: none;
+}
+
+.for-you-popup__drag-handle {
+  font-size: 0.8rem;
+  color: var(--text-tertiary, #555);
+  line-height: 1;
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.for-you-popup__checkbox {
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: var(--accent, #6366f1);
+}
+
+.for-you-popup__label {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.72rem;
+  color: var(--text-secondary, #bbb);
+  cursor: pointer;
+  flex: 1;
+}
+
+.for-you-popup__label-desc {
+  font-size: 0.62rem;
+  color: var(--text-tertiary, #666);
+}
+
 .home-suggestion-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
