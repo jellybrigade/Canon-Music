@@ -1,22 +1,28 @@
+- Search overhaul — algorithm and layout (HIGH PRIORITY)
+  - Algorithm problems:
+    - Exact/prefix match on artist name should rank far above substring matches from unrelated fields
+    - Searching "Ye" shows ABBA, Aesop Rock, A Perfect Kiss before Ye (the artist) — prefix match on artist name must beat partial matches elsewhere
+    - Tracks section spammed with tracks from albums whose title starts with "&" or "Y" (e.g. Do Make Say Think's "& Yet & Yet") — track results should rank by artist/title relevance, not album title match
+    - Albums section: searching "Ye" buries Ye's own albums behind "& Yet & Yet", "2093" (Yeat), "Alive 2007" (Daft Punk), "Almighty So" (Chief Keef) — album title prefix match should not beat artist name match
+    - Ranking priority should be: exact name match > prefix match on primary field (artist name / album title / track title) > artist match on secondary results > substring anywhere
+  - Layout problems:
+    - Artists section requires scrolling to reach despite large unused whitespace — artists should appear at top, immediately visible
+    - Each section shows only a few results then hides behind "More" — layout should use available window space to show more results without requiring clicks
+    - Window space wasted; results cramped into a narrow column
+  - Goals:
+    - Relevance-ranked results: best match type first (exact > prefix > fuzzy), primary field weighted higher than secondary
+    - Artists pinned to top of results
+    - Layout fills the search window — use a multi-column or card-based layout that takes advantage of the full width
+    - "More" fallback only for truly long tails, not for the primary 5-10 results
+
 - Clicking a genre tag on an album (opened from Home) navigates to Home instead of Library filtered by that genre
 
 - For You cards (all except Jump Back In and On Repeat) don't pick fresh albums on refresh — they just shift the queue by one
   - e.g. refresh 1: [A1, A2, A3, A4] → refresh 2: [A2, A3, A4, A5] → refresh 3: [A3, A4, A5, A6]
   - Should pick 4 genuinely new albums each refresh, not advance a sliding window
 
-- MusicBrainz should be primary source of truth for artist name used in Last.fm lookups
-  - When artist is MB-identified, the MB canonical name should be stored as lastfm_artist_name in artist_identity (not just the local library name)
-  - useEnrichArtist already prefers lastfm_artist_name over raw artist.name — but that field only gets set on manual identify, not MB auto-identify
-  - Fix: when MB auto-identifies an artist (or user confirms via IdentifyDialog), populate lastfm_artist_name from the MB artist name if not already set by the user
-  - Also: if user manually overrides lastfm_artist_name in the identify dialog, that should take priority over MB name for Last.fm calls
-
-- Artist page overhaul (design + UX)
-  - Current layout is functional but sparse and not visually distinctive
-  - Goals: cleaner hierarchy, better use of the banner area, bio feels more integrated, similar artists look like a real section not a chip dump
-  - Consider: artist image as a proper portrait (not just blurred bg), top tracks and albums more visually separated, stats row more prominent
-  - Needs design work before implementation
-
 - Clicking artist name in Album detail view should navigate to that artist's page
+- In the Spotlight section on Home, clicking the artist name should navigate to that artist's page
 - Custom For You categories: let user create their own card via filter builder in the Customize popup
   - Needs design work: which filters to expose (genre? decade? play count range? loved? unplayed? artist?), which to skip (too granular / redundant with built-ins)
   - Needs design work: how filters combine (AND? tag-style multi-select?)

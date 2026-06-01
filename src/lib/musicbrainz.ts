@@ -264,6 +264,37 @@ export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> 
   };
 }
 
+// ── Wikidata image lookup ──────────────────────────────────────────────────────
+
+interface WikidataSparqlResponse {
+  results?: {
+    bindings?: Array<{
+      image?: { value: string };
+    }>;
+  };
+}
+
+export async function fetchWikidataImageByMbid(mbid: string): Promise<string | null> {
+  try {
+    const sparql = `SELECT ?image WHERE { ?item wdt:P434 "${mbid}" . ?item wdt:P18 ?image . } LIMIT 1`;
+    const body = new URLSearchParams({ query: sparql, format: "json" }).toString();
+    const res = await tauriFetch("https://query.wikidata.org/sparql", {
+      method: "POST",
+      headers: {
+        "User-Agent": USER_AGENT,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Accept": "application/sparql-results+json",
+      },
+      body,
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as WikidataSparqlResponse;
+    return data.results?.bindings?.[0]?.image?.value ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Genre utilities ────────────────────────────────────────────────────────────
 
 /**

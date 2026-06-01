@@ -94,8 +94,13 @@ export interface LastfmArtistInfo {
   imageUrl: string | null;
 }
 
+// Hash of Last.fm's "missing artist" placeholder image — reject it everywhere
+export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
+
 function pickImage(images: Array<{ "#text": string; size: string }>): string | null {
-  const filtered = images.filter((img) => img["#text"]);
+  const filtered = images.filter(
+    (img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER)
+  );
   const extralarge = filtered.find((img) => img.size === "extralarge");
   const large = filtered.find((img) => img.size === "large");
   const chosen = extralarge ?? large ?? filtered[filtered.length - 1];

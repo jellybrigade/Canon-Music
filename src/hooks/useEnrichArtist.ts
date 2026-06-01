@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchArtistInfo } from "../lib/lastfm";
+import { fetchWikidataImageByMbid } from "../lib/musicbrainz";
 import { useSetting } from "./useSetting";
 
 export interface ArtistEnrichmentRow {
@@ -27,6 +28,7 @@ export interface ArtistEnrichmentRow {
   similar_json: string | null;   // JSON string[]
   top_tags_json: string | null;  // JSON string[]
   lastfm_image_url: string | null;
+  wikidata_image_url: string | null;
   enriched_at: number | null;
 }
 
@@ -37,14 +39,27 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
-async function enrichArtist(artistName: string, lastfmName: string): Promise<void> {
-  const info = await fetchArtistInfo(lastfmName);
+async function enrichArtist(
+  artistName: string,
+  lastfmName: string,
+  mbArtistId: string | null,
+  hasWikidataImage: boolean,
+): Promise<void> {
+  const [info, wikidataImageUrl] = await Promise.all([
+    fetchArtistInfo(lastfmName),
+    mbArtistId && !hasWikidataImage ? fetchWikidataImageByMbid(mbArtistId) : Promise.resolve(null),
+  ]);
   const db = await getDb();
+  // Only mark as enriched when we actually got data — avoids locking out retries on API failure
+  const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
+  const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;
+
   await db.execute(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
-        bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url, enriched_at)
-     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?)
+        bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
+        wikidata_image_url, enriched_at)
+     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
        bio = excluded.bio,
        listeners = excluded.listeners,
@@ -52,7 +67,8 @@ async function enrichArtist(artistName: string, lastfmName: string): Promise<voi
        similar_json = excluded.similar_json,
        top_tags_json = excluded.top_tags_json,
        lastfm_image_url = excluded.lastfm_image_url,
-       enriched_at = excluded.enriched_at`,
+       wikidata_image_url = COALESCE(excluded.wikidata_image_url, artist_identity.wikidata_image_url),
+       enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
       info.bio,
@@ -61,7 +77,8 @@ async function enrichArtist(artistName: string, lastfmName: string): Promise<voi
       info.similar.length > 0 ? JSON.stringify(info.similar) : null,
       info.topTags.length > 0 ? JSON.stringify(info.topTags) : null,
       info.imageUrl,
-      Math.floor(Date.now() / 1000),
+      wikidataImageUrl,
+      enrichedAt,
     ]
   );
 }
@@ -97,9 +114,11 @@ export function useEnrichArtist(artistName: string) {
     ranRef.current = true;
 
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
+    const mbArtistId = query.data?.mb_artist_id ?? null;
+    const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
     if (inFlight.has(artistName)) return;
-    const promise = enrichArtist(artistName, lastfmName)
+    const promise = enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage)
       .then(() => queryClient.invalidateQueries({ queryKey: ["artist-enrichment", artistName] }))
       .catch(() => { /* silent */ })
       .finally(() => inFlight.delete(artistName));
@@ -112,8 +131,10 @@ export function useEnrichArtist(artistName: string) {
     setError(null);
     ranRef.current = false;
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
+    const mbArtistId = query.data?.mb_artist_id ?? null;
+    const hasWikidataImage = !!(query.data?.wikidata_image_url);
     try {
-      await enrichArtist(artistName, lastfmName);
+      await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
       await queryClient.invalidateQueries({ queryKey: ["artist-enrichment", artistName] });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Refresh failed");

@@ -312,7 +312,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     await saveIdentity.mutateAsync({
       artistName,
       mbArtistId: effectiveMbArtistId ?? lookupResult?.mbDetail?.id ?? null,
-      lastfmArtistName: lfmArtist.trim() || null,
+      lastfmArtistName: lfmArtist.trim() || lookupResult?.mbDetail?.name || null,
     });
     onClose();
   }

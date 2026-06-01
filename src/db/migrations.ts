@@ -352,4 +352,8 @@ export const migrations: Migration[] = [
       ALTER TABLE artist_identity ADD COLUMN enriched_at INTEGER;
     `,
   },
+  {
+    version: 21,
+    sql: `ALTER TABLE artist_identity ADD COLUMN wikidata_image_url TEXT;`,
+  },
 ];
