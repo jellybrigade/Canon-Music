@@ -285,11 +285,19 @@ export default function App() {
     startRadio(track, mode);
   }
 
+  const syncingRef = useRef(false);
+
   function runSync(s: Server) {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    syncLibrary(s)
+    void queryClient.invalidateQueries({ queryKey: ["albums"] });
+    syncLibrary(s, () => {
+      void queryClient.invalidateQueries({ queryKey: ["albums"] });
+    })
       .then(({ failedAlbums, failedPlaylists }) => {
+        syncingRef.current = false;
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
@@ -314,6 +322,7 @@ export default function App() {
         }, 1000);
       })
       .catch((err: unknown) => {
+        syncingRef.current = false;
         setSyncStatus("error");
         setSyncError(err instanceof Error ? err.message : String(err));
         console.error("Sync failed:", err);
@@ -324,6 +333,13 @@ export default function App() {
     if (!server || syncedRef.current === server.id) return;
     syncedRef.current = server.id;
     runSync(server);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server]);
+
+  useEffect(() => {
+    if (!server) return;
+    const id = setInterval(() => { runSync(server); }, 5 * 60 * 1000);
+    return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server]);
 
@@ -734,6 +750,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { navigateTo("artists", { artist: { name, album_count: albumCount, artwork_url: null } }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

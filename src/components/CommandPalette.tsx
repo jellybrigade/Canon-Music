@@ -57,11 +57,12 @@ interface Props {
   onClose: () => void;
   onNavigate: (view: View) => void;
   onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist: (name: string, albumCount: number) => void;
   onPlayTrack: (id: string) => void;
   serverWithCredential?: ServerWithCredential;
 }
 
-export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPlayTrack, serverWithCredential }: Props) {
+export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential }: Props) {
   const [raw, setRaw] = useState("");
   const deferred = useDeferredValue(raw.trim());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -80,12 +81,12 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPla
     : [];
 
   const items: Item[] = deferred
-    ? [...searchAlbums, ...searchTracks, ...searchArtists]
+    ? [...searchArtists, ...searchAlbums, ...searchTracks]
     : NAV_COMMANDS;
 
-  const albumOffset = 0;
-  const trackOffset = searchAlbums.length;
-  const artistOffset = searchAlbums.length + searchTracks.length;
+  const artistOffset = 0;
+  const albumOffset = searchArtists.length;
+  const trackOffset = searchArtists.length + searchAlbums.length;
 
   const activate = useCallback((item: Item) => {
     if (item.kind === "nav") {
@@ -99,14 +100,13 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPla
         year: null,
         artwork_url: item.artwork_url,
       });
-      // onSelectAlbum already calls navigateTo("library") and closes the palette
     } else if (item.kind === "track") {
       onPlayTrack(item.id);
     } else if (item.kind === "artist") {
-      onNavigate("artists");
+      onSelectArtist(item.name, item.album_count);
     }
     onClose();
-  }, [onNavigate, onSelectAlbum, onPlayTrack, onClose, serverWithCredential]);
+  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose, serverWithCredential]);
 
   useEffect(() => {
     if (open) {
@@ -186,6 +186,27 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPla
             <p className="cp-empty">No results for "{deferred}"</p>
           )}
 
+          {deferred && results && searchArtists.length > 0 && (
+            <div className="cp-section">
+              <p className="cp-section-label">Artists</p>
+              {searchArtists.map((artist, i) => {
+                const idx = artistOffset + i;
+                return (
+                  <button
+                    key={artist.name}
+                    className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
+                    onMouseEnter={() => setFocusedIdx(idx)}
+                    onMouseDown={(e) => { e.preventDefault(); activate(artist); }}
+                  >
+                    <div className="cp-track-icon"><User size={14} /></div>
+                    <span className="cp-result-primary">{artist.name}</span>
+                    <span className="cp-result-secondary">{artist.album_count} albums</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {deferred && results && searchAlbums.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Albums</p>
@@ -229,27 +250,6 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onPla
                     <span className="cp-result-secondary">
                       {[track.artist, track.album_name].filter(Boolean).join(" · ")}
                     </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {deferred && results && searchArtists.length > 0 && (
-            <div className="cp-section">
-              <p className="cp-section-label">Artists</p>
-              {searchArtists.map((artist, i) => {
-                const idx = artistOffset + i;
-                return (
-                  <button
-                    key={artist.name}
-                    className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedIdx(idx)}
-                    onMouseDown={(e) => { e.preventDefault(); activate(artist); }}
-                  >
-                    <div className="cp-track-icon"><User size={14} /></div>
-                    <span className="cp-result-primary">{artist.name}</span>
-                    <span className="cp-result-secondary">{artist.album_count} albums</span>
                   </button>
                 );
               })}
