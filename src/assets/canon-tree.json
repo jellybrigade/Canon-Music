@@ -32610,7 +32610,7 @@
       "id": "j-rock",
       "name": "J-Rock",
       "type": "genre",
-      "canonical_key": "j-rock",
+      "canonical_key": "jrock",
       "parents": [
         "rock"
       ],

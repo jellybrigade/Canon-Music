@@ -1,7 +1,7 @@
 import { getDb } from "../db";
 import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds } from "./canonicalize";
 import { bucketize } from "./tag-buckets";
-import { fetchAlbumTags } from "./lastfm";
+import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import type { MbGenre } from "./musicbrainz";
 
 export interface NormalizedTag {
@@ -30,6 +30,13 @@ export async function readNormalizedTags(albumId: string): Promise<NormalizedTag
   );
   const json = rows[0]?.normalized_tags_json;
   if (!json) return null;
+  // If album_genres is empty, the filter pipeline is broken — force re-normalization.
+  type CountRow = { n: number };
+  const countRows = await db.select<CountRow[]>(
+    "SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?",
+    [albumId]
+  );
+  if ((countRows[0]?.n ?? 0) === 0) return null;
   return JSON.parse(json) as NormalizedTags;
 }
 
@@ -87,6 +94,13 @@ async function _doNormalizeAlbum(
   try {
     const result = await fetchAlbumTags(lfmArtist, lfmAlbum);
     lastfmRaw = result.genres;
+    if (lastfmRaw.length === 0) {
+      const stripped = lfmAlbum.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
+      if (stripped && stripped !== lfmAlbum) {
+        const retry = await fetchAlbumTags(lfmArtist, stripped);
+        lastfmRaw = retry.genres;
+      }
+    }
   } catch (e) {
     console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} — ${lfmAlbum}":`, e);
   }
@@ -95,6 +109,16 @@ async function _doNormalizeAlbum(
   if (identity?.combinedMbGenres?.length) {
     for (const g of identity.combinedMbGenres) {
       lastfmRaw.push(g.name);
+    }
+  }
+
+  // Artist tags as last resort: only when no file tags AND no album/MB tags exist
+  if (fileTagRows.length === 0 && lastfmRaw.length === 0) {
+    try {
+      const artistTags = await fetchArtistGenreTags(lfmArtist);
+      lastfmRaw.push(...artistTags);
+    } catch (e) {
+      console.warn(`normalizeAlbum: artist tag fallback failed for "${lfmArtist}":`, e);
     }
   }
 

@@ -43,15 +43,38 @@ export function useListeningStats() {
       return db.select<AlbumStatRow[]>(
         `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
                 a.play_count AS plays,
-                COALESCE(MAX(sh.scrobbled_at), '') AS last_played
+                '' AS last_played
          FROM albums a
          JOIN tracks t ON t.album_id = a.id
-         LEFT JOIN scrobble_history sh ON sh.track_id = t.id
+         LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
          WHERE a.artwork_url IS NOT NULL
          GROUP BY a.id
-         HAVING COUNT(DISTINCT sh.track_id) > 0
-            AND COUNT(DISTINCT sh.track_id) < COUNT(DISTINCT t.id)
-         ORDER BY last_played DESC`,
+         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) > 0
+            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
+         ORDER BY a.name`,
+        []
+      );
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Albums where ≥50% of tracks have been played (play_count or scrobble history), but not 100%
+  const almostDoneQuery = useQuery<AlbumStatRow[]>({
+    queryKey: ["albums", "almost-done"],
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<AlbumStatRow[]>(
+        `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
+                a.play_count AS plays,
+                '' AS last_played
+         FROM albums a
+         JOIN tracks t ON t.album_id = a.id
+         LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
+         WHERE a.artwork_url IS NOT NULL
+         GROUP BY a.id
+         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) * 2 >= COUNT(t.id)
+            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
+         ORDER BY a.name`,
         []
       );
     },
@@ -96,16 +119,18 @@ export function useListeningStats() {
   const playedAlbumIds = useMemo(() => new Set(stats.map(s => s.id)), [stats]);
 
   const finishTheAlbum = finishQuery.data ?? [];
+  const almostDone = almostDoneQuery.data ?? [];
 
   return {
     ...query,
-    isLoading: query.isLoading || finishQuery.isLoading,
+    isLoading: query.isLoading || finishQuery.isLoading || almostDoneQuery.isLoading,
     stats,
     onRepeat,
     rediscover,
     vault,
     hiddenGem,
     finishTheAlbum,
+    almostDone,
     playedAlbumIds,
   };
 }

@@ -557,6 +557,12 @@
   height: 22px;
 }
 
+/* Top album bottom corners flush against bottom row */
+.suggestion-card--has-bottom .suggestion-card__row--top .suggestion-card__art-wrap {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 .suggestion-card--skeleton .suggestion-card__art-wrap {
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;

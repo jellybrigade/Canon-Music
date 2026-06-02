@@ -67,8 +67,7 @@ export function canonicalKey(name: string): string {
     .replace(/[̀-ͯ]/g, "")
     .replace(/[^a-z0-9 ]/g, "")
     .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\brap\b/g, "hip hop");
+    .trim();
 }
 
 /** Synthetic canonical_id for unmatched tags stored in album_genres. */

@@ -143,6 +143,7 @@ export interface NavidromeTrack {
   coverArt?: string;
   starred?: string;
   path?: string;
+  playCount?: number;
 }
 
 export function getStreamUrl(
@@ -268,6 +269,38 @@ export function unstarAlbum(
   nativeAlbumId: string
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "unstar.view", { albumId: nativeAlbumId });
+}
+
+export function setRating(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativeTrackId: string,
+  rating: number
+): Promise<void> {
+  return callSubsonicVoid(baseUrl, username, credential, "setRating.view", { id: nativeTrackId, rating: String(rating) });
+}
+
+export async function fetchTrackRating(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativeTrackId: string
+): Promise<number> {
+  const params = buildAuthParams(username, credential);
+  params.set("id", nativeTrackId);
+  const url = `${normalizeUrl(baseUrl)}/rest/getSong?${params.toString()}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return 0;
+    const data = (await res.json()) as {
+      "subsonic-response": { status: string; song?: { userRating?: number } };
+    };
+    const resp = data["subsonic-response"];
+    return resp.status === "ok" ? (resp.song?.userRating ?? 0) : 0;
+  } catch {
+    return 0;
+  }
 }
 
 export interface NavidromePlaylist {

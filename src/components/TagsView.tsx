@@ -184,6 +184,16 @@ export function TagsView() {
     [vocab, nodeById]
   );
 
+  const orphanRows = useMemo(() => {
+    if (!vocab) return [];
+    let filtered = vocab.filter((r) => r.track_count === 0);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter((r) => r.raw_value.toLowerCase().includes(q));
+    }
+    return filtered;
+  }, [vocab, search]);
+
   const rows = useMemo(() => {
     if (!vocab) return [];
     const isUnresolved = (r: { canonical_id: string | null }) =>
@@ -191,6 +201,7 @@ export function TagsView() {
     let filtered = showAll
       ? showTrivial ? vocab : vocab.filter((r) => !isTrivialExactMatch(r, nodeById))
       : vocab.filter(isUnresolved);
+    filtered = filtered.filter((r) => r.track_count > 0);
     if (search.trim()) {
       const q = search.toLowerCase();
       filtered = filtered.filter((r) => r.raw_value.toLowerCase().includes(q));
@@ -445,6 +456,33 @@ export function TagsView() {
           {trivialCount} trivially exact-matched {trivialCount === 1 ? "tag" : "tags"} hidden —{" "}
           <button className="tags-trivial-show-btn" onClick={() => setShowTrivial(true)}>show them</button>
         </p>
+      )}
+
+      {orphanRows.length > 0 && (
+        <section className="tags-orphan-section">
+          <h2 className="tags-review-title">
+            Cleanup
+            <span className="tags-unmapped-badge">{orphanRows.length}</span>
+          </h2>
+          <p className="tags-review-desc">
+            These mappings apply to tags not in your library. They&apos;re still active during normalization — delete any that are wrong.
+          </p>
+          <table className="tags-table">
+            <thead>
+              <tr>
+                <th>Raw value</th>
+                <th>Kind</th>
+                <th>Tracks</th>
+                <th></th>
+                <th>Maps to</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {orphanRows.map((row) => renderRow(row))}
+            </tbody>
+          </table>
+        </section>
       )}
     </main>
   );

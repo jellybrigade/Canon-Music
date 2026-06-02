@@ -4,7 +4,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding-bottom: var(--player-bar-height);
+  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
   animation: fadeIn var(--motion-med);
 }
 
@@ -14,7 +14,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: var(--player-bar-height);
+  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
   color: var(--text-tertiary);
   gap: 0.5rem;
   animation: fadeIn var(--motion-med);
@@ -37,7 +37,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: var(--player-bar-height);
+  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
   animation: fadeIn var(--motion-med);
 }
 
@@ -199,6 +199,70 @@
   font-size: 0.75rem;
   padding: 0.25em 0.75em;
   box-shadow: none;
+}
+
+.year-range-filter {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.year-range-input {
+  width: 62px;
+  font-size: 0.7rem;
+  padding: 0.22em 0.4em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  box-shadow: none;
+  text-align: center;
+  /* hide number spinners */
+  -moz-appearance: textfield;
+}
+
+.year-range-input::-webkit-outer-spin-button,
+.year-range-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.year-range-input:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: none;
+  outline: none;
+}
+
+.year-range-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.year-range-sep {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.year-range-clear {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 2px;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+}
+
+.year-range-clear:hover {
+  color: var(--text-primary);
+  border-color: transparent;
+  background: var(--bg-hover);
 }
 
 .search-trigger-btn {

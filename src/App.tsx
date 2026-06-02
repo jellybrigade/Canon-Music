@@ -78,6 +78,8 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
   const [canonicalIdFilters, setCanonicalIdFilters] = useState<string[]>([]);
+  const [yearFromInput, setYearFromInput] = useState("");
+  const [yearToInput, setYearToInput] = useState("");
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -285,10 +287,17 @@ export default function App() {
     startRadio(track, mode);
   }
 
+  const syncingRef = useRef(false);
+
   function runSync(s: Server) {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    syncLibrary(s)
+    void queryClient.invalidateQueries({ queryKey: ["albums"] });
+    syncLibrary(s, () => {
+      void queryClient.invalidateQueries({ queryKey: ["albums"] });
+    })
       .then(({ failedAlbums, failedPlaylists }) => {
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
@@ -317,6 +326,9 @@ export default function App() {
         setSyncStatus("error");
         setSyncError(err instanceof Error ? err.message : String(err));
         console.error("Sync failed:", err);
+      })
+      .finally(() => {
+        syncingRef.current = false;
       });
   }
 
@@ -324,6 +336,13 @@ export default function App() {
     if (!server || syncedRef.current === server.id) return;
     syncedRef.current = server.id;
     runSync(server);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [server]);
+
+  useEffect(() => {
+    if (!server) return;
+    const id = setInterval(() => { runSync(server); }, 5 * 60 * 1000);
+    return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server]);
 
@@ -361,10 +380,12 @@ export default function App() {
     if (searchQuery && !searchResults) {
       return <p className="empty-state">Searching…</p>;
     }
-    const visibleAlbums = lovedOnly
-      ? albums.filter((a) => lovedAlbumIds.has(a.id))
-      : albums;
-    const filtersActive = lovedOnly || canonicalIdFilters.length > 0;
+    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
+    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
+    let visibleAlbums = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
+    if (yearFrom != null && !isNaN(yearFrom)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 0) >= yearFrom);
+    if (yearTo != null && !isNaN(yearTo)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 9999) <= yearTo);
+    const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
       ? "No loved albums"
       : filtersActive
@@ -377,7 +398,7 @@ export default function App() {
         onSelect={setSelectedAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
         emptyMessage={emptyMessage}
-        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}`}
+        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}-${yearFromInput}-${yearToInput}`}
         sort={sort}
       />
     );
@@ -539,6 +560,36 @@ export default function App() {
                     {opt.label}
                   </button>
                 ))}
+              </div>
+              <div className="year-range-filter">
+                <input
+                  className="year-range-input"
+                  type="number"
+                  placeholder="From"
+                  value={yearFromInput}
+                  onChange={(e) => setYearFromInput(e.target.value)}
+                  min={1900}
+                  max={2100}
+                />
+                <span className="year-range-sep">–</span>
+                <input
+                  className="year-range-input"
+                  type="number"
+                  placeholder="To"
+                  value={yearToInput}
+                  onChange={(e) => setYearToInput(e.target.value)}
+                  min={1900}
+                  max={2100}
+                />
+                {(yearFromInput !== "" || yearToInput !== "") && (
+                  <button
+                    className="year-range-clear"
+                    onClick={() => { setYearFromInput(""); setYearToInput(""); }}
+                    title="Clear year filter"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
               <button
                 className="search-trigger-btn"
@@ -734,6 +785,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { navigateTo("artists", { artist: { name, album_count: albumCount, artwork_url: null } }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

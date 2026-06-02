@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -169,11 +169,14 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.artist ?? null,
     currentTrack?.id ?? null
   );
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(currentTrack ?? null);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const userScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollingRef = useRef(false);
   const accent = usePlayerStore((s) => s.accentColor);
 
   const largeArtUrl = currentTrack?.artworkRef
@@ -200,13 +203,31 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     );
     if (activeIndex === activeLyricIndexRef.current) return;
     activeLyricIndexRef.current = activeIndex;
+    if (userScrollingRef.current) return;
     if (activeLyricRef.current && lyricsContainerRef.current) {
       const container = lyricsContainerRef.current;
       const line = activeLyricRef.current;
       const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+      autoScrollingRef.current = true;
       container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
+      setTimeout(() => { autoScrollingRef.current = false; }, 500);
     }
   }, [tab, elapsed, lyricsLines]);
+
+  function handleLyricsScroll() {
+    if (autoScrollingRef.current) return;
+    userScrollingRef.current = true;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      userScrollingRef.current = false;
+    }, 5000);
+  }
+
+  function handleLyricSeek(timeSec: number) {
+    userScrollingRef.current = false;
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    void seek(timeSec);
+  }
 
   function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!progressBarRef.current || duration <= 0) return;
@@ -267,7 +288,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       className="now-playing-view"
       style={{
         ...(largeArtUrl ? { '--art-bg': `url("${largeArtUrl.replace(/"/g, '%22')}")` } : {}),
-        ...(accent ? { '--accent': accent, '--accent-hover': accent } : {}),
+        ...(accent ? { '--accent': accent, '--accent-hover': accent, '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
       {onBack && (
@@ -426,6 +447,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 {t === "up-next" ? "Up Next" : t === "about" ? "About" : "Lyrics"}
               </button>
             ))}
+            {tab === "lyrics" && (
+              <button
+                className="now-playing-tab-refresh-btn"
+                title="Re-fetch lyrics"
+                disabled={lyricsLoading}
+                onClick={() => void lyricsRefresh()}
+              >
+                <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
+              </button>
+            )}
           </div>
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>
@@ -459,16 +490,18 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                         <div className="now-playing-up-next-thumb now-playing-up-next-thumb--placeholder" />
                       )}
                       <div className="now-playing-up-next-info">
-                        <span className="now-playing-up-next-title">{track.title}</span>
+                        <div className="now-playing-up-next-title-row">
+                          <span className="now-playing-up-next-title">{track.title}</span>
+                          {track.duration != null && (
+                            <span className="now-playing-up-next-duration">
+                              {formatDuration(track.duration)}
+                            </span>
+                          )}
+                        </div>
                         <span className="now-playing-up-next-meta">
                           {[track.artist, track.album].filter(Boolean).join(" • ")}
                         </span>
                       </div>
-                      {track.duration != null && (
-                        <span className="now-playing-up-next-duration">
-                          {formatDuration(track.duration)}
-                        </span>
-                      )}
                     </button>
                   ))
                 )}
@@ -604,7 +637,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             )}
 
             {tab === "lyrics" && (
-              <div className="now-playing-lyrics" ref={lyricsContainerRef}>
+              <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
                 {lyricsLoading ? (
                   <p className="now-playing-empty">Loading lyrics…</p>
                 ) : lyricsLines && lyricsLines.length > 0 ? (
@@ -616,7 +649,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                         key={i}
                         ref={isActive ? activeLyricRef : undefined}
                         className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                        onClick={() => void seek(line.timeSec)}
+                        onClick={() => handleLyricSeek(line.timeSec)}
                         style={{ cursor: "pointer" }}
                       >
                         {line.text || " "}

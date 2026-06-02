@@ -5,7 +5,12 @@ import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchP
 import type { NavidromeCredential } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 
-export async function syncLibrary(server: Server): Promise<{ failedAlbums: number; failedPlaylists: number; skippedAlbums: number }> {
+const BATCH_NOTIFY_INTERVAL = 25;
+
+export async function syncLibrary(
+  server: Server,
+  onAlbumBatch?: () => void,
+): Promise<{ failedAlbums: number; failedPlaylists: number; skippedAlbums: number }> {
   const credJson = await keychain.get(`canon.server.${server.id}`, "credential");
   if (!credJson) throw new Error(`No credentials found for server ${server.id}`);
   let credential: NavidromeCredential;
@@ -20,6 +25,7 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
   const db = await getDb();
   let failedAlbums = 0;
   let skippedAlbums = 0;
+  let processedCount = 0;
 
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
@@ -46,6 +52,11 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
       [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0]
     );
 
+    processedCount++;
+    if (onAlbumBatch && (processedCount === 1 || processedCount % BATCH_NOTIFY_INTERVAL === 0)) {
+      onAlbumBatch();
+    }
+
     if (skipTracks) {
       skippedAlbums++;
       continue;
@@ -63,8 +74,8 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
       const trackDbId = `${server.id}:${track.id}`;
       await db.execute(
         `INSERT OR REPLACE INTO tracks
-           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trackDbId,
           server.id,
@@ -78,6 +89,7 @@ export async function syncLibrary(server: Server): Promise<{ failedAlbums: numbe
           track.year ?? null,
           track.duration ?? null,
           track.path ?? null,
+          track.playCount ?? 0,
         ]
       );
       if (track.genre) {

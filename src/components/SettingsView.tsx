@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getVersion } from "@tauri-apps/api/app";
 import { checkForUpdate, installAndRestart } from "../lib/updater";
@@ -86,6 +86,16 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
 
   // Remove server confirm
   const [removeConfirm, setRemoveConfirm] = useState(false);
+
+  // Settings filter
+  const [settingsFilter, setSettingsFilter] = useState("");
+  const fl = settingsFilter.toLowerCase().trim();
+  function show(...labels: string[]) {
+    return !fl || labels.some((l) => l.toLowerCase().includes(fl));
+  }
+
+  // Import ref
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // About / update state
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -285,10 +295,50 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
 
   void credential; // used indirectly via server ops
 
+  async function handleExportSettings() {
+    const db = await getDb();
+    const rows = await db.select<{ key: string; value: string }[]>("SELECT key, value FROM settings");
+    const json = JSON.stringify(Object.fromEntries(rows.map((r) => [r.key, r.value])), null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `canon-settings-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function handleImportSettings(file: File) {
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Record<string, unknown>;
+      const db = await getDb();
+      for (const [key, value] of Object.entries(parsed)) {
+        if (typeof value === "string") {
+          await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
+        }
+      }
+      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      window.location.reload();
+    } catch (e) {
+      alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   return (
     <div className="settings-view">
       <div className="settings-inner">
         <h2 className="settings-title">Settings</h2>
+
+        <div className="settings-search-wrap">
+          <input
+            className="settings-search-input"
+            type="search"
+            placeholder="Filter settings…"
+            value={settingsFilter}
+            onChange={(e) => setSettingsFilter(e.target.value)}
+          />
+        </div>
 
         {/* ── Server ── */}
         <section className="settings-section">
@@ -386,6 +436,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
         </section>
 
         {/* ── Metadata & Tags ── */}
+        {show("metadata", "tags", "last.fm", "api key", "tag popularity", "musicbrainz", "auto-identify", "auto-refresh", "stale", "rap", "hip hop", "refresh all") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Metadata &amp; Tags</h3>
           <p className="settings-section-desc">
@@ -483,7 +534,10 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </div>
         </section>
 
+        )}
+
         {/* ── Playback ── */}
+        {show("playback", "waveform", "play album") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Playback</h3>
           <label className="settings-field settings-field--inline">
@@ -515,7 +569,10 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </p>
         </section>
 
+        )}
+
         {/* ── About ── */}
+        {show("about", "version", "update", "check for updates") && (
         <section className="settings-section">
           <h3 className="settings-section-title">About</h3>
           <div className="settings-diag-row">
@@ -565,7 +622,10 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </div>
         </section>
 
+        )}
+
         {/* ── Diagnostics ── */}
+        {show("diagnostics", "sync", "scrobble", "export", "import") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Diagnostics</h3>
 
@@ -588,7 +648,29 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
               Refresh
             </button>
           </div>
+
+          <div className="settings-field settings-field--row" style={{ marginTop: "0.75rem" }}>
+            <button className="settings-btn" onClick={() => { void handleExportSettings(); }}>
+              Export settings
+            </button>
+            <button className="settings-btn" onClick={() => importInputRef.current?.click()}>
+              Import settings
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void handleImportSettings(file);
+                e.target.value = "";
+              }}
+            />
+            <span className="settings-hint">Server credentials are not included.</span>
+          </div>
         </section>
+        )}
       </div>
     </div>
   );

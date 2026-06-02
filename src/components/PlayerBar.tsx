@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
+import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
@@ -40,9 +41,24 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const pullProgress  = useTagsStore((s) => s.pullProgress);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
+  const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
+  const sleepTimerEndOfTrack = usePlayerStore((s) => s.sleepTimerEndOfTrack);
+  const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
+  const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
+
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
   const artThumbRef = useRef<HTMLButtonElement>(null);
+
+  const [timerOpen, setTimerOpen] = useState(false);
+  const [timerPopoverPos, setTimerPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
+  const timerBtnRef = useRef<HTMLButtonElement>(null);
+  const timerPopoverRef = useRef<HTMLDivElement>(null);
+  const [remaining, setRemaining] = useState("");
+
+  const [trackRating, setTrackRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const ratingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -81,6 +97,13 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   }, []);
 
   useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--normalizing-bar-height",
+      pullProgress ? "24px" : "0px"
+    );
+  }, [pullProgress]);
+
+  useEffect(() => {
     if (!artOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
     document.addEventListener("keydown", onKey);
@@ -98,6 +121,55 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
   }, [artOpen]);
+
+  // Sleep timer countdown display
+  useEffect(() => {
+    if (!sleepTimerEndsAt) { setRemaining(""); return; }
+    function tick() {
+      const ms = sleepTimerEndsAt! - Date.now();
+      if (ms <= 0) { setRemaining(""); return; }
+      const m = Math.floor(ms / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      setRemaining(`${m}:${s.toString().padStart(2, "0")}`);
+    }
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [sleepTimerEndsAt]);
+
+  // Close timer popover on outside click
+  useEffect(() => {
+    if (!timerOpen) return;
+    function onMouseDown(e: MouseEvent) {
+      const t = e.target as Node;
+      if (timerPopoverRef.current?.contains(t) || timerBtnRef.current?.contains(t)) return;
+      setTimerOpen(false);
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, [timerOpen]);
+
+  // Fetch star rating when track changes
+  useEffect(() => {
+    if (!currentTrack || !serverWithCred) { setTrackRating(0); return; }
+    const { server, credential } = serverWithCred;
+    const nativeId = stripServerPrefix(currentTrack.id, server.id);
+    void fetchTrackRating(server.url, server.username, credential, nativeId).then(setTrackRating);
+  }, [currentTrack?.id, serverWithCred]);
+
+  function handleStarClick(star: number) {
+    if (!currentTrack || !serverWithCred) return;
+    const newRating = star === trackRating ? 0 : star;
+    setTrackRating(newRating);
+    if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
+    ratingDebounce.current = setTimeout(() => {
+      const { server, credential } = serverWithCred;
+      const nativeId = stripServerPrefix(currentTrack.id, server.id);
+      setRating(server.url, server.username, credential, nativeId, newRating).catch(console.error);
+    }, 100);
+  }
+
+  const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;
 
   const repeatLabel =
     repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
@@ -191,15 +263,56 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
 
         <div className="player-section player-section--right">
           {currentTrack && serverWithCred && (
-            <button
-              className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
-              onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-              title={isLoved ? "Unlove" : "Love"}
-              aria-label={isLoved ? "Unlove" : "Love"}
-            >
-              <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-            </button>
+            <>
+              <button
+                className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
+                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+                title={isLoved ? "Unlove" : "Love"}
+                aria-label={isLoved ? "Unlove" : "Love"}
+              >
+                <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+              </button>
+              <div
+                className="player-stars"
+                onMouseLeave={() => setHoverRating(0)}
+              >
+                {[1, 2, 3, 4, 5].map((star) => {
+                  const filled = star <= (hoverRating || trackRating);
+                  return (
+                    <button
+                      key={star}
+                      className={`player-star-btn${filled ? " player-star-btn--filled" : ""}`}
+                      onClick={() => handleStarClick(star)}
+                      onMouseEnter={() => setHoverRating(star)}
+                      title={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                      aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                    >
+                      <Star size={13} fill={filled ? "currentColor" : "none"} strokeWidth={filled ? 0 : 1.5} />
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           )}
+          <button
+            ref={timerBtnRef}
+            className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
+            onClick={() => {
+              if (timerBtnRef.current) {
+                const r = timerBtnRef.current.getBoundingClientRect();
+                setTimerPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+              }
+              setTimerOpen((o) => !o);
+            }}
+            title={timerActive ? (remaining || "End of track") : "Sleep timer"}
+            aria-label="Sleep timer"
+          >
+            {timerActive && remaining ? (
+              <span className="player-timer-remaining">{remaining}</span>
+            ) : (
+              <Timer size={18} />
+            )}
+          </button>
           <button
             className="player-btn player-btn--icon"
             onClick={onNowPlaying}
@@ -234,6 +347,38 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           </div>
         </div>
       </div>}
+
+      {timerOpen && (
+        <div
+          ref={timerPopoverRef}
+          className="timer-popover"
+          style={timerPopoverPos ? { right: timerPopoverPos.right, bottom: timerPopoverPos.bottom } : undefined}
+        >
+          {([15, 30, 45, 60] as const).map((min) => (
+            <button
+              key={min}
+              className={`timer-popover-item${sleepTimerEndsAt ? " timer-popover-item--active" : ""}`}
+              onClick={() => { setSleepTimer(min); setTimerOpen(false); }}
+            >
+              {min} min
+            </button>
+          ))}
+          <button
+            className={`timer-popover-item${sleepTimerEndOfTrack ? " timer-popover-item--active" : ""}`}
+            onClick={() => { setSleepTimer("end-of-track"); setTimerOpen(false); }}
+          >
+            End of track
+          </button>
+          {timerActive && (
+            <button
+              className="timer-popover-item timer-popover-item--off"
+              onClick={() => { clearSleepTimer(); setTimerOpen(false); }}
+            >
+              Off
+            </button>
+          )}
+        </div>
+      )}
 
       {artOpen && currentTrack && (currentTrack.artworkRef || currentTrack.coverArtUrl) && (() => {
         const popoverUrl = serverWithCred && currentTrack.artworkRef

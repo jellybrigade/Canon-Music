@@ -27,6 +27,17 @@
   transition: opacity 0.4s ease;
 }
 
+/* Dominant color radial glow at top, derived from album art accent */
+.now-playing-view::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 100% 40% at 50% 0%, var(--np-dominant, transparent), transparent 70%);
+  opacity: 0.22;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .now-playing-back-btn {
   position: absolute;
   top: 12px;
@@ -331,6 +342,31 @@
   color: #fff;
 }
 
+.now-playing-tab-refresh-btn {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  margin-left: auto;
+  padding: 0.5rem 0.5rem 0.625rem;
+  display: flex;
+  align-items: center;
+}
+
+.now-playing-tab-refresh-btn:hover:not(:disabled) {
+  background: none !important;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.now-playing-tab-refresh-btn:disabled {
+  cursor: default;
+}
+
+.now-playing-tab-refresh-btn .spin {
+  animation: spin 1s linear infinite;
+}
+
 .now-playing-tab-panel {
   flex: 1;
   overflow-y: auto;
@@ -403,7 +439,16 @@
   gap: 0.125rem;
 }
 
+.now-playing-up-next-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .now-playing-up-next-title {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
