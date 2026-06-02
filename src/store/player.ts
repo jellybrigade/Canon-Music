@@ -112,7 +112,7 @@ interface PlayerState {
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
-  next: () => Promise<void>;
+  next: (fromNaturalEnd?: boolean) => Promise<void>;
   prev: () => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -384,11 +384,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({ sleepTimerEndsAt: null, sleepTimerEndOfTrack: false });
     },
 
-    next: async () => {
+    next: async (fromNaturalEnd = false) => {
       const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder } = get();
       if (queue.length === 0 || !streamUrlFor) return;
 
-      if (get().sleepTimerEndOfTrack) {
+      if (fromNaturalEnd && get().sleepTimerEndOfTrack) {
         get().clearSleepTimer();
         stopElapsedTimer();
         set({ isPlaying: false });

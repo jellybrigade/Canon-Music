@@ -46,10 +46,11 @@ export function useListeningStats() {
                 '' AS last_played
          FROM albums a
          JOIN tracks t ON t.album_id = a.id
+         LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
          WHERE a.artwork_url IS NOT NULL
          GROUP BY a.id
-         HAVING COUNT(CASE WHEN t.play_count > 0 THEN 1 END) > 0
-            AND COUNT(CASE WHEN t.play_count > 0 THEN 1 END) < COUNT(t.id)
+         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) > 0
+            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
          ORDER BY a.name`,
         []
       );
@@ -57,7 +58,7 @@ export function useListeningStats() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Albums where ≥50% of tracks have Navidrome play_count > 0, but not 100%
+  // Albums where ≥50% of tracks have been played (play_count or scrobble history), but not 100%
   const almostDoneQuery = useQuery<AlbumStatRow[]>({
     queryKey: ["albums", "almost-done"],
     queryFn: async () => {
@@ -68,10 +69,11 @@ export function useListeningStats() {
                 '' AS last_played
          FROM albums a
          JOIN tracks t ON t.album_id = a.id
+         LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
          WHERE a.artwork_url IS NOT NULL
          GROUP BY a.id
-         HAVING COUNT(CASE WHEN t.play_count > 0 THEN 1 END) * 2 >= COUNT(t.id)
-            AND COUNT(CASE WHEN t.play_count > 0 THEN 1 END) < COUNT(t.id)
+         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) * 2 >= COUNT(t.id)
+            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
          ORDER BY a.name`,
         []
       );

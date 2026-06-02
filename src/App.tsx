@@ -299,7 +299,6 @@ export default function App() {
       void queryClient.invalidateQueries({ queryKey: ["albums"] });
     })
       .then(({ failedAlbums, failedPlaylists }) => {
-        syncingRef.current = false;
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
@@ -324,10 +323,12 @@ export default function App() {
         }, 1000);
       })
       .catch((err: unknown) => {
-        syncingRef.current = false;
         setSyncStatus("error");
         setSyncError(err instanceof Error ? err.message : String(err));
         console.error("Sync failed:", err);
+      })
+      .finally(() => {
+        syncingRef.current = false;
       });
   }
 

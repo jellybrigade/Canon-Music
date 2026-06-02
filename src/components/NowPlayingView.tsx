@@ -210,7 +210,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
       autoScrollingRef.current = true;
       container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
-      requestAnimationFrame(() => { autoScrollingRef.current = false; });
+      setTimeout(() => { autoScrollingRef.current = false; }, 500);
     }
   }, [tab, elapsed, lyricsLines]);
 
