@@ -105,6 +105,11 @@ interface PlayerState {
   accentColor: string | null;
   waveformPeaks: number[] | null;
 
+  sleepTimerEndsAt: number | null;
+  sleepTimerEndOfTrack: boolean;
+  setSleepTimer: (preset: number | "end-of-track") => void;
+  clearSleepTimer: () => void;
+
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
   next: () => Promise<void>;
@@ -134,6 +139,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let elapsedInterval: ReturnType<typeof setInterval> | null = null;
   let cancelWaveform: (() => void) | null = null;
+  let sleepTimerTimeout: ReturnType<typeof setTimeout> | null = null;
 
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
@@ -329,6 +335,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     accentColor: null,
     waveformPeaks: null,
 
+    sleepTimerEndsAt: null,
+    sleepTimerEndOfTrack: false,
+
     setWaveformPeaks: (peaks) => {
       set({ waveformPeaks: peaks });
     },
@@ -356,9 +365,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistRadioState();
     },
 
+    setSleepTimer: (preset) => {
+      if (sleepTimerTimeout) { clearTimeout(sleepTimerTimeout); sleepTimerTimeout = null; }
+      if (preset === "end-of-track") {
+        set({ sleepTimerEndOfTrack: true, sleepTimerEndsAt: null });
+      } else {
+        const endsAt = Date.now() + preset * 60 * 1000;
+        set({ sleepTimerEndsAt: endsAt, sleepTimerEndOfTrack: false });
+        sleepTimerTimeout = setTimeout(() => {
+          get().pause();
+          get().clearSleepTimer();
+        }, preset * 60 * 1000);
+      }
+    },
+
+    clearSleepTimer: () => {
+      if (sleepTimerTimeout) { clearTimeout(sleepTimerTimeout); sleepTimerTimeout = null; }
+      set({ sleepTimerEndsAt: null, sleepTimerEndOfTrack: false });
+    },
+
     next: async () => {
       const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder } = get();
       if (queue.length === 0 || !streamUrlFor) return;
+
+      if (get().sleepTimerEndOfTrack) {
+        get().clearSleepTimer();
+        stopElapsedTimer();
+        set({ isPlaying: false });
+        void persistQueueState();
+        return;
+      }
 
       if (repeat === "repeat-one") {
         const track = resolveTrack(queue, shuffleOrder, isShuffled, queueIndex);

@@ -288,7 +288,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       className="now-playing-view"
       style={{
         ...(largeArtUrl ? { '--art-bg': `url("${largeArtUrl.replace(/"/g, '%22')}")` } : {}),
-        ...(accent ? { '--accent': accent, '--accent-hover': accent } : {}),
+        ...(accent ? { '--accent': accent, '--accent-hover': accent, '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
       {onBack && (

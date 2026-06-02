@@ -27,6 +27,17 @@
   transition: opacity 0.4s ease;
 }
 
+/* Dominant color radial glow at top, derived from album art accent */
+.now-playing-view::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 100% 40% at 50% 0%, var(--np-dominant, transparent), transparent 70%);
+  opacity: 0.22;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .now-playing-back-btn {
   position: absolute;
   top: 12px;

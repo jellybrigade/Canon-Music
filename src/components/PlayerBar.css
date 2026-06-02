@@ -33,9 +33,9 @@
 }
 
 .player-section--right {
-  flex: 0 0 180px;
+  flex: 0 0 310px;
   justify-content: flex-end;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
 .player-thumb {
@@ -260,6 +260,87 @@
 
 .normalizing-bar--above-player {
   bottom: var(--player-bar-height);
+}
+
+/* ── Star rating ── */
+.player-stars {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.player-star-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0.15em 0.2em;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  line-height: 1;
+  opacity: 0.45;
+  transition: opacity 0.1s, color 0.1s;
+}
+
+.player-star-btn:hover,
+.player-star-btn--filled {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* ── Timer button countdown label ── */
+.player-timer-remaining {
+  font-size: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* ── Sleep timer popover ── */
+.timer-popover {
+  position: fixed;
+  bottom: calc(var(--player-bar-height) + 8px);
+  right: 1.25rem;
+  width: 130px;
+  background: var(--surface-1, #1c1c1c);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 0;
+}
+
+.timer-popover-item {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-radius: 0;
+}
+
+.timer-popover-item:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.timer-popover-item--active {
+  color: var(--accent);
+}
+
+.timer-popover-item--off {
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  border-top: 1px solid var(--border);
 }
 
 .art-popover {
