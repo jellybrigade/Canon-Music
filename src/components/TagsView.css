@@ -3,7 +3,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 1.5rem 2rem;
-  padding-bottom: calc(var(--player-bar-height) + 1.5rem);
+  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px) + 1.5rem);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;

@@ -81,6 +81,13 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   }, []);
 
   useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--normalizing-bar-height",
+      pullProgress ? "24px" : "0px"
+    );
+  }, [pullProgress]);
+
+  useEffect(() => {
     if (!artOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
     document.addEventListener("keydown", onKey);

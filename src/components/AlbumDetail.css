@@ -301,6 +301,7 @@
 .album-detail-body {
   flex: 1;
   overflow-y: auto;
+  padding-bottom: var(--normalizing-bar-height, 0px);
 }
 
 .tracklist {
