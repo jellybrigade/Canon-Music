@@ -16,6 +16,7 @@ import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useSetting } from "../hooks/useSetting";
+import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import { rawGenreId } from "../lib/canonicalize";
@@ -58,6 +59,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
+  const genreMappings = useGenreMappings();
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
   const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
@@ -176,18 +178,32 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   }
 
   const displayGenres = useMemo((): Array<{ id: string | null; name: string }> => {
-    if (normalizedTags?.genres.length) return normalizedTags.genres;
-    if (!tracks) return [];
-    const seen = new Set<string>();
-    const result: Array<{ id: null; name: string }> = [];
-    for (const t of tracks) {
-      if (t.genre && !seen.has(t.genre)) {
-        seen.add(t.genre);
-        result.push({ id: null, name: t.genre });
+    let raw: Array<{ id: string | null; name: string }>;
+    if (normalizedTags?.genres.length) {
+      raw = normalizedTags.genres;
+    } else if (tracks) {
+      const seen = new Set<string>();
+      raw = [];
+      for (const t of tracks) {
+        if (t.genre && !seen.has(t.genre)) {
+          seen.add(t.genre);
+          raw.push({ id: null, name: t.genre });
+        }
       }
+    } else {
+      return [];
     }
-    return result;
-  }, [normalizedTags, tracks]);
+    // Drop unmapped tags (id=null) whose raw name maps to a canonical already shown,
+    // preventing stale-cache duplicates like "Hip Hop" + "Rap".
+    const shownNames = new Set(raw.filter((g) => g.id !== null).map((g) => g.name));
+    return raw.filter((g) => {
+      if (g.id !== null) return true;
+      const mapped = genreMappings.get(g.name);
+      if (mapped === null) return false;
+      if (mapped !== undefined && shownNames.has(mapped)) return false;
+      return true;
+    });
+  }, [normalizedTags, tracks, genreMappings]);
 
   const hasTags =
     displayGenres.length > 0 ||

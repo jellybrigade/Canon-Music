@@ -30,6 +30,13 @@ export async function readNormalizedTags(albumId: string): Promise<NormalizedTag
   );
   const json = rows[0]?.normalized_tags_json;
   if (!json) return null;
+  // If album_genres is empty, the filter pipeline is broken — force re-normalization.
+  type CountRow = { n: number };
+  const countRows = await db.select<CountRow[]>(
+    "SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?",
+    [albumId]
+  );
+  if ((countRows[0]?.n ?? 0) === 0) return null;
   return JSON.parse(json) as NormalizedTags;
 }
 
