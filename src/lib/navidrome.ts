@@ -143,6 +143,7 @@ export interface NavidromeTrack {
   coverArt?: string;
   starred?: string;
   path?: string;
+  playCount?: number;
 }
 
 export function getStreamUrl(

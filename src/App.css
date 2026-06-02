@@ -233,7 +233,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .sidebar-btn-label {
-  font-size: 0.6875rem;
+  font-size: 0.5625rem;
   font-weight: 500;
   color: inherit;
   opacity: 0.9;

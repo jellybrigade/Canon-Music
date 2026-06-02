@@ -74,8 +74,8 @@ export async function syncLibrary(
       const trackDbId = `${server.id}:${track.id}`;
       await db.execute(
         `INSERT OR REPLACE INTO tracks
-           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trackDbId,
           server.id,
@@ -89,6 +89,7 @@ export async function syncLibrary(
           track.year ?? null,
           track.duration ?? null,
           track.path ?? null,
+          track.playCount ?? 0,
         ]
       );
       if (track.genre) {

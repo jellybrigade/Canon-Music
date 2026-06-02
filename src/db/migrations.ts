@@ -356,4 +356,8 @@ export const migrations: Migration[] = [
     version: 21,
     sql: `ALTER TABLE artist_identity ADD COLUMN wikidata_image_url TEXT;`,
   },
+  {
+    version: 22,
+    sql: `ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];

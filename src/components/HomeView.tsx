@@ -59,6 +59,7 @@ const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
   { key: "hidden-gem",       kicker: "Hidden gem",       desc: "Albums with just 1–3 plays" },
   { key: "loved",            kicker: "Loved",            desc: "Albums and tracks you've starred" },
   { key: "unplayed",         kicker: "Unplayed",         desc: "Never played in your library" },
+  { key: "almost-done",      kicker: "Almost done",      desc: "Albums where you've heard most but not all tracks" },
 ];
 
 const DEFAULT_FOR_YOU_ENABLED = new Set([
@@ -420,7 +421,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         </div>
         <div className="home-suggestion-grid">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="suggestion-card suggestion-card--skeleton">
+            <div key={i} className="suggestion-card suggestion-card--skeleton suggestion-card--has-bottom">
               <div className="suggestion-card__header">
                 <span className="suggestion-card__kicker-skel" />
               </div>
@@ -466,7 +467,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           return (
             <div
               key={group.kicker}
-              className="suggestion-card"
+              className={`suggestion-card${group.albums.length > 1 ? " suggestion-card--has-bottom" : ""}`}
               style={{ "--kicker-color": kickerColor } as React.CSSProperties}
             >
               <div className="suggestion-card__header">
@@ -637,7 +638,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { server } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playAlbum = usePlayAlbum(serverWithCredential);
-  const [forYouSeed, setForYouSeed] = useState(0);
+  const [forYouSeed, setForYouSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
 
   const [rawCategoryConfig, setRawCategoryConfig] = useSetting("for_you_categories", DEFAULT_FOR_YOU_CONFIG_JSON);
@@ -665,7 +666,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
+  const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
   const recentItems = useMemo(
@@ -718,7 +719,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     "hidden-gem":       hiddenGem as AlbumRow[],
     "loved":            lovedSource ?? [],
     "unplayed":         unplayed ?? [],
-  }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayed]);
+    "almost-done":      almostDone as AlbumRow[],
+  }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayed, almostDone]);
 
   const forYouGroups = useMemo(
     () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 4),
