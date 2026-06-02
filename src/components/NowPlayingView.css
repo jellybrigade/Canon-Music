@@ -403,7 +403,16 @@
   gap: 0.125rem;
 }
 
+.now-playing-up-next-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
 .now-playing-up-next-title {
+  flex: 1;
+  min-width: 0;
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-primary);
