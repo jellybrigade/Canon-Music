@@ -252,6 +252,21 @@
 }
 
 
+/* ── Year group header ─────────────────────────────────────────────── */
+
+.year-group-header {
+  display: flex;
+  align-items: center;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: -0.01em;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  pointer-events: none;
+  user-select: none;
+}
+
 /* ── Album off-tree badge ──────────────────────────────────────────── */
 
 .album-off-tree-badge {

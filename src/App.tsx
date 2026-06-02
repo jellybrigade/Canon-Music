@@ -78,6 +78,8 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
   const [canonicalIdFilters, setCanonicalIdFilters] = useState<string[]>([]);
+  const [yearFromInput, setYearFromInput] = useState("");
+  const [yearToInput, setYearToInput] = useState("");
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -377,10 +379,12 @@ export default function App() {
     if (searchQuery && !searchResults) {
       return <p className="empty-state">Searching…</p>;
     }
-    const visibleAlbums = lovedOnly
-      ? albums.filter((a) => lovedAlbumIds.has(a.id))
-      : albums;
-    const filtersActive = lovedOnly || canonicalIdFilters.length > 0;
+    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
+    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
+    let visibleAlbums = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
+    if (yearFrom != null && !isNaN(yearFrom)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 0) >= yearFrom);
+    if (yearTo != null && !isNaN(yearTo)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 9999) <= yearTo);
+    const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
       ? "No loved albums"
       : filtersActive
@@ -393,7 +397,7 @@ export default function App() {
         onSelect={setSelectedAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
         emptyMessage={emptyMessage}
-        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}`}
+        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}-${yearFromInput}-${yearToInput}`}
         sort={sort}
       />
     );
@@ -555,6 +559,36 @@ export default function App() {
                     {opt.label}
                   </button>
                 ))}
+              </div>
+              <div className="year-range-filter">
+                <input
+                  className="year-range-input"
+                  type="number"
+                  placeholder="From"
+                  value={yearFromInput}
+                  onChange={(e) => setYearFromInput(e.target.value)}
+                  min={1900}
+                  max={2100}
+                />
+                <span className="year-range-sep">–</span>
+                <input
+                  className="year-range-input"
+                  type="number"
+                  placeholder="To"
+                  value={yearToInput}
+                  onChange={(e) => setYearToInput(e.target.value)}
+                  min={1900}
+                  max={2100}
+                />
+                {(yearFromInput !== "" || yearToInput !== "") && (
+                  <button
+                    className="year-range-clear"
+                    onClick={() => { setYearFromInput(""); setYearToInput(""); }}
+                    title="Clear year filter"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
               <button
                 className="search-trigger-btn"

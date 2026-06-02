@@ -16,6 +16,11 @@ const PADDING = 20;
 const COL_GAP = 16;
 const ROW_GAP = 24;
 const CARD_MIN = 190;
+const YEAR_HEADER_HEIGHT = 38;
+
+type GridRow =
+  | { type: "year-header"; label: string }
+  | { type: "albums"; items: AlbumRow[] };
 
 interface Props {
   albums: AlbumRow[];
@@ -50,8 +55,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
 
   useScrollMemory(scrollKey, containerRef);
 
-  // Re-measure when albums transition from empty to non-empty — stale containerWidth
-  // from the empty state can leave cols=1 and produce full-width stacked images.
+  // Re-measure when albums transition from empty to non-empty
   const prevAlbumsLen = useRef(albums.length);
   useLayoutEffect(() => {
     const wasEmpty = prevAlbumsLen.current === 0;
@@ -66,44 +70,76 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
   const cardWidth = available > 0 ? (available - COL_GAP * (cols - 1)) / cols : CARD_MIN;
   const rowHeight = Math.round(cardWidth) + ROW_GAP;
-  const rowCount = Math.ceil(albums.length / cols);
 
-  const virtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: () => containerRef.current,
-    estimateSize: () => rowHeight,
-    overscan: 3,
-  });
-
-  const prevCols = useRef(cols);
-  useLayoutEffect(() => {
-    if (prevCols.current !== cols) {
-      prevCols.current = cols;
-      virtualizer.measure();
+  // Build mixed rows: year-header rows interleaved with album rows when sort=year
+  const rows = useMemo<GridRow[]>(() => {
+    if (cols === 0) return [];
+    if (sort === "year") {
+      const result: GridRow[] = [];
+      let batch: AlbumRow[] = [];
+      let lastYear: number | null | "unset" = "unset";
+      const flush = () => {
+        for (let i = 0; i < batch.length; i += cols)
+          result.push({ type: "albums", items: batch.slice(i, i + cols) });
+        batch = [];
+      };
+      for (const album of albums) {
+        if (album.year !== lastYear) {
+          flush();
+          result.push({ type: "year-header", label: album.year ? String(album.year) : "Unknown" });
+          lastYear = album.year;
+        }
+        batch.push(album);
+      }
+      flush();
+      return result;
     }
-  }, [cols, virtualizer]);
+    const result: GridRow[] = [];
+    for (let i = 0; i < albums.length; i += cols)
+      result.push({ type: "albums", items: albums.slice(i, i + cols) });
+    return result;
+  }, [albums, sort, cols]);
 
   const scrubberSections = useMemo(() => {
     if (!sort || sort === "recently_added" || cols === 0) return [];
+    if (sort === "year") {
+      return rows.flatMap((row, i) =>
+        row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : []
+      );
+    }
     const seen = new Set<string>();
     const sections: { label: string; rowIndex: number }[] = [];
-    for (let i = 0; i < albums.length; i++) {
-      const album = albums[i]!;
-      let label: string;
-      if (sort === "year") {
-        label = album.year ? `${Math.floor(album.year / 10) * 10}s` : "?";
-      } else {
-        const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
-        const ch = src[0]?.toUpperCase() ?? "#";
-        label = /[A-Z]/.test(ch) ? ch : "#";
-      }
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      if (row.type !== "albums") continue;
+      const album = row.items[0];
+      if (!album) continue;
+      const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
+      const ch = src[0]?.toUpperCase() ?? "#";
+      const label = /[A-Z]/.test(ch) ? ch : "#";
       if (!seen.has(label)) {
         seen.add(label);
-        sections.push({ label, rowIndex: Math.floor(i / cols) });
+        sections.push({ label, rowIndex: i });
       }
     }
     return sections;
-  }, [albums, sort, cols]);
+  }, [rows, sort, cols]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: (i) => rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight,
+    overscan: 3,
+  });
+
+  const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}`);
+  useLayoutEffect(() => {
+    const key = `${cols}-${rowHeight}-${rows.length}`;
+    if (prevLayoutKey.current !== key) {
+      prevLayoutKey.current = key;
+      virtualizer.measure();
+    }
+  }, [cols, rowHeight, rows.length, virtualizer]);
 
   return (
     <div className="album-grid-wrapper">
@@ -113,8 +149,27 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         ) : (
         <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
-            const rowStart = virtualRow.index * cols;
-            const rowAlbums = albums.slice(rowStart, rowStart + cols);
+            const row = rows[virtualRow.index];
+            if (!row) return null;
+
+            if (row.type === "year-header") {
+              return (
+                <div
+                  key={virtualRow.key}
+                  className="year-group-header"
+                  style={{
+                    position: "absolute",
+                    top: `${PADDING + virtualRow.start}px`,
+                    left: `${PADDING}px`,
+                    right: `${PADDING}px`,
+                    height: `${YEAR_HEADER_HEIGHT}px`,
+                  }}
+                >
+                  {row.label}
+                </div>
+              );
+            }
+
             return (
               <div
                 key={virtualRow.key}
@@ -129,7 +184,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                   gap: `${COL_GAP}px`,
                 }}
               >
-                {rowAlbums.map((album) => (
+                {row.items.map((album) => (
                   <div
                     key={album.id}
                     className="album-card"
