@@ -301,7 +301,7 @@
 .timer-popover {
   position: fixed;
   bottom: calc(var(--player-bar-height) + 8px);
-  right: 1.25rem;
+  right: 1.25rem; /* fallback; overridden by inline style from getBoundingClientRect */
   width: 130px;
   background: var(--surface-1, #1c1c1c);
   border: 1px solid var(--border);

@@ -94,8 +94,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         label = album.year ? `${Math.floor(album.year / 10) * 10}s` : "?";
       } else {
         const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
-        const stripped = src.replace(/^(The |A |An )/i, "");
-        const ch = stripped[0]?.toUpperCase() ?? "#";
+        const ch = src[0]?.toUpperCase() ?? "#";
         label = /[A-Z]/.test(ch) ? ch : "#";
       }
       if (!seen.has(label)) {

@@ -51,6 +51,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const artThumbRef = useRef<HTMLButtonElement>(null);
 
   const [timerOpen, setTimerOpen] = useState(false);
+  const [timerPopoverPos, setTimerPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
   const timerBtnRef = useRef<HTMLButtonElement>(null);
   const timerPopoverRef = useRef<HTMLDivElement>(null);
   const [remaining, setRemaining] = useState("");
@@ -296,7 +297,13 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           <button
             ref={timerBtnRef}
             className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
-            onClick={() => setTimerOpen((o) => !o)}
+            onClick={() => {
+              if (timerBtnRef.current) {
+                const r = timerBtnRef.current.getBoundingClientRect();
+                setTimerPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+              }
+              setTimerOpen((o) => !o);
+            }}
             title={timerActive ? (remaining || "End of track") : "Sleep timer"}
             aria-label="Sleep timer"
           >
@@ -342,7 +349,11 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
       </div>}
 
       {timerOpen && (
-        <div ref={timerPopoverRef} className="timer-popover">
+        <div
+          ref={timerPopoverRef}
+          className="timer-popover"
+          style={timerPopoverPos ? { right: timerPopoverPos.right, bottom: timerPopoverPos.bottom } : undefined}
+        >
           {([15, 30, 45, 60] as const).map((min) => (
             <button
               key={min}

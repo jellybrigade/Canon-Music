@@ -111,6 +111,14 @@
   opacity: 0.75;
 }
 
+.tags-orphan-section {
+  margin-top: 2rem;
+}
+
+.tags-orphan-section .tags-table tr td {
+  opacity: 0.6;
+}
+
 .tags-cell-raw {
   font-family: var(--font-mono, monospace);
   font-size: 0.75rem;
