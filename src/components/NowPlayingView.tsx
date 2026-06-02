@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -169,7 +169,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.artist ?? null,
     currentTrack?.id ?? null
   );
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading } = useLyrics(currentTrack ?? null);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
@@ -447,6 +447,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 {t === "up-next" ? "Up Next" : t === "about" ? "About" : "Lyrics"}
               </button>
             ))}
+            {tab === "lyrics" && (
+              <button
+                className="now-playing-tab-refresh-btn"
+                title="Re-fetch lyrics"
+                disabled={lyricsLoading}
+                onClick={() => void lyricsRefresh()}
+              >
+                <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
+              </button>
+            )}
           </div>
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>

@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import type { CurrentTrack } from "../store/player";
@@ -7,9 +8,11 @@ interface LyricsResult {
   plain: string | null;
   synced: string | null;
   loading: boolean;
+  refresh: () => Promise<void>;
 }
 
 export function useLyrics(track: CurrentTrack | null): LyricsResult {
+  const queryClient = useQueryClient();
   const query = useQuery({
     queryKey: ["lyrics", track?.id ?? null],
     enabled: !!track,
@@ -50,9 +53,17 @@ export function useLyrics(track: CurrentTrack | null): LyricsResult {
     gcTime: 5 * 60 * 1000,
   });
 
+  const refresh = useCallback(async () => {
+    if (!track) return;
+    const db = await getDb();
+    await db.execute("DELETE FROM lyrics WHERE track_id = ?", [track.id]);
+    await queryClient.invalidateQueries({ queryKey: ["lyrics", track.id] });
+  }, [track, queryClient]);
+
   return {
     plain: query.data?.plain ?? null,
     synced: query.data?.synced ?? null,
-    loading: query.isLoading,
+    loading: query.isFetching,
+    refresh,
   };
 }

@@ -331,6 +331,31 @@
   color: #fff;
 }
 
+.now-playing-tab-refresh-btn {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  margin-left: auto;
+  padding: 0.5rem 0.5rem 0.625rem;
+  display: flex;
+  align-items: center;
+}
+
+.now-playing-tab-refresh-btn:hover:not(:disabled) {
+  background: none !important;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.now-playing-tab-refresh-btn:disabled {
+  cursor: default;
+}
+
+.now-playing-tab-refresh-btn .spin {
+  animation: spin 1s linear infinite;
+}
+
 .now-playing-tab-panel {
   flex: 1;
   overflow-y: auto;
