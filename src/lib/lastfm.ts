@@ -67,22 +67,19 @@ export async function fetchAlbumTags(artist: string, album: string): Promise<Las
   const apiKey = await getApiKey();
   if (!apiKey) throw new Error("Last.fm API key not configured");
   const minCount = await getMinTagCount();
+  const tags = await fetchTags("album.getTopTags", { artist, album }, apiKey, minCount);
+  return { genres: tags, moods: [] };
+}
 
-  const [albumTags, artistTags] = await Promise.allSettled([
-    fetchTags("album.getTopTags", { artist, album }, apiKey, minCount),
-    fetchTags("artist.getTopTags", { artist }, apiKey, minCount),
-  ]);
-
-  const allTags = [
-    ...(albumTags.status === "fulfilled" ? albumTags.value : []),
-    ...(artistTags.status === "fulfilled" ? artistTags.value : []),
-  ];
-
-  // Separate genres and moods by checking against canon tree kind
-  // Moods are determined dynamically using canonicalKey normalization
-  // Simple heuristic: moods are a subset of known mood keywords
-  // Actual split happens in useTagPull via findCanonical
-  return { genres: allTags, moods: [] };
+export async function fetchArtistGenreTags(artist: string): Promise<string[]> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return [];
+  const minCount = await getMinTagCount();
+  try {
+    return await fetchTags("artist.getTopTags", { artist }, apiKey, minCount);
+  } catch {
+    return [];
+  }
 }
 
 export interface LastfmArtistInfo {

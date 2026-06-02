@@ -1,7 +1,7 @@
 import { getDb } from "../db";
 import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds } from "./canonicalize";
 import { bucketize } from "./tag-buckets";
-import { fetchAlbumTags } from "./lastfm";
+import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import type { MbGenre } from "./musicbrainz";
 
 export interface NormalizedTag {
@@ -102,6 +102,16 @@ async function _doNormalizeAlbum(
   if (identity?.combinedMbGenres?.length) {
     for (const g of identity.combinedMbGenres) {
       lastfmRaw.push(g.name);
+    }
+  }
+
+  // Artist tags as last resort: only when no file tags AND no album/MB tags exist
+  if (fileTagRows.length === 0 && lastfmRaw.length === 0) {
+    try {
+      const artistTags = await fetchArtistGenreTags(lfmArtist);
+      lastfmRaw.push(...artistTags);
+    } catch (e) {
+      console.warn(`normalizeAlbum: artist tag fallback failed for "${lfmArtist}":`, e);
     }
   }
 
