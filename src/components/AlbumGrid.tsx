@@ -162,7 +162,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                       />
                     </button>
                     {offTreeSet.has(album.id) && (
-                      <div className="album-off-tree-badge" title="Has off-tree tags">
+                      <div className="album-off-tree-badge" title="Has unmapped genre tags — open Tags view to resolve">
                         <AlertTriangle size={13} />
                       </div>
                     )}

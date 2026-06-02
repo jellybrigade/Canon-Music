@@ -129,7 +129,20 @@ export function useVocabulary() {
          FROM track_tags tt
          LEFT JOIN tag_mappings tm ON tm.raw_value = tt.raw_value AND tm.kind = tt.kind
          GROUP BY tt.raw_value, tt.kind
-         ORDER BY track_count DESC, tt.raw_value`
+         UNION ALL
+         SELECT
+           tm.raw_value,
+           tm.kind,
+           0 AS track_count,
+           tm.canonical_id,
+           tm.source AS mapping_source,
+           tm.match_type AS mapping_match_type,
+           COALESCE(tm.locked, 0) AS locked
+         FROM tag_mappings tm
+         WHERE NOT EXISTS (
+           SELECT 1 FROM track_tags tt WHERE tt.raw_value = tm.raw_value AND tt.kind = tm.kind
+         )
+         ORDER BY track_count DESC, raw_value`
       );
     },
   });
