@@ -38,6 +38,7 @@ import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
+import { useTagsStore } from "./store/tags";
 import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
@@ -74,6 +75,9 @@ export default function App() {
   const [rawSort, setSort] = useSetting("library_sort", "artist");
   const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
   const sidebarExpanded = rawSidebarExpanded === "true";
+  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
+  const pullProgress = useTagsStore((s) => s.pullProgress);
+  const metaBarVisible = !!(enrichmentPending || pullProgress);
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
@@ -759,7 +763,10 @@ export default function App() {
   return (
     <Suspense fallback={null}>
       <div className="app-layout">
-        <nav className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}`}>
+        <nav
+          className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}`}
+          style={{ paddingBottom: `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)` }}
+        >
           {NAV_ITEMS.map(({ id, label, icon, badge }) => (
             <button
               key={id}
@@ -774,13 +781,15 @@ export default function App() {
               {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
             </button>
           ))}
-          <button
-            className="sidebar-expand-btn"
-            title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-            onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
-          >
-            {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-          </button>
+          {view !== "nowplaying" && (
+            <button
+              className="sidebar-expand-btn"
+              title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+              onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
+            >
+              {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            </button>
+          )}
         </nav>
         {renderContent()}
       </div>
