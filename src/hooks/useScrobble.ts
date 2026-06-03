@@ -2,17 +2,34 @@ import { useEffect, useRef } from "react";
 import { getDb } from "../db";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/player";
+import { reportNowPlaying } from "../lib/navidrome";
+import { stripServerPrefix } from "../lib/ids";
+import type { ServerWithCredential } from "./useServer";
 
 const SCROBBLE_MIN_ELAPSED_S = 240;
 const SCROBBLE_FRACTION = 0.5;
 
-export function useScrobble(track: CurrentTrack | null, elapsed: number) {
+export function useScrobble(
+  track: CurrentTrack | null,
+  elapsed: number,
+  serverWithCred: ServerWithCredential | undefined
+) {
   const scrobbedRef = useRef(false);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
 
   useEffect(() => {
     scrobbedRef.current = false;
   }, [playStartedAt]);
+
+  useEffect(() => {
+    if (!track || !serverWithCred) return;
+    const { server, credential } = serverWithCred;
+    if (!track.id.startsWith(server.id + ":")) return;
+    const nativeId = stripServerPrefix(track.id, server.id);
+    reportNowPlaying(server.url, server.username, credential, nativeId).catch(
+      () => {} // server unreachable — silently skip
+    );
+  }, [playStartedAt, track, serverWithCred]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!track || scrobbedRef.current) return;

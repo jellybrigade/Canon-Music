@@ -263,6 +263,16 @@
   border-color: var(--text-tertiary);
 }
 
+/* file-sourced chips: solid border (default); lastfm-sourced: dashed border */
+.album-tag-chip--lastfm {
+  border-style: dashed;
+  opacity: 0.85;
+}
+
+.album-tag-chip--lastfm:hover {
+  opacity: 1;
+}
+
 .album-tag-actions {
   display: flex;
   align-items: center;

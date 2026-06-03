@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -13,6 +13,7 @@ const CommandPalette = lazy(() => import("./components/CommandPalette").then((m)
 const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
+const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m) => ({ default: m.NowPlayingView })));
@@ -30,6 +31,7 @@ import { useVocabulary } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
+import { invalidateGenreTreeCache } from "./hooks/useGenreTree";
 import { syncLibrary } from "./lib/sync";
 import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
 import { stripServerPrefix } from "./lib/ids";
@@ -38,6 +40,7 @@ import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
+import { useTagsStore } from "./store/tags";
 import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
@@ -53,7 +56,7 @@ import "./styles/base.css";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
+type View = "home" | "nowplaying" | "library" | "artists" | "genres" | "playlists" | "tags" | "settings";
 
 export default function App() {
   useTrackEndedListener();
@@ -64,8 +67,6 @@ export default function App() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
-  useScrobble(currentTrack, elapsed);
-
   const { data: servers, isLoading: serversLoading } = useServers();
   const queryClient = useQueryClient();
 
@@ -74,6 +75,15 @@ export default function App() {
   const { lovedAlbumIds } = useLoved();
 
   const [rawSort, setSort] = useSetting("library_sort", "artist");
+  const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
+  const sidebarExpanded = rawSidebarExpanded === "true";
+  const [rawSidebarWidth, setSidebarWidthSetting] = useSetting("sidebar.width", "180");
+  const sidebarWidth = Math.max(130, Math.min(400, parseInt(rawSidebarWidth, 10) || 180));
+  const [dragLiveWidth, setDragLiveWidth] = useState<number | null>(null);
+  const dragStartRef = useRef<{ x: number; width: number } | null>(null);
+  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
+  const pullProgress = useTagsStore((s) => s.pullProgress);
+  const metaBarVisible = !!(enrichmentPending || pullProgress);
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
@@ -168,6 +178,7 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   useGlobalShortcuts(serverWithCred);
   useScrobbleFlush(serverWithCred);
+  useScrobble(currentTrack, elapsed, serverWithCred);
   const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
@@ -198,6 +209,7 @@ export default function App() {
     { id: "nowplaying", label: "Now Playing", icon: <Headphones size={24} /> },
     { id: "library", label: "Library", icon: <Music size={24} /> },
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
+    { id: "genres", label: "Genres", icon: <Layers size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: unmappedCount || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
@@ -208,6 +220,41 @@ export default function App() {
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumRow | null>(null);
+
+  function handleSidebarResizeMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    const startWidth = dragLiveWidth ?? sidebarWidth;
+    dragStartRef.current = { x: e.clientX, width: startWidth };
+
+    function onMove(ev: MouseEvent) {
+      if (!dragStartRef.current) return;
+      const newWidth = dragStartRef.current.width + (ev.clientX - dragStartRef.current.x);
+      setDragLiveWidth(Math.max(52, Math.min(400, newWidth)));
+    }
+
+    function onUp(ev: MouseEvent) {
+      if (!dragStartRef.current) return;
+      const newWidth = dragStartRef.current.width + (ev.clientX - dragStartRef.current.x);
+      dragStartRef.current = null;
+      setDragLiveWidth(null);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (newWidth < 130) {
+        void setSidebarExpanded("false");
+      } else {
+        const clamped = Math.min(Math.max(Math.round(newWidth), 130), 400);
+        void setSidebarWidthSetting(String(clamped));
+        void setSidebarExpanded("true");
+      }
+    }
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
 
   function navigateTo(v: View, select?: { album?: AlbumRow; artist?: ArtistRow }) {
     if (v === "nowplaying" && isQueueOpen) toggleQueue();
@@ -264,6 +311,33 @@ export default function App() {
     startRadio(track, mode);
   }
 
+  async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    // Include ancestor rows so selecting a parent category plays its entire subtree.
+    const rows = await db.select<TrackRow[]>(
+      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+       FROM tracks t
+       JOIN albums a ON t.album_id = a.id
+       JOIN album_genres ag ON ag.album_id = a.id
+       WHERE ag.canonical_id = ?
+       ORDER BY RANDOM()`,
+      [canonicalId]
+    );
+    if (rows.length === 0) return;
+    const streamUrlFn = (tr: CurrentTrack) =>
+      getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    const tracks: CurrentTrack[] = rows.map((t) => ({
+      id: t.id, title: t.title, artist: t.artist, duration: t.duration,
+      coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
+      artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+    }));
+    await playQueue(tracks, streamUrlFn, 0);
+    startRadio(tracks[0]!, "same-genre", genreLabel);
+  }
+
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
@@ -309,6 +383,7 @@ export default function App() {
           setSyncError(`Sync partial — failed to fetch tracks for ${parts.join(" and ")}.`);
         }
         void queryClient.invalidateQueries({ queryKey: ["albums"] });
+        invalidateGenreTreeCache();
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: ["artists"] });
           void queryClient.invalidateQueries({ queryKey: ["genres"] });
@@ -697,6 +772,21 @@ export default function App() {
           </main>
         );
 
+      case "genres":
+        return (
+          <Suspense fallback={null}>
+            <main className={`library${queueClass}`}>
+              <GenreView
+                onSelectGenre={(canonicalId) => {
+                  setCanonicalIdFilters([canonicalId]);
+                  setView("library");
+                }}
+                onPlayGenre={(canonicalId, label) => { void handlePlayGenre(canonicalId, label); }}
+              />
+            </main>
+          </Suspense>
+        );
+
       case "playlists":
         return (
           <main className={`library${queueClass}`}>
@@ -758,7 +848,13 @@ export default function App() {
   return (
     <Suspense fallback={null}>
       <div className="app-layout">
-        <nav className="sidebar">
+        <nav
+          className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}${dragLiveWidth !== null ? " sidebar--dragging" : ""}`}
+          style={{
+            width: sidebarExpanded ? `${dragLiveWidth ?? sidebarWidth}px` : undefined,
+            paddingBottom: `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)`,
+          }}
+        >
           {NAV_ITEMS.map(({ id, label, icon, badge }) => (
             <button
               key={id}
@@ -770,9 +866,24 @@ export default function App() {
                 {icon}
                 {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
               </span>
-              <span className="sidebar-btn-label">{label}</span>
+              {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
             </button>
           ))}
+          {view !== "nowplaying" && (
+            <button
+              className="sidebar-expand-btn"
+              title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+              onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
+            >
+              {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+            </button>
+          )}
+          {sidebarExpanded && (
+            <div
+              className="sidebar-resize-handle"
+              onMouseDown={handleSidebarResizeMouseDown}
+            />
+          )}
         </nav>
         {renderContent()}
       </div>

@@ -56,6 +56,7 @@ function useScrobbleQueueCount() {
 export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer }: Props) {
   const [lastfmKey, setLastfmKey] = useSetting("lastfm.api_key", "");
   const [showWaveform, setShowWaveform] = useSetting("player.show_waveform", "false");
+  const [restoreQueue, setRestoreQueue] = useSetting("queue.restore_on_startup", "false");
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
@@ -537,7 +538,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
         )}
 
         {/* ── Playback ── */}
-        {show("playback", "waveform", "play album") && (
+        {show("playback", "waveform", "play album", "restore queue") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Playback</h3>
           <label className="settings-field settings-field--inline">
@@ -550,6 +551,17 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </label>
           <p className="settings-section-desc">
             Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally.
+          </p>
+          <label className="settings-field settings-field--inline" style={{ marginTop: "0.5rem" }}>
+            <input
+              type="checkbox"
+              checked={restoreQueue === "true"}
+              onChange={(e) => void setRestoreQueue(e.target.checked ? "true" : "false")}
+            />
+            <span>Restore queue on startup</span>
+          </label>
+          <p className="settings-section-desc">
+            Restores your last queue and position when Canon starts. Playback does not resume automatically.
           </p>
           <label className="settings-field">
             <span>Play album action</span>
@@ -612,7 +624,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
                   disabled={updateInstalling}
                   onClick={() => {
                     setUpdateInstalling(true);
-                    void installAndRestart(pendingUpdate).catch(() => setUpdateInstalling(false));
+                    void installAndRestart(pendingUpdate, () => {}).catch(() => setUpdateInstalling(false));
                   }}
                 >
                   {updateInstalling ? "Installing…" : "Install & Restart"}

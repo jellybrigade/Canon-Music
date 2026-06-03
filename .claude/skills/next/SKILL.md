@@ -11,12 +11,13 @@ Read `instructions/what-to-do.md`.
 
 ## Phase 2 — Pick work
 
-Select 1–3 items that form a coherent batch. Prefer:
-- Items that touch the same area of the codebase (fewer context switches)
+Start by picking **1–2 items** as your anchor:
 - Bugs over enhancements when both are present
 - Smaller, self-contained items over large open-ended ones
 
-Do not pick more than 3. One focused item is better than three sprawling ones.
+Then scan the rest of the backlog: for each remaining item, check whether it touches the same files, components, or logic as your anchor. If it does, pull it into the batch — do all related work in one pass rather than revisiting the same area twice.
+
+There is no hard cap, but the batch must stay coherent. If an item touches the same files but pulls in unrelated scope, leave it out.
 
 ## Phase 3 — Plan (stay in plan mode)
 
@@ -31,6 +32,8 @@ Wait for user approval before proceeding. If the user wants to adjust scope or a
 ## Phase 4 — Implement
 
 Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch. Keep ARCHITECTURE.md current if any files are added, moved, or substantially repurposed.
+
+**Do not start Canon in dev mode and do not take screenshots to verify.** Typecheck (`pnpm tsc --noEmit`) is sufficient for frontend changes. Rust changes: `cargo check`. The app is long-running and a dev instance is usually already open.
 
 ## Phase 5 — Commit
 

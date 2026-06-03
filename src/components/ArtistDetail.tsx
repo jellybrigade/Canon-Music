@@ -177,7 +177,7 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
         )}
       </span>
       {artUrl ? (
-        <img className="artist-track-art" src={artUrl} alt="" />
+        <img className="artist-track-art" src={artUrl} alt="" loading="lazy" />
       ) : (
         <div className="artist-track-art artist-track-art--placeholder" />
       )}
@@ -294,6 +294,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               className="artist-portrait"
               src={portraitUrl}
               alt={artist.name}
+              loading="lazy"
             />
           ) : (
             <div

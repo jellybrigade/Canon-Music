@@ -236,6 +236,7 @@ export function useSaveAlbumIdentity() {
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ["album-identity", input.albumId] });
       void queryClient.invalidateQueries({ queryKey: ["normalized-tags", input.albumId] });
+      void queryClient.invalidateQueries({ queryKey: ["failed-lookup-album-ids"] });
     },
   });
 }
@@ -247,6 +248,23 @@ export function useSaveAlbumIdentity() {
  * produce a confident match. Uses INSERT OR IGNORE so it never clobbers a
  * confirmed row that arrived via the dialog or a race condition.
  */
+// ── Failed lookup IDs (for grid badge) ───────────────────────────────────────
+
+/** Returns the set of album IDs that were looked up but yielded no MB match. */
+export function useFailedLookupAlbumIds() {
+  return useQuery({
+    queryKey: ["failed-lookup-album-ids"],
+    queryFn: async (): Promise<string[]> => {
+      const db = await getDb();
+      const rows = await db.select<{ album_id: string }[]>(
+        `SELECT album_id FROM album_identity
+         WHERE mb_release_group_id IS NULL AND looked_up_at IS NOT NULL`
+      );
+      return rows.map((r) => r.album_id);
+    },
+  });
+}
+
 export function useRecordFailedLookup() {
   const queryClient = useQueryClient();
 
@@ -262,6 +280,7 @@ export function useRecordFailedLookup() {
     },
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: ["album-identity", input.albumId] });
+      void queryClient.invalidateQueries({ queryKey: ["failed-lookup-album-ids"] });
     },
   });
 }

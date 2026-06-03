@@ -58,7 +58,6 @@
   column-gap: 1rem;
   row-gap: 1.5rem;
   padding: 1.25rem;
-  overflow-y: auto;
   flex: 1;
 }
 
@@ -275,6 +274,20 @@
   left: 6px;
   background: rgba(234, 179, 8, 0.9);
   color: #000;
+  border-radius: 3px;
+  padding: 2px 4px;
+  display: flex;
+  align-items: center;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.album-unidentified-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(99, 102, 241, 0.9);
+  color: #fff;
   border-radius: 3px;
   padding: 2px 4px;
   display: flex;

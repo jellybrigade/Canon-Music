@@ -100,6 +100,7 @@ interface PlayerState {
   radioActive: boolean;
   radioSeed: CurrentTrack | null;
   radioMode: RadioMode;
+  radioLabel: string | null;
 
   isQueueOpen: boolean;
   accentColor: string | null;
@@ -123,7 +124,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
   setRadioActive: (active: boolean) => void;
-  startRadio: (seed: CurrentTrack, mode?: RadioMode) => void;
+  startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
   setRadioMode: (mode: RadioMode) => void;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -280,7 +281,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   async function persistRadioState() {
     try {
-      const { radioActive, radioSeed, radioMode } = get();
+      const { radioActive, radioSeed, radioMode, radioLabel } = get();
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
@@ -293,6 +294,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_mode', ?)",
         [radioMode]
+      );
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_label', ?)",
+        [radioLabel ?? ""]
       );
     } catch (e) {
       console.error("Failed to persist radio state:", e);
@@ -331,6 +336,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioActive: false,
     radioSeed: null,
     radioMode: "curated",
+    radioLabel: null,
     isQueueOpen: false,
     accentColor: null,
     waveformPeaks: null,
@@ -521,12 +527,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     setRadioActive: (active: boolean) => {
-      set({ radioActive: active, ...(!active ? { radioSeed: null } : {}) });
+      set({ radioActive: active, ...(!active ? { radioSeed: null, radioLabel: null } : {}) });
       void persistRadioState();
     },
 
-    startRadio: (seed: CurrentTrack, mode?: RadioMode) => {
-      set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}) });
+    startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => {
+      set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}), radioLabel: label ?? null });
       void persistRadioState();
     },
 
@@ -643,9 +649,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup')",
           []
         );
+        const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
@@ -658,10 +665,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (valid.includes(row.value as RepeatMode)) {
               set({ repeat: row.value as RepeatMode });
             }
-          } else if (row.key === "queue_state") {
+          } else if (row.key === "queue_state" && restoreQueue) {
             try {
               const saved = JSON.parse(row.value) as QueueSnapshot;
-              if (Array.isArray(saved.queue) && saved.queue.length > 0) {
+              if (Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
                 set({
                   queue: saved.queue,
                   queueIndex: saved.queueIndex ?? 0,
@@ -689,6 +696,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (VALID_MODES.includes(row.value as RadioMode)) {
               set({ radioMode: row.value as RadioMode });
             }
+          } else if (row.key === "radio_label") {
+            set({ radioLabel: row.value || null });
           }
         }
       } catch (e) {

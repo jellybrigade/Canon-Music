@@ -179,7 +179,7 @@ button.primary:hover:not(:disabled) {
 
 /* ── Left sidebar ── */
 .sidebar {
-  width: 84px;
+  width: 52px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -189,25 +189,61 @@ button.primary:hover:not(:disabled) {
   gap: 0.125rem;
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);
+  transition: width 0.18s ease;
+  position: relative;
+}
+
+.sidebar--dragging {
+  transition: none;
+}
+
+.sidebar-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 10;
+}
+
+.sidebar-resize-handle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.sidebar--expanded {
+  width: 180px;
+  align-items: stretch;
 }
 
 .sidebar-btn {
-  width: 72px;
-  height: 54px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   border: none;
   background: transparent;
   box-shadow: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
   font-size: 1rem;
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
   transition: color 0.12s, background-color 0.12s;
+  flex-shrink: 0;
+}
+
+.sidebar--expanded .sidebar-btn {
+  width: auto;
+  height: 40px;
+  margin: 0 8px;
+  padding: 0 10px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .sidebar-btn:hover:not(:disabled) {
@@ -233,23 +269,48 @@ button.primary:hover:not(:disabled) {
 }
 
 .sidebar-btn-label {
-  font-size: 0.5625rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: inherit;
   opacity: 0.9;
   line-height: 1.2;
   pointer-events: none;
-  text-align: center;
-  word-break: break-word;
-  max-width: 100%;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar-btn--active .sidebar-btn-label {
   opacity: 1;
+}
+
+.sidebar-expand-btn {
+  margin-top: auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: color 0.12s, background-color 0.12s;
+  flex-shrink: 0;
+}
+
+.sidebar-expand-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.sidebar--expanded .sidebar-expand-btn {
+  width: auto;
+  align-self: flex-end;
+  padding: 0 6px;
 }
 
 .sidebar-badge {

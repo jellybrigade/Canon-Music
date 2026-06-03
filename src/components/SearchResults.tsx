@@ -111,6 +111,7 @@ export function SearchResults({
                     <img
                       src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 64)}
                       alt={album.name}
+                      loading="lazy"
                     />
                   ) : (
                     <Music size={18} />

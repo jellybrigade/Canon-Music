@@ -243,7 +243,7 @@
 
 .normalizing-bar {
   position: fixed;
-  bottom: var(--player-bar-height);
+  bottom: 0;
   left: 0;
   right: 0;
   height: 24px;
@@ -260,6 +260,31 @@
 
 .normalizing-bar--above-player {
   bottom: var(--player-bar-height);
+}
+
+.normalizing-bar__action,
+.normalizing-bar__dismiss {
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted, rgba(255,255,255,0.45));
+}
+
+.normalizing-bar__action {
+  color: var(--accent, #fff);
+  border-color: var(--accent, rgba(255,255,255,0.3));
+}
+
+.normalizing-bar__action:hover {
+  opacity: 0.8;
+}
+
+.normalizing-bar__dismiss:hover {
+  opacity: 0.6;
 }
 
 /* ── Star rating ── */

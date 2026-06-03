@@ -6,6 +6,7 @@ export function RadioChip() {
   const radioActive = usePlayerStore((s) => s.radioActive);
   const radioSeed = usePlayerStore((s) => s.radioSeed);
   const radioMode = usePlayerStore((s) => s.radioMode);
+  const radioLabel = usePlayerStore((s) => s.radioLabel);
   const setRadioActive = usePlayerStore((s) => s.setRadioActive);
   const setRadioMode = usePlayerStore((s) => s.setRadioMode);
   const [open, setOpen] = useState(false);
@@ -24,14 +25,18 @@ export function RadioChip() {
 
   if (!radioActive) return null;
 
-  const modeLabel = RADIO_MODES.find((m) => m.mode === radioMode)?.label ?? "Radio";
+  const modeLabel = radioLabel ?? (RADIO_MODES.find((m) => m.mode === radioMode)?.label ?? "Radio");
+  const tooltipParts = [
+    radioLabel ? `Genre: ${radioLabel}` : null,
+    radioSeed ? `Seeded from: ${radioSeed.title}` : null,
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="radio-chip" ref={chipRef}>
       <button
         className="radio-chip-btn"
         onClick={() => setOpen((v) => !v)}
-        title={radioSeed ? `Radio seeded from: ${radioSeed.title}` : "Radio active"}
+        title={tooltipParts || "Radio active"}
       >
         Radio: {modeLabel} ●
       </button>

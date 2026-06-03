@@ -39,7 +39,33 @@ function stripTrailingBrackets(title: string): string | null {
   return stripped !== title && stripped.length > 0 ? stripped : null;
 }
 
-export async function autoIdentifyAlbum({ artist, album }: { artist: string; album: string }): Promise<AutoIdentifyResult> {
+function filterByTrackCount(
+  candidates: MbReleaseGroupCandidate[],
+  trackCount: number
+): MbReleaseGroupCandidate[] {
+  if (trackCount <= 0) return candidates;
+
+  const allowed = new Set<string>();
+  if (trackCount <= 3) {
+    allowed.add("Single");
+    allowed.add("Album"); // short albums exist
+  } else if (trackCount <= 6) {
+    allowed.add("EP");
+    allowed.add("Album");
+  } else {
+    allowed.add("Album");
+    allowed.add("Broadcast");
+    allowed.add("Other");
+  }
+
+  const filtered = candidates.filter(
+    (c) => c.primaryType === null || allowed.has(c.primaryType)
+  );
+  // Fall back to unfiltered if filtering wiped everything
+  return filtered.length > 0 ? filtered : candidates;
+}
+
+export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { artist: string; album: string; trackCount?: number }): Promise<AutoIdentifyResult> {
   try {
     let candidates = await searchReleaseGroups(artist, album);
     let searchTitle = album;
@@ -55,6 +81,8 @@ export async function autoIdentifyAlbum({ artist, album }: { artist: string; alb
     if (candidates.length === 0) {
       return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], error: null };
     }
+
+    candidates = filterByTrackCount(candidates, trackCount);
 
     const ranked = rankCandidates(candidates, artist, searchTitle);
     const top = ranked[0]!;

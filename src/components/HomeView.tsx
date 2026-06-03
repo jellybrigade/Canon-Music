@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useSetting } from "../hooks/useSetting";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
@@ -12,14 +12,21 @@ import { useListeningStats } from "../hooks/useListeningStats";
 import type { AlbumStatRow } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
+import { useGenres } from "../hooks/useGenres";
+import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
-import type { RadioMode } from "../store/player";
+import type { RadioMode, CurrentTrack } from "../store/player";
 import { extractAccent } from "../lib/artColor";
+import { stringToColor } from "../lib/color";
 import { useSearch } from "../hooks/useSearch";
+import { getDb } from "../db";
+import { stripServerPrefix } from "../lib/ids";
 import { SearchResults } from "./SearchResults";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "../styles/home.css";
+import "../styles/genres.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -233,7 +240,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
         onContextMenu={(e) => onCardContextMenu(e, pick.album)}
       >
         {artUrl
-          ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} />
+          ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
       </div>
       <div className="home-spotlight__body">
@@ -488,7 +495,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                       onContextMenu={e => onCardContextMenu(e, album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                         <div className="album-overlay">
                           <span className="album-name">{album.name}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
@@ -522,7 +529,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                         onContextMenu={e => onCardContextMenu(e, album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -539,6 +546,42 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+// ── Featured Genres ───────────────────────────────────────────────────────────
+
+interface FeaturedGenresSectionProps {
+  genres: GenreRow[];
+  onPlayGenre: (canonicalId: string, label?: string) => void;
+}
+
+function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
+  if (genres.length === 0) return null;
+  return (
+    <section className="home-section">
+      <div className="home-section__header">
+        <h2 className="home-section__title">Genres</h2>
+      </div>
+      <div className="genre-card-grid">
+        {genres.slice(0, 18).map(g => (
+          <div
+            key={g.canonical_id}
+            className="genre-card"
+            style={{ "--genre-color": stringToColor(g.name) } as React.CSSProperties}
+          >
+            <span className="genre-card__name">{g.name}</span>
+            <button
+              className="genre-card__play"
+              onClick={() => onPlayGenre(g.canonical_id, g.name)}
+              aria-label={`Play ${g.name} radio`}
+            >
+              <Play size={10} fill="currentColor" />
+            </button>
+          </div>
+        ))}
       </div>
     </section>
   );
@@ -608,7 +651,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" loading="lazy" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"
@@ -635,8 +678,10 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
 export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
-  const { server } = serverWithCredential;
+  const { server, credential } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
+  const playQueue = usePlayerStore(s => s.playQueue);
+  const startRadio = usePlayerStore(s => s.startRadio);
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
@@ -666,6 +711,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
+  const { data: recentlyReleasedRaw } = useRecentlyReleasedAlbums();
+  const { data: allGenres } = useGenres();
   const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
@@ -729,6 +776,39 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const vaultItems = useMemo(() => vault.slice(0, 20) as AlbumRow[], [vault]);
+
+  const featuredGenres = useMemo(
+    () => allGenres ? seededShuffle(allGenres.filter(g => g.album_count >= 2), forYouSeed) : [],
+    [allGenres, forYouSeed],
+  );
+
+  const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    const rows = await db.select<TrackRow[]>(
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+       FROM tracks t
+       JOIN albums a ON t.album_id = a.id
+       JOIN album_genres ag ON a.id = ag.album_id
+       WHERE ag.canonical_id = ? AND ag.relation = 'direct'
+       ORDER BY RANDOM()
+       LIMIT 1`,
+      [canonicalId]
+    );
+    const t = rows[0];
+    if (!t) return;
+    const coverArtUrl = t.artwork_url
+      ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
+      : null;
+    const track: CurrentTrack = {
+      id: t.id, title: t.title, artist: t.artist, duration: t.duration,
+      coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+    };
+    const streamUrlFn = (tr: CurrentTrack) =>
+      getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));
+    await playQueue([track], streamUrlFn, 0);
+    startRadio(track, "same-genre", genreLabel);
+  }, [server, credential, playQueue, startRadio]);
 
   const play = (album: AlbumRow) => void playAlbum(album);
 
@@ -807,7 +887,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
         </>
       )}
       {contextMenu && (

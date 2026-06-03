@@ -6,6 +6,7 @@ import {
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
+import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
@@ -38,7 +39,9 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
-  const pullProgress  = useTagsStore((s) => s.pullProgress);
+  const pullProgress        = useTagsStore((s) => s.pullProgress);
+  const enrichmentPending   = useTagsStore((s) => s.enrichmentPending);
+  const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
@@ -99,9 +102,9 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--normalizing-bar-height",
-      pullProgress ? "24px" : "0px"
+      (pullProgress || enrichmentPending) ? "24px" : "0px"
     );
-  }, [pullProgress]);
+  }, [pullProgress, enrichmentPending]);
 
   useEffect(() => {
     if (!artOpen) return;
@@ -177,9 +180,26 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
 
   return (
     <>
+      {enrichmentPending && !pullProgress && (
+        <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
+          Metadata not fetched for {enrichmentPending} albums
+          <button
+            className="normalizing-bar__action"
+            onClick={() => { void runEnrichment(); }}
+          >
+            Fetch now
+          </button>
+          <button
+            className="normalizing-bar__dismiss"
+            onClick={() => setEnrichmentPending(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {pullProgress && (
         <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
-          Normalizing tags… {pullProgress.done} / {pullProgress.total}
+          Fetching metadata… {pullProgress.done} / {pullProgress.total}
         </div>
       )}
       {!currentTrack ? null : <div

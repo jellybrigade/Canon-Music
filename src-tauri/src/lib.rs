@@ -461,6 +461,11 @@ async fn audio_extract_waveform(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // WebKitGTK renders a native GTK overlay scrollbar (thick on hover) on top of
+    // the CSS ::-webkit-scrollbar. Disable it so only the styled thin bar shows.
+    #[cfg(target_os = "linux")]
+    std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
+
     // Spawn a thread to own OutputStream so it stays alive for the process lifetime.
     // Non-fatal: if no audio device is available the app still opens, play commands
     // return an error instead of crashing.

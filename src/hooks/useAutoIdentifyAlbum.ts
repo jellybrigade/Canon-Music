@@ -21,6 +21,7 @@ export function useAutoIdentifyAlbum({
   albumId,
   artist,
   album,
+  trackCount,
   mbAutoIdentify,
   existingIdentity,
   identityLoaded,
@@ -28,6 +29,7 @@ export function useAutoIdentifyAlbum({
   albumId: string;
   artist: string;
   album: string;
+  trackCount: number;
   /** Current value of the "mb.auto_identify" setting (string "true"/"false"). */
   mbAutoIdentify: string;
   /** The row from useAlbumIdentity — undefined while loading, null when no row. */
@@ -37,7 +39,7 @@ export function useAutoIdentifyAlbum({
 }) {
   return useQuery({
     queryKey: ["auto-identify-album", albumId],
-    queryFn: (): Promise<AutoIdentifyResult> => autoIdentifyAlbum({ artist, album }),
+    queryFn: (): Promise<AutoIdentifyResult> => autoIdentifyAlbum({ artist, album, trackCount }),
     enabled:
       mbAutoIdentify === "true" &&
       !!albumId &&
