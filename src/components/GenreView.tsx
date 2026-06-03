@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Play, ListFilter, Search, X } from "lucide-react";
 import { useGenreTree } from "../hooks/useGenreTree";
 import { getParentChain } from "../lib/canonicalize";
@@ -7,9 +7,6 @@ import "../styles/genres.css";
 
 const EMPTY_MAP = new Map<string, never>();
 const EMPTY_SECTION: Record<string, string[]> = {};
-
-// Cap so one very long label doesn't dominate.
-const COL_MAX_WIDTH = 480;
 
 type SectionTab = NodeSection;
 const SECTION_LABELS: Record<NodeSection, string> = {
@@ -30,27 +27,6 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Container width — tracked by ResizeObserver so applied widths recompute on resize.
-  const [containerWidth, setContainerWidth] = useState(0);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const observerRef = useRef<ResizeObserver | null>(null);
-  const containerCallbackRef = useCallback((el: HTMLDivElement | null) => {
-    containerRef.current = el;
-    observerRef.current?.disconnect();
-    observerRef.current = null;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) setContainerWidth(entry.contentRect.width);
-    });
-    ro.observe(el);
-    observerRef.current = ro;
-  }, []);
-
-  // naturalWidths: canvas-measured max-content width per column.
-  // Canvas avoids overflow:hidden interference with DOM max-content measurement.
-  const [naturalWidths, setNaturalWidths] = useState<number[]>([]);
-
   // Stable references — empty fallbacks so hooks run unconditionally before data loads.
   const nodeById = data?.nodeById ?? EMPTY_MAP;
   const childrenById = data?.childrenById ?? EMPTY_MAP;
@@ -59,92 +35,16 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
 
   const columns = useMemo(() => {
     const cols: string[][] = [rootsBySection[section] ?? []];
+    const visited = new Set<string>();
     for (const selectedId of path) {
-      const kids = childrenById.get(selectedId) ?? [];
+      if (visited.has(selectedId)) break;
+      visited.add(selectedId);
+      const kids = (childrenById.get(selectedId) ?? []).filter((id) => !visited.has(id));
       if (kids.length === 0) break;
       cols.push(kids);
     }
     return cols;
   }, [rootsBySection, section, path, childrenById]);
-
-  // Measure natural widths via scrollWidth — returns full untruncated text width even
-  // when overflow:hidden clips the visible content. No font parsing, no DOM thrashing.
-  useLayoutEffect(() => {
-    if (search) return;
-    const colEls = containerRef.current?.querySelectorAll<HTMLElement>(".genre-column");
-    if (!colEls?.length) return;
-    const measured = Array.from(colEls).map((col) => {
-      const rows = col.querySelectorAll<HTMLElement>(".genre-col-row");
-      if (!rows.length) return 0;
-      // chrome = everything in the row except the name's flex area (count + chevron + gaps + padding)
-      const firstRow = rows[0]!;
-      const firstName = firstRow.querySelector<HTMLElement>(".genre-col-name");
-      const chrome = firstName ? firstRow.offsetWidth - firstName.offsetWidth : 0;
-      let maxTextW = 0;
-      rows.forEach((row) => {
-        const nameEl = row.querySelector<HTMLElement>(".genre-col-name");
-        if (nameEl) maxTextW = Math.max(maxTextW, nameEl.scrollWidth);
-      });
-      return Math.min(maxTextW + chrome, COL_MAX_WIDTH);
-    });
-    if (measured.some((w) => w > 0)) setNaturalWidths(measured);
-  }, [columns, search]);
-
-  // Applied widths: pure computation from natural widths + container width.
-  // No DOM reads here. Reacts to window resize without re-measuring.
-  const appliedWidths = useMemo(() => {
-    if (naturalWidths.length === 0) return [];
-
-    const total = naturalWidths.reduce((s, w) => s + w, 0);
-    if (!containerWidth || total <= containerWidth) return naturalWidths;
-
-    const n = naturalWidths.length;
-    const widths = [...naturalWidths];
-    let overage = total - containerWidth;
-
-    // Floor per column index (from left). Last col has Infinity floor = never shrunk.
-    // Col 0 floor ~4 chars, col 1 floor ~6 chars, col 2+ floor = natural minus 30px (min 60px).
-    const floorFor = (i: number): number => {
-      if (i === n - 1) return naturalWidths[i] ?? 0; // last col: never shrink
-      if (i === 0) return 48;
-      if (i === 1) return 72;
-      return Math.max(60, (naturalWidths[i] ?? 60) - 30);
-    };
-
-    // Weighted shrink: col 0 absorbs 70%, col 1 absorbs 30%, col 2+ (not last) absorbs 1 unit each.
-    const weights: number[] = widths.map((_, i) => {
-      if (i === n - 1) return 0;
-      if (i === 0) return 7;
-      if (i === 1) return 3;
-      return 1;
-    });
-    const totalWeight = weights.reduce((s, w) => s + w, 0);
-
-    // First pass: weighted ask, clamped to each col's capacity.
-    const asks: number[] = weights.map((w, i) => {
-      const ask = totalWeight > 0 ? overage * (w / totalWeight) : 0;
-      const capacity = (naturalWidths[i] ?? 0) - floorFor(i);
-      return Math.max(0, Math.min(ask, capacity));
-    });
-
-    let absorbed = asks.reduce((s, a) => s + a, 0);
-    overage -= absorbed;
-
-    // Second pass: if still over, give remainder to cols that still have capacity, left-first.
-    for (let i = 0; i < n - 1 && overage > 0.5; i++) {
-      const capacity = (naturalWidths[i] ?? 0) - floorFor(i) - (asks[i] ?? 0);
-      if (capacity > 0) {
-        const extra = Math.min(capacity, overage);
-        asks[i] = (asks[i] ?? 0) + extra;
-        overage -= extra;
-      }
-    }
-
-    for (let i = 0; i < n; i++) {
-      widths[i] = (naturalWidths[i] ?? 0) - (asks[i] ?? 0);
-    }
-    return widths;
-  }, [naturalWidths, containerWidth]);
 
   if (!data) {
     return (
@@ -298,18 +198,14 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
         </div>
       ) : (
         /* ── Miller columns ── */
-        <div className="genre-columns" ref={containerCallbackRef}>
+        <div className="genre-columns">
           {columns.map((colIds, depth) => {
             const selectedInCol = path[depth] ?? null;
             const unique = [...new Set(colIds)];
-            // appliedWidths[depth] is set after measurement; fall back to CSS flex
-            // on the very first paint (before useLayoutEffect has fired).
-            const appliedW = appliedWidths[depth];
             return (
               <div
                 key={depth}
                 className="genre-column"
-                style={appliedW !== undefined ? { flex: "none", width: appliedW } : undefined}
               >
                 {unique.map((nodeId) => {
                   const node = nodeById.get(nodeId);
@@ -331,31 +227,33 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                       }}
                     >
                       <span className="genre-col-name">{node.name}</span>
-                      <span className="genre-col-count">{count}</span>
-                      <span className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`} aria-hidden>›</span>
-                      <div className="genre-col-actions">
-                        <button
-                          className="genre-col-action-btn"
-                          title="Browse in Library"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectGenre(nodeId);
-                          }}
-                          aria-label="Filter library to this genre"
-                        >
-                          <ListFilter size={15} strokeWidth={2} />
-                        </button>
-                        <button
-                          className="genre-col-action-btn genre-col-action-btn--play"
-                          title="Shuffle play"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onPlayGenre(nodeId, node.name);
-                          }}
-                          aria-label="Shuffle play this genre"
-                        >
-                          <Play size={14} fill="currentColor" strokeWidth={0} />
-                        </button>
+                      <div className="genre-col-right">
+                        <span className="genre-col-count">{count}</span>
+                        <span className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`} aria-hidden>›</span>
+                        <div className="genre-col-actions">
+                          <button
+                            className="genre-col-action-btn"
+                            title="Browse in Library"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectGenre(nodeId);
+                            }}
+                            aria-label="Filter library to this genre"
+                          >
+                            <ListFilter size={15} strokeWidth={2} />
+                          </button>
+                          <button
+                            className="genre-col-action-btn genre-col-action-btn--play"
+                            title="Shuffle play"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onPlayGenre(nodeId, node.name);
+                            }}
+                            aria-label="Shuffle play this genre"
+                          >
+                            <Play size={14} fill="currentColor" strokeWidth={0} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
