@@ -45,10 +45,20 @@ export async function syncLibrary(
       existing.navidrome_created === (album.created ?? null) &&
       (album.songCount === undefined || existing.track_count === album.songCount);
 
-    // Always upsert album row (keeps cover art ID and metadata fresh)
+    // Upsert album row — preserve computed_at/normalized_tags_json so background normalizer
+    // doesn't re-run on every sync.
     await db.execute(
-      `INSERT OR REPLACE INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         server_id = excluded.server_id,
+         server_type = excluded.server_type,
+         name = excluded.name,
+         artist = excluded.artist,
+         year = excluded.year,
+         artwork_url = excluded.artwork_url,
+         navidrome_created = excluded.navidrome_created,
+         play_count = excluded.play_count`,
       [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0]
     );
 

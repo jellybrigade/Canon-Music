@@ -26,6 +26,8 @@ interface TagsState {
   clearInbox: () => void;
   pullProgress: { done: number; total: number } | null;
   setPullProgress: (p: { done: number; total: number } | null) => void;
+  enrichmentPending: number | null;
+  setEnrichmentPending: (n: number | null) => void;
 }
 
 export const useTagsStore = create<TagsState>()((set) => ({
@@ -57,4 +59,6 @@ export const useTagsStore = create<TagsState>()((set) => ({
 
   pullProgress: null,
   setPullProgress: (p) => set({ pullProgress: p }),
+  enrichmentPending: null,
+  setEnrichmentPending: (n) => set({ enrichmentPending: n }),
 }));
