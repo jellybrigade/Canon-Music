@@ -572,7 +572,7 @@ function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionPro
             role="button"
             tabIndex={0}
             onClick={() => onPlayGenre(g.canonical_id, g.name)}
-            onKeyDown={e => e.key === "Enter" && onPlayGenre(g.canonical_id, g.name)}
+            onKeyDown={e => (e.key === "Enter" || e.key === " ") && onPlayGenre(g.canonical_id, g.name)}
             aria-label={`Play ${g.name} radio`}
           >
             <span className="genre-card__name">{g.name}</span>

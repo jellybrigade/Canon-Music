@@ -17,51 +17,54 @@ import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
-const PEAK_HOLD_FRAMES = 60;
+const PEAK_HOLD_FRAMES = 20; // at ~20fps
 const PEAK_DECAY = 0.95;
+const METER_FRAME_SKIP = 3; // invoke IPC every 3rd rAF → ~20fps
 
 function PeakMeter({ isPlaying }: { isPlaying: boolean }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number | null>(null);
   const peakHold = useRef(0);
   const peakFrames = useRef(0);
+  const frameCount = useRef(0);
 
   const draw = useCallback(() => {
-    if (!canvasRef.current) return;
-    invoke<number>("audio_get_level")
-      .then((rms) => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        const w = canvas.width;
-        const h = canvas.height;
+    frameCount.current++;
+    if (frameCount.current % METER_FRAME_SKIP === 0) {
+      invoke<number>("audio_get_level")
+        .then((rms) => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          const w = canvas.width;
+          const h = canvas.height;
 
-        // Update peak hold
-        if (rms >= peakHold.current) {
-          peakHold.current = rms;
-          peakFrames.current = PEAK_HOLD_FRAMES;
-        } else {
-          if (peakFrames.current > 0) {
-            peakFrames.current--;
+          if (rms >= peakHold.current) {
+            peakHold.current = rms;
+            peakFrames.current = PEAK_HOLD_FRAMES;
           } else {
-            peakHold.current *= PEAK_DECAY;
+            if (peakFrames.current > 0) {
+              peakFrames.current--;
+            } else {
+              peakHold.current *= PEAK_DECAY;
+            }
           }
-        }
 
-        ctx.clearRect(0, 0, w, h);
-        // Bar
-        const barH = Math.round(rms * h * 4); // scale up — RMS is typically 0..0.3
-        const accent = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#a78bfa";
-        ctx.fillStyle = accent;
-        ctx.fillRect(0, h - Math.min(barH, h), w, Math.min(barH, h));
-        // Peak indicator
-        const peakY = h - Math.round(peakHold.current * h * 4);
-        if (peakY >= 0 && peakY < h) {
-          ctx.fillRect(0, Math.max(0, peakY - 1), w, 2);
-        }
-      })
-      .catch(() => {});
+          ctx.clearRect(0, 0, w, h);
+          // Bar — RMS is typically 0..0.3, scale up for visibility
+          const barH = Math.round(rms * h * 4);
+          const accent = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#a78bfa";
+          ctx.fillStyle = accent;
+          ctx.fillRect(0, h - Math.min(barH, h), w, Math.min(barH, h));
+          // Peak indicator
+          const peakY = h - Math.round(peakHold.current * h * 4);
+          if (peakY >= 0 && peakY < h) {
+            ctx.fillRect(0, Math.max(0, peakY - 1), w, 2);
+          }
+        })
+        .catch(() => {});
+    }
     rafRef.current = requestAnimationFrame(draw);
   }, []);
 

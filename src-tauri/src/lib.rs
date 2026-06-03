@@ -88,7 +88,7 @@ impl<I: Source<Item = i16>> MeteredSource<I> {
     fn new(inner: I, level: Arc<Mutex<f32>>) -> Self {
         let sr = inner.sample_rate().max(1);
         let ch = inner.channels().max(1) as u32;
-        let window = sr / 100 * ch; // ~10ms
+        let window = (sr / 100 * ch).max(1); // ~10ms; max(1) guards against sr < 100
         MeteredSource { inner, level, sum_sq: 0.0, count: 0, window }
     }
 }
@@ -387,12 +387,13 @@ fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     let target_vol = *state.volume.lock().unwrap();
     let sink_opt = state.sink.lock().unwrap().clone();
     if let Some(sink) = sink_opt {
-        sink.set_volume(0.0);
-        sink.play();
         if fade_ms == 0 {
             sink.set_volume(target_vol);
+            sink.play();
             return;
         }
+        sink.set_volume(0.0);
+        sink.play();
         std::thread::spawn(move || {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {

@@ -548,6 +548,7 @@ export default function App() {
             serverWithCredential={serverWithCred}
             onClose={() => setSelectedArtist(null)}
             onSelectAlbum={setSelectedAlbum}
+            onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
           />
         </main>
       );

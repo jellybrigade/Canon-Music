@@ -27,13 +27,13 @@ export function useGenres() {
 }
 
 // Genres drawn from the user's most recently played albums (up to 10 albums).
-// Falls back to empty array if no scrobble history exists.
+// Falls back to top genres by album_count when no scrobble history exists.
 export function useRecentGenres() {
   const query = useQuery({
     queryKey: ["genres", "recent"],
     queryFn: async (): Promise<GenreRow[]> => {
       const db = await getDb();
-      return db.select<GenreRow[]>(`
+      const recent = await db.select<GenreRow[]>(`
         WITH recent_albums AS (
           SELECT t.album_id, MAX(sh.scrobbled_at) AS last_played
           FROM scrobble_history sh
@@ -49,6 +49,15 @@ export function useRecentGenres() {
           AND ag.canonical_id NOT LIKE 'raw:%'
         GROUP BY ag.canonical_id
         ORDER BY MAX(ra.last_played) DESC
+      `);
+      if (recent.length > 0) return recent;
+      return db.select<GenreRow[]>(`
+        SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
+        FROM album_genres
+        WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
+        GROUP BY canonical_id
+        ORDER BY album_count DESC
+        LIMIT 18
       `);
     },
     staleTime: 5 * 60 * 1000,
