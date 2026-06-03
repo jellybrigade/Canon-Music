@@ -118,6 +118,14 @@ impl<I: Source<Item = i16>> Source for MeteredSource<I> {
     fn channels(&self) -> u16 { self.inner.channels() }
     fn sample_rate(&self) -> u32 { self.inner.sample_rate() }
     fn total_duration(&self) -> Option<Duration> { self.inner.total_duration() }
+    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
+        let result = self.inner.try_seek(pos);
+        if result.is_ok() {
+            self.sum_sq = 0.0;
+            self.count = 0;
+        }
+        result
+    }
 }
 
 struct AudioState {
