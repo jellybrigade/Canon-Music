@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -72,6 +72,8 @@ export default function App() {
   const { lovedAlbumIds } = useLoved();
 
   const [rawSort, setSort] = useSetting("library_sort", "artist");
+  const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
+  const sidebarExpanded = rawSidebarExpanded === "true";
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
@@ -757,7 +759,7 @@ export default function App() {
   return (
     <Suspense fallback={null}>
       <div className="app-layout">
-        <nav className="sidebar">
+        <nav className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}`}>
           {NAV_ITEMS.map(({ id, label, icon, badge }) => (
             <button
               key={id}
@@ -769,9 +771,16 @@ export default function App() {
                 {icon}
                 {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
               </span>
-              <span className="sidebar-btn-label">{label}</span>
+              {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
             </button>
           ))}
+          <button
+            className="sidebar-expand-btn"
+            title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+            onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
+          >
+            {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
         </nav>
         {renderContent()}
       </div>

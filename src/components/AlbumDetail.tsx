@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Heart, Play, ChevronRight, Disc, HelpCircle } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -17,6 +17,7 @@ import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from ".
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useSetting } from "../hooks/useSetting";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
+import { getDb } from "../db";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import { rawGenreId } from "../lib/canonicalize";
@@ -178,8 +179,31 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     }
   }
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string }> => {
-    let raw: Array<{ id: string | null; name: string }>;
+  const { data: rawSourceRows = [] } = useQuery({
+    queryKey: ["album-genre-raw-sources", album.id],
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<{ canonical_id: string; raw_value: string; source: string }[]>(
+        `SELECT DISTINCT tt.canonical_id, tt.raw_value, tt.source
+         FROM tracks t JOIN track_tags tt ON tt.track_id = t.id
+         WHERE t.album_id = ? AND tt.kind = 'genre'`,
+        [album.id]
+      );
+    },
+    staleTime: Infinity,
+  });
+
+  const rawSourcesByCanonicalId = useMemo(() => {
+    const map = new Map<string, Array<{ raw_value: string; source: string }>>();
+    for (const r of rawSourceRows) {
+      if (!map.has(r.canonical_id)) map.set(r.canonical_id, []);
+      map.get(r.canonical_id)!.push({ raw_value: r.raw_value, source: r.source });
+    }
+    return map;
+  }, [rawSourceRows]);
+
+  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" }> => {
+    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" }>;
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -314,55 +338,79 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           {displayGenres.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Genres</h3>
-              {displayGenres.map((tag) => (
-                <button
-                  key={tag.id ?? tag.name}
-                  className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setDrawerState({ albumId: album.id });
-                  }}
-                >
-                  {tag.name}
-                </button>
-              ))}
+              {displayGenres.map((tag) => {
+                const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
+                const chipTitle = rawSources.length > 0
+                  ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
+                  : undefined;
+                const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
+                return (
+                  <button
+                    key={tag.id ?? tag.name}
+                    className={`album-tag-chip${sourceClass}`}
+                    title={chipTitle}
+                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setDrawerState({ albumId: album.id });
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
           )}
           {normalizedTags && normalizedTags.descriptors.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Descriptors</h3>
-              {normalizedTags.descriptors.map((tag) => (
-                <button
-                  key={tag.id ?? tag.name}
-                  className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setDrawerState({ albumId: album.id });
-                  }}
-                >
-                  {tag.name}
-                </button>
-              ))}
+              {normalizedTags.descriptors.map((tag) => {
+                const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
+                const chipTitle = rawSources.length > 0
+                  ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
+                  : undefined;
+                const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
+                return (
+                  <button
+                    key={tag.id ?? tag.name}
+                    className={`album-tag-chip${sourceClass}`}
+                    title={chipTitle}
+                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setDrawerState({ albumId: album.id });
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
           )}
           {normalizedTags && normalizedTags.scenes.length > 0 && (
             <div className="album-tag-column">
               <h3 className="album-tag-column-title">Scenes & Movements</h3>
-              {normalizedTags.scenes.map((tag) => (
-                <button
-                  key={tag.id ?? tag.name}
-                  className="album-tag-chip"
-                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setDrawerState({ albumId: album.id });
-                  }}
-                >
-                  {tag.name}
-                </button>
-              ))}
+              {normalizedTags.scenes.map((tag) => {
+                const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
+                const chipTitle = rawSources.length > 0
+                  ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
+                  : undefined;
+                const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
+                return (
+                  <button
+                    key={tag.id ?? tag.name}
+                    className={`album-tag-chip${sourceClass}`}
+                    title={chipTitle}
+                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setDrawerState({ albumId: album.id });
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                );
+              })}
             </div>
           )}
         </section>
