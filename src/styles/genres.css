@@ -233,6 +233,20 @@
   border-right: none;
 }
 
+.genre-column::-webkit-scrollbar {
+  width: 4px;
+}
+.genre-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+.genre-column::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
+}
+.genre-column::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
 /* ── Column rows ── */
 
 .genre-col-row {

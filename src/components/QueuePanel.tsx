@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, GripVertical, Play, Search } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -9,6 +10,9 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
 type ContextMenu = { x: number; y: number; position: number } | null;
+
+const QUEUE_ROW_HEIGHT = 52;
+const DND_MAX_QUEUE = 300;
 
 interface QueuePanelProps {
   serverWithCred?: ServerWithCredential;
@@ -31,23 +35,39 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const [dropTarget, setDropTarget] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
   const filterInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  const orderedTracks = useMemo(
+    () => Array.from({ length: queue.length }, (_, i) => {
+      const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[i] ?? i) : i;
+      return { position: i, track: queue[idx]! };
+    }),
+    [queue, isShuffled, shuffleOrder]
+  );
+
+  const filterLower = filter.toLowerCase();
+  const visibleTracks = useMemo(
+    () => filter
+      ? orderedTracks.filter(({ track }) =>
+          track.title.toLowerCase().includes(filterLower) ||
+          (track.artist ?? "").toLowerCase().includes(filterLower)
+        )
+      : orderedTracks,
+    [orderedTracks, filter, filterLower]
+  );
+
+  const dndEnabled = !filter && queue.length <= DND_MAX_QUEUE;
+
+  const virtualizer = useVirtualizer({
+    count: visibleTracks.length,
+    getScrollElement: () => listRef.current,
+    estimateSize: () => QUEUE_ROW_HEIGHT,
+    overscan: 5,
+  });
 
   if (!isQueueOpen) return null;
 
-  const orderedTracks = Array.from({ length: queue.length }, (_, i) => {
-    const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[i] ?? i) : i;
-    return { position: i, track: queue[idx]! };
-  });
-
   const lastPosition = queue.length - 1;
-
-  const filterLower = filter.toLowerCase();
-  const visibleTracks = filter
-    ? orderedTracks.filter(({ track }) =>
-        track.title.toLowerCase().includes(filterLower) ||
-        (track.artist ?? "").toLowerCase().includes(filterLower)
-      )
-    : orderedTracks;
 
   function handleDragStart(e: React.DragEvent, position: number) {
     setDragFrom(position);
@@ -73,6 +93,8 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
     setDragFrom(null);
     setDropTarget(null);
   }
+
+  const virtualItems = virtualizer.getVirtualItems();
 
   return (
     <div className="queue-panel">
@@ -104,48 +126,62 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
           </button>
         )}
       </div>
-      <div className="queue-list">
+      <div className="queue-list" ref={listRef}>
         {visibleTracks.length === 0 && (
           <p className="queue-empty">{filter ? "No matches" : "No tracks in queue"}</p>
         )}
-        {visibleTracks.map(({ position, track }) => (
-          <div
-            key={`${track.id}-${position}`}
-            className={[
-              "queue-row",
-              position === queueIndex ? "queue-row--active" : "",
-              dropTarget === position && dragFrom !== position ? "queue-row--drop-target" : "",
-            ].filter(Boolean).join(" ")}
-            draggable={!filter}
-            onDragStart={filter ? undefined : (e) => handleDragStart(e, position)}
-            onDragOver={filter ? undefined : (e) => handleDragOver(e, position)}
-            onDrop={filter ? undefined : (e) => handleDrop(e, position)}
-            onDragEnd={filter ? undefined : handleDragEnd}
-            onClick={() => void playFromQueueIndex(position)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setContextMenu({ x: e.clientX, y: e.clientY, position });
-            }}
-          >
-            <span className="queue-row-drag-handle" aria-hidden><GripVertical size={16} /></span>
-            <span className="queue-row-num">
-              {position === queueIndex ? <Play size={12} /> : position + 1}
-            </span>
-            {(() => {
+        {visibleTracks.length > 0 && (
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+            {virtualItems.map((virtualItem) => {
+              const { position, track } = visibleTracks[virtualItem.index]!;
               const artUrl = track.coverArtUrl
                 ?? (track.artworkRef && serverWithCred
                   ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, track.artworkRef, 64)
                   : null);
-              return artUrl
-                ? <img src={artUrl} alt="" className="queue-row-art" />
-                : <div className="queue-row-art queue-row-art--placeholder" />;
-            })()}
-            <div className="queue-row-info">
-              <span className="queue-row-title">{track.title}</span>
-              {track.artist && <span className="queue-row-artist">{track.artist}</span>}
-            </div>
+              return (
+                <div
+                  key={`${track.id}-${position}`}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                  className={[
+                    "queue-row",
+                    position === queueIndex ? "queue-row--active" : "",
+                    dropTarget === position && dragFrom !== position ? "queue-row--drop-target" : "",
+                  ].filter(Boolean).join(" ")}
+                  draggable={dndEnabled}
+                  onDragStart={dndEnabled ? (e) => handleDragStart(e, position) : undefined}
+                  onDragOver={dndEnabled ? (e) => handleDragOver(e, position) : undefined}
+                  onDrop={dndEnabled ? (e) => handleDrop(e, position) : undefined}
+                  onDragEnd={dndEnabled ? handleDragEnd : undefined}
+                  onClick={() => void playFromQueueIndex(position)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, position });
+                  }}
+                >
+                  <span className="queue-row-drag-handle" aria-hidden><GripVertical size={16} /></span>
+                  <span className="queue-row-num">
+                    {position === queueIndex ? <Play size={12} /> : position + 1}
+                  </span>
+                  {artUrl
+                    ? <img src={artUrl} alt="" className="queue-row-art" />
+                    : <div className="queue-row-art queue-row-art--placeholder" />}
+                  <div className="queue-row-info">
+                    <span className="queue-row-title">{track.title}</span>
+                    {track.artist && <span className="queue-row-artist">{track.artist}</span>}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        )}
       </div>
 
       {contextMenu && (

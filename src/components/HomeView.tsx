@@ -555,7 +555,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
 
 interface FeaturedGenresSectionProps {
   genres: GenreRow[];
-  onPlayGenre: (canonicalId: string) => void;
+  onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
 function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
@@ -575,7 +575,7 @@ function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionPro
             <span className="genre-card__name">{g.name}</span>
             <button
               className="genre-card__play"
-              onClick={() => onPlayGenre(g.canonical_id)}
+              onClick={() => onPlayGenre(g.canonical_id, g.name)}
               aria-label={`Play ${g.name} radio`}
             >
               <Play size={10} fill="currentColor" />
@@ -782,7 +782,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     [allGenres, forYouSeed],
   );
 
-  const handlePlayGenre = useCallback(async (canonicalId: string) => {
+  const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
     const db = await getDb();
     type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
     const rows = await db.select<TrackRow[]>(
@@ -807,7 +807,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));
     await playQueue([track], streamUrlFn, 0);
-    startRadio(track, "same-genre");
+    startRadio(track, "same-genre", genreLabel);
   }, [server, credential, playQueue, startRadio]);
 
   const play = (album: AlbumRow) => void playAlbum(album);

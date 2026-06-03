@@ -33,6 +33,8 @@ Wait for user approval before proceeding. If the user wants to adjust scope or a
 
 Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch. Keep ARCHITECTURE.md current if any files are added, moved, or substantially repurposed.
 
+**Do not start Canon in dev mode and do not take screenshots to verify.** Typecheck (`pnpm tsc --noEmit`) is sufficient for frontend changes. Rust changes: `cargo check`. The app is long-running and a dev instance is usually already open.
+
 ## Phase 5 — Commit
 
 When implementation is complete, invoke the `/commit` skill. It will handle staging and the commit message. Before invoking `/commit`, remove the completed items from `instructions/what-to-do.md`: delete each item's row from the table AND its detail section.

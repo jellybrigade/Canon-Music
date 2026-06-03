@@ -100,6 +100,7 @@ interface PlayerState {
   radioActive: boolean;
   radioSeed: CurrentTrack | null;
   radioMode: RadioMode;
+  radioLabel: string | null;
 
   isQueueOpen: boolean;
   accentColor: string | null;
@@ -123,7 +124,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
   setRadioActive: (active: boolean) => void;
-  startRadio: (seed: CurrentTrack, mode?: RadioMode) => void;
+  startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
   setRadioMode: (mode: RadioMode) => void;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -280,7 +281,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   async function persistRadioState() {
     try {
-      const { radioActive, radioSeed, radioMode } = get();
+      const { radioActive, radioSeed, radioMode, radioLabel } = get();
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
@@ -293,6 +294,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_mode', ?)",
         [radioMode]
+      );
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_label', ?)",
+        [radioLabel ?? ""]
       );
     } catch (e) {
       console.error("Failed to persist radio state:", e);
@@ -331,6 +336,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioActive: false,
     radioSeed: null,
     radioMode: "curated",
+    radioLabel: null,
     isQueueOpen: false,
     accentColor: null,
     waveformPeaks: null,
@@ -521,12 +527,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     setRadioActive: (active: boolean) => {
-      set({ radioActive: active, ...(!active ? { radioSeed: null } : {}) });
+      set({ radioActive: active, ...(!active ? { radioSeed: null, radioLabel: null } : {}) });
       void persistRadioState();
     },
 
-    startRadio: (seed: CurrentTrack, mode?: RadioMode) => {
-      set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}) });
+    startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => {
+      set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}), radioLabel: label ?? null });
       void persistRadioState();
     },
 
@@ -690,6 +696,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (VALID_MODES.includes(row.value as RadioMode)) {
               set({ radioMode: row.value as RadioMode });
             }
+          } else if (row.key === "radio_label") {
+            set({ radioLabel: row.value || null });
           }
         }
       } catch (e) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
@@ -187,10 +187,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
     : currentTrack?.coverArtUrl ?? null;
 
-  const orderedTracks = Array.from({ length: queue.length }, (_, pos) => {
-    const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-    return { position: pos, track: queue[idx]! };
-  });
+  const orderedTracks = useMemo(
+    () => Array.from({ length: queue.length }, (_, pos) => {
+      const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
+      return { position: pos, track: queue[idx]! };
+    }),
+    [queue, isShuffled, shuffleOrder]
+  );
 
   const otherAlbums = artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [];
 

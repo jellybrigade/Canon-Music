@@ -21,7 +21,7 @@ const SECTION_LABELS: Record<NodeSection, string> = {
 
 interface Props {
   onSelectGenre: (canonicalId: string) => void;
-  onPlayGenre: (canonicalId: string) => void;
+  onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
 export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
@@ -256,7 +256,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                     <button
                       className="genre-col-action-btn genre-col-action-btn--play"
                       title="Shuffle play"
-                      onClick={(e) => { e.stopPropagation(); onPlayGenre(node.id); }}
+                      onClick={(e) => { e.stopPropagation(); onPlayGenre(node.id, node.name); }}
                       aria-label="Shuffle play this genre"
                     >
                       <Play size={14} fill="currentColor" strokeWidth={0} />
@@ -322,7 +322,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                           title="Shuffle play"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onPlayGenre(nodeId);
+                            onPlayGenre(nodeId, node.name);
                           }}
                           aria-label="Shuffle play this genre"
                         >

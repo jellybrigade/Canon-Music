@@ -310,7 +310,7 @@ export default function App() {
     startRadio(track, mode);
   }
 
-  async function handlePlayGenre(canonicalId: string) {
+  async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
@@ -334,6 +334,7 @@ export default function App() {
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
     }));
     await playQueue(tracks, streamUrlFn, 0);
+    startRadio(tracks[0]!, "same-genre", genreLabel);
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
@@ -778,7 +779,7 @@ export default function App() {
                   setCanonicalIdFilters([canonicalId]);
                   setView("library");
                 }}
-                onPlayGenre={(canonicalId) => { void handlePlayGenre(canonicalId); }}
+                onPlayGenre={(canonicalId, label) => { void handlePlayGenre(canonicalId, label); }}
               />
             </main>
           </Suspense>
