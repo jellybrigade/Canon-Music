@@ -220,8 +220,8 @@
   margin-bottom: 24px;
 }
 
-/* Each column takes equal share of available space, minimum 240px.
-   Rightmost columns compress first as space shrinks. */
+/* Width set via inline style by GenreView after DOM measurement (useLayoutEffect).
+   The flex fallback applies only on the very first paint before measurement fires. */
 .genre-column {
   flex: 1 1 260px;
   min-width: 0;

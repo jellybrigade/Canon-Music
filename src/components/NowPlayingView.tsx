@@ -13,6 +13,7 @@ import { RadioChip } from "./RadioChip";
 import { stripServerPrefix } from "../lib/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
+import { useSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
@@ -178,6 +179,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollingRef = useRef(false);
   const accent = usePlayerStore((s) => s.accentColor);
+  const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
+  const [showWaveform] = useSetting("player.show_waveform", "false");
+  const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
@@ -346,11 +350,21 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             <span className="player-elapsed">{formatDuration(elapsed)}</span>
             <div
               ref={progressBarRef}
-              className="now-playing-progress-bar"
+              className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
               onClick={handleProgressClick}
               style={{ cursor: duration > 0 ? "pointer" : "default" }}
             >
-              <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
+              {useWaveform ? (
+                waveformPeaks!.map((peak, i) => (
+                  <div
+                    key={i}
+                    className={`now-playing-waveform-bar${i / waveformPeaks!.length < progress ? " now-playing-waveform-bar--filled" : ""}`}
+                    style={{ "--peak": peak } as React.CSSProperties}
+                  />
+                ))
+              ) : (
+                <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
+              )}
             </div>
             <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
           </div>

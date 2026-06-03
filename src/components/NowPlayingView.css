@@ -233,6 +233,33 @@
   transition: background 0.5s ease, box-shadow 0.5s ease;
 }
 
+.now-playing-progress-bar--waveform {
+  height: 48px;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  border-radius: 0;
+  overflow: visible;
+}
+
+.now-playing-progress-bar--waveform:hover {
+  height: 48px;
+}
+
+.now-playing-waveform-bar {
+  flex: 1;
+  height: calc(max(var(--peak, 0.05) * 48px, 2px));
+  background-color: rgba(255, 255, 255, 0.15);
+  border-radius: 1px;
+}
+
+.now-playing-waveform-bar--filled {
+  background-color: var(--accent);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 50%, transparent);
+  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+}
+
 /* ── Playback controls ── */
 .now-playing-controls {
   display: flex;

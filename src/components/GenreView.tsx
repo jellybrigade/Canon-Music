@@ -1,9 +1,16 @@
-import { useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Play, ListFilter, Search, X } from "lucide-react";
 import { useGenreTree } from "../hooks/useGenreTree";
 import { getParentChain } from "../lib/canonicalize";
 import type { NodeSection } from "../lib/canonicalize";
 import "../styles/genres.css";
+
+const EMPTY_MAP = new Map<string, never>();
+const EMPTY_SECTION: Record<string, string[]> = {};
+
+// Floor so a shrunk column stays legible; cap so one very long label doesn't dominate.
+const COL_MIN_WIDTH = 100;
+const COL_MAX_WIDTH = 480;
 
 type SectionTab = NodeSection;
 const SECTION_LABELS: Record<NodeSection, string> = {
@@ -24,6 +31,92 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Container width — tracked by ResizeObserver so applied widths recompute on resize.
+  const [containerWidth, setContainerWidth] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  const containerCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry) setContainerWidth(entry.contentRect.width);
+    });
+    ro.observe(el);
+    observerRef.current = ro;
+  }, []);
+
+  // Refs to the rendered column divs — populated in the columns.map below.
+  const colRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  // naturalWidths: DOM-measured max-content width per column.
+  // Updated only when column *content* changes (section/path navigation).
+  const [naturalWidths, setNaturalWidths] = useState<number[]>([]);
+
+  // Stable references — empty fallbacks so hooks run unconditionally before data loads.
+  const nodeById = data?.nodeById ?? EMPTY_MAP;
+  const childrenById = data?.childrenById ?? EMPTY_MAP;
+  const countById = data?.countById ?? EMPTY_MAP;
+  const rootsBySection = data?.rootsBySection ?? EMPTY_SECTION;
+
+  const columns = useMemo(() => {
+    const cols: string[][] = [rootsBySection[section] ?? []];
+    for (const selectedId of path) {
+      const kids = childrenById.get(selectedId) ?? [];
+      if (kids.length === 0) break;
+      cols.push(kids);
+    }
+    return cols;
+  }, [rootsBySection, section, path, childrenById]);
+
+  // Measure natural (max-content) widths after every content change.
+  // Depends on `columns` so it also fires when data first loads (columns goes
+  // from [[]] to real roots). useLayoutEffect + setState flush synchronously
+  // before the browser paints, so columns are never visually full-width.
+  useLayoutEffect(() => {
+    if (search) return; // columns not rendered during search
+    const measured: number[] = [];
+    for (const el of colRefs.current) {
+      if (!el) continue;
+      // Temporarily lay out at max-content to get the true intrinsic width.
+      const prevFlex = el.style.flex;
+      const prevWidth = el.style.width;
+      el.style.flex = "none";
+      el.style.width = "max-content";
+      // offsetWidth forces a synchronous reflow — captures real font size,
+      // scrollbar, border, and padding with zero guesswork.
+      const w = Math.min(el.offsetWidth, COL_MAX_WIDTH);
+      el.style.flex = prevFlex;
+      el.style.width = prevWidth;
+      measured.push(w);
+    }
+    if (measured.length > 0) setNaturalWidths(measured);
+  }, [columns]); // columns is memoized; changes on data-load and navigation
+
+  // Applied widths: pure computation from natural widths + container width.
+  // No DOM reads here. Reacts to window resize without re-measuring.
+  const appliedWidths = useMemo(() => {
+    if (naturalWidths.length === 0) return [];
+
+    const total = naturalWidths.reduce((s, w) => s + w, 0);
+    if (!containerWidth || total <= containerWidth) return naturalWidths;
+
+    // Left-first truncation: column 0 shrinks toward COL_MIN_WIDTH first,
+    // then column 1, etc. Rightmost (current) column is never shrunk first.
+    const widths = [...naturalWidths];
+    let overage = total - containerWidth;
+    for (let i = 0; i < widths.length && overage > 0; i++) {
+      const w = widths[i] ?? COL_MIN_WIDTH;
+      const canShrink = w - COL_MIN_WIDTH;
+      if (canShrink > 0) {
+        const shrink = Math.min(canShrink, overage);
+        widths[i] = w - shrink;
+        overage -= shrink;
+      }
+    }
+    return widths;
+  }, [naturalWidths, containerWidth]);
+
   if (!data) {
     return (
       <div className="genre-view">
@@ -31,8 +124,6 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
       </div>
     );
   }
-
-  const { nodeById, childrenById, countById, rootsBySection } = data;
 
   const availableSections = (
     ["genres", "descriptors", "scenes-and-movements"] as NodeSection[]
@@ -56,13 +147,6 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
           a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
         )
     : [];
-
-  const columns: string[][] = [rootsBySection[section] ?? []];
-  for (const selectedId of path) {
-    const kids = childrenById.get(selectedId) ?? [];
-    if (kids.length === 0) break;
-    columns.push(kids);
-  }
 
   function handleNodeClick(nodeId: string, depth: number) {
     setPath([...path.slice(0, depth), nodeId]);
@@ -185,12 +269,20 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
         </div>
       ) : (
         /* ── Miller columns ── */
-        <div className="genre-columns">
+        <div className="genre-columns" ref={containerCallbackRef}>
           {columns.map((colIds, depth) => {
             const selectedInCol = path[depth] ?? null;
             const unique = [...new Set(colIds)];
+            // appliedWidths[depth] is set after measurement; fall back to CSS flex
+            // on the very first paint (before useLayoutEffect has fired).
+            const appliedW = appliedWidths[depth];
             return (
-              <div key={depth} className="genre-column">
+              <div
+                key={depth}
+                ref={(el) => { colRefs.current[depth] = el; }}
+                className="genre-column"
+                style={appliedW !== undefined ? { flex: "none", width: appliedW } : undefined}
+              >
                 {unique.map((nodeId) => {
                   const node = nodeById.get(nodeId);
                   if (!node) return null;

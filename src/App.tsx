@@ -76,6 +76,10 @@ export default function App() {
   const [rawSort, setSort] = useSetting("library_sort", "artist");
   const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
   const sidebarExpanded = rawSidebarExpanded === "true";
+  const [rawSidebarWidth, setSidebarWidthSetting] = useSetting("sidebar.width", "180");
+  const sidebarWidth = Math.max(130, Math.min(400, parseInt(rawSidebarWidth, 10) || 180));
+  const [dragLiveWidth, setDragLiveWidth] = useState<number | null>(null);
+  const dragStartRef = useRef<{ x: number; width: number } | null>(null);
   const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
   const pullProgress = useTagsStore((s) => s.pullProgress);
   const metaBarVisible = !!(enrichmentPending || pullProgress);
@@ -215,6 +219,41 @@ export default function App() {
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [selectedAlbum, setSelectedAlbum] = useState<AlbumRow | null>(null);
+
+  function handleSidebarResizeMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    const startWidth = dragLiveWidth ?? sidebarWidth;
+    dragStartRef.current = { x: e.clientX, width: startWidth };
+
+    function onMove(ev: MouseEvent) {
+      if (!dragStartRef.current) return;
+      const newWidth = dragStartRef.current.width + (ev.clientX - dragStartRef.current.x);
+      setDragLiveWidth(Math.max(52, Math.min(400, newWidth)));
+    }
+
+    function onUp(ev: MouseEvent) {
+      if (!dragStartRef.current) return;
+      const newWidth = dragStartRef.current.width + (ev.clientX - dragStartRef.current.x);
+      dragStartRef.current = null;
+      setDragLiveWidth(null);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      if (newWidth < 130) {
+        void setSidebarExpanded("false");
+      } else {
+        const clamped = Math.min(Math.max(Math.round(newWidth), 130), 400);
+        void setSidebarWidthSetting(String(clamped));
+        void setSidebarExpanded("true");
+      }
+    }
+
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "ew-resize";
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
 
   function navigateTo(v: View, select?: { album?: AlbumRow; artist?: ArtistRow }) {
     if (v === "nowplaying" && isQueueOpen) toggleQueue();
@@ -807,8 +846,11 @@ export default function App() {
     <Suspense fallback={null}>
       <div className="app-layout">
         <nav
-          className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}`}
-          style={{ paddingBottom: `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)` }}
+          className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}${dragLiveWidth !== null ? " sidebar--dragging" : ""}`}
+          style={{
+            width: sidebarExpanded ? `${dragLiveWidth ?? sidebarWidth}px` : undefined,
+            paddingBottom: `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)`,
+          }}
         >
           {NAV_ITEMS.map(({ id, label, icon, badge }) => (
             <button
@@ -832,6 +874,12 @@ export default function App() {
             >
               {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
             </button>
+          )}
+          {sidebarExpanded && (
+            <div
+              className="sidebar-resize-handle"
+              onMouseDown={handleSidebarResizeMouseDown}
+            />
           )}
         </nav>
         {renderContent()}
