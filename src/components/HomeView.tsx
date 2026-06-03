@@ -863,6 +863,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             />
           )}
 
+          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+
           <ForYouRail
             key={forYouSeed}
             groups={forYouGroups}
@@ -882,7 +884,6 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
         </>
       )}
       {contextMenu && (

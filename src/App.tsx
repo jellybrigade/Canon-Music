@@ -488,7 +488,7 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => setSelectedAlbum(null)}
-        onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
+        onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
         onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); setView("library"); }}
       />
     );
@@ -539,6 +539,20 @@ export default function App() {
       );
     }
 
+    // Global artist-detail guard — same pattern as album: overlay over any origin view.
+    if (selectedArtist && serverWithCred) {
+      return (
+        <main className={`library${queueClass}`}>
+          <ArtistDetail
+            artist={selectedArtist}
+            serverWithCredential={serverWithCred}
+            onClose={() => setSelectedArtist(null)}
+            onSelectAlbum={setSelectedAlbum}
+          />
+        </main>
+      );
+    }
+
     if (searchOpen || searchQuery) {
       return (
         <main className={`library${queueClass}`}>
@@ -557,7 +571,7 @@ export default function App() {
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
               onSelectAlbum={(album) => { setSelectedAlbum(album); }}
-              onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
+              onSelectArtist={(artist) => { setSelectedArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (
@@ -575,7 +589,7 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
-                onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
+                onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -594,7 +608,7 @@ export default function App() {
               <NowPlayingView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={setSelectedAlbum}
-                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+                onSelectArtist={(artistName) => setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null })}
                 onBack={() => navigateTo("library")}
               />
             ) : <main className="content-main" />}
@@ -743,31 +757,20 @@ export default function App() {
       case "artists":
         return (
           <main className={`library${queueClass}`}>
-            {selectedArtist && serverWithCred ? (
-              <ArtistDetail
-                artist={selectedArtist}
+            <header className="library-header">
+              <h1>Artists</h1>
+              <span className="server-name">{server?.display_name}</span>
+            </header>
+            {serverWithCred ? (
+              <ArtistGrid
+                artists={artists ?? []}
                 serverWithCredential={serverWithCred}
-                onClose={() => setSelectedArtist(null)}
-                onSelectAlbum={setSelectedAlbum}
+                onSelect={setSelectedArtist}
+                onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+                scrollKey="artists"
               />
             ) : (
-              <>
-                <header className="library-header">
-                  <h1>Artists</h1>
-                  <span className="server-name">{server?.display_name}</span>
-                </header>
-                {serverWithCred ? (
-                  <ArtistGrid
-                    artists={artists ?? []}
-                    serverWithCredential={serverWithCred}
-                    onSelect={setSelectedArtist}
-                    onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-                    scrollKey="artists"
-                  />
-                ) : (
-                  <p className="empty-state">Loading…</p>
-                )}
-              </>
+              <p className="empty-state">Loading…</p>
             )}
           </main>
         );
@@ -896,7 +899,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { navigateTo("artists", { artist: { name, album_count: albumCount, artwork_url: null } }); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { setSelectedArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />
