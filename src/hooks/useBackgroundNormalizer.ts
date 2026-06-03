@@ -121,7 +121,14 @@ export function useBackgroundNormalizer() {
       }
 
       if (total > AUTO_RUN_THRESHOLD) {
-        setEnrichmentPending(total);
+        const snoozeDb = await getDb();
+        const snoozeRows = await snoozeDb.select<{ value: string }[]>(
+          "SELECT value FROM settings WHERE key = 'enrichment.snooze_until'", []
+        );
+        const snooze = snoozeRows[0]?.value;
+        const snoozed = snooze === "forever"
+          || (!!snooze && Number(snooze) > Math.floor(Date.now() / 1000));
+        if (!snoozed) setEnrichmentPending(total);
         isRunning = false;
         return;
       }

@@ -6,9 +6,11 @@ import {
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
+import { useSetting } from "../hooks/useSetting";
 import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
+import { ContextMenu } from "./ContextMenu";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -42,6 +44,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const pullProgress        = useTagsStore((s) => s.pullProgress);
   const enrichmentPending   = useTagsStore((s) => s.enrichmentPending);
   const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
+  const [, setSnoozeUntil] = useSetting("enrichment.snooze_until", "");
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
@@ -49,6 +52,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
+  const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
   const artThumbRef = useRef<HTMLButtonElement>(null);
@@ -195,6 +199,36 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           >
             Dismiss
           </button>
+          <button
+            className="normalizing-bar__more"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setSnoozeMenu({ x: r.left, y: r.bottom });
+            }}
+          >
+            …
+          </button>
+          {snoozeMenu && (
+            <ContextMenu x={snoozeMenu.x} y={snoozeMenu.y} onClose={() => setSnoozeMenu(null)}>
+              {([
+                ["Snooze 1 day", String(Math.floor(Date.now() / 1000) + 86400)],
+                ["Snooze 1 week", String(Math.floor(Date.now() / 1000) + 604800)],
+                ["Snooze 1 month", String(Math.floor(Date.now() / 1000) + 2592000)],
+                ["Never show again", "forever"],
+              ] as [string, string][]).map(([label, value]) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    void setSnoozeUntil(value);
+                    setEnrichmentPending(null);
+                    setSnoozeMenu(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </ContextMenu>
+          )}
         </div>
       )}
       {pullProgress && (
