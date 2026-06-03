@@ -62,15 +62,62 @@ impl Seek for GrowingFileReader {
 struct PosTracker {
     play_start: Option<Instant>,
     offset: f64,
+    speed: f32,
 }
 
 impl PosTracker {
     fn current(&self) -> f64 {
         match self.play_start {
-            Some(t) => self.offset + t.elapsed().as_secs_f64(),
+            Some(t) => self.offset + t.elapsed().as_secs_f64() * self.speed as f64,
             None => self.offset,
         }
     }
+}
+
+/// Wraps a Source to compute exponential-smoothed RMS level for the peak meter.
+struct MeteredSource<I: Source<Item = i16>> {
+    inner: I,
+    level: Arc<Mutex<f32>>,
+    sum_sq: f32,
+    count: u32,
+    // Update level every ~10ms worth of frames
+    window: u32,
+}
+
+impl<I: Source<Item = i16>> MeteredSource<I> {
+    fn new(inner: I, level: Arc<Mutex<f32>>) -> Self {
+        let sr = inner.sample_rate().max(1);
+        let ch = inner.channels().max(1) as u32;
+        let window = sr / 100 * ch; // ~10ms
+        MeteredSource { inner, level, sum_sq: 0.0, count: 0, window }
+    }
+}
+
+impl<I: Source<Item = i16>> Iterator for MeteredSource<I> {
+    type Item = i16;
+    fn next(&mut self) -> Option<i16> {
+        let s = self.inner.next()?;
+        let norm = s as f32 / i16::MAX as f32;
+        self.sum_sq += norm * norm;
+        self.count += 1;
+        if self.count >= self.window {
+            let rms = (self.sum_sq / self.count as f32).sqrt();
+            let mut lk = self.level.lock().unwrap();
+            // Exponential smoothing: attack fast, release slow
+            const SMOOTHING: f32 = 0.8;
+            *lk = SMOOTHING * *lk + (1.0 - SMOOTHING) * rms;
+            self.sum_sq = 0.0;
+            self.count = 0;
+        }
+        Some(s)
+    }
+}
+
+impl<I: Source<Item = i16>> Source for MeteredSource<I> {
+    fn current_frame_len(&self) -> Option<usize> { self.inner.current_frame_len() }
+    fn channels(&self) -> u16 { self.inner.channels() }
+    fn sample_rate(&self) -> u32 { self.inner.sample_rate() }
+    fn total_duration(&self) -> Option<Duration> { self.inner.total_duration() }
 }
 
 struct AudioState {
@@ -79,8 +126,12 @@ struct AudioState {
     play_id: Arc<AtomicU64>,
     pos: Arc<Mutex<PosTracker>>,
     volume: Arc<Mutex<f32>>,
+    speed: Arc<Mutex<f32>>,
     // URL → pre-fetched bytes. Populated by audio_prefetch; consumed (and cleared) by audio_play.
     prefetch_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    level: Arc<Mutex<f32>>,
+    // Bumped on every pause/resume to cancel in-flight fade threads.
+    fade_gen: Arc<AtomicU64>,
 }
 
 #[tauri::command]
@@ -116,7 +167,7 @@ async fn audio_play(
     let handle = state.handle.as_ref().ok_or("No audio output device available")?.clone();
 
     // Bump play_id BEFORE stopping old sink so the watcher thread sees the new id
-    // before sleep_until_end() returns, preventing a spurious track-ended event.
+    // before the poll loop exits, preventing a spurious track-ended event.
     let this_id = state.play_id.fetch_add(1, Ordering::Relaxed) + 1;
 
     {
@@ -132,10 +183,15 @@ async fn audio_play(
         pos.offset = 0.0;
     }
 
+    // Reset peak meter level on new track
+    *state.level.lock().unwrap() = 0.0;
+
     let play_id_arc = Arc::clone(&state.play_id);
     let sink_arc = Arc::clone(&state.sink);
     let pos_arc = Arc::clone(&state.pos);
     let volume_arc = Arc::clone(&state.volume);
+    let speed_arc = Arc::clone(&state.speed);
+    let level_arc = Arc::clone(&state.level);
 
     // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
@@ -172,19 +228,34 @@ async fn audio_play(
             Err(e) => { eprintln!("audio_play sink error: {e}"); return; }
         };
         let current_volume = *volume_arc.lock().unwrap();
+        let current_speed = *speed_arc.lock().unwrap();
         sink.set_volume(current_volume);
-        sink.append(source);
+        sink.set_speed(current_speed);
+
+        // Wrap in metered source for peak meter
+        let metered = MeteredSource::new(source, Arc::clone(&level_arc));
+        sink.append(metered);
 
         {
             let mut pos = pos_arc.lock().unwrap();
             pos.offset = 0.0;
+            pos.speed = current_speed;
             pos.play_start = Some(Instant::now());
         }
 
+        // Poll-based watcher: checks every 100ms so it can't hang if sink never empties.
         let play_id_watcher = Arc::clone(&play_id_arc);
         let sink_watcher = Arc::clone(&sink);
         std::thread::spawn(move || {
-            sink_watcher.sleep_until_end();
+            loop {
+                std::thread::sleep(Duration::from_millis(100));
+                if play_id_watcher.load(Ordering::Relaxed) != this_id {
+                    return;
+                }
+                if sink_watcher.empty() {
+                    break;
+                }
+            }
             if play_id_watcher.load(Ordering::Relaxed) == this_id {
                 app.emit("track-ended", ()).ok();
             }
@@ -202,11 +273,33 @@ fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
 }
 
 #[tauri::command]
+fn audio_get_level(state: tauri::State<'_, AudioState>) -> f32 {
+    *state.level.lock().unwrap()
+}
+
+#[tauri::command]
 fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
     *state.volume.lock().unwrap() = volume;
     if let Some(sink) = state.sink.lock().unwrap().as_ref() {
         sink.set_volume(volume);
     }
+}
+
+#[tauri::command]
+fn audio_set_speed(state: tauri::State<'_, AudioState>, speed: f32) {
+    let clamped = speed.clamp(0.5, 2.0);
+    *state.speed.lock().unwrap() = clamped;
+    let sink_opt = state.sink.lock().unwrap().clone();
+    if let Some(sink) = sink_opt {
+        sink.set_speed(clamped);
+    }
+    let mut pos = state.pos.lock().unwrap();
+    // Freeze offset at current real-time position, then start fresh with new speed.
+    if let Some(t) = pos.play_start.take() {
+        pos.offset += t.elapsed().as_secs_f64() * pos.speed as f64;
+    }
+    pos.speed = clamped;
+    pos.play_start = Some(Instant::now());
 }
 
 #[tauri::command]
@@ -237,24 +330,73 @@ async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Res
 }
 
 #[tauri::command]
-fn audio_pause(state: tauri::State<'_, AudioState>) {
-    if let Some(sink) = state.sink.lock().unwrap().as_ref() {
-        sink.pause();
-    }
+fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
+    let fade_gen = Arc::clone(&state.fade_gen);
+    let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+
     let mut pos = state.pos.lock().unwrap();
     if let Some(t) = pos.play_start.take() {
-        pos.offset += t.elapsed().as_secs_f64();
+        pos.offset += t.elapsed().as_secs_f64() * pos.speed as f64;
+    }
+    drop(pos);
+
+    if fade_ms == 0 {
+        if let Some(sink) = state.sink.lock().unwrap().as_ref() {
+            sink.pause();
+        }
+        return;
+    }
+
+    let target_vol = *state.volume.lock().unwrap();
+    let sink_opt = state.sink.lock().unwrap().clone();
+    if let Some(sink) = sink_opt {
+        std::thread::spawn(move || {
+            let steps = (fade_ms / 10).max(1);
+            for i in 1..=steps {
+                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                let t = i as f32 / steps as f32;
+                sink.set_volume(target_vol * (1.0 - t));
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if fade_gen.load(Ordering::Relaxed) == gen {
+                sink.pause();
+            }
+        });
     }
 }
 
 #[tauri::command]
-fn audio_resume(state: tauri::State<'_, AudioState>) {
-    if let Some(sink) = state.sink.lock().unwrap().as_ref() {
-        sink.play();
-    }
+fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
+    let fade_gen = Arc::clone(&state.fade_gen);
+    let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+
     let mut pos = state.pos.lock().unwrap();
     if pos.play_start.is_none() {
         pos.play_start = Some(Instant::now());
+    }
+    drop(pos);
+
+    let target_vol = *state.volume.lock().unwrap();
+    let sink_opt = state.sink.lock().unwrap().clone();
+    if let Some(sink) = sink_opt {
+        sink.set_volume(0.0);
+        sink.play();
+        if fade_ms == 0 {
+            sink.set_volume(target_vol);
+            return;
+        }
+        std::thread::spawn(move || {
+            let steps = (fade_ms / 10).max(1);
+            for i in 1..=steps {
+                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                let t = i as f32 / steps as f32;
+                sink.set_volume(target_vol * t);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if fade_gen.load(Ordering::Relaxed) == gen {
+                sink.set_volume(target_vol);
+            }
+        });
     }
 }
 
@@ -262,11 +404,13 @@ fn audio_resume(state: tauri::State<'_, AudioState>) {
 fn audio_stop(state: tauri::State<'_, AudioState>) {
     // Bump play_id first so the watcher thread won't emit track-ended after stop.
     state.play_id.fetch_add(1, Ordering::Relaxed);
+    state.fade_gen.fetch_add(1, Ordering::Relaxed);
     let old_sink = state.sink.lock().unwrap().take();
     if let Some(sink) = old_sink {
         sink.stop();
     }
     state.prefetch_cache.lock().unwrap().clear();
+    *state.level.lock().unwrap() = 0.0;
     let mut pos = state.pos.lock().unwrap();
     pos.play_start = None;
     pos.offset = 0.0;
@@ -497,9 +641,12 @@ pub fn run() {
             handle,
             sink: Arc::new(Mutex::new(None)),
             play_id: Arc::new(AtomicU64::new(0)),
-            pos: Arc::new(Mutex::new(PosTracker { play_start: None, offset: 0.0 })),
+            pos: Arc::new(Mutex::new(PosTracker { play_start: None, offset: 0.0, speed: 1.0 })),
             volume: Arc::new(Mutex::new(1.0_f32)),
+            speed: Arc::new(Mutex::new(1.0_f32)),
             prefetch_cache: Arc::new(Mutex::new(HashMap::new())),
+            level: Arc::new(Mutex::new(0.0_f32)),
+            fade_gen: Arc::new(AtomicU64::new(0)),
         })
         .invoke_handler(tauri::generate_handler![
             set_credential,
@@ -511,7 +658,9 @@ pub fn run() {
             audio_resume,
             audio_stop,
             audio_get_pos,
+            audio_get_level,
             audio_volume,
+            audio_set_speed,
             audio_seek,
             audio_extract_waveform,
         ])

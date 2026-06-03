@@ -14,6 +14,7 @@ import { getMinTagCount, setMinTagCount } from "../lib/lastfm";
 import { keychain } from "../keychain";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useTagsStore } from "../store/tags";
+import { usePlayerStore } from "../store/player";
 import { useRapToHipHop } from "../hooks/useTagMappings";
 import "./SettingsView.css";
 
@@ -58,6 +59,10 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [showWaveform, setShowWaveform] = useSetting("player.show_waveform", "false");
   const [restoreQueue, setRestoreQueue] = useSetting("queue.restore_on_startup", "false");
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
+  const speed = usePlayerStore((s) => s.speed);
+  const setSpeed = usePlayerStore((s) => s.setSpeed);
+  const pauseFadeMs = usePlayerStore((s) => s.pauseFadeMs);
+  const [, setPauseFadeSetting] = useSetting("player.pause_fade_ms", "150");
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
   const [mbAutoIdentify, setMbAutoIdentify] = useSetting("mb.auto_identify", "false");
@@ -578,6 +583,40 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </label>
           <p className="settings-section-desc">
             What clicking ▶ Play Album does to the current queue.
+          </p>
+          <label className="settings-field" style={{ marginTop: "0.5rem" }}>
+            <span>Playback speed — {speed.toFixed(2)}×</span>
+            <input
+              type="range"
+              className="settings-range"
+              min={0.5}
+              max={2.0}
+              step={0.05}
+              value={speed}
+              onChange={(e) => void setSpeed(parseFloat(e.target.value))}
+            />
+          </label>
+          <p className="settings-section-desc">
+            Speed up or slow down playback. Affects pitch (no time-stretch).
+          </p>
+          <label className="settings-field" style={{ marginTop: "0.5rem" }}>
+            <span>Pause/resume fade — {pauseFadeMs === 0 ? "off" : `${pauseFadeMs} ms`}</span>
+            <input
+              type="range"
+              className="settings-range"
+              min={0}
+              max={2000}
+              step={50}
+              value={pauseFadeMs}
+              onChange={(e) => {
+                const ms = parseInt(e.target.value, 10);
+                usePlayerStore.setState({ pauseFadeMs: ms });
+                void setPauseFadeSetting(String(ms));
+              }}
+            />
+          </label>
+          <p className="settings-section-desc">
+            Smooth volume fade when pausing and resuming. 0 = instant.
           </p>
         </section>
 

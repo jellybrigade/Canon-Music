@@ -39,6 +39,9 @@ export const RADIO_MODES: { mode: RadioMode; label: string }[] = [
 
 const PREV_RESTART_THRESHOLD_S = 3;
 
+// Deduplicates natural-end advances triggered by both the Rust event and the TS fallback.
+let lastEndedTrackId: string | null = null;
+
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
   if (from === currentIdx) return to;
   let adj = currentIdx;
@@ -111,6 +114,9 @@ interface PlayerState {
   setSleepTimer: (preset: number | "end-of-track") => void;
   clearSleepTimer: () => void;
 
+  speed: number;
+  pauseFadeMs: number;
+
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
@@ -120,6 +126,7 @@ interface PlayerState {
   stop: () => void;
   setVolume: (volume: number) => Promise<void>;
   seek: (seconds: number) => Promise<void>;
+  setSpeed: (speed: number) => Promise<void>;
   toggleRepeat: () => Promise<void>;
   toggleShuffle: () => void;
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
@@ -141,6 +148,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   let elapsedInterval: ReturnType<typeof setInterval> | null = null;
   let cancelWaveform: (() => void) | null = null;
   let sleepTimerTimeout: ReturnType<typeof setTimeout> | null = null;
+  // Tracks whether the TS fallback already fired next() for the current track position.
+  let naturalEndFiredForIndex: number | null = null;
 
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
@@ -164,6 +173,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (nextTrack) {
               invoke("audio_prefetch", { url: streamUrlFor(nextTrack) }).catch(() => {});
             }
+          }
+          // Fallback: advance when pos reaches end in case Rust track-ended event doesn't fire.
+          if (duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
+            naturalEndFiredForIndex = queueIndex;
+            void get().next(true);
           }
         })
         .catch(() => {});
@@ -267,6 +281,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   }
 
   async function playTrack(track: CurrentTrack, url: string) {
+    // Re-arm the natural-end fallback and dedup guard for the incoming track.
+    naturalEndFiredForIndex = null;
+    lastEndedTrackId = null;
     set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null });
     stopElapsedTimer();
     try {
@@ -326,6 +343,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     error: null,
     elapsed: 0,
     volume: 1,
+    speed: 1,
+    pauseFadeMs: 150,
     repeat: "off",
     isShuffled: false,
     shuffleOrder: [],
@@ -394,6 +413,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder } = get();
       if (queue.length === 0 || !streamUrlFor) return;
 
+      // Deduplicate: both the Rust event and the TS fallback call next(true); only handle once.
+      if (fromNaturalEnd) {
+        const trackId = get().currentTrack?.id ?? null;
+        if (trackId && trackId === lastEndedTrackId) return;
+        lastEndedTrackId = trackId;
+      }
+
       if (fromNaturalEnd && get().sleepTimerEndOfTrack) {
         get().clearSleepTimer();
         stopElapsedTimer();
@@ -441,13 +467,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     pause: () => {
-      invoke("audio_pause").catch(console.error);
+      const fadeMs = get().pauseFadeMs;
+      invoke("audio_pause", { fadeMs }).catch(console.error);
       stopElapsedTimer();
       set({ isPlaying: false });
     },
 
     resume: () => {
-      invoke("audio_resume").catch(console.error);
+      const fadeMs = get().pauseFadeMs;
+      invoke("audio_resume", { fadeMs }).catch(console.error);
       startElapsedTimer();
       set({ isPlaying: true });
     },
@@ -484,6 +512,21 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     seek: async (seconds: number) => {
       set({ elapsed: seconds });
       await invoke("audio_seek", { seconds });
+    },
+
+    setSpeed: async (speed: number) => {
+      const clamped = Math.max(0.5, Math.min(2.0, speed));
+      set({ speed: clamped });
+      await invoke("audio_set_speed", { speed: clamped });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.speed', ?)",
+          [String(clamped)]
+        );
+      } catch (e) {
+        console.error("Failed to persist speed:", e);
+      }
     },
 
     toggleRepeat: async () => {
@@ -649,7 +692,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -698,6 +741,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             }
           } else if (row.key === "radio_label") {
             set({ radioLabel: row.value || null });
+          } else if (row.key === "player.speed") {
+            const speed = parseFloat(row.value);
+            if (!isNaN(speed)) {
+              const clamped = Math.max(0.5, Math.min(2.0, speed));
+              set({ speed: clamped });
+              void invoke("audio_set_speed", { speed: clamped });
+            }
+          } else if (row.key === "player.pause_fade_ms") {
+            const ms = parseInt(row.value, 10);
+            if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
           }
         }
       } catch (e) {

@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import { usePlayerStore } from "../store/player";
 import { useSetting } from "../hooks/useSetting";
+import { WaveformBars } from "./WaveformBars";
 
 const SECONDS_PER_MINUTE = 60;
 
@@ -40,6 +41,10 @@ export function PlayerProgress() {
   }
 
   const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
+  const filledCount = useMemo(
+    () => (waveformPeaks ? Math.round(progress * waveformPeaks.length) : 0),
+    [progress, waveformPeaks]
+  );
 
   return (
     <div className="player-progress">
@@ -58,13 +63,12 @@ export function PlayerProgress() {
         style={{ cursor: duration > 0 ? "pointer" : "default" }}
       >
         {useWaveform ? (
-          waveformPeaks.map((peak, i) => (
-            <div
-              key={i}
-              className={`waveform-bar${i / waveformPeaks.length < progress ? " waveform-bar--filled" : ""}`}
-              style={{ "--peak": peak } as React.CSSProperties}
-            />
-          ))
+          <WaveformBars
+            peaks={waveformPeaks}
+            filledCount={filledCount}
+            barClass="waveform-bar"
+            filledClass="waveform-bar waveform-bar--filled"
+          />
         ) : (
           <div className="player-progress-fill" style={{ width: `${progress * 100}%` }} />
         )}
