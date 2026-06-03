@@ -193,7 +193,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .sidebar--expanded {
-  width: 160px;
+  width: 180px;
   align-items: stretch;
 }
 
