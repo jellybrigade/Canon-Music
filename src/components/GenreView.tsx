@@ -8,8 +8,7 @@ import "../styles/genres.css";
 const EMPTY_MAP = new Map<string, never>();
 const EMPTY_SECTION: Record<string, string[]> = {};
 
-// Floor so a shrunk column stays legible; cap so one very long label doesn't dominate.
-const COL_MIN_WIDTH = 100;
+// Cap so one very long label doesn't dominate.
 const COL_MAX_WIDTH = 480;
 
 type SectionTab = NodeSection;
@@ -33,8 +32,10 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
 
   // Container width — tracked by ResizeObserver so applied widths recompute on resize.
   const [containerWidth, setContainerWidth] = useState(0);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
   const containerCallbackRef = useCallback((el: HTMLDivElement | null) => {
+    containerRef.current = el;
     observerRef.current?.disconnect();
     observerRef.current = null;
     if (!el) return;
@@ -46,11 +47,8 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
     observerRef.current = ro;
   }, []);
 
-  // Refs to the rendered column divs — populated in the columns.map below.
-  const colRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  // naturalWidths: DOM-measured max-content width per column.
-  // Updated only when column *content* changes (section/path navigation).
+  // naturalWidths: canvas-measured max-content width per column.
+  // Canvas avoids overflow:hidden interference with DOM max-content measurement.
   const [naturalWidths, setNaturalWidths] = useState<number[]>([]);
 
   // Stable references — empty fallbacks so hooks run unconditionally before data loads.
@@ -69,29 +67,28 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
     return cols;
   }, [rootsBySection, section, path, childrenById]);
 
-  // Measure natural (max-content) widths after every content change.
-  // Depends on `columns` so it also fires when data first loads (columns goes
-  // from [[]] to real roots). useLayoutEffect + setState flush synchronously
-  // before the browser paints, so columns are never visually full-width.
+  // Measure natural widths via scrollWidth — returns full untruncated text width even
+  // when overflow:hidden clips the visible content. No font parsing, no DOM thrashing.
   useLayoutEffect(() => {
-    if (search) return; // columns not rendered during search
-    const measured: number[] = [];
-    for (const el of colRefs.current) {
-      if (!el) continue;
-      // Temporarily lay out at max-content to get the true intrinsic width.
-      const prevFlex = el.style.flex;
-      const prevWidth = el.style.width;
-      el.style.flex = "none";
-      el.style.width = "max-content";
-      // offsetWidth forces a synchronous reflow — captures real font size,
-      // scrollbar, border, and padding with zero guesswork.
-      const w = Math.min(el.offsetWidth, COL_MAX_WIDTH);
-      el.style.flex = prevFlex;
-      el.style.width = prevWidth;
-      measured.push(w);
-    }
-    if (measured.length > 0) setNaturalWidths(measured);
-  }, [columns]); // columns is memoized; changes on data-load and navigation
+    if (search) return;
+    const colEls = containerRef.current?.querySelectorAll<HTMLElement>(".genre-column");
+    if (!colEls?.length) return;
+    const measured = Array.from(colEls).map((col) => {
+      const rows = col.querySelectorAll<HTMLElement>(".genre-col-row");
+      if (!rows.length) return 0;
+      // chrome = everything in the row except the name's flex area (count + chevron + gaps + padding)
+      const firstRow = rows[0]!;
+      const firstName = firstRow.querySelector<HTMLElement>(".genre-col-name");
+      const chrome = firstName ? firstRow.offsetWidth - firstName.offsetWidth : 0;
+      let maxTextW = 0;
+      rows.forEach((row) => {
+        const nameEl = row.querySelector<HTMLElement>(".genre-col-name");
+        if (nameEl) maxTextW = Math.max(maxTextW, nameEl.scrollWidth);
+      });
+      return Math.min(maxTextW + chrome, COL_MAX_WIDTH);
+    });
+    if (measured.some((w) => w > 0)) setNaturalWidths(measured);
+  }, [columns, search]);
 
   // Applied widths: pure computation from natural widths + container width.
   // No DOM reads here. Reacts to window resize without re-measuring.
@@ -101,18 +98,50 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
     const total = naturalWidths.reduce((s, w) => s + w, 0);
     if (!containerWidth || total <= containerWidth) return naturalWidths;
 
-    // Left-first truncation: column 0 shrinks toward COL_MIN_WIDTH first,
-    // then column 1, etc. Rightmost (current) column is never shrunk first.
+    const n = naturalWidths.length;
     const widths = [...naturalWidths];
     let overage = total - containerWidth;
-    for (let i = 0; i < widths.length && overage > 0; i++) {
-      const w = widths[i] ?? COL_MIN_WIDTH;
-      const canShrink = w - COL_MIN_WIDTH;
-      if (canShrink > 0) {
-        const shrink = Math.min(canShrink, overage);
-        widths[i] = w - shrink;
-        overage -= shrink;
+
+    // Floor per column index (from left). Last col has Infinity floor = never shrunk.
+    // Col 0 floor ~4 chars, col 1 floor ~6 chars, col 2+ floor = natural minus 30px (min 60px).
+    const floorFor = (i: number): number => {
+      if (i === n - 1) return naturalWidths[i] ?? 0; // last col: never shrink
+      if (i === 0) return 48;
+      if (i === 1) return 72;
+      return Math.max(60, (naturalWidths[i] ?? 60) - 30);
+    };
+
+    // Weighted shrink: col 0 absorbs 70%, col 1 absorbs 30%, col 2+ (not last) absorbs 1 unit each.
+    const weights: number[] = widths.map((_, i) => {
+      if (i === n - 1) return 0;
+      if (i === 0) return 7;
+      if (i === 1) return 3;
+      return 1;
+    });
+    const totalWeight = weights.reduce((s, w) => s + w, 0);
+
+    // First pass: weighted ask, clamped to each col's capacity.
+    const asks: number[] = weights.map((w, i) => {
+      const ask = totalWeight > 0 ? overage * (w / totalWeight) : 0;
+      const capacity = (naturalWidths[i] ?? 0) - floorFor(i);
+      return Math.max(0, Math.min(ask, capacity));
+    });
+
+    let absorbed = asks.reduce((s, a) => s + a, 0);
+    overage -= absorbed;
+
+    // Second pass: if still over, give remainder to cols that still have capacity, left-first.
+    for (let i = 0; i < n - 1 && overage > 0.5; i++) {
+      const capacity = (naturalWidths[i] ?? 0) - floorFor(i) - (asks[i] ?? 0);
+      if (capacity > 0) {
+        const extra = Math.min(capacity, overage);
+        asks[i] = (asks[i] ?? 0) + extra;
+        overage -= extra;
       }
+    }
+
+    for (let i = 0; i < n; i++) {
+      widths[i] = (naturalWidths[i] ?? 0) - (asks[i] ?? 0);
     }
     return widths;
   }, [naturalWidths, containerWidth]);
@@ -279,7 +308,6 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
             return (
               <div
                 key={depth}
-                ref={(el) => { colRefs.current[depth] = el; }}
                 className="genre-column"
                 style={appliedW !== undefined ? { flex: "none", width: appliedW } : undefined}
               >
