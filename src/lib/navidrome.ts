@@ -436,6 +436,18 @@ export function scrobbleTrack(
   });
 }
 
+export function reportNowPlaying(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativeTrackId: string
+): Promise<void> {
+  return callSubsonicVoid(baseUrl, username, credential, "scrobble.view", {
+    id: nativeTrackId,
+    submission: "false",
+  });
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,

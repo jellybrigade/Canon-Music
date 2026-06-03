@@ -64,8 +64,6 @@ export default function App() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
-  useScrobble(currentTrack, elapsed);
-
   const { data: servers, isLoading: serversLoading } = useServers();
   const queryClient = useQueryClient();
 
@@ -168,6 +166,7 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   useGlobalShortcuts(serverWithCred);
   useScrobbleFlush(serverWithCred);
+  useScrobble(currentTrack, elapsed, serverWithCred);
   const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
