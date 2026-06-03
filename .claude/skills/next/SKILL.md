@@ -33,6 +33,10 @@ Wait for user approval before proceeding. If the user wants to adjust scope or a
 
 Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch. Keep ARCHITECTURE.md current if any files are added, moved, or substantially repurposed.
 
+When building any UI with hover-reveal buttons, cards, or interactive chips, read `instructions/ui-patterns.md` first.
+
+After implementation, if you encountered any non-obvious rendering quirk, browser/WebKit edge case, or layout gotcha that isn't already in `instructions/ui-patterns.md`, append it. One section per pattern: what the symptom was, root cause, fix.
+
 **Do not start Canon in dev mode and do not take screenshots to verify.** Typecheck (`pnpm tsc --noEmit`) is sufficient for frontend changes. Rust changes: `cargo check`. The app is long-running and a dev instance is usually already open.
 
 ## Phase 5 — Commit
