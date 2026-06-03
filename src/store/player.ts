@@ -643,9 +643,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'queue.restore_on_startup')",
           []
         );
+        const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
@@ -658,7 +659,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (valid.includes(row.value as RepeatMode)) {
               set({ repeat: row.value as RepeatMode });
             }
-          } else if (row.key === "queue_state") {
+          } else if (row.key === "queue_state" && restoreQueue) {
             try {
               const saved = JSON.parse(row.value) as QueueSnapshot;
               if (Array.isArray(saved.queue) && saved.queue.length > 0) {

@@ -107,6 +107,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                           src={imgUrl}
                           alt={artist.name}
                           decoding="async"
+                          loading="lazy"
                         />
                       ) : (
                         <div className="album-art album-art--placeholder" />

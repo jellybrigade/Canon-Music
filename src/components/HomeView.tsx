@@ -233,7 +233,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
         onContextMenu={(e) => onCardContextMenu(e, pick.album)}
       >
         {artUrl
-          ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} />
+          ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
       </div>
       <div className="home-spotlight__body">
@@ -488,7 +488,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                       onContextMenu={e => onCardContextMenu(e, album)}
                     >
                       <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
+                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                         <div className="album-overlay">
                           <span className="album-name">{album.name}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
@@ -522,7 +522,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                         onContextMenu={e => onCardContextMenu(e, album)}
                       >
                         <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" />
+                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                           <button
                             className="suggestion-card__play suggestion-card__play--sm"
                             onClick={e => { e.stopPropagation(); playAlbum(album); }}
@@ -608,7 +608,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                   >
                     <div className="carousel-card__art-wrap">
                       {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" />
+                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" loading="lazy" />
                         : <div className="carousel-card__art" />}
                       <button
                         className="carousel-card__play"
