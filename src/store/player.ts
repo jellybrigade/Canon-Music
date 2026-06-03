@@ -662,7 +662,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           } else if (row.key === "queue_state" && restoreQueue) {
             try {
               const saved = JSON.parse(row.value) as QueueSnapshot;
-              if (Array.isArray(saved.queue) && saved.queue.length > 0) {
+              if (Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
                 set({
                   queue: saved.queue,
                   queueIndex: saved.queueIndex ?? 0,
