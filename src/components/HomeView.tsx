@@ -69,7 +69,7 @@ const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
 ];
 
 const DEFAULT_FOR_YOU_ENABLED = new Set([
-  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved",
+  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved", "almost-done",
 ]);
 
 const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES.map(c => ({

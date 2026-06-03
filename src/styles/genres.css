@@ -37,7 +37,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding: 24px 28px 0;
+  padding: 24px 28px;
 }
 
 .genre-view__loading {
@@ -177,7 +177,6 @@
   overflow-y: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  margin-bottom: 24px;
 }
 
 /* Width set via inline style by GenreView after DOM measurement (useLayoutEffect).
@@ -200,10 +199,13 @@
   background: transparent;
 }
 .genre-column::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: transparent;
   border-radius: 2px;
 }
-.genre-column::-webkit-scrollbar-thumb:hover {
+.genre-column:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+}
+.genre-column:hover::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
 }
 
@@ -317,7 +319,6 @@
 .genre-search-results {
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 24px;
 }
 
 .genre-search-results__empty {

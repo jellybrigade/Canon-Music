@@ -360,4 +360,11 @@ export const migrations: Migration[] = [
     version: 22,
     sql: `ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    // v22 was recorded in schema_migrations on some installs but the DDL silently
+    // did not execute (WAL / HMR race). Re-issuing here so those installs get the
+    // column. The runner swallows "duplicate column name" for installs where v22 ran.
+    version: 23,
+    sql: `ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];
