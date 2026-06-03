@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { readNormalizedTags, normalizeAlbum, isStale, type NormalizedTags } from "../lib/tag-normalize";
 import { useSetting } from "./useSetting";
 import { useAlbumIdentity } from "./useAlbumIdentity";
+import { useTagsStore } from "../store/tags";
 import type { MbGenre } from "../lib/musicbrainz";
 
 export type { NormalizedTags };
@@ -11,6 +12,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   const queryClient = useQueryClient();
   const [stalenessDays] = useSetting("tags.staleness_days", "30");
   const { data: identity } = useAlbumIdentity(albumId);
+  const decrementEnrichmentPending = useTagsStore((s) => s.decrementEnrichmentPending);
 
   const query = useQuery({
     queryKey: ["normalized-tags", albumId],
@@ -38,6 +40,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       combinedMbGenres,
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
+      decrementEnrichmentPending();
     });
   }, [query.isLoading, query.data, albumId, artist, album, queryClient, stalenessDays, identity]);
 
