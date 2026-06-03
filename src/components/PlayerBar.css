@@ -45,11 +45,6 @@
   width: 100%;
 }
 
-.peak-meter {
-  flex-shrink: 0;
-  border-radius: 1px;
-  opacity: 0.7;
-}
 
 .player-thumb {
   width: 54px;
