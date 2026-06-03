@@ -13,6 +13,10 @@ export interface GenreTreeData {
 
 let cachedData: GenreTreeData | null = null;
 
+export function invalidateGenreTreeCache(): void {
+  cachedData = null;
+}
+
 async function buildGenreTree(): Promise<GenreTreeData> {
   if (cachedData) return cachedData;
 

@@ -624,7 +624,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
                   disabled={updateInstalling}
                   onClick={() => {
                     setUpdateInstalling(true);
-                    void installAndRestart(pendingUpdate).catch(() => setUpdateInstalling(false));
+                    void installAndRestart(pendingUpdate, () => {}).catch(() => setUpdateInstalling(false));
                   }}
                 >
                   {updateInstalling ? "Installing…" : "Install & Restart"}

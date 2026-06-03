@@ -29,7 +29,7 @@ export function useScrobble(
     reportNowPlaying(server.url, server.username, credential, nativeId).catch(
       () => {} // server unreachable — silently skip
     );
-  }, [playStartedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playStartedAt, track, serverWithCred]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!track || scrobbedRef.current) return;

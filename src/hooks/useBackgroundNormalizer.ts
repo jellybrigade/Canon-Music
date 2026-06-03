@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { fetchArtistInfo } from "../lib/lastfm";
@@ -7,6 +7,8 @@ import { useTagsStore } from "../store/tags";
 
 const INTERVAL_MS = 2000;
 const AUTO_RUN_THRESHOLD = 300;
+
+let isRunning = false;
 
 type AlbumRow = { id: string; artist: string | null; name: string };
 type ArtistRow = { name: string; lastfm_artist_name: string | null };
@@ -100,14 +102,13 @@ async function queryStale(staleDays: number): Promise<{ albums: AlbumRow[]; arti
 export function useBackgroundNormalizer() {
   const [autoRefresh] = useSetting("tags.auto_refresh", "true");
   const [stalenessDays] = useSetting("tags.staleness_days", "30");
-  const runningRef = useRef(false);
 
   useEffect(() => {
     if (autoRefresh !== "true") return;
-    if (runningRef.current) return;
+    if (isRunning) return;
 
     const staleDays = Number(stalenessDays) || 30;
-    runningRef.current = true;
+    isRunning = true;
 
     async function checkStale() {
       const { setEnrichmentPending } = useTagsStore.getState();
@@ -115,27 +116,39 @@ export function useBackgroundNormalizer() {
       const total = albums.length + artists.length;
 
       if (total === 0) {
-        runningRef.current = false;
+        isRunning = false;
         return;
       }
 
       if (total > AUTO_RUN_THRESHOLD) {
         setEnrichmentPending(total);
-        runningRef.current = false;
+        isRunning = false;
         return;
       }
 
       await doEnrich(albums, artists);
-      runningRef.current = false;
+      isRunning = false;
     }
 
     void checkStale();
   }, [autoRefresh, stalenessDays]);
 }
 
-export async function runEnrichment(staleDays = 30): Promise<void> {
+export async function runEnrichment(): Promise<void> {
+  if (isRunning) return;
+  isRunning = true;
   const { setEnrichmentPending } = useTagsStore.getState();
   setEnrichmentPending(null);
-  const { albums, artists } = await queryStale(staleDays);
-  await doEnrich(albums, artists);
+  try {
+    const db = await getDb();
+    const rows = await db.select<{ value: string }[]>(
+      "SELECT value FROM settings WHERE key = 'tags.staleness_days'",
+      []
+    );
+    const staleDays = Number(rows[0]?.value) || 30;
+    const { albums, artists } = await queryStale(staleDays);
+    await doEnrich(albums, artists);
+  } finally {
+    isRunning = false;
+  }
 }

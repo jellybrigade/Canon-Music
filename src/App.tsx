@@ -31,6 +31,7 @@ import { useVocabulary } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
+import { invalidateGenreTreeCache } from "./hooks/useGenreTree";
 import { syncLibrary } from "./lib/sync";
 import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
 import { stripServerPrefix } from "./lib/ids";
@@ -382,6 +383,7 @@ export default function App() {
           setSyncError(`Sync partial — failed to fetch tracks for ${parts.join(" and ")}.`);
         }
         void queryClient.invalidateQueries({ queryKey: ["albums"] });
+        invalidateGenreTreeCache();
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: ["artists"] });
           void queryClient.invalidateQueries({ queryKey: ["genres"] });
