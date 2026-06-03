@@ -18,6 +18,7 @@ import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
 import type { RadioMode, CurrentTrack } from "../store/player";
 import { extractAccent } from "../lib/artColor";
+import { stringToColor } from "../lib/color";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../lib/ids";
@@ -25,6 +26,7 @@ import { SearchResults } from "./SearchResults";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "../styles/home.css";
+import "../styles/genres.css";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -160,15 +162,6 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
     [result[i], result[j]] = [result[j]!, result[i]!];
   }
   return result;
-}
-
-function stringToColor(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = ((hash % 360) + 360) % 360;
-  return `hsl(${hue}, 48%, 32%)`;
 }
 
 function buildForYouGroups(

@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -13,6 +13,7 @@ const CommandPalette = lazy(() => import("./components/CommandPalette").then((m)
 const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
+const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m) => ({ default: m.NowPlayingView })));
@@ -54,7 +55,7 @@ import "./styles/base.css";
 import "./App.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
+type View = "home" | "nowplaying" | "library" | "artists" | "genres" | "playlists" | "tags" | "settings";
 
 export default function App() {
   useTrackEndedListener();
@@ -203,6 +204,7 @@ export default function App() {
     { id: "nowplaying", label: "Now Playing", icon: <Headphones size={24} /> },
     { id: "library", label: "Library", icon: <Music size={24} /> },
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
+    { id: "genres", label: "Genres", icon: <Layers size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: unmappedCount || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
@@ -267,6 +269,32 @@ export default function App() {
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     await playQueue([track], streamUrlFn, 0);
     startRadio(track, mode);
+  }
+
+  async function handlePlayGenre(canonicalId: string) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    // Include ancestor rows so selecting a parent category plays its entire subtree.
+    const rows = await db.select<TrackRow[]>(
+      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+       FROM tracks t
+       JOIN albums a ON t.album_id = a.id
+       JOIN album_genres ag ON ag.album_id = a.id
+       WHERE ag.canonical_id = ?
+       ORDER BY RANDOM()`,
+      [canonicalId]
+    );
+    if (rows.length === 0) return;
+    const streamUrlFn = (tr: CurrentTrack) =>
+      getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    const tracks: CurrentTrack[] = rows.map((t) => ({
+      id: t.id, title: t.title, artist: t.artist, duration: t.duration,
+      coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
+      artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+    }));
+    await playQueue(tracks, streamUrlFn, 0);
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
@@ -700,6 +728,21 @@ export default function App() {
               </>
             )}
           </main>
+        );
+
+      case "genres":
+        return (
+          <Suspense fallback={null}>
+            <main className={`library${queueClass}`}>
+              <GenreView
+                onSelectGenre={(canonicalId) => {
+                  setCanonicalIdFilters([canonicalId]);
+                  setView("library");
+                }}
+                onPlayGenre={(canonicalId) => { void handlePlayGenre(canonicalId); }}
+              />
+            </main>
+          </Suspense>
         );
 
       case "playlists":

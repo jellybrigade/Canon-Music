@@ -1,0 +1,367 @@
+/* ── Genre Cards (used by HomeView Featured Genres) ─────────────────────── */
+
+.genre-card-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.genre-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px 9px 14px;
+  border-radius: 8px;
+  background: var(--genre-color, #2a2a2a);
+  min-width: 110px;
+  max-width: 200px;
+  flex: 1 1 130px;
+  cursor: default;
+  overflow: hidden;
+  transition: filter 0.15s;
+}
+
+.genre-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+}
+
+.genre-card:hover {
+  filter: brightness(1.18);
+}
+
+.genre-card__name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.genre-card__play {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.genre-card:hover .genre-card__play {
+  opacity: 1;
+}
+
+.genre-card__play:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+/* ── Genre View Page ──────────────────────────────────────────────────────── */
+
+.genre-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  padding: 24px 28px 0;
+}
+
+.genre-view__loading {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  padding: 32px 0;
+}
+
+/* ── Section tabs ── */
+
+.genre-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  flex-shrink: 0;
+}
+
+.genre-tab {
+  padding: 6px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.genre-tab:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.genre-tab--active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+/* ── Search ── */
+
+.genre-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-shrink: 0;
+}
+
+.genre-search__icon {
+  position: absolute;
+  left: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+
+.genre-search__input {
+  width: 280px;
+  padding: 7px 32px 7px 32px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.genre-search__input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.genre-search__input::placeholder {
+  color: rgba(255, 255, 255, 0.28);
+}
+
+.genre-search__clear {
+  position: absolute;
+  left: 256px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  padding: 2px;
+}
+
+.genre-search__clear:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* ── Breadcrumb ── */
+
+.genre-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 12px;
+  flex-shrink: 0;
+  min-height: 22px;
+}
+
+.genre-breadcrumb__item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.genre-breadcrumb__sep {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.85rem;
+  margin: 0 2px;
+}
+
+.genre-breadcrumb__node {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.genre-breadcrumb__node:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ── Miller Columns ── */
+
+.genre-columns {
+  display: flex;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  margin-bottom: 24px;
+}
+
+/* Each column takes equal share of available space, minimum 240px.
+   Rightmost columns compress first as space shrinks. */
+.genre-column {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.genre-column:last-child {
+  border-right: none;
+}
+
+/* ── Column rows ── */
+
+.genre-col-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s;
+  min-height: 44px;
+}
+
+.genre-col-row:hover {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.genre-col-row--selected {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.genre-col-row--selected:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.genre-col-name {
+  flex: 1;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.genre-col-row--selected .genre-col-name {
+  color: #fff;
+  font-weight: 500;
+}
+
+.genre-col-count {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+/* Fixed-width chevron slot so count stays aligned on all rows */
+.genre-col-chevron {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+  line-height: 1;
+}
+
+.genre-col-chevron--hidden {
+  visibility: hidden;
+}
+
+.genre-col-row--selected .genre-col-chevron {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Hover-only action buttons ── */
+/* Use div not span — avoids WebKit opacity compositing quirks with SVG children */
+
+.genre-col-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  visibility: hidden;
+}
+
+.genre-col-row:hover .genre-col-actions {
+  visibility: visible;
+}
+
+.genre-col-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  flex-shrink: 0;
+}
+
+.genre-col-action-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+
+.genre-col-action-btn--play:hover {
+  background: rgba(79, 193, 138, 0.25);
+  color: #4fc18a;
+}
+
+/* ── Search results ── */
+
+.genre-search-results {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 24px;
+}
+
+.genre-search-results__empty {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.9rem;
+  padding: 20px 0;
+}
+
+.genre-search-result-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.genre-col-breadcrumb {
+  font-size: 0.73rem;
+  color: rgba(255, 255, 255, 0.28);
+  flex-shrink: 0;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
