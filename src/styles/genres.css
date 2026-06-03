@@ -3,71 +3,31 @@
 .genre-card-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
 }
 
 .genre-card {
-  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px 10px 9px 14px;
-  border-radius: 8px;
-  background: var(--genre-color, #2a2a2a);
-  min-width: 110px;
-  max-width: 200px;
-  flex: 1 1 130px;
-  cursor: default;
-  overflow: hidden;
-  transition: filter 0.15s;
-}
-
-.genre-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.04);
-  pointer-events: none;
+  padding: 6px 12px;
+  border-radius: 100px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+  flex: 0 0 auto;
 }
 
 .genre-card:hover {
-  filter: brightness(1.18);
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .genre-card__name {
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-.genre-card__play {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.9);
-  opacity: 0;
-  transition: opacity 0.15s, background 0.15s;
-}
-
-.genre-card:hover .genre-card__play {
-  opacity: 1;
-}
-
-.genre-card__play:hover {
-  background: rgba(255, 255, 255, 0.28);
 }
 
 /* ── Genre View Page ──────────────────────────────────────────────────────── */
@@ -77,7 +37,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding: 24px 28px 0;
+  padding: 24px 28px;
 }
 
 .genre-view__loading {
@@ -217,7 +177,6 @@
   overflow-y: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  margin-bottom: 24px;
 }
 
 /* Width set via inline style by GenreView after DOM measurement (useLayoutEffect).
@@ -240,10 +199,13 @@
   background: transparent;
 }
 .genre-column::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.14);
+  background: transparent;
   border-radius: 2px;
 }
-.genre-column::-webkit-scrollbar-thumb:hover {
+.genre-column:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+}
+.genre-column:hover::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.28);
 }
 
@@ -357,7 +319,6 @@
 .genre-search-results {
   flex: 1;
   overflow-y: auto;
-  margin-bottom: 24px;
 }
 
 .genre-search-results__empty {

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
@@ -183,6 +184,27 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const [showWaveform] = useSetting("player.show_waveform", "false");
   const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
 
+  // Downsample to 80 bars for the overlay — reduces DOM nodes from 200 and cuts jank.
+  // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.
+  const overlayPeaks = useMemo(() => {
+    if (!waveformPeaks) return null;
+    const TARGET = 80;
+    if (waveformPeaks.length <= TARGET) return waveformPeaks;
+    const ratio = waveformPeaks.length / TARGET;
+    return Array.from({ length: TARGET }, (_, i) => {
+      const start = Math.floor(i * ratio);
+      const end = Math.floor((i + 1) * ratio);
+      let sum = 0;
+      for (let j = start; j < end; j++) sum += waveformPeaks[j] ?? 0;
+      return sum / (end - start);
+    });
+  }, [waveformPeaks]);
+
+  const overlayFilledCount = useMemo(
+    () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
+    [progress, overlayPeaks]
+  );
+
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
     : currentTrack?.coverArtUrl ?? null;
@@ -358,13 +380,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               style={{ cursor: duration > 0 ? "pointer" : "default" }}
             >
               {useWaveform ? (
-                waveformPeaks!.map((peak, i) => (
-                  <div
-                    key={i}
-                    className={`now-playing-waveform-bar${i / waveformPeaks!.length < progress ? " now-playing-waveform-bar--filled" : ""}`}
-                    style={{ "--peak": peak } as React.CSSProperties}
-                  />
-                ))
+                <WaveformBars
+                  peaks={overlayPeaks!}
+                  filledCount={overlayFilledCount}
+                  barClass="now-playing-waveform-bar"
+                  filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
+                />
               ) : (
                 <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
               )}

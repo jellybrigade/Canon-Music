@@ -1,18 +1,95 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer,
 } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
+import { useSetting } from "../hooks/useSetting";
 import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
+import { ContextMenu } from "./ContextMenu";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
+
+const PEAK_HOLD_FRAMES = 20; // at ~20fps
+const PEAK_DECAY = 0.95;
+const METER_FRAME_SKIP = 3; // invoke IPC every 3rd rAF → ~20fps
+
+function PeakMeter({ isPlaying }: { isPlaying: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const rafRef = useRef<number | null>(null);
+  const peakHold = useRef(0);
+  const peakFrames = useRef(0);
+  const frameCount = useRef(0);
+
+  const draw = useCallback(() => {
+    frameCount.current++;
+    if (frameCount.current % METER_FRAME_SKIP === 0) {
+      invoke<number>("audio_get_level")
+        .then((rms) => {
+          const canvas = canvasRef.current;
+          if (!canvas) return;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) return;
+          const w = canvas.width;
+          const h = canvas.height;
+
+          if (rms >= peakHold.current) {
+            peakHold.current = rms;
+            peakFrames.current = PEAK_HOLD_FRAMES;
+          } else {
+            if (peakFrames.current > 0) {
+              peakFrames.current--;
+            } else {
+              peakHold.current *= PEAK_DECAY;
+            }
+          }
+
+          ctx.clearRect(0, 0, w, h);
+          // Bar — RMS is typically 0..0.3, scale up for visibility
+          const barH = Math.round(rms * h * 4);
+          const accent = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#a78bfa";
+          ctx.fillStyle = accent;
+          ctx.fillRect(0, h - Math.min(barH, h), w, Math.min(barH, h));
+          // Peak indicator
+          const peakY = h - Math.round(peakHold.current * h * 4);
+          if (peakY >= 0 && peakY < h) {
+            ctx.fillRect(0, Math.max(0, peakY - 1), w, 2);
+          }
+        })
+        .catch(() => {});
+    }
+    rafRef.current = requestAnimationFrame(draw);
+  }, []);
+
+  useEffect(() => {
+    if (isPlaying) {
+      rafRef.current = requestAnimationFrame(draw);
+    } else {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+      // Clear canvas when stopped
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      peakHold.current = 0;
+      peakFrames.current = 0;
+    }
+    return () => {
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [isPlaying, draw]);
+
+  return <canvas ref={canvasRef} className="peak-meter" width={4} height={28} aria-hidden />;
+}
 
 interface Props {
   onNowPlaying: () => void;
@@ -42,6 +119,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const pullProgress        = useTagsStore((s) => s.pullProgress);
   const enrichmentPending   = useTagsStore((s) => s.enrichmentPending);
   const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
+  const [, setSnoozeUntil] = useSetting("enrichment.snooze_until", "");
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
@@ -49,6 +127,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
+  const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
   const artThumbRef = useRef<HTMLButtonElement>(null);
@@ -195,6 +274,36 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           >
             Dismiss
           </button>
+          <button
+            className="normalizing-bar__more"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setSnoozeMenu({ x: r.left, y: r.bottom });
+            }}
+          >
+            …
+          </button>
+          {snoozeMenu && (
+            <ContextMenu x={snoozeMenu.x} y={snoozeMenu.y} onClose={() => setSnoozeMenu(null)}>
+              {([
+                ["Snooze 1 day", String(Math.floor(Date.now() / 1000) + 86400)],
+                ["Snooze 1 week", String(Math.floor(Date.now() / 1000) + 604800)],
+                ["Snooze 1 month", String(Math.floor(Date.now() / 1000) + 2592000)],
+                ["Never show again", "forever"],
+              ] as [string, string][]).map(([label, value]) => (
+                <button
+                  key={label}
+                  onClick={() => {
+                    void setSnoozeUntil(value);
+                    setEnrichmentPending(null);
+                    setSnoozeMenu(null);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </ContextMenu>
+          )}
         </div>
       )}
       {pullProgress && (
@@ -278,7 +387,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             </button>
           </div>
 
-          <PlayerProgress />
+          <div className="player-progress-row">
+            <PlayerProgress />
+            <PeakMeter isPlaying={isPlaying} />
+          </div>
         </div>
 
         <div className="player-section player-section--right">

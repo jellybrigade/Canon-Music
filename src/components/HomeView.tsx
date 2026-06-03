@@ -13,12 +13,11 @@ import type { AlbumStatRow } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
 import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
-import { useGenres } from "../hooks/useGenres";
+import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
 import type { RadioMode, CurrentTrack } from "../store/player";
 import { extractAccent } from "../lib/artColor";
-import { stringToColor } from "../lib/color";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../lib/ids";
@@ -70,7 +69,7 @@ const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
 ];
 
 const DEFAULT_FOR_YOU_ENABLED = new Set([
-  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved",
+  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved", "almost-done",
 ]);
 
 const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES.map(c => ({
@@ -563,23 +562,20 @@ function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionPro
   return (
     <section className="home-section">
       <div className="home-section__header">
-        <h2 className="home-section__title">Genres</h2>
+        <h2 className="home-section__title">Genres from recent plays</h2>
       </div>
       <div className="genre-card-grid">
         {genres.slice(0, 18).map(g => (
           <div
             key={g.canonical_id}
             className="genre-card"
-            style={{ "--genre-color": stringToColor(g.name) } as React.CSSProperties}
+            role="button"
+            tabIndex={0}
+            onClick={() => onPlayGenre(g.canonical_id, g.name)}
+            onKeyDown={e => (e.key === "Enter" || e.key === " ") && onPlayGenre(g.canonical_id, g.name)}
+            aria-label={`Play ${g.name} radio`}
           >
             <span className="genre-card__name">{g.name}</span>
-            <button
-              className="genre-card__play"
-              onClick={() => onPlayGenre(g.canonical_id, g.name)}
-              aria-label={`Play ${g.name} radio`}
-            >
-              <Play size={10} fill="currentColor" />
-            </button>
           </div>
         ))}
       </div>
@@ -712,7 +708,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
   const { data: recentlyReleasedRaw } = useRecentlyReleasedAlbums();
-  const { data: allGenres } = useGenres();
+  const { genres: recentGenres } = useRecentGenres();
   const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
@@ -777,10 +773,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const vaultItems = useMemo(() => vault.slice(0, 20) as AlbumRow[], [vault]);
 
-  const featuredGenres = useMemo(
-    () => allGenres ? seededShuffle(allGenres.filter(g => g.album_count >= 2), forYouSeed) : [],
-    [allGenres, forYouSeed],
-  );
+  const featuredGenres = recentGenres;
 
   const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
     const db = await getDb();
@@ -870,6 +863,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             />
           )}
 
+          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+
           <ForYouRail
             key={forYouSeed}
             groups={forYouGroups}
@@ -889,7 +884,6 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
           <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
         </>
       )}
       {contextMenu && (
