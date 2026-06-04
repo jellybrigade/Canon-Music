@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -52,6 +52,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
+  const [moreOpen, setMoreOpen] = useState(false);
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
@@ -109,6 +110,13 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
       (pullProgress || enrichmentPending) ? "24px" : "0px"
     );
   }, [pullProgress, enrichmentPending]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMoreOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
 
   useEffect(() => {
     if (!artOpen) return;
@@ -401,7 +409,86 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label="Volume"
             />
           </div>
+          <button
+            className={`player-btn player-btn--icon player-more-btn${moreOpen ? " player-btn--active" : ""}`}
+            onClick={() => setMoreOpen((o) => !o)}
+            title="More controls"
+            aria-label="More controls"
+          >
+            <ChevronUp size={18} style={moreOpen ? { transform: "rotate(180deg)" } : undefined} />
+          </button>
         </div>
+        {moreOpen && (
+          <div className="player-more-panel">
+            <button
+              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
+              onClick={toggleShuffle}
+              title="Shuffle"
+              aria-label="Shuffle"
+            >
+              <Shuffle size={18} />
+            </button>
+            <button
+              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
+              onClick={() => void toggleRepeat()}
+              title={repeatLabel}
+              aria-label={repeatLabel}
+            >
+              {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
+            </button>
+            {currentTrack && serverWithCred && (
+              <button
+                className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
+                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+                title={isLoved ? "Unlove" : "Love"}
+                aria-label={isLoved ? "Unlove" : "Love"}
+              >
+                <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+              </button>
+            )}
+            <button
+              className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
+              onClick={() => {
+                const pbh = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--player-bar-height")) || 92;
+                setTimerPopoverPos({ right: 8, bottom: pbh + 56 });
+                setTimerOpen((o) => !o);
+                setMoreOpen(false);
+              }}
+              title={timerActive ? (remaining || "End of track") : "Sleep timer"}
+              aria-label="Sleep timer"
+            >
+              {timerActive && remaining ? (
+                <span className="player-timer-remaining">{remaining}</span>
+              ) : (
+                <Timer size={18} />
+              )}
+            </button>
+            <button
+              className="player-btn player-btn--icon"
+              onClick={() => { onNowPlaying(); setMoreOpen(false); }}
+              title="Now playing"
+              aria-label="Now playing"
+            >
+              <Headphones size={18} />
+            </button>
+            <div
+              className="player-more-volume"
+              onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
+            >
+              <Volume2 size={16} aria-hidden />
+              <input
+                type="range"
+                className="player-volume-slider"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => void setVolume(parseFloat(e.target.value))}
+                aria-label="Volume"
+              />
+            </div>
+          </div>
+        )}
       </div>}
 
       {timerOpen && (
