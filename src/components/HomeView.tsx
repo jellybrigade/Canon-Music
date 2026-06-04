@@ -132,7 +132,7 @@ function buildSpotlight(
 
     const fromFrequent = frequentRaw?.find(a => {
       const id = `${serverId}:${a.id}`;
-      return a.artist === currentArtist && id !== currentAlbumId;
+      return a.artist === currentArtist && id !== currentAlbumId && !!a.coverArt;
     });
     if (fromFrequent) return { kicker: `More from ${currentArtist}`, album: naviToAlbumRow(fromFrequent, serverId) };
 

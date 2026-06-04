@@ -220,6 +220,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
       const rawPeaks = new Array<number>(200).fill(0);
       let runningMax = 0;
+      let filledCount = 0;
 
       const unlistenChunk = await listen<{ track_id: string; offset: number; peaks: number[] }>(
         "waveform_chunk",
@@ -231,9 +232,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             rawPeaks[offset + i] = v;
             if (v > runningMax) runningMax = v;
           }
+          filledCount = Math.max(filledCount, offset + peaks.length);
           if (get().currentTrack?.id !== trackId) return;
-          const normalized = runningMax > 0 ? rawPeaks.map((p) => p / runningMax) : rawPeaks.slice();
-          set({ waveformPeaks: normalized });
+          const scale = runningMax > 0 ? 1 / runningMax : 1;
+          // Tile the known bars across all 200 positions so a rough shape appears immediately.
+          // Once all bars are filled, waveform_complete replaces this with the accurate version.
+          const display = new Array<number>(200);
+          for (let i = 0; i < 200; i++) {
+            display[i] = (rawPeaks[Math.floor(i * filledCount / 200)] ?? 0) * scale;
+          }
+          set({ waveformPeaks: display });
         }
       );
 

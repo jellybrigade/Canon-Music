@@ -454,7 +454,7 @@ async fn audio_extract_waveform(
         };
         let bucket_size = (estimated_frames / BUCKET_COUNT).max(1);
 
-        const EMIT_BATCH: usize = 10; // emit every N bars to reduce IPC round-trips
+        const EMIT_BATCH: usize = 2; // small batch so first bars appear quickly; later bars still batched
 
         let mut raw_peaks: Vec<f32> = Vec::with_capacity(BUCKET_COUNT);
         let mut bucket_sum_sq = 0.0f32;
