@@ -411,3 +411,37 @@
   aspect-ratio: 1;
   object-fit: cover;
 }
+
+/* ── Narrow player bar (≤640px) ── */
+@media (max-width: 640px) {
+  .player-bar {
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+  }
+
+  .player-section--left {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .player-section--center {
+    flex: 0 0 auto;
+  }
+
+  .player-section--right {
+    flex: 0 0 auto;
+    gap: 0.25rem;
+  }
+
+  .player-btn--hide-narrow,
+  .player-stars--hide-narrow,
+  .player-volume,
+  .player-progress-row {
+    display: none !important;
+  }
+
+  .player-thumb {
+    width: 42px;
+    height: 42px;
+  }
+}

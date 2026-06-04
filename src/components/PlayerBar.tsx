@@ -263,7 +263,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
         <div className="player-section player-section--center">
           <div className="player-controls">
             <button
-              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
               title="Shuffle"
               aria-label="Shuffle"
@@ -301,7 +301,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               <SkipForward size={24} />
             </button>
             <button
-              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
@@ -321,7 +321,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           {currentTrack && serverWithCred && (
             <>
               <button
-                className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
+                className={`player-btn player-btn--icon player-btn--hide-narrow${isLoved ? " player-btn--active" : ""}`}
                 onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
                 title={isLoved ? "Unlove" : "Love"}
                 aria-label={isLoved ? "Unlove" : "Love"}
@@ -329,7 +329,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
                 <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
               </button>
               <div
-                className="player-stars"
+                className="player-stars player-stars--hide-narrow"
                 onMouseLeave={() => setHoverRating(0)}
               >
                 {[1, 2, 3, 4, 5].map((star) => {
@@ -352,7 +352,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           )}
           <button
             ref={timerBtnRef}
-            className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
+            className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}
             onClick={() => {
               if (timerBtnRef.current) {
                 const r = timerBtnRef.current.getBoundingClientRect();
@@ -370,7 +370,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             )}
           </button>
           <button
-            className="player-btn player-btn--icon"
+            className="player-btn player-btn--icon player-btn--hide-narrow"
             onClick={onNowPlaying}
             title="Now playing"
             aria-label="Now playing"
