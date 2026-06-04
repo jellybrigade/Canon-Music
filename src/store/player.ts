@@ -235,12 +235,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           filledCount = Math.max(filledCount, offset + peaks.length);
           if (get().currentTrack?.id !== trackId) return;
           const scale = runningMax > 0 ? 1 / runningMax : 1;
-          // Tile the known bars across all 200 positions so a rough shape appears immediately.
-          // Once all bars are filled, waveform_complete replaces this with the accurate version.
-          const display = new Array<number>(200);
-          for (let i = 0; i < 200; i++) {
-            display[i] = (rawPeaks[Math.floor(i * filledCount / 200)] ?? 0) * scale;
-          }
+          // Show each bar at its actual position; unfilled bars get a stub so the load direction is clear.
+          const display = rawPeaks.map((v, i) => i < filledCount ? v * scale : 0.1);
           set({ waveformPeaks: display });
         }
       );
