@@ -127,7 +127,10 @@ export function useVocabulary() {
            tm.match_type AS mapping_match_type,
            COALESCE(tm.locked, 0) AS locked
          FROM track_tags tt
-         LEFT JOIN tag_mappings tm ON tm.raw_value = tt.raw_value AND tm.kind = tt.kind
+         LEFT JOIN tag_mappings tm
+           ON LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+            = LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
+           AND tm.kind = tt.kind
          GROUP BY tt.raw_value, tt.kind
          UNION ALL
          SELECT
@@ -140,7 +143,10 @@ export function useVocabulary() {
            COALESCE(tm.locked, 0) AS locked
          FROM tag_mappings tm
          WHERE NOT EXISTS (
-           SELECT 1 FROM track_tags tt WHERE tt.raw_value = tm.raw_value AND tt.kind = tm.kind
+           SELECT 1 FROM track_tags tt
+           WHERE LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
+               = LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+             AND tt.kind = tm.kind
          )
          ORDER BY track_count DESC, raw_value`
       );
@@ -197,15 +203,35 @@ export function useVocabAlbums(rawValue: string, kind: TagKind) {
     queryKey: ["vocab", "albums", rawValue, kind],
     queryFn: async () => {
       const db = await getDb();
-      type Row = { album_id: string; album_name: string; track_count: number };
+      type Row = { album_id: string; album_name: string; track_count: number; artwork_url: string | null };
       return db.select<Row[]>(
-        `SELECT a.id as album_id, a.name as album_name, COUNT(tt.track_id) as track_count
+        `SELECT a.id as album_id, a.name as album_name, a.artwork_url,
+                COUNT(tt.track_id) as track_count
          FROM track_tags tt
          JOIN tracks t ON tt.track_id = t.id
          JOIN albums a ON t.album_id = a.id
          WHERE tt.raw_value = ? AND tt.kind = ?
          GROUP BY a.id, a.name
          ORDER BY track_count DESC, a.name`,
+        [rawValue, kind]
+      );
+    },
+    enabled: !!rawValue,
+  });
+}
+
+export function useUnresolvedAlbums(rawValue: string, kind: TagKind) {
+  return useQuery({
+    queryKey: ["unresolved", "albums", rawValue, kind],
+    queryFn: async () => {
+      const db = await getDb();
+      type Row = { album_id: string; album_name: string; artwork_url: string | null };
+      return db.select<Row[]>(
+        `SELECT a.id as album_id, a.name as album_name, a.artwork_url
+         FROM album_unresolved_genres aug
+         JOIN albums a ON aug.album_id = a.id
+         WHERE aug.raw_value = ? AND aug.kind = ?
+         LIMIT 4`,
         [rawValue, kind]
       );
     },
@@ -310,7 +336,9 @@ export function useUnresolvedGenres() {
         FROM album_unresolved_genres aug
         WHERE NOT EXISTS (
           SELECT 1 FROM tag_mappings tm
-          WHERE tm.raw_value = aug.raw_value AND tm.kind = aug.kind
+          WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+              = LOWER(REPLACE(REPLACE(TRIM(aug.raw_value), '-', ' '), '_', ' '))
+            AND tm.kind = aug.kind
         )
         GROUP BY aug.raw_value, aug.kind
         ORDER BY album_count DESC, aug.raw_value
