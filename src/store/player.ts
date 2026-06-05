@@ -14,7 +14,7 @@ export interface CurrentTrack {
   albumId?: string | null;
 }
 
-export type RepeatMode = "off" | "repeat-all" | "repeat-one";
+type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
 export type RadioMode =
   | "curated"

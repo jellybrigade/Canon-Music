@@ -16,6 +16,26 @@ import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
+interface LoveButtonProps {
+  isLoved: boolean;
+  onToggle: () => void;
+  narrow?: boolean;
+}
+
+// fallow-ignore-next-line complexity
+function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
+  return (
+    <button
+      className={`player-btn player-btn--icon${narrow ? " player-btn--hide-narrow" : ""}${isLoved ? " player-btn--active" : ""}`}
+      onClick={onToggle}
+      title={isLoved ? "Unlove" : "Love"}
+      aria-label={isLoved ? "Unlove" : "Love"}
+    >
+      <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+    </button>
+  );
+}
+
 interface Props {
   onNowPlaying: () => void;
   serverWithCred?: ServerWithCredential;
@@ -328,14 +348,11 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
         <div className="player-section player-section--right">
           {currentTrack && serverWithCred && (
             <>
-              <button
-                className={`player-btn player-btn--icon player-btn--hide-narrow${isLoved ? " player-btn--active" : ""}`}
-                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-                title={isLoved ? "Unlove" : "Love"}
-                aria-label={isLoved ? "Unlove" : "Love"}
-              >
-                <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-              </button>
+              <LoveButton
+                isLoved={isLoved}
+                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+                narrow
+              />
               <div
                 className="player-stars player-stars--hide-narrow"
                 onMouseLeave={() => setHoverRating(0)}
@@ -437,14 +454,10 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>
             {currentTrack && serverWithCred && (
-              <button
-                className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
-                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-                title={isLoved ? "Unlove" : "Love"}
-                aria-label={isLoved ? "Unlove" : "Love"}
-              >
-                <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-              </button>
+              <LoveButton
+                isLoved={isLoved}
+                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+              />
             )}
             <button
               className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}

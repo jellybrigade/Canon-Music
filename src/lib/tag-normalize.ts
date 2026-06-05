@@ -18,7 +18,7 @@ export interface NormalizedTags {
   computed_at: number;
 }
 
-export const STALE_DAYS_DEFAULT = 30;
+const STALE_DAYS_DEFAULT = 30;
 const CAPS = { genres: 6, descriptors: 6, scenes: 4 };
 
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {

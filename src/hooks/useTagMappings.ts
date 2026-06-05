@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { TagKind } from "../lib/canonicalize";
 
-export interface TagMappingRow {
+interface TagMappingRow {
   raw_value: string;
   kind: TagKind;
   canonical_id: string;
@@ -290,32 +290,6 @@ export function useRapToHipHop() {
   });
 
   return { enabled: enabled ?? false, toggle };
-}
-
-export function useAddUserTreeNode() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, name, type, canonical_key, parent_ids }: {
-      id: string;
-      name: string;
-      type: "genre" | "mood" | "category";
-      canonical_key: string;
-      parent_ids: string[];
-    }) => {
-      const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO user_tree_nodes (id, name, type, canonical_key, parent_ids) VALUES (?, ?, ?, ?, ?)",
-        [id, name, type, canonical_key, JSON.stringify(parent_ids)]
-      );
-      const { bustCanonTreeCache } = await import("../lib/canonicalize");
-      bustCanonTreeCache();
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-    },
-  });
 }
 
 export interface UnresolvedGenreRow {

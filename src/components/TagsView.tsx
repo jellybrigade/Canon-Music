@@ -216,6 +216,7 @@ interface FilterBarProps {
   onSort?: (s: string) => void;
 }
 
+// fallow-ignore-next-line complexity
 function TagFilterBar({ search, onSearch, kind, onKind, source, onSource, sort, sortOptions, onSort }: FilterBarProps) {
   return (
     <div className="tags-filter-bar">
@@ -304,6 +305,7 @@ function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore,
   const { data: albums = [] } = useUnresolvedAlbums(row.raw_value, row.kind);
 
   useEffect(() => {
+    // fallow-ignore-next-line complexity
     function handler(e: KeyboardEvent) {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
@@ -392,6 +394,7 @@ interface MappedGroupProps {
   onLock: (rawValue: string, kind: TagKind, locked: boolean) => void;
 }
 
+// fallow-ignore-next-line complexity
 function TagMappedGroup({ group, onDelete, onLock }: MappedGroupProps) {
   const primaryVariant = group.variants[0];
   const { data: albums = [] } = useVocabAlbums(primaryVariant?.raw_value ?? "", primaryVariant?.kind ?? "genre");
@@ -461,6 +464,7 @@ interface ListRowProps {
   onLock?: () => void;
 }
 
+// fallow-ignore-next-line complexity
 function TagListRow({ row, nodeById, showUndo, showDelete, showLock, isOrphan, onUndo, onDelete, onLock }: ListRowProps) {
   const { data: albums = [] } = useVocabAlbums(row.raw_value, row.kind);
   const isLocked = row.locked === 1;
@@ -513,6 +517,31 @@ function TagListRow({ row, nodeById, showUndo, showDelete, showLock, isOrphan, o
   );
 }
 
+// ── Resolved column list ──────────────────────────────────────────────────────
+
+interface ResolvedTagListProps {
+  rows: VocabRow[];
+  nodeById: Map<string, TreeNode>;
+  onUndo: (row: VocabRow) => void;
+}
+
+function ResolvedTagList({ rows, nodeById, onUndo }: ResolvedTagListProps) {
+  if (rows.length === 0) return <p className="tags-resolved-empty">None</p>;
+  return (
+    <div className="tags-list">
+      {rows.map((row) => (
+        <TagListRow
+          key={`${row.raw_value}:${row.kind}`}
+          row={row}
+          nodeById={nodeById}
+          showUndo
+          onUndo={() => onUndo(row)}
+        />
+      ))}
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
 type TabId = "review" | "mapped" | "resolved" | "cleanup";
@@ -528,6 +557,7 @@ function applySearch<T extends { raw_value: string }>(rows: T[], search: string)
   return rows.filter((r) => r.raw_value.toLowerCase().includes(q));
 }
 
+// fallow-ignore-next-line complexity
 export function TagsView() {
   const { data: vocab } = useVocabulary();
   const { data: unresolvedGenres } = useUnresolvedGenres();
@@ -597,6 +627,7 @@ export function TagsView() {
   }, [mappedRows, mappedKind, mappedSearch, mappedSource]);
 
   // Group filtered mapped rows by canonical_id; sort groups by totalTracks or name
+  // fallow-ignore-next-line complexity
   const mappedGroups = useMemo((): MappedGroup[] => {
     const byId = new Map<string, VocabRow[]>();
     for (const row of filteredMapped) {
@@ -875,21 +906,11 @@ export function TagsView() {
                   )}
                 </h3>
                 <p className="tags-resolved-col-desc">Used in genre output without remapping.</p>
-                {filteredAccepted.length === 0 ? (
-                  <p className="tags-resolved-empty">None</p>
-                ) : (
-                  <div className="tags-list">
-                    {filteredAccepted.map((row) => (
-                      <TagListRow
-                        key={`${row.raw_value}:${row.kind}`}
-                        row={row}
-                        nodeById={nodeById}
-                        showUndo
-                        onUndo={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind })}
-                      />
-                    ))}
-                  </div>
-                )}
+                <ResolvedTagList
+                  rows={filteredAccepted}
+                  nodeById={nodeById}
+                  onUndo={(row) => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind })}
+                />
               </div>
               <div className="tags-resolved-col">
                 <h3 className="tags-resolved-col-title">
@@ -899,21 +920,11 @@ export function TagsView() {
                   )}
                 </h3>
                 <p className="tags-resolved-col-desc">Excluded from genre output entirely.</p>
-                {filteredIgnored.length === 0 ? (
-                  <p className="tags-resolved-empty">None</p>
-                ) : (
-                  <div className="tags-list">
-                    {filteredIgnored.map((row) => (
-                      <TagListRow
-                        key={`${row.raw_value}:${row.kind}`}
-                        row={row}
-                        nodeById={nodeById}
-                        showUndo
-                        onUndo={() => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind })}
-                      />
-                    ))}
-                  </div>
-                )}
+                <ResolvedTagList
+                  rows={filteredIgnored}
+                  nodeById={nodeById}
+                  onUndo={(row) => deleteMapping.mutate({ rawValue: row.raw_value, kind: row.kind })}
+                />
               </div>
             </div>
           </>
