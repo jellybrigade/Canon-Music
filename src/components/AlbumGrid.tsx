@@ -1,11 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Heart, AlertTriangle, CircleHelp } from "lucide-react";
+import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
 import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
-import { useOffTreeAlbumIds } from "../hooks/useTrackTags";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
 import { useSetting } from "../hooks/useSetting";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -37,8 +36,6 @@ interface Props {
 export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
-  const { data: offTreeIds } = useOffTreeAlbumIds();
-  const offTreeSet = useMemo(() => new Set(offTreeIds ?? []), [offTreeIds]);
   const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
@@ -221,11 +218,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                         strokeWidth={2}
                       />
                     </button>
-                    {offTreeSet.has(album.id) && (
-                      <div className="album-off-tree-badge" title="Has unmapped genre tags — open Tags view to resolve">
-                        <AlertTriangle size={13} />
-                      </div>
-                    )}
+
                     {mbAutoIdentify === "true" && failedLookupSet.has(album.id) && (
                       <div className="album-unidentified-badge" title="Couldn't match on MusicBrainz — click to identify manually">
                         <CircleHelp size={13} />

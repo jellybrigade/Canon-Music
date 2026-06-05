@@ -10,7 +10,7 @@ export interface LastfmTagResult {
 
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const MAX_TAGS = 10;
-const MIN_TAG_COUNT_DEFAULT = 25;
+const MIN_TAG_COUNT_DEFAULT = 5;
 // ≤ 4 req/s to stay well within Last.fm rate limit
 const rateLimit = makeRateLimiter(250);
 
@@ -164,7 +164,12 @@ export async function fetchArtistImage(artist: string): Promise<string | null> {
   return info.imageUrl;
 }
 
-export async function fetchArtistTopTracks(artist: string): Promise<string[]> {
+export interface LastfmTopTrack {
+  name: string;
+  playcount: number;
+}
+
+export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTrack[]> {
   const apiKey = await getApiKey();
   if (!apiKey) return [];
   await rateLimit();
@@ -179,11 +184,14 @@ export async function fetchArtistTopTracks(artist: string): Promise<string[]> {
     const res = await fetch(url.toString());
     if (!res.ok) return [];
     const data = (await res.json()) as {
-      toptracks?: { track?: Array<{ name: string }> };
+      toptracks?: { track?: Array<{ name: string; playcount?: string }> };
       error?: number;
     };
     if (data.error) return [];
-    return (data.toptracks?.track ?? []).map((t) => t.name);
+    return (data.toptracks?.track ?? []).map((t) => ({
+      name: t.name,
+      playcount: parseInt(t.playcount ?? "0", 10) || 0,
+    }));
   } catch {
     return [];
   }

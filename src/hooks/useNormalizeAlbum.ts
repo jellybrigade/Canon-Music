@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { readNormalizedTags, normalizeAlbum, isStale, type NormalizedTags } from "../lib/tag-normalize";
 import { useSetting } from "./useSetting";
@@ -13,6 +13,10 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   const [stalenessDays] = useSetting("tags.staleness_days", "30");
   const { data: identity } = useAlbumIdentity(albumId);
   const decrementEnrichmentPending = useTagsStore((s) => s.decrementEnrichmentPending);
+  // undefined = not yet seen (first render); null = seen, no MB genres; string = seen, has MB genres
+  const prevMbGenresJsonRef = useRef<string | null | undefined>(undefined);
+  // Guard: only decrement the enrichment counter once per album mount, regardless of re-runs
+  const decrementedRef = useRef(false);
 
   const query = useQuery({
     queryKey: ["normalized-tags", albumId],
@@ -23,7 +27,15 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
 
   useEffect(() => {
     if (query.isLoading || !albumId) return;
-    if (!isStale(query.data ?? null, Number(stalenessDays) || 30)) return;
+
+    const currentMbGenres = identity?.combined_genres_json ?? null;
+    const mbGenresJustArrived =
+      prevMbGenresJsonRef.current !== undefined &&
+      prevMbGenresJsonRef.current !== currentMbGenres &&
+      currentMbGenres !== null;
+    prevMbGenresJsonRef.current = currentMbGenres;
+
+    if (!mbGenresJustArrived && !isStale(query.data ?? null, Number(stalenessDays) || 30)) return;
 
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {
@@ -40,7 +52,10 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       combinedMbGenres,
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
-      decrementEnrichmentPending();
+      if (!decrementedRef.current) {
+        decrementedRef.current = true;
+        decrementEnrichmentPending();
+      }
     });
   }, [query.isLoading, query.data, albumId, artist, album, queryClient, stalenessDays, identity]);
 

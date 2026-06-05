@@ -1,6 +1,6 @@
 /* ── Queue panel ── */
 .library--queue-open {
-  margin-right: 280px;
+  margin-right: var(--queue-panel-width, 280px);
 }
 
 .queue-panel {
@@ -8,13 +8,28 @@
   top: 0;
   right: 0;
   bottom: var(--player-bar-height);
-  width: 280px;
+  width: var(--queue-panel-width, 280px);
   background-color: var(--bg-elevated);
   border-left: 1px solid var(--border);
   z-index: var(--z-panel);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.queue-panel-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: ew-resize;
+  z-index: 1;
+}
+.queue-panel-resize-handle:hover,
+.queue-panel-resize-handle:active {
+  background: var(--accent);
+  opacity: 0.4;
 }
 
 .queue-panel-header {
