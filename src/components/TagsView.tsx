@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { Lock, Unlock, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import {
@@ -76,17 +77,7 @@ function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreateNode }
     setOpen(true);
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onMouseDown(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [open]);
+  useClickOutside(wrapRef, () => { setOpen(false); setQuery(""); }, open);
 
   if (currentId && currentName) {
     return (
@@ -623,17 +614,7 @@ function NodeModal({ initialName = "", editingNode, treeNodes, onSave, onCancel,
     setParentOpen(true);
   }
 
-  useEffect(() => {
-    if (!parentOpen) return;
-    function onDown(e: MouseEvent) {
-      if (parentWrapRef.current && !parentWrapRef.current.contains(e.target as Node)) {
-        setParentOpen(false);
-        setParentQuery("");
-      }
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [parentOpen]);
+  useClickOutside(parentWrapRef, () => { setParentOpen(false); setParentQuery(""); }, parentOpen);
 
   const previewKey = canonicalKey(name);
 

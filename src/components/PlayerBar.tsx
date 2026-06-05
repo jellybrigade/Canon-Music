@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp,
@@ -84,9 +86,24 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const timerPopoverRef = useRef<HTMLDivElement>(null);
   const [remaining, setRemaining] = useState("");
 
-  const [trackRating, setTrackRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
-  const ratingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClient = useQueryClient();
+  const nativeTrackId =
+    currentTrack && serverWithCred
+      ? stripServerPrefix(currentTrack.id, serverWithCred.server.id)
+      : null;
+  const { data: trackRating = 0 } = useQuery({
+    queryKey: ["trackRating", nativeTrackId],
+    queryFn: () =>
+      fetchTrackRating(
+        serverWithCred!.server.url,
+        serverWithCred!.server.username,
+        serverWithCred!.credential,
+        nativeTrackId!
+      ),
+    enabled: !!nativeTrackId,
+    staleTime: Infinity,
+  });
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -145,17 +162,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [artOpen]);
 
-  useEffect(() => {
-    if (!artOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      const target = e.target as Node;
-      if (artPopoverRef.current?.contains(target)) return;
-      if (artThumbRef.current?.contains(target)) return;
-      setArtOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [artOpen]);
+  useClickOutside([artPopoverRef, artThumbRef], () => setArtOpen(false), artOpen);
 
   // Sleep timer countdown display
   useEffect(() => {
@@ -172,36 +179,14 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
     return () => clearInterval(id);
   }, [sleepTimerEndsAt]);
 
-  // Close timer popover on outside click
-  useEffect(() => {
-    if (!timerOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      const t = e.target as Node;
-      if (timerPopoverRef.current?.contains(t) || timerBtnRef.current?.contains(t)) return;
-      setTimerOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [timerOpen]);
-
-  // Fetch star rating when track changes
-  useEffect(() => {
-    if (!currentTrack || !serverWithCred) { setTrackRating(0); return; }
-    const { server, credential } = serverWithCred;
-    const nativeId = stripServerPrefix(currentTrack.id, server.id);
-    void fetchTrackRating(server.url, server.username, credential, nativeId).then(setTrackRating);
-  }, [currentTrack?.id, serverWithCred]);
+  useClickOutside([timerPopoverRef, timerBtnRef], () => setTimerOpen(false), timerOpen);
 
   function handleStarClick(star: number) {
-    if (!currentTrack || !serverWithCred) return;
+    if (!currentTrack || !serverWithCred || !nativeTrackId) return;
     const newRating = star === trackRating ? 0 : star;
-    setTrackRating(newRating);
-    if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
-    ratingDebounce.current = setTimeout(() => {
-      const { server, credential } = serverWithCred;
-      const nativeId = stripServerPrefix(currentTrack.id, server.id);
-      setRating(server.url, server.username, credential, nativeId, newRating).catch(console.error);
-    }, 100);
+    queryClient.setQueryData(["trackRating", nativeTrackId], newRating);
+    const { server, credential } = serverWithCred;
+    setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(console.error);
   }
 
   const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;

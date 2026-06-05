@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useClickOutside } from "../hooks/useClickOutside";
 import { usePlayerStore, RADIO_MODES } from "../store/player";
 import "./RadioChip.css";
 
@@ -12,16 +13,7 @@ export function RadioChip() {
   const [open, setOpen] = useState(false);
   const chipRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    function handleOutside(e: MouseEvent) {
-      if (chipRef.current && !chipRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open]);
+  useClickOutside(chipRef, () => setOpen(false), open);
 
   if (!radioActive) return null;
 

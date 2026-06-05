@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { useSetting } from "../hooks/useSetting";
@@ -490,14 +491,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     setShowCustomize(s => !s);
   }
 
-  useEffect(() => {
-    if (!showCustomize) return;
-    function handleClickOutside() {
-      setShowCustomize(false);
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showCustomize]);
+  useClickOutside([], () => setShowCustomize(false), showCustomize);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
