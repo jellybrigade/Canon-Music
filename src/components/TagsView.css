@@ -217,6 +217,14 @@
   box-shadow: none;
 }
 
+/* ── Mapped list (2-col grid) ────────────────────────────────────────────── */
+
+.tags-mapped-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 2rem;
+}
+
 /* ── Mapped group ────────────────────────────────────────────────────────── */
 
 .tags-mapped-group {
@@ -506,6 +514,7 @@
 }
 
 .tags-review-card {
+  align-self: start;
   background: var(--bg-card, rgba(255, 255, 255, 0.04));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
   border-radius: 10px;
@@ -546,7 +555,8 @@
 .tags-art-strip {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .tags-art-thumb {
@@ -567,7 +577,7 @@
 .tags-card-actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.125rem;
+  margin-top: 0.25rem;
 }
 
 .tags-card-btn {
@@ -580,6 +590,9 @@
   font-size: 0.75rem;
   font-weight: 500;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: border-color 0.12s, color 0.12s;
   white-space: nowrap;
 }
@@ -651,8 +664,7 @@
 }
 
 .tags-list-row {
-  display: grid;
-  grid-template-columns: 1fr auto auto 1fr auto;
+  display: flex;
   align-items: center;
   gap: 0.75rem;
   padding: 0.4rem 0.25rem;
@@ -669,6 +681,7 @@
   align-items: center;
   gap: 0.25rem;
   visibility: hidden;
+  flex-shrink: 0;
 }
 
 .tags-list-row:hover .tags-list-actions {
@@ -676,33 +689,48 @@
 }
 
 .tags-list-left {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  min-width: 0;
-}
-
-.tags-list-count {
-  text-align: right;
-  white-space: nowrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .tags-list-mapping {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  min-width: 0;
+  flex-shrink: 0;
+  max-width: 40%;
 }
 
 .tags-track-count {
   font-size: 0.75rem;
   color: var(--text-muted, rgba(255, 255, 255, 0.45));
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tags-not-in-library {
   font-size: 0.6875rem;
   color: var(--text-tertiary, rgba(255, 255, 255, 0.25));
   font-style: italic;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tags-direct-badge {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
 }
 
 /* ── Source badge ────────────────────────────────────────────────────────── */

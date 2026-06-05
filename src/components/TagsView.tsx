@@ -259,7 +259,7 @@ function TagReviewCard({ row, treeNodes, onMap, onAccept, onIgnore }: ReviewCard
         {row.album_count} {row.album_count === 1 ? "album" : "albums"}
         {row.sources && <span className="tags-card-source"> · {row.sources}</span>}
       </div>
-      <AlbumArtStrip albums={albums} />
+      <AlbumArtStrip albums={albums.slice(0, 3)} />
       <CanonCombobox
         treeNodes={treeNodes}
         currentId={null}
@@ -399,10 +399,7 @@ function TagMappedGroup({ group, onDelete, onLock }: MappedGroupProps) {
 
   if (!primaryVariant) return null;
 
-  // Alias variants: those whose raw_value differs from the canon node name
   const aliasVariants = group.variants.filter((v) => v.raw_value !== group.node.name);
-  // Identity-only: single variant, spelled exactly like canon name (e.g. Disco → Disco)
-  const isIdentityOnly = aliasVariants.length === 0;
 
   function toggleLock() {
     for (const v of group.variants) {
@@ -428,15 +425,6 @@ function TagMappedGroup({ group, onDelete, onLock }: MappedGroupProps) {
           >
             {isLocked ? <Lock size={13} /> : <Unlock size={13} />}
           </button>
-          {isIdentityOnly && (
-            <button
-              className="tags-delete-btn"
-              title="Remove mapping"
-              onClick={() => onDelete(primaryVariant.raw_value, primaryVariant.kind)}
-            >
-              ×
-            </button>
-          )}
         </div>
       </div>
       {aliasVariants.length > 0 && (
@@ -479,23 +467,21 @@ function TagListRow({ row, nodeById, showUndo, showDelete, showLock, isOrphan, o
   const mappedNode = row.canonical_id && row.canonical_id !== ACCEPTED && row.canonical_id !== IGNORED
     ? nodeById.get(row.canonical_id)
     : null;
+  // Show canonical node's type (genre/mood/descriptor/scene) when known; raw kind as fallback
+  const displayKind = mappedNode?.type ?? row.kind;
 
   return (
     <div className="tags-list-row">
       <div className="tags-list-left">
         <span className="tags-cell-raw">{row.raw_value}</span>
-        <span className={`tags-kind-badge tags-kind-badge--${row.kind}`}>{row.kind}</span>
-      </div>
-      {!isOrphan && <AlbumArtStrip albums={albums.slice(0, 3) as ArtAlbum[]} />}
-      <div className="tags-list-count">
-        {isOrphan ? (
-          <span className="tags-not-in-library">not in library</span>
-        ) : (
+        <span className={`tags-kind-badge tags-kind-badge--${displayKind}`}>{displayKind}</span>
+        {!isOrphan && (
           <span className="tags-track-count">
             {row.track_count} {row.track_count === 1 ? "track" : "tracks"}
           </span>
         )}
       </div>
+      {!isOrphan && <AlbumArtStrip albums={albums.slice(0, 3) as ArtAlbum[]} />}
       <div className="tags-list-mapping">
         {mappedNode && (
           <>
@@ -551,7 +537,7 @@ export function TagsView() {
   const [tab, setTab] = useState<TabId>("review");
 
   // review
-  const [reviewMode, setReviewMode] = useState<ViewMode>("focus");
+  const [reviewMode, setReviewMode] = useState<ViewMode>("grid");
   const [reviewSearch, setReviewSearch] = useState("");
   const [reviewKind, setReviewKind] = useState<KindFilter>("all");
   const [reviewSort, setReviewSort] = useState<"impact" | "az">("impact");
@@ -591,8 +577,8 @@ export function TagsView() {
     () => vocab?.filter((r) => r.canonical_id && r.canonical_id !== ACCEPTED && r.canonical_id !== IGNORED && r.track_count > 0) ?? [],
     [vocab]
   );
-  const acceptedRows = useMemo(() => vocab?.filter((r) => r.canonical_id === ACCEPTED) ?? [], [vocab]);
-  const ignoredRows = useMemo(() => vocab?.filter((r) => r.canonical_id === IGNORED) ?? [], [vocab]);
+  const acceptedRows = useMemo(() => vocab?.filter((r) => r.canonical_id === ACCEPTED && r.track_count > 0) ?? [], [vocab]);
+  const ignoredRows = useMemo(() => vocab?.filter((r) => r.canonical_id === IGNORED && r.track_count > 0) ?? [], [vocab]);
   const cleanupRows = useMemo(() => vocab?.filter((r) => r.track_count === 0) ?? [], [vocab]);
 
   // filtered
@@ -627,12 +613,14 @@ export function TagsView() {
       const totalTracks = variants.reduce((s, r) => s + r.track_count, 0);
       groups.push({ canonicalId, node, variants, totalTracks });
     }
+    // hide trivial identity-only groups (raw_value === canonical name — auto-mapped, no real alias)
+    const filtered = groups.filter((g) => !(g.variants.length === 1 && g.variants[0]?.raw_value === g.node.name));
     if (mappedSort === "az") {
-      groups.sort((a, b) => a.node.name.localeCompare(b.node.name));
+      filtered.sort((a, b) => a.node.name.localeCompare(b.node.name));
     } else {
-      groups.sort((a, b) => b.totalTracks - a.totalTracks);
+      filtered.sort((a, b) => b.totalTracks - a.totalTracks);
     }
-    return groups;
+    return filtered;
   }, [filteredMapped, nodeById, mappedSort]);
 
   const filteredAccepted = useMemo(() => {
@@ -855,7 +843,7 @@ export function TagsView() {
                 {mappedRows.length === 0 ? "No mapped tags yet." : "No tags match filter."}
               </p>
             ) : (
-              <div className="tags-list">
+              <div className="tags-mapped-list">
                 {mappedGroups.map((group) => (
                   <TagMappedGroup
                     key={group.canonicalId}

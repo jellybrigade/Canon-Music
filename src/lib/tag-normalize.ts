@@ -132,6 +132,41 @@ async function _doNormalizeAlbum(
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
 
+  // Write lastfm-sourced tags to track_tags so the vocab query can count them.
+  // File tags get written during sync; lastfm tags must be written here or they
+  // appear as orphaned in Cleanup even though normalization applies them.
+  type TrackIdRow = { id: string };
+  const albumTracks = await db.select<TrackIdRow[]>(
+    "SELECT id FROM tracks WHERE album_id = ?",
+    [albumId]
+  );
+  if (albumTracks.length > 0) {
+    for (const entry of byKey.values()) {
+      if (entry.source !== "lastfm") continue;
+      for (const track of albumTracks) {
+        await db.execute(
+          `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, 'lastfm')`,
+          [track.id, entry.name]
+        );
+      }
+    }
+    // Apply any pre-existing tag_mappings to the newly inserted lastfm rows
+    await db.execute(
+      `UPDATE track_tags
+       SET canonical_id = (
+         SELECT tm.canonical_id FROM tag_mappings tm
+         WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+             = LOWER(REPLACE(REPLACE(TRIM(track_tags.raw_value), '-', ' '), '_', ' '))
+           AND tm.kind = track_tags.kind
+         LIMIT 1
+       )
+       WHERE source = 'lastfm'
+         AND canonical_id IS NULL
+         AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
+      [albumId]
+    );
+  }
+
   const seenIds = new Set<string>();
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
