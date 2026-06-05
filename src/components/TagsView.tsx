@@ -565,6 +565,7 @@ export function TagsView() {
   const autoMapExact = useAutoMapExact();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [tab, setTab] = useState<TabId>("review");
+  const [autoMapSummary, setAutoMapSummary] = useState<{ mapped: number; remaining: number } | null>(null);
 
   // review
   const [reviewMode, setReviewMode] = useState<ViewMode>("grid");
@@ -596,7 +597,13 @@ export function TagsView() {
   }, []);
 
   useEffect(() => {
-    autoMapExact.mutate();
+    autoMapExact.mutate(undefined, {
+      onSuccess: (result) => {
+        if (result.mapped > 0 || result.remaining > 0) {
+          setAutoMapSummary(result);
+        }
+      },
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -735,6 +742,19 @@ export function TagsView() {
         {/* ── Review ───────────────────────────────────────────────────────── */}
         {tab === "review" && (
           <>
+            {autoMapSummary && (
+              <div className="tags-automap-banner">
+                <span className="tags-automap-text">
+                  {autoMapSummary.mapped > 0
+                    ? `${autoMapSummary.mapped} tag${autoMapSummary.mapped === 1 ? "" : "s"} auto-mapped.`
+                    : "No new auto-mappings."}
+                  {autoMapSummary.remaining > 0
+                    ? ` ${autoMapSummary.remaining} still need${autoMapSummary.remaining === 1 ? "s" : ""} review.`
+                    : " All tags resolved."}
+                </span>
+                <button className="tags-automap-dismiss" onClick={() => setAutoMapSummary(null)}>×</button>
+              </div>
+            )}
             <div className="tags-review-toolbar">
               <TagFilterBar
                 search={reviewSearch}

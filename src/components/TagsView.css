@@ -99,6 +99,42 @@
   text-align: center;
 }
 
+/* ── Auto-map summary banner ─────────────────────────────────────────────── */
+
+.tags-automap-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 0.875rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+}
+
+.tags-automap-text {
+  flex: 1;
+}
+
+.tags-automap-dismiss {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted, rgba(255, 255, 255, 0.4));
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  opacity: 0.7;
+}
+
+.tags-automap-dismiss:hover {
+  opacity: 1;
+  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+}
+
 /* ── Filter bar ──────────────────────────────────────────────────────────── */
 
 .tags-filter-bar {

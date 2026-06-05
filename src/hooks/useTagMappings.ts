@@ -157,7 +157,7 @@ export function useVocabulary() {
 export function useAutoMapExact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ mapped: number; remaining: number }> => {
       const db = await getDb();
       const { getCanonTree, findCanonicalSync } = await import("../lib/canonicalize");
       const tree = await getCanonTree();
@@ -174,21 +174,37 @@ export function useAutoMapExact() {
         `SELECT DISTINCT raw_value, kind FROM track_tags`
       );
 
+      let mapped = 0;
       for (const { raw_value, kind } of all) {
         if (lockedSet.has(`${kind}:${raw_value}`)) continue;
         const result = findCanonicalSync(raw_value, kind as TagKind, tree);
         if (result.node && result.matchType === "exact") {
-          await db.execute(
+          const res = await db.execute(
             `INSERT OR IGNORE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
              VALUES (?, ?, ?, 'auto', ?, datetime('now'))`,
             [raw_value, kind, result.node.id, result.matchType]
           );
+          if (res.rowsAffected > 0) mapped++;
           await db.execute(
             "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ? AND canonical_id IS NULL",
             [result.node.id, raw_value, kind]
           );
         }
       }
+
+      const unresolvedRows = await db.select<{ n: number }[]>(`
+        SELECT COUNT(DISTINCT aug.raw_value || ':' || aug.kind) AS n
+        FROM album_unresolved_genres aug
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tag_mappings tm
+          WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+              = LOWER(REPLACE(REPLACE(TRIM(aug.raw_value), '-', ' '), '_', ' '))
+            AND tm.kind = aug.kind
+        )
+      `);
+      const remaining = unresolvedRows[0]?.n ?? 0;
+
+      return { mapped, remaining };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
