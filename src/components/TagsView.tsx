@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Lock, Unlock, ChevronLeft, ChevronRight } from "lucide-react";
+import { Lock, Unlock, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import {
   useVocabulary,
   useTagMappings,
@@ -10,8 +10,17 @@ import {
   useUnresolvedAlbums,
 } from "../hooks/useTagMappings";
 import type { UnresolvedGenreRow, VocabRow } from "../hooks/useTagMappings";
-import { getCanonTree } from "../lib/canonicalize";
+import { getCanonTree, canonicalKey } from "../lib/canonicalize";
 import type { TreeNode, TagKind } from "../lib/canonicalize";
+import {
+  useUserNodes,
+  useCreateUserNode,
+  useUpdateUserNode,
+  useDeleteUserNode,
+  useUserTreeChangelog,
+  isSuperseeded,
+} from "../hooks/useUserTree";
+import type { UserTreeNode } from "../hooks/useUserTree";
 import { useServers, useServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import "./TagsView.css";
@@ -26,9 +35,10 @@ interface ComboboxProps {
   currentId: string | null;
   onSelect: (id: string) => void;
   onClear: () => void;
+  onCreateNode?: (name: string) => void;
 }
 
-function CanonCombobox({ treeNodes, currentId, onSelect, onClear }: ComboboxProps) {
+function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreateNode }: ComboboxProps) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
@@ -47,6 +57,10 @@ function CanonCombobox({ treeNodes, currentId, onSelect, onClear }: ComboboxProp
       .filter((n) => n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q))
       .slice(0, 10);
   }, [treeNodes, query]);
+
+  // Only offer "create" when query has content and no exact name match
+  const canCreate = onCreateNode && query.trim().length > 0 &&
+    !treeNodes.some((n) => n.name.toLowerCase() === query.trim().toLowerCase());
 
   function openDropdown() {
     if (inputRef.current) {
@@ -83,6 +97,8 @@ function CanonCombobox({ treeNodes, currentId, onSelect, onClear }: ComboboxProp
     );
   }
 
+  const showDropdown = open && (matches.length > 0 || canCreate);
+
   return (
     <div className="tags-combobox" ref={wrapRef}>
       <input
@@ -93,7 +109,7 @@ function CanonCombobox({ treeNodes, currentId, onSelect, onClear }: ComboboxProp
         onChange={(e) => { setQuery(e.target.value); openDropdown(); }}
         onFocus={openDropdown}
       />
-      {open && matches.length > 0 && createPortal(
+      {showDropdown && createPortal(
         <div className="tags-combobox-dropdown" style={dropdownStyle}>
           {matches.map((n) => (
             <button
@@ -110,6 +126,20 @@ function CanonCombobox({ treeNodes, currentId, onSelect, onClear }: ComboboxProp
               <span className="tags-option-section">{n.section ?? n.type}</span>
             </button>
           ))}
+          {canCreate && (
+            <button
+              className="tags-combobox-option tags-combobox-create"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onCreateNode!(query.trim());
+                setQuery("");
+                setOpen(false);
+              }}
+            >
+              <Plus size={12} />
+              <span className="tags-option-name">Create "{query.trim()}"</span>
+            </button>
+          )}
         </div>,
         document.body
       )}
@@ -245,9 +275,10 @@ interface ReviewCardProps {
   onMap: (rawValue: string, kind: TagKind, canonicalId: string) => void;
   onAccept: (rawValue: string, kind: TagKind) => void;
   onIgnore: (rawValue: string, kind: TagKind) => void;
+  onCreateNode: (name: string, rawValue: string, rawKind: TagKind) => void;
 }
 
-function TagReviewCard({ row, treeNodes, onMap, onAccept, onIgnore }: ReviewCardProps) {
+function TagReviewCard({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: ReviewCardProps) {
   const { data: albums = [] } = useUnresolvedAlbums(row.raw_value, row.kind);
 
   return (
@@ -266,6 +297,7 @@ function TagReviewCard({ row, treeNodes, onMap, onAccept, onIgnore }: ReviewCard
         currentId={null}
         onSelect={(id) => onMap(row.raw_value, row.kind, id)}
         onClear={() => {}}
+        onCreateNode={(name) => onCreateNode(name, row.raw_value, row.kind)}
       />
       <div className="tags-card-actions">
         <button
@@ -299,9 +331,10 @@ interface FocusCardProps {
   onIgnore: (rawValue: string, kind: TagKind) => void;
   onNext: () => void;
   onPrev: () => void;
+  onCreateNode: (name: string, rawValue: string, rawKind: TagKind) => void;
 }
 
-function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore, onNext, onPrev }: FocusCardProps) {
+function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore, onNext, onPrev, onCreateNode }: FocusCardProps) {
   const { data: albums = [] } = useUnresolvedAlbums(row.raw_value, row.kind);
 
   useEffect(() => {
@@ -338,6 +371,7 @@ function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore,
           currentId={null}
           onSelect={(id) => onMap(row.raw_value, row.kind, id)}
           onClear={() => {}}
+          onCreateNode={(name) => onCreateNode(name, row.raw_value, row.kind)}
         />
       </div>
       <div className="tags-focus-actions">
@@ -542,9 +576,195 @@ function ResolvedTagList({ rows, nodeById, onUndo }: ResolvedTagListProps) {
   );
 }
 
+// ── Create / edit node modal ──────────────────────────────────────────────────
+
+interface NodeFormState {
+  name: string;
+  type: "genre" | "mood" | "category";
+  parentId: string;
+}
+
+interface NodeModalProps {
+  initialName?: string;
+  editingNode?: UserTreeNode;
+  treeNodes: TreeNode[];
+  onSave: (state: NodeFormState) => void;
+  onCancel: () => void;
+  error?: string;
+}
+
+function NodeModal({ initialName = "", editingNode, treeNodes, onSave, onCancel, error }: NodeModalProps) {
+  const [name, setName] = useState(editingNode?.name ?? initialName);
+  const [type, setType] = useState<"genre" | "mood" | "category">(editingNode?.type ?? "genre");
+  const [parentId, setParentId] = useState<string>(
+    editingNode ? (JSON.parse(editingNode.parent_ids) as string[])[0] ?? "" : ""
+  );
+  const [parentQuery, setParentQuery] = useState("");
+  const [parentOpen, setParentOpen] = useState(false);
+  const [parentDropStyle, setParentDropStyle] = useState<React.CSSProperties>({});
+  const parentInputRef = useRef<HTMLInputElement>(null);
+  const parentWrapRef = useRef<HTMLDivElement>(null);
+
+  const parentMatches = useMemo(() => {
+    if (!parentQuery.trim()) return [];
+    const q = parentQuery.toLowerCase();
+    return treeNodes
+      .filter((n) => n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q))
+      .slice(0, 8);
+  }, [treeNodes, parentQuery]);
+
+  const parentNode = treeNodes.find((n) => n.id === parentId) ?? null;
+
+  function openParentDrop() {
+    if (parentInputRef.current) {
+      const rect = parentInputRef.current.getBoundingClientRect();
+      setParentDropStyle({ position: "fixed", top: rect.bottom + 2, left: rect.left, width: Math.max(rect.width, 220), zIndex: 10000 });
+    }
+    setParentOpen(true);
+  }
+
+  useEffect(() => {
+    if (!parentOpen) return;
+    function onDown(e: MouseEvent) {
+      if (parentWrapRef.current && !parentWrapRef.current.contains(e.target as Node)) {
+        setParentOpen(false);
+        setParentQuery("");
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [parentOpen]);
+
+  const previewKey = canonicalKey(name);
+
+  return createPortal(
+    <div className="node-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div className="node-modal">
+        <h3 className="node-modal-title">{editingNode ? "Edit node" : "Create new node"}</h3>
+
+        <label className="node-modal-label">
+          Name
+          <input
+            className="node-modal-input"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onSave({ name: name.trim(), type, parentId }); } if (e.key === "Escape") onCancel(); }}
+          />
+          {name.trim() && (
+            <span className="node-modal-key-preview">key: {previewKey}</span>
+          )}
+        </label>
+
+        <label className="node-modal-label">
+          Type
+          <div className="tags-seg node-modal-seg">
+            {(["genre", "mood", "category"] as const).map((t) => (
+              <button
+                key={t}
+                className={`tags-seg-btn${type === t ? " tags-seg-btn--active" : ""}`}
+                onClick={() => setType(t)}
+              >{t}</button>
+            ))}
+          </div>
+        </label>
+
+        <label className="node-modal-label">
+          Parent <span className="node-modal-optional">(optional)</span>
+          {parentNode ? (
+            <div className="tags-mapped" style={{ marginTop: 4 }}>
+              <span className="tags-mapped-name">{parentNode.name}</span>
+              <button className="tags-clear-btn" onClick={() => { setParentId(""); setParentQuery(""); }}>×</button>
+            </div>
+          ) : (
+            <div className="tags-combobox" ref={parentWrapRef} style={{ marginTop: 4 }}>
+              <input
+                ref={parentInputRef}
+                className="tags-combobox-input"
+                placeholder="Search for parent node…"
+                value={parentQuery}
+                onChange={(e) => { setParentQuery(e.target.value); openParentDrop(); }}
+                onFocus={openParentDrop}
+              />
+              {parentOpen && parentMatches.length > 0 && createPortal(
+                <div className="tags-combobox-dropdown" style={parentDropStyle}>
+                  {parentMatches.map((n) => (
+                    <button
+                      key={n.id}
+                      className="tags-combobox-option"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setParentId(n.id);
+                        setParentQuery("");
+                        setParentOpen(false);
+                      }}
+                    >
+                      <span className="tags-option-name">{n.name}</span>
+                      <span className="tags-option-section">{n.section ?? n.type}</span>
+                    </button>
+                  ))}
+                </div>,
+                document.body
+              )}
+            </div>
+          )}
+        </label>
+
+        {error && <p className="node-modal-error">{error}</p>}
+
+        <div className="node-modal-actions">
+          <button className="node-modal-btn node-modal-btn--cancel" onClick={onCancel}>Cancel</button>
+          <button
+            className="node-modal-btn node-modal-btn--save"
+            disabled={!name.trim()}
+            onClick={() => onSave({ name: name.trim(), type, parentId })}
+          >
+            {editingNode ? "Save" : "Create"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// ── Tree node row ─────────────────────────────────────────────────────────────
+
+interface TreeNodeRowProps {
+  node: UserTreeNode;
+  treeNodes: TreeNode[];
+  onEdit: (node: UserTreeNode) => void;
+  onDelete: (node: UserTreeNode) => void;
+}
+
+function UserNodeRow({ node, treeNodes, onEdit, onDelete }: TreeNodeRowProps) {
+  const parentIds = JSON.parse(node.parent_ids) as string[];
+  const parentName = parentIds[0] ? (treeNodes.find((n) => n.id === parentIds[0])?.name ?? parentIds[0]) : null;
+  const superseded = isSuperseeded(node);
+
+  return (
+    <div className={`tree-node-row${superseded ? " tree-node-row--superseded" : ""}`}>
+      <div className="tree-node-row-left">
+        <span className="tree-node-name">{node.name}</span>
+        <span className={`tags-kind-badge tags-kind-badge--${node.type}`}>{node.type}</span>
+        {parentName && <span className="tree-node-parent">↳ {parentName}</span>}
+        {superseded && (
+          <span className="tree-node-conflict" title="A node with this key now exists in the bundled tree — you can delete this duplicate">
+            <AlertTriangle size={12} /> bundled
+          </span>
+        )}
+      </div>
+      <div className="tree-node-row-actions">
+        <button className="tree-node-action-btn" onClick={() => onEdit(node)} title="Edit"><Pencil size={13} /></button>
+        <button className="tree-node-action-btn tree-node-action-btn--danger" onClick={() => onDelete(node)} title="Delete"><Trash2 size={13} /></button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main view ─────────────────────────────────────────────────────────────────
 
-type TabId = "review" | "mapped" | "resolved" | "cleanup";
+type TabId = "review" | "mapped" | "resolved" | "cleanup" | "tree";
 type ViewMode = "focus" | "grid";
 const PAGE_SIZE = 24;
 
@@ -563,9 +783,21 @@ export function TagsView() {
   const { data: unresolvedGenres } = useUnresolvedGenres();
   const { saveMapping, deleteMapping, lockMapping } = useTagMappings();
   const autoMapExact = useAutoMapExact();
+  const { data: userNodes = [] } = useUserNodes();
+  const { data: changelog = [] } = useUserTreeChangelog();
+  const createUserNode = useCreateUserNode();
+  const updateUserNode = useUpdateUserNode();
+  const deleteUserNode = useDeleteUserNode();
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [tab, setTab] = useState<TabId>("review");
   const [autoMapSummary, setAutoMapSummary] = useState<{ mapped: number; remaining: number } | null>(null);
+
+  // node create/edit modal
+  interface PendingCreate { name: string; rawValue?: string; rawKind?: TagKind }
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
+  const [editingNode, setEditingNode] = useState<UserTreeNode | null>(null);
+  const [nodeModalError, setNodeModalError] = useState<string | undefined>();
+  const [deletingNode, setDeletingNode] = useState<UserTreeNode | null>(null);
 
   // review
   const [reviewMode, setReviewMode] = useState<ViewMode>("grid");
@@ -709,11 +941,82 @@ export function TagsView() {
     }
   }
 
+  // node modal handlers
+  function openCreateModal(name: string, rawValue?: string, rawKind?: TagKind) {
+    setNodeModalError(undefined);
+    setPendingCreate({ name, rawValue, rawKind });
+    setEditingNode(null);
+  }
+
+  function openEditModal(node: UserTreeNode) {
+    setNodeModalError(undefined);
+    setEditingNode(node);
+    setPendingCreate(null);
+  }
+
+  function closeNodeModal() {
+    setPendingCreate(null);
+    setEditingNode(null);
+    setNodeModalError(undefined);
+  }
+
+  async function handleNodeSave(state: NodeFormState) {
+    setNodeModalError(undefined);
+    try {
+      if (editingNode) {
+        await updateUserNode.mutateAsync({
+          id: editingNode.id,
+          name: state.name,
+          type: state.type,
+          parentIds: state.parentId ? [state.parentId] : [],
+        });
+        // Refresh tree nodes after mutation
+        const tree = await getCanonTree();
+        setTreeNodes(tree.nodes);
+        closeNodeModal();
+      } else if (pendingCreate) {
+        const newId = await createUserNode.mutateAsync({
+          name: state.name,
+          type: state.type,
+          parentIds: state.parentId ? [state.parentId] : [],
+        });
+        // Refresh tree nodes, then map raw tag if this came from a combobox
+        const tree = await getCanonTree();
+        setTreeNodes(tree.nodes);
+        if (pendingCreate.rawValue && pendingCreate.rawKind) {
+          saveMapping.mutate({ rawValue: pendingCreate.rawValue, kind: pendingCreate.rawKind, canonicalId: newId, source: "manual" });
+        }
+        closeNodeModal();
+      }
+    } catch (e) {
+      setNodeModalError(e instanceof Error ? e.message : "Failed to save node.");
+    }
+  }
+
+  async function handleNodeDelete(node: UserTreeNode) {
+    setDeletingNode(node);
+  }
+
+  async function confirmNodeDelete() {
+    if (!deletingNode) return;
+    try {
+      await deleteUserNode.mutateAsync({ id: deletingNode.id, name: deletingNode.name });
+      const tree = await getCanonTree();
+      setTreeNodes(tree.nodes);
+    } catch (e) {
+      console.error(e);
+    }
+    setDeletingNode(null);
+  }
+
+  const supersededCount = userNodes.filter(isSuperseeded).length;
+
   const tabs: { id: TabId; label: string; badge?: number }[] = [
     { id: "review", label: "Review", badge: reviewRows.length || undefined },
     { id: "mapped", label: "Mapped" },
     { id: "resolved", label: "Resolved" },
     { id: "cleanup", label: "Cleanup", badge: cleanupRows.length || undefined },
+    { id: "tree", label: "Tree", badge: supersededCount || undefined },
   ];
 
   return (
@@ -833,6 +1136,7 @@ export function TagsView() {
                   onIgnore={handleIgnore}
                   onNext={handleFocusNext}
                   onPrev={handleFocusPrev}
+                  onCreateNode={openCreateModal}
                 />
               </div>
             ) : (
@@ -846,6 +1150,7 @@ export function TagsView() {
                       onMap={handleMap}
                       onAccept={handleAccept}
                       onIgnore={handleIgnore}
+                      onCreateNode={openCreateModal}
                     />
                   ))}
                 </div>
@@ -992,7 +1297,91 @@ export function TagsView() {
           </>
         )}
 
+        {/* ── Tree ─────────────────────────────────────────────────────────── */}
+        {tab === "tree" && (
+          <>
+            <div className="tree-tab-header">
+              <p className="tags-tab-desc">
+                Nodes you've added to extend the canon tree. These merge with the bundled taxonomy at runtime.
+              </p>
+              <button
+                className="tree-add-btn"
+                onClick={() => openCreateModal("")}
+              >
+                <Plus size={13} /> Add node
+              </button>
+            </div>
+
+            {supersededCount > 0 && (
+              <div className="tree-conflict-banner">
+                <AlertTriangle size={13} />
+                {supersededCount} of your node{supersededCount === 1 ? "" : "s"} now {supersededCount === 1 ? "exists" : "exist"} in the bundled tree — review and delete if no longer needed.
+              </div>
+            )}
+
+            {userNodes.length === 0 ? (
+              <p className="tags-empty">No custom nodes yet.</p>
+            ) : (
+              <div className="tree-node-list">
+                {userNodes.map((node) => (
+                  <UserNodeRow
+                    key={node.id}
+                    node={node}
+                    treeNodes={treeNodes}
+                    onEdit={openEditModal}
+                    onDelete={handleNodeDelete}
+                  />
+                ))}
+              </div>
+            )}
+
+            {changelog.length > 0 && (
+              <div className="tree-changelog">
+                <h3 className="tree-changelog-title">Changelog</h3>
+                <div className="tree-changelog-list">
+                  {changelog.map((entry) => (
+                    <div key={entry.id} className="tree-changelog-row">
+                      <span className={`tree-changelog-action tree-changelog-action--${entry.action}`}>{entry.action}</span>
+                      <span className="tree-changelog-name">{entry.node_name}</span>
+                      <span className="tree-changelog-date">{new Date(entry.created_at).toLocaleDateString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
       </div>
+
+      {/* ── Modals ─────────────────────────────────────────────────────────── */}
+
+      {(pendingCreate !== null || editingNode !== null) && (
+        <NodeModal
+          initialName={pendingCreate?.name ?? ""}
+          editingNode={editingNode ?? undefined}
+          treeNodes={treeNodes}
+          onSave={(state) => { void handleNodeSave(state); }}
+          onCancel={closeNodeModal}
+          error={nodeModalError}
+        />
+      )}
+
+      {deletingNode && (
+        <div className="node-modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) setDeletingNode(null); }}>
+          <div className="node-modal">
+            <h3 className="node-modal-title">Delete "{deletingNode.name}"?</h3>
+            <p className="node-modal-warn">
+              Any tag mappings pointing to this node will be cleared. This cannot be undone.
+            </p>
+            <div className="node-modal-actions">
+              <button className="node-modal-btn node-modal-btn--cancel" onClick={() => setDeletingNode(null)}>Cancel</button>
+              <button className="node-modal-btn node-modal-btn--danger" onClick={() => { void confirmNodeDelete(); }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   );
 }
