@@ -75,6 +75,8 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
   const [moreOpen, setMoreOpen] = useState(false);
+  const morePanelRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
@@ -87,6 +89,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const [remaining, setRemaining] = useState("");
 
   const [hoverRating, setHoverRating] = useState(0);
+  const ratingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
   const nativeTrackId =
     currentTrack && serverWithCred
@@ -180,13 +183,19 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   }, [sleepTimerEndsAt]);
 
   useClickOutside([timerPopoverRef, timerBtnRef], () => setTimerOpen(false), timerOpen);
+  useClickOutside([morePanelRef, moreBtnRef], () => setMoreOpen(false), moreOpen);
 
   function handleStarClick(star: number) {
     if (!currentTrack || !serverWithCred || !nativeTrackId) return;
     const newRating = star === trackRating ? 0 : star;
     queryClient.setQueryData(["trackRating", nativeTrackId], newRating);
     const { server, credential } = serverWithCred;
-    setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(console.error);
+    if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
+    ratingDebounce.current = setTimeout(() => {
+      setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(() => {
+        queryClient.invalidateQueries({ queryKey: ["trackRating", nativeTrackId] });
+      });
+    }, 200);
   }
 
   const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;
@@ -412,6 +421,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             />
           </div>
           <button
+            ref={moreBtnRef}
             className={`player-btn player-btn--icon player-more-btn${moreOpen ? " player-btn--active" : ""}`}
             onClick={() => setMoreOpen((o) => !o)}
             title="More controls"
@@ -421,7 +431,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           </button>
         </div>
         {moreOpen && (
-          <div className="player-more-panel">
+          <div ref={morePanelRef} className="player-more-panel">
             <button
               className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}

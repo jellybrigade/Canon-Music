@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } from "react";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
@@ -307,11 +307,12 @@ interface ForYouCustomizePopupProps {
   config: ForYouCategoryConfig[];
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
   position: { top: number; left: number };
+  popupRef: RefObject<HTMLDivElement | null>;
 }
 
 const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
 
-function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustomizePopupProps) {
+function ForYouCustomizePopup({ config, onConfigChange, position, popupRef }: ForYouCustomizePopupProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropAt, setDropAt] = useState<number | null>(null);
   const [addMode, setAddMode] = useState(false);
@@ -358,12 +359,12 @@ function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustom
   function submitAdd() {
     const name = addName.trim();
     if (!name) return;
+    if (addFilterType === "artist" && !addArtist.trim()) return;
     const key = `custom-${Date.now()}`;
     const customFilter: ForYouCustomFilter =
       addFilterType === "decade"
         ? { type: "decade", decade: addDecade }
         : { type: "artist", artist: addArtist.trim() };
-    if (addFilterType === "artist" && !addArtist.trim()) return;
     const next: ForYouCategoryConfig = { key, kicker: name, enabled: true, customFilter };
     onConfigChange([...config, next]);
     setAddMode(false);
@@ -373,6 +374,7 @@ function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustom
 
   return createPortal(
     <div
+      ref={popupRef}
       className="for-you-popup"
       style={{ top: position.top, left: position.left }}
       onMouseDown={e => e.stopPropagation()}
@@ -380,81 +382,85 @@ function ForYouCustomizePopup({ config, onConfigChange, position }: ForYouCustom
         if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
       }}
     >
-      <p className="for-you-popup__title">Customize</p>
-      {config.map((cat, i) => (
-        <div key={cat.key}>
-          {dropAt === i && <div className="for-you-popup__drop-line" />}
-          <div
-            className="for-you-popup__row"
-            onDragOver={e => handleDragOver(e, i)}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-          >
-            <span
-              className="for-you-popup__drag-handle"
-              aria-hidden="true"
-              draggable={!cat.customFilter}
-              onDragStart={cat.customFilter ? undefined : e => handleDragStart(e, i)}
-              style={{ visibility: cat.customFilter ? "hidden" : undefined }}
-            >⠿</span>
-            <input
-              type="checkbox"
-              id={`fycat-${cat.key}`}
-              checked={cat.enabled}
-              onChange={() => toggleEnabled(i)}
-              className="for-you-popup__checkbox"
-            />
-            <label htmlFor={`fycat-${cat.key}`} className="for-you-popup__label">
-              {cat.kicker}
-              {cat.customFilter ? (
-                <span className="for-you-popup__label-desc">
-                  {cat.customFilter.type === "decade" ? `${cat.customFilter.decade}s` : `Artist: ${cat.customFilter.artist}`}
-                </span>
-              ) : (
-                <span className="for-you-popup__label-desc">{FOR_YOU_CATEGORY_DESC[cat.key]}</span>
-              )}
-            </label>
-            {cat.customFilter && (
-              <button className="for-you-popup__remove" onClick={() => removeCustom(cat.key)} aria-label="Remove category">×</button>
-            )}
-          </div>
-        </div>
-      ))}
-      {dropAt === config.length && <div className="for-you-popup__drop-line" />}
-
       {addMode ? (
-        <div className="for-you-popup__add-form">
-          <input
-            className="for-you-popup__add-input"
-            placeholder="Category name…"
-            value={addName}
-            onChange={e => setAddName(e.target.value)}
-            autoFocus
-          />
-          <select className="for-you-popup__add-select" value={addFilterType} onChange={e => setAddFilterType(e.target.value as "decade" | "artist")}>
-            <option value="decade">Decade</option>
-            <option value="artist">Artist</option>
-          </select>
-          {addFilterType === "decade" && (
-            <select className="for-you-popup__add-select" value={addDecade} onChange={e => setAddDecade(Number(e.target.value))}>
-              {DECADES.map(d => <option key={d} value={d}>{d}s</option>)}
-            </select>
-          )}
-          {addFilterType === "artist" && (
+        <>
+          <p className="for-you-popup__title">Add category</p>
+          <div className="for-you-popup__add-form">
             <input
               className="for-you-popup__add-input"
-              placeholder="Artist name…"
-              value={addArtist}
-              onChange={e => setAddArtist(e.target.value)}
+              placeholder="Category name…"
+              value={addName}
+              onChange={e => setAddName(e.target.value)}
+              autoFocus
             />
-          )}
-          <div className="for-you-popup__add-actions">
-            <button className="for-you-popup__add-confirm" onClick={submitAdd}>Add</button>
-            <button className="for-you-popup__add-cancel" onClick={() => { setAddMode(false); setAddName(""); setAddArtist(""); }}>Cancel</button>
+            <select className="for-you-popup__add-select" value={addFilterType} onChange={e => setAddFilterType(e.target.value as "decade" | "artist")}>
+              <option value="decade">Decade</option>
+              <option value="artist">Artist</option>
+            </select>
+            {addFilterType === "decade" && (
+              <select className="for-you-popup__add-select" value={addDecade} onChange={e => setAddDecade(Number(e.target.value))}>
+                {DECADES.map(d => <option key={d} value={d}>{d}s</option>)}
+              </select>
+            )}
+            {addFilterType === "artist" && (
+              <input
+                className="for-you-popup__add-input"
+                placeholder="Artist name…"
+                value={addArtist}
+                onChange={e => setAddArtist(e.target.value)}
+              />
+            )}
+            <div className="for-you-popup__add-actions">
+              <button className="for-you-popup__add-confirm" onClick={submitAdd}>Add</button>
+              <button className="for-you-popup__add-cancel" onClick={() => { setAddMode(false); setAddName(""); setAddArtist(""); }}>Cancel</button>
+            </div>
           </div>
-        </div>
+        </>
       ) : (
-        <button className="for-you-popup__add-btn" onClick={() => setAddMode(true)}>+ Add category</button>
+        <>
+          <p className="for-you-popup__title">Customize</p>
+          {config.map((cat, i) => (
+            <div key={cat.key}>
+              {dropAt === i && <div className="for-you-popup__drop-line" />}
+              <div
+                className="for-you-popup__row"
+                onDragOver={e => handleDragOver(e, i)}
+                onDrop={handleDrop}
+                onDragEnd={handleDragEnd}
+              >
+                <span
+                  className="for-you-popup__drag-handle"
+                  aria-hidden="true"
+                  draggable={!cat.customFilter}
+                  onDragStart={cat.customFilter ? undefined : e => handleDragStart(e, i)}
+                  style={{ visibility: cat.customFilter ? "hidden" : undefined }}
+                >⠿</span>
+                <input
+                  type="checkbox"
+                  id={`fycat-${cat.key}`}
+                  checked={cat.enabled}
+                  onChange={() => toggleEnabled(i)}
+                  className="for-you-popup__checkbox"
+                />
+                <label htmlFor={`fycat-${cat.key}`} className="for-you-popup__label">
+                  {cat.kicker}
+                  {cat.customFilter ? (
+                    <span className="for-you-popup__label-desc">
+                      {cat.customFilter.type === "decade" ? `${cat.customFilter.decade}s` : `Artist: ${cat.customFilter.artist}`}
+                    </span>
+                  ) : (
+                    <span className="for-you-popup__label-desc">{FOR_YOU_CATEGORY_DESC[cat.key]}</span>
+                  )}
+                </label>
+                {cat.customFilter && (
+                  <button className="for-you-popup__remove" onClick={() => removeCustom(cat.key)} aria-label="Remove category">×</button>
+                )}
+              </div>
+            </div>
+          ))}
+          {dropAt === config.length && <div className="for-you-popup__drop-line" />}
+          <button className="for-you-popup__add-btn" onClick={() => setAddMode(true)}>+ Add category</button>
+        </>
       )}
     </div>,
     document.body,
@@ -480,6 +486,8 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
   const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const customizeButtonRef = useRef<HTMLButtonElement>(null);
 
+  const customizePopupRef = useRef<HTMLDivElement>(null);
+
   function handleCustomizeClick() {
     if (!showCustomize && customizeButtonRef.current) {
       const rect = customizeButtonRef.current.getBoundingClientRect();
@@ -491,7 +499,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     setShowCustomize(s => !s);
   }
 
-  useClickOutside([], () => setShowCustomize(false), showCustomize);
+  useClickOutside([customizeButtonRef, customizePopupRef], () => setShowCustomize(false), showCustomize);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -537,7 +545,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           <SlidersHorizontal size={11} />
         </button>
         {showCustomize && (
-          <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} />
+          <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} popupRef={customizePopupRef} />
         )}
       </div>
       <div className="home-suggestion-grid">

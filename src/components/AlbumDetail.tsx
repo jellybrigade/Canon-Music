@@ -497,10 +497,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     </td>
                     <td className="track-title">{track.title}</td>
                     <td className="track-artist">{track.artist ?? ""}</td>
-                    {track.year && track.year !== album.year && (
-                      <td className="track-year" title="Track year differs from album year">{track.year}</td>
-                    )}
-                    {!(track.year && track.year !== album.year) && <td className="track-year" />}
+                    {track.year && track.year !== album.year
+                      ? <td className="track-year" title="Track year differs from album year">{track.year}</td>
+                      : <td className="track-year" />}
                     <td className="track-duration">
                       {track.duration ? formatDuration(track.duration) : ""}
                     </td>
