@@ -14,6 +14,7 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import { fetchArtistTopTracks, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import type { LastfmTopTrack } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useLoved } from "../hooks/useLoved";
 import "./ArtistDetail.css";
@@ -74,9 +75,34 @@ function useArtistTopTracks(artistName: string) {
 function useLastfmTopTracks(artistName: string) {
   return useQuery({
     queryKey: ["lastfm-artist-top-tracks", artistName],
-    queryFn: () => fetchArtistTopTracks(artistName),
+    queryFn: (): Promise<LastfmTopTrack[]> => fetchArtistTopTracks(artistName),
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
+}
+
+type ReleaseGroup = "album" | "ep" | "single" | "compilation";
+
+function classifyRelease(name: string): ReleaseGroup {
+  const n = name.toLowerCase().trim();
+  if (/\bsingle\b|-\s*single\s*$/.test(n)) return "single";
+  if (/\bep\b|-\s*ep\s*$/.test(n)) return "ep";
+  if (/compilation|greatest hits|best of\b|anthology|the collection|box set/.test(n)) return "compilation";
+  return "album";
+}
+
+function groupAlbums(albums: AlbumRow[]): { group: ReleaseGroup; label: string; items: AlbumRow[] }[] {
+  const map: Record<ReleaseGroup, AlbumRow[]> = { album: [], ep: [], single: [], compilation: [] };
+  for (const a of albums) map[classifyRelease(a.name)].push(a);
+  return (
+    [
+      { group: "album" as const, label: "Albums" },
+      { group: "ep" as const, label: "EPs" },
+      { group: "single" as const, label: "Singles" },
+      { group: "compilation" as const, label: "Compilations" },
+    ] as const
+  )
+    .map(({ group, label }) => ({ group, label, items: map[group] }))
+    .filter(({ items }) => items.length > 0);
 }
 
 function useSimilarInLibrary(names: string[]) {
@@ -110,14 +136,19 @@ function normalizeTitle(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function rankByLastfm(tracks: TopTrack[], lastfmTitles: string[]): TopTrack[] {
+function rankByLastfm(tracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): TopTrack[] {
   const rankMap = new Map<string, number>();
-  lastfmTitles.forEach((title, i) => rankMap.set(normalizeTitle(title), i));
+  lastfmTracks.forEach(({ name }, i) => rankMap.set(normalizeTitle(name), i));
   return [...tracks].sort((a, b) => {
     const ra = rankMap.get(normalizeTitle(a.title)) ?? Infinity;
     const rb = rankMap.get(normalizeTitle(b.title)) ?? Infinity;
     return ra - rb;
   });
+}
+
+function lastfmOnlyTracks(localTracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): LastfmTopTrack[] {
+  const localNorm = new Set(localTracks.map((t) => normalizeTitle(t.title)));
+  return lastfmTracks.filter((t) => !localNorm.has(normalizeTitle(t.name))).slice(0, 10);
 }
 
 function formatCount(n: number): string {
@@ -213,6 +244,9 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     ? rankByLastfm(rawTracks, lastfmTitles)
     : rawTracks ?? [];
   const lovedTracks = topTracks.filter((t) => lovedTrackIds.has(t.id));
+  const lfmOnlyTracks = rawTracks && lastfmTitles
+    ? lastfmOnlyTracks(rawTracks, lastfmTitles)
+    : [];
 
   const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
   const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
@@ -350,16 +384,16 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             </section>
           )}
 
-          {albums && albums.length > 0 && (
-            <section className="artist-section">
-              <h2 className="artist-section-title">Albums</h2>
+          {albums && albums.length > 0 && groupAlbums(albums).map(({ label, items }) => (
+            <section key={label} className="artist-section">
+              <h2 className="artist-section-title">{label}</h2>
               <AlbumGrid
-                albums={albums}
+                albums={items}
                 serverWithCredential={serverWithCredential}
                 onSelect={onSelectAlbum}
               />
             </section>
-          )}
+          ))}
 
           {topTracks.length > 0 && (
             <section className="artist-section">
@@ -367,6 +401,19 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               <div className="artist-top-tracks artist-top-tracks--grid">
                 {topTracks.map((track) => <TrackRow key={track.id} track={track} topTracks={topTracks} currentTrack={currentTrack} isPlaying={isPlaying} server={server} credential={credential} onPlay={handlePlayTrack} />)}
               </div>
+              {lfmOnlyTracks.length > 0 && (
+                <div className="artist-lastfm-only">
+                  <p className="artist-lastfm-only-label">Also on Last.fm</p>
+                  {lfmOnlyTracks.map((t) => (
+                    <div key={t.name} className="artist-lastfm-only-row">
+                      <span className="artist-lastfm-only-title">{t.name}</span>
+                      {t.playcount > 0 && (
+                        <span className="artist-lastfm-only-plays">{formatCount(t.playcount)} plays</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </div>

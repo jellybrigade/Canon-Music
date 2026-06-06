@@ -86,7 +86,7 @@ function useArtistTopTracks(artistName: string | null) {
         );
         const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
         const matched: TopTrack[] = [];
-        for (const name of trackNames) {
+        for (const { name } of trackNames) {
           const track = byTitle.get(name.toLowerCase());
           if (track && !matched.some((m) => m.id === track.id)) {
             matched.push(track);

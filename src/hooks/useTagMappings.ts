@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { TagKind } from "../lib/canonicalize";
 
-export interface TagMappingRow {
+interface TagMappingRow {
   raw_value: string;
   kind: TagKind;
   canonical_id: string;
@@ -127,7 +127,10 @@ export function useVocabulary() {
            tm.match_type AS mapping_match_type,
            COALESCE(tm.locked, 0) AS locked
          FROM track_tags tt
-         LEFT JOIN tag_mappings tm ON tm.raw_value = tt.raw_value AND tm.kind = tt.kind
+         LEFT JOIN tag_mappings tm
+           ON LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+            = LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
+           AND tm.kind = tt.kind
          GROUP BY tt.raw_value, tt.kind
          UNION ALL
          SELECT
@@ -140,7 +143,10 @@ export function useVocabulary() {
            COALESCE(tm.locked, 0) AS locked
          FROM tag_mappings tm
          WHERE NOT EXISTS (
-           SELECT 1 FROM track_tags tt WHERE tt.raw_value = tm.raw_value AND tt.kind = tm.kind
+           SELECT 1 FROM track_tags tt
+           WHERE LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' '))
+               = LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+             AND tt.kind = tm.kind
          )
          ORDER BY track_count DESC, raw_value`
       );
@@ -151,7 +157,7 @@ export function useVocabulary() {
 export function useAutoMapExact() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
+    mutationFn: async (): Promise<{ mapped: number; remaining: number }> => {
       const db = await getDb();
       const { getCanonTree, findCanonicalSync } = await import("../lib/canonicalize");
       const tree = await getCanonTree();
@@ -168,21 +174,37 @@ export function useAutoMapExact() {
         `SELECT DISTINCT raw_value, kind FROM track_tags`
       );
 
+      let mapped = 0;
       for (const { raw_value, kind } of all) {
         if (lockedSet.has(`${kind}:${raw_value}`)) continue;
         const result = findCanonicalSync(raw_value, kind as TagKind, tree);
         if (result.node && result.matchType === "exact") {
-          await db.execute(
+          const res = await db.execute(
             `INSERT OR IGNORE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
              VALUES (?, ?, ?, 'auto', ?, datetime('now'))`,
             [raw_value, kind, result.node.id, result.matchType]
           );
+          if (res.rowsAffected > 0) mapped++;
           await db.execute(
             "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ? AND canonical_id IS NULL",
             [result.node.id, raw_value, kind]
           );
         }
       }
+
+      const unresolvedRows = await db.select<{ n: number }[]>(`
+        SELECT COUNT(DISTINCT aug.raw_value || ':' || aug.kind) AS n
+        FROM album_unresolved_genres aug
+        WHERE NOT EXISTS (
+          SELECT 1 FROM tag_mappings tm
+          WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+              = LOWER(REPLACE(REPLACE(TRIM(aug.raw_value), '-', ' '), '_', ' '))
+            AND tm.kind = aug.kind
+        )
+      `);
+      const remaining = unresolvedRows[0]?.n ?? 0;
+
+      return { mapped, remaining };
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["vocab"] });
@@ -197,15 +219,35 @@ export function useVocabAlbums(rawValue: string, kind: TagKind) {
     queryKey: ["vocab", "albums", rawValue, kind],
     queryFn: async () => {
       const db = await getDb();
-      type Row = { album_id: string; album_name: string; track_count: number };
+      type Row = { album_id: string; album_name: string; track_count: number; artwork_url: string | null };
       return db.select<Row[]>(
-        `SELECT a.id as album_id, a.name as album_name, COUNT(tt.track_id) as track_count
+        `SELECT a.id as album_id, a.name as album_name, a.artwork_url,
+                COUNT(tt.track_id) as track_count
          FROM track_tags tt
          JOIN tracks t ON tt.track_id = t.id
          JOIN albums a ON t.album_id = a.id
          WHERE tt.raw_value = ? AND tt.kind = ?
          GROUP BY a.id, a.name
          ORDER BY track_count DESC, a.name`,
+        [rawValue, kind]
+      );
+    },
+    enabled: !!rawValue,
+  });
+}
+
+export function useUnresolvedAlbums(rawValue: string, kind: TagKind) {
+  return useQuery({
+    queryKey: ["unresolved", "albums", rawValue, kind],
+    queryFn: async () => {
+      const db = await getDb();
+      type Row = { album_id: string; album_name: string; artwork_url: string | null };
+      return db.select<Row[]>(
+        `SELECT a.id as album_id, a.name as album_name, a.artwork_url
+         FROM album_unresolved_genres aug
+         JOIN albums a ON aug.album_id = a.id
+         WHERE aug.raw_value = ? AND aug.kind = ?
+         LIMIT 4`,
         [rawValue, kind]
       );
     },
@@ -266,32 +308,6 @@ export function useRapToHipHop() {
   return { enabled: enabled ?? false, toggle };
 }
 
-export function useAddUserTreeNode() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({ id, name, type, canonical_key, parent_ids }: {
-      id: string;
-      name: string;
-      type: "genre" | "mood" | "category";
-      canonical_key: string;
-      parent_ids: string[];
-    }) => {
-      const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO user_tree_nodes (id, name, type, canonical_key, parent_ids) VALUES (?, ?, ?, ?, ?)",
-        [id, name, type, canonical_key, JSON.stringify(parent_ids)]
-      );
-      const { bustCanonTreeCache } = await import("../lib/canonicalize");
-      bustCanonTreeCache();
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-    },
-  });
-}
-
 export interface UnresolvedGenreRow {
   raw_value: string;
   kind: TagKind;
@@ -310,7 +326,9 @@ export function useUnresolvedGenres() {
         FROM album_unresolved_genres aug
         WHERE NOT EXISTS (
           SELECT 1 FROM tag_mappings tm
-          WHERE tm.raw_value = aug.raw_value AND tm.kind = aug.kind
+          WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+              = LOWER(REPLACE(REPLACE(TRIM(aug.raw_value), '-', ' '), '_', ' '))
+            AND tm.kind = aug.kind
         )
         GROUP BY aug.raw_value, aug.kind
         ORDER BY album_count DESC, aug.raw_value

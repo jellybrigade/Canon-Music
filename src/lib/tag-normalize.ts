@@ -7,7 +7,7 @@ import type { MbGenre } from "./musicbrainz";
 export interface NormalizedTag {
   id: string | null;
   name: string;
-  source: "file" | "lastfm";
+  source: "file" | "lastfm" | "musicbrainz";
   confidence: number;
 }
 
@@ -18,7 +18,7 @@ export interface NormalizedTags {
   computed_at: number;
 }
 
-export const STALE_DAYS_DEFAULT = 30;
+const STALE_DAYS_DEFAULT = 30;
 const CAPS = { genres: 6, descriptors: 6, scenes: 4 };
 
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {
@@ -105,15 +105,15 @@ async function _doNormalizeAlbum(
     console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} — ${lfmAlbum}":`, e);
   }
 
-  // Inject MB genres as additional lastfm-source candidates (community-voted)
+  const mbRaw: string[] = [];
   if (identity?.combinedMbGenres?.length) {
     for (const g of identity.combinedMbGenres) {
-      lastfmRaw.push(g.name);
+      mbRaw.push(g.name);
     }
   }
 
   // Artist tags as last resort: only when no file tags AND no album/MB tags exist
-  if (fileTagRows.length === 0 && lastfmRaw.length === 0) {
+  if (fileTagRows.length === 0 && lastfmRaw.length === 0 && mbRaw.length === 0) {
     try {
       const artistTags = await fetchArtistGenreTags(lfmArtist);
       lastfmRaw.push(...artistTags);
@@ -122,7 +122,7 @@ async function _doNormalizeAlbum(
     }
   }
 
-  type RawEntry = { name: string; source: "file" | "lastfm" };
+  type RawEntry = { name: string; source: "file" | "lastfm" | "musicbrainz" };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
     byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
@@ -131,6 +131,45 @@ async function _doNormalizeAlbum(
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
+  for (const raw of mbRaw) {
+    const k = canonicalKey(raw);
+    if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
+  }
+
+  // Write lastfm-sourced tags to track_tags so the vocab query can count them.
+  // File tags get written during sync; lastfm tags must be written here or they
+  // appear as orphaned in Cleanup even though normalization applies them.
+  type TrackIdRow = { id: string };
+  const albumTracks = await db.select<TrackIdRow[]>(
+    "SELECT id FROM tracks WHERE album_id = ?",
+    [albumId]
+  );
+  if (albumTracks.length > 0) {
+    for (const entry of byKey.values()) {
+      if (entry.source === "file") continue;
+      for (const track of albumTracks) {
+        await db.execute(
+          `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, ?)`,
+          [track.id, entry.name, entry.source]
+        );
+      }
+    }
+    // Apply any pre-existing tag_mappings to the newly inserted lastfm/musicbrainz rows
+    await db.execute(
+      `UPDATE track_tags
+       SET canonical_id = (
+         SELECT tm.canonical_id FROM tag_mappings tm
+         WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
+             = LOWER(REPLACE(REPLACE(TRIM(track_tags.raw_value), '-', ' '), '_', ' '))
+           AND tm.kind = track_tags.kind
+         LIMIT 1
+       )
+       WHERE source IN ('lastfm', 'musicbrainz')
+         AND canonical_id IS NULL
+         AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
+      [albumId]
+    );
+  }
 
   const seenIds = new Set<string>();
   const mapped: NormalizedTag[] = [];
@@ -138,7 +177,7 @@ async function _doNormalizeAlbum(
 
   for (const entry of byKey.values()) {
     const manualId = manualMap.get(canonicalKey(entry.name));
-    const confidence = entry.source === "file" ? 1.0 : 0.8;
+    const confidence = entry.source === "file" ? 1.0 : entry.source === "lastfm" ? 0.8 : 0.7;
 
     if (manualId === "__ignored__") continue;
 
@@ -167,13 +206,15 @@ async function _doNormalizeAlbum(
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
     const file: NormalizedTag[] = [];
     const lastfm: NormalizedTag[] = [];
+    const mb: NormalizedTag[] = [];
     for (const id of ids) {
       const tag = mappedById.get(id);
       if (!tag) continue;
       if (tag.source === "file") file.push(tag);
+      else if (tag.source === "musicbrainz") mb.push(tag);
       else lastfm.push(tag);
     }
-    return [...file, ...lastfm].slice(0, cap);
+    return [...file, ...lastfm, ...mb].slice(0, cap);
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);

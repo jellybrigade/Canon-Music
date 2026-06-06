@@ -367,4 +367,18 @@ export const migrations: Migration[] = [
     version: 23,
     sql: `ALTER TABLE tracks ADD COLUMN play_count INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    version: 24,
+    sql: `
+      CREATE TABLE IF NOT EXISTS user_tree_changelog (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        node_id TEXT NOT NULL,
+        node_name TEXT NOT NULL,
+        action TEXT NOT NULL CHECK(action IN ('create', 'update', 'delete')),
+        before_json TEXT,
+        after_json TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `,
+  },
 ];

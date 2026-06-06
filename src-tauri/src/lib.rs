@@ -74,60 +74,6 @@ impl PosTracker {
     }
 }
 
-/// Wraps a Source to compute exponential-smoothed RMS level for the peak meter.
-struct MeteredSource<I: Source<Item = i16>> {
-    inner: I,
-    level: Arc<Mutex<f32>>,
-    sum_sq: f32,
-    count: u32,
-    // Update level every ~10ms worth of frames
-    window: u32,
-}
-
-impl<I: Source<Item = i16>> MeteredSource<I> {
-    fn new(inner: I, level: Arc<Mutex<f32>>) -> Self {
-        let sr = inner.sample_rate().max(1);
-        let ch = inner.channels().max(1) as u32;
-        let window = (sr / 100 * ch).max(1); // ~10ms; max(1) guards against sr < 100
-        MeteredSource { inner, level, sum_sq: 0.0, count: 0, window }
-    }
-}
-
-impl<I: Source<Item = i16>> Iterator for MeteredSource<I> {
-    type Item = i16;
-    fn next(&mut self) -> Option<i16> {
-        let s = self.inner.next()?;
-        let norm = s as f32 / i16::MAX as f32;
-        self.sum_sq += norm * norm;
-        self.count += 1;
-        if self.count >= self.window {
-            let rms = (self.sum_sq / self.count as f32).sqrt();
-            let mut lk = self.level.lock().unwrap();
-            // Exponential smoothing: attack fast, release slow
-            const SMOOTHING: f32 = 0.8;
-            *lk = SMOOTHING * *lk + (1.0 - SMOOTHING) * rms;
-            self.sum_sq = 0.0;
-            self.count = 0;
-        }
-        Some(s)
-    }
-}
-
-impl<I: Source<Item = i16>> Source for MeteredSource<I> {
-    fn current_frame_len(&self) -> Option<usize> { self.inner.current_frame_len() }
-    fn channels(&self) -> u16 { self.inner.channels() }
-    fn sample_rate(&self) -> u32 { self.inner.sample_rate() }
-    fn total_duration(&self) -> Option<Duration> { self.inner.total_duration() }
-    fn try_seek(&mut self, pos: Duration) -> Result<(), rodio::source::SeekError> {
-        let result = self.inner.try_seek(pos);
-        if result.is_ok() {
-            self.sum_sq = 0.0;
-            self.count = 0;
-        }
-        result
-    }
-}
-
 struct AudioState {
     handle: Option<OutputStreamHandle>,
     sink: Arc<Mutex<Option<Arc<Sink>>>>,
@@ -137,7 +83,6 @@ struct AudioState {
     speed: Arc<Mutex<f32>>,
     // URL → pre-fetched bytes. Populated by audio_prefetch; consumed (and cleared) by audio_play.
     prefetch_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
-    level: Arc<Mutex<f32>>,
     // Bumped on every pause/resume to cancel in-flight fade threads.
     fade_gen: Arc<AtomicU64>,
 }
@@ -191,15 +136,11 @@ async fn audio_play(
         pos.offset = 0.0;
     }
 
-    // Reset peak meter level on new track
-    *state.level.lock().unwrap() = 0.0;
-
     let play_id_arc = Arc::clone(&state.play_id);
     let sink_arc = Arc::clone(&state.sink);
     let pos_arc = Arc::clone(&state.pos);
     let volume_arc = Arc::clone(&state.volume);
     let speed_arc = Arc::clone(&state.speed);
-    let level_arc = Arc::clone(&state.level);
 
     // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
@@ -240,9 +181,7 @@ async fn audio_play(
         sink.set_volume(current_volume);
         sink.set_speed(current_speed);
 
-        // Wrap in metered source for peak meter
-        let metered = MeteredSource::new(source, Arc::clone(&level_arc));
-        sink.append(metered);
+        sink.append(source);
 
         {
             let mut pos = pos_arc.lock().unwrap();
@@ -278,11 +217,6 @@ async fn audio_play(
 #[tauri::command]
 fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
     state.pos.lock().unwrap().current()
-}
-
-#[tauri::command]
-fn audio_get_level(state: tauri::State<'_, AudioState>) -> f32 {
-    *state.level.lock().unwrap()
 }
 
 #[tauri::command]
@@ -419,7 +353,6 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
         sink.stop();
     }
     state.prefetch_cache.lock().unwrap().clear();
-    *state.level.lock().unwrap() = 0.0;
     let mut pos = state.pos.lock().unwrap();
     pos.play_start = None;
     pos.offset = 0.0;
@@ -521,7 +454,7 @@ async fn audio_extract_waveform(
         };
         let bucket_size = (estimated_frames / BUCKET_COUNT).max(1);
 
-        const EMIT_BATCH: usize = 10; // emit every N bars to reduce IPC round-trips
+        const EMIT_BATCH: usize = 2; // small batch so first bars appear quickly; later bars still batched
 
         let mut raw_peaks: Vec<f32> = Vec::with_capacity(BUCKET_COUNT);
         let mut bucket_sum_sq = 0.0f32;
@@ -654,7 +587,6 @@ pub fn run() {
             volume: Arc::new(Mutex::new(1.0_f32)),
             speed: Arc::new(Mutex::new(1.0_f32)),
             prefetch_cache: Arc::new(Mutex::new(HashMap::new())),
-            level: Arc::new(Mutex::new(0.0_f32)),
             fade_gen: Arc::new(AtomicU64::new(0)),
         })
         .invoke_handler(tauri::generate_handler![
@@ -667,7 +599,6 @@ pub fn run() {
             audio_resume,
             audio_stop,
             audio_get_pos,
-            audio_get_level,
             audio_volume,
             audio_set_speed,
             audio_seek,

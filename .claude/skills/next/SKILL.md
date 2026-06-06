@@ -31,7 +31,7 @@ Wait for user approval before proceeding. If the user wants to adjust scope or a
 
 ## Phase 4 — Implement
 
-Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch. Keep ARCHITECTURE.md current if any files are added, moved, or substantially repurposed.
+Exit plan mode and implement the approved plan. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch.
 
 When building any UI with hover-reveal buttons, cards, or interactive chips, read `instructions/ui-patterns.md` first.
 

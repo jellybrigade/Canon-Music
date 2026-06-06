@@ -240,6 +240,8 @@
 .home-spotlight__artist-link {
   background: none;
   border: none;
+  box-shadow: none;
+  text-decoration: none;
   padding: 0;
   color: inherit;
   font-size: inherit;
@@ -430,9 +432,102 @@
   color: var(--text-tertiary, #666);
 }
 
+.for-you-popup__remove {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0 0.2rem;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.for-you-popup__remove:hover { color: var(--danger, #e74c3c); }
+
+.for-you-popup__add-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0.4rem 0.75rem;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--accent);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.for-you-popup__add-btn:hover { opacity: 1; }
+
+.for-you-popup__add-form {
+  padding: 0.5rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+
+.for-you-popup__add-input {
+  background: var(--bg-input, rgba(255,255,255,0.07));
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+}
+.for-you-popup__add-input:focus { border-color: var(--accent); }
+
+.for-you-popup__add-select {
+  -webkit-appearance: none;
+  appearance: none;
+  background-color: var(--bg-popover, #242424);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23888' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.25rem 1.5rem 0.25rem 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  cursor: pointer;
+}
+
+.for-you-popup__add-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.for-you-popup__add-confirm {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: none;
+}
+.for-you-popup__add-cancel {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.8rem;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: none;
+}
+
 .home-suggestion-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
   gap: 10px;
 }
 

@@ -263,7 +263,7 @@
   border-color: var(--text-tertiary);
 }
 
-/* file-sourced chips: solid border (default); lastfm-sourced: dashed border */
+/* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
 .album-tag-chip--lastfm {
   border-style: dashed;
   opacity: 0.85;
@@ -271,6 +271,39 @@
 
 .album-tag-chip--lastfm:hover {
   opacity: 1;
+}
+
+.album-tag-chip--musicbrainz {
+  border-style: dotted;
+  opacity: 0.75;
+}
+
+.album-tag-chip--musicbrainz:hover {
+  opacity: 1;
+}
+
+.album-tag-column--grouped {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+
+.album-tag-source-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.album-tag-source-label {
+  font-size: 0.5625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  opacity: 0.65;
+  white-space: nowrap;
+  margin-right: 0.1rem;
 }
 
 .album-tag-actions {
@@ -426,4 +459,31 @@
   color: var(--text-primary, rgba(255, 255, 255, 0.85));
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ── Tag level badge ── */
+.album-tag-level-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  color: var(--text-tertiary);
+  vertical-align: middle;
+  margin-left: 0.3em;
+  cursor: help;
+}
+
+/* ── Track year column ── */
+.track-year {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-style: italic;
+  padding-right: 0.5rem;
+  min-width: 2.5rem;
 }

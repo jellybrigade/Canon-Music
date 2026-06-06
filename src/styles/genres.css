@@ -179,12 +179,13 @@
   border-radius: 10px;
 }
 
-/* Width set via inline style by GenreView after DOM measurement (useLayoutEffect).
-   The flex fallback applies only on the very first paint before measurement fires. */
 .genre-column {
-  flex: 1 1 260px;
-  min-width: 0;
-  overflow-y: auto;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 180px;
+  max-width: 460px;
+  min-height: 0;
+  overflow-y: scroll;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -220,6 +221,7 @@
   user-select: none;
   transition: background 0.1s;
   min-height: 44px;
+  position: relative;
 }
 
 .genre-col-row:hover {
@@ -275,17 +277,39 @@
 
 /* ── Hover-only action buttons ── */
 /* Use div not span — avoids WebKit opacity compositing quirks with SVG children */
+/* Position absolute so actions never affect column width measurement or row layout */
+
+/* Fixed-width slot — always reserves space for whichever state is visible */
+.genre-col-right {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 64px;
+}
 
 .genre-col-actions {
   display: flex;
   align-items: center;
   gap: 4px;
-  flex-shrink: 0;
-  visibility: hidden;
+  position: absolute;
+  right: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
 }
 
 .genre-col-row:hover .genre-col-actions {
-  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.genre-col-row:hover .genre-col-count,
+.genre-col-row:hover .genre-col-chevron {
+  opacity: 0;
+  transition: opacity 0.1s;
 }
 
 .genre-col-action-btn {

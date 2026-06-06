@@ -54,13 +54,14 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     overscan: 3,
   });
 
-  const prevCols = useRef(cols);
+  const prevLayoutKey = useRef(`${cols}-${rowHeight}`);
   useLayoutEffect(() => {
-    if (prevCols.current !== cols) {
-      prevCols.current = cols;
+    const key = `${cols}-${rowHeight}`;
+    if (prevLayoutKey.current !== key) {
+      prevLayoutKey.current = key;
       virtualizer.measure();
     }
-  }, [cols, virtualizer]);
+  }, [cols, rowHeight, virtualizer]);
 
   if (artists.length === 0) {
     return <p className="empty-state">No artists found. Sync first.</p>;

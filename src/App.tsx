@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
@@ -93,16 +94,7 @@ export default function App() {
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!genreDropdownOpen) return;
-    function onClickOutside(e: MouseEvent) {
-      if (genreDropdownRef.current && !genreDropdownRef.current.contains(e.target as Node)) {
-        setGenreDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, [genreDropdownOpen]);
+  useClickOutside(genreDropdownRef, () => setGenreDropdownOpen(false), genreDropdownOpen);
 
   const [selectedArtist, setSelectedArtist] = useState<ArtistRow | null>(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState<PlaylistRow | null>(null);

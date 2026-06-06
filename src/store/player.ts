@@ -14,7 +14,7 @@ export interface CurrentTrack {
   albumId?: string | null;
 }
 
-export type RepeatMode = "off" | "repeat-all" | "repeat-one";
+type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
 export type RadioMode =
   | "curated"
@@ -220,6 +220,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
       const rawPeaks = new Array<number>(200).fill(0);
       let runningMax = 0;
+      let filledCount = 0;
 
       const unlistenChunk = await listen<{ track_id: string; offset: number; peaks: number[] }>(
         "waveform_chunk",
@@ -231,9 +232,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             rawPeaks[offset + i] = v;
             if (v > runningMax) runningMax = v;
           }
+          filledCount = Math.max(filledCount, offset + peaks.length);
           if (get().currentTrack?.id !== trackId) return;
-          const normalized = runningMax > 0 ? rawPeaks.map((p) => p / runningMax) : rawPeaks.slice();
-          set({ waveformPeaks: normalized });
+          const scale = runningMax > 0 ? 1 / runningMax : 1;
+          // Show each bar at its actual position; unfilled bars get a stub so the load direction is clear.
+          const display = rawPeaks.map((v, i) => i < filledCount ? v * scale : 0.1);
+          set({ waveformPeaks: display });
         }
       );
 

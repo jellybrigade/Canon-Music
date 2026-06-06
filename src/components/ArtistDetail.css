@@ -470,3 +470,41 @@
   color: var(--danger, #e74c3c);
   font-size: 0.75rem;
 }
+
+/* ── Last.fm-only tracks ── */
+.artist-lastfm-only {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.5rem;
+}
+
+.artist-lastfm-only-label {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.4rem 0;
+  padding-left: 0.5rem;
+}
+
+.artist-lastfm-only-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.25rem 0.75rem;
+  opacity: 0.5;
+}
+
+.artist-lastfm-only-title {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist-lastfm-only-plays {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+}

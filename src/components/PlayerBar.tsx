@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp,
 } from "lucide-react";
-import { invoke } from "@tauri-apps/api/core";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
@@ -17,78 +18,24 @@ import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
-const PEAK_HOLD_FRAMES = 20; // at ~20fps
-const PEAK_DECAY = 0.95;
-const METER_FRAME_SKIP = 3; // invoke IPC every 3rd rAF → ~20fps
+interface LoveButtonProps {
+  isLoved: boolean;
+  onToggle: () => void;
+  narrow?: boolean;
+}
 
-function PeakMeter({ isPlaying }: { isPlaying: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number | null>(null);
-  const peakHold = useRef(0);
-  const peakFrames = useRef(0);
-  const frameCount = useRef(0);
-
-  const draw = useCallback(() => {
-    frameCount.current++;
-    if (frameCount.current % METER_FRAME_SKIP === 0) {
-      invoke<number>("audio_get_level")
-        .then((rms) => {
-          const canvas = canvasRef.current;
-          if (!canvas) return;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) return;
-          const w = canvas.width;
-          const h = canvas.height;
-
-          if (rms >= peakHold.current) {
-            peakHold.current = rms;
-            peakFrames.current = PEAK_HOLD_FRAMES;
-          } else {
-            if (peakFrames.current > 0) {
-              peakFrames.current--;
-            } else {
-              peakHold.current *= PEAK_DECAY;
-            }
-          }
-
-          ctx.clearRect(0, 0, w, h);
-          // Bar — RMS is typically 0..0.3, scale up for visibility
-          const barH = Math.round(rms * h * 4);
-          const accent = getComputedStyle(canvas).getPropertyValue("--accent").trim() || "#a78bfa";
-          ctx.fillStyle = accent;
-          ctx.fillRect(0, h - Math.min(barH, h), w, Math.min(barH, h));
-          // Peak indicator
-          const peakY = h - Math.round(peakHold.current * h * 4);
-          if (peakY >= 0 && peakY < h) {
-            ctx.fillRect(0, Math.max(0, peakY - 1), w, 2);
-          }
-        })
-        .catch(() => {});
-    }
-    rafRef.current = requestAnimationFrame(draw);
-  }, []);
-
-  useEffect(() => {
-    if (isPlaying) {
-      rafRef.current = requestAnimationFrame(draw);
-    } else {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      // Clear canvas when stopped
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext("2d");
-        ctx?.clearRect(0, 0, canvas.width, canvas.height);
-      }
-      peakHold.current = 0;
-      peakFrames.current = 0;
-    }
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [isPlaying, draw]);
-
-  return <canvas ref={canvasRef} className="peak-meter" width={4} height={28} aria-hidden />;
+// fallow-ignore-next-line complexity
+function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
+  return (
+    <button
+      className={`player-btn player-btn--icon${narrow ? " player-btn--hide-narrow" : ""}${isLoved ? " player-btn--active" : ""}`}
+      onClick={onToggle}
+      title={isLoved ? "Unlove" : "Love"}
+      aria-label={isLoved ? "Unlove" : "Love"}
+    >
+      <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
+    </button>
+  );
 }
 
 interface Props {
@@ -127,6 +74,9 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
+  const [moreOpen, setMoreOpen] = useState(false);
+  const morePanelRef = useRef<HTMLDivElement>(null);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
@@ -138,9 +88,25 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   const timerPopoverRef = useRef<HTMLDivElement>(null);
   const [remaining, setRemaining] = useState("");
 
-  const [trackRating, setTrackRating] = useState(0);
   const [hoverRating, setHoverRating] = useState(0);
   const ratingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const queryClient = useQueryClient();
+  const nativeTrackId =
+    currentTrack && serverWithCred
+      ? stripServerPrefix(currentTrack.id, serverWithCred.server.id)
+      : null;
+  const { data: trackRating = 0 } = useQuery({
+    queryKey: ["trackRating", nativeTrackId],
+    queryFn: () =>
+      fetchTrackRating(
+        serverWithCred!.server.url,
+        serverWithCred!.server.username,
+        serverWithCred!.credential,
+        nativeTrackId!
+      ),
+    enabled: !!nativeTrackId,
+    staleTime: Infinity,
+  });
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -186,23 +152,20 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
   }, [pullProgress, enrichmentPending]);
 
   useEffect(() => {
+    if (!moreOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMoreOpen(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [moreOpen]);
+
+  useEffect(() => {
     if (!artOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [artOpen]);
 
-  useEffect(() => {
-    if (!artOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      const target = e.target as Node;
-      if (artPopoverRef.current?.contains(target)) return;
-      if (artThumbRef.current?.contains(target)) return;
-      setArtOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [artOpen]);
+  useClickOutside([artPopoverRef, artThumbRef], () => setArtOpen(false), artOpen);
 
   // Sleep timer countdown display
   useEffect(() => {
@@ -219,36 +182,20 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
     return () => clearInterval(id);
   }, [sleepTimerEndsAt]);
 
-  // Close timer popover on outside click
-  useEffect(() => {
-    if (!timerOpen) return;
-    function onMouseDown(e: MouseEvent) {
-      const t = e.target as Node;
-      if (timerPopoverRef.current?.contains(t) || timerBtnRef.current?.contains(t)) return;
-      setTimerOpen(false);
-    }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [timerOpen]);
-
-  // Fetch star rating when track changes
-  useEffect(() => {
-    if (!currentTrack || !serverWithCred) { setTrackRating(0); return; }
-    const { server, credential } = serverWithCred;
-    const nativeId = stripServerPrefix(currentTrack.id, server.id);
-    void fetchTrackRating(server.url, server.username, credential, nativeId).then(setTrackRating);
-  }, [currentTrack?.id, serverWithCred]);
+  useClickOutside([timerPopoverRef, timerBtnRef], () => setTimerOpen(false), timerOpen);
+  useClickOutside([morePanelRef, moreBtnRef], () => setMoreOpen(false), moreOpen);
 
   function handleStarClick(star: number) {
-    if (!currentTrack || !serverWithCred) return;
+    if (!currentTrack || !serverWithCred || !nativeTrackId) return;
     const newRating = star === trackRating ? 0 : star;
-    setTrackRating(newRating);
+    queryClient.setQueryData(["trackRating", nativeTrackId], newRating);
+    const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
-      const { server, credential } = serverWithCred;
-      const nativeId = stripServerPrefix(currentTrack.id, server.id);
-      setRating(server.url, server.username, credential, nativeId, newRating).catch(console.error);
-    }, 100);
+      setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(() => {
+        queryClient.invalidateQueries({ queryKey: ["trackRating", nativeTrackId] });
+      });
+    }, 200);
   }
 
   const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;
@@ -338,7 +285,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
         <div className="player-section player-section--center">
           <div className="player-controls">
             <button
-              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
               title="Shuffle"
               aria-label="Shuffle"
@@ -376,7 +323,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               <SkipForward size={24} />
             </button>
             <button
-              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
@@ -389,23 +336,19 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
 
           <div className="player-progress-row">
             <PlayerProgress />
-            <PeakMeter isPlaying={isPlaying} />
           </div>
         </div>
 
         <div className="player-section player-section--right">
           {currentTrack && serverWithCred && (
             <>
-              <button
-                className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
-                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-                title={isLoved ? "Unlove" : "Love"}
-                aria-label={isLoved ? "Unlove" : "Love"}
-              >
-                <Heart size={18} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-              </button>
+              <LoveButton
+                isLoved={isLoved}
+                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+                narrow
+              />
               <div
-                className="player-stars"
+                className="player-stars player-stars--hide-narrow"
                 onMouseLeave={() => setHoverRating(0)}
               >
                 {[1, 2, 3, 4, 5].map((star) => {
@@ -428,7 +371,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
           )}
           <button
             ref={timerBtnRef}
-            className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
+            className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}
             onClick={() => {
               if (timerBtnRef.current) {
                 const r = timerBtnRef.current.getBoundingClientRect();
@@ -446,7 +389,7 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
             )}
           </button>
           <button
-            className="player-btn player-btn--icon"
+            className="player-btn player-btn--icon player-btn--hide-narrow"
             onClick={onNowPlaying}
             title="Now playing"
             aria-label="Now playing"
@@ -477,7 +420,83 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
               aria-label="Volume"
             />
           </div>
+          <button
+            ref={moreBtnRef}
+            className={`player-btn player-btn--icon player-more-btn${moreOpen ? " player-btn--active" : ""}`}
+            onClick={() => setMoreOpen((o) => !o)}
+            title="More controls"
+            aria-label="More controls"
+          >
+            <ChevronUp size={18} style={moreOpen ? { transform: "rotate(180deg)" } : undefined} />
+          </button>
         </div>
+        {moreOpen && (
+          <div ref={morePanelRef} className="player-more-panel">
+            <button
+              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
+              onClick={toggleShuffle}
+              title="Shuffle"
+              aria-label="Shuffle"
+            >
+              <Shuffle size={18} />
+            </button>
+            <button
+              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
+              onClick={() => void toggleRepeat()}
+              title={repeatLabel}
+              aria-label={repeatLabel}
+            >
+              {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
+            </button>
+            {currentTrack && serverWithCred && (
+              <LoveButton
+                isLoved={isLoved}
+                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
+              />
+            )}
+            <button
+              className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
+              onClick={() => {
+                const pbh = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--player-bar-height")) || 92;
+                setTimerPopoverPos({ right: 8, bottom: pbh + 56 });
+                setTimerOpen((o) => !o);
+                setMoreOpen(false);
+              }}
+              title={timerActive ? (remaining || "End of track") : "Sleep timer"}
+              aria-label="Sleep timer"
+            >
+              {timerActive && remaining ? (
+                <span className="player-timer-remaining">{remaining}</span>
+              ) : (
+                <Timer size={18} />
+              )}
+            </button>
+            <button
+              className="player-btn player-btn--icon"
+              onClick={() => { onNowPlaying(); setMoreOpen(false); }}
+              title="Now playing"
+              aria-label="Now playing"
+            >
+              <Headphones size={18} />
+            </button>
+            <div
+              className="player-more-volume"
+              onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
+            >
+              <Volume2 size={16} aria-hidden />
+              <input
+                type="range"
+                className="player-volume-slider"
+                min={0}
+                max={1}
+                step={0.01}
+                value={volume}
+                onChange={(e) => void setVolume(parseFloat(e.target.value))}
+                aria-label="Volume"
+              />
+            </div>
+          </div>
+        )}
       </div>}
 
       {timerOpen && (

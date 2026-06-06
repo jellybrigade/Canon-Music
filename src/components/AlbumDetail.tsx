@@ -202,8 +202,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return map;
   }, [rawSourceRows]);
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" }> => {
-    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" }>;
+  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }> => {
+    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }>;
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -229,6 +229,21 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       return true;
     });
   }, [normalizedTags, tracks, genreMappings]);
+
+  const genreGroups = useMemo(() => {
+    const file: typeof displayGenres = [];
+    const lastfm: typeof displayGenres = [];
+    const musicbrainz: typeof displayGenres = [];
+    const unsourced: typeof displayGenres = [];
+    for (const g of displayGenres) {
+      if (g.source === "file") file.push(g);
+      else if (g.source === "lastfm") lastfm.push(g);
+      else if (g.source === "musicbrainz") musicbrainz.push(g);
+      else unsourced.push(g);
+    }
+    const nonEmpty = [file, lastfm, musicbrainz, unsourced].filter((g) => g.length > 0);
+    return { file, lastfm, musicbrainz, unsourced, multiSource: nonEmpty.length > 1 };
+  }, [displayGenres]);
 
   const hasTags =
     displayGenres.length > 0 ||
@@ -334,36 +349,67 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       </div>
 
       {hasTags && (
-        <section className="album-tag-band">
-          {displayGenres.length > 0 && (
-            <div className="album-tag-column">
-              <h3 className="album-tag-column-title">Genres</h3>
-              {displayGenres.map((tag) => {
-                const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
-                const chipTitle = rawSources.length > 0
-                  ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
-                  : undefined;
-                const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
-                return (
-                  <button
-                    key={tag.id ?? tag.name}
-                    className={`album-tag-chip${sourceClass}`}
-                    title={chipTitle}
-                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setDrawerState({ albumId: album.id });
-                    }}
-                  >
-                    {tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+        <section className="album-tag-band" aria-label="Album tags">
+          {displayGenres.length > 0 && (() => {
+            const renderGenreChip = (tag: typeof displayGenres[0]) => {
+              const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
+              const chipTitle = rawSources.length > 0
+                ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
+                : undefined;
+              const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
+              return (
+                <button
+                  key={tag.id ?? tag.name}
+                  className={`album-tag-chip${sourceClass}`}
+                  title={chipTitle}
+                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setDrawerState({ albumId: album.id });
+                  }}
+                >
+                  {tag.name}
+                </button>
+              );
+            };
+            return (
+              <div className={`album-tag-column${genreGroups.multiSource ? " album-tag-column--grouped" : ""}`}>
+                <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
+                {genreGroups.multiSource ? (
+                  <>
+                    {genreGroups.file.length > 0 && (
+                      <div className="album-tag-source-group">
+                        <span className="album-tag-source-label">File</span>
+                        {genreGroups.file.map(renderGenreChip)}
+                      </div>
+                    )}
+                    {genreGroups.lastfm.length > 0 && (
+                      <div className="album-tag-source-group">
+                        <span className="album-tag-source-label">Last.fm</span>
+                        {genreGroups.lastfm.map(renderGenreChip)}
+                      </div>
+                    )}
+                    {genreGroups.musicbrainz.length > 0 && (
+                      <div className="album-tag-source-group">
+                        <span className="album-tag-source-label">MusicBrainz</span>
+                        {genreGroups.musicbrainz.map(renderGenreChip)}
+                      </div>
+                    )}
+                    {genreGroups.unsourced.length > 0 && (
+                      <div className="album-tag-source-group">
+                        {genreGroups.unsourced.map(renderGenreChip)}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  displayGenres.map(renderGenreChip)
+                )}
+              </div>
+            );
+          })()}
           {normalizedTags && normalizedTags.descriptors.length > 0 && (
             <div className="album-tag-column">
-              <h3 className="album-tag-column-title">Descriptors</h3>
+              <h3 className="album-tag-column-title" title="Mood and style descriptors from enrichment services">Descriptors</h3>
               {normalizedTags.descriptors.map((tag) => {
                 const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
                 const chipTitle = rawSources.length > 0
@@ -389,7 +435,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           )}
           {normalizedTags && normalizedTags.scenes.length > 0 && (
             <div className="album-tag-column">
-              <h3 className="album-tag-column-title">Scenes & Movements</h3>
+              <h3 className="album-tag-column-title" title="Musical scenes, movements and subgenre contexts">Scenes & Movements</h3>
               {normalizedTags.scenes.map((tag) => {
                 const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
                 const chipTitle = rawSources.length > 0
@@ -451,6 +497,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     </td>
                     <td className="track-title">{track.title}</td>
                     <td className="track-artist">{track.artist ?? ""}</td>
+                    {track.year && track.year !== album.year
+                      ? <td className="track-year" title="Track year differs from album year">{track.year}</td>
+                      : <td className="track-year" />}
                     <td className="track-duration">
                       {track.duration ? formatDuration(track.duration) : ""}
                     </td>
