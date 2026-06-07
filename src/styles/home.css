@@ -658,6 +658,10 @@
   border-bottom-right-radius: 0;
 }
 
+.suggestion-card__row--top .album-overlay {
+  border-radius: 0;
+}
+
 .suggestion-card--skeleton .suggestion-card__art-wrap {
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
