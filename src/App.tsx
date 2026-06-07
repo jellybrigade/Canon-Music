@@ -42,6 +42,7 @@ import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { usePlayerStore } from "./store/player";
 import { useTagsStore } from "./store/tags";
+import { useLibraryFiltersStore } from "./store/libraryFilters";
 import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
@@ -72,8 +73,17 @@ export default function App() {
   const queryClient = useQueryClient();
 
   const [view, setView] = useState<View>("home");
-  const [lovedOnly, setLovedOnly] = useState(false);
   const { lovedAlbumIds } = useLoved();
+
+  const canonicalIdFilters = useLibraryFiltersStore((s) => s.canonicalIdFilters);
+  const lovedOnly = useLibraryFiltersStore((s) => s.lovedOnly);
+  const yearFromInput = useLibraryFiltersStore((s) => s.yearFromInput);
+  const yearToInput = useLibraryFiltersStore((s) => s.yearToInput);
+  const setCanonicalIdFilters = useLibraryFiltersStore((s) => s.setCanonicalIdFilters);
+  const toggleCanonicalIdFilter = useLibraryFiltersStore((s) => s.toggleCanonicalIdFilter);
+  const toggleLovedOnly = useLibraryFiltersStore((s) => s.toggleLovedOnly);
+  const setYearFromInput = useLibraryFiltersStore((s) => s.setYearFromInput);
+  const setYearToInput = useLibraryFiltersStore((s) => s.setYearToInput);
 
   const [rawSort, setSort] = useSetting("library_sort", "artist");
   const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
@@ -88,9 +98,6 @@ export default function App() {
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
-  const [canonicalIdFilters, setCanonicalIdFilters] = useState<string[]>([]);
-  const [yearFromInput, setYearFromInput] = useState("");
-  const [yearToInput, setYearToInput] = useState("");
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -493,12 +500,6 @@ export default function App() {
     { value: "year", label: "Year" },
   ];
 
-  function toggleGenreFilter(id: string) {
-    setCanonicalIdFilters((prev) =>
-      prev.includes(id) ? prev.filter((g) => g !== id) : [...prev, id]
-    );
-  }
-
   function renderSearchBar() {
     return (
       <div className="search-bar">
@@ -705,7 +706,7 @@ export default function App() {
                         <button
                           key={g.canonical_id}
                           className={`genre-dropdown-item${canonicalIdFilters.includes(g.canonical_id) ? " genre-dropdown-item--active" : ""}`}
-                          onClick={() => toggleGenreFilter(g.canonical_id)}
+                          onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
                         >
                           <span className="genre-dropdown-name">{g.name}</span>
                           <span className="genre-dropdown-count">{g.album_count}</span>
@@ -727,7 +728,7 @@ export default function App() {
               )}
               <button
                 className={`loved-filter-btn${lovedOnly ? " loved-filter-btn--active" : ""}`}
-                onClick={() => setLovedOnly((v) => !v)}
+                onClick={toggleLovedOnly}
                 title={lovedOnly ? "Show all albums" : "Show loved albums"}
               >
                 <Heart size={14} fill={lovedOnly ? "currentColor" : "none"} strokeWidth={2} />

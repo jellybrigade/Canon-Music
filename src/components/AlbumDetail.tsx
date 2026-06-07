@@ -18,8 +18,8 @@ import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useSetting } from "../hooks/useSetting";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
-import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { getCoverArtUrl } from "../lib/navidrome";
+import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
@@ -149,10 +149,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     };
   }
 
-  function streamUrlFor(track: CurrentTrack): string {
-    const navTrackId = stripServerPrefix(track.id, server.id);
-    return getStreamUrl(server.url, server.username, credential, navTrackId);
-  }
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
