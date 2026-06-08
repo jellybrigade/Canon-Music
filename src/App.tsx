@@ -760,7 +760,7 @@ export default function App() {
               key={id}
               className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
               title={badge ? `${label} (${badge} unmapped)` : label}
-              onClick={() => navigateTo(id)}
+              onClick={() => { setCanonicalIdFilters([]); navigateTo(id); }}
             >
               <span className="sidebar-btn-icon">
                 {icon}

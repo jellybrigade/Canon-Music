@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { usePlayerStore } from "../store/player";
-import { useLibraryFiltersStore } from "../store/libraryFilters";
 import type { AlbumRow } from "./useAlbums";
 import type { ArtistRow } from "./useArtists";
 import type { PlaylistRow } from "./usePlaylists";
@@ -24,7 +23,6 @@ export function useAppNavigation() {
 
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
-  const setCanonicalIdFilters = useLibraryFiltersStore((s) => s.setCanonicalIdFilters);
 
   function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
     historyRef.current.push({ view, selectedAlbum, selectedArtist, selectedPlaylist });
@@ -33,7 +31,6 @@ export function useAppNavigation() {
     setSelectedAlbum(select?.album ?? null);
     setSelectedArtist(select?.artist ?? null);
     setSelectedPlaylist(null);
-    setCanonicalIdFilters([]);
   }
 
   function goBack() {
