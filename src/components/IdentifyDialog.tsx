@@ -72,6 +72,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumId
       lastfmAlbumName: lfmAlbum.trim() || null,
       lastfmMatchConfirmed: true,
       combinedGenres: lookupResult?.combinedGenres ?? [],
+      combinedTags: lookupResult?.combinedTags ?? [],
       label: releaseDetail?.label ?? null,
       country: releaseDetail?.country ?? null,
       catalogNumber: releaseDetail?.catalogNumber ?? null,

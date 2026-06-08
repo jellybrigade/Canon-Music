@@ -76,6 +76,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         combinedMbGenres: albumIdentity?.combined_genres_json
           ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
           : null,
+        combinedMbTags: albumIdentity?.combined_tags_json
+          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null,
       });
       await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
     } catch {
@@ -101,7 +104,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   useEffect(() => {
     if (!autoResult) return;
-    const { decision, score, detail, release, combinedGenres } = autoResult;
+    const { decision, score, detail, release, combinedGenres, combinedTags } = autoResult;
 
     if (decision === "auto_confirmed" && detail) {
       saveIdentity.mutate({
@@ -113,6 +116,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         lastfmAlbumName: null,
         lastfmMatchConfirmed: false,
         combinedGenres,
+        combinedTags,
         label: release?.label ?? null,
         country: release?.country ?? null,
         catalogNumber: release?.catalogNumber ?? null,
@@ -199,8 +203,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return map;
   }, [rawSourceRows]);
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }> => {
-    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }>;
+  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" | "musicbrainz-folksonomy" }> => {
+    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" | "musicbrainz-folksonomy" }>;
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -231,15 +235,17 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     const file: typeof displayGenres = [];
     const lastfm: typeof displayGenres = [];
     const musicbrainz: typeof displayGenres = [];
+    const folksonomy: typeof displayGenres = [];
     const unsourced: typeof displayGenres = [];
     for (const g of displayGenres) {
       if (g.source === "file") file.push(g);
       else if (g.source === "lastfm") lastfm.push(g);
       else if (g.source === "musicbrainz") musicbrainz.push(g);
+      else if (g.source === "musicbrainz-folksonomy") folksonomy.push(g);
       else unsourced.push(g);
     }
-    const nonEmpty = [file, lastfm, musicbrainz, unsourced].filter((g) => g.length > 0);
-    return { file, lastfm, musicbrainz, unsourced, multiSource: nonEmpty.length > 1 };
+    const nonEmpty = [file, lastfm, musicbrainz, folksonomy, unsourced].filter((g) => g.length > 0);
+    return { file, lastfm, musicbrainz, folksonomy, unsourced, multiSource: nonEmpty.length > 1 };
   }, [displayGenres]);
 
   const hasTags =
@@ -386,10 +392,20 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                         {genreGroups.lastfm.map(renderGenreChip)}
                       </div>
                     )}
-                    {genreGroups.musicbrainz.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">MusicBrainz</span>
-                        {genreGroups.musicbrainz.map(renderGenreChip)}
+                    {(genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0) && (
+                      <div className="album-tag-mb-row">
+                        {genreGroups.musicbrainz.length > 0 && (
+                          <div className="album-tag-source-group">
+                            <span className="album-tag-source-label">MusicBrainz</span>
+                            {genreGroups.musicbrainz.map(renderGenreChip)}
+                          </div>
+                        )}
+                        {genreGroups.folksonomy.length > 0 && (
+                          <div className="album-tag-source-group">
+                            <span className="album-tag-source-label">Folksonomy</span>
+                            {genreGroups.folksonomy.map(renderGenreChip)}
+                          </div>
+                        )}
                       </div>
                     )}
                     {genreGroups.unsourced.length > 0 && (

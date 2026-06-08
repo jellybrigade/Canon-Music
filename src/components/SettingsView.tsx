@@ -11,6 +11,7 @@ import { persistAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { authenticate } from "../lib/navidrome";
 import type { NavidromeCredential } from "../lib/navidrome";
 import { getMinTagCount, setMinTagCount } from "../lib/lastfm";
+import { getMinFolksonomyCount, setMinFolksonomyCount } from "../lib/musicbrainz";
 import { keychain } from "../keychain";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useTagsStore } from "../store/tags";
@@ -70,6 +71,10 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const { data: minTagCount } = useQuery({
     queryKey: ["settings", "lastfm.min_tag_count"],
     queryFn: getMinTagCount,
+  });
+  const { data: minFolksonomyCount } = useQuery({
+    queryKey: ["settings", "musicbrainz.min_folksonomy_count"],
+    queryFn: getMinFolksonomyCount,
   });
   const pullProgress = useTagsStore((s) => s.pullProgress);
   const setPullProgress = useTagsStore((s) => s.setPullProgress);
@@ -143,6 +148,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
               lastfmAlbumName: null,
               lastfmMatchConfirmed: false,
               combinedGenres: result.combinedGenres,
+              combinedTags: result.combinedTags,
               label: result.release?.label ?? null,
               country: result.release?.country ?? null,
               catalogNumber: result.release?.catalogNumber ?? null,
@@ -172,11 +178,11 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
     type FullRow = {
       id: string; artist: string | null; name: string;
       lastfm_artist_name: string | null; lastfm_album_name: string | null;
-      combined_genres_json: string | null;
+      combined_genres_json: string | null; combined_tags_json: string | null;
     };
     const albums = await db.select<FullRow[]>(
       `SELECT a.id, a.artist, a.name,
-              ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json
+              ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
        FROM albums a
        LEFT JOIN album_identity ai ON ai.album_id = a.id
        ORDER BY a.name`
@@ -188,10 +194,14 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
         const combinedMbGenres = album.combined_genres_json
           ? (JSON.parse(album.combined_genres_json) as Array<{ name: string; count: number }>)
           : null;
+        const combinedMbTags = album.combined_tags_json
+          ? (JSON.parse(album.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null;
         await normalizeAlbum(album.id, album.artist ?? "", album.name, {
           lastfmArtistName: album.lastfm_artist_name,
           lastfmAlbumName: album.lastfm_album_name,
           combinedMbGenres,
+          combinedMbTags,
         });
       } catch (e) {
         console.warn("Last.fm sync failed for:", album.name, e);
@@ -484,6 +494,25 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             <strong>Identify…</strong> button on any album or artist to confirm MusicBrainz IDs.
             Confirmed identity enriches genres, label, country, and release date.
           </p>
+          <label className="settings-field">
+            <span>Min folksonomy tag votes (0–100)</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={minFolksonomyCount ?? 2}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (!isNaN(v) && v >= 0 && v <= 100) {
+                  void setMinFolksonomyCount(v).then(() => {
+                    void queryClient.invalidateQueries({ queryKey: ["settings", "musicbrainz.min_folksonomy_count"] });
+                  });
+                }
+              }}
+              className="settings-staleness-input"
+            />
+          </label>
           <label className="settings-field settings-field--inline">
             <input
               type="checkbox"

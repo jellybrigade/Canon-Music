@@ -13,7 +13,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   const [stalenessDays] = useSetting("tags.staleness_days", "30");
   const { data: identity } = useAlbumIdentity(albumId);
   const decrementEnrichmentPending = useTagsStore((s) => s.decrementEnrichmentPending);
-  // undefined = not yet seen (first render); null = seen, no MB genres; string = seen, has MB genres
+  // undefined = not yet seen (first render); null/string = seen value (genres + tags concatenated for change detection)
   const prevMbGenresJsonRef = useRef<string | null | undefined>(undefined);
   // Guard: only decrement the enrichment counter once per album mount, regardless of re-runs
   const decrementedRef = useRef(false);
@@ -29,13 +29,15 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
     if (query.isLoading || !albumId) return;
 
     const currentMbGenres = identity?.combined_genres_json ?? null;
-    const mbGenresJustArrived =
+    const currentMbTags = identity?.combined_tags_json ?? null;
+    const currentMbKey = `${currentMbGenres ?? ""}|${currentMbTags ?? ""}`;
+    const mbDataJustArrived =
       prevMbGenresJsonRef.current !== undefined &&
-      prevMbGenresJsonRef.current !== currentMbGenres &&
-      currentMbGenres !== null;
-    prevMbGenresJsonRef.current = currentMbGenres;
+      prevMbGenresJsonRef.current !== currentMbKey &&
+      (currentMbGenres !== null || currentMbTags !== null);
+    prevMbGenresJsonRef.current = currentMbKey;
 
-    if (!mbGenresJustArrived && !isStale(query.data ?? null, Number(stalenessDays) || 30)) return;
+    if (!mbDataJustArrived && !isStale(query.data ?? null, Number(stalenessDays) || 30)) return;
 
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {
@@ -46,10 +48,20 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       }
     }
 
+    let combinedMbTags: MbGenre[] | null = null;
+    if (identity?.combined_tags_json) {
+      try {
+        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
+      } catch {
+        // Malformed JSON — ignore, proceed without MB tags
+      }
+    }
+
     void normalizeAlbum(albumId, artist, album, {
       lastfmArtistName: identity?.lastfm_artist_name ?? null,
       lastfmAlbumName: identity?.lastfm_album_name ?? null,
       combinedMbGenres,
+      combinedMbTags,
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
       if (!decrementedRef.current) {

@@ -28,6 +28,7 @@ export interface AutoIdentifyResult {
   detail: MbReleaseGroupDetail | null;
   release: MbReleaseDetail | null;
   combinedGenres: MbGenre[];
+  combinedTags: MbGenre[];
   error: string | null;
 }
 
@@ -79,7 +80,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
     }
 
     if (candidates.length === 0) {
-      return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], error: null };
+      return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], combinedTags: [], error: null };
     }
 
     candidates = filterByTrackCount(candidates, trackCount);
@@ -91,7 +92,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
 
     if (top.score < AUTO_CONFIRM_THRESHOLD || gap < MIN_SCORE_GAP) {
       const decision = top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous";
-      return { decision, score: top.score, top: top.candidate, detail: null, release: null, combinedGenres: [], error: null };
+      return { decision, score: top.score, top: top.candidate, detail: null, release: null, combinedGenres: [], combinedTags: [], error: null };
     }
 
     const rgDetail = await lookupReleaseGroup(top.candidate.id);
@@ -111,6 +112,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
     }
 
     const combinedGenres = combineGenres(rgDetail.genres, releaseDetail?.genres ?? []);
+    const combinedTags = combineGenres(rgDetail.tags, releaseDetail?.tags ?? []);
 
     return {
       decision: "auto_confirmed",
@@ -119,6 +121,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
       detail: rgDetail,
       release: releaseDetail,
       combinedGenres,
+      combinedTags,
       error: null,
     };
   } catch (e) {
@@ -129,6 +132,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
       detail: null,
       release: null,
       combinedGenres: [],
+      combinedTags: [],
       error: e instanceof Error ? e.message : String(e),
     };
   }

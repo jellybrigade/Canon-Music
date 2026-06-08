@@ -282,6 +282,22 @@
   opacity: 1;
 }
 
+.album-tag-chip--musicbrainz-folksonomy {
+  border-style: dotted;
+  opacity: 0.6;
+}
+
+.album-tag-chip--musicbrainz-folksonomy:hover {
+  opacity: 1;
+}
+
+.album-tag-mb-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
 .album-tag-column--grouped {
   flex-direction: column;
   align-items: flex-start;

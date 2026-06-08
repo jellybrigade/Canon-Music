@@ -48,6 +48,7 @@ export interface MbReleaseGroupDetail {
   artistName: string;
   artistMbid: string | null;
   genres: MbGenre[];
+  tags: MbGenre[];
   releases: MbReleaseSummary[];
 }
 
@@ -67,6 +68,7 @@ export interface MbReleaseDetail {
   catalogNumber: string | null;
   barcode: string | null;
   genres: MbGenre[];
+  tags: MbGenre[];
 }
 
 export interface MbArtistCandidate {
@@ -151,6 +153,7 @@ interface MbLookupRGResponse {
   "primary-type"?: string;
   "artist-credit"?: Array<{ artist?: { id: string; name: string } }>;
   genres?: Array<{ name: string; count: number }>;
+  tags?: Array<{ name: string; count: number }>;
   releases?: Array<{
     id: string;
     title: string;
@@ -161,7 +164,7 @@ interface MbLookupRGResponse {
 
 export async function lookupReleaseGroup(rgMbid: string): Promise<MbReleaseGroupDetail> {
   const data = await mbGet<MbLookupRGResponse>(`release-group/${rgMbid}`, {
-    inc: "genres+releases+artist-credits",
+    inc: "genres+tags+releases+artist-credits",
   });
 
   const credit = data["artist-credit"]?.[0]?.artist;
@@ -173,6 +176,7 @@ export async function lookupReleaseGroup(rgMbid: string): Promise<MbReleaseGroup
     artistName: credit?.name ?? "",
     artistMbid: credit?.id ?? null,
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+    tags: (data.tags ?? []).map((t) => ({ name: t.name, count: t.count })),
     releases: (data.releases ?? []).map((r) => ({
       id: r.id,
       title: r.title,
@@ -191,6 +195,7 @@ interface MbLookupReleaseResponse {
   country?: string;
   barcode?: string;
   genres?: Array<{ name: string; count: number }>;
+  tags?: Array<{ name: string; count: number }>;
   "label-info"?: Array<{
     label?: { name: string };
     "catalog-number"?: string;
@@ -199,7 +204,7 @@ interface MbLookupReleaseResponse {
 
 export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetail> {
   const data = await mbGet<MbLookupReleaseResponse>(`release/${releaseMbid}`, {
-    inc: "genres+labels",
+    inc: "genres+tags+labels",
   });
 
   const labelInfo = data["label-info"]?.[0];
@@ -212,6 +217,7 @@ export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetai
     catalogNumber: labelInfo?.["catalog-number"] ?? null,
     barcode: data.barcode ?? null,
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
+    tags: (data.tags ?? []).map((t) => ({ name: t.name, count: t.count })),
   };
 }
 
@@ -296,6 +302,29 @@ export async function fetchWikidataImageByMbid(mbid: string): Promise<string | n
   } catch {
     return null;
   }
+}
+
+// ── Folksonomy threshold ───────────────────────────────────────────────────────
+
+const MIN_FOLKSONOMY_COUNT_DEFAULT = 2;
+
+export async function getMinFolksonomyCount(): Promise<number> {
+  const { getDb } = await import("../db");
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'"
+  );
+  const val = parseInt(rows[0]?.value ?? "", 10);
+  return isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
+}
+
+export async function setMinFolksonomyCount(count: number): Promise<void> {
+  const { getDb } = await import("../db");
+  const db = await getDb();
+  await db.execute(
+    "INSERT OR REPLACE INTO settings (key, value) VALUES ('musicbrainz.min_folksonomy_count', ?)",
+    [String(count)]
+  );
 }
 
 // ── Genre utilities ────────────────────────────────────────────────────────────
