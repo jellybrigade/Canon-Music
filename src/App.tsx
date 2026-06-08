@@ -17,6 +17,7 @@ const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({
 const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
+import { CanonLockup } from "./components/CanonIcon";
 const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m) => ({ default: m.NowPlayingView })));
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
@@ -514,7 +515,7 @@ export default function App() {
         return (
           <main className={`library${queueClass}`}>
             <header className="library-header">
-              <h1>Canon</h1>
+              <CanonLockup height={22} className="library-header-logo" />
               <span className="server-name">{server?.display_name}</span>
               {syncStatus === "syncing" && (
                 <span className="sync-status">Syncing…</span>

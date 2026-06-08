@@ -43,6 +43,10 @@
   gap: 1rem;
 }
 
+.wizard-lockup {
+  color: var(--text-primary);
+}
+
 .wizard-title {
   font-size: 1.25rem;
   font-weight: 700;

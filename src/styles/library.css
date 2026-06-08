@@ -168,12 +168,9 @@
   flex-shrink: 0;
 }
 
-.library-header h1 {
-  font-family: var(--font-display);
-  font-size: 1.0625rem;
-  font-weight: 800;
-  margin: 0;
-  letter-spacing: -0.03em;
+.library-header-logo {
+  color: var(--text-primary);
+  flex-shrink: 0;
 }
 
 .server-name {

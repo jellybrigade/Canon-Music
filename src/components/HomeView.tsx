@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } fro
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
@@ -912,7 +913,10 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   return (
     <div className="home-view">
       <header className="home-greeting">
-        <h1 className="home-greeting__text">{getGreeting()}</h1>
+        <div className="home-greeting__left">
+          <CanonIcon size={28} className="home-greeting__logo" />
+          <h1 className="home-greeting__text">{getGreeting()}</h1>
+        </div>
         <div className="home-search-bar">
           <Search size={13} className="search-bar-icon" />
           <input
