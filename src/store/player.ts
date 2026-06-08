@@ -191,6 +191,68 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
+  async function preloadWaveforms() {
+    try {
+      const db = await getDb();
+      const settingRows = await db.select<{ value: string }[]>(
+        "SELECT value FROM settings WHERE key = 'player.show_waveform'",
+        []
+      );
+      if ((settingRows[0]?.value ?? "false") !== "true") return;
+
+      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+      if (!streamUrlFor) return;
+
+      for (let offset = 1; offset <= 2; offset++) {
+        const nextPosition = queueIndex + offset;
+        if (nextPosition >= queue.length) continue;
+        const track = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
+        if (!track) continue;
+
+        type Row = { peaks_json: string };
+        const rows = await db.select<Row[]>(
+          "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
+          [track.id]
+        );
+        if (rows[0]) continue;
+
+        const rawUrl = streamUrlFor(track);
+        const waveformUrl = (() => {
+          try {
+            const u = new URL(rawUrl);
+            u.searchParams.set("maxBitRate", "32");
+            u.searchParams.set("format", "mp3");
+            return u.toString();
+          } catch {
+            return rawUrl;
+          }
+        })();
+
+        // One-shot listener: cache result, no state update
+        const unlisten = await listen<{ track_id: string; peaks: number[] }>(
+          "waveform_complete",
+          async (event) => {
+            if (event.payload.track_id !== track.id) return;
+            unlisten();
+            const now = Math.floor(Date.now() / 1000);
+            await db.execute(
+              "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
+              [track.id, JSON.stringify(event.payload.peaks), now]
+            ).catch(() => {});
+          }
+        );
+
+        void invoke("audio_extract_waveform", {
+          trackId: track.id,
+          url: waveformUrl,
+          durationSecs: track.duration ?? 0,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to preload waveforms:", e);
+    }
+  }
+
   async function fetchWaveform(trackId: string, url: string) {
     // Cancel any in-flight extraction from the previous track before registering new listeners
     cancelWaveform?.();
@@ -295,6 +357,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({ isPlaying: true, isLoading: false });
       startElapsedTimer();
       void fetchWaveform(track.id, url);
+      void preloadWaveforms();
     } catch (e) {
       set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
     }
