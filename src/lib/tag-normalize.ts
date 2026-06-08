@@ -5,7 +5,7 @@ import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import { getMinFolksonomyCount } from "./musicbrainz";
 import type { MbGenre } from "./musicbrainz";
 
-export type TagSource = "file" | "lastfm" | "musicbrainz" | "musicbrainz-folksonomy";
+export type TagSource = "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
 export interface NormalizedTag {
   id: string | null;
@@ -190,6 +190,19 @@ async function _doNormalizeAlbum(
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
 
+  // User-entered genres take highest priority — injected first so seenIds blocks duplicates
+  type UserGenreRow = { canonical_id: string; name: string };
+  const userGenreRows = await db.select<UserGenreRow[]>(
+    "SELECT canonical_id, name FROM album_user_genres WHERE album_id = ?",
+    [albumId]
+  );
+  for (const row of userGenreRows) {
+    const node = tree.byId.get(row.canonical_id);
+    if (!node || seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+    mapped.push({ id: node.id, name: node.name, source: "manual", confidence: 1.0 });
+  }
+
   for (const entry of byKey.values()) {
     const manualId = manualMap.get(canonicalKey(entry.name));
     const confidence =
@@ -223,6 +236,7 @@ async function _doNormalizeAlbum(
   const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
+    const manual: NormalizedTag[] = [];
     const file: NormalizedTag[] = [];
     const lastfm: NormalizedTag[] = [];
     const mb: NormalizedTag[] = [];
@@ -230,12 +244,13 @@ async function _doNormalizeAlbum(
     for (const id of ids) {
       const tag = mappedById.get(id);
       if (!tag) continue;
-      if (tag.source === "file") file.push(tag);
+      if (tag.source === "manual") manual.push(tag);
+      else if (tag.source === "file") file.push(tag);
       else if (tag.source === "musicbrainz") mb.push(tag);
       else if (tag.source === "musicbrainz-folksonomy") folk.push(tag);
       else lastfm.push(tag);
     }
-    return [...file, ...lastfm, ...mb, ...folk].slice(0, cap);
+    return [...manual, ...file, ...lastfm, ...mb, ...folk].slice(0, cap);
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);

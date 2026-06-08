@@ -403,4 +403,16 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
     `,
   },
+  {
+    version: 26,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_user_genres (
+        album_id     TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        name         TEXT NOT NULL,
+        created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (album_id, canonical_id)
+      );
+    `,
+  },
 ];
