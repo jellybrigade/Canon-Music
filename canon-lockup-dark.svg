@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 80" width="420" height="80" role="img">
+  <title>Canon Music — horizontal lockup</title>
+  <rect x="0"  y="0"  width="68" height="14" rx="7" fill="#111111"/>
+  <rect x="24" y="26" width="50" height="14" rx="7" fill="#111111"/>
+  <rect x="48" y="52" width="34" height="14" rx="7" fill="#111111"/>
+  <text
+    x="98"
+    y="48"
+    font-family="ui-sans-serif, system-ui, -apple-system, sans-serif"
+    font-size="52"
+    font-weight="500"
+    fill="#111111"
+    letter-spacing="-2"
+  >canon</text>
+</svg>

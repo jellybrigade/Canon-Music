@@ -4,6 +4,7 @@ import { authenticate } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import type { Server } from "../../types/server";
+import { CanonLockup } from "../CanonIcon";
 import "./Wizard.css";
 
 interface Props {
@@ -128,6 +129,7 @@ export function Wizard({ onSuccess }: Props) {
 
         {step === 1 && (
           <div className="wizard-body">
+            <CanonLockup height={32} className="wizard-lockup" />
             <h1 className="wizard-title">Welcome to Canon</h1>
             <p className="wizard-desc">
               Canon is a music player for Navidrome that normalizes your tags automatically — genres,
