@@ -4,6 +4,39 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { installAndRestart, type DownloadProgress } from "../lib/updater";
 import "./UpdatePrompt.css";
 
+interface ChangelogSection {
+  heading: string;
+  items: string[];
+}
+
+function parseChangelog(body: string): ChangelogSection[] | null {
+  const lines = body.trim().split("\n");
+  const sections: ChangelogSection[] = [];
+  let current: ChangelogSection | null = null;
+
+  for (const line of lines) {
+    const heading = line.match(/^#{1,3}\s+(.+)/);
+    if (heading) {
+      const name = (heading[1] ?? "").trim();
+      // skip version header lines like "Canon v0.5.1"
+      if (/^canon\s+v\d/i.test(name)) continue;
+      current = { heading: name, items: [] };
+      sections.push(current);
+    } else if (current && line.match(/^[-*]\s+/)) {
+      current.items.push(line.replace(/^[-*]\s+/, "").trim());
+    }
+  }
+
+  return sections.length > 0 ? sections : null;
+}
+
+const SECTION_COLORS: Record<string, string> = {
+  added: "changelog-badge--added",
+  fixed: "changelog-badge--fixed",
+  changed: "changelog-badge--changed",
+  removed: "changelog-badge--removed",
+};
+
 interface Props {
   update: Update;
   onDismiss: () => void;
@@ -39,12 +72,35 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
           <span className="update-prompt-title">Canon {update.version} is ready</span>
         </div>
 
-        {update.body && (
-          <div className="update-prompt-changelog">
-            <p className="update-prompt-changelog-label">What&apos;s new</p>
-            <pre className="update-prompt-changelog-body">{update.body.trim()}</pre>
-          </div>
-        )}
+        {update.body && (() => {
+          const sections = parseChangelog(update.body);
+          return (
+            <div className="update-prompt-changelog">
+              <p className="update-prompt-changelog-label">What&apos;s new</p>
+              {sections ? (
+                <div className="update-prompt-changelog-sections">
+                  {sections.map((section) => {
+                    const colorClass = SECTION_COLORS[section.heading.toLowerCase()] ?? "changelog-badge--changed";
+                    return (
+                      <div key={section.heading} className="changelog-section">
+                        <span className={`changelog-badge ${colorClass}`}>{section.heading}</span>
+                        {section.items.length > 0 && (
+                          <ul className="changelog-items">
+                            {section.items.map((item, i) => (
+                              <li key={i}>{item}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <pre className="update-prompt-changelog-body">{update.body.trim()}</pre>
+              )}
+            </div>
+          );
+        })()}
 
         {installing && (
           <div className="update-prompt-progress">
