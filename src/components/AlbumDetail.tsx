@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { Heart, Play, ChevronRight, Disc, HelpCircle } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
@@ -18,9 +18,10 @@ import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useSetting } from "../hooks/useSetting";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
-import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
-import { rawGenreId } from "../lib/canonicalize";
+import { getCoverArtUrl } from "../lib/navidrome";
+import { makeStreamUrlBuilder } from "../lib/track";
+import { rawGenreId, getCanonTree } from "../lib/canonicalize";
+import type { TreeNode } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
@@ -76,6 +77,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         combinedMbGenres: albumIdentity?.combined_genres_json
           ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
           : null,
+        combinedMbTags: albumIdentity?.combined_tags_json
+          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null,
       });
       await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
     } catch {
@@ -101,7 +105,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   useEffect(() => {
     if (!autoResult) return;
-    const { decision, score, detail, release, combinedGenres } = autoResult;
+    const { decision, score, detail, release, combinedGenres, combinedTags } = autoResult;
 
     if (decision === "auto_confirmed" && detail) {
       saveIdentity.mutate({
@@ -113,6 +117,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         lastfmAlbumName: null,
         lastfmMatchConfirmed: false,
         combinedGenres,
+        combinedTags,
         label: release?.label ?? null,
         country: release?.country ?? null,
         catalogNumber: release?.catalogNumber ?? null,
@@ -132,6 +137,74 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
   const [showIdentify, setShowIdentify] = useState(false);
 
+  const [showGenreInput, setShowGenreInput] = useState(false);
+  const [genreInput, setGenreInput] = useState("");
+  const [autocomplete, setAutocomplete] = useState<TreeNode[]>([]);
+  const [isGenreUpdating, setIsGenreUpdating] = useState(false);
+  const genreInputRef = useRef<HTMLInputElement>(null);
+
+  const handleGenreInputChange = useCallback(async (value: string) => {
+    setGenreInput(value);
+    if (!value.trim()) { setAutocomplete([]); return; }
+    const tree = await getCanonTree();
+    const q = value.toLowerCase();
+    const matches = tree.nodes
+      .filter((n) => n.type === "genre" && n.name.toLowerCase().includes(q))
+      .slice(0, 8);
+    setAutocomplete(matches);
+  }, []);
+
+  const handleAddUserGenre = useCallback(async (canonicalId: string, name: string) => {
+    setIsGenreUpdating(true);
+    setShowGenreInput(false);
+    setGenreInput("");
+    setAutocomplete([]);
+    try {
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name) VALUES (?, ?, ?)",
+        [album.id, canonicalId, name]
+      );
+      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
+        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
+        combinedMbGenres: albumIdentity?.combined_genres_json
+          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
+          : null,
+        combinedMbTags: albumIdentity?.combined_tags_json
+          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+    } finally {
+      setIsGenreUpdating(false);
+    }
+  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+
+  const handleRemoveUserGenre = useCallback(async (canonicalId: string) => {
+    setIsGenreUpdating(true);
+    try {
+      const db = await getDb();
+      await db.execute(
+        "DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?",
+        [album.id, canonicalId]
+      );
+      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
+        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
+        combinedMbGenres: albumIdentity?.combined_genres_json
+          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
+          : null,
+        combinedMbTags: albumIdentity?.combined_tags_json
+          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+    } finally {
+      setIsGenreUpdating(false);
+    }
+  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
     : null;
@@ -149,10 +222,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     };
   }
 
-  function streamUrlFor(track: CurrentTrack): string {
-    const navTrackId = stripServerPrefix(track.id, server.id);
-    return getStreamUrl(server.url, server.username, credential, navTrackId);
-  }
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
@@ -202,8 +272,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return map;
   }, [rawSourceRows]);
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }> => {
-    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "musicbrainz" }>;
+  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }> => {
+    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }>;
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -231,24 +301,26 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   }, [normalizedTags, tracks, genreMappings]);
 
   const genreGroups = useMemo(() => {
+    const manual: typeof displayGenres = [];
     const file: typeof displayGenres = [];
     const lastfm: typeof displayGenres = [];
     const musicbrainz: typeof displayGenres = [];
+    const folksonomy: typeof displayGenres = [];
     const unsourced: typeof displayGenres = [];
     for (const g of displayGenres) {
-      if (g.source === "file") file.push(g);
+      if (g.source === "manual") manual.push(g);
+      else if (g.source === "file") file.push(g);
       else if (g.source === "lastfm") lastfm.push(g);
       else if (g.source === "musicbrainz") musicbrainz.push(g);
+      else if (g.source === "musicbrainz-folksonomy") folksonomy.push(g);
       else unsourced.push(g);
     }
-    const nonEmpty = [file, lastfm, musicbrainz, unsourced].filter((g) => g.length > 0);
-    return { file, lastfm, musicbrainz, unsourced, multiSource: nonEmpty.length > 1 };
+    const nonEmpty = [manual, file, lastfm, musicbrainz, folksonomy, unsourced].filter((g) => g.length > 0);
+    return { manual, file, lastfm, musicbrainz, folksonomy, unsourced, multiSource: nonEmpty.length > 1 };
   }, [displayGenres]);
 
-  const hasTags =
-    displayGenres.length > 0 ||
-    (normalizedTags?.descriptors?.length ?? 0) > 0 ||
-    (normalizedTags?.scenes?.length ?? 0) > 0;
+  // Always true — every synced album can have user genres added
+  const hasTags = true;
 
   return (
     <div className="album-detail">
@@ -350,7 +422,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
       {hasTags && (
         <section className="album-tag-band" aria-label="Album tags">
-          {displayGenres.length > 0 && (() => {
+          {(() => {
             const renderGenreChip = (tag: typeof displayGenres[0]) => {
               const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
               const chipTitle = rawSources.length > 0
@@ -372,10 +444,56 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 </button>
               );
             };
+
+            const hasAutoGenres = genreGroups.file.length > 0 || genreGroups.lastfm.length > 0 ||
+              genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0 || genreGroups.unsourced.length > 0;
+            const showGrouped = genreGroups.multiSource;
+
             return (
-              <div className={`album-tag-column${genreGroups.multiSource ? " album-tag-column--grouped" : ""}`}>
-                <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
-                {genreGroups.multiSource ? (
+              <div className={`album-tag-column${showGrouped ? " album-tag-column--grouped" : ""}`}>
+                <div className="album-tag-column-header">
+                  <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
+                  {!showGenreInput && (
+                    <button
+                      className="album-tag-add-genre-btn"
+                      onClick={() => {
+                        setShowGenreInput(true);
+                        setTimeout(() => genreInputRef.current?.focus(), 0);
+                      }}
+                      title="Add genre"
+                      disabled={isGenreUpdating}
+                    >
+                      <Plus size={10} />
+                    </button>
+                  )}
+                </div>
+
+                {genreGroups.manual.length > 0 && (
+                  <div className="album-tag-source-group">
+                    {showGrouped && <span className="album-tag-source-label">Added</span>}
+                    {genreGroups.manual.map((tag) => (
+                      <span key={tag.id ?? tag.name} className="album-tag-chip album-tag-chip--manual">
+                        <button
+                          className="album-tag-chip-label"
+                          onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                          title="Filter by this genre"
+                        >
+                          {tag.name}
+                        </button>
+                        <button
+                          className="album-tag-chip-remove"
+                          onClick={() => void handleRemoveUserGenre(tag.id!)}
+                          title="Remove"
+                          disabled={isGenreUpdating}
+                        >
+                          <X size={9} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {hasAutoGenres && showGrouped && (
                   <>
                     {genreGroups.file.length > 0 && (
                       <div className="album-tag-source-group">
@@ -389,10 +507,20 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                         {genreGroups.lastfm.map(renderGenreChip)}
                       </div>
                     )}
-                    {genreGroups.musicbrainz.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">MusicBrainz</span>
-                        {genreGroups.musicbrainz.map(renderGenreChip)}
+                    {(genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0) && (
+                      <div className="album-tag-mb-row">
+                        {genreGroups.musicbrainz.length > 0 && (
+                          <div className="album-tag-source-group">
+                            <span className="album-tag-source-label">MusicBrainz</span>
+                            {genreGroups.musicbrainz.map(renderGenreChip)}
+                          </div>
+                        )}
+                        {genreGroups.folksonomy.length > 0 && (
+                          <div className="album-tag-source-group">
+                            <span className="album-tag-source-label">Folksonomy</span>
+                            {genreGroups.folksonomy.map(renderGenreChip)}
+                          </div>
+                        )}
                       </div>
                     )}
                     {genreGroups.unsourced.length > 0 && (
@@ -401,8 +529,45 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                       </div>
                     )}
                   </>
-                ) : (
-                  displayGenres.map(renderGenreChip)
+                )}
+
+                {hasAutoGenres && !showGrouped && (
+                  displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
+                )}
+
+                {showGenreInput && (
+                  <div className="album-genre-input-wrapper">
+                    <input
+                      ref={genreInputRef}
+                      className="album-genre-input"
+                      type="text"
+                      placeholder="Search genres…"
+                      value={genreInput}
+                      onChange={(e) => void handleGenreInputChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setShowGenreInput(false);
+                          setGenreInput("");
+                          setAutocomplete([]);
+                        } else if (e.key === "Enter" && autocomplete.length > 0) {
+                          void handleAddUserGenre(autocomplete[0]!.id, autocomplete[0]!.name);
+                        }
+                      }}
+                    />
+                    {autocomplete.length > 0 && (
+                      <ul className="album-genre-autocomplete">
+                        {autocomplete.map((node) => (
+                          <li
+                            key={node.id}
+                            className="album-genre-autocomplete-item"
+                            onClick={() => void handleAddUserGenre(node.id, node.name)}
+                          >
+                            {node.name}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 )}
               </div>
             );

@@ -658,6 +658,10 @@
   border-bottom-right-radius: 0;
 }
 
+.suggestion-card__row--top .album-overlay {
+  border-radius: 0;
+}
+
 .suggestion-card--skeleton .suggestion-card__art-wrap {
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
@@ -797,8 +801,9 @@
 
 .carousel-card__play {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.75);
   width: 34px;
   height: 34px;
   padding: 0;
@@ -812,7 +817,6 @@
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transform: scale(0.75);
   transition: opacity var(--motion-med, 200ms ease-out), transform var(--motion-med, 200ms ease-out), background var(--motion-fast, 120ms ease-out);
   z-index: 1;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.45);
@@ -820,12 +824,12 @@
 
 .carousel-card:hover .carousel-card__play {
   opacity: 1;
-  transform: scale(1);
+  transform: translate(-50%, -50%) scale(1);
 }
 
 .carousel-card__play:hover {
   background: var(--accent-hover, #2d5bbf);
-  transform: scale(1.08) !important;
+  transform: translate(-50%, -50%) scale(1.08) !important;
 }
 
 .carousel-card__name {

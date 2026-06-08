@@ -22,6 +22,7 @@ export interface AlbumIdentityRow {
   lastfm_album_name: string | null;
   lastfm_match_confirmed: number;
   combined_genres_json: string | null;
+  combined_tags_json: string | null;
   label: string | null;
   country: string | null;
   catalog_number: string | null;
@@ -62,6 +63,7 @@ export interface AlbumLookupResult {
   mbRelease: MbReleaseDetail | null;
   mbCandidates: MbReleaseGroupCandidate[];
   combinedGenres: MbGenre[];
+  combinedTags: MbGenre[];
   error: string | null;
 }
 
@@ -101,6 +103,7 @@ export function useIdentifyAlbum({
               mbRelease: null,
               mbCandidates: [],
               combinedGenres: [],
+              combinedTags: [],
               error: null,
             };
           }
@@ -112,6 +115,7 @@ export function useIdentifyAlbum({
               mbRelease: null,
               mbCandidates: candidates,
               combinedGenres: [],
+              combinedTags: [],
               error: null,
             };
           }
@@ -142,6 +146,10 @@ export function useIdentifyAlbum({
           rgDetail.genres,
           releaseDetail?.genres ?? []
         );
+        const combinedTags = combineGenres(
+          rgDetail.tags,
+          releaseDetail?.tags ?? []
+        );
 
         return {
           mbStatus: "found",
@@ -149,6 +157,7 @@ export function useIdentifyAlbum({
           mbRelease: releaseDetail,
           mbCandidates: candidates,
           combinedGenres,
+          combinedTags,
           error: null,
         };
       } catch (e) {
@@ -158,6 +167,7 @@ export function useIdentifyAlbum({
           mbRelease: null,
           mbCandidates: [],
           combinedGenres: [],
+          combinedTags: [],
           error: e instanceof Error ? e.message : String(e),
         };
       }
@@ -179,6 +189,7 @@ export interface SaveAlbumIdentityInput {
   lastfmAlbumName: string | null;
   lastfmMatchConfirmed: boolean;
   combinedGenres: MbGenre[];
+  combinedTags: MbGenre[];
   label: string | null;
   country: string | null;
   catalogNumber: string | null;
@@ -203,9 +214,9 @@ export async function persistAlbumIdentity(
     `INSERT OR REPLACE INTO album_identity
        (album_id, mb_release_group_id, mb_release_id, mb_artist_id,
         lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed,
-        combined_genres_json, label, country, catalog_number, barcode,
+        combined_genres_json, combined_tags_json, label, country, catalog_number, barcode,
         release_date, confirmed_at, auto_matched, match_score, looked_up_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.albumId,
       input.mbReleaseGroupId,
@@ -215,6 +226,7 @@ export async function persistAlbumIdentity(
       input.lastfmAlbumName,
       input.lastfmMatchConfirmed ? 1 : 0,
       input.combinedGenres.length > 0 ? JSON.stringify(input.combinedGenres) : null,
+      input.combinedTags.length > 0 ? JSON.stringify(input.combinedTags) : null,
       input.label,
       input.country,
       input.catalogNumber,

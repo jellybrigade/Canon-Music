@@ -103,10 +103,20 @@ async function runSearch(query: string): Promise<SearchResults> {
     .sort((a, b) => b.s - a.s || a.item.title.localeCompare(b.item.title))
     .map(x => x.item);
 
-  const artists: SearchArtist[] = artistRows
+  const FEAT_RE = /^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i;
+
+  const scoredArtists = artistRows
     .map(a => ({ item: a, s: scoreMatch(a.name, query) }))
     .filter(x => x.s > 0)
-    .sort((a, b) => b.s - a.s || b.item.album_count - a.item.album_count)
+    .sort((a, b) => b.s - a.s || b.item.album_count - a.item.album_count);
+
+  const primaryNames = new Set(scoredArtists.map(x => x.item.name.toLowerCase()));
+
+  const artists: SearchArtist[] = scoredArtists
+    .filter(({ item }) => {
+      const m = FEAT_RE.exec(item.name);
+      return !m || !m[1] || !primaryNames.has(m[1].toLowerCase());
+    })
     .map(x => x.item);
 
   return { albums, tracks, artists };

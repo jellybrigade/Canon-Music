@@ -2,12 +2,15 @@ import { getDb } from "../db";
 import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds } from "./canonicalize";
 import { bucketize } from "./tag-buckets";
 import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
+import { getMinFolksonomyCount } from "./musicbrainz";
 import type { MbGenre } from "./musicbrainz";
+
+export type TagSource = "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
 export interface NormalizedTag {
   id: string | null;
   name: string;
-  source: "file" | "lastfm" | "musicbrainz";
+  source: TagSource;
   confidence: number;
 }
 
@@ -51,7 +54,7 @@ export async function normalizeAlbum(
   albumId: string,
   artist: string,
   album: string,
-  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null }
+  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null; combinedMbTags?: MbGenre[] | null }
 ): Promise<NormalizedTags> {
   const existing = inFlightPromises.get(albumId);
   if (existing) return existing;
@@ -65,7 +68,7 @@ async function _doNormalizeAlbum(
   albumId: string,
   artist: string,
   album: string,
-  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null }
+  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null; combinedMbTags?: MbGenre[] | null }
 ): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
@@ -112,8 +115,16 @@ async function _doNormalizeAlbum(
     }
   }
 
+  const minFolksonomy = await getMinFolksonomyCount();
+  const mbFolkRaw: string[] = [];
+  if (identity?.combinedMbTags?.length) {
+    for (const t of identity.combinedMbTags) {
+      if (t.count >= minFolksonomy) mbFolkRaw.push(t.name);
+    }
+  }
+
   // Artist tags as last resort: only when no file tags AND no album/MB tags exist
-  if (fileTagRows.length === 0 && lastfmRaw.length === 0 && mbRaw.length === 0) {
+  if (fileTagRows.length === 0 && lastfmRaw.length === 0 && mbRaw.length === 0 && mbFolkRaw.length === 0) {
     try {
       const artistTags = await fetchArtistGenreTags(lfmArtist);
       lastfmRaw.push(...artistTags);
@@ -122,7 +133,7 @@ async function _doNormalizeAlbum(
     }
   }
 
-  type RawEntry = { name: string; source: "file" | "lastfm" | "musicbrainz" };
+  type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
     byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
@@ -134,6 +145,10 @@ async function _doNormalizeAlbum(
   for (const raw of mbRaw) {
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
+  }
+  for (const raw of mbFolkRaw) {
+    const k = canonicalKey(raw);
+    if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
 
   // Write lastfm-sourced tags to track_tags so the vocab query can count them.
@@ -164,7 +179,7 @@ async function _doNormalizeAlbum(
            AND tm.kind = track_tags.kind
          LIMIT 1
        )
-       WHERE source IN ('lastfm', 'musicbrainz')
+       WHERE source IN ('lastfm', 'musicbrainz', 'musicbrainz-folksonomy')
          AND canonical_id IS NULL
          AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
       [albumId]
@@ -175,9 +190,26 @@ async function _doNormalizeAlbum(
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
 
+  // User-entered genres take highest priority — injected first so seenIds blocks duplicates
+  type UserGenreRow = { canonical_id: string; name: string };
+  const userGenreRows = await db.select<UserGenreRow[]>(
+    "SELECT canonical_id, name FROM album_user_genres WHERE album_id = ?",
+    [albumId]
+  );
+  for (const row of userGenreRows) {
+    const node = tree.byId.get(row.canonical_id);
+    if (!node || seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+    mapped.push({ id: node.id, name: node.name, source: "manual", confidence: 1.0 });
+  }
+
   for (const entry of byKey.values()) {
     const manualId = manualMap.get(canonicalKey(entry.name));
-    const confidence = entry.source === "file" ? 1.0 : entry.source === "lastfm" ? 0.8 : 0.7;
+    const confidence =
+      entry.source === "file" ? 1.0
+      : entry.source === "lastfm" ? 0.8
+      : entry.source === "musicbrainz" ? 0.7
+      : 0.6;
 
     if (manualId === "__ignored__") continue;
 
@@ -204,17 +236,21 @@ async function _doNormalizeAlbum(
   const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
+    const manual: NormalizedTag[] = [];
     const file: NormalizedTag[] = [];
     const lastfm: NormalizedTag[] = [];
     const mb: NormalizedTag[] = [];
+    const folk: NormalizedTag[] = [];
     for (const id of ids) {
       const tag = mappedById.get(id);
       if (!tag) continue;
-      if (tag.source === "file") file.push(tag);
+      if (tag.source === "manual") manual.push(tag);
+      else if (tag.source === "file") file.push(tag);
       else if (tag.source === "musicbrainz") mb.push(tag);
+      else if (tag.source === "musicbrainz-folksonomy") folk.push(tag);
       else lastfm.push(tag);
     }
-    return [...file, ...lastfm, ...mb].slice(0, cap);
+    return [...manual, ...file, ...lastfm, ...mb, ...folk].slice(0, cap);
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);

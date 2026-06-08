@@ -6,7 +6,7 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
 import { RadioChip } from "./RadioChip";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
-import { useSetting } from "../hooks/useSetting";
+import { useSidebarResize } from "../hooks/useSidebarResize";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
@@ -35,45 +35,20 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const startRadio     = usePlayerStore((s) => s.startRadio);
 
-  const [rawQueueWidth, setRawQueueWidth] = useSetting("queue.panel_width", String(DEFAULT_QUEUE_WIDTH));
-  const savedWidth = Math.max(MIN_QUEUE_WIDTH, Math.min(MAX_QUEUE_WIDTH, parseInt(rawQueueWidth, 10) || DEFAULT_QUEUE_WIDTH));
-  const [dragLiveWidth, setDragLiveWidth] = useState<number | null>(null);
-  const panelWidth = dragLiveWidth ?? savedWidth;
-  const dragResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  const { liveWidth, savedWidth, handleMouseDown: handleResizeMouseDown } = useSidebarResize({
+    direction: "rtl",
+    min: MIN_QUEUE_WIDTH,
+    max: MAX_QUEUE_WIDTH,
+    settingKey: "queue.panel_width",
+    defaultWidth: DEFAULT_QUEUE_WIDTH,
+  });
+  const panelWidth = liveWidth ?? savedWidth;
 
   useEffect(() => {
     if (!isQueueOpen) return;
     document.documentElement.style.setProperty("--queue-panel-width", `${panelWidth}px`);
     return () => { document.documentElement.style.removeProperty("--queue-panel-width"); };
   }, [panelWidth, isQueueOpen]);
-
-  function handleResizeMouseDown(e: React.MouseEvent) {
-    e.preventDefault();
-    dragResizeRef.current = { startX: e.clientX, startWidth: panelWidth };
-    document.body.style.userSelect = "none";
-    document.body.style.cursor = "ew-resize";
-
-    function onMove(ev: MouseEvent) {
-      if (!dragResizeRef.current) return;
-      const delta = dragResizeRef.current.startX - ev.clientX;
-      const newW = Math.max(MIN_QUEUE_WIDTH, Math.min(MAX_QUEUE_WIDTH, dragResizeRef.current.startWidth + delta));
-      setDragLiveWidth(newW);
-    }
-    function onUp(ev: MouseEvent) {
-      if (!dragResizeRef.current) return;
-      const delta = dragResizeRef.current.startX - ev.clientX;
-      const newW = Math.max(MIN_QUEUE_WIDTH, Math.min(MAX_QUEUE_WIDTH, dragResizeRef.current.startWidth + delta));
-      dragResizeRef.current = null;
-      setDragLiveWidth(null);
-      document.body.style.userSelect = "";
-      document.body.style.cursor = "";
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-      void setRawQueueWidth(String(Math.round(newW)));
-    }
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  }
 
   const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);

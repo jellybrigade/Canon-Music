@@ -11,8 +11,8 @@ import type { NavidromeCredential } from "../lib/navidrome";
 import type { AlbumRow } from "../hooks/useAlbums";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
-import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { getCoverArtUrl } from "../lib/navidrome";
+import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, LASTFM_PLACEHOLDER } from "../lib/lastfm";
 import type { LastfmTopTrack } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
@@ -292,10 +292,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     };
   }
 
-  function streamUrlFor(track: CurrentTrack): string {
-    const navTrackId = stripServerPrefix(track.id, server.id);
-    return getStreamUrl(server.url, server.username, credential, navTrackId);
-  }
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
   function handlePlayTrack(track: TopTrack) {
     if (!topTracks.length) return;

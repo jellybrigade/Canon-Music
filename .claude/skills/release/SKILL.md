@@ -7,10 +7,17 @@ Release Canon to main. Run these steps in order — do not skip any.
 
 1. **Code review** — run `/code-review` on development. Fix every blocker before continuing.
 
-2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`, apply semver:
-   - Bugfixes only → patch (`x.y.Z`)
-   - New features → minor (`x.Y.0`)
-   - Breaking changes → major (`X.0.0`)
+2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. For each semver bump level, identify the single strongest reason from the commit list:
+   - **Major** (`X.0.0`): breaking change or architectural overhaul — quote the most significant commit
+   - **Minor** (`x.Y.0`): new user-visible feature — quote the most significant commit
+   - **Patch** (`x.y.Z`): bugfixes / polish only — quote the most significant commit
+
+   Then use `AskUserQuestion` to present all three options with their reasons. Example shape:
+   - Option "Major X.0.0" → description: biggest breaking-change commit summary
+   - Option "Minor x.Y.0" → description: biggest new-feature commit summary
+   - Option "Patch x.y.Z" → description: biggest bugfix commit summary
+
+   Wait for the user to choose before proceeding.
 
 3. **Bump version** — update `"version"` in both `src-tauri/tauri.conf.json` and `package.json`, then commit on development:
    ```bash
