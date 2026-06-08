@@ -40,10 +40,12 @@ function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
 
 interface Props {
   onNowPlaying: () => void;
+  onSelectArtist?: (name: string) => void;
+  onSelectAlbumById?: (albumId: string) => Promise<void>;
   serverWithCred?: ServerWithCredential;
 }
 
-export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
+export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
@@ -263,20 +265,45 @@ export function PlayerBar({ onNowPlaying, serverWithCred }: Props) {
         style={accentColor ? { '--accent': accentColor, '--accent-hover': accentColor } as React.CSSProperties : undefined}
       >
         <div className="player-section player-section--left">
-          <button
-            ref={artThumbRef}
-            className="player-thumb"
-            onClick={() => setArtOpen((v) => !v)}
-            aria-label={artOpen ? "Hide album art" : "Show album art"}
-          >
-            {currentTrack.coverArtUrl && (
-              <img src={currentTrack.coverArtUrl} alt="" />
-            )}
-          </button>
+          <div className="player-thumb-wrap">
+            <button
+              ref={artThumbRef}
+              className="player-thumb"
+              onClick={() => {
+                if (currentTrack.albumId && onSelectAlbumById) {
+                  void onSelectAlbumById(currentTrack.albumId);
+                } else {
+                  setArtOpen((v) => !v);
+                }
+              }}
+              aria-label="Go to album"
+            >
+              {currentTrack.coverArtUrl && (
+                <img src={currentTrack.coverArtUrl} alt="" />
+              )}
+            </button>
+            <button
+              className="player-thumb-expand"
+              onClick={onNowPlaying}
+              aria-label="Now playing"
+              title="Now playing"
+            >
+              <ChevronUp size={12} />
+            </button>
+          </div>
           <div className="player-track-info">
             <span className="player-title">{currentTrack.title}</span>
             {currentTrack.artist && (
-              <span className="player-artist">{currentTrack.artist}</span>
+              onSelectArtist ? (
+                <button
+                  className="player-artist player-artist--link"
+                  onClick={() => onSelectArtist(currentTrack.artist!)}
+                >
+                  {currentTrack.artist}
+                </button>
+              ) : (
+                <span className="player-artist">{currentTrack.artist}</span>
+              )
             )}
           </div>
           <RadioChip />

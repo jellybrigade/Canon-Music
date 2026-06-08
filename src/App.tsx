@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -44,6 +44,7 @@ import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
+import { FeedbackModal } from "./components/FeedbackModal";
 import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
 import { stripServerPrefix } from "./lib/ids";
 import { getDb } from "./db";
@@ -95,6 +96,7 @@ export default function App() {
     setSelectedPlaylist,
     navigateTo,
     goBack,
+    peekBack,
   } = useAppNavigation();
 
   const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
@@ -152,6 +154,7 @@ export default function App() {
   }, [homeSearchRaw]);
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   useEffect(() => {
@@ -415,7 +418,7 @@ export default function App() {
       <AlbumDetail
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
-        onClose={() => setSelectedAlbum(null)}
+        onClose={() => { if (peekBack() !== null && peekBack() !== "library") goBack(); else setSelectedAlbum(null); }}
         onSelectArtist={(name) => { setSelectedArtist({ name, album_count: 0, artwork_url: null }); setSelectedAlbum(null); }}
         onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); navigateTo("library"); }}
       />
@@ -437,7 +440,7 @@ export default function App() {
           <ArtistDetail
             artist={selectedArtist}
             serverWithCredential={serverWithCred}
-            onClose={() => setSelectedArtist(null)}
+            onClose={() => { if (peekBack() !== null && peekBack() !== "artists") goBack(); else setSelectedArtist(null); }}
             onSelectAlbum={setSelectedAlbum}
             onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
           />
@@ -499,8 +502,8 @@ export default function App() {
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={setSelectedAlbum}
-                onSelectArtist={(artistName) => setSelectedArtist({ name: artistName, album_count: 0, artwork_url: null })}
+                onSelectAlbum={(album) => navigateTo("library", { album })}
+                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
                 onBack={goBack}
               />
             ) : <main className="content-main" />}
@@ -747,7 +750,9 @@ export default function App() {
           className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}${sidebarLiveWidth !== null ? " sidebar--dragging" : ""}`}
           style={{
             width: sidebarExpanded ? `${sidebarLiveWidth ?? sidebarWidth}px` : undefined,
-            paddingBottom: `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)`,
+            paddingBottom: currentTrack
+              ? `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)`
+              : `${metaBarVisible ? 28 : 4}px`,
           }}
         >
           {NAV_ITEMS.map(({ id, label, icon, badge }) => (
@@ -765,13 +770,23 @@ export default function App() {
             </button>
           ))}
           {view !== "nowplaying" && (
-            <button
-              className="sidebar-expand-btn"
-              title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-              onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
-            >
-              {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-            </button>
+            <>
+              <button
+                className="sidebar-feedback-btn"
+                title="Send feedback"
+                onClick={() => setFeedbackOpen(true)}
+              >
+                <MessageSquare size={15} />
+                {sidebarExpanded && <span className="sidebar-btn-label">Feedback</span>}
+              </button>
+              <button
+                className="sidebar-expand-btn"
+                title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
+              >
+                {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+              </button>
+            </>
           )}
           {sidebarExpanded && (
             <div
@@ -784,7 +799,16 @@ export default function App() {
       </div>
       <QueuePanel serverWithCred={serverWithCred ?? undefined} />
       {view !== "nowplaying" && (
-        <PlayerBar onNowPlaying={() => navigateTo("nowplaying")} serverWithCred={serverWithCred ?? undefined} />
+        <PlayerBar
+          onNowPlaying={() => navigateTo("nowplaying")}
+          onSelectArtist={(name: string) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+          onSelectAlbumById={async (albumId: string) => {
+            const db = await getDb();
+            const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
+            if (rows[0]) setSelectedAlbum(rows[0]);
+          }}
+          serverWithCred={serverWithCred ?? undefined}
+        />
       )}
       <CommandPalette
         open={commandPaletteOpen}
@@ -799,6 +823,12 @@ export default function App() {
         <UpdatePrompt
           update={pendingUpdate}
           onDismiss={() => setPendingUpdate(null)}
+        />
+      )}
+      {feedbackOpen && (
+        <FeedbackModal
+          serverUrl={server?.url}
+          onClose={() => setFeedbackOpen(false)}
         />
       )}
     </Suspense>

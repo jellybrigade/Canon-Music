@@ -45,6 +45,11 @@ export function useAppNavigation() {
     setSelectedPlaylist(prev.selectedPlaylist);
   }
 
+  function peekBack(): AppView | null {
+    const entry = historyRef.current[historyRef.current.length - 1];
+    return entry ? entry.view : null;
+  }
+
   return {
     view,
     selectedAlbum,
@@ -55,5 +60,6 @@ export function useAppNavigation() {
     setSelectedPlaylist,
     navigateTo,
     goBack,
+    peekBack,
   };
 }
