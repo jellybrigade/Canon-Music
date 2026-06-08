@@ -420,7 +420,7 @@ export default function App() {
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
         onClose={() => { if (peekBack() !== null && peekBack() !== "library") goBack(); else setSelectedAlbum(null); }}
-        onSelectArtist={(name) => { setSelectedArtist({ name, album_count: 0, artwork_url: null }); setSelectedAlbum(null); }}
+        onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
         onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); navigateTo("library"); }}
       />
     );

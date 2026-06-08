@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Download } from "lucide-react";
+import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { installAndRestart, type DownloadProgress } from "../lib/updater";
 import "./UpdatePrompt.css";
@@ -7,6 +8,12 @@ import "./UpdatePrompt.css";
 interface ChangelogSection {
   heading: string;
   items: string[];
+}
+
+interface VersionChangelog {
+  version: string;
+  sections: ChangelogSection[] | null;
+  raw: string;
 }
 
 function parseChangelog(body: string): ChangelogSection[] | null {
@@ -18,7 +25,6 @@ function parseChangelog(body: string): ChangelogSection[] | null {
     const heading = line.match(/^#{1,3}\s+(.+)/);
     if (heading) {
       const name = (heading[1] ?? "").trim();
-      // skip version header lines like "Canon v0.5.1"
       if (/^canon\s+v\d/i.test(name)) continue;
       current = { heading: name, items: [] };
       sections.push(current);
@@ -28,6 +34,16 @@ function parseChangelog(body: string): ChangelogSection[] | null {
   }
 
   return sections.length > 0 ? sections : null;
+}
+
+function semverCompare(a: string, b: string): number {
+  const pa = a.replace(/^v/, "").split(".").map(Number);
+  const pb = b.replace(/^v/, "").split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
 }
 
 const SECTION_COLORS: Record<string, string> = {
@@ -46,6 +62,53 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [changelogs, setChangelogs] = useState<VersionChangelog[] | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const currentVersion = await getVersion();
+        const resp = await fetch(
+          "https://api.github.com/repos/jellybrigade/Canon-Music/releases?per_page=50"
+        );
+        if (!resp.ok) throw new Error("fetch failed");
+        const releases = (await resp.json()) as { tag_name: string; body: string }[];
+
+        const filtered = releases
+          .filter((r) => {
+            const ver = r.tag_name.replace(/^v/, "");
+            return (
+              semverCompare(ver, currentVersion) > 0 &&
+              semverCompare(ver, update.version) <= 0
+            );
+          })
+          .sort((a, b) => semverCompare(b.tag_name, a.tag_name));
+
+        if (filtered.length > 0) {
+          setChangelogs(
+            filtered.map((r) => ({
+              version: r.tag_name.replace(/^v/, ""),
+              sections: parseChangelog(r.body ?? ""),
+              raw: r.body ?? "",
+            }))
+          );
+          return;
+        }
+      } catch {
+        // fall through to default
+      }
+
+      if (update.body) {
+        setChangelogs([
+          {
+            version: update.version,
+            sections: parseChangelog(update.body),
+            raw: update.body,
+          },
+        ]);
+      }
+    })();
+  }, [update.version, update.body]);
 
   async function handleInstall() {
     setInstalling(true);
@@ -64,6 +127,8 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
       ? Math.round((progress.downloaded / progress.total) * 100)
       : null;
 
+  const multiVersion = changelogs && changelogs.length > 1;
+
   return (
     <div className="update-prompt-backdrop">
       <div className="update-prompt">
@@ -72,35 +137,45 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
           <span className="update-prompt-title">Canon {update.version} is ready</span>
         </div>
 
-        {update.body && (() => {
-          const sections = parseChangelog(update.body);
-          return (
-            <div className="update-prompt-changelog">
-              <p className="update-prompt-changelog-label">What&apos;s new</p>
-              {sections ? (
-                <div className="update-prompt-changelog-sections">
-                  {sections.map((section) => {
-                    const colorClass = SECTION_COLORS[section.heading.toLowerCase()] ?? "changelog-badge--changed";
-                    return (
-                      <div key={section.heading} className="changelog-section">
-                        <span className={`changelog-badge ${colorClass}`}>{section.heading}</span>
-                        {section.items.length > 0 && (
-                          <ul className="changelog-items">
-                            {section.items.map((item, i) => (
-                              <li key={i}>{item}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })}
+        {changelogs && changelogs.length > 0 && (
+          <div className="update-prompt-changelog">
+            <p className="update-prompt-changelog-label">
+              {multiVersion ? `What's new — ${changelogs.length} versions` : "What's new"}
+            </p>
+            <div className="update-prompt-changelog-sections">
+              {changelogs.map((cl) => (
+                <div key={cl.version} className="changelog-release">
+                  {multiVersion && (
+                    <p className="changelog-version-label">v{cl.version}</p>
+                  )}
+                  {cl.sections ? (
+                    cl.sections.map((section) => {
+                      const colorClass =
+                        SECTION_COLORS[section.heading.toLowerCase()] ??
+                        "changelog-badge--changed";
+                      return (
+                        <div key={section.heading} className="changelog-section">
+                          <span className={`changelog-badge ${colorClass}`}>
+                            {section.heading}
+                          </span>
+                          {section.items.length > 0 && (
+                            <ul className="changelog-items">
+                              {section.items.map((item, i) => (
+                                <li key={i}>{item}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <pre className="update-prompt-changelog-body">{cl.raw.trim()}</pre>
+                  )}
                 </div>
-              ) : (
-                <pre className="update-prompt-changelog-body">{update.body.trim()}</pre>
-              )}
+              ))}
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {installing && (
           <div className="update-prompt-progress">
