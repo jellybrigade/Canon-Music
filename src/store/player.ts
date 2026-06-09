@@ -273,10 +273,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         [trackId]
       );
       if (rows[0]) {
-        if (get().currentTrack?.id === trackId) {
-          set({ waveformPeaks: JSON.parse(rows[0].peaks_json) as number[] });
+        const peaks = JSON.parse(rows[0].peaks_json) as number[];
+        // Preloaded waveforms from partial streams are padded with trailing zeros.
+        // If less than 50% of bars have meaningful data, the cache entry is corrupt — delete and re-generate.
+        const lastMeaningful = peaks.reduce((last, v, i) => (v > 0.01 ? i : last), -1);
+        const coverage = peaks.length > 0 ? (lastMeaningful + 1) / peaks.length : 0;
+        if (coverage >= 0.5) {
+          if (get().currentTrack?.id === trackId) {
+            set({ waveformPeaks: peaks });
+          }
+          return;
         }
-        return;
+        await db.execute("DELETE FROM waveform_cache WHERE track_id = ?", [trackId]).catch(() => {});
       }
 
       // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
