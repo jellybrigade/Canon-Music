@@ -3,8 +3,7 @@ import { X } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import "./FeedbackModal.css";
 
-const WEBHOOK_URL =
-  "https://discord.com/api/webhooks/1513504380849229897/lHpOTLX4o-jJjmDoUNOfvZdmIaz4P9kKr0YI9V5IMw0LkSI5TnV_kAwg_kHucSsVAb4Q";
+const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
 
 function detectOS(): string {
   const ua = navigator.userAgent;
