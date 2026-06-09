@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
-import { useLyrics } from "../hooks/useLyrics";
+import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../hooks/useAlbums";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
@@ -157,6 +157,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
   const [volumeOpen, setVolumeOpen] = useState(false);
+  const [lyricsSearchOpen, setLyricsSearchOpen] = useState(false);
+  const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
+  const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
+  const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
@@ -171,7 +175,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.artist ?? null,
     currentTrack?.id ?? null
   );
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null, lyricsOverride);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
@@ -218,6 +222,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   );
 
   const otherAlbums = artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [];
+
+  useEffect(() => {
+    setLyricsOverride(null);
+    setLyricsSearchOpen(false);
+    setLyricsSearchArtist(currentTrack?.artist ?? "");
+    setLyricsSearchTitle(currentTrack?.title ?? "");
+  }, [currentTrack?.id]);
 
   useEffect(() => {
     if (tab !== "up-next" || !upNextRef.current) return;
@@ -486,14 +497,25 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               </button>
             ))}
             {tab === "lyrics" && (
-              <button
-                className="now-playing-tab-refresh-btn"
-                title="Re-fetch lyrics"
-                disabled={lyricsLoading}
-                onClick={() => void lyricsRefresh()}
-              >
-                <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
-              </button>
+              <div className="now-playing-tab-lyric-actions">
+                <button
+                  className={`now-playing-tab-refresh-btn${lyricsSearchOpen ? " now-playing-tab-refresh-btn--active" : ""}`}
+                  title="Search manually"
+                  style={{ margin: 0 }}
+                  onClick={() => setLyricsSearchOpen((o) => !o)}
+                >
+                  <span style={{ fontSize: 11 }}>A→Z</span>
+                </button>
+                <button
+                  className="now-playing-tab-refresh-btn"
+                  title="Re-fetch lyrics"
+                  disabled={lyricsLoading}
+                  style={{ margin: 0 }}
+                  onClick={() => void lyricsRefresh()}
+                >
+                  <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
+                </button>
+              </div>
             )}
           </div>
 
@@ -678,31 +700,79 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             )}
 
             {tab === "lyrics" && (
-              <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
-                {lyricsLoading ? (
-                  <p className="now-playing-empty">Loading lyrics…</p>
-                ) : lyricsLines && lyricsLines.length > 0 ? (
-                  lyricsLines.map((line, i) => {
-                    const isActive = elapsed >= line.timeSec &&
-                      (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec);
-                    return (
-                      <div
-                        key={i}
-                        ref={isActive ? activeLyricRef : undefined}
-                        className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                        onClick={() => handleLyricSeek(line.timeSec)}
-                        style={{ cursor: "pointer" }}
+              <>
+                {lyricsSearchOpen && (
+                  <form
+                    className="lyrics-search-form"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (lyricsSearchArtist.trim() && lyricsSearchTitle.trim()) {
+                        setLyricsOverride({ artist: lyricsSearchArtist.trim(), title: lyricsSearchTitle.trim() });
+                      }
+                    }}
+                  >
+                    <input
+                      className="lyrics-search-input"
+                      placeholder="Artist"
+                      value={lyricsSearchArtist}
+                      onChange={(e) => setLyricsSearchArtist(e.target.value)}
+                    />
+                    <input
+                      className="lyrics-search-input"
+                      placeholder="Track title"
+                      value={lyricsSearchTitle}
+                      onChange={(e) => setLyricsSearchTitle(e.target.value)}
+                    />
+                    <div className="lyrics-search-actions">
+                      <button
+                        type="submit"
+                        className="lyrics-search-btn"
+                        disabled={!lyricsSearchArtist.trim() || !lyricsSearchTitle.trim()}
                       >
-                        {line.text || " "}
-                      </div>
-                    );
-                  })
-                ) : lyricsPlain ? (
-                  <pre className="lyrics-plain">{lyricsPlain}</pre>
-                ) : (
-                  <p className="now-playing-empty">No lyrics found.</p>
+                        Search
+                      </button>
+                      {lyricsOverride && (
+                        <button
+                          type="button"
+                          className="lyrics-search-btn lyrics-search-btn--reset"
+                          onClick={() => {
+                            setLyricsOverride(null);
+                            setLyricsSearchArtist(currentTrack?.artist ?? "");
+                            setLyricsSearchTitle(currentTrack?.title ?? "");
+                          }}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </form>
                 )}
-              </div>
+                <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
+                  {lyricsLoading ? (
+                    <p className="now-playing-empty">Loading lyrics…</p>
+                  ) : lyricsLines && lyricsLines.length > 0 ? (
+                    lyricsLines.map((line, i) => {
+                      const isActive = elapsed >= line.timeSec &&
+                        (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec);
+                      return (
+                        <div
+                          key={i}
+                          ref={isActive ? activeLyricRef : undefined}
+                          className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+                          onClick={() => handleLyricSeek(line.timeSec)}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {line.text || " "}
+                        </div>
+                      );
+                    })
+                  ) : lyricsPlain ? (
+                    <pre className="lyrics-plain">{lyricsPlain}</pre>
+                  ) : (
+                    <p className="now-playing-empty">No lyrics found.</p>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

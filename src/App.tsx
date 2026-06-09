@@ -802,11 +802,11 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
-          onSelectArtist={(name: string) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+          onSelectArtist={(name: string) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
           onSelectAlbumById={async (albumId: string) => {
             const db = await getDb();
             const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-            if (rows[0]) setSelectedAlbum(rows[0]);
+            if (rows[0]) navigateTo("library", { album: rows[0] });
           }}
           serverWithCred={serverWithCred ?? undefined}
         />

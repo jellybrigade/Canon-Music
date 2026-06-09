@@ -4,6 +4,11 @@ import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import type { CurrentTrack } from "../store/player";
 
+export interface LyricsOverride {
+  artist: string;
+  title: string;
+}
+
 interface LyricsResult {
   plain: string | null;
   synced: string | null;
@@ -11,13 +16,30 @@ interface LyricsResult {
   refresh: () => Promise<void>;
 }
 
-export function useLyrics(track: CurrentTrack | null): LyricsResult {
+export function useLyrics(
+  track: CurrentTrack | null,
+  override?: LyricsOverride | null,
+): LyricsResult {
   const queryClient = useQueryClient();
+  const overrideArtist = override?.artist ?? null;
+  const overrideTitle = override?.title ?? null;
+
   const query = useQuery({
-    queryKey: ["lyrics", track?.id ?? null],
+    queryKey: ["lyrics", track?.id ?? null, overrideArtist, overrideTitle],
     enabled: !!track,
     queryFn: async (): Promise<{ plain: string | null; synced: string | null }> => {
       if (!track) return { plain: null, synced: null };
+
+      // Manual search: skip cache, fetch LRCLib with override params (session-only, not persisted)
+      if (overrideArtist && overrideTitle) {
+        const result = await fetchLyrics({
+          artist: overrideArtist,
+          album: track.album ?? "",
+          title: overrideTitle,
+          durationSec: track.duration ?? null,
+        }).catch(() => null);
+        return { plain: result?.plain ?? null, synced: result?.synced ?? null };
+      }
 
       const db = await getDb();
       type CacheRow = { plain: string | null; synced: string | null };
