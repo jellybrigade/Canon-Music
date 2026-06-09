@@ -78,7 +78,7 @@ async function _doNormalizeAlbum(
     `SELECT DISTINCT tt.raw_value
      FROM track_tags tt
      JOIN tracks t ON t.id = tt.track_id
-     WHERE t.album_id = ? AND tt.kind = 'genre'`,
+     WHERE t.album_id = ? AND tt.kind = 'genre' AND tt.source = 'server'`,
     [albumId]
   );
 

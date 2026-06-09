@@ -535,6 +535,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                               {formatDuration(track.duration)}
                             </span>
                           )}
+                          {lovedTrackIds.has(track.id) && (
+                            <Heart size={10} className="now-playing-up-next-loved" fill="currentColor" strokeWidth={0} />
+                          )}
                         </div>
                         <span className="now-playing-up-next-meta">
                           {[track.artist, track.album].filter(Boolean).join(" • ")}
