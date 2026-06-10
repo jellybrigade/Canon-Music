@@ -118,11 +118,10 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
     [treeNodes],
   );
 
-  const decidedRows = useMemo(() => {
-    const rows = vocab.filter((r) => !!r.canonical_id);
-    console.log("[TagDecided] vocab updated:", vocab.length, "total,", rows.length, "decided");
-    return rows;
-  }, [vocab]);
+  const decidedRows = useMemo(
+    () => vocab.filter((r) => !!r.canonical_id),
+    [vocab],
+  );
 
   const mappedRows = useMemo(
     () => decidedRows.filter((r) => r.canonical_id !== ACCEPTED && r.canonical_id !== IGNORED),
@@ -184,14 +183,11 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
   const paginationTotal =
     filter === "accepted" ? filteredAccepted.length
     : filter === "ignored" ? filteredIgnored.length
-    : mappedGroups.length;
+    : filter === "mapped" ? mappedGroups.length
+    : Math.max(mappedGroups.length, filteredAccepted.length, filteredIgnored.length);
 
   function handleUndo(rawValue: string, kind: TagKind) {
-    console.log("[TagDecided] revert", { rawValue, kind });
-    deleteMapping.mutate({ rawValue, kind }, {
-      onSuccess: () => console.log("[TagDecided] revert success", { rawValue, kind }),
-      onError: (e) => console.error("[TagDecided] revert error", { rawValue, kind }, e),
-    });
+    deleteMapping.mutate({ rawValue, kind });
   }
   function handleLock(rawValue: string, kind: TagKind, locked: boolean) {
     lockMapping.mutate({ rawValue, kind, locked });

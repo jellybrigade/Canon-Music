@@ -90,9 +90,10 @@ export function useTagMappings() {
         throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
       }
       await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
+      // Clear all raw variants that share the same norm_value, not just the one passed in
       await db.execute(
-        "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?",
-        [rawValue, kind],
+        "UPDATE track_tags SET canonical_id = NULL WHERE LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')) = ? AND kind = ?",
+        [norm, kind],
       );
     },
     onSuccess: () => {
@@ -235,8 +236,8 @@ export function useAutoMapExact() {
         }
       }
 
-      // Batch insert — chunks of 200 to stay under SQLite 999-variable limit (4 params/row)
-      const CHUNK = 200;
+      // Batch insert — 5 params/row, so CHUNK = floor(999/5) = 199
+      const CHUNK = 199;
       let mapped = 0;
       for (let i = 0; i < matches.length; i += CHUNK) {
         const chunk = matches.slice(i, i + CHUNK);

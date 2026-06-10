@@ -511,7 +511,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   title="Re-fetch lyrics"
                   disabled={lyricsLoading}
                   style={{ margin: 0 }}
-                  onClick={() => void lyricsRefresh()}
+                  onClick={() => { setLyricsOverride(null); void lyricsRefresh(); }}
                 >
                   <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
                 </button>

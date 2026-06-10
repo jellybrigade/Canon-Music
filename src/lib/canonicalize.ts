@@ -72,7 +72,7 @@ export function canonicalKey(name: string): string {
 
 /** Normalization that matches the SQL in tag_vocab_cache (used as JOIN key in tag_mappings). */
 export function sqlNorm(name: string): string {
-  return name.replace(/-/g, " ").replace(/_/g, " ").toLowerCase().trim().replace(/\s+/g, " ");
+  return name.replace(/-/g, " ").replace(/_/g, " ").toLowerCase().trim();
 }
 
 /** Synthetic canonical_id for unmatched tags stored in album_genres. */
