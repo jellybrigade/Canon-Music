@@ -7,7 +7,7 @@ import type { TreeNode } from "../lib/canonicalize";
 export interface UserTreeNode {
   id: string;
   name: string;
-  type: "genre" | "mood" | "category";
+  type: "genre" | "descriptor" | "scenes-and-movements";
   canonical_key: string;
   parent_ids: string; // JSON-encoded string[]
 }
@@ -63,7 +63,7 @@ export function useCreateUserNode() {
       parentIds = [],
     }: {
       name: string;
-      type: "genre" | "mood" | "category";
+      type: "genre" | "descriptor" | "scenes-and-movements";
       parentIds?: string[];
     }): Promise<string> => {
       const db = await getDb();
@@ -109,7 +109,7 @@ export function useUpdateUserNode() {
     }: {
       id: string;
       name: string;
-      type: "genre" | "mood" | "category";
+      type: "genre" | "descriptor" | "scenes-and-movements";
       parentIds: string[];
     }) => {
       const db = await getDb();

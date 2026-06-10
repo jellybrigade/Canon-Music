@@ -13,9 +13,11 @@ import { canonicalKey } from "../lib/canonicalize";
 
 // ── NodeModal ─────────────────────────────────────────────────────────────────
 
+export type UserNodeType = "genre" | "descriptor" | "scenes-and-movements";
+
 export interface NodeFormState {
   name: string;
-  type: "genre" | "mood" | "category";
+  type: UserNodeType;
   parentId: string;
 }
 
@@ -30,7 +32,7 @@ interface NodeModalProps {
 
 export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, onCancel, error }: NodeModalProps) {
   const [name, setName] = useState(editingNode?.name ?? initialName);
-  const [type, setType] = useState<"genre" | "mood" | "category">(editingNode?.type ?? "genre");
+  const [type, setType] = useState<UserNodeType>((editingNode?.type as UserNodeType) ?? "genre");
   const [parentId, setParentId] = useState<string>(
     editingNode ? (JSON.parse(editingNode.parent_ids) as string[])[0] ?? "" : "",
   );
@@ -40,13 +42,17 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
   const parentInputRef = useRef<HTMLInputElement>(null);
   const parentWrapRef = useRef<HTMLDivElement>(null);
 
+  const sectionForType = (t: UserNodeType) =>
+    t === "genre" ? "genres" : t === "descriptor" ? "descriptors" : "scenes-and-movements";
+
   const parentMatches = useMemo(() => {
     if (!parentQuery.trim()) return [];
     const q = parentQuery.toLowerCase();
+    const section = sectionForType(type);
     return treeNodes
-      .filter((n) => n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q))
+      .filter((n) => n.section === section && (n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q)))
       .slice(0, 8);
-  }, [treeNodes, parentQuery]);
+  }, [treeNodes, parentQuery, type]);
 
   const parentNode = treeNodes.find((n) => n.id === parentId) ?? null;
 
@@ -94,13 +100,17 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
         <label className="node-modal-label">
           Type
           <div className="tags-seg node-modal-seg">
-            {(["genre", "mood", "category"] as const).map((t) => (
+            {([
+              ["genre", "Genre"],
+              ["descriptor", "Descriptor"],
+              ["scenes-and-movements", "Scenes & Movements"],
+            ] as [UserNodeType, string][]).map(([t, label]) => (
               <button
                 key={t}
                 className={`tags-seg-btn${type === t ? " tags-seg-btn--active" : ""}`}
-                onClick={() => setType(t)}
+                onClick={() => { setType(t); setParentId(""); setParentQuery(""); }}
               >
-                {t}
+                {label}
               </button>
             ))}
           </div>
