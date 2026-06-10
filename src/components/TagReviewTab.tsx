@@ -1,29 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import {
-  useTagMappings,
-  useAutoMapExact,
-  useUnresolvedGenres,
-  useUnresolvedAlbums,
-} from "../hooks/useTagMappings";
-import type { UnresolvedGenreRow } from "../hooks/useTagMappings";
+import { useEffect, useMemo, useState } from "react";
+import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
+import type { TagVocabRow } from "../hooks/useTagMappings";
 import type { TreeNode, TagKind } from "../lib/canonicalize";
 import {
   ACCEPTED,
   IGNORED,
-  PAGE_SIZE,
   AlbumArtStrip,
+  TagSourceDots,
+  SOURCE_META,
   CanonCombobox,
-  TagFilterBar,
-  applyKindFilter,
   applySearch,
+  Pagination,
 } from "./TagsViewHelpers";
-import type { KindFilter } from "./TagsViewHelpers";
 
-// ── ReviewCard ────────────────────────────────────────────────────────────────
+// ── ReviewItem ────────────────────────────────────────────────────────────────
 
-interface ReviewCardProps {
-  row: UnresolvedGenreRow;
+interface ReviewItemProps {
+  row: TagVocabRow;
   treeNodes: TreeNode[];
   onMap: (rawValue: string, kind: TagKind, canonicalId: string) => void;
   onAccept: (rawValue: string, kind: TagKind) => void;
@@ -31,94 +24,16 @@ interface ReviewCardProps {
   onCreateNode: (name: string, rawValue: string, rawKind: TagKind) => void;
 }
 
-function TagReviewCard({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: ReviewCardProps) {
-  const { data: albums = [] } = useUnresolvedAlbums(row.raw_value, row.kind);
-
+function ReviewItem({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: ReviewItemProps) {
   return (
-    <div className="tags-review-card">
-      <div className="tags-card-header">
-        <span className="tags-card-title">{row.raw_value}</span>
-        <span className={`tags-kind-badge tags-kind-badge--${row.kind}`}>{row.kind}</span>
+    <div className="review-item">
+      <div className="ri-meta">
+        <TagSourceDots sources={row.sources} />
+        <span className="ri-albums">{row.album_count}</span>
       </div>
-      <div className="tags-card-meta">
-        {row.album_count} {row.album_count === 1 ? "album" : "albums"}
-        {row.sources && <span className="tags-card-source"> · {row.sources}</span>}
-      </div>
-      <AlbumArtStrip albums={albums.slice(0, 3)} />
-      <CanonCombobox
-        treeNodes={treeNodes}
-        currentId={null}
-        onSelect={(id) => onMap(row.raw_value, row.kind, id)}
-        onClear={() => {}}
-        onCreateNode={(name) => onCreateNode(name, row.raw_value, row.kind)}
-      />
-      <div className="tags-card-actions">
-        <button
-          className="tags-card-btn tags-card-btn--accept"
-          title="Accept this tag as-is — use in genre output without remapping"
-          onClick={() => onAccept(row.raw_value, row.kind)}
-        >
-          Accept
-        </button>
-        <button
-          className="tags-card-btn tags-card-btn--ignore"
-          title="Ignore this tag — exclude from genre output"
-          onClick={() => onIgnore(row.raw_value, row.kind)}
-        >
-          Ignore
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── FocusCard ─────────────────────────────────────────────────────────────────
-
-interface FocusCardProps {
-  row: UnresolvedGenreRow;
-  index: number;
-  total: number;
-  treeNodes: TreeNode[];
-  onMap: (rawValue: string, kind: TagKind, canonicalId: string) => void;
-  onAccept: (rawValue: string, kind: TagKind) => void;
-  onIgnore: (rawValue: string, kind: TagKind) => void;
-  onNext: () => void;
-  onPrev: () => void;
-  onCreateNode: (name: string, rawValue: string, rawKind: TagKind) => void;
-}
-
-function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore, onNext, onPrev, onCreateNode }: FocusCardProps) {
-  const { data: albums = [] } = useUnresolvedAlbums(row.raw_value, row.kind);
-
-  useEffect(() => {
-    // fallow-ignore-next-line complexity
-    function handler(e: KeyboardEvent) {
-      const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-      if (e.key === "a" || e.key === "A") { e.preventDefault(); onAccept(row.raw_value, row.kind); }
-      if (e.key === "i" || e.key === "I") { e.preventDefault(); onIgnore(row.raw_value, row.kind); }
-      if (e.key === "ArrowRight" || e.key === "s" || e.key === "S") { e.preventDefault(); onNext(); }
-      if (e.key === "ArrowLeft") { e.preventDefault(); onPrev(); }
-    }
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [row.raw_value, row.kind, onAccept, onIgnore, onNext, onPrev]);
-
-  return (
-    <div className="tags-focus-card">
-      <div className="tags-focus-meta">
-        <div className="tags-focus-meta-top">
-          <span className="tags-focus-raw">{row.raw_value}</span>
-          <span className={`tags-kind-badge tags-kind-badge--${row.kind}`}>{row.kind}</span>
-        </div>
-        <span className="tags-focus-impact">
-          {row.album_count} {row.album_count === 1 ? "album" : "albums"}
-          {row.sources && <span className="tags-focus-sources"> · {row.sources}</span>}
-        </span>
-      </div>
-      <AlbumArtStrip albums={albums} size={64} />
-      <div className="tags-focus-map-section">
-        <span className="tags-focus-map-label">Map to canon</span>
+      <span className="ri-name">{row.raw_value}</span>
+      <AlbumArtStrip rawValue={row.raw_value} kind={row.kind} size={26} />
+      <div className="ri-actions">
         <CanonCombobox
           treeNodes={treeNodes}
           currentId={null}
@@ -126,33 +41,22 @@ function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore,
           onClear={() => {}}
           onCreateNode={(name) => onCreateNode(name, row.raw_value, row.kind)}
         />
-      </div>
-      <div className="tags-focus-actions">
-        <button
-          className="tags-focus-btn tags-focus-btn--accept"
-          onClick={() => onAccept(row.raw_value, row.kind)}
-          title="Accept this tag as-is"
-        >
-          Accept <span className="tags-focus-hint">A</span>
-        </button>
-        <button
-          className="tags-focus-btn tags-focus-btn--ignore"
-          onClick={() => onIgnore(row.raw_value, row.kind)}
-          title="Exclude from genre output"
-        >
-          Ignore <span className="tags-focus-hint">I</span>
-        </button>
-      </div>
-      <div className="tags-focus-nav">
-        <button className="tags-focus-nav-btn" onClick={onPrev} disabled={index === 0}>
-          <div className="tags-focus-nav-icon"><ChevronLeft size={13} /></div>
-          Prev
-        </button>
-        <span className="tags-focus-pos">{index + 1} / {total}</span>
-        <button className="tags-focus-nav-btn" onClick={onNext} disabled={index >= total - 1}>
-          Skip
-          <div className="tags-focus-nav-icon"><ChevronRight size={13} /></div>
-        </button>
+        <div className="ri-buttons">
+          <button
+            className="btn-flat accept"
+            onClick={() => onAccept(row.raw_value, row.kind)}
+            title="Accept this tag as-is — keep in genre output without remapping"
+          >
+            Accept
+          </button>
+          <button
+            className="btn-flat ignore"
+            onClick={() => onIgnore(row.raw_value, row.kind)}
+            title="Ignore — exclude from genre output"
+          >
+            Ignore
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -160,175 +64,94 @@ function TagFocusCard({ row, index, total, treeNodes, onMap, onAccept, onIgnore,
 
 // ── TagReviewTab ──────────────────────────────────────────────────────────────
 
-type ViewMode = "focus" | "grid";
-
 interface TagReviewTabProps {
   treeNodes: TreeNode[];
+  autoNote: string | null;
+  onDismissAutoNote: () => void;
   onCreateNode: (name: string, rawValue?: string, rawKind?: TagKind) => void;
 }
 
-// fallow-ignore-next-line complexity
-export function TagReviewTab({ treeNodes, onCreateNode }: TagReviewTabProps) {
-  const { data: unresolvedGenres } = useUnresolvedGenres();
+const PAGE_SIZE = 20;
+
+export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateNode }: TagReviewTabProps) {
+  const { data: vocab = [], isLoading, isError, error } = useTagVocab();
   const { saveMapping } = useTagMappings();
-  const autoMapExact = useAutoMapExact();
 
-  const [autoMapSummary, setAutoMapSummary] = useState<{ mapped: number; remaining: number } | null>(null);
-  const [reviewMode, setReviewMode] = useState<ViewMode>("grid");
-  const [reviewSearch, setReviewSearch] = useState("");
-  const [reviewKind, setReviewKind] = useState<KindFilter>("all");
-  const [reviewSort, setReviewSort] = useState<"impact" | "az">("impact");
-  const [focusIdx, setFocusIdx] = useState(0);
-  const [gridPages, setGridPages] = useState(false);
-  const [gridPage, setGridPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    autoMapExact.mutate(undefined, {
-      onSuccess: (result) => {
-        if (result.mapped > 0 || result.remaining > 0) {
-          setAutoMapSummary(result);
-        }
-      },
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const unresolvedRows = useMemo(
+    () => vocab.filter((r) => !r.canonical_id && r.album_count > 0),
+    [vocab],
+  );
 
-  const reviewRows = unresolvedGenres ?? [];
+  const filteredRows = useMemo(() => applySearch(unresolvedRows, search), [unresolvedRows, search]);
 
-  const filteredReview = useMemo(() => {
-    let rows = applyKindFilter(reviewRows, reviewKind);
-    rows = applySearch(rows, reviewSearch);
-    if (reviewSort === "az") rows = [...rows].sort((a, b) => a.raw_value.localeCompare(b.raw_value));
-    return rows;
-  }, [reviewRows, reviewKind, reviewSearch, reviewSort]);
+  useEffect(() => { setPage(1); }, [search]);
 
-  const clampedFocusIdx = Math.min(focusIdx, Math.max(0, filteredReview.length - 1));
-
-  const handleFocusNext = useCallback(() => {
-    setFocusIdx((i) => Math.min(i + 1, filteredReview.length - 1));
-  }, [filteredReview.length]);
-
-  const handleFocusPrev = useCallback(() => {
-    setFocusIdx((i) => Math.max(i - 1, 0));
-  }, []);
-
-  const totalGridPages = Math.max(1, Math.ceil(filteredReview.length / PAGE_SIZE));
-  const currentGridPage = Math.min(gridPage, totalGridPages);
-  const pagedReview = gridPages
-    ? filteredReview.slice((currentGridPage - 1) * PAGE_SIZE, currentGridPage * PAGE_SIZE)
-    : filteredReview;
-
-  function handleMap(rawValue: string, kind: TagKind, canonicalId: string) {
-    saveMapping.mutate({ rawValue, kind, canonicalId, source: "manual" });
+  function handleMap(rawValue: string, k: TagKind, canonicalId: string) {
+    saveMapping.mutate({ rawValue, kind: k, canonicalId, source: "manual" });
   }
-  function handleAccept(rawValue: string, kind: TagKind) {
-    saveMapping.mutate({ rawValue, kind, canonicalId: ACCEPTED });
+  function handleAccept(rawValue: string, k: TagKind) {
+    saveMapping.mutate({ rawValue, kind: k, canonicalId: ACCEPTED });
   }
-  function handleIgnore(rawValue: string, kind: TagKind) {
-    saveMapping.mutate({ rawValue, kind, canonicalId: IGNORED });
+  function handleIgnore(rawValue: string, k: TagKind) {
+    saveMapping.mutate({ rawValue, kind: k, canonicalId: IGNORED });
+  }
+
+  if (isLoading) {
+    return <div className="review-empty"><strong>Loading…</strong></div>;
+  }
+
+  if (isError) {
+    return (
+      <div className="review-empty">
+        <strong>Failed to load tags</strong>
+        {String(error)}
+      </div>
+    );
   }
 
   return (
     <>
-      {autoMapSummary && (
-        <div className="tags-automap-banner">
-          <span className="tags-automap-text">
-            {autoMapSummary.mapped > 0
-              ? `${autoMapSummary.mapped} tag${autoMapSummary.mapped === 1 ? "" : "s"} auto-mapped.`
-              : "No new auto-mappings."}
-            {autoMapSummary.remaining > 0
-              ? ` ${autoMapSummary.remaining} still need${autoMapSummary.remaining === 1 ? "s" : ""} review.`
-              : " All tags resolved."}
-          </span>
-          <button className="tags-automap-dismiss" onClick={() => setAutoMapSummary(null)}>×</button>
+      {autoNote && (
+        <div className="review-autonote">
+          {autoNote}
+          <button className="review-autonote-dismiss" onClick={onDismissAutoNote}>×</button>
         </div>
       )}
-      <div className="tags-review-toolbar">
-        <TagFilterBar
-          search={reviewSearch}
-          onSearch={(s) => { setReviewSearch(s); setFocusIdx(0); setGridPage(1); }}
-          kind={reviewKind}
-          onKind={(k) => { setReviewKind(k); setFocusIdx(0); setGridPage(1); }}
-          sort={reviewSort}
-          sortOptions={[{ value: "impact", label: "By impact" }, { value: "az", label: "A–Z" }]}
-          onSort={(s) => setReviewSort(s as "impact" | "az")}
+      <div className="review-toolbar">
+        <input
+          className="review-search"
+          placeholder="Search…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="tags-mode-controls">
-          <div className="tags-mode-toggle">
-            <button
-              className={`tags-mode-btn${reviewMode === "focus" ? " tags-mode-btn--active" : ""}`}
-              onClick={() => setReviewMode("focus")}
-              title="Focus mode — one tag at a time"
-            >
-              Focus
-            </button>
-            <button
-              className={`tags-mode-btn${reviewMode === "grid" ? " tags-mode-btn--active" : ""}`}
-              onClick={() => setReviewMode("grid")}
-              title="Grid — browse all"
-            >
-              Grid
-            </button>
-          </div>
-          {reviewMode === "grid" && (
-            <div className="tags-flow-toggle">
-              <button
-                className={`tags-flow-btn${!gridPages ? " tags-flow-btn--active" : ""}`}
-                onClick={() => setGridPages(false)}
-                title="Show all as continuous flow"
-              >
-                Flow
-              </button>
-              <button
-                className={`tags-flow-btn${gridPages ? " tags-flow-btn--active" : ""}`}
-                onClick={() => { setGridPages(true); setGridPage(1); }}
-                title="Paginate results"
-              >
-                Pages
-              </button>
-            </div>
-          )}
+        <div className="review-toolbar-pagination">
+          <Pagination page={page} total={filteredRows.length} pageSize={PAGE_SIZE} onChange={setPage} />
+        </div>
+        <div className="review-legend">
+          {Object.entries(SOURCE_META).map(([, { cls, label }]) => (
+            <span key={cls} className="review-legend-item">
+              <span className={`tag-src-dot ${cls}`} />
+              {label}
+            </span>
+          ))}
         </div>
       </div>
 
-      {filteredReview.length === 0 ? (
-        <p className="tags-empty">
-          {reviewRows.length === 0 ? "All tags reviewed — genres look good! 🎉" : "No tags match filter."}
-        </p>
-      ) : reviewMode === "focus" ? (
-        <div className="tags-focus-wrap">
-          <div className="tags-progress-bar">
-            <div
-              className="tags-progress-fill"
-              style={{
-                width: filteredReview.length <= 1
-                  ? "0%"
-                  : `${(clampedFocusIdx / (filteredReview.length - 1)) * 100}%`,
-              }}
-            />
-          </div>
-          <p className="tags-progress-label">
-            {clampedFocusIdx + 1} of {filteredReview.length} remaining
-          </p>
-          <TagFocusCard
-            key={`${filteredReview[clampedFocusIdx]?.raw_value}:${filteredReview[clampedFocusIdx]?.kind}`}
-            row={filteredReview[clampedFocusIdx]!}
-            index={clampedFocusIdx}
-            total={filteredReview.length}
-            treeNodes={treeNodes}
-            onMap={handleMap}
-            onAccept={handleAccept}
-            onIgnore={handleIgnore}
-            onNext={handleFocusNext}
-            onPrev={handleFocusPrev}
-            onCreateNode={onCreateNode}
-          />
+      {filteredRows.length === 0 ? (
+        <div className="review-empty">
+          <strong>{unresolvedRows.length === 0 ? "All tags resolved" : "No tags match"}</strong>
+          {unresolvedRows.length === 0
+            ? `${vocab.length} tag${vocab.length === 1 ? "" : "s"} total — all mapped, accepted, or ignored.`
+            : "Clear the search filter to see all pending tags."}
         </div>
       ) : (
-        <>
-          <div className="tags-card-grid">
-            {pagedReview.map((row) => (
-              <TagReviewCard
+        <div className="review-scroll">
+          <div className="review-list">
+            {filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((row) => (
+              <ReviewItem
                 key={`${row.raw_value}:${row.kind}`}
                 row={row}
                 treeNodes={treeNodes}
@@ -339,28 +162,7 @@ export function TagReviewTab({ treeNodes, onCreateNode }: TagReviewTabProps) {
               />
             ))}
           </div>
-          {gridPages && totalGridPages > 1 && (
-            <div className="tags-pagination">
-              <button
-                className="tags-page-btn"
-                disabled={currentGridPage <= 1}
-                onClick={() => setGridPage((p) => p - 1)}
-              >
-                <div className="tags-page-icon"><ChevronLeft size={14} /></div>
-              </button>
-              <span className="tags-page-info">
-                Page {currentGridPage} of {totalGridPages}
-              </span>
-              <button
-                className="tags-page-btn"
-                disabled={currentGridPage >= totalGridPages}
-                onClick={() => setGridPage((p) => p + 1)}
-              >
-                <div className="tags-page-icon"><ChevronRight size={14} /></div>
-              </button>
-            </div>
-          )}
-        </>
+        </div>
       )}
     </>
   );

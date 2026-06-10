@@ -34,10 +34,12 @@ const CATEGORY_COLOR: Record<Category, number> = {
 };
 
 const PLACEHOLDERS: Record<Category, string> = {
-  bug: "What went wrong? Steps to reproduce help a lot.",
+  bug: "What went wrong? Any extra context is helpful.",
   suggestion: "What would you like to see?",
   general: "What's on your mind?",
 };
+
+const STEPS_PLACEHOLDER = "1. Open the app\n2. …\n3. …";
 
 interface Props {
   serverUrl?: string;
@@ -47,6 +49,8 @@ interface Props {
 export function FeedbackModal({ serverUrl, onClose }: Props) {
   const [category, setCategory] = useState<Category>("general");
   const [text, setText] = useState("");
+  const [steps, setSteps] = useState("");
+  const [stepsError, setStepsError] = useState(false);
   const [includeSysInfo, setIncludeSysInfo] = useState(true);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [appVersion, setAppVersion] = useState("…");
@@ -62,7 +66,13 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
   }, [onClose]);
 
   async function submit() {
-    if (!text.trim() || status === "sending") return;
+    if (status === "sending") return;
+    if (category === "bug") {
+      if (!steps.trim()) { setStepsError(true); return; }
+    } else {
+      if (!text.trim()) return;
+    }
+    setStepsError(false);
     setStatus("sending");
 
     const serverHost = serverUrl
@@ -73,9 +83,19 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
       ? `\n\n*Canon v${appVersion} · ${detectOS()} · ${serverHost}*`
       : "";
 
+    let bodyText: string;
+    if (category === "bug") {
+      const parts: string[] = [];
+      if (text.trim()) parts.push(`**Description**\n${text.trim()}`);
+      parts.push(`**Steps to reproduce**\n${steps.trim()}`);
+      bodyText = parts.join("\n\n");
+    } else {
+      bodyText = text.trim();
+    }
+
     const embed = {
       title: `${CATEGORY_EMOJI[category]} ${CATEGORY_LABELS[category]}`,
-      description: text.trim() + sysLine,
+      description: bodyText + sysLine,
       color: CATEGORY_COLOR[category],
       timestamp: new Date().toISOString(),
     };
@@ -112,21 +132,45 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
             <button
               key={c}
               className={`feedback-cat-btn${category === c ? " feedback-cat-btn--active" : ""}`}
-              onClick={() => setCategory(c)}
+              onClick={() => { setCategory(c); setStepsError(false); }}
             >
               {CATEGORY_LABELS[c]}
             </button>
           ))}
         </div>
 
-        <textarea
-          className="feedback-textarea"
-          placeholder={PLACEHOLDERS[category]}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={5}
-          autoFocus
-        />
+        {category === "bug" ? (
+          <div className="feedback-bug-fields">
+            <textarea
+              className="feedback-textarea feedback-textarea--bug"
+              placeholder={PLACEHOLDERS.bug}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={2}
+              autoFocus
+            />
+            <div className="feedback-steps-label">
+              Steps to reproduce <span className="feedback-required">*</span>
+            </div>
+            <textarea
+              className={`feedback-textarea feedback-textarea--bug${stepsError ? " feedback-textarea--error" : ""}`}
+              placeholder={STEPS_PLACEHOLDER}
+              value={steps}
+              onChange={(e) => { setSteps(e.target.value); if (e.target.value.trim()) setStepsError(false); }}
+              rows={3}
+            />
+            {stepsError && <div className="feedback-steps-error">Steps to reproduce are required.</div>}
+          </div>
+        ) : (
+          <textarea
+            className="feedback-textarea"
+            placeholder={PLACEHOLDERS[category]}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            autoFocus
+          />
+        )}
 
         <div className="feedback-footer">
           <label className="feedback-sysinfo">
@@ -150,7 +194,7 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
               <button
                 className="feedback-submit"
                 onClick={() => void submit()}
-                disabled={!text.trim() || status === "sending"}
+                disabled={(category === "bug" ? !steps.trim() : !text.trim()) || status === "sending"}
               >
                 {status === "sending" ? "Sending…" : "Send"}
               </button>

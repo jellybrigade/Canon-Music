@@ -93,8 +93,7 @@ export function useCreateUserNode() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
       void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["unresolved-genres"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
     },
   });
 }
@@ -143,8 +142,7 @@ export function useUpdateUserNode() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
       void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["unresolved-genres"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
     },
   });
 }
@@ -175,8 +173,7 @@ export function useDeleteUserNode() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
       void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["unresolved-genres"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
     },
   });

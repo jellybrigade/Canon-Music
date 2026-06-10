@@ -27,9 +27,29 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
   const matches = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
+
+    function initials(s: string) {
+      return s.split(/[\s\-_/]+/).map(w => w[0] ?? "").join("").toLowerCase();
+    }
+
+    function score(n: { name: string; canonical_key: string }): number {
+      const nl = n.name.toLowerCase();
+      const kl = n.canonical_key.toLowerCase();
+      if (nl === q) return 5;
+      if (nl.startsWith(q)) return 4;
+      if (nl.includes(q)) return 3;
+      if (kl.includes(q)) return 2;
+      if (initials(nl) === q) return 2;
+      if (initials(nl).startsWith(q) && q.length >= 2) return 1;
+      return 0;
+    }
+
     return treeNodes
-      .filter((n) => n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q))
-      .slice(0, 10);
+      .map(n => ({ n, s: score(n) }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => b.s - a.s)
+      .slice(0, 10)
+      .map(x => x.n);
   }, [treeNodes, query]);
 
   const canCreate =

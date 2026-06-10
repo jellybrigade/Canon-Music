@@ -4,6 +4,7 @@ import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks } from "./navidrome";
 import type { NavidromeCredential } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
+import { rebuildTagVocabCache } from "./tag-normalize";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -197,6 +198,8 @@ export async function syncLibrary(
 
   // Scan for tag issues after all data is updated
   await scanForIssues(server.id);
+
+  await rebuildTagVocabCache();
 
   return { failedAlbums, failedPlaylists, skippedAlbums };
 }
