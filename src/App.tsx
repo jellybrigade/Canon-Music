@@ -28,7 +28,7 @@ import { useSearch } from "./hooks/useSearch";
 import { useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
-import { useVocabulary } from "./hooks/useTagMappings";
+import { useTagVocab } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
@@ -131,10 +131,10 @@ export default function App() {
   const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
   const { data: genres } = useGenres();
-  const { data: vocab } = useVocabulary();
+  const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
-  const unmappedCount = vocab?.filter((r) => !r.canonical_id).length ?? 0;
+  const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
 
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
@@ -802,11 +802,11 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
-          onSelectArtist={(name: string) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
+          onSelectArtist={(name: string) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
           onSelectAlbumById={async (albumId: string) => {
             const db = await getDb();
             const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-            if (rows[0]) navigateTo("library", { album: rows[0] });
+            if (rows[0]) setSelectedAlbum(rows[0]);
           }}
           serverWithCred={serverWithCred ?? undefined}
         />

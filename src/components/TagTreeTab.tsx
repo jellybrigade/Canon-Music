@@ -183,15 +183,12 @@ function UserNodeRow({ node, treeNodes, onEdit, onDelete }: TreeNodeRowProps) {
 
   return (
     <div className={`tree-node-row${superseded ? " tree-node-row--superseded" : ""}`}>
-      <div className="tree-node-row-left">
-        <span className="tree-node-name">{node.name}</span>
-        <span className={`tags-kind-badge tags-kind-badge--${node.type}`}>{node.type}</span>
-        {parentName && <span className="tree-node-parent">↳ {parentName}</span>}
+      <span className="tree-node-name">{node.name}</span>
+      <span className={`tags-kind-badge tags-kind-badge--${node.type}`}>{node.type}</span>
+      <div className="tree-node-parent">
+        {parentName ? <><span className="tree-node-parent-arrow">↳</span>{parentName}</> : <span style={{ color: "var(--text-tertiary)" }}>—</span>}
         {superseded && (
-          <span
-            className="tree-node-conflict"
-            title="A node with this key now exists in the bundled tree — you can delete this duplicate"
-          >
+          <span className="tree-node-conflict" title="A node with this key now exists in the bundled tree">
             <AlertTriangle size={12} /> bundled
           </span>
         )}
@@ -245,40 +242,47 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
         </div>
       )}
 
-      {userNodes.length === 0 ? (
-        <p className="tags-empty">No custom nodes yet.</p>
-      ) : (
-        <div className="tree-node-list">
-          {userNodes.map((node) => (
-            <UserNodeRow
-              key={node.id}
-              node={node}
-              treeNodes={treeNodes}
-              onEdit={onEditNode}
-              onDelete={onDeleteNode}
-            />
-          ))}
-        </div>
-      )}
+      <div className="tree-scroll">
+        {userNodes.length === 0 ? (
+          <p className="tags-empty">No custom nodes yet.</p>
+        ) : (
+          <>
+            <div className="tree-col-header">
+              <span>Node</span><span>Type</span><span>Parent</span><span></span>
+            </div>
+            <div className="tree-node-list">
+              {userNodes.map((node) => (
+                <UserNodeRow
+                  key={node.id}
+                  node={node}
+                  treeNodes={treeNodes}
+                  onEdit={onEditNode}
+                  onDelete={onDeleteNode}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
-      {changelog.length > 0 && (
-        <div className="tree-changelog">
-          <h3 className="tree-changelog-title">Changelog</h3>
-          <div className="tree-changelog-list">
-            {changelog.map((entry) => (
-              <div key={entry.id} className="tree-changelog-row">
-                <span className={`tree-changelog-action tree-changelog-action--${entry.action}`}>
-                  {entry.action}
-                </span>
-                <span className="tree-changelog-name">{entry.node_name}</span>
-                <span className="tree-changelog-date">
-                  {new Date(entry.created_at).toLocaleDateString()}
-                </span>
-              </div>
-            ))}
+        {changelog.length > 0 && (
+          <div className="tree-changelog">
+            <h3 className="tree-changelog-title">Changelog</h3>
+            <div className="tree-changelog-list">
+              {changelog.map((entry) => (
+                <div key={entry.id} className="tree-changelog-row">
+                  <span className={`tree-changelog-action tree-changelog-action--${entry.action}`}>
+                    {entry.action}
+                  </span>
+                  <span className="tree-changelog-name">{entry.node_name}</span>
+                  <span className="tree-changelog-date">
+                    {new Date(entry.created_at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }

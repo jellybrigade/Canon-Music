@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchAlbumTags, classifyTag } from "../lib/lastfm";
-import { findCanonical, getCanonTree } from "../lib/canonicalize";
+import { findCanonical, getCanonTree, sqlNorm } from "../lib/canonicalize";
 import { useTagsStore } from "../store/tags";
 import type { InboxItem, InboxTagRow } from "../store/tags";
 import type { AlbumRow } from "./useAlbums";
@@ -78,9 +78,9 @@ async function applyInboxItem(item: InboxItem): Promise<void> {
       const mt = tag.findResult.matchType;
       const matchType = mt === "exact" || mt === "fuzzy" ? mt : null;
       await db.execute(
-        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at)
-         VALUES (?, ?, ?, 'manual', ?, datetime('now'))`,
-        [tag.rawValue, tag.kind, canonicalId, matchType]
+        `INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value)
+         VALUES (?, ?, ?, 'manual', ?, datetime('now'), ?)`,
+        [tag.rawValue, tag.kind, canonicalId, matchType, sqlNorm(tag.rawValue)]
       );
     }
 
@@ -179,7 +179,7 @@ export function useAcceptInboxItem() {
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
       void queryClient.invalidateQueries({ queryKey: ["albums"] });
-      void queryClient.invalidateQueries({ queryKey: ["vocab"] });
+      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
     },
   });
 }

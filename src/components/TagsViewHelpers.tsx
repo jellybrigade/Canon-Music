@@ -1,42 +1,19 @@
 import { useServers, useServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
-import { Lock, Unlock } from "lucide-react";
+import { useTagAlbums } from "../hooks/useTagMappings";
 import { CanonCombobox } from "./CanonCombobox";
-import type { TreeNode, TagKind } from "../lib/canonicalize";
-import type { VocabRow } from "../hooks/useTagMappings";
-import { useVocabAlbums } from "../hooks/useTagMappings";
+import type { TagKind } from "../lib/canonicalize";
+
+// ── Sentinel constants ────────────────────────────────────────────────────────
 
 export const ACCEPTED = "__accepted__";
 export const IGNORED = "__ignored__";
-export const PAGE_SIZE = 24;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export type ArtAlbum = { album_id: string; album_name: string; artwork_url: string | null };
 export type KindFilter = "all" | "genre" | "mood";
-export type SourceFilter = "all" | "auto" | "manual";
 export interface SegOption { value: string; label: string }
-
-export interface MappedGroup {
-  canonicalId: string;
-  node: TreeNode;
-  variants: VocabRow[];
-  totalTracks: number;
-}
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-export const KIND_OPTIONS: SegOption[] = [
-  { value: "all", label: "All" },
-  { value: "genre", label: "Genre" },
-  { value: "mood", label: "Mood" },
-];
-
-export const SOURCE_OPTIONS: SegOption[] = [
-  { value: "all", label: "All" },
-  { value: "auto", label: "Auto" },
-  { value: "manual", label: "Manual" },
-];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -52,7 +29,8 @@ export function applySearch<T extends { raw_value: string }>(rows: T[], search: 
 
 // ── AlbumArtStrip ─────────────────────────────────────────────────────────────
 
-export function AlbumArtStrip({ albums, size = 40 }: { albums: ArtAlbum[]; size?: number }) {
+export function AlbumArtStrip({ rawValue, kind, size = 24 }: { rawValue: string; kind: TagKind; size?: number }) {
+  const { data: albums = [] } = useTagAlbums(rawValue, kind);
   const { data: servers } = useServers();
   const { data: swc } = useServerWithCredential(servers?.[0]?.id);
 
@@ -84,13 +62,32 @@ export function AlbumArtStrip({ albums, size = 40 }: { albums: ArtAlbum[]; size?
   );
 }
 
-// ── SourceBadge ───────────────────────────────────────────────────────────────
+// ── TagSourceLabels ───────────────────────────────────────────────────────────
 
-export function SourceBadge({ source }: { source: "auto" | "manual" | null }) {
-  if (!source) return null;
+export const SOURCE_META: Record<string, { cls: string; label: string }> = {
+  "lastfm":                { cls: "src-lfm",     label: "Last.fm" },
+  "musicbrainz":           { cls: "src-mb",      label: "MusicBrainz" },
+  "musicbrainz-folksonomy":{ cls: "src-mb-folk", label: "Folksonomy" },
+  "file":                  { cls: "src-file",    label: "File tags" },
+};
+
+function srcCls(s: string) {
+  return SOURCE_META[s]?.cls ?? (s.startsWith("musicbrainz") ? "src-mb" : "src-file");
+}
+
+/** Colored dot per source — use SOURCE_META for a legend. */
+export function TagSourceDots({ sources }: { sources: string | null }) {
+  if (!sources) return null;
+  const parts = sources.split(",").map((s) => s.trim()).filter(Boolean);
   return (
-    <span className={`tags-source-badge tags-source-badge--${source}`}>
-      {source === "auto" ? "AUTO" : "MANUAL"}
+    <span className="tag-sources">
+      {parts.map((s) => (
+        <span
+          key={s}
+          className={`tag-src-dot ${srcCls(s)}`}
+          title={SOURCE_META[s]?.label ?? s}
+        />
+      ))}
     </span>
   );
 }
@@ -117,131 +114,36 @@ export function SegToggle({ value, options, onChange }: {
   );
 }
 
-// ── TagFilterBar ──────────────────────────────────────────────────────────────
-
-interface FilterBarProps {
-  search: string;
-  onSearch: (s: string) => void;
-  kind: KindFilter;
-  onKind: (k: KindFilter) => void;
-  source?: SourceFilter;
-  onSource?: (s: SourceFilter) => void;
-  sort?: string;
-  sortOptions?: SegOption[];
-  onSort?: (s: string) => void;
-}
-
-export function TagFilterBar({ search, onSearch, kind, onKind, source, onSource, sort, sortOptions, onSort }: FilterBarProps) {
-  return (
-    <div className="tags-filter-bar">
-      <input
-        className="tags-search"
-        placeholder="Filter…"
-        value={search}
-        onChange={(e) => onSearch(e.target.value)}
-      />
-      <SegToggle value={kind} options={KIND_OPTIONS} onChange={(v) => onKind(v as KindFilter)} />
-      {onSource && source !== undefined && (
-        <SegToggle value={source} options={SOURCE_OPTIONS} onChange={(v) => onSource(v as SourceFilter)} />
-      )}
-      {onSort && sortOptions && sort !== undefined && (
-        <SegToggle value={sort} options={sortOptions} onChange={onSort} />
-      )}
-    </div>
-  );
-}
-
-// ── TagListRow ────────────────────────────────────────────────────────────────
-
-interface ListRowProps {
-  row: VocabRow;
-  nodeById: Map<string, TreeNode>;
-  showUndo?: boolean;
-  showDelete?: boolean;
-  showLock?: boolean;
-  isOrphan?: boolean;
-  onUndo?: () => void;
-  onDelete?: () => void;
-  onLock?: () => void;
-}
-
-// fallow-ignore-next-line complexity
-export function TagListRow({ row, nodeById, showUndo, showDelete, showLock, isOrphan, onUndo, onDelete, onLock }: ListRowProps) {
-  const { data: albums = [] } = useVocabAlbums(row.raw_value, row.kind);
-  const isLocked = row.locked === 1;
-  const mappedNode =
-    row.canonical_id && row.canonical_id !== ACCEPTED && row.canonical_id !== IGNORED
-      ? nodeById.get(row.canonical_id)
-      : null;
-  const displayKind = mappedNode?.type ?? row.kind;
-
-  return (
-    <div className="tags-list-row">
-      <div className="tags-list-left">
-        <span className="tags-cell-raw">{row.raw_value}</span>
-        <span className={`tags-kind-badge tags-kind-badge--${displayKind}`}>{displayKind}</span>
-        {!isOrphan && (
-          <span className="tags-track-count">
-            {row.track_count} {row.track_count === 1 ? "track" : "tracks"}
-          </span>
-        )}
-      </div>
-      {!isOrphan && <AlbumArtStrip albums={albums.slice(0, 3) as ArtAlbum[]} />}
-      <div className="tags-list-mapping">
-        {mappedNode && (
-          <>
-            <span className="tags-mapped-name">{mappedNode.name}</span>
-            <SourceBadge source={row.mapping_source} />
-          </>
-        )}
-        {row.canonical_id === ACCEPTED && <span className="tags-mapped-accepted">Accepted as-is</span>}
-        {row.canonical_id === IGNORED && <span className="tags-mapped-ignored">Ignored</span>}
-      </div>
-      <div className="tags-list-actions">
-        {showLock && mappedNode && (
-          <button
-            className={`tags-lock-btn${isLocked ? " tags-lock-btn--locked" : ""}`}
-            onClick={onLock}
-            title={isLocked ? "Unlock mapping" : "Lock (prevents auto-remap)"}
-          >
-            {isLocked ? <Lock size={13} /> : <Unlock size={13} />}
-          </button>
-        )}
-        {showUndo && (
-          <button className="tags-undo-btn" onClick={onUndo}>Undo</button>
-        )}
-        {showDelete && (
-          <button className="tags-delete-btn" onClick={onDelete} title="Remove mapping">×</button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── ResolvedTagList ───────────────────────────────────────────────────────────
-
-interface ResolvedTagListProps {
-  rows: VocabRow[];
-  nodeById: Map<string, TreeNode>;
-  onUndo: (row: VocabRow) => void;
-}
-
-export function ResolvedTagList({ rows, nodeById, onUndo }: ResolvedTagListProps) {
-  if (rows.length === 0) return <p className="tags-resolved-empty">None</p>;
-  return (
-    <div className="tags-list">
-      {rows.map((row) => (
-        <TagListRow
-          key={`${row.raw_value}:${row.kind}`}
-          row={row}
-          nodeById={nodeById}
-          showUndo
-          onUndo={() => onUndo(row)}
-        />
-      ))}
-    </div>
-  );
-}
-
 // Re-export CanonCombobox so tabs only need one import for tag-related components
 export { CanonCombobox };
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+export function Pagination({ page, total, pageSize, onChange }: {
+  page: number;
+  total: number;
+  pageSize: number;
+  onChange: (p: number) => void;
+}) {
+  const totalPages = Math.ceil(total / pageSize);
+  if (totalPages <= 1) return null;
+
+  function pages(): (number | "…")[] {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    if (page <= 4) return [1, 2, 3, 4, 5, "…", totalPages];
+    if (page >= totalPages - 3) return [1, "…", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    return [1, "…", page - 1, page, page + 1, "…", totalPages];
+  }
+
+  return (
+    <div className="pagination">
+      <button className="pg-btn" disabled={page === 1} onClick={() => onChange(page - 1)}>‹</button>
+      {pages().map((p, i) =>
+        p === "…"
+          ? <span key={`e${i}`} className="pg-ellipsis">…</span>
+          : <button key={p} className={`pg-btn${page === p ? " pg-btn--active" : ""}`} onClick={() => onChange(p)}>{p}</button>
+      )}
+      <button className="pg-btn" disabled={page === totalPages} onClick={() => onChange(page + 1)}>›</button>
+    </div>
+  );
+}

@@ -7,6 +7,23 @@ import type { MbGenre } from "./musicbrainz";
 
 export type TagSource = "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
+export async function rebuildTagVocabCache(): Promise<void> {
+  const db = await getDb();
+  await db.execute("DELETE FROM tag_vocab_cache");
+  await db.execute(`
+    INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
+    SELECT
+      LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
+      tt.raw_value,
+      tt.kind,
+      COUNT(DISTINCT tr.album_id),
+      GROUP_CONCAT(DISTINCT CASE WHEN tt.source = 'server' THEN 'file' ELSE tt.source END)
+    FROM track_tags tt
+    JOIN tracks tr ON tr.id = tt.track_id
+    GROUP BY LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')), tt.kind
+  `);
+}
+
 export interface NormalizedTag {
   id: string | null;
   name: string;
@@ -78,7 +95,7 @@ async function _doNormalizeAlbum(
     `SELECT DISTINCT tt.raw_value
      FROM track_tags tt
      JOIN tracks t ON t.id = tt.track_id
-     WHERE t.album_id = ? AND tt.kind = 'genre' AND tt.source = 'server'`,
+     WHERE t.album_id = ? AND tt.kind = 'genre'`,
     [albumId]
   );
 
@@ -177,6 +194,7 @@ async function _doNormalizeAlbum(
          WHERE LOWER(REPLACE(REPLACE(TRIM(tm.raw_value), '-', ' '), '_', ' '))
              = LOWER(REPLACE(REPLACE(TRIM(track_tags.raw_value), '-', ' '), '_', ' '))
            AND tm.kind = track_tags.kind
+           AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
          LIMIT 1
        )
        WHERE source IN ('lastfm', 'musicbrainz', 'musicbrainz-folksonomy')
