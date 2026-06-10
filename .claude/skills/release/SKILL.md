@@ -51,6 +51,14 @@ Release Canon to main. Run these steps in order — do not skip any.
    ```
    Omit a subheading if it has zero items. Summarize all changes since the last release — run `git log main..development --oneline` before writing to make sure nothing is missed.
 
+   **Release note tone**: write for users, not developers. Describe what changed from the user's perspective — what they can now do, what no longer breaks, what behaves differently. No internal names (function names, SQL, hook names, variable names). No jargon. Each bullet should be one plain sentence a non-technical user can understand.
+
+   Good: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
+   Bad: "Refresh button clears lyricsOverride before calling lyricsRefresh()."
+
+   Good: "Tags with multiple spellings (e.g. Post-Rock and Post Rock) are now fully removed when you undo a mapping."
+   Bad: "deleteMapping clears track_tags by norm_value instead of raw_value."
+
 5. **Push**: `git push` — CI reads the version from `tauri.conf.json`, creates the `vX.Y.Z` tag, and builds Windows / macOS / Linux artifacts automatically.
 
 6. **Return to development**: `git checkout development`
