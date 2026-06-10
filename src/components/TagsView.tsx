@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { useVocabulary, useUnresolvedGenres, useTagMappings } from "../hooks/useTagMappings";
+import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useTagVocab, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
 import {
   useUserNodes,
   useCreateUserNode,
@@ -13,13 +14,11 @@ import { getCanonTree } from "../lib/canonicalize";
 import { NodeModal } from "./TagTreeTab";
 import type { NodeFormState } from "./TagTreeTab";
 import { TagReviewTab } from "./TagReviewTab";
-import { TagMappedTab } from "./TagMappedTab";
-import { TagResolvedTab } from "./TagResolvedTab";
-import { TagCleanupTab } from "./TagCleanupTab";
+import { TagDecidedTab } from "./TagDecidedTab";
 import { TagTreeTab } from "./TagTreeTab";
 import "./TagsView.css";
 
-type TabId = "review" | "mapped" | "resolved" | "cleanup" | "tree";
+type TabId = "review" | "decided" | "tree";
 
 interface PendingCreate {
   name: string;
@@ -32,16 +31,31 @@ export function TagsView() {
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
   const [tab, setTab] = useState<TabId>("review");
 
-  // modal state
   const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
   const [editingNode, setEditingNode] = useState<UserTreeNode | null>(null);
   const [nodeModalError, setNodeModalError] = useState<string | undefined>();
   const [deletingNode, setDeletingNode] = useState<UserTreeNode | null>(null);
 
-  const { data: unresolvedGenres } = useUnresolvedGenres();
-  const { data: vocab } = useVocabulary();
+  const queryClient = useQueryClient();
+  const { data: vocab = [] } = useTagVocab();
   const { data: userNodes = [] } = useUserNodes();
   const { saveMapping } = useTagMappings();
+  const autoMapExact = useAutoMapExact();
+  const autoMapRanRef = useRef(false);
+  const [autoNote, setAutoNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (autoMapRanRef.current) return;
+    autoMapRanRef.current = true;
+    autoMapExact.mutate(undefined, {
+      onSuccess: (result) => {
+        if (result.mapped > 0) {
+          setAutoNote(`${result.mapped} tag${result.mapped === 1 ? "" : "s"} auto-mapped on entry.`);
+        }
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const createUserNode = useCreateUserNode();
   const updateUserNode = useUpdateUserNode();
   const deleteUserNode = useDeleteUserNode();
@@ -55,20 +69,22 @@ export function TagsView() {
     setTreeNodes(tree.nodes);
   }
 
-  // tab badges
-  const reviewBadge = unresolvedGenres?.length || undefined;
-  const cleanupBadge = vocab?.filter((r) => r.track_count === 0).length || undefined;
+  function handleRefresh() {
+    void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
+    void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
+    void refreshTree();
+  }
+
+  const reviewCount = vocab.filter((r) => !r.canonical_id && r.album_count > 0).length;
+  const decidedCount = vocab.filter((r) => !!r.canonical_id).length;
   const supersededCount = userNodes.filter(isSuperseeded).length;
 
   const tabs: { id: TabId; label: string; badge?: number }[] = [
-    { id: "review", label: "Review", badge: reviewBadge },
-    { id: "mapped", label: "Mapped" },
-    { id: "resolved", label: "Resolved" },
-    { id: "cleanup", label: "Cleanup", badge: cleanupBadge },
+    { id: "review", label: "Review", badge: reviewCount || undefined },
+    { id: "decided", label: "Decided", badge: decidedCount || undefined },
     { id: "tree", label: "Tree", badge: supersededCount || undefined },
   ];
 
-  // modal handlers
   function openCreateModal(name: string, rawValue?: string, rawKind?: TagKind) {
     setNodeModalError(undefined);
     setPendingCreate({ name, rawValue, rawKind });
@@ -134,11 +150,14 @@ export function TagsView() {
 
   return (
     <main className="tags-view">
-      <header className="tags-header">
-        <h1 className="tags-title">Tag Vocabulary</h1>
+      <header className="tags-view-header">
+        <div className="tags-view-title-row">
+          <div className="tags-view-title">Genre Tags</div>
+          <button className="tags-refresh-btn" onClick={handleRefresh} title="Refresh tag data">↻</button>
+        </div>
       </header>
 
-      <div className="tags-tabs" role="tablist">
+      <div className="tags-tab-bar" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.id}
@@ -148,24 +167,21 @@ export function TagsView() {
             onClick={() => setTab(t.id)}
           >
             {t.label}
-            {t.badge ? <span className="tags-tab-badge">{t.badge}</span> : null}
+            {t.badge !== undefined ? <span className="tags-tab-badge">{t.badge}</span> : null}
           </button>
         ))}
       </div>
 
       <div className="tags-tab-panel">
         {tab === "review" && (
-          <TagReviewTab treeNodes={treeNodes} onCreateNode={openCreateModal} />
+          <TagReviewTab
+            treeNodes={treeNodes}
+            autoNote={autoNote}
+            onDismissAutoNote={() => setAutoNote(null)}
+            onCreateNode={openCreateModal}
+          />
         )}
-        {tab === "mapped" && (
-          <TagMappedTab treeNodes={treeNodes} />
-        )}
-        {tab === "resolved" && (
-          <TagResolvedTab treeNodes={treeNodes} />
-        )}
-        {tab === "cleanup" && (
-          <TagCleanupTab treeNodes={treeNodes} />
-        )}
+        {tab === "decided" && <TagDecidedTab treeNodes={treeNodes} />}
         {tab === "tree" && (
           <TagTreeTab
             treeNodes={treeNodes}

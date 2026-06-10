@@ -415,4 +415,32 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 27,
+    sql: `
+      ALTER TABLE tag_mappings ADD COLUMN norm_value TEXT;
+      UPDATE tag_mappings SET norm_value = LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' '));
+      CREATE INDEX IF NOT EXISTS idx_tag_mappings_norm ON tag_mappings(norm_value, kind);
+
+      CREATE TABLE IF NOT EXISTS tag_vocab_cache (
+        norm_value  TEXT NOT NULL,
+        raw_value   TEXT NOT NULL,
+        kind        TEXT NOT NULL,
+        album_count INTEGER NOT NULL DEFAULT 0,
+        sources     TEXT,
+        PRIMARY KEY (norm_value, kind)
+      );
+
+      INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
+      SELECT
+        LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
+        tt.raw_value,
+        tt.kind,
+        COUNT(DISTINCT tr.album_id),
+        GROUP_CONCAT(DISTINCT CASE WHEN tt.source = 'server' THEN 'file' ELSE tt.source END)
+      FROM track_tags tt
+      JOIN tracks tr ON tr.id = tt.track_id
+      GROUP BY LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')), tt.kind;
+    `,
+  },
 ];
