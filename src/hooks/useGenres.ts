@@ -48,6 +48,10 @@ export function useRecentGenres() {
         WHERE ag.relation = 'direct'
           AND ag.canonical_id NOT LIKE 'raw:%'
         GROUP BY ag.canonical_id
+        HAVING (
+          SELECT COUNT(DISTINCT ag2.album_id) FROM album_genres ag2
+          WHERE ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
+        ) >= 5
         ORDER BY MAX(ra.last_played) DESC
       `);
       if (recent.length > 0) return recent;
@@ -56,6 +60,7 @@ export function useRecentGenres() {
         FROM album_genres
         WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
         GROUP BY canonical_id
+        HAVING COUNT(DISTINCT album_id) >= 5
         ORDER BY album_count DESC
         LIMIT 18
       `);
