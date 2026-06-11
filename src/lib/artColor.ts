@@ -7,7 +7,54 @@ const accentCache = new Map<string, string | null>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
-const MIN_LIGHTNESS_FOR_UI = 0.4; // lift dark colors so they're readable on dark bg
+const OKLAB_MIN_L = 0.55;
+
+// OKLab color math — perceptually uniform, so the L floor is consistent across
+// all hues (blues/greens don't need as much lifting as HSL-based floor did).
+// Ported from ratune/src/color.rs.
+
+function srgbToLinear(x: number): number {
+  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+}
+
+function linearToSrgb(x: number): number {
+  const c = Math.max(0, x);
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+}
+
+function rgbToOklab(r: number, g: number, b: number): [number, number, number] {
+  const rl = srgbToLinear(r / 255);
+  const gl = srgbToLinear(g / 255);
+  const bl = srgbToLinear(b / 255);
+  const l = Math.cbrt(0.41222148 * rl + 0.53633254 * gl + 0.05144599 * bl);
+  const m = Math.cbrt(0.21190350 * rl + 0.68069955 * gl + 0.10739696 * bl);
+  const s = Math.cbrt(0.08830246 * rl + 0.28171884 * gl + 0.62997870 * bl);
+  return [
+    0.21045426 * l + 0.79361778 * m - 0.00407205 * s,
+    1.97799850 * l - 2.42859220 * m + 0.45059370 * s,
+    0.02590403 * l + 0.78277177 * m - 0.80867577 * s,
+  ];
+}
+
+function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
+  const l = L + 0.39633778 * a + 0.21580376 * b;
+  const m = L - 0.10556135 * a - 0.06385417 * b;
+  const s = L - 0.08948418 * a - 1.29148555 * b;
+  const l3 = l * l * l;
+  const m3 = m * m * m;
+  const s3 = s * s * s;
+  return [
+    Math.round(Math.min(255, Math.max(0, linearToSrgb(+4.07674166 * l3 - 3.30771159 * m3 + 0.23096993 * s3) * 255))),
+    Math.round(Math.min(255, Math.max(0, linearToSrgb(-1.26843800 * l3 + 2.60975740 * m3 - 0.34131940 * s3) * 255))),
+    Math.round(Math.min(255, Math.max(0, linearToSrgb(-0.00419609 * l3 - 0.70341861 * m3 + 1.70761470 * s3) * 255))),
+  ];
+}
+
+function ensureReadable(r: number, g: number, b: number): [number, number, number] {
+  const [L, a, ob] = rgbToOklab(r, g, b);
+  if (L >= OKLAB_MIN_L) return [r, g, b];
+  return oklabToRgb(OKLAB_MIN_L, a, ob);
+}
 
 function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
   const max = Math.max(r, g, b);
@@ -46,39 +93,36 @@ export function extractAccent(imageUrl: string): Promise<string | null> {
         const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
         let bestScore = -1;
-        let bestH = 0;
-        let bestS = 0;
-        let bestL = 0;
+        let bestR = 0;
+        let bestG = 0;
+        let bestB = 0;
 
         for (let i = 0; i < data.length; i += 4) {
           const r = (data[i] ?? 0) / 255;
           const g = (data[i + 1] ?? 0) / 255;
           const b = (data[i + 2] ?? 0) / 255;
 
-          const { h, s, l } = rgbToHsl(r, g, b);
+          const { s, l } = rgbToHsl(r, g, b);
 
           if (s < MIN_SATURATION) continue;
           if (l < MIN_BRIGHTNESS || l > MAX_BRIGHTNESS) continue;
 
-          // Score: favor high saturation and mid-range lightness
           const score = s * (1 - Math.abs(l - 0.5) * 1.4);
           if (score > bestScore) {
             bestScore = score;
-            bestH = h;
-            bestS = s;
-            bestL = l;
+            bestR = data[i] ?? 0;
+            bestG = data[i + 1] ?? 0;
+            bestB = data[i + 2] ?? 0;
           }
         }
 
         if (bestScore < 0) { accentCache.set(imageUrl, null); resolve(null); return; }
 
-        // Lift lightness so result is readable against a dark background
-        const finalL = Math.max(bestL, MIN_LIGHTNESS_FOR_UI);
-        const color = `hsl(${Math.round(bestH)}, ${Math.round(bestS * 100)}%, ${Math.round(finalL * 100)}%)`;
+        const [fr, fg, fb] = ensureReadable(bestR, bestG, bestB);
+        const color = `rgb(${fr}, ${fg}, ${fb})`;
         accentCache.set(imageUrl, color);
         resolve(color);
       } catch {
-        // SecurityError from CORS-tainted canvas, or any other failure — fail silently
         accentCache.set(imageUrl, null);
         resolve(null);
       }

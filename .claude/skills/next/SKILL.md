@@ -19,6 +19,13 @@ Then scan the rest of the backlog: for each remaining item, check whether it tou
 
 There is no hard cap, but the batch must stay coherent. If an item touches the same files but pulls in unrelated scope, leave it out.
 
+## Phase 2.5 — Research reference projects
+
+Before planning, grep `reference-projects/` for how they handle the problem:
+
+- **For any item** (bug, idea, or audit finding): search all reference projects, not just the one credited in the audit table. A feature attributed to one project may be implemented better in another. Cast wide — search by behavior, function name, and related terms.
+- Use the findings to inform the implementation approach: copy the best pattern, adapt it to Canon's stack, and note in the plan which project(s) you drew from.
+
 ## Phase 3 — Plan (stay in plan mode)
 
 Present the plan to the user:
