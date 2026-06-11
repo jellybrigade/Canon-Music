@@ -106,7 +106,7 @@ impl Seek for StreamingBuffer {
         let mut state = self.shared.state.lock().unwrap();
         let new_pos = match pos {
             SeekFrom::Start(n) => n,
-            SeekFrom::Current(n) => (state.read_pos as i64 + n) as u64,
+            SeekFrom::Current(n) => (state.read_pos as i64 + n).max(0) as u64,
             SeekFrom::End(n) => {
                 // Use Content-Length if download isn't done yet; block until done if unknown.
                 let total = if state.finished {
