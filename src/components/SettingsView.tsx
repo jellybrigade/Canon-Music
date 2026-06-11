@@ -63,6 +63,8 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const speed = usePlayerStore((s) => s.speed);
   const consumeMode = usePlayerStore((s) => s.consumeMode);
   const toggleConsumeMode = usePlayerStore((s) => s.toggleConsumeMode);
+  const consumeOnSkip = usePlayerStore((s) => s.consumeOnSkip);
+  const toggleConsumeOnSkip = usePlayerStore((s) => s.toggleConsumeOnSkip);
   const setSpeed = usePlayerStore((s) => s.setSpeed);
   const pauseFadeMs = usePlayerStore((s) => s.pauseFadeMs);
   const [, setPauseFadeSetting] = useSetting("player.pause_fade_ms", "150");
@@ -637,6 +639,15 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
               onChange={() => void toggleConsumeMode()}
             />
             <span>Consume mode</span>
+          </label>
+          <label className="settings-field settings-field--inline" style={{ marginTop: "0.25rem" }}>
+            <input
+              type="checkbox"
+              checked={consumeOnSkip}
+              disabled={!consumeMode}
+              onChange={() => void toggleConsumeOnSkip()}
+            />
+            <span style={{ opacity: consumeMode ? 1 : 0.4 }}>Also consume on manual skip</span>
           </label>
           <p className="settings-section-desc">
             Remove each track from the queue after it finishes playing. Disabled in shuffle mode.

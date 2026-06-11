@@ -82,6 +82,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           : null,
       });
       await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+      await queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", album.id] });
     } catch {
       // silent
     } finally {
@@ -288,14 +289,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     } else {
       return [];
     }
-    // Drop unmapped tags (id=null) whose raw name maps to a canonical already shown,
-    // preventing stale-cache duplicates like "Hip Hop" + "Rap".
+    // Drop unmapped tags (id=null) that have no decision yet (undecided unmatched),
+    // are ignored, or whose mapped name is already shown as a canonical chip.
     const shownNames = new Set(raw.filter((g) => g.id !== null).map((g) => g.name));
     return raw.filter((g) => {
       if (g.id !== null) return true;
       const mapped = genreMappings.get(g.name);
-      if (mapped === null) return false;
-      if (mapped !== undefined && shownNames.has(mapped)) return false;
+      if (mapped === undefined) return false; // no decision yet — hide from band
+      if (mapped === null) return false;      // ignored
+      if (shownNames.has(mapped)) return false; // already shown as canonical
       return true;
     });
   }, [normalizedTags, tracks, genreMappings]);
@@ -318,6 +320,27 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     const nonEmpty = [manual, file, lastfm, musicbrainz, folksonomy, unsourced].filter((g) => g.length > 0);
     return { manual, file, lastfm, musicbrainz, folksonomy, unsourced, multiSource: nonEmpty.length > 1 };
   }, [displayGenres]);
+
+  // Same query key + shape as TagDrawer's useAlbumUnmatchedGenres so the cache is shared.
+  const { data: unmatchedGenres = [] } = useQuery({
+    queryKey: ["album-unmatched-genres", album.id],
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<{ raw_value: string; source: string }[]>(
+        `SELECT DISTINCT ug.raw_value, ug.source
+         FROM album_unresolved_genres ug
+         WHERE ug.album_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM tag_mappings tm
+             WHERE tm.raw_value = ug.raw_value AND tm.kind = 'genre'
+           )
+         ORDER BY ug.source, ug.raw_value`,
+        [album.id]
+      );
+    },
+    staleTime: Infinity,
+  });
+  const unmatchedCount = unmatchedGenres.length;
 
   // Always true — every synced album can have user genres added
   const hasTags = true;
@@ -533,6 +556,16 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
                 {hasAutoGenres && !showGrouped && (
                   displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
+                )}
+
+                {unmatchedCount > 0 && !showGenreInput && (
+                  <button
+                    className="album-unmatched-hint"
+                    onClick={() => setDrawerState({ albumId: album.id })}
+                    title="Open tag drawer to map unmatched genres"
+                  >
+                    {unmatchedCount} unmatched →
+                  </button>
                 )}
 
                 {showGenreInput && (

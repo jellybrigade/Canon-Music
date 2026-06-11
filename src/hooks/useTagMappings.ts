@@ -72,6 +72,7 @@ export function useTagMappings() {
       void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
     },
     onError: (e) => {
       console.error("[saveMapping]", e);
@@ -100,6 +101,7 @@ export function useTagMappings() {
       void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
       void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
       void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
     },
   });
 

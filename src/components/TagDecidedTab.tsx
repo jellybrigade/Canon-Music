@@ -26,12 +26,6 @@ function MappedGroup({ group, onUndo, onLock }: MappedGroupProps) {
     (v) => v.raw_value.toLowerCase() !== group.nodeName.toLowerCase(),
   );
 
-  function toggleLock() {
-    for (const v of group.variants) {
-      onLock(v.raw_value, v.kind, !isLocked);
-    }
-  }
-
   return (
     <div className="decided-group">
       <div className="decided-group-main">
@@ -39,22 +33,20 @@ function MappedGroup({ group, onUndo, onLock }: MappedGroupProps) {
         {group.albumCount > 0 && (
           <span className="decided-group-albums">{group.albumCount}</span>
         )}
-        <div className="decided-group-actions">
-          <button
-            className={`d-lock${isLocked ? " d-lock--active" : ""}`}
-            title={isLocked ? "Locked — click to unlock" : "Lock (prevents auto-remap)"}
-            onClick={toggleLock}
-          >
-            {isLocked ? <Lock size={11} /> : <Unlock size={11} />}
-          </button>
-          <button
-            className="d-undo"
-            title="Revert all variants to unresolved"
-            onClick={() => { for (const v of group.variants) onUndo(v.raw_value, v.kind); }}
-          >
-            ↩
-          </button>
-        </div>
+        <button
+          className="d-undo"
+          title="Revert all variants to unresolved"
+          onClick={() => { for (const v of group.variants) onUndo(v.raw_value, v.kind); }}
+        >
+          ↩
+        </button>
+        <button
+          className={`d-lock${isLocked ? " d-lock--active" : ""}`}
+          title={isLocked ? "Locked — click to unlock" : "Lock (prevents auto-remap)"}
+          onClick={() => { for (const v of group.variants) onLock(v.raw_value, v.kind, !isLocked); }}
+        >
+          <div>{isLocked ? <Lock size={14} /> : <Unlock size={14} />}</div>
+        </button>
       </div>
       {aliasVariants.length > 0 && (
         <div className="decided-aliases">

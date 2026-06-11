@@ -64,6 +64,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       combinedMbTags,
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
+      void queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", albumId] });
       if (!decrementedRef.current) {
         decrementedRef.current = true;
         decrementEnrichmentPending();

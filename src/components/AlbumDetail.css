@@ -688,3 +688,21 @@
   padding-right: 0.5rem;
   min-width: 2.5rem;
 }
+
+/* ── Unmatched genres hint (opens TagDrawer) ── */
+
+.album-unmatched-hint {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: 0.65rem;
+  padding: 2px 4px;
+  cursor: pointer;
+  transition: color 0.1s;
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.album-unmatched-hint:hover { color: var(--text-secondary); }

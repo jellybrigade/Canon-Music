@@ -1,10 +1,18 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { useAlbumIdentity } from "../hooks/useAlbumIdentity";
+import { useTagMappings } from "../hooks/useTagMappings";
+import { normalizeAlbum } from "../lib/tag-normalize";
+import { getCanonTree } from "../lib/canonicalize";
+import type { TreeNode } from "../lib/canonicalize";
 import type { NormalizedTag } from "../lib/tag-normalize";
+import type { MbGenre } from "../lib/musicbrainz";
+import { CanonCombobox, ACCEPTED, IGNORED } from "./TagsViewHelpers";
 import "./TagDrawer.css";
+import "./TagsView.css";
 
 interface Props {
   albumId: string;
@@ -32,6 +40,29 @@ function useTrackRawTags(trackId: string | undefined) {
       );
     },
     enabled: !!trackId,
+  });
+}
+
+function useAlbumUnmatchedGenres(albumId: string) {
+  return useQuery({
+    queryKey: ["album-unmatched-genres", albumId],
+    queryFn: async () => {
+      const db = await getDb();
+      // album_unresolved_genres captures all unmapped tags (file, lastfm, musicbrainz)
+      // written by normalizeAlbum — filter out any that already have a mapping decision
+      return db.select<{ raw_value: string; source: string }[]>(
+        `SELECT DISTINCT ug.raw_value, ug.source
+         FROM album_unresolved_genres ug
+         WHERE ug.album_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM tag_mappings tm
+             WHERE tm.raw_value = ug.raw_value AND tm.kind = 'genre'
+           )
+         ORDER BY ug.source, ug.raw_value`,
+        [albumId]
+      );
+    },
+    staleTime: Infinity,
   });
 }
 
@@ -85,6 +116,91 @@ function TagSection({
   );
 }
 
+// ── UnmatchedSection ──────────────────────────────────────────────────────────
+
+interface UnmatchedSectionProps {
+  albumId: string;
+  albumArtist: string;
+  albumName: string;
+}
+
+function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionProps) {
+  const { data: unmatched = [] } = useAlbumUnmatchedGenres(albumId);
+  const { data: identity } = useAlbumIdentity(albumId);
+  const { saveMapping } = useTagMappings();
+  const queryClient = useQueryClient();
+  const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
+
+  useEffect(() => {
+    getCanonTree().then((t) => setTreeNodes(t.nodes)).catch(console.error);
+  }, []);
+
+  if (unmatched.length === 0) return null;
+
+  async function handleDecision(rawValue: string, canonicalId: string) {
+    try {
+      await saveMapping.mutateAsync({ rawValue, kind: "genre", canonicalId, source: "manual" });
+    } catch {
+      return;
+    }
+
+    let combinedMbGenres: MbGenre[] | null = null;
+    if (identity?.combined_genres_json) {
+      try { combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[]; } catch { /* malformed */ }
+    }
+    let combinedMbTags: MbGenre[] | null = null;
+    if (identity?.combined_tags_json) {
+      try { combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[]; } catch { /* malformed */ }
+    }
+
+    await normalizeAlbum(albumId, albumArtist, albumName, {
+      lastfmArtistName: identity?.lastfm_artist_name ?? null,
+      lastfmAlbumName: identity?.lastfm_album_name ?? null,
+      combinedMbGenres,
+      combinedMbTags,
+    });
+
+    void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
+    void queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", albumId] });
+  }
+
+  return (
+    <div className="tag-drawer-section">
+      <h3 className="tag-drawer-section-title">Unmatched genres</h3>
+      {unmatched.map(({ raw_value, source }) => (
+        <div key={raw_value} className="td-unmatched-row">
+          <div className="td-unmatched-header">
+            <span className="td-unmatched-name">{raw_value}</span>
+            <SourceBadge source={source} />
+            <button
+              className="btn-flat accept"
+              title="Accept as-is — keep in genre output without remapping"
+              onClick={() => void handleDecision(raw_value, ACCEPTED)}
+            >
+              Accept
+            </button>
+            <button
+              className="btn-flat ignore"
+              title="Ignore — exclude from genre output"
+              onClick={() => void handleDecision(raw_value, IGNORED)}
+            >
+              Ignore
+            </button>
+          </div>
+          <CanonCombobox
+            treeNodes={treeNodes}
+            currentId={null}
+            onSelect={(id) => void handleDecision(raw_value, id)}
+            onClear={() => {}}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── TagDrawer ─────────────────────────────────────────────────────────────────
+
 export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
   const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
   const { data: rawTrackTags } = useTrackRawTags(trackId);
@@ -116,6 +232,11 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
             <div className="tag-drawer-empty">No normalized tags yet.</div>
           ) : (
             <>
+              <UnmatchedSection
+                albumId={albumId}
+                albumArtist={albumArtist}
+                albumName={albumName}
+              />
               <TagSection
                 title="Genres"
                 tags={normalizedTags.genres}
