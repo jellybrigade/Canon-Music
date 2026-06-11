@@ -138,7 +138,11 @@ function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionP
   if (unmatched.length === 0) return null;
 
   async function handleDecision(rawValue: string, canonicalId: string) {
-    await saveMapping.mutateAsync({ rawValue, kind: "genre", canonicalId, source: "manual" });
+    try {
+      await saveMapping.mutateAsync({ rawValue, kind: "genre", canonicalId, source: "manual" });
+    } catch {
+      return;
+    }
 
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {
