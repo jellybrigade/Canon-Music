@@ -150,7 +150,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
     pause, resume, next, prev, seek, setVolume,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
-    addToQueue, playNext,
+    addToQueue, playNext, audioFormat,
   } = usePlayerStore();
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -419,6 +419,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             </div>
             <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
           </div>
+
+          {audioFormat && (
+            <div className="now-playing-format">
+              {audioFormat.codec && `${audioFormat.codec} · `}
+              {audioFormat.sampleRate >= 1000
+                ? `${(audioFormat.sampleRate / 1000).toFixed(1)} kHz`
+                : `${audioFormat.sampleRate} Hz`}
+              {" · "}
+              {audioFormat.channels === 1 ? "mono" : audioFormat.channels === 2 ? "stereo" : `${audioFormat.channels}ch`}
+            </div>
+          )}
 
           <div className="now-playing-controls">
             <button

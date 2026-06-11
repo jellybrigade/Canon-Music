@@ -211,6 +211,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.now-playing-format {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.28);
+  text-align: center;
+  letter-spacing: 0.02em;
+  margin-top: 0.25rem;
+}
+
 .now-playing-progress-bar {
   flex: 1;
   height: 4px;

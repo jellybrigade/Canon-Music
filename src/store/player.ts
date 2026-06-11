@@ -42,6 +42,11 @@ const PREV_RESTART_THRESHOLD_S = 3;
 // Deduplicates natural-end advances triggered by both the Rust event and the TS fallback.
 let lastEndedTrackId: string | null = null;
 
+// Cancels in-flight audio-error retry listener when a new track starts.
+let cancelAudioError: (() => void) | null = null;
+// Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
+let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
   if (from === currentIdx) return to;
   let adj = currentIdx;
@@ -116,6 +121,8 @@ interface PlayerState {
 
   speed: number;
   pauseFadeMs: number;
+  consumeMode: boolean;
+  audioFormat: { sampleRate: number; channels: number; codec: string } | null;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
@@ -133,6 +140,7 @@ interface PlayerState {
   setRadioActive: (active: boolean) => void;
   startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
   setRadioMode: (mode: RadioMode) => void;
+  toggleConsumeMode: () => Promise<void>;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -151,13 +159,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   // Tracks whether the TS fallback already fired next() for the current track position.
   let naturalEndFiredForIndex: number | null = null;
 
+  // Global listener: update audioFormat whenever Rust emits it at play start.
+  void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
+    set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
+  });
+
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
     let prefetchedForIndex: number | null = null;
+    let stallPos: number | null = null;
+    let stallSince: number | null = null;
     elapsedInterval = setInterval(() => {
       invoke<number>("audio_get_pos")
         .then((pos) => {
           set({ elapsed: pos });
+          // Stall watchdog: if position hasn't moved in 5s while playing, retry audio_play.
+          const { isPlaying, isLoading, streamUrl } = get();
+          if (isPlaying && !isLoading) {
+            if (stallPos !== pos) {
+              stallPos = pos;
+              stallSince = Date.now();
+            } else if (stallSince !== null && Date.now() - stallSince >= 5000) {
+              stallSince = null;
+              if (streamUrl) {
+                void invoke("audio_play", { url: streamUrl }).then(() => {
+                  if (get().streamUrl !== streamUrl) return;
+                  set({ isPlaying: true, isLoading: false });
+                  startElapsedTimer();
+                }).catch(() => {});
+              }
+            }
+          } else {
+            stallPos = null;
+            stallSince = null;
+          }
           const { queue, queueIndex, streamUrlFor, currentTrack, isShuffled, shuffleOrder } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
@@ -354,20 +389,81 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
-  async function playTrack(track: CurrentTrack, url: string) {
-    // Re-arm the natural-end fallback and dedup guard for the incoming track.
+  // Sets up an audio-error listener that retries audio_play up to 4x on stream
+  // failures (HTTP error, decode error). Cleans itself up on track change.
+  async function setupAudioErrorListener(url: string) {
+    let retryCount = 0;
+    const retryDelays = [2000, 4000, 8000, 16000];
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unlisten = await listen<{ url: string; message: string }>("audio-error", (event) => {
+      if (event.payload.url !== url) return;
+      if (get().streamUrl !== url) return;
+
+      if (retryTimer) clearTimeout(retryTimer);
+
+      if (retryCount < retryDelays.length) {
+        const delay = retryDelays[retryCount++]!;
+        retryTimer = setTimeout(async () => {
+          retryTimer = null;
+          if (get().streamUrl !== url) return;
+          try {
+            await invoke("audio_play", { url });
+            if (get().streamUrl !== url) return;
+            set({ isPlaying: true, isLoading: false, error: null });
+            startElapsedTimer();
+          } catch {
+            // next audio-error event triggers another retry if attempts remain
+          }
+        }, delay);
+      } else {
+        unlisten();
+        cancelAudioError = null;
+        set({ isPlaying: false, isLoading: false, error: event.payload.message });
+      }
+    });
+
+    cancelAudioError = () => {
+      unlisten();
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = null;
+    };
+  }
+
+  // nav=true: debounces 100ms so rapid prev/next coalesces to one HTTP request.
+  async function playTrack(track: CurrentTrack, url: string, nav = false) {
     naturalEndFiredForIndex = null;
     lastEndedTrackId = null;
-    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null });
+    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
-    try {
-      await invoke("audio_play", { url });
-      set({ isPlaying: true, isLoading: false });
-      startElapsedTimer();
-      void fetchWaveform(track.id, url);
-      void preloadWaveforms();
-    } catch (e) {
-      set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
+
+    cancelAudioError?.();
+    cancelAudioError = null;
+
+    const doPlay = async () => {
+      void setupAudioErrorListener(url);
+      try {
+        await invoke("audio_play", { url });
+        if (get().currentTrack?.id !== track.id) return;
+        set({ isPlaying: true, isLoading: false });
+        startElapsedTimer();
+        void fetchWaveform(track.id, url);
+        void preloadWaveforms();
+      } catch (e) {
+        if (get().currentTrack?.id !== track.id) return;
+        set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    };
+
+    if (nav) {
+      if (navDebounceTimer) clearTimeout(navDebounceTimer);
+      navDebounceTimer = setTimeout(() => {
+        navDebounceTimer = null;
+        if (get().currentTrack?.id !== track.id) return;
+        void doPlay();
+      }, 100);
+    } else {
+      await doPlay();
     }
   }
 
@@ -437,9 +533,25 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     sleepTimerEndsAt: null,
     sleepTimerEndOfTrack: false,
+    consumeMode: false,
+    audioFormat: null,
 
     setWaveformPeaks: (peaks) => {
       set({ waveformPeaks: peaks });
+    },
+
+    toggleConsumeMode: async () => {
+      const next = !get().consumeMode;
+      set({ consumeMode: next });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_mode', ?)",
+          [next ? "true" : "false"]
+        );
+      } catch (e) {
+        console.error("Failed to persist consume mode:", e);
+      }
     },
 
     play: async (track, streamUrl) => {
@@ -485,7 +597,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     next: async (fromNaturalEnd = false) => {
-      const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder } = get();
+      const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder, consumeMode } = get();
       if (queue.length === 0 || !streamUrlFor) return;
 
       // Deduplicate: both the Rust event and the TS fallback call next(true); only handle once.
@@ -505,7 +617,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       if (repeat === "repeat-one") {
         const track = resolveTrack(queue, shuffleOrder, isShuffled, queueIndex);
-        if (track) await playTrack(track, streamUrlFor(track));
+        if (track) await playTrack(track, streamUrlFor(track), true);
+        void persistQueueState();
+        return;
+      }
+
+      // Consume mode: remove the just-played track from the queue on natural end.
+      // Shuffle not supported — queue indices would need a full remap.
+      if (fromNaturalEnd && consumeMode && !isShuffled) {
+        const newQueue = queue.filter((_, i) => i !== queueIndex);
+        if (newQueue.length === 0) {
+          set({ queue: newQueue });
+          get().stop();
+        } else if (repeat === "repeat-all" && queueIndex >= newQueue.length) {
+          set({ queue: newQueue, queueIndex: 0 });
+          const t = newQueue[0] ?? null;
+          if (t) void playTrack(t, streamUrlFor(t), true);
+        } else {
+          const nextIdx = Math.min(queueIndex, newQueue.length - 1);
+          set({ queue: newQueue, queueIndex: nextIdx });
+          const t = newQueue[nextIdx] ?? null;
+          if (t) void playTrack(t, streamUrlFor(t), true);
+        }
         void persistQueueState();
         return;
       }
@@ -514,7 +647,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (nextPosition < queue.length) {
         set({ queueIndex: nextPosition });
         const track = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
-        if (track) await playTrack(track, streamUrlFor(track));
+        if (track) await playTrack(track, streamUrlFor(track), true);
       } else if (repeat === "repeat-all") {
         // Re-shuffle on loop-back so each pass plays a different order
         const newShuffleOrder = isShuffled && queue.length > 1
@@ -522,7 +655,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           : shuffleOrder;
         set({ queueIndex: 0, shuffleOrder: newShuffleOrder });
         const track = resolveTrack(queue, newShuffleOrder, isShuffled, 0);
-        if (track) await playTrack(track, streamUrlFor(track));
+        if (track) await playTrack(track, streamUrlFor(track), true);
       } else {
         get().stop();
       }
@@ -537,7 +670,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         : Math.max(0, queueIndex - 1);
       set({ queueIndex: newPosition });
       const track = resolveTrack(queue, shuffleOrder, isShuffled, newPosition);
-      if (track) await playTrack(track, streamUrlFor(track));
+      if (track) void playTrack(track, streamUrlFor(track), true);
       void persistQueueState();
     },
 
@@ -767,7 +900,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -826,6 +959,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           } else if (row.key === "player.pause_fade_ms") {
             const ms = parseInt(row.value, 10);
             if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
+          } else if (row.key === "player.consume_mode") {
+            set({ consumeMode: row.value === "true" });
           }
         }
       } catch (e) {
