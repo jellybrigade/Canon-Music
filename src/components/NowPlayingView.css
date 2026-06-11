@@ -211,6 +211,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.now-playing-format {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.28);
+  text-align: center;
+  letter-spacing: 0.02em;
+  margin-top: 0.25rem;
+}
+
 .now-playing-progress-bar {
   flex: 1;
   height: 4px;
@@ -682,6 +690,14 @@
 }
 
 /* ── Lyrics ── */
+.now-playing-lyrics-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .now-playing-lyrics {
   padding: 0.5rem 0;
   overflow-y: auto;
@@ -689,6 +705,31 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+}
+
+.lyrics-resync-pill {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--accent) 25%, rgba(20, 20, 20, 0.85));
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  z-index: 3;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+
+.lyrics-resync-pill:hover {
+  background: color-mix(in srgb, var(--accent) 40%, rgba(20, 20, 20, 0.85));
 }
 
 .lyrics-line {

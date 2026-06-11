@@ -40,13 +40,21 @@ export async function getCanonTree(): Promise<CanonTree> {
   const userRows = await db.select<UserNode[]>("SELECT * FROM user_tree_nodes");
 
   const bundled = canonTreeData.nodes as TreeNode[];
-  const userNodes: TreeNode[] = userRows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    type: r.type,
-    canonical_key: r.canonical_key,
-    parents: JSON.parse(r.parent_ids) as string[],
-  }));
+  const userNodes: TreeNode[] = userRows.map((r) => {
+    const section: NodeSection | undefined =
+      r.type === "genre" ? "genres"
+      : r.type === "descriptor" ? "descriptors"
+      : r.type === "scenes-and-movements" ? "scenes-and-movements"
+      : undefined;
+    return {
+      id: r.id,
+      name: r.name,
+      type: r.type,
+      canonical_key: r.canonical_key,
+      parents: JSON.parse(r.parent_ids) as string[],
+      section,
+    };
+  });
 
   const nodes = [...bundled, ...userNodes];
   const byKey = new Map<string, TreeNode>();
@@ -58,6 +66,20 @@ export async function getCanonTree(): Promise<CanonTree> {
 
   cachedTree = { nodes, byKey, byId };
   return cachedTree;
+}
+
+const RAW_ALIASES: Record<string, string> = {
+  "rnb": "r&b",
+  "r n b": "r&b",
+  "r and b": "r&b",
+  "r'n'b": "r&b",
+  "r.n.b": "r&b",
+  "rhythm and blues": "r&b",
+  "rhythm & blues": "r&b",
+};
+
+function applyAliases(raw: string): string {
+  return RAW_ALIASES[raw.toLowerCase().trim()] ?? raw;
 }
 
 export function canonicalKey(name: string): string {
@@ -143,7 +165,7 @@ export async function findCanonical(
   existingMappings?: Map<string, string>
 ): Promise<FindResult> {
   const tree = await getCanonTree();
-  const key = canonicalKey(rawValue);
+  const key = canonicalKey(applyAliases(rawValue));
 
   // Check saved mapping first
   if (existingMappings) {
@@ -189,7 +211,7 @@ export function findCanonicalSync(
   tree: CanonTree,
   existingMappings?: Map<string, string>
 ): FindResult {
-  const key = canonicalKey(rawValue);
+  const key = canonicalKey(applyAliases(rawValue));
 
   if (existingMappings) {
     const mappedId = existingMappings.get(`${rawValue}:${kind}`);

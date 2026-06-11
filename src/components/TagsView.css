@@ -525,7 +525,8 @@
   transition: opacity 0.1s;
 }
 
-.decided-group:hover .decided-group-actions { opacity: 1; }
+.decided-group:hover .decided-group-actions,
+.decided-group-actions:has(.d-lock--active) { opacity: 1; }
 
 /* alias chips */
 .decided-aliases {
@@ -1001,6 +1002,10 @@
   font-size: 0.55rem;
   color: var(--text-tertiary);
   white-space: nowrap;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
 }
 
 /* mapped state inside combobox */

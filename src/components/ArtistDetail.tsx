@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Play, Disc, Radio } from "lucide-react";
 import { getDb } from "../db";
@@ -13,8 +13,8 @@ import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { fetchArtistTopTracks, LASTFM_PLACEHOLDER } from "../lib/lastfm";
-import type { LastfmTopTrack } from "../lib/lastfm";
+import { fetchArtistTopTracks, fetchArtistTopAlbums, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useLoved } from "../hooks/useLoved";
 import "./ArtistDetail.css";
@@ -35,6 +35,7 @@ interface TopTrack {
   album_name: string | null;
   album_id: string | null;
   artwork_url: string | null;
+  play_count: number | null;
 }
 
 function useArtistAlbums(artistName: string) {
@@ -60,7 +61,7 @@ function useArtistTopTracks(artistName: string) {
       const db = await getDb();
       return db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url
+                t.album_id, a.artwork_url, t.play_count
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.artist = ?
@@ -69,6 +70,14 @@ function useArtistTopTracks(artistName: string) {
         [artistName]
       );
     },
+  });
+}
+
+function useLastfmTopAlbums(artistName: string) {
+  return useQuery({
+    queryKey: ["lastfm-artist-top-albums", artistName],
+    queryFn: (): Promise<LastfmTopAlbum[]> => fetchArtistTopAlbums(artistName),
+    staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -183,15 +192,21 @@ interface TrackRowProps {
   server: Server;
   credential: NavidromeCredential;
   onPlay: (track: TopTrack) => void;
+  lastfmPlaycount?: number;
+  onAlbumClick?: (albumId: string) => void;
 }
 
-function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credential, onPlay }: TrackRowProps) {
+function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
   const rank = topTracks.indexOf(track);
   const artUrl = track.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
     : null;
+
+  const showPlaycount = lastfmPlaycount !== undefined && lastfmPlaycount > 0;
+  const showLibraryCount = !showPlaycount && track.play_count != null && track.play_count > 0;
+
   return (
     <div
       className={`artist-track-row${isActive ? " artist-track-row--active" : ""}`}
@@ -214,11 +229,24 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
       )}
       <div className="artist-track-info">
         <span className="artist-track-title">{track.title}</span>
-        {track.album_name && (
+        {track.album_name && track.album_id && onAlbumClick ? (
+          <button
+            className="artist-track-album-link"
+            onClick={(e) => { e.stopPropagation(); onAlbumClick(track.album_id!); }}
+          >
+            {track.album_name}
+          </button>
+        ) : track.album_name ? (
           <span className="artist-track-album">{track.album_name}</span>
-        )}
+        ) : null}
       </div>
-      <span className="artist-track-duration">{formatDuration(track.duration)}</span>
+      {showPlaycount ? (
+        <span className="artist-track-playcount">{formatCount(lastfmPlaycount!)}</span>
+      ) : showLibraryCount ? (
+        <span className="artist-track-playcount">{track.play_count}×</span>
+      ) : (
+        <span className="artist-track-duration">{formatDuration(track.duration)}</span>
+      )}
     </div>
   );
 }
@@ -233,6 +261,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
   const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
+  const { data: lastfmAlbums } = useLastfmTopAlbums(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -247,6 +276,24 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const lfmOnlyTracks = rawTracks && lastfmTitles
     ? lastfmOnlyTracks(rawTracks, lastfmTitles)
     : [];
+
+  const lastfmPlaycountMap = useMemo(() => {
+    const m = new Map<string, number>();
+    (lastfmTitles ?? []).forEach((t) => m.set(normalizeTitle(t.name), t.playcount));
+    return m;
+  }, [lastfmTitles]);
+
+  const popularAlbums = useMemo(() => {
+    if (!albums || !lastfmAlbums || lastfmAlbums.length === 0) return [];
+    const localByNorm = new Map(albums.map((a) => [normalizeTitle(a.name), a]));
+    const matched: AlbumRow[] = [];
+    for (const lfmAlbum of lastfmAlbums) {
+      const local = localByNorm.get(normalizeTitle(lfmAlbum.name));
+      if (local) matched.push(local);
+      if (matched.length >= 6) break;
+    }
+    return matched;
+  }, [albums, lastfmAlbums]);
 
   const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
   const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
@@ -293,6 +340,11 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   }
 
   const streamUrlFor = makeStreamUrlBuilder(server, credential);
+
+  function handleAlbumClick(albumId: string) {
+    const album = albums?.find((a) => a.id === albumId);
+    if (album) onSelectAlbum(album);
+  }
 
   function handlePlayTrack(track: TopTrack) {
     if (!topTracks.length) return;
@@ -376,8 +428,32 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             <section className="artist-section">
               <h2 className="artist-section-title">Favorites</h2>
               <div className="artist-top-tracks artist-top-tracks--grid">
-                {lovedTracks.map((track) => <TrackRow key={track.id} track={track} topTracks={topTracks} currentTrack={currentTrack} isPlaying={isPlaying} server={server} credential={credential} onPlay={handlePlayTrack} />)}
+                {lovedTracks.map((track) => (
+                  <TrackRow
+                    key={track.id}
+                    track={track}
+                    topTracks={topTracks}
+                    currentTrack={currentTrack}
+                    isPlaying={isPlaying}
+                    server={server}
+                    credential={credential}
+                    onPlay={handlePlayTrack}
+                    lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
+                    onAlbumClick={handleAlbumClick}
+                  />
+                ))}
               </div>
+            </section>
+          )}
+
+          {popularAlbums.length > 0 && (
+            <section className="artist-section">
+              <h2 className="artist-section-title">Popular</h2>
+              <AlbumGrid
+                albums={popularAlbums}
+                serverWithCredential={serverWithCredential}
+                onSelect={onSelectAlbum}
+              />
             </section>
           )}
 
@@ -396,7 +472,20 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             <section className="artist-section">
               <h2 className="artist-section-title">Tracks</h2>
               <div className="artist-top-tracks artist-top-tracks--grid">
-                {topTracks.map((track) => <TrackRow key={track.id} track={track} topTracks={topTracks} currentTrack={currentTrack} isPlaying={isPlaying} server={server} credential={credential} onPlay={handlePlayTrack} />)}
+                {topTracks.map((track) => (
+                  <TrackRow
+                    key={track.id}
+                    track={track}
+                    topTracks={topTracks}
+                    currentTrack={currentTrack}
+                    isPlaying={isPlaying}
+                    server={server}
+                    credential={credential}
+                    onPlay={handlePlayTrack}
+                    lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
+                    onAlbumClick={handleAlbumClick}
+                  />
+                ))}
               </div>
               {lfmOnlyTracks.length > 0 && (
                 <div className="artist-lastfm-only">

@@ -43,6 +43,19 @@ function buildAuthParams(
   return p;
 }
 
+async function apiPost(
+  baseUrl: string,
+  endpoint: string,
+  params: URLSearchParams
+): Promise<Response> {
+  const url = `${normalizeUrl(baseUrl)}/rest/${endpoint}`;
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+}
+
 export function getCoverArtUrl(
   baseUrl: string,
   username: string,
@@ -71,8 +84,7 @@ export async function fetchAllAlbums(
     params.set("size", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
-    const url = `${normalizeUrl(baseUrl)}/rest/getAlbumList2?${params.toString()}`;
-    const res = await fetch(url);
+    const res = await apiPost(baseUrl, "getAlbumList2", params);
     if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
     const data = (await res.json()) as {
@@ -109,8 +121,7 @@ export async function fetchAlbumListByType(
   params.set("type", type);
   params.set("size", String(size));
 
-  const url = `${normalizeUrl(baseUrl)}/rest/getAlbumList2?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "getAlbumList2", params);
   if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -165,9 +176,7 @@ export async function fetchAlbumTracks(
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", albumId);
-  const url = `${normalizeUrl(baseUrl)}/rest/getAlbum?${params.toString()}`;
-
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "getAlbum", params);
   if (!res.ok) throw new Error(`getAlbum returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -197,8 +206,7 @@ export async function fetchStarred2(
   credential: NavidromeCredential
 ): Promise<NavidromeStarred> {
   const params = buildAuthParams(username, credential);
-  const url = `${normalizeUrl(baseUrl)}/rest/getStarred2?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "getStarred2", params);
   if (!res.ok) throw new Error(`getStarred2 returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -223,8 +231,7 @@ async function callSubsonicVoid(
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);
-  const url = `${normalizeUrl(baseUrl)}/rest/${endpoint}?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, endpoint, params);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { message: string } };
@@ -289,9 +296,8 @@ export async function fetchTrackRating(
 ): Promise<number> {
   const params = buildAuthParams(username, credential);
   params.set("id", nativeTrackId);
-  const url = `${normalizeUrl(baseUrl)}/rest/getSong?${params.toString()}`;
   try {
-    const res = await fetch(url);
+    const res = await apiPost(baseUrl, "getSong", params);
     if (!res.ok) return 0;
     const data = (await res.json()) as {
       "subsonic-response": { status: string; song?: { userRating?: number } };
@@ -316,8 +322,7 @@ export async function fetchPlaylists(
   credential: NavidromeCredential
 ): Promise<NavidromePlaylist[]> {
   const params = buildAuthParams(username, credential);
-  const url = `${normalizeUrl(baseUrl)}/rest/getPlaylists?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "getPlaylists", params);
   if (!res.ok) throw new Error(`getPlaylists returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -344,8 +349,7 @@ export async function fetchPlaylistTracks(
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", playlistId);
-  const url = `${normalizeUrl(baseUrl)}/rest/getPlaylist?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "getPlaylist", params);
   if (!res.ok) throw new Error(`getPlaylist returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -369,8 +373,7 @@ export async function createNavidromePlaylist(
 ): Promise<NavidromePlaylist> {
   const params = buildAuthParams(username, credential);
   params.set("name", name);
-  const url = `${normalizeUrl(baseUrl)}/rest/createPlaylist?${params.toString()}`;
-  const res = await fetch(url);
+  const res = await apiPost(baseUrl, "createPlaylist", params);
   if (!res.ok) throw new Error(`createPlaylist returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -455,17 +458,12 @@ export async function authenticate(
 ): Promise<NavidromeCredential> {
   const salt = generateSalt();
   const token = md5(password + salt);
-  const url = new URL(`${normalizeUrl(baseUrl)}/rest/ping.view`);
-  url.searchParams.set("u", username);
-  url.searchParams.set("t", token);
-  url.searchParams.set("s", salt);
-  url.searchParams.set("v", "1.16.1");
-  url.searchParams.set("c", "canon");
-  url.searchParams.set("f", "json");
+  const params = new URLSearchParams({ u: username, t: token, s: salt, v: "1.16.1", c: "canon", f: "json" });
 
-  const res = await fetch(url.toString());
+  const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
-    throw new Error(`Server returned ${res.status} — check URL (tried: ${url.origin}${url.pathname})`);
+    const origin = new URL(normalizeUrl(baseUrl)).origin;
+    throw new Error(`Server returned ${res.status} — check URL (tried: ${origin}/rest/ping.view)`);
   }
 
   const data = (await res.json()) as {

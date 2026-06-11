@@ -1,3 +1,11 @@
+mod streaming;
+use streaming::StreamingBuffer;
+
+/// Combines Read + Seek + Send into a single object-safe trait so we can
+/// box either a Cursor (prefetch cache hit) or a StreamingBuffer (live fetch).
+trait AudioReader: Read + Seek + Send + Sync {}
+impl<T: Read + Seek + Send + Sync> AudioReader for T {}
+
 use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
@@ -151,27 +159,80 @@ async fn audio_play(
     };
 
     // Download and decode on a blocking thread so audio_play returns immediately.
-    // rodio's Decoder requires Read+Seek; HTTP responses are not seekable, so we
-    // buffer via bytes(). If bytes were pre-fetched, skip the download entirely.
+    // Pre-fetched bytes use an in-memory Cursor (instant start). Otherwise a
+    // StreamingBuffer lets the decoder start as soon as format-probing data arrives
+    // (~first 64 KB), reducing initial buffering wait. Large files still accumulate
+    // in memory over time; this is not a ring buffer.
     std::thread::spawn(move || {
-        let bytes: Vec<u8> = if let Some(b) = cached_bytes {
-            b
+        // Build reader: either from prefetch cache or a streaming HTTP response.
+        let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
+            (Box::new(Cursor::new(bytes)), String::new())
         } else {
-            match http_client().get(&url).send().and_then(|r| r.bytes()) {
-                Ok(b) => b.to_vec(),
-                Err(e) => { eprintln!("audio_play fetch error: {e}"); return; }
-            }
+            let response = match http_client().get(&url).send() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("audio_play fetch error: {e}");
+                    app.emit("audio-error", serde_json::json!({ "url": url, "message": e.to_string() })).ok();
+                    return;
+                }
+            };
+            let ct = response.headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_lowercase();
+            let codec = if ct.contains("flac") { "FLAC" }
+                else if ct.contains("mpeg") || ct.contains("mp3") { "MP3" }
+                else if ct.contains("ogg") { "OGG" }
+                else if ct.contains("aac") || ct.contains("mp4") || ct.contains("m4a") { "AAC" }
+                else if ct.contains("opus") { "Opus" }
+                else if ct.contains("wav") { "WAV" }
+                else { "" }.to_string();
+            let content_length = response.content_length();
+            let (buffer, writer) = StreamingBuffer::new(content_length);
+
+            // Stream HTTP chunks into the buffer on a dedicated thread.
+            let play_id_dl = Arc::clone(&play_id_arc);
+            let mut response = response;
+            std::thread::spawn(move || {
+                let mut chunk = vec![0u8; 65536];
+                loop {
+                    if play_id_dl.load(Ordering::Relaxed) != this_id { break; }
+                    match response.read(&mut chunk) {
+                        Ok(0) => break,
+                        Ok(n) => { if !writer.write_chunk(&chunk[..n]) { break; } }
+                        Err(_) => break,
+                    }
+                }
+                writer.finish();
+            });
+
+            (Box::new(buffer), codec)
         };
 
-        // A newer play arrived while downloading — discard.
+        // Check before blocking on format probing; common fast-path for rapid skips.
         if play_id_arc.load(Ordering::Relaxed) != this_id {
             return;
         }
 
-        let source = match Decoder::new(Cursor::new(bytes)) {
+        // Decoder::new blocks (via Condvar) until enough bytes arrive for format probing.
+        let source = match Decoder::new(reader) {
             Ok(s) => s,
-            Err(e) => { eprintln!("audio_play decode error: {e}"); return; }
+            Err(e) => {
+                eprintln!("audio_play decode error: {e}");
+                app.emit("audio-error", serde_json::json!({ "url": url, "message": e.to_string() })).ok();
+                return;
+            }
         };
+
+        // A newer play arrived during format probing — discard.
+        if play_id_arc.load(Ordering::Relaxed) != this_id {
+            return;
+        }
+
+        let channels = source.channels();
+        let sample_rate = source.sample_rate();
+
         let sink = match Sink::try_new(&handle) {
             Ok(s) => Arc::new(s),
             Err(e) => { eprintln!("audio_play sink error: {e}"); return; }
@@ -189,6 +250,12 @@ async fn audio_play(
             pos.speed = current_speed;
             pos.play_start = Some(Instant::now());
         }
+
+        app.emit("audio-format", serde_json::json!({
+            "sample_rate": sample_rate,
+            "channels": channels,
+            "codec": codec
+        })).ok();
 
         // Poll-based watcher: checks every 100ms so it can't hang if sink never empties.
         let play_id_watcher = Arc::clone(&play_id_arc);

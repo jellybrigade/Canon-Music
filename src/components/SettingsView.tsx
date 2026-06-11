@@ -61,6 +61,8 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [restoreQueue, setRestoreQueue] = useSetting("queue.restore_on_startup", "false");
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
   const speed = usePlayerStore((s) => s.speed);
+  const consumeMode = usePlayerStore((s) => s.consumeMode);
+  const toggleConsumeMode = usePlayerStore((s) => s.toggleConsumeMode);
   const setSpeed = usePlayerStore((s) => s.setSpeed);
   const pauseFadeMs = usePlayerStore((s) => s.pauseFadeMs);
   const [, setPauseFadeSetting] = useSetting("player.pause_fade_ms", "150");
@@ -627,6 +629,17 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
           </label>
           <p className="settings-section-desc">
             Speed up or slow down playback. Affects pitch (no time-stretch).
+          </p>
+          <label className="settings-field settings-field--inline" style={{ marginTop: "0.5rem" }}>
+            <input
+              type="checkbox"
+              checked={consumeMode}
+              onChange={() => void toggleConsumeMode()}
+            />
+            <span>Consume mode</span>
+          </label>
+          <p className="settings-section-desc">
+            Remove each track from the queue after it finishes playing. Disabled in shuffle mode.
           </p>
           <label className="settings-field" style={{ marginTop: "0.5rem" }}>
             <span>Pause/resume fade — {pauseFadeMs === 0 ? "off" : `${pauseFadeMs} ms`}</span>

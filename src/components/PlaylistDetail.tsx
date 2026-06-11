@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Trash2 } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../hooks/usePlaylistTracks";
@@ -11,6 +12,7 @@ import { usePlayerStore } from "../store/player";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 
 const SECONDS_PER_MINUTE = 60;
+const PLAYLIST_ROW_HEIGHT = 40;
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
@@ -37,6 +39,14 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const genreMappings = useGenreMappings();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: PlaylistTrackRow } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: tracks?.length ?? 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => PLAYLIST_ROW_HEIGHT,
+    overscan: 5,
+  });
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -126,43 +136,51 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
         </div>
       </div>
 
-      <div className="album-detail-body">
+      <div className="album-detail-body" ref={scrollRef}>
         {isLoading ? (
           <p className="empty-state">Loading…</p>
         ) : !tracks || tracks.length === 0 ? (
           <p className="empty-state">Playlist is empty.</p>
         ) : (
-          <table className="tracklist">
-            <tbody>
-              {tracks.map((track) => {
-                const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
-                const isCurrentTrack = currentTrack?.id === track.id;
-                return (
-                  <tr
-                    key={`${track.id}-${track.position}`}
-                    className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
-                    onClick={() => handlePlayTrack(track)}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, track }); }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
-                  >
-                    <td className="track-number">
-                      {isCurrentlyPlaying
-                        ? <span className="track-playing-indicator"><Play size={12} /></span>
-                        : track.position + 1}
-                    </td>
-                    <td className="track-title">{track.title}</td>
-                    <td className="track-artist">{track.artist ?? ""}</td>
-                    <td className="track-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</td>
-                    <td className="track-duration">
-                      {track.duration ? formatDuration(track.duration) : ""}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const track = tracks[virtualItem.index]!;
+              const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
+              const isCurrentTrack = currentTrack?.id === track.id;
+              return (
+                <div
+                  key={`${track.id}-${track.position}`}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                  className={`playlist-vrow${isCurrentTrack ? " playlist-vrow--active" : ""}`}
+                  onClick={() => handlePlayTrack(track)}
+                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, track }); }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
+                >
+                  <span className="playlist-vrow-num">
+                    {isCurrentlyPlaying
+                      ? <span className="track-playing-indicator"><Play size={12} /></span>
+                      : track.position + 1}
+                  </span>
+                  <span className="playlist-vrow-title">{track.title}</span>
+                  <span className="playlist-vrow-artist">{track.artist ?? ""}</span>
+                  <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>
+                  <span className="playlist-vrow-duration">
+                    {track.duration ? formatDuration(track.duration) : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 

@@ -150,7 +150,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
     pause, resume, next, prev, seek, setVolume,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
-    addToQueue, playNext,
+    addToQueue, playNext, audioFormat,
   } = usePlayerStore();
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -183,6 +183,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const userScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollingRef = useRef(false);
+  const [showResyncPill, setShowResyncPill] = useState(false);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useSetting("player.show_waveform", "false");
@@ -228,6 +229,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     setLyricsSearchOpen(false);
     setLyricsSearchArtist(currentTrack?.artist ?? "");
     setLyricsSearchTitle(currentTrack?.title ?? "");
+    setShowResyncPill(false);
   }, [currentTrack?.id]);
 
   useEffect(() => {
@@ -235,6 +237,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     const active = upNextRef.current.querySelector(".now-playing-up-next-row--active");
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab]);
+
+  function scrollToActiveLine() {
+    if (!activeLyricRef.current || !lyricsContainerRef.current) return;
+    const container = lyricsContainerRef.current;
+    const line = activeLyricRef.current;
+    const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+    autoScrollingRef.current = true;
+    container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
+    setTimeout(() => { autoScrollingRef.current = false; }, 500);
+  }
 
   useEffect(() => {
     if (tab !== "lyrics" || !lyricsLines) return;
@@ -244,27 +256,31 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     if (activeIndex === activeLyricIndexRef.current) return;
     activeLyricIndexRef.current = activeIndex;
     if (userScrollingRef.current) return;
-    if (activeLyricRef.current && lyricsContainerRef.current) {
-      const container = lyricsContainerRef.current;
-      const line = activeLyricRef.current;
-      const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
-      autoScrollingRef.current = true;
-      container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
-      setTimeout(() => { autoScrollingRef.current = false; }, 500);
-    }
+    scrollToActiveLine();
   }, [tab, elapsed, lyricsLines]);
 
   function handleLyricsScroll() {
     if (autoScrollingRef.current) return;
     userScrollingRef.current = true;
+    setShowResyncPill(true);
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     scrollTimeoutRef.current = setTimeout(() => {
       userScrollingRef.current = false;
+      setShowResyncPill(false);
+      scrollToActiveLine();
     }, 5000);
+  }
+
+  function handleResyncPress() {
+    if (scrollTimeoutRef.current) { clearTimeout(scrollTimeoutRef.current); scrollTimeoutRef.current = null; }
+    userScrollingRef.current = false;
+    setShowResyncPill(false);
+    scrollToActiveLine();
   }
 
   function handleLyricSeek(timeSec: number) {
     userScrollingRef.current = false;
+    setShowResyncPill(false);
     if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
     void seek(timeSec);
   }
@@ -403,6 +419,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             </div>
             <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
           </div>
+
+          {audioFormat && (
+            <div className="now-playing-format">
+              {audioFormat.codec && `${audioFormat.codec} · `}
+              {audioFormat.sampleRate >= 1000
+                ? `${(audioFormat.sampleRate / 1000).toFixed(1)} kHz`
+                : `${audioFormat.sampleRate} Hz`}
+              {" · "}
+              {audioFormat.channels === 1 ? "mono" : audioFormat.channels === 2 ? "stereo" : `${audioFormat.channels}ch`}
+            </div>
+          )}
 
           <div className="now-playing-controls">
             <button
@@ -747,29 +774,37 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     </div>
                   </form>
                 )}
-                <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
-                  {lyricsLoading ? (
-                    <p className="now-playing-empty">Loading lyrics…</p>
-                  ) : lyricsLines && lyricsLines.length > 0 ? (
-                    lyricsLines.map((line, i) => {
-                      const isActive = elapsed >= line.timeSec &&
-                        (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec);
-                      return (
-                        <div
-                          key={i}
-                          ref={isActive ? activeLyricRef : undefined}
-                          className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                          onClick={() => handleLyricSeek(line.timeSec)}
-                          style={{ cursor: "pointer" }}
-                        >
-                          {line.text || " "}
-                        </div>
-                      );
-                    })
-                  ) : lyricsPlain ? (
-                    <pre className="lyrics-plain">{lyricsPlain}</pre>
-                  ) : (
-                    <p className="now-playing-empty">No lyrics found.</p>
+                <div className="now-playing-lyrics-wrap">
+                  <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
+                    {lyricsLoading ? (
+                      <p className="now-playing-empty">Loading lyrics…</p>
+                    ) : lyricsLines && lyricsLines.length > 0 ? (
+                      lyricsLines.map((line, i) => {
+                        const isActive = elapsed >= line.timeSec &&
+                          (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec);
+                        return (
+                          <div
+                            key={i}
+                            ref={isActive ? activeLyricRef : undefined}
+                            className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+                            onClick={() => handleLyricSeek(line.timeSec)}
+                            style={{ cursor: "pointer" }}
+                          >
+                            {line.text || " "}
+                          </div>
+                        );
+                      })
+                    ) : lyricsPlain ? (
+                      <pre className="lyrics-plain">{lyricsPlain}</pre>
+                    ) : (
+                      <p className="now-playing-empty">No lyrics found.</p>
+                    )}
+                  </div>
+                  {showResyncPill && (
+                    <button className="lyrics-resync-pill" onClick={handleResyncPress}>
+                      <RefreshCw size={12} />
+                      Re-sync
+                    </button>
                   )}
                 </div>
               </>

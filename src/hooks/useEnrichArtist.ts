@@ -14,7 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchArtistInfo } from "../lib/lastfm";
-import { fetchWikidataImageByMbid } from "../lib/musicbrainz";
+import { fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
 import { useSetting } from "./useSetting";
 
 export interface ArtistEnrichmentRow {
@@ -45,9 +45,21 @@ async function enrichArtist(
   mbArtistId: string | null,
   hasWikidataImage: boolean,
 ): Promise<void> {
+  // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
+  // Only attempt when no MBID is set and no image is cached. Single match = safe to use.
+  let resolvedMbid = mbArtistId;
+  if (!resolvedMbid && !hasWikidataImage) {
+    try {
+      const candidates = await searchArtists(artistName);
+      if (candidates.length === 1) resolvedMbid = candidates[0]!.id;
+    } catch {
+      // silent — portrait stays absent if MB is unreachable
+    }
+  }
+
   const [info, wikidataImageUrl] = await Promise.all([
     fetchArtistInfo(lastfmName),
-    mbArtistId && !hasWikidataImage ? fetchWikidataImageByMbid(mbArtistId) : Promise.resolve(null),
+    resolvedMbid && !hasWikidataImage ? fetchWikidataImageByMbid(resolvedMbid) : Promise.resolve(null),
   ]);
   const db = await getDb();
   // Only mark as enriched when we actually got data — avoids locking out retries on API failure
