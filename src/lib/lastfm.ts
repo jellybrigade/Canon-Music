@@ -169,6 +169,41 @@ export interface LastfmTopTrack {
   playcount: number;
 }
 
+export interface LastfmTopAlbum {
+  name: string;
+  playcount: number;
+  listeners: number;
+}
+
+export async function fetchArtistTopAlbums(artist: string): Promise<LastfmTopAlbum[]> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return [];
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "artist.getTopAlbums");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("limit", "20");
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      topalbums?: { album?: Array<{ name: string; playcount?: string; listeners?: string }> };
+      error?: number;
+    };
+    if (data.error) return [];
+    return (data.topalbums?.album ?? []).map((a) => ({
+      name: a.name,
+      playcount: parseInt(a.playcount ?? "0", 10) || 0,
+      listeners: parseInt(a.listeners ?? "0", 10) || 0,
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTrack[]> {
   const apiKey = await getApiKey();
   if (!apiKey) return [];
