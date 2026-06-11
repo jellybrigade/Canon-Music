@@ -184,3 +184,106 @@
   border-color: rgba(213, 0, 0, 0.25);
   color: #e74c3c;
 }
+
+/* ── Unmatched genre rows ── */
+
+.td-unmatched-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.td-unmatched-row:last-child {
+  border-bottom: none;
+}
+
+.td-unmatched-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.td-unmatched-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+/* Combobox below the genre name — full width */
+.td-unmatched-row .tags-combobox { width: 100%; }
+
+.td-unmatched-row .tags-combobox-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 4px 10px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.td-unmatched-row .tags-combobox-input:focus { border-color: var(--accent); }
+
+.td-unmatched-row .tags-mapped {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  flex: 1;
+  min-width: 0;
+}
+
+.td-unmatched-row .tags-mapped-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td-unmatched-row .tags-clear-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 0.875rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Accept / Ignore buttons — scoped variant matching TagsView.css btn-flat */
+.td-unmatched-row .btn-flat {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.td-unmatched-row .btn-flat.accept:hover {
+  color: #4caf7d;
+  border-color: rgba(76, 175, 125, 0.45);
+  background: rgba(76, 175, 125, 0.07);
+}
+
+.td-unmatched-row .btn-flat.ignore:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}

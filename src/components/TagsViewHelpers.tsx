@@ -29,7 +29,7 @@ export function applySearch<T extends { raw_value: string }>(rows: T[], search: 
 
 // ── AlbumArtStrip ─────────────────────────────────────────────────────────────
 
-export function AlbumArtStrip({ rawValue, kind, size = 24 }: { rawValue: string; kind: TagKind; size?: number }) {
+export function AlbumArtStrip({ rawValue, kind, size = 24, max }: { rawValue: string; kind: TagKind; size?: number; max?: number }) {
   const { data: albums = [] } = useTagAlbums(rawValue, kind);
   const { data: servers } = useServers();
   const { data: swc } = useServerWithCredential(servers?.[0]?.id);
@@ -42,7 +42,8 @@ export function AlbumArtStrip({ rawValue, kind, size = 24 }: { rawValue: string;
           ? getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, a.artwork_url, size * 2)
           : null,
     }))
-    .filter((a) => a.url);
+    .filter((a) => a.url)
+    .slice(0, max);
 
   if (!tiles.length) return null;
 
