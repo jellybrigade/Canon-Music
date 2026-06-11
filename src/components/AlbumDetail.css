@@ -575,6 +575,69 @@
 
 
 
+/* ── Virtualized playlist track rows ── */
+.playlist-vrow {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 2fr) minmax(0, 1.25fr) minmax(0, 1fr) auto;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.playlist-vrow:hover {
+  background-color: var(--bg-hover);
+}
+
+.playlist-vrow--active {
+  color: var(--accent);
+}
+
+.playlist-vrow > * {
+  padding: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-vrow-num {
+  color: var(--text-tertiary);
+  text-align: right;
+  padding-right: 0.75rem !important;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.playlist-vrow-title {
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.playlist-vrow-artist {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: 0.8125rem;
+}
+
+.playlist-vrow-genre {
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.playlist-vrow-duration {
+  color: var(--text-tertiary);
+  text-align: right;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  padding-right: 0.75rem !important;
+}
+
 /* ── Unidentified album badge (shown when MB auto-identify is on and album has no confirmed identity) ── */
 .album-unidentified-badge {
   display: inline-flex;

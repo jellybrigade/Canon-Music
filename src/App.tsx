@@ -38,6 +38,7 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
+import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
 import { usePlayerStore } from "./store/player";
 import { useTagsStore } from "./store/tags";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
@@ -62,6 +63,7 @@ export default function App() {
   useMediaSession();
   useRadio();
   useBackgroundNormalizer();
+  useNowPlayingPrefetch();
 
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
