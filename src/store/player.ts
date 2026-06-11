@@ -122,6 +122,7 @@ interface PlayerState {
   speed: number;
   pauseFadeMs: number;
   consumeMode: boolean;
+  consumeOnSkip: boolean;
   audioFormat: { sampleRate: number; channels: number; codec: string } | null;
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
@@ -141,6 +142,7 @@ interface PlayerState {
   startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
   setRadioMode: (mode: RadioMode) => void;
   toggleConsumeMode: () => Promise<void>;
+  toggleConsumeOnSkip: () => Promise<void>;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -534,6 +536,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     sleepTimerEndsAt: null,
     sleepTimerEndOfTrack: false,
     consumeMode: false,
+    consumeOnSkip: false,
     audioFormat: null,
 
     setWaveformPeaks: (peaks) => {
@@ -551,6 +554,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist consume mode:", e);
+      }
+    },
+
+    toggleConsumeOnSkip: async () => {
+      const next = !get().consumeOnSkip;
+      set({ consumeOnSkip: next });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_on_skip', ?)",
+          [next ? "true" : "false"]
+        );
+      } catch (e) {
+        console.error("Failed to persist consume on skip:", e);
       }
     },
 
@@ -597,7 +614,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     next: async (fromNaturalEnd = false) => {
-      const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder, consumeMode } = get();
+      const { queue, queueIndex, streamUrlFor, repeat, isShuffled, shuffleOrder, consumeMode, consumeOnSkip } = get();
       if (queue.length === 0 || !streamUrlFor) return;
 
       // Deduplicate: both the Rust event and the TS fallback call next(true); only handle once.
@@ -622,9 +639,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         return;
       }
 
-      // Consume mode: remove the just-played track from the queue on natural end.
+      // Consume mode: remove the just-played track from the queue on natural end or manual skip.
       // Shuffle not supported — queue indices would need a full remap.
-      if (fromNaturalEnd && consumeMode && !isShuffled) {
+      if (consumeMode && !isShuffled && (fromNaturalEnd || consumeOnSkip)) {
         const newQueue = queue.filter((_, i) => i !== queueIndex);
         if (newQueue.length === 0) {
           set({ queue: newQueue });
@@ -900,7 +917,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -961,6 +978,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
           } else if (row.key === "player.consume_mode") {
             set({ consumeMode: row.value === "true" });
+          } else if (row.key === "player.consume_on_skip") {
+            set({ consumeOnSkip: row.value === "true" });
           }
         }
       } catch (e) {
