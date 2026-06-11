@@ -1,7 +1,7 @@
 import { getDb } from "../db";
 import { keychain } from "../keychain";
 import type { Server } from "../types/server";
-import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks } from "./navidrome";
+import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
 import type { NavidromeCredential } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 import { rebuildTagVocabCache } from "./tag-normalize";
@@ -20,6 +20,8 @@ export async function syncLibrary(
   } catch {
     throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
   }
+
+  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential);
 
   const albums = await fetchAllAlbums(server.url, server.username, credential);
 
@@ -48,9 +50,10 @@ export async function syncLibrary(
 
     // Upsert album row — preserve computed_at/normalized_tags_json so background normalizer
     // doesn't re-run on every sync.
+    const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     await db.execute(
-      `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
          server_type = excluded.server_type,
@@ -59,8 +62,9 @@ export async function syncLibrary(
          year = excluded.year,
          artwork_url = excluded.artwork_url,
          navidrome_created = excluded.navidrome_created,
-         play_count = excluded.play_count`,
-      [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0]
+         play_count = excluded.play_count,
+         release_type = excluded.release_type`,
+      [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, releaseType]
     );
 
     processedCount++;

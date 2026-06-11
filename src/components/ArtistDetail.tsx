@@ -44,7 +44,7 @@ function useArtistAlbums(artistName: string) {
     queryFn: async (): Promise<AlbumRow[]> => {
       const db = await getDb();
       return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type
          FROM albums
          WHERE artist = ?
          ORDER BY year IS NULL, year DESC, name`,
@@ -91,7 +91,14 @@ function useLastfmTopTracks(artistName: string) {
 
 type ReleaseGroup = "album" | "ep" | "single" | "compilation";
 
-function classifyRelease(name: string): ReleaseGroup {
+function classifyRelease(name: string, releaseType?: string | null | undefined): ReleaseGroup {
+  if (releaseType) {
+    const rt = releaseType.toLowerCase();
+    if (rt === "single") return "single";
+    if (rt === "ep") return "ep";
+    if (rt === "compilation" || rt === "live" || rt === "remix") return "compilation";
+    if (rt === "album") return "album";
+  }
   const n = name.toLowerCase().trim();
   if (/\bsingle\b|-\s*single\s*$/.test(n)) return "single";
   if (/\bep\b|-\s*ep\s*$/.test(n)) return "ep";
@@ -101,7 +108,7 @@ function classifyRelease(name: string): ReleaseGroup {
 
 function groupAlbums(albums: AlbumRow[]): { group: ReleaseGroup; label: string; items: AlbumRow[] }[] {
   const map: Record<ReleaseGroup, AlbumRow[]> = { album: [], ep: [], single: [], compilation: [] };
-  for (const a of albums) map[classifyRelease(a.name)].push(a);
+  for (const a of albums) map[classifyRelease(a.name, a.release_type)].push(a);
   return (
     [
       { group: "album" as const, label: "Albums" },

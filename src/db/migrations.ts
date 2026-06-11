@@ -443,4 +443,8 @@ export const migrations: Migration[] = [
       GROUP BY LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')), tt.kind;
     `,
   },
+  {
+    version: 21,
+    sql: `ALTER TABLE albums ADD COLUMN release_type TEXT;`,
+  },
 ];

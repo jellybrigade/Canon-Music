@@ -16,6 +16,8 @@ export interface NavidromeAlbum {
   created?: string;
   songCount?: number;
   playCount?: number;
+  releaseTypes?: string[];
+  releaseType?: string;
 }
 
 function generateSalt(): string {
@@ -449,6 +451,54 @@ export function reportNowPlaying(
     id: nativeTrackId,
     submission: "false",
   });
+}
+
+export async function fetchAndStoreOpenSubsonicExtensions(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<string[]> {
+  try {
+    const params = buildAuthParams(username, credential);
+    const res = await apiPost(baseUrl, "getOpenSubsonicExtensions", params);
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        openSubsonicExtensions?: Array<{ name: string; versions: number[] }>;
+      };
+    };
+    const response = data["subsonic-response"];
+    if (response.status !== "ok") return [];
+    const extensions = (response.openSubsonicExtensions ?? []).map((e) => e.name);
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    await db.execute(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('server.opensub_extensions', ?)",
+      [JSON.stringify(extensions)]
+    );
+    return extensions;
+  } catch {
+    return [];
+  }
+}
+
+export async function getStoredOpenSubsonicExtensions(): Promise<string[]> {
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    const rows = await db.select<{ value: string }[]>(
+      "SELECT value FROM settings WHERE key = 'server.opensub_extensions'"
+    );
+    if (!rows[0]) return [];
+    return JSON.parse(rows[0].value) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function supportsOpenSubsonicExtension(extensions: string[], name: string): boolean {
+  return extensions.includes(name);
 }
 
 export async function authenticate(

@@ -356,11 +356,24 @@
 }
 
 .genre-col-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 0.73rem;
   color: rgba(255, 255, 255, 0.28);
-  flex-shrink: 0;
+  min-width: 0;
   max-width: 240px;
+  overflow: hidden;
+}
+
+.genre-col-breadcrumb__seg {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.genre-col-breadcrumb__sep {
+  flex-shrink: 0;
+  opacity: 0.5;
 }

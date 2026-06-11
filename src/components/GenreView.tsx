@@ -169,7 +169,12 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                   <span className="genre-col-name">{node.name}</span>
                   {parentChain.length > 0 && (
                     <span className="genre-col-breadcrumb">
-                      {parentChain.join(" › ")}
+                      {parentChain.map((seg, i) => (
+                        <span key={i} style={{ flexShrink: parentChain.length - i }} className="genre-col-breadcrumb__seg">
+                          {seg}
+                          {i < parentChain.length - 1 && <span className="genre-col-breadcrumb__sep"> ›</span>}
+                        </span>
+                      ))}
                     </span>
                   )}
                   <span className="genre-col-count">{count}</span>

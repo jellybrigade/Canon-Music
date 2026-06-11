@@ -10,7 +10,7 @@ import { autoIdentifyAlbum } from "../lib/album-identify";
 import { persistAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { authenticate } from "../lib/navidrome";
 import type { NavidromeCredential } from "../lib/navidrome";
-import { getMinTagCount, setMinTagCount } from "../lib/lastfm";
+import { getMinTagCount, setMinTagCount, setApiKey as setLastfmApiKey } from "../lib/lastfm";
 import { getMinFolksonomyCount, setMinFolksonomyCount } from "../lib/musicbrainz";
 import { keychain } from "../keychain";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -56,7 +56,16 @@ function useScrobbleQueueCount() {
 }
 
 export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer }: Props) {
-  const [lastfmKey, setLastfmKey] = useSetting("lastfm.api_key", "");
+  const [lastfmKey, setLastfmKeyState] = useState("");
+  useEffect(() => {
+    keychain.get("canon.lastfm", "api_key")
+      .then((k) => { if (k) setLastfmKeyState(k); })
+      .catch(() => {});
+  }, []);
+  async function setLastfmKey(k: string) {
+    setLastfmKeyState(k);
+    await setLastfmApiKey(k);
+  }
   const [showWaveform, setShowWaveform] = useSetting("player.show_waveform", "false");
   const [restoreQueue, setRestoreQueue] = useSetting("queue.restore_on_startup", "false");
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
@@ -71,6 +80,7 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const [autoRefresh, setAutoRefresh] = useSetting("tags.auto_refresh", "true");
   const [mbAutoIdentify, setMbAutoIdentify] = useSetting("mb.auto_identify", "false");
+  const [hideTagBadge, setHideTagBadge] = useSetting("ui.hide_tag_badge", "false");
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
   const { data: minTagCount } = useQuery({
     queryKey: ["settings", "lastfm.min_tag_count"],
@@ -295,11 +305,6 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
     try {
       await keychain.delete(`canon.server.${server.id}`, "credential");
     } catch { /* not fatal */ }
-    if (server.sidecar_secret_key) {
-      try {
-        await keychain.delete(server.sidecar_secret_key, "secret");
-      } catch { /* not fatal */ }
-    }
     onRemoveServer();
   }
 
@@ -552,6 +557,14 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
               onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
             />
             <span>Map &ldquo;Rap&rdquo; to Hip Hop</span>
+          </label>
+          <label className="settings-field settings-field--inline">
+            <input
+              type="checkbox"
+              checked={hideTagBadge === "true"}
+              onChange={(e) => void setHideTagBadge(e.target.checked ? "true" : "false")}
+            />
+            <span>Hide tag issues badge</span>
           </label>
 
           <div className="settings-field settings-field--row" style={{ marginTop: "0.25rem" }}>

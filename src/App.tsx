@@ -137,6 +137,7 @@ export default function App() {
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
+  const [hideTagBadge] = useSetting("ui.hide_tag_badge", "false");
 
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
@@ -323,7 +324,7 @@ export default function App() {
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
     { id: "genres", label: "Genres", icon: <Layers size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
-    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: unmappedCount || undefined },
+    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge === "true" ? undefined : unmappedCount) || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
   ];
 
