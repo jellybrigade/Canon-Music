@@ -1,4 +1,5 @@
 import React, { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
 import { useSearch } from "../hooks/useSearch";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -63,6 +64,7 @@ interface Props {
 }
 
 export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential }: Props) {
+  const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
   const deferred = useDeferredValue(raw.trim());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -225,7 +227,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     {artUrl
                       ? <img className="cp-art" src={artUrl} alt="" />
                       : <div className="cp-art cp-art--placeholder" />}
-                    <span className="cp-result-primary">{album.name}</span>
+                    <span className="cp-result-primary">{albumDisplayName(album.name)}</span>
                     {album.artist && <span className="cp-result-secondary">{album.artist}</span>}
                   </button>
                 );

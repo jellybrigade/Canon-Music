@@ -8,6 +8,7 @@ interface Props {
 
 export function PlaybackTab({ searchQuery }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", false);
+  const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
 
@@ -156,7 +157,7 @@ export function PlaybackTab({ searchQuery }: Props) {
         </section>
       )}
 
-      {show("waveform", "display", "progress bar") && (
+      {show("waveform", "display", "progress bar", "album", "suffix", "bracket", "edition") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Display</h3>
           <SettingRow
@@ -167,6 +168,16 @@ export function PlaybackTab({ searchQuery }: Props) {
               type="checkbox"
               checked={showWaveform}
               onChange={(e) => void setShowWaveform(e.target.checked)}
+            />
+          </SettingRow>
+          <SettingRow
+            title="Show album edition suffixes"
+            description='Show trailing parenthetical info in album names — e.g. "(clean)", "(24-bit / 44.1kHz)", "(Deluxe Edition)".'
+          >
+            <input
+              type="checkbox"
+              checked={showAlbumSuffixes}
+              onChange={(e) => void setShowAlbumSuffixes(e.target.checked)}
             />
           </SettingRow>
         </section>

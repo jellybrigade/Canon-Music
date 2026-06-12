@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
@@ -58,6 +59,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
+  const albumDisplayName = useAlbumDisplayName();
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
@@ -364,7 +366,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
             <div className="album-detail-art album-art--placeholder" />
           )}
           <div className="album-detail-meta">
-            <h2 className="album-detail-title">{album.name}</h2>
+            <h2 className="album-detail-title">{albumDisplayName(album.name)}</h2>
             {album.artist && (
               onSelectArtist ? (
                 <span
