@@ -34,6 +34,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const queryClient = useQueryClient();
 
   const [lastfmKey, setLastfmKeyState] = useState("");
+  const [lastfmKeyFocused, setLastfmKeyFocused] = useState(false);
   useEffect(() => {
     keychain.get("canon.lastfm", "api_key")
       .then((k) => { if (k) setLastfmKeyState(k); })
@@ -43,6 +44,9 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     setLastfmKeyState(k);
     await setLastfmApiKey(k);
   }
+  const lastfmKeyDisplay = !lastfmKeyFocused && lastfmKey.length > 8
+    ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}`
+    : lastfmKey;
 
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
@@ -172,7 +176,9 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             <input
               type="text"
               placeholder="Paste your Last.fm API key"
-              value={lastfmKey}
+              value={lastfmKeyDisplay}
+              onFocus={() => setLastfmKeyFocused(true)}
+              onBlur={() => setLastfmKeyFocused(false)}
               onChange={(e) => void setLastfmKey(e.target.value)}
             />
           </SettingRow>
