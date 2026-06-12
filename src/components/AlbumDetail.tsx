@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix, stripAlbumSuffix } from "../hooks/useAlbumDisplayName";
+import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
@@ -65,8 +65,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
   const strippingEnabled = !showAlbumSuffixes;
   const detectedSuffix = extractSuffix(album.name);
-  const suffixWasStripped = strippingEnabled && detectedSuffix !== null &&
-    stripAlbumSuffix(album.name, suffixAllowlist) !== album.name;
+  const suffixWasStripped = albumDisplayName(album.name) !== album.name;
   const suffixCanBeAdded = strippingEnabled && detectedSuffix !== null && !suffixWasStripped &&
     !suffixAllowlist.some((s) => s.toLowerCase() === detectedSuffix.toLowerCase());
   const queryClient = useQueryClient();

@@ -1172,10 +1172,10 @@
   padding: 20px 28px 32px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 
-.title-cleanup-intro p {
+.title-cleanup-intro {
   margin: 0;
   font-size: 0.8125rem;
   color: var(--text-secondary);
@@ -1187,27 +1187,40 @@
   color: var(--text-primary);
 }
 
+.title-cleanup-section-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
 .title-cleanup-add-row {
   display: flex;
   gap: 8px;
   align-items: center;
+  margin-bottom: 6px;
 }
 
-.title-cleanup-input {
-  flex: 1;
+.title-cleanup-input,
+.title-cleanup-edit-input {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 4px;
   color: var(--text-primary);
   font: inherit;
   font-size: 0.875rem;
-  padding: 7px 12px;
+  padding: 6px 10px;
   outline: none;
   transition: border-color 0.1s;
-  max-width: 340px;
 }
+.title-cleanup-input { flex: 1; max-width: 300px; }
+.title-cleanup-edit-input { flex: 1; }
 .title-cleanup-input::placeholder { color: var(--text-tertiary); }
-.title-cleanup-input:focus { border-color: var(--accent); }
+.title-cleanup-input:focus,
+.title-cleanup-edit-input:focus { border-color: var(--accent); }
 
 .title-cleanup-add-btn {
   background: var(--accent);
@@ -1217,9 +1230,10 @@
   font: inherit;
   font-size: 0.8125rem;
   font-weight: 600;
-  padding: 7px 14px;
+  padding: 6px 14px;
   cursor: pointer;
   transition: opacity 0.1s;
+  white-space: nowrap;
 }
 .title-cleanup-add-btn:hover:not(:disabled) { opacity: 0.85; }
 .title-cleanup-add-btn:disabled { opacity: 0.4; cursor: default; }
@@ -1227,42 +1241,75 @@
 .title-cleanup-error {
   font-size: 0.75rem;
   color: var(--danger, #e74c3c);
-  margin-top: -8px;
+  margin-top: -2px;
+  margin-bottom: 4px;
+}
+
+.title-cleanup-empty {
+  margin: 0;
+  padding: 16px 0 4px;
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  line-height: 1.5;
 }
 
 .title-cleanup-list {
   list-style: none;
-  margin: 0;
+  margin: 2px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .title-cleanup-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 6px;
+  padding: 6px 8px;
   border-radius: 4px;
-  background: var(--surface-1, var(--bg-card));
 }
-.title-cleanup-row:hover { background: var(--surface-2, var(--bg-hover)); }
+.title-cleanup-row:hover { background: var(--surface-1, var(--bg-hover)); }
+.title-cleanup-row--disabled { opacity: 0.45; }
 
+.title-cleanup-builtin-label,
 .title-cleanup-suffix {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--text-primary);
 }
 
-.title-cleanup-remove {
+/* shared small action buttons (Edit / Save / Cancel / Disable / Enable) */
+.title-cleanup-action {
   background: none;
-  border: none;
-  padding: 0 4px;
-  color: var(--text-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  transition: color 0.1s;
+  white-space: nowrap;
+  transition: color 0.1s, border-color 0.1s;
 }
-.title-cleanup-remove:hover { color: var(--danger, #e74c3c); }
+.title-cleanup-action:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.title-cleanup-action--muted { color: var(--text-tertiary); border-color: transparent; }
+.title-cleanup-action--muted:hover { color: var(--text-secondary); border-color: var(--border-strong); }
+.title-cleanup-action--remove { color: var(--text-tertiary); border-color: transparent; font-size: 1rem; padding: 0 5px; }
+.title-cleanup-action--remove:hover { color: var(--danger, #e74c3c); border-color: transparent; }
+
+.title-cleanup-toggle {
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 3px;
+  padding: 2px 8px;
+  font: inherit;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.1s, border-color 0.1s;
+}
+.title-cleanup-toggle:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+.title-cleanup-toggle--off { color: var(--accent); border-color: var(--accent); }
+.title-cleanup-toggle--off:hover { opacity: 0.75; }
