@@ -185,6 +185,14 @@
   color: #e74c3c;
 }
 
+.td-remapped-hint {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* ── Unmatched genre rows ── */
 
 .td-unmatched-row {
@@ -199,20 +207,23 @@
   border-bottom: none;
 }
 
-.td-unmatched-header {
+.td-unmatched-top {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
 .td-unmatched-name {
   font-size: 0.875rem;
   font-weight: 500;
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--text-secondary);
+  word-break: break-word;
+}
+
+.td-unmatched-actions {
+  display: flex;
+  gap: 0.4rem;
 }
 
 /* Combobox below the genre name — full width */

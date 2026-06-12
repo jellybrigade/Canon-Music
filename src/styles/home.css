@@ -268,6 +268,15 @@
   border: none;
 }
 
+.home-spotlight__genres {
+  margin: 0 0 14px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
 .home-spotlight__actions {
   display: flex;
   gap: 10px;

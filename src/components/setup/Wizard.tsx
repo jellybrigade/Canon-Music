@@ -99,8 +99,7 @@ export function Wizard({ onSuccess }: Props) {
       await keychain.set(`canon.server.${id}`, "credential", JSON.stringify(testedCredential));
       const db = await getDb();
       await db.execute(
-        `INSERT INTO servers (id, type, url, display_name, username, sidecar_url, sidecar_secret_key, sidecar_path_prefix_from, sidecar_path_prefix_to)
-         VALUES (?, 'navidrome', ?, ?, ?, NULL, NULL, NULL, NULL)`,
+        `INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)`,
         [
           id,
           url.trim().replace(/\/+$/, ""),

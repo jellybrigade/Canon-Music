@@ -43,6 +43,33 @@ function useTrackRawTags(trackId: string | undefined) {
   });
 }
 
+function useAlbumRawGenreMap(albumId: string) {
+  return useQuery({
+    queryKey: ["album-raw-genre-map", albumId],
+    queryFn: async () => {
+      const db = await getDb();
+      type Row = { canonical_id: string; raw_value: string };
+      const rows = await db.select<Row[]>(
+        `SELECT DISTINCT tt.canonical_id, tt.raw_value
+         FROM track_tags tt
+         JOIN tracks t ON t.id = tt.track_id
+         WHERE t.album_id = ? AND tt.kind = 'genre'
+           AND tt.canonical_id IS NOT NULL
+           AND tt.canonical_id NOT IN ('__accepted__', '__ignored__')`,
+        [albumId]
+      );
+      const map = new Map<string, string[]>();
+      for (const { canonical_id, raw_value } of rows) {
+        const arr = map.get(canonical_id) ?? [];
+        arr.push(raw_value);
+        map.set(canonical_id, arr);
+      }
+      return map;
+    },
+    staleTime: Infinity,
+  });
+}
+
 function useAlbumUnmatchedGenres(albumId: string) {
   return useQuery({
     queryKey: ["album-unmatched-genres", albumId],
@@ -81,11 +108,13 @@ function TagSection({
   tags,
   level,
   emptyMessage,
+  rawMap,
 }: {
   title: string;
   tags: NormalizedTag[];
   level: "album" | "track";
   emptyMessage?: string;
+  rawMap?: Map<string, string[]>;
 }) {
   if (tags.length === 0) {
     if (!emptyMessage) return null;
@@ -105,13 +134,19 @@ function TagSection({
         {title}
         <span className={`tag-level-badge tag-level-badge--${level}`}>{level}</span>
       </h3>
-      {tags.map((tag) => (
-        <div key={tag.id ?? tag.name} className="tag-drawer-row">
-          <span className="tag-drawer-name">{tag.name}</span>
-          <SourceBadge source={tag.source} />
-          <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
-        </div>
-      ))}
+      {tags.map((tag) => {
+        const originals = tag.id ? rawMap?.get(tag.id) : undefined;
+        const remapped = originals?.filter((r) => r.toLowerCase() !== tag.name.toLowerCase());
+        const tooltip = remapped?.length ? `Original: ${remapped.join(", ")}` : undefined;
+        return (
+          <div key={tag.id ?? tag.name} className="tag-drawer-row" title={tooltip}>
+            <span className="tag-drawer-name">{tag.name}</span>
+            {remapped?.length ? <span className="td-remapped-hint">⟵</span> : null}
+            <SourceBadge source={tag.source} />
+            <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -162,6 +197,8 @@ function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionP
 
     void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
     void queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", albumId] });
+    void queryClient.invalidateQueries({ queryKey: ["album-genre-raw-sources", albumId] });
+    void queryClient.invalidateQueries({ queryKey: ["album-raw-genre-map", albumId] });
   }
 
   return (
@@ -169,9 +206,11 @@ function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionP
       <h3 className="tag-drawer-section-title">Unmatched genres</h3>
       {unmatched.map(({ raw_value, source }) => (
         <div key={raw_value} className="td-unmatched-row">
-          <div className="td-unmatched-header">
+          <div className="td-unmatched-top">
             <span className="td-unmatched-name">{raw_value}</span>
             <SourceBadge source={source} />
+          </div>
+          <div className="td-unmatched-actions">
             <button
               className="btn-flat accept"
               title="Accept as-is — keep in genre output without remapping"
@@ -204,6 +243,7 @@ function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionP
 export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }: Props) {
   const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
   const { data: rawTrackTags } = useTrackRawTags(trackId);
+  const { data: rawMap } = useAlbumRawGenreMap(albumId);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -242,11 +282,13 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
                 tags={normalizedTags.genres}
                 level="album"
                 emptyMessage="No genres identified — try syncing in Settings."
+                rawMap={rawMap}
               />
               <TagSection
                 title="Descriptors"
                 tags={normalizedTags.descriptors}
                 level="album"
+                rawMap={rawMap}
               />
               <TagSection
                 title="Scenes & Movements"

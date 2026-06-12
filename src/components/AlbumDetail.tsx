@@ -15,7 +15,7 @@ import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
-import { useSetting } from "../hooks/useSetting";
+import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -64,7 +64,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const genreMappings = useGenreMappings();
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
-  const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
+  const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
   const refreshTags = useCallback(async () => {
@@ -396,7 +396,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   </p>
                 </div>
               )
-            ) : mbAutoIdentify === "true" && identityLoaded && !autoIdentifyFetching ? (
+            ) : mbAutoIdentify && identityLoaded && !autoIdentifyFetching ? (
               <button
                 className="album-unidentified-badge"
                 onClick={() => setShowIdentify(true)}

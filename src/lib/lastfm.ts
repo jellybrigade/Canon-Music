@@ -1,7 +1,11 @@
 import { getDb } from "../db";
+import { keychain } from "../keychain";
 import { canonicalKey } from "./canonicalize";
 import type { TagKind } from "./canonicalize";
 import { makeRateLimiter } from "./rate-limiter";
+
+const LASTFM_KEYCHAIN_SERVICE = "canon.lastfm";
+const LASTFM_KEYCHAIN_ACCOUNT = "api_key";
 
 export interface LastfmTagResult {
   genres: string[];
@@ -15,11 +19,37 @@ const MIN_TAG_COUNT_DEFAULT = 5;
 const rateLimit = makeRateLimiter(250);
 
 async function getApiKey(): Promise<string | null> {
-  const db = await getDb();
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'lastfm.api_key'"
-  );
-  return rows[0]?.value ?? null;
+  try {
+    const key = await keychain.get(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
+    if (key) return key;
+  } catch { /* not in keychain yet */ }
+  // Migration: move legacy SQLite key to keychain on first access
+  try {
+    const db = await getDb();
+    const rows = await db.select<{ value: string }[]>(
+      "SELECT value FROM settings WHERE key = 'lastfm.api_key'"
+    );
+    const legacy = rows[0]?.value;
+    if (legacy) {
+      await keychain.set(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT, legacy);
+      await db.execute("DELETE FROM settings WHERE key = 'lastfm.api_key'");
+      return legacy;
+    }
+  } catch { /* migration not critical */ }
+  return null;
+}
+
+export async function setApiKey(key: string): Promise<void> {
+  if (key) {
+    await keychain.set(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT, key);
+  } else {
+    try { await keychain.delete(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT); } catch { /* ok */ }
+  }
+  // Remove any lingering SQLite copy
+  try {
+    const db = await getDb();
+    await db.execute("DELETE FROM settings WHERE key = 'lastfm.api_key'");
+  } catch { /* ok */ }
 }
 
 export async function getMinTagCount(): Promise<number> {

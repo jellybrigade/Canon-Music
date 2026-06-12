@@ -152,6 +152,7 @@ interface PlayerState {
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
   setWaveformPeaks: (peaks: number[] | null) => void;
+  setPauseFadeMs: (ms: number) => Promise<void>;
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
@@ -751,6 +752,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist speed:", e);
+      }
+    },
+
+    setPauseFadeMs: async (ms: number) => {
+      const clamped = Math.max(0, Math.min(2000, ms));
+      set({ pauseFadeMs: clamped });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.pause_fade_ms', ?)",
+          [String(clamped)]
+        );
+      } catch (e) {
+        console.error("Failed to persist pause fade:", e);
       }
     },
 

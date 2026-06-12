@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
@@ -227,6 +228,17 @@ interface SpotlightProps {
 function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const [accentColor, setAccentColor] = useState<string | null>(null);
+  const { data: genres } = useQuery({
+    queryKey: ["spotlight-genres", pick.album.id],
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<{ name: string }[]>(
+        "SELECT name FROM album_genres WHERE album_id = ? AND relation = 'direct' ORDER BY name LIMIT 3",
+        [pick.album.id]
+      );
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   const artUrl = pick.album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 400)
@@ -272,6 +284,11 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
             </p>
           )}
         </div>
+        {genres && genres.length > 0 && (
+          <p className="home-spotlight__genres">
+            {genres.map(g => g.name).join(" · ")}
+          </p>
+        )}
         <div className="home-spotlight__actions">
           <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
             <Play size={13} fill="currentColor" />

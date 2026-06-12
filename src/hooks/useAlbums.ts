@@ -8,6 +8,7 @@ export interface AlbumRow {
   artist: string | null;
   year: number | null;
   artwork_url: string | null;
+  release_type?: string | null;
 }
 
 export type AlbumSort = "artist" | "alphabetical" | "year" | "recently_added";
@@ -30,7 +31,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
         // Join through album_genres — covers both leaf and ancestor canon ids,
         // as well as raw: synthetic ids for unmatched tags.
         return db.select<AlbumRow[]>(
-          `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url
+          `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type
            FROM albums a
            JOIN album_genres ag ON ag.album_id = a.id
            WHERE ag.canonical_id IN (${placeholders})
@@ -39,7 +40,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
         );
       }
       return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url FROM albums a ORDER BY ${order}`
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type FROM albums a ORDER BY ${order}`
       );
     },
   });

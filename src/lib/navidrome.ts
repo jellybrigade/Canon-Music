@@ -16,6 +16,8 @@ export interface NavidromeAlbum {
   created?: string;
   songCount?: number;
   playCount?: number;
+  releaseTypes?: string[];
+  releaseType?: string;
 }
 
 function generateSalt(): string {
@@ -449,6 +451,106 @@ export function reportNowPlaying(
     id: nativeTrackId,
     submission: "false",
   });
+}
+
+export async function fetchAndStoreOpenSubsonicExtensions(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<string[]> {
+  try {
+    const params = buildAuthParams(username, credential);
+    const res = await apiPost(baseUrl, "getOpenSubsonicExtensions", params);
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        openSubsonicExtensions?: Array<{ name: string; versions: number[] }>;
+      };
+    };
+    const response = data["subsonic-response"];
+    if (response.status !== "ok") return [];
+    const extensions = (response.openSubsonicExtensions ?? []).map((e) => e.name);
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    await db.execute(
+      "INSERT OR REPLACE INTO settings (key, value) VALUES ('server.opensub_extensions', ?)",
+      [JSON.stringify(extensions)]
+    );
+    return extensions;
+  } catch {
+    return [];
+  }
+}
+
+export async function getStoredOpenSubsonicExtensions(): Promise<string[]> {
+  try {
+    const { getDb } = await import("../db");
+    const db = await getDb();
+    const rows = await db.select<{ value: string }[]>(
+      "SELECT value FROM settings WHERE key = 'server.opensub_extensions'"
+    );
+    if (!rows[0]) return [];
+    return JSON.parse(rows[0].value) as string[];
+  } catch {
+    return [];
+  }
+}
+
+export function supportsOpenSubsonicExtension(extensions: string[], name: string): boolean {
+  return extensions.includes(name);
+}
+
+function msToLrcTimestamp(ms: number): string {
+  const totalSec = ms / 1000;
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = (totalSec % 60).toFixed(2).padStart(5, "0");
+  return `${String(minutes).padStart(2, "0")}:${seconds}`;
+}
+
+export async function fetchLyricsBySongId(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  trackId: string
+): Promise<{ plain: string | null; synced: string | null } | null> {
+  try {
+    const params = buildAuthParams(username, credential);
+    params.set("id", trackId);
+    const res = await apiPost(baseUrl, "getLyricsBySongId", params);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        lyricsList?: {
+          structuredLyrics?: Array<{
+            synced: boolean;
+            line: Array<{ start?: number; value: string }>;
+          }>;
+        };
+      };
+    };
+    const sr = data["subsonic-response"];
+    if (sr.status !== "ok" || !sr.lyricsList?.structuredLyrics?.length) return null;
+
+    const lyrics = sr.lyricsList.structuredLyrics;
+    const syncedEntry = lyrics.find((l) => l.synced);
+    const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
+
+    const synced = syncedEntry
+      ? syncedEntry.line.map((l) =>
+          l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
+        ).join("\n")
+      : null;
+
+    const plain = plainEntry
+      ? plainEntry.line.map((l) => l.value).join("\n")
+      : null;
+
+    return { plain, synced };
+  } catch {
+    return null;
+  }
 }
 
 export async function authenticate(

@@ -5,9 +5,7 @@ import type { CurrentTrack } from "../store/player";
 import { reportNowPlaying } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "./useServer";
-
-const SCROBBLE_MIN_ELAPSED_S = 240;
-const SCROBBLE_FRACTION = 0.5;
+import { useSetting } from "./useSetting";
 
 export function useScrobble(
   track: CurrentTrack | null,
@@ -16,6 +14,10 @@ export function useScrobble(
 ) {
   const scrobbedRef = useRef(false);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
+  const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
+  const [thresholdPctRaw] = useSetting("scrobble.threshold_percent", "50");
+  const minElapsedS = Math.max(0, parseInt(minSecondsRaw, 10) || 0);
+  const fraction = Math.max(0, Math.min(100, parseInt(thresholdPctRaw, 10) || 50)) / 100;
 
   useEffect(() => {
     scrobbedRef.current = false;
@@ -36,8 +38,8 @@ export function useScrobble(
 
     const duration = track.duration ?? null;
     const thresholdMet =
-      elapsed >= SCROBBLE_MIN_ELAPSED_S ||
-      (duration !== null && duration > 0 && elapsed / duration >= SCROBBLE_FRACTION);
+      elapsed >= minElapsedS ||
+      (duration !== null && duration > 0 && elapsed / duration >= fraction);
 
     if (!thresholdMet) return;
 
