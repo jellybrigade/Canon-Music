@@ -83,28 +83,6 @@ export function TitleCleanupTab() {
         your own.
       </p>
 
-      {/* ── Built-in rules ── */}
-      <section>
-        <div className="title-cleanup-section-label">Built-in rules</div>
-        <ul className="title-cleanup-list">
-          {BUILTIN_PATTERNS.map((p) => {
-            const disabled = disabledIds.includes(p.id);
-            return (
-              <li key={p.id} className={`title-cleanup-row${disabled ? " title-cleanup-row--disabled" : ""}`}>
-                <span className="title-cleanup-builtin-label">{p.label}</span>
-                <button
-                  className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
-                  onClick={() => void (disabled ? enableBuiltin(p.id) : disableBuiltin(p.id))}
-                  title={disabled ? "Enable" : "Disable"}
-                >
-                  {disabled ? "Enable" : "Disable"}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
       {/* ── Custom rules ── */}
       <section>
         <div className="title-cleanup-section-label">Your rules</div>
@@ -144,6 +122,28 @@ export function TitleCleanupTab() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/* ── Built-in rules ── */}
+      <section>
+        <div className="title-cleanup-section-label">Built-in rules</div>
+        <ul className="title-cleanup-list">
+          {BUILTIN_PATTERNS.map((p) => {
+            const disabled = disabledIds.includes(p.id);
+            return (
+              <li key={p.id} className={`title-cleanup-row${disabled ? " title-cleanup-row--disabled" : ""}`}>
+                <span className="title-cleanup-builtin-label">{p.label}</span>
+                <button
+                  className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
+                  onClick={() => void (disabled ? enableBuiltin(p.id) : disableBuiltin(p.id))}
+                  title={disabled ? "Enable" : "Disable"}
+                >
+                  {disabled ? "Enable" : "Disable"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </div>
   );
