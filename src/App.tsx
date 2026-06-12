@@ -160,9 +160,19 @@ export default function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
+  const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
   useEffect(() => {
     void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
   }, []);
+  useEffect(() => {
+    if (!autoCheckUpdates) return;
+    const ms = Math.max(10, parseInt(autoCheckIntervalMin, 10) || 60) * 60 * 1000;
+    const id = setInterval(() => {
+      void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
+    }, ms);
+    return () => clearInterval(id);
+  }, [autoCheckUpdates, autoCheckIntervalMin]);
 
   const handleSearchChange = useCallback((value: string) => {
     setSearchRaw(value);
