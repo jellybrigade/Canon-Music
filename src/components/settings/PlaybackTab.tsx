@@ -20,6 +20,9 @@ export function PlaybackTab({ searchQuery }: Props) {
   const consumeOnSkip = usePlayerStore((s) => s.consumeOnSkip);
   const toggleConsumeOnSkip = usePlayerStore((s) => s.toggleConsumeOnSkip);
 
+  const [minSeconds, setMinSeconds] = useSetting("scrobble.min_seconds", "240");
+  const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
+
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
 
@@ -112,6 +115,42 @@ export function PlaybackTab({ searchQuery }: Props) {
               disabled={!consumeMode}
               style={{ opacity: consumeMode ? 1 : 0.4 }}
               onChange={() => void toggleConsumeOnSkip()}
+            />
+          </SettingRow>
+        </section>
+      )}
+
+      {show("scrobble", "last.fm", "threshold", "scrobbling") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Scrobbling</h3>
+          <SettingRow
+            title={`Min time before scrobble — ${minSeconds}s`}
+            description="Track must have played this many seconds before it can be scrobbled."
+            stacked
+          >
+            <input
+              type="range"
+              className="settings-range"
+              min={0}
+              max={300}
+              step={10}
+              value={minSeconds}
+              onChange={(e) => void setMinSeconds(e.target.value)}
+            />
+          </SettingRow>
+          <SettingRow
+            title={`Completion threshold — ${thresholdPct}%`}
+            description="Scrobble after this percentage of the track has played (whichever condition is met first)."
+            stacked
+          >
+            <input
+              type="range"
+              className="settings-range"
+              min={25}
+              max={100}
+              step={5}
+              value={thresholdPct}
+              onChange={(e) => void setThresholdPct(e.target.value)}
             />
           </SettingRow>
         </section>
