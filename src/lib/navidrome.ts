@@ -501,6 +501,58 @@ export function supportsOpenSubsonicExtension(extensions: string[], name: string
   return extensions.includes(name);
 }
 
+function msToLrcTimestamp(ms: number): string {
+  const totalSec = ms / 1000;
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = (totalSec % 60).toFixed(2).padStart(5, "0");
+  return `${String(minutes).padStart(2, "0")}:${seconds}`;
+}
+
+export async function fetchLyricsBySongId(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  trackId: string
+): Promise<{ plain: string | null; synced: string | null } | null> {
+  try {
+    const params = buildAuthParams(username, credential);
+    params.set("id", trackId);
+    const res = await apiPost(baseUrl, "getLyricsBySongId", params);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        lyricsList?: {
+          structuredLyrics?: Array<{
+            synced: boolean;
+            line: Array<{ start?: number; value: string }>;
+          }>;
+        };
+      };
+    };
+    const sr = data["subsonic-response"];
+    if (sr.status !== "ok" || !sr.lyricsList?.structuredLyrics?.length) return null;
+
+    const lyrics = sr.lyricsList.structuredLyrics;
+    const syncedEntry = lyrics.find((l) => l.synced);
+    const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
+
+    const synced = syncedEntry
+      ? syncedEntry.line.map((l) =>
+          l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
+        ).join("\n")
+      : null;
+
+    const plain = plainEntry
+      ? plainEntry.line.map((l) => l.value).join("\n")
+      : null;
+
+    return { plain, synced };
+  } catch {
+    return null;
+  }
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,

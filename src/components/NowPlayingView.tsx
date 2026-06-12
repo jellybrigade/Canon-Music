@@ -175,7 +175,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.artist ?? null,
     currentTrack?.id ?? null
   );
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null, lyricsOverride);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);

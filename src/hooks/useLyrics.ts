@@ -2,6 +2,9 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
+import { fetchLyricsBySongId } from "../lib/navidrome";
+import { stripServerPrefix } from "../lib/ids";
+import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
 
 export interface LyricsOverride {
@@ -19,6 +22,7 @@ interface LyricsResult {
 export function useLyrics(
   track: CurrentTrack | null,
   override?: LyricsOverride | null,
+  serverWithCredential?: ServerWithCredential | null,
 ): LyricsResult {
   const queryClient = useQueryClient();
   const overrideArtist = override?.artist ?? null;
@@ -49,6 +53,21 @@ export function useLyrics(
       );
       if (cached.length > 0) {
         return { plain: cached[0]!.plain, synced: cached[0]!.synced };
+      }
+
+      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib
+      if (serverWithCredential) {
+        const { server, credential } = serverWithCredential;
+        const navTrackId = stripServerPrefix(track.id, server.id);
+        const serverLyrics = await fetchLyricsBySongId(server.url, server.username, credential, navTrackId);
+        if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
+          await db.execute(
+            `INSERT OR REPLACE INTO lyrics (track_id, plain, synced, source, fetched_at)
+             VALUES (?, ?, ?, 'navidrome', datetime('now'))`,
+            [track.id, serverLyrics.plain, serverLyrics.synced]
+          );
+          return serverLyrics;
+        }
       }
 
       if (!track.artist || !track.album) return { plain: null, synced: null };

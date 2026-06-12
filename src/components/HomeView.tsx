@@ -285,11 +285,9 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
           )}
         </div>
         {genres && genres.length > 0 && (
-          <div className="home-spotlight__genres">
-            {genres.map(g => (
-              <span key={g.name} className="home-spotlight__genre-chip">{g.name}</span>
-            ))}
-          </div>
+          <p className="home-spotlight__genres">
+            {genres.map(g => g.name).join(" · ")}
+          </p>
         )}
         <div className="home-spotlight__actions">
           <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
