@@ -22,7 +22,7 @@ export interface ChangelogEntry {
   created_at: string;
 }
 
-const BUNDLED_KEYS = new Set((canonTreeData.nodes as TreeNode[]).map((n) => n.canonical_key));
+const BUNDLED_KEYS = new Set((canonTreeData.nodes as TreeNode[]).map((n) => canonicalKey(n.name)));
 
 export function isSuperseeded(node: UserTreeNode): boolean {
   return BUNDLED_KEYS.has(node.canonical_key);

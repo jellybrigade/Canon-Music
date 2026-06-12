@@ -18,6 +18,11 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
     const listeners = settingListeners.get(key)!;
     listeners.add(setValue);
 
+    if (settingCache.has(key)) {
+      return () => { listeners.delete(setValue); };
+    }
+
+    let cancelled = false;
     getDb()
       .then((db) =>
         db.select<{ value: string }[]>(
@@ -26,25 +31,28 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
         )
       )
       .then((rows) => {
-        if (rows[0]) {
+        if (!cancelled && rows[0]) {
           settingCache.set(key, rows[0].value);
           setValue(rows[0].value);
         }
       })
       .catch((e) => console.error("Failed to load setting:", key, e));
 
-    return () => { listeners.delete(setValue); };
+    return () => {
+      cancelled = true;
+      listeners.delete(setValue);
+    };
   }, [key]);
 
   const update = useCallback(
     async (newValue: string) => {
-      settingCache.set(key, newValue);
-      settingListeners.get(key)?.forEach((fn) => fn(newValue));
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
         [key, newValue]
       );
+      settingCache.set(key, newValue);
+      settingListeners.get(key)?.forEach((fn) => fn(newValue));
     },
     [key]
   );

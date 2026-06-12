@@ -41,9 +41,11 @@ export const BUILTIN_PATTERNS: BuiltinPattern[] = [
   { id: "edition-import",      label: "Import",               pattern: /^import$/i },
 ];
 
+const TRAILING_PAREN_RE = /^(.*?)\s*\(([^)]+)\)\s*$/;
+
 /** Extracts the text inside trailing parens, e.g. "Album (Deluxe)" → "Deluxe". Returns null if no parens suffix. */
 export function extractSuffix(name: string): string | null {
-  const m = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  const m = name.match(TRAILING_PAREN_RE);
   if (!m || !m[1]!.trim()) return null;
   return m[2]!.trim();
 }
@@ -53,7 +55,7 @@ export function stripAlbumSuffix(
   userAllowlist: string[] = [],
   disabledBuiltinIds: string[] = [],
 ): string {
-  const m = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  const m = name.match(TRAILING_PAREN_RE);
   if (!m) return name;
   const inner = m[2]!.trim();
   const stripped = m[1]!.trim();

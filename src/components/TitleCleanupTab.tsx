@@ -7,15 +7,15 @@ import {
 } from "../hooks/useAlbumDisplayName";
 import { useAlbums } from "../hooks/useAlbums";
 
-function AlbumList({ albums }: { albums: { name: string; artist: string | null }[] }) {
+function AlbumList({ albums }: { albums: { id: string; name: string; artist: string | null }[] }) {
   return (
     <ul className="title-cleanup-album-list">
-      {albums.map((a) => <li key={`${a.artist}-${a.name}`}>{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</li>)}
+      {albums.map((a) => <li key={a.id}>{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</li>)}
     </ul>
   );
 }
 
-function CountBtn({ albums, open, onToggle }: { albums: { name: string; artist: string | null }[]; open: boolean; onToggle: () => void }) {
+function CountBtn({ albums, open, onToggle }: { albums: { id: string; name: string; artist: string | null }[]; open: boolean; onToggle: () => void }) {
   if (albums.length === 0) {
     return <span className="title-cleanup-count title-cleanup-count--zero">0 albums</span>;
   }
@@ -37,7 +37,7 @@ function BuiltinRow({
 }: {
   label: string;
   disabled: boolean;
-  affectedAlbums: { name: string; artist: string | null }[];
+  affectedAlbums: { id: string; name: string; artist: string | null }[];
   onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -65,7 +65,7 @@ function CustomRow({
   onEdit,
 }: {
   suffix: string;
-  affectedAlbums: { name: string; artist: string | null }[];
+  affectedAlbums: { id: string; name: string; artist: string | null }[];
   onRemove: () => void;
   onEdit: (next: string) => void;
 }) {
@@ -127,28 +127,32 @@ export function TitleCleanupTab() {
   const { data: allAlbums = [] } = useAlbums();
 
   const suffixAlbumMap = useMemo(() => {
-    const map = new Map<string, { name: string; artist: string | null }[]>();
+    const map = new Map<string, { id: string; name: string; artist: string | null }[]>();
     for (const album of allAlbums) {
       const suffix = extractSuffix(album.name);
       if (!suffix) continue;
       const key = suffix.toLowerCase();
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push({ name: album.name, artist: album.artist });
+      map.get(key)!.push({ id: album.id, name: album.name, artist: album.artist });
     }
     return map;
   }, [allAlbums]);
 
-  function customMatches(suffix: string): { name: string; artist: string | null }[] {
+  function customMatches(suffix: string): { id: string; name: string; artist: string | null }[] {
     return suffixAlbumMap.get(suffix.toLowerCase()) ?? [];
   }
 
-  function builtinMatches(pattern: RegExp): { name: string; artist: string | null }[] {
-    const results: { name: string; artist: string | null }[] = [];
-    for (const [suffix, albums] of suffixAlbumMap) {
-      if (pattern.test(suffix)) results.push(...albums);
+  const builtinMatchesMap = useMemo(() => {
+    const result = new Map<string, { id: string; name: string; artist: string | null }[]>();
+    for (const p of BUILTIN_PATTERNS) {
+      const matches: { id: string; name: string; artist: string | null }[] = [];
+      for (const [suffix, albums] of suffixAlbumMap) {
+        if (p.pattern.test(suffix)) matches.push(...albums);
+      }
+      result.set(p.id, matches);
     }
-    return results;
-  }
+    return result;
+  }, [suffixAlbumMap]);
 
   function handleAdd() {
     const trimmed = inputValue.trim();
@@ -215,7 +219,7 @@ export function TitleCleanupTab() {
                 key={p.id}
                 label={p.label}
                 disabled={disabledIds.includes(p.id)}
-                affectedAlbums={builtinMatches(p.pattern)}
+                affectedAlbums={builtinMatchesMap.get(p.id) ?? []}
                 onToggle={() => void (disabledIds.includes(p.id) ? enableBuiltin(p.id) : disableBuiltin(p.id))}
               />
             ))}
