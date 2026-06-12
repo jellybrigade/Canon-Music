@@ -1,0 +1,213 @@
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { authenticate } from "../../lib/navidrome";
+import type { NavidromeCredential } from "../../lib/navidrome";
+import { keychain } from "../../keychain";
+import { getDb } from "../../db";
+import type { ServerWithCredential } from "../../hooks/useServer";
+
+type TestState = "idle" | "testing" | "ok" | "error";
+
+interface Props {
+  serverWithCredential: ServerWithCredential | undefined;
+  onRemoveServer: () => void;
+  searchQuery: string;
+}
+
+export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }: Props) {
+  const { server } = serverWithCredential ?? {};
+  const queryClient = useQueryClient();
+
+  const [serverEditing, setServerEditing] = useState(false);
+  const [editUrl, setEditUrl] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editUsername, setEditUsername] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [serverTestState, setServerTestState] = useState<TestState>("idle");
+  const [serverTestError, setServerTestError] = useState("");
+  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{ url: string; username: string; password: string } | null>(null);
+  const [serverTestedCredential, setServerTestedCredential] = useState<NavidromeCredential | null>(null);
+  const [serverSaving, setServerSaving] = useState(false);
+  const [serverSaveError, setServerSaveError] = useState("");
+  const [removeConfirm, setRemoveConfirm] = useState(false);
+
+  const fl = searchQuery.toLowerCase().trim();
+  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+
+  function beginEditServer() {
+    if (!server) return;
+    setEditUrl(server.url);
+    setEditDisplayName(server.display_name);
+    setEditUsername(server.username);
+    setEditPassword("");
+    setServerTestState("idle");
+    setServerTestError("");
+    setServerTestedSnapshot(null);
+    setServerTestedCredential(null);
+    setServerSaveError("");
+    setServerEditing(true);
+  }
+
+  function handleEditCredentialChange(key: "url" | "username" | "password", v: string) {
+    if (key === "url") setEditUrl(v);
+    else if (key === "username") setEditUsername(v);
+    else setEditPassword(v);
+    setServerTestState("idle");
+    setServerTestedSnapshot(null);
+    setServerTestedCredential(null);
+  }
+
+  async function handleServerTest() {
+    setServerTestState("testing");
+    setServerTestError("");
+    try {
+      const cred = await authenticate(editUrl, editUsername, editPassword);
+      setServerTestState("ok");
+      setServerTestedSnapshot({ url: editUrl, username: editUsername, password: editPassword });
+      setServerTestedCredential(cred);
+    } catch (err) {
+      setServerTestState("error");
+      setServerTestError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  const serverSnapshotMatch =
+    serverTestedSnapshot !== null &&
+    serverTestedSnapshot.url === editUrl &&
+    serverTestedSnapshot.username === editUsername &&
+    serverTestedSnapshot.password === editPassword;
+
+  const canSaveServer =
+    serverTestState === "ok" &&
+    serverSnapshotMatch &&
+    editDisplayName.trim() !== "" &&
+    !serverSaving;
+
+  async function handleSaveServer() {
+    if (!server || !serverTestedCredential) return;
+    setServerSaving(true);
+    setServerSaveError("");
+    try {
+      await keychain.set(`canon.server.${server.id}`, "credential", JSON.stringify(serverTestedCredential));
+      const db = await getDb();
+      await db.execute(
+        "UPDATE servers SET url=?, display_name=?, username=? WHERE id=?",
+        [editUrl.trim().replace(/\/+$/, ""), editDisplayName.trim(), editUsername.trim(), server.id]
+      );
+      await queryClient.invalidateQueries({ queryKey: ["servers"] });
+      await queryClient.invalidateQueries({ queryKey: ["server-credential", server.id] });
+      setServerEditing(false);
+    } catch (err) {
+      setServerSaveError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setServerSaving(false);
+    }
+  }
+
+  async function handleRemoveServer() {
+    if (!server) return;
+    const db = await getDb();
+    await db.execute("DELETE FROM servers WHERE id=?", [server.id]);
+    try {
+      await keychain.delete(`canon.server.${server.id}`, "credential");
+    } catch { /* not fatal */ }
+    onRemoveServer();
+  }
+
+  if (!show("server", "url", "username", "password", "display name", "connection")) return null;
+
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section-title">Server</h3>
+      {server ? (
+        <>
+          {!serverEditing ? (
+            <div className="settings-server-card">
+              <div className="settings-server-info">
+                <span className="settings-server-name">{server.display_name}</span>
+                <span className="settings-server-meta">{server.url} · {server.username}</span>
+              </div>
+              <button className="settings-btn" onClick={beginEditServer}>Edit</button>
+            </div>
+          ) : (
+            <div className="settings-server-edit">
+              <label className="settings-field">
+                <span>Server URL</span>
+                <input
+                  type="url"
+                  value={editUrl}
+                  onChange={(e) => handleEditCredentialChange("url", e.target.value)}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Display name</span>
+                <input
+                  type="text"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Username</span>
+                <input
+                  type="text"
+                  autoComplete="username"
+                  value={editUsername}
+                  onChange={(e) => handleEditCredentialChange("username", e.target.value)}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Password</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  placeholder="Enter password to re-test"
+                  value={editPassword}
+                  onChange={(e) => handleEditCredentialChange("password", e.target.value)}
+                />
+              </label>
+              {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
+              {serverTestState === "ok" && serverSnapshotMatch && <p className="settings-success">Connection successful.</p>}
+              {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
+              <div className="settings-field--row">
+                <button className="settings-btn" onClick={() => setServerEditing(false)}>Cancel</button>
+                <button
+                  className="settings-btn"
+                  onClick={() => { void handleServerTest(); }}
+                  disabled={!editUrl.trim() || !editUsername.trim() || !editPassword.trim() || serverTestState === "testing"}
+                >
+                  {serverTestState === "testing" ? "Testing…" : "Test connection"}
+                </button>
+                <button
+                  className="settings-btn primary"
+                  onClick={() => { void handleSaveServer(); }}
+                  disabled={!canSaveServer}
+                >
+                  {serverSaving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="settings-remove-server">
+            {!removeConfirm ? (
+              <button className="settings-btn settings-btn--danger" onClick={() => setRemoveConfirm(true)}>
+                Remove server
+              </button>
+            ) : (
+              <div className="settings-remove-confirm">
+                <span className="settings-error">Remove server and return to setup?</span>
+                <button className="settings-btn" onClick={() => setRemoveConfirm(false)}>Cancel</button>
+                <button className="settings-btn settings-btn--danger" onClick={() => { void handleRemoveServer(); }}>
+                  Remove
+                </button>
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="settings-section-desc">No server configured.</p>
+      )}
+    </section>
+  );
+}

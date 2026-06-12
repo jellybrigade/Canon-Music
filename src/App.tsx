@@ -25,7 +25,7 @@ import { useArtists } from "./hooks/useArtists";
 import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
 import { useSearch } from "./hooks/useSearch";
-import { useSetting } from "./hooks/useSetting";
+import { useBoolSetting, useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
 import { useTagVocab } from "./hooks/useTagMappings";
@@ -102,8 +102,7 @@ export default function App() {
     peekBack,
   } = useAppNavigation();
 
-  const [rawSidebarExpanded, setSidebarExpanded] = useSetting("sidebar.expanded", "false");
-  const sidebarExpanded = rawSidebarExpanded === "true";
+  const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
   const { liveWidth: sidebarLiveWidth, savedWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useSidebarResize({
     direction: "ltr",
     min: 52,
@@ -111,7 +110,7 @@ export default function App() {
     saveMin: 130,
     settingKey: "sidebar.width",
     defaultWidth: 180,
-    onCollapse: () => void setSidebarExpanded("false"),
+    onCollapse: () => void setSidebarExpanded(false),
   });
 
   const queryClient = useQueryClient();
@@ -137,7 +136,7 @@ export default function App() {
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
-  const [hideTagBadge] = useSetting("ui.hide_tag_badge", "false");
+  const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
 
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
@@ -324,7 +323,7 @@ export default function App() {
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
     { id: "genres", label: "Genres", icon: <Layers size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
-    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge === "true" ? undefined : unmappedCount) || undefined },
+    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
   ];
 
@@ -741,6 +740,8 @@ export default function App() {
               onRemoveServer={() => {
                 queryClient.setQueryData(["servers"], []);
               }}
+              hideTagBadge={hideTagBadge}
+              setHideTagBadge={setHideTagBadge}
             />
           </main>
         );
@@ -786,7 +787,7 @@ export default function App() {
               <button
                 className="sidebar-expand-btn"
                 title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-                onClick={() => void setSidebarExpanded(sidebarExpanded ? "false" : "true")}
+                onClick={() => void setSidebarExpanded(!sidebarExpanded)}
               >
                 {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
               </button>

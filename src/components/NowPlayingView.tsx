@@ -14,7 +14,7 @@ import { RadioChip } from "./RadioChip";
 import { stripServerPrefix } from "../lib/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
-import { useSetting } from "../hooks/useSetting";
+import { useBoolSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
@@ -186,8 +186,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const [showResyncPill, setShowResyncPill] = useState(false);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
-  const [showWaveform] = useSetting("player.show_waveform", "false");
-  const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
+  const [showWaveform] = useBoolSetting("player.show_waveform", false);
+  const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
 
   // Downsample to 80 bars for the overlay — reduces DOM nodes from 200 and cuts jank.
   // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.

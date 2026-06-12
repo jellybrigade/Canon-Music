@@ -6,7 +6,7 @@ import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
-import { useSetting } from "../hooks/useSetting";
+import { useBoolSetting } from "../hooks/useSetting";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -36,7 +36,7 @@ interface Props {
 export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
-  const [mbAutoIdentify] = useSetting("mb.auto_identify", "false");
+  const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
@@ -219,7 +219,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                       />
                     </button>
 
-                    {mbAutoIdentify === "true" && failedLookupSet.has(album.id) && (
+                    {mbAutoIdentify && failedLookupSet.has(album.id) && (
                       <div className="album-unidentified-badge" title="Couldn't match on MusicBrainz — click to identify manually">
                         <CircleHelp size={13} />
                       </div>

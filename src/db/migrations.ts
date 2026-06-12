@@ -444,7 +444,7 @@ export const migrations: Migration[] = [
     `,
   },
   {
-    version: 21,
+    version: 28,
     sql: `ALTER TABLE albums ADD COLUMN release_type TEXT;`,
   },
 ];

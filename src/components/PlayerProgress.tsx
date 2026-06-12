@@ -1,6 +1,6 @@
 import React, { useMemo, useRef } from "react";
 import { usePlayerStore } from "../store/player";
-import { useSetting } from "../hooks/useSetting";
+import { useBoolSetting } from "../hooks/useSetting";
 import { WaveformBars } from "./WaveformBars";
 
 const SECONDS_PER_MINUTE = 60;
@@ -17,7 +17,7 @@ export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
   const seek = usePlayerStore((s) => s.seek);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
-  const [showWaveform] = useSetting("player.show_waveform", "false");
+  const [showWaveform] = useBoolSetting("player.show_waveform", false);
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
@@ -40,7 +40,7 @@ export function PlayerProgress() {
     }
   }
 
-  const useWaveform = showWaveform === "true" && waveformPeaks && waveformPeaks.length > 0;
+  const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
   const filledCount = useMemo(
     () => (waveformPeaks ? Math.round(progress * waveformPeaks.length) : 0),
     [progress, waveformPeaks]
