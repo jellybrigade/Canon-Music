@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -227,6 +228,7 @@ interface SpotlightProps {
 
 function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
+  const albumDisplayName = useAlbumDisplayName();
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const { data: genres } = useQuery({
     queryKey: ["spotlight-genres", pick.album.id],
@@ -271,7 +273,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
       <div className="home-spotlight__body">
         <div className="home-spotlight__top">
           <span className="home-spotlight__kicker">{pick.kicker}</span>
-          <h2 className="home-spotlight__title">{pick.album.name}</h2>
+          <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
           {(pick.album.artist || pick.album.year) && (
             <p className="home-spotlight__meta">
               {pick.album.artist && onSelectArtist ? (
@@ -500,6 +502,7 @@ const KICKER_COLORS: Record<string, string> = {
 
 function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
+  const albumDisplayName = useAlbumDisplayName();
   const [showCustomize, setShowCustomize] = useState(false);
   const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const customizeButtonRef = useRef<HTMLButtonElement>(null);
@@ -597,7 +600,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                       <div className="suggestion-card__art-wrap">
                         <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                         <div className="album-overlay">
-                          <span className="album-name">{album.name}</span>
+                          <span className="album-name">{albumDisplayName(album.name)}</span>
                           {album.artist && <span className="album-artist">{album.artist}</span>}
                         </div>
                         <button

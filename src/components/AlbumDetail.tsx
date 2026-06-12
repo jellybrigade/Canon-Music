@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
@@ -58,6 +59,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
+  const albumDisplayName = useAlbumDisplayName();
+  const [suffixAllowlist, addToSuffixAllowlist] = useAlbumSuffixAllowlist();
+  const [showFullTitle, setShowFullTitle] = useState(false);
+  const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
+  const strippingEnabled = !showAlbumSuffixes;
+  const detectedSuffix = extractSuffix(album.name);
+  const suffixWasStripped = albumDisplayName(album.name) !== album.name;
+  const suffixCanBeAdded = strippingEnabled && detectedSuffix !== null && !suffixWasStripped &&
+    !suffixAllowlist.some((s) => s.toLowerCase() === detectedSuffix.toLowerCase());
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
@@ -364,7 +374,29 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
             <div className="album-detail-art album-art--placeholder" />
           )}
           <div className="album-detail-meta">
-            <h2 className="album-detail-title">{album.name}</h2>
+            <div className="album-detail-title-row">
+              <h2 className="album-detail-title">
+                {showFullTitle ? album.name : albumDisplayName(album.name)}
+              </h2>
+              {suffixWasStripped && (
+                <button
+                  className="album-suffix-toggle-btn"
+                  onClick={() => setShowFullTitle((v) => !v)}
+                  title={showFullTitle ? "Hide full title" : "Show full title"}
+                >
+                  {showFullTitle ? "Hide" : "···"}
+                </button>
+              )}
+            </div>
+            {suffixCanBeAdded && detectedSuffix && (
+              <button
+                className="album-suffix-add-btn"
+                onClick={() => void addToSuffixAllowlist(detectedSuffix)}
+                title="Strips this parenthetical from all albums. Manage in Tags › Title Cleanup."
+              >
+                + Strip "({detectedSuffix})" from all albums
+              </button>
+            )}
             {album.artist && (
               onSelectArtist ? (
                 <span

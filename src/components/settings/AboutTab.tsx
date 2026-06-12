@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { checkForUpdate, installAndRestart } from "../../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { useBoolSetting, useSetting } from "../../hooks/useSetting";
+import { SettingRow } from "./SettingRow";
 
 interface Props {
   searchQuery: string;
@@ -12,6 +14,8 @@ export function AboutTab({ searchQuery }: Props) {
   const [updateCheckState, setUpdateCheckState] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">("idle");
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
+  const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
 
   useEffect(() => { void getVersion().then(setAppVersion); }, []);
 
@@ -27,6 +31,26 @@ export function AboutTab({ searchQuery }: Props) {
         <span className="settings-diag-label">Version</span>
         <span className="settings-diag-value">{appVersion ?? "…"}</span>
       </div>
+      <SettingRow title="Auto check for updates">
+        <input
+          type="checkbox"
+          checked={autoCheck}
+          onChange={(e) => void setAutoCheck(e.target.checked)}
+        />
+      </SettingRow>
+      <SettingRow title="Check interval" description="How often to check in the background.">
+        <select
+          value={intervalMin}
+          disabled={!autoCheck}
+          onChange={(e) => void setIntervalMin(e.target.value)}
+        >
+          <option value="10">Every 10 minutes</option>
+          <option value="30">Every 30 minutes</option>
+          <option value="60">Every hour</option>
+          <option value="360">Every 6 hours</option>
+          <option value="1440">Every day</option>
+        </select>
+      </SettingRow>
       <div className="settings-field settings-field--row" style={{ marginTop: "0.75rem" }}>
         {updateCheckState !== "available" ? (
           <button

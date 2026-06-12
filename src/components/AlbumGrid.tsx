@@ -1,4 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
@@ -44,6 +45,7 @@ interface CardProps {
 }
 
 const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
+  const albumDisplayName = useAlbumDisplayName();
   return (
     <div
       className="album-card"
@@ -71,7 +73,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
         </div>
       )}
       <div className="album-overlay">
-        <span className="album-name">{album.name}</span>
+        <span className="album-name">{albumDisplayName(album.name)}</span>
         {album.artist && <span className="album-artist">{album.artist}</span>}
       </div>
     </div>

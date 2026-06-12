@@ -57,6 +57,9 @@ export async function getCanonTree(): Promise<CanonTree> {
   });
 
   const nodes = [...bundled, ...userNodes];
+  // Recompute canonical_key from node.name so it always reflects the current
+  // canonicalKey() implementation, regardless of what's stored in JSON or DB.
+  for (const n of nodes) n.canonical_key = canonicalKey(n.name);
   const byKey = new Map<string, TreeNode>();
   const byId = new Map<string, TreeNode>();
   for (const n of nodes) {
@@ -87,6 +90,7 @@ export function canonicalKey(name: string): string {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
+    .replace(/\s*&\s*/g, " and ")
     .replace(/[^a-z0-9 ]/g, "")
     .replace(/\s+/g, " ")
     .trim();

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Music, User } from "lucide-react";
 import type { SearchAlbum, SearchTrack, SearchArtist } from "../hooks/useSearch";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -37,6 +38,7 @@ export function SearchResults({
   onPlayTrack,
 }: Props) {
   const { server, credential } = serverWithCredential;
+  const albumDisplayName = useAlbumDisplayName();
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllTracks, setShowAllTracks] = useState(false);
@@ -118,7 +120,7 @@ export function SearchResults({
                   )}
                 </div>
                 <div className="search-album-info">
-                  <span className="search-item-primary">{album.name}</span>
+                  <span className="search-item-primary">{albumDisplayName(album.name)}</span>
                   {album.artist && (
                     <span className="search-item-secondary">{album.artist}</span>
                   )}

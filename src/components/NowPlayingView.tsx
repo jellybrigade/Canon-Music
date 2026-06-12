@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
@@ -153,6 +154,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     addToQueue, playNext, audioFormat,
   } = usePlayerStore();
   const { lovedTrackIds, toggleTrackLove } = useLoved();
+  const albumDisplayName = useAlbumDisplayName();
   const progressBarRef = useRef<HTMLDivElement>(null);
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
@@ -618,7 +620,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                               ? <img src={thumbUrl} alt={album.name} className="now-playing-album-chip-art" />
                               : <div className="now-playing-album-chip-art now-playing-album-chip-art--placeholder" />
                             }
-                            <span className="now-playing-album-chip-name">{album.name}</span>
+                            <span className="now-playing-album-chip-name">{albumDisplayName(album.name)}</span>
                             {album.year && <span className="now-playing-album-chip-year">{album.year}</span>}
                           </button>
                         );
