@@ -7,16 +7,16 @@ import {
 } from "../hooks/useAlbumDisplayName";
 import { useAlbums } from "../hooks/useAlbums";
 
-function AlbumList({ names }: { names: string[] }) {
+function AlbumList({ albums }: { albums: { name: string; artist: string | null }[] }) {
   return (
     <ul className="title-cleanup-album-list">
-      {names.map((n) => <li key={n}>{n}</li>)}
+      {albums.map((a) => <li key={`${a.artist}-${a.name}`}>{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</li>)}
     </ul>
   );
 }
 
-function CountBtn({ names, open, onToggle }: { names: string[]; open: boolean; onToggle: () => void }) {
-  if (names.length === 0) {
+function CountBtn({ albums, open, onToggle }: { albums: { name: string; artist: string | null }[]; open: boolean; onToggle: () => void }) {
+  if (albums.length === 0) {
     return <span className="title-cleanup-count title-cleanup-count--zero">0 albums</span>;
   }
   return (
@@ -24,7 +24,7 @@ function CountBtn({ names, open, onToggle }: { names: string[]; open: boolean; o
       className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`}
       onClick={onToggle}
     >
-      {names.length} album{names.length !== 1 ? "s" : ""}
+      {albums.length} album{albums.length !== 1 ? "s" : ""}
     </button>
   );
 }
@@ -32,12 +32,12 @@ function CountBtn({ names, open, onToggle }: { names: string[]; open: boolean; o
 function BuiltinRow({
   label,
   disabled,
-  affectedNames,
+  affectedAlbums,
   onToggle,
 }: {
   label: string;
   disabled: boolean;
-  affectedNames: string[];
+  affectedAlbums: { name: string; artist: string | null }[];
   onToggle: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -45,7 +45,7 @@ function BuiltinRow({
     <li className={`title-cleanup-item${disabled ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
         <span className="title-cleanup-builtin-label">{label}</span>
-        <CountBtn names={affectedNames} open={open} onToggle={() => setOpen((v) => !v)} />
+        <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
         <button
           className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
           onClick={onToggle}
@@ -53,19 +53,19 @@ function BuiltinRow({
           {disabled ? "Enable" : "Disable"}
         </button>
       </div>
-      {open && <AlbumList names={affectedNames} />}
+      {open && <AlbumList albums={affectedAlbums} />}
     </li>
   );
 }
 
 function CustomRow({
   suffix,
-  affectedNames,
+  affectedAlbums,
   onRemove,
   onEdit,
 }: {
   suffix: string;
-  affectedNames: string[];
+  affectedAlbums: { name: string; artist: string | null }[];
   onRemove: () => void;
   onEdit: (next: string) => void;
 }) {
@@ -106,7 +106,7 @@ function CustomRow({
     <li className="title-cleanup-item">
       <div className="title-cleanup-row">
         <span className="title-cleanup-suffix">({suffix})</span>
-        <CountBtn names={affectedNames} open={open} onToggle={() => setOpen((v) => !v)} />
+        <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
         <button className="title-cleanup-action title-cleanup-action--muted" onClick={() => { setDraft(suffix); setEditing(true); }}>
           Edit
         </button>
@@ -114,7 +114,7 @@ function CustomRow({
           ×
         </button>
       </div>
-      {open && <AlbumList names={affectedNames} />}
+      {open && <AlbumList albums={affectedAlbums} />}
     </li>
   );
 }
@@ -127,25 +127,25 @@ export function TitleCleanupTab() {
   const { data: allAlbums = [] } = useAlbums();
 
   const suffixAlbumMap = useMemo(() => {
-    const map = new Map<string, string[]>();
+    const map = new Map<string, { name: string; artist: string | null }[]>();
     for (const album of allAlbums) {
       const suffix = extractSuffix(album.name);
       if (!suffix) continue;
       const key = suffix.toLowerCase();
       if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(album.name);
+      map.get(key)!.push({ name: album.name, artist: album.artist });
     }
     return map;
   }, [allAlbums]);
 
-  function customMatches(suffix: string): string[] {
+  function customMatches(suffix: string): { name: string; artist: string | null }[] {
     return suffixAlbumMap.get(suffix.toLowerCase()) ?? [];
   }
 
-  function builtinMatches(pattern: RegExp): string[] {
-    const results: string[] = [];
-    for (const [suffix, names] of suffixAlbumMap) {
-      if (pattern.test(suffix)) results.push(...names);
+  function builtinMatches(pattern: RegExp): { name: string; artist: string | null }[] {
+    const results: { name: string; artist: string | null }[] = [];
+    for (const [suffix, albums] of suffixAlbumMap) {
+      if (pattern.test(suffix)) results.push(...albums);
     }
     return results;
   }
@@ -198,7 +198,7 @@ export function TitleCleanupTab() {
                 <CustomRow
                   key={suffix}
                   suffix={suffix}
-                  affectedNames={customMatches(suffix)}
+                  affectedAlbums={customMatches(suffix)}
                   onRemove={() => void removeSuffix(suffix)}
                   onEdit={(next) => void editSuffix(suffix, next)}
                 />
@@ -215,7 +215,7 @@ export function TitleCleanupTab() {
                 key={p.id}
                 label={p.label}
                 disabled={disabledIds.includes(p.id)}
-                affectedNames={builtinMatches(p.pattern)}
+                affectedAlbums={builtinMatches(p.pattern)}
                 onToggle={() => void (disabledIds.includes(p.id) ? enableBuiltin(p.id) : disableBuiltin(p.id))}
               />
             ))}
