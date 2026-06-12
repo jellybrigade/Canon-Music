@@ -16,9 +16,10 @@ import type { NodeFormState } from "./TagTreeTab";
 import { TagReviewTab } from "./TagReviewTab";
 import { TagDecidedTab } from "./TagDecidedTab";
 import { TagTreeTab } from "./TagTreeTab";
+import { TitleCleanupTab } from "./TitleCleanupTab";
 import "./TagsView.css";
 
-type TabId = "review" | "decided" | "tree";
+type TabId = "review" | "decided" | "tree" | "title-cleanup";
 
 interface PendingCreate {
   name: string;
@@ -83,6 +84,7 @@ export function TagsView() {
     { id: "review", label: "Review", badge: reviewCount || undefined },
     { id: "decided", label: "Decided", badge: decidedCount || undefined },
     { id: "tree", label: "Tree", badge: supersededCount || undefined },
+    { id: "title-cleanup", label: "Title Cleanup" },
   ];
 
   function openCreateModal(name: string, rawValue?: string, rawKind?: TagKind) {
@@ -182,6 +184,7 @@ export function TagsView() {
           />
         )}
         {tab === "decided" && <TagDecidedTab treeNodes={treeNodes} />}
+        {tab === "title-cleanup" && <TitleCleanupTab />}
         {tab === "tree" && (
           <TagTreeTab
             treeNodes={treeNodes}

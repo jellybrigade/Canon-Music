@@ -1,4 +1,5 @@
-import { useBoolSetting } from "./useSetting";
+import { useCallback, useMemo } from "react";
+import { useBoolSetting, useSetting } from "./useSetting";
 
 /**
  * Known edition/quality suffixes that are noise, not title identity.
@@ -46,17 +47,43 @@ const STRIP_PATTERNS: RegExp[] = [
   /^import$/i,
 ];
 
-export function stripAlbumSuffix(name: string): string {
+/** Extracts the text inside trailing parens, e.g. "Album (Deluxe)" → "Deluxe". Returns null if no parens suffix. */
+export function extractSuffix(name: string): string | null {
+  const m = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  if (!m || !m[1]!.trim()) return null;
+  return m[2]!.trim();
+}
+
+export function stripAlbumSuffix(name: string, userAllowlist: string[] = []): string {
   const m = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
   if (!m) return name;
   const inner = m[2]!.trim();
   const stripped = m[1]!.trim();
-  if (stripped.length === 0) return name; // don't strip if nothing remains
-  return STRIP_PATTERNS.some((re) => re.test(inner)) ? stripped : name;
+  if (stripped.length === 0) return name;
+  const matchesBuiltin = STRIP_PATTERNS.some((re) => re.test(inner));
+  const matchesUser = userAllowlist.some((s) => s.toLowerCase() === inner.toLowerCase());
+  return (matchesBuiltin || matchesUser) ? stripped : name;
+}
+
+/** Manages the user-defined suffix allowlist stored in settings. */
+export function useAlbumSuffixAllowlist(): [string[], (s: string) => Promise<void>, (s: string) => Promise<void>] {
+  const [raw, setRaw] = useSetting("display.album_suffix_allowlist", "[]");
+  const list = useMemo(() => {
+    try { return JSON.parse(raw) as string[]; } catch { return []; }
+  }, [raw]);
+  const add = useCallback(async (suffix: string) => {
+    if (list.some((s) => s.toLowerCase() === suffix.toLowerCase())) return;
+    await setRaw(JSON.stringify([...list, suffix]));
+  }, [list, setRaw]);
+  const remove = useCallback(async (suffix: string) => {
+    await setRaw(JSON.stringify(list.filter((s) => s.toLowerCase() !== suffix.toLowerCase())));
+  }, [list, setRaw]);
+  return [list, add, remove];
 }
 
 /** Returns a display transform: identity when suffixes shown, stripper when hidden. */
 export function useAlbumDisplayName(): (name: string) => string {
   const [show] = useBoolSetting("display.show_album_suffixes", true);
-  return show ? (n) => n : stripAlbumSuffix;
+  const [userAllowlist] = useAlbumSuffixAllowlist();
+  return show ? (n) => n : (n) => stripAlbumSuffix(n, userAllowlist);
 }
