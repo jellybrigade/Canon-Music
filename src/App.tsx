@@ -231,6 +231,22 @@ export default function App() {
     return () => { cancelled = true; };
   }, [currentTrack?.coverArtUrl, setAccentColor]);
 
+  useEffect(() => {
+    const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+    if (!link) return;
+    if (currentTrack?.coverArtUrl) {
+      link.href = currentTrack.coverArtUrl;
+    } else {
+      link.href = "/icon.svg";
+    }
+  }, [currentTrack?.coverArtUrl]);
+
+  useEffect(() => {
+    if (!currentTrack) { document.title = "Canon"; return; }
+    const parts = [currentTrack.artist, currentTrack.title].filter(Boolean);
+    document.title = parts.length > 0 ? `${parts.join(" – ")} · Canon` : "Canon";
+  }, [currentTrack?.title, currentTrack?.artist]);
+
   async function handlePlayTrack(trackId: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
