@@ -7,25 +7,25 @@ import {
 } from "../hooks/useAlbumDisplayName";
 import { useAlbums } from "../hooks/useAlbums";
 
-function AlbumCount({ names }: { names: string[] }) {
-  const [open, setOpen] = useState(false);
+function AlbumList({ names }: { names: string[] }) {
+  return (
+    <ul className="title-cleanup-album-list">
+      {names.map((n) => <li key={n}>{n}</li>)}
+    </ul>
+  );
+}
+
+function CountBtn({ names, open, onToggle }: { names: string[]; open: boolean; onToggle: () => void }) {
   if (names.length === 0) {
     return <span className="title-cleanup-count title-cleanup-count--zero">0 albums</span>;
   }
   return (
-    <>
-      <button
-        className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {names.length} album{names.length !== 1 ? "s" : ""}
-      </button>
-      {open && (
-        <ul className="title-cleanup-album-list">
-          {names.map((n) => <li key={n}>{n}</li>)}
-        </ul>
-      )}
-    </>
+    <button
+      className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`}
+      onClick={onToggle}
+    >
+      {names.length} album{names.length !== 1 ? "s" : ""}
+    </button>
   );
 }
 
@@ -40,11 +40,12 @@ function BuiltinRow({
   affectedNames: string[];
   onToggle: () => void;
 }) {
+  const [open, setOpen] = useState(false);
   return (
     <li className={`title-cleanup-item${disabled ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
         <span className="title-cleanup-builtin-label">{label}</span>
-        <AlbumCount names={affectedNames} />
+        <CountBtn names={affectedNames} open={open} onToggle={() => setOpen((v) => !v)} />
         <button
           className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
           onClick={onToggle}
@@ -52,6 +53,7 @@ function BuiltinRow({
           {disabled ? "Enable" : "Disable"}
         </button>
       </div>
+      {open && <AlbumList names={affectedNames} />}
     </li>
   );
 }
@@ -68,6 +70,7 @@ function CustomRow({
   onEdit: (next: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(suffix);
 
   function save() {
@@ -103,7 +106,7 @@ function CustomRow({
     <li className="title-cleanup-item">
       <div className="title-cleanup-row">
         <span className="title-cleanup-suffix">({suffix})</span>
-        <AlbumCount names={affectedNames} />
+        <CountBtn names={affectedNames} open={open} onToggle={() => setOpen((v) => !v)} />
         <button className="title-cleanup-action title-cleanup-action--muted" onClick={() => { setDraft(suffix); setEditing(true); }}>
           Edit
         </button>
@@ -111,6 +114,7 @@ function CustomRow({
           ×
         </button>
       </div>
+      {open && <AlbumList names={affectedNames} />}
     </li>
   );
 }
@@ -167,7 +171,6 @@ export function TitleCleanupTab() {
           your own.
         </p>
 
-        {/* ── Custom rules ── */}
         <section>
           <div className="title-cleanup-section-label">Your rules</div>
           <div className="title-cleanup-add-row">
@@ -204,7 +207,6 @@ export function TitleCleanupTab() {
           )}
         </section>
 
-        {/* ── Built-in rules ── */}
         <section>
           <div className="title-cleanup-section-label">Built-in rules</div>
           <ul className="title-cleanup-list">
