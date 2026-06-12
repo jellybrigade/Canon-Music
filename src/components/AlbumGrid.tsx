@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
@@ -38,20 +38,20 @@ interface CardProps {
   artUrl: string | null;
   isLoved: boolean;
   showBadge: boolean;
-  onSelect: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onToggleLove: (e: React.MouseEvent) => void;
+  onSelect: (album: AlbumRow) => void;
+  onContextMenu: (x: number, y: number, album: AlbumRow) => void;
+  onToggleLove: (albumId: string) => void;
 }
 
 const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
   return (
     <div
       className="album-card"
-      onClick={onSelect}
+      onClick={() => onSelect(album)}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onSelect()}
-      onContextMenu={onContextMenu}
+      onKeyDown={(e) => e.key === "Enter" && onSelect(album)}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, album); }}
     >
       {artUrl ? (
         <img className="album-art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
@@ -61,7 +61,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
       <button
         className={`album-heart${isLoved ? " album-heart--loved" : ""}`}
         aria-label={isLoved ? "Unlove album" : "Love album"}
-        onClick={onToggleLove}
+        onClick={(e) => { e.stopPropagation(); onToggleLove(album.id); }}
       >
         <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={2} />
       </button>
@@ -101,6 +101,14 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   }, []);
 
   useScrollMemory(scrollKey, containerRef);
+
+  const handleSelect = useCallback((album: AlbumRow) => onSelect(album), [onSelect]);
+  const handleContextMenu = useCallback((x: number, y: number, album: AlbumRow) => {
+    setContextMenu({ x, y, album });
+  }, []);
+  const handleToggleLove = useCallback((albumId: string) => {
+    void toggleAlbumLove(albumId, serverWithCredential);
+  }, [toggleAlbumLove, serverWithCredential]);
 
   // Re-measure when albums transition from empty to non-empty
   const prevAlbumsLen = useRef(albums.length);
@@ -238,9 +246,9 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                     artUrl={album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null}
                     isLoved={lovedAlbumIds.has(album.id)}
                     showBadge={mbAutoIdentify && failedLookupSet.has(album.id)}
-                    onSelect={() => onSelect(album)}
-                    onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, album }); }}
-                    onToggleLove={(e) => { e.stopPropagation(); void toggleAlbumLove(album.id, serverWithCredential); }}
+                    onSelect={handleSelect}
+                    onContextMenu={handleContextMenu}
+                    onToggleLove={handleToggleLove}
                   />
                 ))}
               </div>

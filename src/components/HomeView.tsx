@@ -233,7 +233,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
     queryFn: async () => {
       const db = await getDb();
       return db.select<{ name: string }[]>(
-        "SELECT name FROM album_genres WHERE album_id = ? ORDER BY name LIMIT 3",
+        "SELECT name FROM album_genres WHERE album_id = ? AND relation = 'direct' ORDER BY name LIMIT 3",
         [pick.album.id]
       );
     },

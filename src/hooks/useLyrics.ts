@@ -99,7 +99,7 @@ export function useLyrics(
     const db = await getDb();
     await db.execute("DELETE FROM lyrics WHERE track_id = ?", [track.id]);
     await queryClient.invalidateQueries({ queryKey: ["lyrics", track.id] });
-  }, [track, queryClient]);
+  }, [track, overrideArtist, overrideTitle, queryClient]);
 
   return {
     plain: query.data?.plain ?? null,
