@@ -2,7 +2,9 @@ import { useRef, useState, useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
+import { useSetting } from "./useSetting";
 import type { Server } from "../types/server";
+import { QK } from "../lib/query-keys";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -12,15 +14,16 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const syncingRef = useRef(false);
   const syncedRef = useRef<string | null>(null);
+  const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
 
   function runSync(s: Server) {
     if (syncingRef.current) return;
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    void queryClient.invalidateQueries({ queryKey: ["albums"] });
+    void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
     syncLibrary(s, () => {
-      void queryClient.invalidateQueries({ queryKey: ["albums"] });
+      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
     })
       .then(({ failedAlbums, failedPlaylists }) => {
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
@@ -32,19 +35,19 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
           setSyncError(`Sync partial — failed to fetch tracks for ${parts.join(" and ")}.`);
         }
-        void queryClient.invalidateQueries({ queryKey: ["albums"] });
+        void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
         invalidateGenreTreeCache();
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: ["artists"] });
-          void queryClient.invalidateQueries({ queryKey: ["genres"] });
+          void queryClient.invalidateQueries({ queryKey: QK.artists() });
+          void queryClient.invalidateQueries({ queryKey: QK.genres() });
         }, 300);
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: ["loved_tracks"] });
-          void queryClient.invalidateQueries({ queryKey: ["loved_albums"] });
-          void queryClient.invalidateQueries({ queryKey: ["playlists"] });
+          void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });
+          void queryClient.invalidateQueries({ queryKey: QK.loved_albums() });
+          void queryClient.invalidateQueries({ queryKey: QK.playlists() });
         }, 600);
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: ["tag_issues"] });
+          void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
         }, 1000);
       })
       .catch((err: unknown) => {
@@ -65,11 +68,12 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   }, [server]);
 
   useEffect(() => {
-    if (!server) return;
-    const id = setInterval(() => { runSync(server); }, 5 * 60 * 1000);
+    const intervalMin = parseInt(autoSyncIntervalMin, 10);
+    if (!server || isNaN(intervalMin) || intervalMin <= 0) return;
+    const id = setInterval(() => { runSync(server); }, intervalMin * 60 * 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server]);
+  }, [server, autoSyncIntervalMin]);
 
   return { syncStatus, syncError, lastSyncedAt, runSync };
 }

@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { AlbumRow } from "./useAlbums";
+import { QK } from "../lib/query-keys";
 
 export function useRecentlyReleasedAlbums(limit = 20) {
   return useQuery<AlbumRow[]>({
-    queryKey: ["recently-released", limit],
+    queryKey: QK.recentlyReleased(limit),
     queryFn: async () => {
       const db = await getDb();
       return db.select<AlbumRow[]>(

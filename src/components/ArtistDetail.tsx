@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { Play, Disc, Radio } from "lucide-react";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
@@ -40,7 +41,7 @@ interface TopTrack {
 
 function useArtistAlbums(artistName: string) {
   return useQuery({
-    queryKey: ["artist-albums", artistName],
+    queryKey: QK.artistAlbums(artistName),
     queryFn: async (): Promise<AlbumRow[]> => {
       const db = await getDb();
       return db.select<AlbumRow[]>(
@@ -56,7 +57,7 @@ function useArtistAlbums(artistName: string) {
 
 function useArtistTopTracks(artistName: string) {
   return useQuery({
-    queryKey: ["artist-top-tracks", artistName],
+    queryKey: QK.artistTopTracks(artistName),
     queryFn: async (): Promise<TopTrack[]> => {
       const db = await getDb();
       return db.select<TopTrack[]>(
@@ -75,7 +76,7 @@ function useArtistTopTracks(artistName: string) {
 
 function useLastfmTopAlbums(artistName: string) {
   return useQuery({
-    queryKey: ["lastfm-artist-top-albums", artistName],
+    queryKey: QK.lastfmArtistTopAlbums(artistName),
     queryFn: (): Promise<LastfmTopAlbum[]> => fetchArtistTopAlbums(artistName),
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
@@ -83,7 +84,7 @@ function useLastfmTopAlbums(artistName: string) {
 
 function useLastfmTopTracks(artistName: string) {
   return useQuery({
-    queryKey: ["lastfm-artist-top-tracks", artistName],
+    queryKey: QK.lastfmArtistTopTracks(artistName),
     queryFn: (): Promise<LastfmTopTrack[]> => fetchArtistTopTracks(artistName),
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
@@ -123,7 +124,7 @@ function groupAlbums(albums: AlbumRow[]): { group: ReleaseGroup; label: string; 
 
 function useSimilarInLibrary(names: string[]) {
   return useQuery({
-    queryKey: ["similar-in-library", names],
+    queryKey: QK.similarInLibrary(names),
     queryFn: async () => {
       if (names.length === 0) return new Set<string>();
       const db = await getDb();

@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../db";
+import { QK } from "../../lib/query-keys";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -13,7 +14,7 @@ interface Props {
 
 function useScrobbleQueueCount() {
   return useQuery({
-    queryKey: ["scrobble_queue", "count"],
+    queryKey: QK.scrobbleQueueCount(),
     queryFn: async () => {
       const db = await getDb();
       type Row = { n: number };
@@ -65,7 +66,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
         }
       }
-      await queryClient.invalidateQueries({ queryKey: ["settings"] });
+      await queryClient.invalidateQueries({ queryKey: QK.settingsAll() });
       window.location.reload();
     } catch (e) {
       alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`);

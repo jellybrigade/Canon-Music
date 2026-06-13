@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { authenticate } from "../../lib/navidrome";
+import { QK } from "../../lib/query-keys";
+import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
 
 type TestState = "idle" | "testing" | "ok" | "error";
+type AuthMethod = "password" | "apikey";
 
 interface Props {
   serverWithCredential: ServerWithCredential | undefined;
@@ -23,9 +25,11 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
+  const [editApiKey, setEditApiKey] = useState("");
+  const [editAuthMethod, setEditAuthMethod] = useState<AuthMethod>("password");
   const [serverTestState, setServerTestState] = useState<TestState>("idle");
   const [serverTestError, setServerTestError] = useState("");
-  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{ url: string; username: string; password: string } | null>(null);
+  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{ url: string; username: string; password: string; apiKey: string; authMethod: AuthMethod } | null>(null);
   const [serverTestedCredential, setServerTestedCredential] = useState<NavidromeCredential | null>(null);
   const [serverSaving, setServerSaving] = useState(false);
   const [serverSaveError, setServerSaveError] = useState("");
@@ -40,6 +44,8 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     setEditDisplayName(server.display_name);
     setEditUsername(server.username);
     setEditPassword("");
+    setEditApiKey("");
+    setEditAuthMethod("password");
     setServerTestState("idle");
     setServerTestError("");
     setServerTestedSnapshot(null);
@@ -48,10 +54,18 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     setServerEditing(true);
   }
 
-  function handleEditCredentialChange(key: "url" | "username" | "password", v: string) {
+  function handleEditCredentialChange(key: "url" | "username" | "password" | "apiKey", v: string) {
     if (key === "url") setEditUrl(v);
     else if (key === "username") setEditUsername(v);
+    else if (key === "apiKey") setEditApiKey(v);
     else setEditPassword(v);
+    setServerTestState("idle");
+    setServerTestedSnapshot(null);
+    setServerTestedCredential(null);
+  }
+
+  function handleEditAuthMethodChange(m: AuthMethod) {
+    setEditAuthMethod(m);
     setServerTestState("idle");
     setServerTestedSnapshot(null);
     setServerTestedCredential(null);
@@ -61,9 +75,11 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     setServerTestState("testing");
     setServerTestError("");
     try {
-      const cred = await authenticate(editUrl, editUsername, editPassword);
+      const cred = editAuthMethod === "apikey"
+        ? await authenticateWithApiKey(editUrl, editUsername, editApiKey)
+        : await authenticate(editUrl, editUsername, editPassword);
       setServerTestState("ok");
-      setServerTestedSnapshot({ url: editUrl, username: editUsername, password: editPassword });
+      setServerTestedSnapshot({ url: editUrl, username: editUsername, password: editPassword, apiKey: editApiKey, authMethod: editAuthMethod });
       setServerTestedCredential(cred);
     } catch (err) {
       setServerTestState("error");
@@ -75,8 +91,11 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     serverTestedSnapshot !== null &&
     serverTestedSnapshot.url === editUrl &&
     serverTestedSnapshot.username === editUsername &&
-    serverTestedSnapshot.password === editPassword;
+    serverTestedSnapshot.authMethod === editAuthMethod &&
+    (editAuthMethod === "apikey" ? serverTestedSnapshot.apiKey === editApiKey : serverTestedSnapshot.password === editPassword);
 
+  const canTestServer = editUrl.trim() !== "" && editUsername.trim() !== "" &&
+    (editAuthMethod === "apikey" ? editApiKey.trim() !== "" : editPassword.trim() !== "");
   const canSaveServer =
     serverTestState === "ok" &&
     serverSnapshotMatch &&
@@ -94,8 +113,8 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
         "UPDATE servers SET url=?, display_name=?, username=? WHERE id=?",
         [editUrl.trim().replace(/\/+$/, ""), editDisplayName.trim(), editUsername.trim(), server.id]
       );
-      await queryClient.invalidateQueries({ queryKey: ["servers"] });
-      await queryClient.invalidateQueries({ queryKey: ["server-credential", server.id] });
+      await queryClient.invalidateQueries({ queryKey: QK.servers() });
+      await queryClient.invalidateQueries({ queryKey: QK.serverCredential(server.id) });
       setServerEditing(false);
     } catch (err) {
       setServerSaveError(err instanceof Error ? err.message : String(err));
@@ -156,16 +175,41 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
                   onChange={(e) => handleEditCredentialChange("username", e.target.value)}
                 />
               </label>
-              <label className="settings-field">
-                <span>Password</span>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="Enter password to re-test"
-                  value={editPassword}
-                  onChange={(e) => handleEditCredentialChange("password", e.target.value)}
-                />
-              </label>
+              <div className="wizard-auth-method">
+                <button
+                  type="button"
+                  className={`wizard-auth-tab${editAuthMethod === "password" ? " wizard-auth-tab--active" : ""}`}
+                  onClick={() => handleEditAuthMethodChange("password")}
+                >Password</button>
+                <button
+                  type="button"
+                  className={`wizard-auth-tab${editAuthMethod === "apikey" ? " wizard-auth-tab--active" : ""}`}
+                  onClick={() => handleEditAuthMethodChange("apikey")}
+                >API Key</button>
+              </div>
+              {editAuthMethod === "password" ? (
+                <label className="settings-field">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    placeholder="Enter password to re-test"
+                    value={editPassword}
+                    onChange={(e) => handleEditCredentialChange("password", e.target.value)}
+                  />
+                </label>
+              ) : (
+                <label className="settings-field">
+                  <span>API Key</span>
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Your Navidrome API key"
+                    value={editApiKey}
+                    onChange={(e) => handleEditCredentialChange("apiKey", e.target.value)}
+                  />
+                </label>
+              )}
               {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
               {serverTestState === "ok" && serverSnapshotMatch && <p className="settings-success">Connection successful.</p>}
               {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
@@ -174,7 +218,7 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
                 <button
                   className="settings-btn"
                   onClick={() => { void handleServerTest(); }}
-                  disabled={!editUrl.trim() || !editUsername.trim() || !editPassword.trim() || serverTestState === "testing"}
+                  disabled={!canTestServer || serverTestState === "testing"}
                 >
                   {serverTestState === "testing" ? "Testing…" : "Test connection"}
                 </button>

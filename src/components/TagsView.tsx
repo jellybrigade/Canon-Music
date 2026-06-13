@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { useTagVocab, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
 import {
   useUserNodes,
@@ -71,8 +72,8 @@ export function TagsView() {
   }
 
   function handleRefresh() {
-    void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-    void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
+    void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+    void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
     void refreshTree();
   }
 

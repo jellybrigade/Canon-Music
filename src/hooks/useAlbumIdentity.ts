@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 import {
   searchReleaseGroups,
   lookupReleaseGroup,
@@ -39,7 +40,7 @@ export interface AlbumIdentityRow {
 
 export function useAlbumIdentity(albumId: string) {
   return useQuery({
-    queryKey: ["album-identity", albumId],
+    queryKey: QK.albumIdentity(albumId),
     queryFn: async (): Promise<AlbumIdentityRow | null> => {
       const db = await getDb();
       const rows = await db.select<AlbumIdentityRow[]>(
@@ -87,7 +88,7 @@ export function useIdentifyAlbum({
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: ["identify-album", albumId, overrideMbRgId, overrideMbReleaseId, artist, album],
+    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
         // Step 1: resolve RG MBID — prefer explicit override, then search
@@ -246,9 +247,9 @@ export function useSaveAlbumIdentity() {
   return useMutation({
     mutationFn: (input: SaveAlbumIdentityInput) => persistAlbumIdentity(input),
     onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({ queryKey: ["album-identity", input.albumId] });
-      void queryClient.invalidateQueries({ queryKey: ["normalized-tags", input.albumId] });
-      void queryClient.invalidateQueries({ queryKey: ["failed-lookup-album-ids"] });
+      void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(input.albumId) });
+      void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(input.albumId) });
+      void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbumIds() });
     },
   });
 }
@@ -265,7 +266,7 @@ export function useSaveAlbumIdentity() {
 /** Returns the set of album IDs that were looked up but yielded no MB match. */
 export function useFailedLookupAlbumIds() {
   return useQuery({
-    queryKey: ["failed-lookup-album-ids"],
+    queryKey: QK.failedLookupAlbumIds(),
     queryFn: async (): Promise<string[]> => {
       const db = await getDb();
       const rows = await db.select<{ album_id: string }[]>(
@@ -291,8 +292,8 @@ export function useRecordFailedLookup() {
       );
     },
     onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({ queryKey: ["album-identity", input.albumId] });
-      void queryClient.invalidateQueries({ queryKey: ["failed-lookup-album-ids"] });
+      void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(input.albumId) });
+      void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbumIds() });
     },
   });
 }

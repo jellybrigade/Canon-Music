@@ -1,8 +1,9 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import { fetchLyricsBySongId } from "../lib/navidrome";
+import { QK } from "../lib/query-keys";
 import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
@@ -17,6 +18,8 @@ interface LyricsResult {
   synced: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  offsetMs: number;
+  setOffsetMs: (ms: number) => Promise<void>;
 }
 
 export function useLyrics(
@@ -29,12 +32,14 @@ export function useLyrics(
   const overrideTitle = override?.title ?? null;
 
   const query = useQuery({
-    queryKey: ["lyrics", track?.id ?? null, overrideArtist, overrideTitle],
+    queryKey: QK.lyrics(track?.id ?? null, overrideArtist, overrideTitle),
     enabled: !!track,
     queryFn: async (): Promise<{ plain: string | null; synced: string | null }> => {
       if (!track) return { plain: null, synced: null };
 
-      // Manual search: skip cache, fetch LRCLib with override params (session-only, not persisted)
+      const db = await getDb();
+
+      // Manual search: persist override result so it survives remounts
       if (overrideArtist && overrideTitle) {
         const result = await fetchLyrics({
           artist: overrideArtist,
@@ -42,10 +47,22 @@ export function useLyrics(
           title: overrideTitle,
           durationSec: track.duration ?? null,
         }).catch(() => null);
-        return { plain: result?.plain ?? null, synced: result?.synced ?? null };
+        const plain = result?.plain ?? null;
+        const synced = result?.synced ?? null;
+        if (plain || synced) {
+          await db.execute(
+            `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+             VALUES (?, ?, ?, 'lrclib', datetime('now'))
+             ON CONFLICT(track_id) DO UPDATE SET
+               plain = excluded.plain,
+               synced = excluded.synced,
+               source = excluded.source,
+               fetched_at = excluded.fetched_at`,
+            [track.id, plain, synced]
+          );
+        }
+        return { plain, synced };
       }
-
-      const db = await getDb();
       type CacheRow = { plain: string | null; synced: string | null };
       const cached = await db.select<CacheRow[]>(
         "SELECT plain, synced FROM lyrics WHERE track_id = ?",
@@ -62,8 +79,13 @@ export function useLyrics(
         const serverLyrics = await fetchLyricsBySongId(server.url, server.username, credential, navTrackId);
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
           await db.execute(
-            `INSERT OR REPLACE INTO lyrics (track_id, plain, synced, source, fetched_at)
-             VALUES (?, ?, ?, 'navidrome', datetime('now'))`,
+            `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+             VALUES (?, ?, ?, 'navidrome', datetime('now'))
+             ON CONFLICT(track_id) DO UPDATE SET
+               plain = excluded.plain,
+               synced = excluded.synced,
+               source = excluded.source,
+               fetched_at = excluded.fetched_at`,
             [track.id, serverLyrics.plain, serverLyrics.synced]
           );
           return serverLyrics;
@@ -83,8 +105,13 @@ export function useLyrics(
       const synced = result?.synced ?? null;
 
       await db.execute(
-        `INSERT OR REPLACE INTO lyrics (track_id, plain, synced, source, fetched_at)
-         VALUES (?, ?, ?, 'lrclib', datetime('now'))`,
+        `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+         VALUES (?, ?, ?, 'lrclib', datetime('now'))
+         ON CONFLICT(track_id) DO UPDATE SET
+           plain = excluded.plain,
+           synced = excluded.synced,
+           source = excluded.source,
+           fetched_at = excluded.fetched_at`,
         [track.id, plain, synced]
       );
 
@@ -98,13 +125,39 @@ export function useLyrics(
     if (!track) return;
     const db = await getDb();
     await db.execute("DELETE FROM lyrics WHERE track_id = ?", [track.id]);
-    await queryClient.invalidateQueries({ queryKey: ["lyrics", track.id] });
+    await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, overrideArtist, overrideTitle, queryClient]);
+
+  const [offsetMs, setOffsetMsState] = useState(0);
+
+  useEffect(() => {
+    if (!track) { setOffsetMsState(0); return; }
+    let cancelled = false;
+    getDb()
+      .then((db) => db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [track.id]))
+      .then((rows) => { if (!cancelled) setOffsetMsState(rows[0]?.offset_ms ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [track?.id]);
+
+  const setOffsetMs = useCallback(async (ms: number) => {
+    if (!track) return;
+    setOffsetMsState(ms);
+    const db = await getDb();
+    await db.execute(
+      `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
+       VALUES (?, NULL, NULL, 'manual', datetime('now'), ?)
+       ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
+      [track.id, ms]
+    );
+  }, [track?.id]);
 
   return {
     plain: query.data?.plain ?? null,
     synced: query.data?.synced ?? null,
     loading: query.isFetching,
     refresh,
+    offsetMs,
+    setOffsetMs,
   };
 }

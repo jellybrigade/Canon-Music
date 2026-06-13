@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { AlbumRow } from "./useAlbums";
+import { QK } from "../lib/query-keys";
 
 export interface AlbumStatRow extends AlbumRow {
   plays: number;
@@ -10,7 +11,7 @@ export interface AlbumStatRow extends AlbumRow {
 
 export function useListeningStats() {
   const query = useQuery<AlbumStatRow[]>({
-    queryKey: ["albums", "listening-stats"],
+    queryKey: QK.albumsListeningStats(),
     queryFn: async () => {
       const db = await getDb();
       return db.select<AlbumStatRow[]>(
@@ -37,7 +38,7 @@ export function useListeningStats() {
   });
 
   const finishQuery = useQuery<AlbumStatRow[]>({
-    queryKey: ["albums", "finish-the-album"],
+    queryKey: QK.albumsFinishThe(),
     queryFn: async () => {
       const db = await getDb();
       return db.select<AlbumStatRow[]>(
@@ -60,7 +61,7 @@ export function useListeningStats() {
 
   // Albums where ≥50% of tracks have been played (play_count or scrobble history), but not 100%
   const almostDoneQuery = useQuery<AlbumStatRow[]>({
-    queryKey: ["albums", "almost-done"],
+    queryKey: QK.albumsAlmostDone(),
     queryFn: async () => {
       const db = await getDb();
       return db.select<AlbumStatRow[]>(

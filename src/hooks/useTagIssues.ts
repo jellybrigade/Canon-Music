@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 
 export interface TagIssueRow {
   id: number;
@@ -17,7 +18,7 @@ export function useTagIssues() {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["tag_issues"],
+    queryKey: QK.tagIssues(),
     queryFn: async (): Promise<TagIssueRow[]> => {
       const db = await getDb();
       return db.select<TagIssueRow[]>(
@@ -42,7 +43,7 @@ export function useTagIssues() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag_issues"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
     },
   });
 
@@ -54,7 +55,7 @@ export function useTagIssues() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag_issues"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
     },
   });
 

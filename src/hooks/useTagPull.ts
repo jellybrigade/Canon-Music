@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchAlbumTags, classifyTag } from "../lib/lastfm";
+import { QK } from "../lib/query-keys";
 import { findCanonical, getCanonTree, sqlNorm } from "../lib/canonicalize";
 import { useTagsStore } from "../store/tags";
 import type { InboxItem, InboxTagRow } from "../store/tags";
@@ -127,9 +128,9 @@ export function useTagPull() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["albums"] });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
     },
   });
 
@@ -158,8 +159,8 @@ export function useTagPull() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
     },
   });
 
@@ -176,10 +177,10 @@ export function useAcceptInboxItem() {
       removeInboxItem(item.albumId);
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["albums"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
     },
   });
 }

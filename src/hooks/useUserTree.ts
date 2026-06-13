@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { canonicalKey, bustCanonTreeCache } from "../lib/canonicalize";
 import canonTreeData from "../assets/canon-tree.json";
 import type { TreeNode } from "../lib/canonicalize";
+import { QK } from "../lib/query-keys";
 
 export interface UserTreeNode {
   id: string;
@@ -34,7 +35,7 @@ function nodeToJson(node: Omit<UserTreeNode, "parent_ids"> & { parentIds: string
 
 export function useUserNodes() {
   return useQuery({
-    queryKey: ["user-tree-nodes"],
+    queryKey: QK.userTreeNodes(),
     queryFn: async (): Promise<UserTreeNode[]> => {
       const db = await getDb();
       return db.select<UserTreeNode[]>("SELECT * FROM user_tree_nodes ORDER BY name");
@@ -44,7 +45,7 @@ export function useUserNodes() {
 
 export function useUserTreeChangelog() {
   return useQuery({
-    queryKey: ["user-tree-changelog"],
+    queryKey: QK.userTreeChangelog(),
     queryFn: async (): Promise<ChangelogEntry[]> => {
       const db = await getDb();
       return db.select<ChangelogEntry[]>(
@@ -91,9 +92,9 @@ export function useCreateUserNode() {
       return id;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeChangelog() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
     },
   });
 }
@@ -140,9 +141,9 @@ export function useUpdateUserNode() {
       bustCanonTreeCache();
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeChangelog() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
     },
   });
 }
@@ -171,10 +172,10 @@ export function useDeleteUserNode() {
       bustCanonTreeCache();
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-nodes"] });
-      void queryClient.invalidateQueries({ queryKey: ["user-tree-changelog"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
+      void queryClient.invalidateQueries({ queryKey: QK.userTreeChangelog() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
     },
   });
 }

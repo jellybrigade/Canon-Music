@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getDb } from "../../db";
-import { authenticate } from "../../lib/navidrome";
+import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import type { Server } from "../../types/server";
@@ -13,11 +13,14 @@ interface Props {
 
 type Step = 1 | 2 | 3;
 type TestState = "idle" | "testing" | "ok" | "error";
+type AuthMethod = "password" | "apikey";
 
 interface ConnectionFields {
   url: string;
   username: string;
   password: string;
+  apiKey: string;
+  authMethod: AuthMethod;
 }
 
 function hostnameFrom(url: string): string {
@@ -36,6 +39,8 @@ export function Wizard({ onSuccess }: Props) {
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [authMethod, setAuthMethod] = useState<AuthMethod>("password");
   const [testState, setTestState] = useState<TestState>("idle");
   const [testError, setTestError] = useState("");
   const [testedSnapshot, setTestedSnapshot] = useState<ConnectionFields | null>(null);
@@ -57,8 +62,9 @@ export function Wizard({ onSuccess }: Props) {
     }
   }
 
-  function handleCredentialChange(key: "username" | "password", v: string) {
+  function handleCredentialChange(key: "username" | "password" | "apiKey", v: string) {
     if (key === "username") setUsername(v);
+    else if (key === "apiKey") setApiKey(v);
     else setPassword(v);
     if (testState !== "idle") {
       setTestState("idle");
@@ -67,13 +73,22 @@ export function Wizard({ onSuccess }: Props) {
     }
   }
 
+  function handleAuthMethodChange(m: AuthMethod) {
+    setAuthMethod(m);
+    setTestState("idle");
+    setTestedSnapshot(null);
+    setTestedCredential(null);
+  }
+
   async function handleTest() {
     setTestState("testing");
     setTestError("");
     try {
-      const credential = await authenticate(url, username, password);
+      const credential = authMethod === "apikey"
+        ? await authenticateWithApiKey(url, username, apiKey)
+        : await authenticate(url, username, password);
       setTestState("ok");
-      setTestedSnapshot({ url, username, password });
+      setTestedSnapshot({ url, username, password, apiKey, authMethod });
       setTestedCredential(credential);
     } catch (err) {
       setTestState("error");
@@ -85,9 +100,11 @@ export function Wizard({ onSuccess }: Props) {
     testedSnapshot !== null &&
     testedSnapshot.url === url &&
     testedSnapshot.username === username &&
-    testedSnapshot.password === password;
+    testedSnapshot.authMethod === authMethod &&
+    (authMethod === "apikey" ? testedSnapshot.apiKey === apiKey : testedSnapshot.password === password);
 
-  const canTest = url.trim() !== "" && username.trim() !== "" && password.trim() !== "";
+  const canTest = url.trim() !== "" && username.trim() !== "" &&
+    (authMethod === "apikey" ? apiKey.trim() !== "" : password.trim() !== "");
   const step2Complete = testState === "ok" && snapshotMatch && displayName.trim() !== "";
 
   async function handleFinish() {
@@ -173,15 +190,40 @@ export function Wizard({ onSuccess }: Props) {
                   onChange={(e) => handleCredentialChange("username", e.target.value)}
                 />
               </label>
-              <label>
-                Password
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => handleCredentialChange("password", e.target.value)}
-                />
-              </label>
+              <div className="wizard-auth-method">
+                <button
+                  type="button"
+                  className={`wizard-auth-tab${authMethod === "password" ? " wizard-auth-tab--active" : ""}`}
+                  onClick={() => handleAuthMethodChange("password")}
+                >Password</button>
+                <button
+                  type="button"
+                  className={`wizard-auth-tab${authMethod === "apikey" ? " wizard-auth-tab--active" : ""}`}
+                  onClick={() => handleAuthMethodChange("apikey")}
+                >API Key</button>
+              </div>
+              {authMethod === "password" ? (
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(e) => handleCredentialChange("password", e.target.value)}
+                  />
+                </label>
+              ) : (
+                <label>
+                  API Key
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    placeholder="Your Navidrome API key"
+                    value={apiKey}
+                    onChange={(e) => handleCredentialChange("apiKey", e.target.value)}
+                  />
+                </label>
+              )}
               <label>
                 Display name
                 <input

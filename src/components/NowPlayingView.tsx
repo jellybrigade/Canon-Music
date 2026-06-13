@@ -17,6 +17,7 @@ import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
 
@@ -53,7 +54,7 @@ interface SuggestedTrack {
 
 function useArtistAlbums(artistName: string | null) {
   return useQuery({
-    queryKey: ["nowplaying-albums", artistName],
+    queryKey: QK.nowPlayingAlbums(artistName),
     queryFn: async (): Promise<AlbumRow[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -70,7 +71,7 @@ function useArtistAlbums(artistName: string | null) {
 
 function useArtistTopTracks(artistName: string | null) {
   return useQuery({
-    queryKey: ["nowplaying-top-tracks", artistName],
+    queryKey: QK.nowPlayingTopTracks(artistName),
     queryFn: async (): Promise<TopTrack[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -115,7 +116,7 @@ function useArtistTopTracks(artistName: string | null) {
 
 function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
   return useQuery({
-    queryKey: ["suggested-tracks", artistName, currentTrackId],
+    queryKey: QK.suggestedTracks(artistName, currentTrackId),
     queryFn: async (): Promise<SuggestedTrack[]> => {
       if (!artistName) return [];
       const similarArtists = await fetchSimilarArtists(artistName);
@@ -177,8 +178,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.artist ?? null,
     currentTrack?.id ?? null
   );
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
+  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
+  const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
   const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
@@ -253,13 +255,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   useEffect(() => {
     if (tab !== "lyrics" || !lyricsLines) return;
     const activeIndex = lyricsLines.findIndex((line, i) =>
-      elapsed >= line.timeSec && (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec)
+      lyricsAdjElapsed >= line.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec)
     );
     if (activeIndex === activeLyricIndexRef.current) return;
     activeLyricIndexRef.current = activeIndex;
     if (userScrollingRef.current) return;
     scrollToActiveLine();
-  }, [tab, elapsed, lyricsLines]);
+  }, [tab, lyricsAdjElapsed, lyricsLines]);
 
   function handleLyricsScroll() {
     if (autoScrollingRef.current) return;
@@ -527,6 +529,31 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             ))}
             {tab === "lyrics" && (
               <div className="now-playing-tab-lyric-actions">
+                {lyricsLines && (
+                  <div className="lyrics-offset-controls">
+                    <button
+                      className="now-playing-tab-refresh-btn"
+                      title="Shift lyrics earlier (−500ms)"
+                      style={{ margin: 0 }}
+                      onClick={() => void setLyricsOffsetMs(lyricsOffsetMs - 500)}
+                    >−</button>
+                    {lyricsOffsetMs !== 0 && (
+                      <button
+                        className="lyrics-offset-value"
+                        title="Reset offset"
+                        onClick={() => void setLyricsOffsetMs(0)}
+                      >
+                        {lyricsOffsetMs > 0 ? "+" : ""}{(lyricsOffsetMs / 1000).toFixed(1)}s
+                      </button>
+                    )}
+                    <button
+                      className="now-playing-tab-refresh-btn"
+                      title="Shift lyrics later (+500ms)"
+                      style={{ margin: 0 }}
+                      onClick={() => void setLyricsOffsetMs(lyricsOffsetMs + 500)}
+                    >+</button>
+                  </div>
+                )}
                 <button
                   className={`now-playing-tab-refresh-btn${lyricsSearchOpen ? " now-playing-tab-refresh-btn--active" : ""}`}
                   title="Search manually"
@@ -782,14 +809,14 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       <p className="now-playing-empty">Loading lyrics…</p>
                     ) : lyricsLines && lyricsLines.length > 0 ? (
                       lyricsLines.map((line, i) => {
-                        const isActive = elapsed >= line.timeSec &&
-                          (i === lyricsLines.length - 1 || elapsed < lyricsLines[i + 1]!.timeSec);
+                        const isActive = lyricsAdjElapsed >= line.timeSec &&
+                          (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
                         return (
                           <div
                             key={i}
                             ref={isActive ? activeLyricRef : undefined}
                             className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                            onClick={() => handleLyricSeek(line.timeSec)}
+                            onClick={() => handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000)}
                             style={{ cursor: "pointer" }}
                           >
                             {line.text || " "}

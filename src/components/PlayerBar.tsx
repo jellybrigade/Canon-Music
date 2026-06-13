@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
@@ -98,7 +99,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
       ? stripServerPrefix(currentTrack.id, serverWithCred.server.id)
       : null;
   const { data: trackRating = 0 } = useQuery({
-    queryKey: ["trackRating", nativeTrackId],
+    queryKey: QK.trackRating(nativeTrackId),
     queryFn: () =>
       fetchTrackRating(
         serverWithCred!.server.url,
@@ -195,7 +196,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
       setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(() => {
-        queryClient.invalidateQueries({ queryKey: ["trackRating", nativeTrackId] });
+        queryClient.invalidateQueries({ queryKey: QK.trackRating(nativeTrackId) });
       });
     }, 200);
   }

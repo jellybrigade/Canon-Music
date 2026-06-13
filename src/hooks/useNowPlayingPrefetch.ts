@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePlayerStore } from "../store/player";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "../lib/lastfm";
 import type { AlbumRow } from "./useAlbums";
 
@@ -39,7 +40,7 @@ export function useNowPlayingPrefetch() {
     if (!artistName) return;
 
     void queryClient.prefetchQuery({
-      queryKey: ["nowplaying-albums", artistName],
+      queryKey: QK.nowPlayingAlbums(artistName),
       queryFn: async (): Promise<AlbumRow[]> => {
         const db = await getDb();
         return db.select<AlbumRow[]>(
@@ -53,7 +54,7 @@ export function useNowPlayingPrefetch() {
     });
 
     void queryClient.prefetchQuery({
-      queryKey: ["nowplaying-top-tracks", artistName],
+      queryKey: QK.nowPlayingTopTracks(artistName),
       queryFn: async (): Promise<TopTrack[]> => {
         const db = await getDb();
         const trackNames = await fetchArtistTopTracks(artistName);
@@ -94,7 +95,7 @@ export function useNowPlayingPrefetch() {
     if (!artistName || !trackId) return;
 
     void queryClient.prefetchQuery({
-      queryKey: ["suggested-tracks", artistName, trackId],
+      queryKey: QK.suggestedTracks(artistName, trackId),
       queryFn: async (): Promise<SuggestedTrack[]> => {
         const similarArtists = await fetchSimilarArtists(artistName);
         if (similarArtists.length === 0) return [];

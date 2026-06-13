@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { useMemo } from "react";
+import { QK } from "../lib/query-keys";
 
 export interface GenreRow {
   canonical_id: string;
@@ -10,7 +11,7 @@ export interface GenreRow {
 
 export function useGenres() {
   return useQuery({
-    queryKey: ["genres"],
+    queryKey: QK.genres(),
     queryFn: async (): Promise<GenreRow[]> => {
       const db = await getDb();
       // Only show direct (leaf) canon-tree genres in the dropdown — raw: ids excluded.
@@ -30,7 +31,7 @@ export function useGenres() {
 // Falls back to top genres by album_count when no scrobble history exists.
 export function useRecentGenres() {
   const query = useQuery({
-    queryKey: ["genres", "recent"],
+    queryKey: QK.genresRecent(),
     queryFn: async (): Promise<GenreRow[]> => {
       const db = await getDb();
       const recent = await db.select<GenreRow[]>(`

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
 import { getCanonTree } from "../lib/canonicalize";
 import type { TreeNode } from "../lib/canonicalize";
@@ -19,7 +20,7 @@ interface MappingRow {
  */
 export function useGenreMappings(): Map<string, string | null> {
   const { data: rows = [] } = useQuery({
-    queryKey: ["genre-display-mappings"],
+    queryKey: QK.genreDisplayMappings(),
     queryFn: async (): Promise<MappingRow[]> => {
       const db = await getDb();
       return db.select<MappingRow[]>(
