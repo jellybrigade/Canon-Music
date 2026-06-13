@@ -934,7 +934,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     <div className="home-view">
       <header className="home-greeting">
         <div className="home-greeting__left">
-          <CanonIcon size={28} className="home-greeting__logo" />
+          <CanonIcon size={38} className="home-greeting__logo" />
           <h1 className="home-greeting__text">{getGreeting()}</h1>
         </div>
         <div className="home-search-bar">
