@@ -37,7 +37,9 @@ export function useLyrics(
     queryFn: async (): Promise<{ plain: string | null; synced: string | null }> => {
       if (!track) return { plain: null, synced: null };
 
-      // Manual search: skip cache, fetch LRCLib with override params (session-only, not persisted)
+      const db = await getDb();
+
+      // Manual search: persist override result so it survives remounts
       if (overrideArtist && overrideTitle) {
         const result = await fetchLyrics({
           artist: overrideArtist,
@@ -45,10 +47,22 @@ export function useLyrics(
           title: overrideTitle,
           durationSec: track.duration ?? null,
         }).catch(() => null);
-        return { plain: result?.plain ?? null, synced: result?.synced ?? null };
+        const plain = result?.plain ?? null;
+        const synced = result?.synced ?? null;
+        if (plain || synced) {
+          await db.execute(
+            `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+             VALUES (?, ?, ?, 'lrclib', datetime('now'))
+             ON CONFLICT(track_id) DO UPDATE SET
+               plain = excluded.plain,
+               synced = excluded.synced,
+               source = excluded.source,
+               fetched_at = excluded.fetched_at`,
+            [track.id, plain, synced]
+          );
+        }
+        return { plain, synced };
       }
-
-      const db = await getDb();
       type CacheRow = { plain: string | null; synced: string | null };
       const cached = await db.select<CacheRow[]>(
         "SELECT plain, synced FROM lyrics WHERE track_id = ?",
@@ -65,8 +79,13 @@ export function useLyrics(
         const serverLyrics = await fetchLyricsBySongId(server.url, server.username, credential, navTrackId);
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
           await db.execute(
-            `INSERT OR REPLACE INTO lyrics (track_id, plain, synced, source, fetched_at)
-             VALUES (?, ?, ?, 'navidrome', datetime('now'))`,
+            `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+             VALUES (?, ?, ?, 'navidrome', datetime('now'))
+             ON CONFLICT(track_id) DO UPDATE SET
+               plain = excluded.plain,
+               synced = excluded.synced,
+               source = excluded.source,
+               fetched_at = excluded.fetched_at`,
             [track.id, serverLyrics.plain, serverLyrics.synced]
           );
           return serverLyrics;
@@ -86,8 +105,13 @@ export function useLyrics(
       const synced = result?.synced ?? null;
 
       await db.execute(
-        `INSERT OR REPLACE INTO lyrics (track_id, plain, synced, source, fetched_at)
-         VALUES (?, ?, ?, 'lrclib', datetime('now'))`,
+        `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
+         VALUES (?, ?, ?, 'lrclib', datetime('now'))
+         ON CONFLICT(track_id) DO UPDATE SET
+           plain = excluded.plain,
+           synced = excluded.synced,
+           source = excluded.source,
+           fetched_at = excluded.fetched_at`,
         [track.id, plain, synced]
       );
 
@@ -120,7 +144,12 @@ export function useLyrics(
     if (!track) return;
     setOffsetMsState(ms);
     const db = await getDb();
-    await db.execute("UPDATE lyrics SET offset_ms = ? WHERE track_id = ?", [ms, track.id]);
+    await db.execute(
+      `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
+       VALUES (?, NULL, NULL, 'manual', datetime('now'), ?)
+       ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
+      [track.id, ms]
+    );
   }, [track?.id]);
 
   return {

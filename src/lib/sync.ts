@@ -16,7 +16,13 @@ export async function syncLibrary(
   if (!credJson) throw new Error(`No credentials found for server ${server.id}`);
   let credential: NavidromeCredential;
   try {
-    credential = JSON.parse(credJson) as NavidromeCredential;
+    const parsed = JSON.parse(credJson) as Record<string, unknown>;
+    // Migrate legacy credentials stored without a type field
+    if (!parsed.type && typeof parsed.token === "string" && typeof parsed.salt === "string") {
+      credential = { type: "md5", token: parsed.token, salt: parsed.salt };
+    } else {
+      credential = parsed as NavidromeCredential;
+    }
   } catch {
     throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
   }

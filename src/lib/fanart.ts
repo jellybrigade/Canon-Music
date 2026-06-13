@@ -26,7 +26,7 @@ export async function fetchFanartTvImageByMbid(mbid: string, apiKey: string): Pr
   try {
     const res = await tauriFetch(`https://webservice.fanart.tv/v3/music/${mbid}?api_key=${encodeURIComponent(apiKey)}`, {
       method: "GET",
-      headers: { "Accept": "application/json" },
+      headers: { "Accept": "application/json", "User-Agent": "Canon Music Player" },
     });
     if (!res.ok) return null;
     const data = (await res.json()) as FanartArtistResponse;

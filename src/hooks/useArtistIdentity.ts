@@ -145,9 +145,6 @@ export function useSaveArtistIdentity() {
         queryKey: QK.artistEnrichment(input.artistName),
       });
       void queryClient.invalidateQueries({
-        queryKey: QK.artistImage(input.lastfmArtistName ?? input.artistName),
-      });
-      void queryClient.invalidateQueries({
         queryKey: QK.lastfmArtistTopTracks(input.lastfmArtistName ?? input.artistName),
       });
     },

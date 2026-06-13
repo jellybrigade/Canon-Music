@@ -65,7 +65,6 @@ export const QK = {
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
-  artistImage: (artistName: string) => ["artist-image", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>
     ["identify-artist", artistName, mbArtistId] as const,

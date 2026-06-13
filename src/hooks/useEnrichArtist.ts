@@ -70,24 +70,26 @@ async function enrichArtist(
     if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey);
   }
 
-  // Bio + portrait fallbacks: TheAudioDB then Wikipedia when Last.fm returns nothing
+  // Bio + portrait fallbacks: TheAudioDB and Wikipedia fetched in parallel when Last.fm returns nothing
   let finalBio = info.bio;
   if (!finalBio) {
-    const adbResult = await fetchTheAudioDbArtist(artistName).catch(() => null);
+    const [adbResult, wikiBio] = await Promise.all([
+      fetchTheAudioDbArtist(artistName).catch(() => null),
+      fetchWikipediaBio(artistName).catch(() => null),
+    ]);
     if (adbResult) {
       finalBio = adbResult.bio;
       if (!imageUrl && !hasWikidataImage && adbResult.thumbUrl) {
         imageUrl = adbResult.thumbUrl;
       }
     }
-    if (!finalBio) {
-      finalBio = await fetchWikipediaBio(artistName).catch(() => null);
-    }
+    if (!finalBio) finalBio = wikiBio;
   }
 
   const db = await getDb();
-  // Only mark as enriched when we actually got data — avoids locking out retries on API failure
-  const gotData = !!(finalBio || info.listeners || info.similar.length > 0);
+  // Only stamp enriched_at when Last.fm returned primary data — keeps the row retryable
+  // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
+  const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
   const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(

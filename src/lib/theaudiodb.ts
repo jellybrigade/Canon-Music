@@ -12,7 +12,7 @@ interface TheAudioDbResponse {
 async function searchTheAudioDb(name: string): Promise<TheAudioDbArtist | null> {
   const res = await tauriFetch(
     `https://www.theaudiodb.com/api/v1/json/2/search.php?s=${encodeURIComponent(name)}`,
-    { method: "GET", connectTimeout: 8000 }
+    { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } }
   );
   if (!res.ok) return null;
   const data = (await res.json()) as TheAudioDbResponse;
@@ -37,7 +37,7 @@ export async function fetchWikipediaBio(name: string): Promise<string | null> {
   try {
     const res = await tauriFetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-      { method: "GET", connectTimeout: 8000 }
+      { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } }
     );
     if (!res.ok) return null;
     const data = (await res.json()) as { extract?: string };
