@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
+import { useSetting } from "./useSetting";
 import type { Server } from "../types/server";
 import { QK } from "../lib/query-keys";
 
@@ -13,6 +14,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const syncingRef = useRef(false);
   const syncedRef = useRef<string | null>(null);
+  const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
 
   function runSync(s: Server) {
     if (syncingRef.current) return;
@@ -66,11 +68,12 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   }, [server]);
 
   useEffect(() => {
-    if (!server) return;
-    const id = setInterval(() => { runSync(server); }, 5 * 60 * 1000);
+    const intervalMin = parseInt(autoSyncIntervalMin, 10);
+    if (!server || isNaN(intervalMin) || intervalMin <= 0) return;
+    const id = setInterval(() => { runSync(server); }, intervalMin * 60 * 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server]);
+  }, [server, autoSyncIntervalMin]);
 
   return { syncStatus, syncError, lastSyncedAt, runSync };
 }

@@ -24,11 +24,35 @@ export function PlaybackTab({ searchQuery }: Props) {
   const [minSeconds, setMinSeconds] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
 
+  const [autoSyncIntervalMin, setAutoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
+
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
 
   return (
     <>
+      {show("library", "sync", "auto sync", "background sync", "interval") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Library</h3>
+          <SettingRow
+            title="Background sync interval"
+            description="How often Canon automatically re-syncs the library in the background. Set to 0 to disable."
+          >
+            <select
+              value={autoSyncIntervalMin}
+              onChange={(e) => void setAutoSyncIntervalMin(e.target.value)}
+              className="settings-select"
+            >
+              <option value="0">Off</option>
+              <option value="5">Every 5 minutes</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every hour</option>
+            </select>
+          </SettingRow>
+        </section>
+      )}
+
       {show("queue", "restore", "play album", "action") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Queue</h3>

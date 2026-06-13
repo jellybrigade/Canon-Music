@@ -762,6 +762,25 @@
   margin-left: auto;
   display: flex;
   align-items: center;
+  gap: 2px;
+}
+
+.lyrics-offset-controls {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-right: 4px;
+}
+
+.lyrics-offset-value {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 3px;
+  line-height: 1;
 }
 
 .now-playing-tab-refresh-btn--active {

@@ -447,4 +447,8 @@ export const migrations: Migration[] = [
     version: 28,
     sql: `ALTER TABLE albums ADD COLUMN release_type TEXT;`,
   },
+  {
+    version: 29,
+    sql: `ALTER TABLE lyrics ADD COLUMN offset_ms INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];

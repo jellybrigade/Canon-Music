@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
@@ -18,6 +18,8 @@ interface LyricsResult {
   synced: string | null;
   loading: boolean;
   refresh: () => Promise<void>;
+  offsetMs: number;
+  setOffsetMs: (ms: number) => Promise<void>;
 }
 
 export function useLyrics(
@@ -102,10 +104,31 @@ export function useLyrics(
     await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, overrideArtist, overrideTitle, queryClient]);
 
+  const [offsetMs, setOffsetMsState] = useState(0);
+
+  useEffect(() => {
+    if (!track) { setOffsetMsState(0); return; }
+    let cancelled = false;
+    getDb()
+      .then((db) => db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [track.id]))
+      .then((rows) => { if (!cancelled) setOffsetMsState(rows[0]?.offset_ms ?? 0); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [track?.id]);
+
+  const setOffsetMs = useCallback(async (ms: number) => {
+    if (!track) return;
+    setOffsetMsState(ms);
+    const db = await getDb();
+    await db.execute("UPDATE lyrics SET offset_ms = ? WHERE track_id = ?", [ms, track.id]);
+  }, [track?.id]);
+
   return {
     plain: query.data?.plain ?? null,
     synced: query.data?.synced ?? null,
     loading: query.isFetching,
     refresh,
+    offsetMs,
+    setOffsetMs,
   };
 }
