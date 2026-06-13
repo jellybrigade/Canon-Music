@@ -17,6 +17,7 @@ import { QK } from "../lib/query-keys";
 import { fetchArtistInfo } from "../lib/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../lib/fanart";
+import { fetchTheAudioDbArtist, fetchWikipediaBio } from "../lib/theaudiodb";
 import { useSetting } from "./useSetting";
 
 export interface ArtistEnrichmentRow {
@@ -68,9 +69,25 @@ async function enrichArtist(
     const fanartKey = await getFanartApiKey();
     if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey);
   }
+
+  // Bio + portrait fallbacks: TheAudioDB then Wikipedia when Last.fm returns nothing
+  let finalBio = info.bio;
+  if (!finalBio) {
+    const adbResult = await fetchTheAudioDbArtist(artistName).catch(() => null);
+    if (adbResult) {
+      finalBio = adbResult.bio;
+      if (!imageUrl && !hasWikidataImage && adbResult.thumbUrl) {
+        imageUrl = adbResult.thumbUrl;
+      }
+    }
+    if (!finalBio) {
+      finalBio = await fetchWikipediaBio(artistName).catch(() => null);
+    }
+  }
+
   const db = await getDb();
   // Only mark as enriched when we actually got data — avoids locking out retries on API failure
-  const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
+  const gotData = !!(finalBio || info.listeners || info.similar.length > 0);
   const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(
@@ -90,7 +107,7 @@ async function enrichArtist(
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
-      info.bio,
+      finalBio,
       info.listeners,
       info.playcount,
       info.similar.length > 0 ? JSON.stringify(info.similar) : null,
