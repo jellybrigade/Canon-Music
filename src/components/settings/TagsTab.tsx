@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QK } from "../../lib/query-keys";
 import { getDb } from "../../db";
 import { normalizeAlbum } from "../../lib/tag-normalize";
 import { autoIdentifyAlbum } from "../../lib/album-identify";
 import { persistAlbumIdentity } from "../../hooks/useAlbumIdentity";
 import { getMinTagCount, setMinTagCount, setApiKey as setLastfmApiKey } from "../../lib/lastfm";
+import { getFanartApiKey, setFanartApiKey } from "../../lib/fanart";
 import { getMinFolksonomyCount, setMinFolksonomyCount } from "../../lib/musicbrainz";
 import { keychain } from "../../keychain";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
@@ -20,7 +22,7 @@ interface Props {
 
 function useLastRefreshed() {
   return useQuery({
-    queryKey: ["albums", "last-computed-at"],
+    queryKey: QK.albumsLastComputedAt(),
     queryFn: async () => {
       const db = await getDb();
       type Row = { last_at: number | null };
@@ -48,17 +50,32 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}`
     : lastfmKey;
 
+  const [fanartKey, setFanartKeyState] = useState("");
+  const [fanartKeyFocused, setFanartKeyFocused] = useState(false);
+  useEffect(() => {
+    getFanartApiKey()
+      .then((k) => { if (k) setFanartKeyState(k); })
+      .catch(() => {});
+  }, []);
+  async function handleSetFanartKey(k: string) {
+    setFanartKeyState(k);
+    await setFanartApiKey(k);
+  }
+  const fanartKeyDisplay = !fanartKeyFocused && fanartKey.length > 8
+    ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}`
+    : fanartKey;
+
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
 
   const { data: minTagCount } = useQuery({
-    queryKey: ["settings", "lastfm.min_tag_count"],
+    queryKey: QK.settingsLastfmMinTagCount(),
     queryFn: getMinTagCount,
   });
   const { data: minFolksonomyCount } = useQuery({
-    queryKey: ["settings", "musicbrainz.min_folksonomy_count"],
+    queryKey: QK.settingsMbMinFolksonomy(),
     queryFn: getMinFolksonomyCount,
   });
 
@@ -118,7 +135,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
         }
         setPullProgress({ done: i + 1, total: unmatched.length });
       }
-      await queryClient.invalidateQueries({ queryKey: ["album-identity"] });
+      await queryClient.invalidateQueries({ queryKey: QK.albumIdentityAll() });
     }
 
     type FullRow = {
@@ -155,7 +172,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       setPullProgress({ done: i + 1, total: albums.length });
     }
 
-    await queryClient.invalidateQueries({ queryKey: ["normalized-tags"] });
+    await queryClient.invalidateQueries({ queryKey: QK.normalizedTagsAll() });
     void refetchLastRefreshed();
     setPullProgress(null);
   }, [refetchLastRefreshed, queryClient, setPullProgress]);
@@ -196,7 +213,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v) && v >= 0 && v <= 100) {
                   void setMinTagCount(v).then(() => {
-                    void queryClient.invalidateQueries({ queryKey: ["settings", "lastfm.min_tag_count"] });
+                    void queryClient.invalidateQueries({ queryKey: QK.settingsLastfmMinTagCount() });
                   });
                 }
               }}
@@ -237,11 +254,31 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
                 const v = parseInt(e.target.value, 10);
                 if (!isNaN(v) && v >= 0 && v <= 100) {
                   void setMinFolksonomyCount(v).then(() => {
-                    void queryClient.invalidateQueries({ queryKey: ["settings", "musicbrainz.min_folksonomy_count"] });
+                    void queryClient.invalidateQueries({ queryKey: QK.settingsMbMinFolksonomy() });
                   });
                 }
               }}
               className="settings-staleness-input"
+            />
+          </SettingRow>
+        </section>
+      )}
+
+      {show("fanart", "fanart.tv", "portrait", "artist image", "api key") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Fanart.tv</h3>
+          <p className="settings-section-desc">
+            Richer artist portraits as a fallback when MusicBrainz / Wikidata has no image.
+            Get a free personal API key at fanart.tv.
+          </p>
+          <SettingRow title="API key" stacked>
+            <input
+              type="text"
+              placeholder="Paste your Fanart.tv API key"
+              value={fanartKeyDisplay}
+              onFocus={() => setFanartKeyFocused(true)}
+              onBlur={() => setFanartKeyFocused(false)}
+              onChange={(e) => void handleSetFanartKey(e.target.value)}
             />
           </SettingRow>
         </section>

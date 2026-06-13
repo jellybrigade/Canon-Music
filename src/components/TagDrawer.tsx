@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useAlbumIdentity } from "../hooks/useAlbumIdentity";
@@ -30,7 +31,7 @@ interface RawTagRow {
 
 function useTrackRawTags(trackId: string | undefined) {
   return useQuery({
-    queryKey: ["track-raw-tags", trackId],
+    queryKey: QK.trackRawTags(trackId),
     queryFn: async () => {
       if (!trackId) return [];
       const db = await getDb();
@@ -45,7 +46,7 @@ function useTrackRawTags(trackId: string | undefined) {
 
 function useAlbumRawGenreMap(albumId: string) {
   return useQuery({
-    queryKey: ["album-raw-genre-map", albumId],
+    queryKey: QK.albumRawGenreMap(albumId),
     queryFn: async () => {
       const db = await getDb();
       type Row = { canonical_id: string; raw_value: string };
@@ -72,7 +73,7 @@ function useAlbumRawGenreMap(albumId: string) {
 
 function useAlbumUnmatchedGenres(albumId: string) {
   return useQuery({
-    queryKey: ["album-unmatched-genres", albumId],
+    queryKey: QK.albumUnmatchedGenres(albumId),
     queryFn: async () => {
       const db = await getDb();
       // album_unresolved_genres captures all unmapped tags (file, lastfm, musicbrainz)
@@ -195,10 +196,10 @@ function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionP
       combinedMbTags,
     });
 
-    void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
-    void queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", albumId] });
-    void queryClient.invalidateQueries({ queryKey: ["album-genre-raw-sources", albumId] });
-    void queryClient.invalidateQueries({ queryKey: ["album-raw-genre-map", albumId] });
+    void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumGenreRawSources(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumRawGenreMap(albumId) });
   }
 
   return (

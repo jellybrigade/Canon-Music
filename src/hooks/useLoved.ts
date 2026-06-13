@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { starTrack, unstarTrack, starAlbum, unstarAlbum } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
+import { QK } from "../lib/query-keys";
 
 interface IdRow {
   id: string;
@@ -16,7 +17,7 @@ export function useLoved() {
   // on Sets, returns [], and incorrectly treats all Sets as identical, so
   // updates after the first render never propagate.
   const { data: lovedTrackArray = [] } = useQuery({
-    queryKey: ["loved_tracks"],
+    queryKey: QK.loved_tracks(),
     staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
@@ -26,7 +27,7 @@ export function useLoved() {
   });
 
   const { data: lovedAlbumArray = [] } = useQuery({
-    queryKey: ["loved_albums"],
+    queryKey: QK.loved_albums(),
     staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
@@ -36,7 +37,7 @@ export function useLoved() {
   });
 
   const { data: lovedTrackAlbumArray = [] } = useQuery({
-    queryKey: ["loved_track_albums"],
+    queryKey: QK.loved_track_albums(),
     staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
@@ -60,7 +61,7 @@ export function useLoved() {
     } else {
       await db.execute("INSERT OR REPLACE INTO loved_tracks (track_id) VALUES (?)", [trackId]);
     }
-    void queryClient.invalidateQueries({ queryKey: ["loved_tracks"] });
+    void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });
     const nativeId = stripServerPrefix(trackId, server.id);
     if (loved) {
       unstarTrack(server.url, server.username, credential, nativeId).catch((err) =>
@@ -82,7 +83,7 @@ export function useLoved() {
     } else {
       await db.execute("INSERT OR REPLACE INTO loved_albums (album_id) VALUES (?)", [albumId]);
     }
-    void queryClient.invalidateQueries({ queryKey: ["loved_albums"] });
+    void queryClient.invalidateQueries({ queryKey: QK.loved_albums() });
     const nativeId = stripServerPrefix(albumId, server.id);
     if (loved) {
       unstarAlbum(server.url, server.username, credential, nativeId).catch((err) =>

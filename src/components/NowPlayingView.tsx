@@ -17,6 +17,7 @@ import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
 import "./NowPlayingView.css";
 
@@ -53,7 +54,7 @@ interface SuggestedTrack {
 
 function useArtistAlbums(artistName: string | null) {
   return useQuery({
-    queryKey: ["nowplaying-albums", artistName],
+    queryKey: QK.nowPlayingAlbums(artistName),
     queryFn: async (): Promise<AlbumRow[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -70,7 +71,7 @@ function useArtistAlbums(artistName: string | null) {
 
 function useArtistTopTracks(artistName: string | null) {
   return useQuery({
-    queryKey: ["nowplaying-top-tracks", artistName],
+    queryKey: QK.nowPlayingTopTracks(artistName),
     queryFn: async (): Promise<TopTrack[]> => {
       if (!artistName) return [];
       const db = await getDb();
@@ -115,7 +116,7 @@ function useArtistTopTracks(artistName: string | null) {
 
 function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
   return useQuery({
-    queryKey: ["suggested-tracks", artistName, currentTrackId],
+    queryKey: QK.suggestedTracks(artistName, currentTrackId),
     queryFn: async (): Promise<SuggestedTrack[]> => {
       if (!artistName) return [];
       const similarArtists = await fetchSimilarArtists(artistName);

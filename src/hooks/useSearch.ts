@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 
 export interface SearchAlbum {
   id: string;
@@ -125,7 +126,7 @@ async function runSearch(query: string): Promise<SearchResults> {
 export function useSearch(query: string) {
   const trimmed = query.trim();
   return useQuery<SearchResults>({
-    queryKey: ["search", trimmed],
+    queryKey: QK.search(trimmed),
     queryFn: () => runSearch(trimmed),
     enabled: trimmed.length > 0,
     staleTime: 10_000,

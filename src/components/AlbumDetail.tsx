@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -91,8 +92,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
           : null,
       });
-      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
-      await queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", album.id] });
+      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
+      await queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(album.id) });
     } catch {
       // silent
     } finally {
@@ -186,7 +187,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
           : null,
       });
-      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
     } finally {
       setIsGenreUpdating(false);
     }
@@ -210,7 +211,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
           : null,
       });
-      await queryClient.invalidateQueries({ queryKey: ["normalized-tags", album.id] });
+      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
     } finally {
       setIsGenreUpdating(false);
     }
@@ -261,7 +262,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   }
 
   const { data: rawSourceRows = [] } = useQuery({
-    queryKey: ["album-genre-raw-sources", album.id],
+    queryKey: QK.albumGenreRawSources(album.id),
     queryFn: async () => {
       const db = await getDb();
       return db.select<{ canonical_id: string; raw_value: string; source: string }[]>(
@@ -333,7 +334,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   // Same query key + shape as TagDrawer's useAlbumUnmatchedGenres so the cache is shared.
   const { data: unmatchedGenres = [] } = useQuery({
-    queryKey: ["album-unmatched-genres", album.id],
+    queryKey: QK.albumUnmatchedGenres(album.id),
     queryFn: async () => {
       const db = await getDb();
       return db.select<{ raw_value: string; source: string }[]>(

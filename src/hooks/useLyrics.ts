@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import { fetchLyricsBySongId } from "../lib/navidrome";
+import { QK } from "../lib/query-keys";
 import { stripServerPrefix } from "../lib/ids";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
@@ -29,7 +30,7 @@ export function useLyrics(
   const overrideTitle = override?.title ?? null;
 
   const query = useQuery({
-    queryKey: ["lyrics", track?.id ?? null, overrideArtist, overrideTitle],
+    queryKey: QK.lyrics(track?.id ?? null, overrideArtist, overrideTitle),
     enabled: !!track,
     queryFn: async (): Promise<{ plain: string | null; synced: string | null }> => {
       if (!track) return { plain: null, synced: null };
@@ -98,7 +99,7 @@ export function useLyrics(
     if (!track) return;
     const db = await getDb();
     await db.execute("DELETE FROM lyrics WHERE track_id = ?", [track.id]);
-    await queryClient.invalidateQueries({ queryKey: ["lyrics", track.id] });
+    await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, overrideArtist, overrideTitle, queryClient]);
 
   return {

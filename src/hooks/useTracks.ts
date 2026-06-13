@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 
 export interface TrackRow {
   id: string;
@@ -17,7 +18,7 @@ export interface TrackRow {
 
 export function useTracks(albumId: string | null) {
   return useQuery({
-    queryKey: ["tracks", albumId],
+    queryKey: QK.tracks(albumId),
     enabled: albumId !== null,
     queryFn: async () => {
       const db = await getDb();

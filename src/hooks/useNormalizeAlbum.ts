@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { readNormalizedTags, normalizeAlbum, isStale, type NormalizedTags } from "../lib/tag-normalize";
 import { useSetting } from "./useSetting";
 import { useAlbumIdentity } from "./useAlbumIdentity";
@@ -19,7 +20,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   const decrementedRef = useRef(false);
 
   const query = useQuery({
-    queryKey: ["normalized-tags", albumId],
+    queryKey: QK.normalizedTags(albumId),
     queryFn: () => readNormalizedTags(albumId),
     enabled: !!albumId,
     staleTime: Infinity,
@@ -63,8 +64,8 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       combinedMbGenres,
       combinedMbTags,
     }).then(() => {
-      void queryClient.invalidateQueries({ queryKey: ["normalized-tags", albumId] });
-      void queryClient.invalidateQueries({ queryKey: ["album-unmatched-genres", albumId] });
+      void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
+      void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
       if (!decrementedRef.current) {
         decrementedRef.current = true;
         decrementEnrichmentPending();

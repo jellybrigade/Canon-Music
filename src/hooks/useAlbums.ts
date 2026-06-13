@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 
 export interface AlbumRow {
   id: string;
@@ -22,7 +23,7 @@ const ORDER_BY: Record<AlbumSort, string> = {
 
 export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = []) {
   return useQuery({
-    queryKey: ["albums", sort, canonicalIds],
+    queryKey: QK.albums(sort, canonicalIds),
     queryFn: async () => {
       const db = await getDb();
       const order = ORDER_BY[sort];

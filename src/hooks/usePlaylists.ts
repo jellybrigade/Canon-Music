@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
+import { QK } from "../lib/query-keys";
 import {
   createNavidromePlaylist,
   deleteNavidromePlaylist,
@@ -20,7 +21,7 @@ export function usePlaylists() {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["playlists"],
+    queryKey: QK.playlists(),
     queryFn: async () => {
       const db = await getDb();
       return db.select<PlaylistRow[]>(
@@ -39,7 +40,7 @@ export function usePlaylists() {
       "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
       [plDbId, server.id, created.name, created.comment ?? null, created.songCount]
     );
-    await queryClient.invalidateQueries({ queryKey: ["playlists"] });
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
   }
 
   async function deletePlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
@@ -49,7 +50,7 @@ export function usePlaylists() {
     const db = await getDb();
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
     await db.execute("DELETE FROM playlists WHERE id = ?", [playlist.id]);
-    await queryClient.invalidateQueries({ queryKey: ["playlists"] });
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
   }
 
   async function addTrackToPlaylist(
@@ -75,8 +76,8 @@ export function usePlaylists() {
       "UPDATE playlists SET track_count = track_count + 1 WHERE id = ?",
       [playlist.id]
     );
-    await queryClient.invalidateQueries({ queryKey: ["playlists"] });
-    await queryClient.invalidateQueries({ queryKey: ["playlist_tracks", playlist.id] });
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
   }
 
   return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist };

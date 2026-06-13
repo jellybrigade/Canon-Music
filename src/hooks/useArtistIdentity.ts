@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 import {
   searchArtists,
   lookupArtist,
@@ -18,7 +19,7 @@ export interface ArtistIdentityRow {
 
 export function useArtistIdentity(artistName: string) {
   return useQuery({
-    queryKey: ["artist-identity", artistName],
+    queryKey: QK.artistIdentity(artistName),
     queryFn: async (): Promise<ArtistIdentityRow | null> => {
       const db = await getDb();
       const rows = await db.select<ArtistIdentityRow[]>(
@@ -57,7 +58,7 @@ export function useIdentifyArtist({
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: ["identify-artist", artistName, overrideMbArtistId],
+    queryKey: QK.identifyArtist(artistName, overrideMbArtistId),
     queryFn: async (): Promise<ArtistLookupResult> => {
       try {
         let artistId = overrideMbArtistId ?? null;
@@ -138,16 +139,16 @@ export function useSaveArtistIdentity() {
     },
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({
-        queryKey: ["artist-identity", input.artistName],
+        queryKey: QK.artistIdentity(input.artistName),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["artist-enrichment", input.artistName],
+        queryKey: QK.artistEnrichment(input.artistName),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["artist-image", input.lastfmArtistName ?? input.artistName],
+        queryKey: QK.artistImage(input.lastfmArtistName ?? input.artistName),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["lastfm-artist-top-tracks", input.lastfmArtistName ?? input.artistName],
+        queryKey: QK.lastfmArtistTopTracks(input.lastfmArtistName ?? input.artistName),
       });
     },
   });

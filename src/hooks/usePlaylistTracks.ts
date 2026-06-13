@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { removeTrackFromNavidromePlaylist } from "../lib/navidrome";
 import { stripServerPrefix } from "../lib/ids";
+import { QK } from "../lib/query-keys";
 
 export interface PlaylistTrackRow {
   id: string;
@@ -21,7 +22,7 @@ export function usePlaylistTracks(playlistId: string | null) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["playlist_tracks", playlistId],
+    queryKey: QK.playlistTracks(playlistId),
     queryFn: async () => {
       if (!playlistId) return [];
       const db = await getDb();
@@ -56,8 +57,8 @@ export function usePlaylistTracks(playlistId: string | null) {
       "UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?",
       [playlist.id]
     );
-    await queryClient.invalidateQueries({ queryKey: ["playlist_tracks", playlistId] });
-    await queryClient.invalidateQueries({ queryKey: ["playlists"] });
+    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlistId) });
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
   }
 
   return { ...query, removeTrack };

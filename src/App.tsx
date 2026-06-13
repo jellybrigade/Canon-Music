@@ -35,6 +35,7 @@ import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
@@ -61,6 +62,7 @@ import "./App.css";
 export default function App() {
   useTrackEndedListener();
   useMediaSession();
+  useWakeLock();
   useRadio();
   useBackgroundNormalizer();
   useNowPlayingPrefetch();

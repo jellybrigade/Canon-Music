@@ -159,6 +159,33 @@
   gap: 0.75rem;
 }
 
+.wizard-auth-method {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.wizard-auth-tab {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border-radius: 0;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.wizard-auth-tab:hover {
+  color: var(--text-primary);
+}
+
+.wizard-auth-tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}
+
 .wizard-actions {
   display: flex;
   gap: 0.625rem;

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { sqlNorm } from "../lib/canonicalize";
 import type { TagKind } from "../lib/canonicalize";
+import { QK } from "../lib/query-keys";
 
 // ── Sentinel constants ────────────────────────────────────────────────────────
 
@@ -69,10 +70,10 @@ export function useTagMappings() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.genreDisplayMappings() });
     },
     onError: (e) => {
       console.error("[saveMapping]", e);
@@ -98,10 +99,10 @@ export function useTagMappings() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.genreDisplayMappings() });
     },
   });
 
@@ -122,9 +123,9 @@ export function useTagMappings() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["genre-display-mappings"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.genreDisplayMappings() });
     },
   });
 
@@ -146,7 +147,7 @@ export function useTagMappings() {
  */
 export function useTagVocab() {
   return useQuery({
-    queryKey: ["tag-vocab"],
+    queryKey: QK.tagVocab(),
     queryFn: async () => {
       const db = await getDb();
       return db.select<TagVocabRow[]>(`
@@ -189,7 +190,7 @@ export function useTagVocab() {
 /** Album art for a tag — works for both resolved and unresolved tags. */
 export function useTagAlbums(rawValue: string, kind: TagKind) {
   return useQuery({
-    queryKey: ["tag-albums", rawValue, kind],
+    queryKey: QK.tagAlbums(rawValue, kind),
     queryFn: async () => {
       const db = await getDb();
       type Row = { album_id: string; album_name: string; artwork_url: string | null };
@@ -293,9 +294,9 @@ export function useAutoMapExact() {
       return { mapped, remaining };
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
     },
   });
 }
@@ -306,7 +307,7 @@ export function useRapToHipHop() {
   const queryClient = useQueryClient();
 
   const { data: enabled } = useQuery({
-    queryKey: ["settings", "tags.rap_to_hiphop"],
+    queryKey: QK.tagRapToHipHop(),
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<{ value: string }[]>(
@@ -343,10 +344,10 @@ export function useRapToHipHop() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["settings", "tags.rap_to_hiphop"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag_mappings"] });
-      void queryClient.invalidateQueries({ queryKey: ["tag-vocab"] });
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
+      void queryClient.invalidateQueries({ queryKey: QK.tagRapToHipHop() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
+      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
     },
   });
 

@@ -13,8 +13,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 import { fetchArtistInfo } from "../lib/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
+import { getFanartApiKey, fetchFanartTvImageByMbid } from "../lib/fanart";
 import { useSetting } from "./useSetting";
 
 export interface ArtistEnrichmentRow {
@@ -61,6 +63,11 @@ async function enrichArtist(
     fetchArtistInfo(lastfmName),
     resolvedMbid && !hasWikidataImage ? fetchWikidataImageByMbid(resolvedMbid) : Promise.resolve(null),
   ]);
+  let imageUrl = wikidataImageUrl;
+  if (!imageUrl && !hasWikidataImage && resolvedMbid) {
+    const fanartKey = await getFanartApiKey();
+    if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey);
+  }
   const db = await getDb();
   // Only mark as enriched when we actually got data — avoids locking out retries on API failure
   const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
@@ -89,7 +96,7 @@ async function enrichArtist(
       info.similar.length > 0 ? JSON.stringify(info.similar) : null,
       info.topTags.length > 0 ? JSON.stringify(info.topTags) : null,
       info.imageUrl,
-      wikidataImageUrl,
+      imageUrl,
       enrichedAt,
     ]
   );
@@ -105,7 +112,7 @@ export function useEnrichArtist(artistName: string) {
   const ranRef = useRef(false);
 
   const query = useQuery({
-    queryKey: ["artist-enrichment", artistName],
+    queryKey: QK.artistEnrichment(artistName),
     queryFn: async (): Promise<ArtistEnrichmentRow | null> => {
       if (!artistName) return null;
       const db = await getDb();
@@ -131,7 +138,7 @@ export function useEnrichArtist(artistName: string) {
 
     if (inFlight.has(artistName)) return;
     const promise = enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage)
-      .then(() => queryClient.invalidateQueries({ queryKey: ["artist-enrichment", artistName] }))
+      .then(() => queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) }))
       .catch(() => { /* silent */ })
       .finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
@@ -147,7 +154,7 @@ export function useEnrichArtist(artistName: string) {
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
     try {
       await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
-      await queryClient.invalidateQueries({ queryKey: ["artist-enrichment", artistName] });
+      await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
     } catch (e) {
       console.error("[useEnrichArtist] refresh failed:", e);
       setError(e instanceof Error ? e.message : String(e));

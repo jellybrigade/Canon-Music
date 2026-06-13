@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { TagKind } from "../lib/canonicalize";
+import { QK } from "../lib/query-keys";
 
 export interface TrackTagRow {
   id: number;
@@ -20,7 +21,7 @@ export interface AlbumTagSummary {
 
 export function useTrackTagsForAlbum(albumId: string) {
   return useQuery({
-    queryKey: ["track_tags", "album", albumId],
+    queryKey: QK.trackTagsAlbum(albumId),
     queryFn: async () => {
       const db = await getDb();
       return db.select<TrackTagRow[]>(
@@ -38,7 +39,7 @@ export function useTrackTagsForAlbum(albumId: string) {
 
 export function useOffTreeAlbumIds() {
   return useQuery({
-    queryKey: ["track_tags", "off_tree_albums"],
+    queryKey: QK.trackTagsOffTree(),
     queryFn: async () => {
       const db = await getDb();
       type Row = { album_id: string };
@@ -68,7 +69,7 @@ export function useTrackTagMutations() {
       }
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
     },
   });
 
@@ -81,8 +82,8 @@ export function useTrackTagMutations() {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["track_tags"] });
-      void queryClient.invalidateQueries({ queryKey: ["track_tags", "off_tree_albums"] });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
+      void queryClient.invalidateQueries({ queryKey: QK.trackTagsOffTree() });
     },
   });
 
@@ -91,7 +92,7 @@ export function useTrackTagMutations() {
 
 export function useAlbumTagsRefreshedAt(albumId: string) {
   return useQuery({
-    queryKey: ["albums", "tags_refreshed_at", albumId],
+    queryKey: QK.albumsTagsRefreshedAt(albumId),
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<{ tags_refreshed_at: string | null }[]>(
@@ -106,7 +107,7 @@ export function useAlbumTagsRefreshedAt(albumId: string) {
 
 export function useStaleAlbums(staleDays: number) {
   return useQuery({
-    queryKey: ["albums", "stale", staleDays],
+    queryKey: QK.albumsStale(staleDays),
     queryFn: async () => {
       const db = await getDb();
       type Row = { id: string; name: string; artist: string | null; tags_refreshed_at: string | null };
@@ -125,7 +126,7 @@ export function useStaleAlbums(staleDays: number) {
 
 export function useTagStats() {
   return useQuery({
-    queryKey: ["track_tags", "stats"],
+    queryKey: QK.trackTagsStats(),
     queryFn: async () => {
       const db = await getDb();
       type Row = { total: number; canonical: number; off_tree: number };

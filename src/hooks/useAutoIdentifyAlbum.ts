@@ -13,6 +13,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { autoIdentifyAlbum } from "../lib/album-identify";
 import type { AutoDecision, AutoIdentifyResult } from "../lib/album-identify";
+import { QK } from "../lib/query-keys";
 import type { AlbumIdentityRow } from "./useAlbumIdentity";
 
 export type { AutoDecision, AutoIdentifyResult };
@@ -37,7 +38,7 @@ export function useAutoIdentifyAlbum({
   identityLoaded: boolean;
 }) {
   return useQuery({
-    queryKey: ["auto-identify-album", albumId],
+    queryKey: QK.autoIdentifyAlbum(albumId),
     queryFn: (): Promise<AutoIdentifyResult> => autoIdentifyAlbum({ artist, album, trackCount }),
     enabled:
       mbAutoIdentify &&

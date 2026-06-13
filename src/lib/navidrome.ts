@@ -1,9 +1,8 @@
 import { md5 } from "js-md5";
 
-export interface NavidromeCredential {
-  token: string;
-  salt: string;
-}
+export type NavidromeCredential =
+  | { type: "md5"; token: string; salt: string }
+  | { type: "apikey"; apiKey: string };
 
 export interface NavidromeAlbum {
   id: string;
@@ -37,8 +36,12 @@ function buildAuthParams(
 ): URLSearchParams {
   const p = new URLSearchParams();
   p.set("u", username);
-  p.set("t", credential.token);
-  p.set("s", credential.salt);
+  if (credential.type === "apikey") {
+    p.set("apiKey", credential.apiKey);
+  } else {
+    p.set("t", credential.token);
+    p.set("s", credential.salt);
+  }
   p.set("v", "1.16.1");
   p.set("c", "canon");
   p.set("f", "json");
@@ -580,5 +583,26 @@ export async function authenticate(
     throw new Error(response.error?.message ?? "Authentication failed");
   }
 
-  return { token, salt };
+  return { type: "md5", token, salt };
+}
+
+export async function authenticateWithApiKey(
+  baseUrl: string,
+  username: string,
+  apiKey: string
+): Promise<NavidromeCredential> {
+  const params = new URLSearchParams({ u: username, apiKey, v: "1.16.1", c: "canon", f: "json" });
+  const res = await apiPost(baseUrl, "ping.view", params);
+  if (!res.ok) {
+    const origin = new URL(normalizeUrl(baseUrl)).origin;
+    throw new Error(`Server returned ${res.status} — check URL (tried: ${origin}/rest/ping.view)`);
+  }
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { code: number; message: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "Authentication failed");
+  }
+  return { type: "apikey", apiKey };
 }

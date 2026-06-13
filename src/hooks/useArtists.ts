@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { QK } from "../lib/query-keys";
 
 export interface ArtistRow {
   name: string;
@@ -9,7 +10,7 @@ export interface ArtistRow {
 
 export function useArtists() {
   return useQuery({
-    queryKey: ["artists"],
+    queryKey: QK.artists(),
     queryFn: async (): Promise<ArtistRow[]> => {
       const db = await getDb();
       return db.select<ArtistRow[]>(`

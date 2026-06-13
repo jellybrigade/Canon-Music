@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
@@ -231,7 +232,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   const albumDisplayName = useAlbumDisplayName();
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const { data: genres } = useQuery({
-    queryKey: ["spotlight-genres", pick.album.id],
+    queryKey: QK.spotlightGenres(pick.album.id),
     queryFn: async () => {
       const db = await getDb();
       return db.select<{ name: string }[]>(
