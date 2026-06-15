@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { starTrack, unstarTrack, starAlbum, unstarAlbum } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import { QK } from "../lib/query-keys";
 
 interface IdRow {

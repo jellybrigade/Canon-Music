@@ -3,7 +3,7 @@ import { getDb } from "../db";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/player";
 import { reportNowPlaying } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
 

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { getDb } from "../db";
 import { scrobbleTrack } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 
 const FLUSH_INTERVAL_MS = 60_000;

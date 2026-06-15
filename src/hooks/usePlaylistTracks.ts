@@ -2,21 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { removeTrackFromNavidromePlaylist } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import { QK } from "../lib/query-keys";
-
-export interface PlaylistTrackRow {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  genre: string | null;
-  track_number: number | null;
-  position: number;
-  artwork_url: string | null;
-  album_name: string | null;
-  album_id: string | null;
-}
+import type { PlaylistTrackRow } from "../types/library";
+export type { PlaylistTrackRow } from "../types/library";
 
 export function usePlaylistTracks(playlistId: string | null) {
   const queryClient = useQueryClient();

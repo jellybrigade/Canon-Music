@@ -1,20 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
-
-export interface TrackRow {
-  id: string;
-  title: string;
-  artist: string | null;
-  album_artist: string | null;
-  album_id: string;
-  genre: string | null;
-  track_number: number | null;
-  disc_number: number | null;
-  year: number | null;
-  duration: number | null;
-  file_path: string | null;
-}
+import type { TrackRow } from "../types/library";
+export type { TrackRow } from "../types/library";
 
 export function useTracks(albumId: string | null) {
   return useQuery({

@@ -4,7 +4,7 @@ import { usePlayerStore } from "../store/player";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "../lib/lastfm";
-import type { AlbumRow } from "./useAlbums";
+import type { AlbumRow } from "../types/library";
 
 interface TopTrack {
   id: string;

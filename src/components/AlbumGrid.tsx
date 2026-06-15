@@ -2,7 +2,7 @@ import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "r
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AlbumRow, AlbumSort } from "../hooks/useAlbums";
+import type { AlbumRow, AlbumSort } from "../types/library";
 import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";

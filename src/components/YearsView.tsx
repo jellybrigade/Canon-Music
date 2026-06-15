@@ -1,6 +1,6 @@
 import { AlbumGrid } from "./AlbumGrid";
 import { useAlbums } from "../hooks/useAlbums";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { RadioMode } from "../store/player";
 

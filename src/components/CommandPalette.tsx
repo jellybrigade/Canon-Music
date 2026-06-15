@@ -4,7 +4,7 @@ import { House, Music, Users, ListMusic, Settings, List, Play, User } from "luci
 import { useSearch } from "../hooks/useSearch";
 import { getCoverArtUrl } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";

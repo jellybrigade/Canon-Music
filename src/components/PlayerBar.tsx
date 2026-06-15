@@ -15,7 +15,7 @@ import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 

@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
-import type { AlbumRow } from "./useAlbums";
+import type { AlbumRow } from "../types/library";
 import { QK } from "../lib/query-keys";
 
 export interface AlbumStatRow extends AlbumRow {

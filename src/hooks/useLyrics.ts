@@ -4,7 +4,7 @@ import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import { fetchLyricsBySongId } from "../lib/navidrome";
 import { QK } from "../lib/query-keys";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Trash2 } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
-import type { PlaylistTrackRow } from "../hooks/usePlaylistTracks";
+import type { PlaylistTrackRow } from "../types/library";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";

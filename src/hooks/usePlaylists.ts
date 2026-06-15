@@ -7,7 +7,7 @@ import {
   deleteNavidromePlaylist,
   addTrackToNavidromePlaylist,
 } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 
 export interface PlaylistRow {
   id: string;

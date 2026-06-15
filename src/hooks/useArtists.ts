@@ -1,12 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
-
-export interface ArtistRow {
-  name: string;
-  album_count: number;
-  artwork_url: string | null;
-}
+import type { ArtistRow } from "../types/library";
+export type { ArtistRow } from "../types/library";
 
 export function useArtists() {
   return useQuery({

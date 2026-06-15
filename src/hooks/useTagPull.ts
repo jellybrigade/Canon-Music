@@ -5,7 +5,7 @@ import { QK } from "../lib/query-keys";
 import { findCanonical, getCanonTree, sqlNorm } from "../lib/canonicalize";
 import { useTagsStore } from "../store/tags";
 import type { InboxItem, InboxTagRow } from "../store/tags";
-import type { AlbumRow } from "./useAlbums";
+import type { AlbumRow } from "../types/library";
 
 export type PullMode = "silent" | "review";
 
