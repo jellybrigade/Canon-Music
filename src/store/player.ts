@@ -932,10 +932,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.show_waveform')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
+        let showWaveform = false;
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
@@ -995,6 +996,31 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {
             set({ consumeOnSkip: row.value === "true" });
+          } else if (row.key === "player.show_waveform") {
+            showWaveform = row.value === "true";
+          }
+        }
+        // Load waveform from cache for the restored track — fetchWaveform is only
+        // called from playTrack, so a session-restored track would show nothing until
+        // the user navigated away and back.
+        if (showWaveform) {
+          const restoredTrack = get().currentTrack;
+          if (restoredTrack) {
+            type WRow = { peaks_json: string };
+            const wrows = await db.select<WRow[]>(
+              "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
+              [restoredTrack.id]
+            );
+            if (wrows[0]) {
+              try {
+                const peaks = JSON.parse(wrows[0].peaks_json) as number[];
+                const lastMeaningful = peaks.reduce((last, v, i) => (v > 0.01 ? i : last), -1);
+                const coverage = peaks.length > 0 ? (lastMeaningful + 1) / peaks.length : 0;
+                if (coverage >= 0.5 && get().currentTrack?.id === restoredTrack.id) {
+                  set({ waveformPeaks: peaks });
+                }
+              } catch { /* malformed peaks, ignore */ }
+            }
           }
         }
       } catch (e) {

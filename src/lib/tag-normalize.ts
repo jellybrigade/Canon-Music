@@ -41,6 +41,19 @@ export interface NormalizedTags {
 const STALE_DAYS_DEFAULT = 30;
 const CAPS = { genres: 6, descriptors: 6, scenes: 4 };
 
+const YEAR_LIKE_RE = /^\d{4}s?$|^\d{2}s$|^'\d{2}s$/i;
+export function isYearLikeGenre(s: string): boolean {
+  return YEAR_LIKE_RE.test(s.trim());
+}
+
+export async function getSkipYearGenres(): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key = 'tags.skip_year_genres'"
+  );
+  return rows[0]?.value === "true";
+}
+
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {
   const db = await getDb();
   type Row = { normalized_tags_json: string | null };
@@ -89,6 +102,7 @@ async function _doNormalizeAlbum(
 ): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
+  const skipYearGenres = await getSkipYearGenres();
 
   type TagRow = { raw_value: string };
   const fileTagRows = await db.select<TagRow[]>(
@@ -153,17 +167,21 @@ async function _doNormalizeAlbum(
   type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
+    if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
     byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
   }
   for (const raw of lastfmRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
   for (const raw of mbRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
   for (const raw of mbFolkRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }

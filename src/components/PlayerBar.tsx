@@ -306,8 +306,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
                 <span className="player-artist">{currentTrack.artist}</span>
               )
             )}
+            <RadioChip />
           </div>
-          <RadioChip />
         </div>
 
         <div className="player-section player-section--center">
