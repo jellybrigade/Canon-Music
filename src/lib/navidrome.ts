@@ -1,5 +1,10 @@
 import { md5 } from "js-md5";
 
+let _streamMaxBitrate = 0;
+export function setStreamMaxBitrate(kbps: number): void {
+  _streamMaxBitrate = kbps;
+}
+
 export type NavidromeCredential =
   | { type: "md5"; token: string; salt: string }
   | { type: "apikey"; apiKey: string };
@@ -170,6 +175,9 @@ export function getStreamUrl(
 ): string {
   const params = buildAuthParams(username, credential);
   params.set("id", trackId);
+  if (_streamMaxBitrate > 0) {
+    params.set("maxBitRate", String(_streamMaxBitrate));
+  }
   return `${normalizeUrl(baseUrl)}/rest/stream?${params.toString()}`;
 }
 

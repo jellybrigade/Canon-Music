@@ -148,6 +148,7 @@ interface PlayerState {
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
+  removeManyFromQueue: (positions: number[]) => Promise<void>;
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
@@ -896,6 +897,49 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
         // If queue is now empty and repeat requires it, just stop cleanly
         if (newQueue.length === 0) get().stop();
+      }
+      void persistQueueState();
+    },
+
+    removeManyFromQueue: async (positions: number[]) => {
+      if (positions.length === 0) return;
+      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+
+      // Sort descending so we remove high indices first — avoids index drift
+      const sorted = [...new Set(positions)].sort((a, b) => b - a);
+
+      let newQueue = [...queue];
+      let newShuffleOrder = [...shuffleOrder];
+      let newQueueIndex = queueIndex;
+      let removedCurrentTrack = false;
+
+      for (const pos of sorted) {
+        if (pos < 0 || pos >= newQueue.length) continue;
+        if (isShuffled && newShuffleOrder.length > 0) {
+          const actualIdx = newShuffleOrder[pos]!;
+          newQueue.splice(actualIdx, 1);
+          newShuffleOrder = newShuffleOrder
+            .filter((_, i) => i !== pos)
+            .map((idx) => (idx > actualIdx ? idx - 1 : idx));
+          if (pos < newQueueIndex) newQueueIndex--;
+          else if (pos === newQueueIndex) removedCurrentTrack = true;
+        } else {
+          newQueue.splice(pos, 1);
+          if (pos < newQueueIndex) newQueueIndex--;
+          else if (pos === newQueueIndex) removedCurrentTrack = true;
+        }
+      }
+
+      newQueueIndex = Math.min(newQueueIndex, Math.max(0, newQueue.length - 1));
+      set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
+
+      if (removedCurrentTrack) {
+        if (newQueue.length > 0 && streamUrlFor) {
+          const next = resolveTrack(newQueue, newShuffleOrder, isShuffled, newQueueIndex);
+          if (next) await playTrack(next, streamUrlFor(next));
+        } else {
+          get().stop();
+        }
       }
       void persistQueueState();
     },

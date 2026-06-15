@@ -201,3 +201,15 @@
   user-select: none;
 }
 
+.queue-row--selected {
+  background-color: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.queue-row--selected:hover {
+  background-color: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.queue-deselect {
+  margin-left: auto;
+}
+

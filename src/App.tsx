@@ -48,7 +48,7 @@ import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { FeedbackModal } from "./components/FeedbackModal";
-import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
+import { getCoverArtUrl, getStreamUrl, setStreamMaxBitrate } from "./lib/navidrome";
 import { stripServerPrefix } from "./lib/ids";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -164,6 +164,8 @@ export default function App() {
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
   const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
+  const [streamMaxBitrate] = useSetting("stream.max_bitrate", "0");
+  useEffect(() => { setStreamMaxBitrate(parseInt(streamMaxBitrate, 10)); }, [streamMaxBitrate]);
   useEffect(() => {
     void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
   }, []);

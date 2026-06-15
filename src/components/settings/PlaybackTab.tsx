@@ -25,9 +25,10 @@ export function PlaybackTab({ searchQuery }: Props) {
   const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
 
   const [autoSyncIntervalMin, setAutoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
+  const [streamMaxBitrate, setStreamMaxBitrate] = useSetting("stream.max_bitrate", "0");
 
   const fl = searchQuery.toLowerCase().trim();
-  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+  const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
 
   return (
     <>
@@ -81,9 +82,24 @@ export function PlaybackTab({ searchQuery }: Props) {
         </section>
       )}
 
-      {show("audio", "speed", "fade", "pause", "resume") && (
+      {show("audio", "speed", "fade", "pause", "resume", "stream", "quality", "bitrate", "transcod") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Audio</h3>
+          <SettingRow
+            title="Stream quality"
+            description="Max bitrate for audio streaming. Raw sends the original file. Lower bitrates reduce bandwidth via server-side transcoding."
+          >
+            <select
+              value={streamMaxBitrate}
+              onChange={(e) => void setStreamMaxBitrate(e.target.value)}
+              className="settings-select"
+            >
+              <option value="0">Raw (original)</option>
+              <option value="320">320 kbps</option>
+              <option value="192">192 kbps</option>
+              <option value="128">128 kbps</option>
+            </select>
+          </SettingRow>
           <SettingRow
             title={`Playback speed — ${speed.toFixed(2)}×`}
             description="Speed up or slow down playback. Affects pitch (no time-stretch)."
