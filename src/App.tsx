@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -15,6 +15,7 @@ const SettingsView   = lazy(() => import("./components/SettingsView").then((m) =
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
 const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
+const YearsView      = lazy(() => import("./components/YearsView").then((m) => ({ default: m.YearsView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { CanonLockup } from "./components/CanonIcon";
@@ -352,6 +353,7 @@ export default function App() {
     { id: "library", label: "Library", icon: <Music size={24} /> },
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
     { id: "genres", label: "Genres", icon: <Layers size={24} /> },
+    { id: "years", label: "Years", icon: <Calendar size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
@@ -715,6 +717,20 @@ export default function App() {
                 onPlayGenre={(canonicalId, label) => { void handlePlayGenre(canonicalId, label); }}
               />
             </main>
+          </Suspense>
+        );
+
+      case "years":
+        return (
+          <Suspense fallback={null}>
+            {serverWithCred ? (
+              <YearsView
+                serverWithCredential={serverWithCred}
+                onSelect={setSelectedAlbum}
+                onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+                serverDisplayName={server?.display_name}
+              />
+            ) : <main className="content-main" />}
           </Suspense>
         );
 

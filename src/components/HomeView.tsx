@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Play, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -699,11 +699,12 @@ interface AlbumCarouselProps {
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
+  onRadio?: () => void;
 }
 
 const CARD_WIDTH = 168 + 14;
 
-function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu }: AlbumCarouselProps) {
+function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
 
@@ -722,6 +723,11 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
       <div className="home-section__header">
         <h2 className="home-section__title">{title}</h2>
         {subtitle && <p className="home-section__subtitle">{subtitle}</p>}
+        {onRadio && (
+          <button className="home-section__radio-btn" onClick={onRadio} aria-label={`Start ${title} radio`} title="Start radio">
+            <Radio size={13} />
+          </button>
+        )}
       </div>
       <div className="album-carousel">
         <button className="album-carousel__arrow album-carousel__arrow--prev" onClick={() => scroll("prev")} aria-label="Scroll left">
@@ -1005,12 +1011,12 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onConfigChange={handleForYouConfigChange}
           />
 
-          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} />
+          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
         </>
       )}
       {contextMenu && (

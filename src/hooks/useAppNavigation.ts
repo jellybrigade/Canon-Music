@@ -4,7 +4,7 @@ import type { AlbumRow } from "./useAlbums";
 import type { ArtistRow } from "./useArtists";
 import type { PlaylistRow } from "./usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "playlists" | "tags" | "settings";
+export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tags" | "settings";
 
 type NavEntry = {
   view: AppView;
