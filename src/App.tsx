@@ -136,7 +136,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
 
@@ -439,6 +439,8 @@ export default function App() {
         serverWithCredential={serverWithCred}
         onSelect={setSelectedAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+        onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
+        playlists={playlists}
         emptyMessage={emptyMessage}
         scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}-${yearFromInput}-${yearToInput}`}
         sort={sort}
@@ -745,6 +747,7 @@ export default function App() {
                   await deletePlaylist(selectedPlaylist, serverWithCred);
                   setSelectedPlaylist(null);
                 }}
+                onRename={renamePlaylist}
               />
             ) : (
               <>

@@ -56,14 +56,27 @@ function buildAuthParams(
 async function apiPost(
   baseUrl: string,
   endpoint: string,
-  params: URLSearchParams
+  params: URLSearchParams,
+  altUrl?: string
 ): Promise<Response> {
   const url = `${normalizeUrl(baseUrl)}/rest/${endpoint}`;
-  return fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
-  });
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+  } catch (err) {
+    if (altUrl && err instanceof TypeError) {
+      const fallbackUrl = `${normalizeUrl(altUrl)}/rest/${endpoint}`;
+      return fetch(fallbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+    }
+    throw err;
+  }
 }
 
 export function getCoverArtUrl(
@@ -82,7 +95,8 @@ export function getCoverArtUrl(
 export async function fetchAllAlbums(
   baseUrl: string,
   username: string,
-  credential: NavidromeCredential
+  credential: NavidromeCredential,
+  altUrl?: string
 ): Promise<NavidromeAlbum[]> {
   const PAGE_SIZE = 500;
   const albums: NavidromeAlbum[] = [];
@@ -94,7 +108,7 @@ export async function fetchAllAlbums(
     params.set("size", String(PAGE_SIZE));
     params.set("offset", String(offset));
 
-    const res = await apiPost(baseUrl, "getAlbumList2", params);
+    const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl);
     if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
     const data = (await res.json()) as {
@@ -125,13 +139,14 @@ export async function fetchAlbumListByType(
   username: string,
   credential: NavidromeCredential,
   type: "recent" | "frequent" | "newest",
-  size = 20
+  size = 20,
+  altUrl?: string
 ): Promise<NavidromeAlbum[]> {
   const params = buildAuthParams(username, credential);
   params.set("type", type);
   params.set("size", String(size));
 
-  const res = await apiPost(baseUrl, "getAlbumList2", params);
+  const res = await apiPost(baseUrl, "getAlbumList2", params, altUrl);
   if (!res.ok) throw new Error(`getAlbumList2 returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -185,11 +200,12 @@ export async function fetchAlbumTracks(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  albumId: string
+  albumId: string,
+  altUrl?: string
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", albumId);
-  const res = await apiPost(baseUrl, "getAlbum", params);
+  const res = await apiPost(baseUrl, "getAlbum", params, altUrl);
   if (!res.ok) throw new Error(`getAlbum returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -216,10 +232,11 @@ export interface NavidromeStarred {
 export async function fetchStarred2(
   baseUrl: string,
   username: string,
-  credential: NavidromeCredential
+  credential: NavidromeCredential,
+  altUrl?: string
 ): Promise<NavidromeStarred> {
   const params = buildAuthParams(username, credential);
-  const res = await apiPost(baseUrl, "getStarred2", params);
+  const res = await apiPost(baseUrl, "getStarred2", params, altUrl);
   if (!res.ok) throw new Error(`getStarred2 returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -240,11 +257,12 @@ async function callSubsonicVoid(
   username: string,
   credential: NavidromeCredential,
   endpoint: string,
-  extraParams: Record<string, string>
+  extraParams: Record<string, string>,
+  altUrl?: string
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);
-  const res = await apiPost(baseUrl, endpoint, params);
+  const res = await apiPost(baseUrl, endpoint, params, altUrl);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { message: string } };
@@ -259,36 +277,40 @@ export function starTrack(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeTrackId: string
+  nativeTrackId: string,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "star.view", { id: nativeTrackId });
+  return callSubsonicVoid(baseUrl, username, credential, "star.view", { id: nativeTrackId }, altUrl);
 }
 
 export function unstarTrack(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeTrackId: string
+  nativeTrackId: string,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "unstar.view", { id: nativeTrackId });
+  return callSubsonicVoid(baseUrl, username, credential, "unstar.view", { id: nativeTrackId }, altUrl);
 }
 
 export function starAlbum(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeAlbumId: string
+  nativeAlbumId: string,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "star.view", { albumId: nativeAlbumId });
+  return callSubsonicVoid(baseUrl, username, credential, "star.view", { albumId: nativeAlbumId }, altUrl);
 }
 
 export function unstarAlbum(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeAlbumId: string
+  nativeAlbumId: string,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "unstar.view", { albumId: nativeAlbumId });
+  return callSubsonicVoid(baseUrl, username, credential, "unstar.view", { albumId: nativeAlbumId }, altUrl);
 }
 
 export function setRating(
@@ -296,21 +318,23 @@ export function setRating(
   username: string,
   credential: NavidromeCredential,
   nativeTrackId: string,
-  rating: number
+  rating: number,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "setRating.view", { id: nativeTrackId, rating: String(rating) });
+  return callSubsonicVoid(baseUrl, username, credential, "setRating.view", { id: nativeTrackId, rating: String(rating) }, altUrl);
 }
 
 export async function fetchTrackRating(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeTrackId: string
+  nativeTrackId: string,
+  altUrl?: string
 ): Promise<number> {
   const params = buildAuthParams(username, credential);
   params.set("id", nativeTrackId);
   try {
-    const res = await apiPost(baseUrl, "getSong", params);
+    const res = await apiPost(baseUrl, "getSong", params, altUrl);
     if (!res.ok) return 0;
     const data = (await res.json()) as {
       "subsonic-response": { status: string; song?: { userRating?: number } };
@@ -327,15 +351,17 @@ export interface NavidromePlaylist {
   name: string;
   comment?: string;
   songCount: number;
+  coverArt?: string;
 }
 
 export async function fetchPlaylists(
   baseUrl: string,
   username: string,
-  credential: NavidromeCredential
+  credential: NavidromeCredential,
+  altUrl?: string
 ): Promise<NavidromePlaylist[]> {
   const params = buildAuthParams(username, credential);
-  const res = await apiPost(baseUrl, "getPlaylists", params);
+  const res = await apiPost(baseUrl, "getPlaylists", params, altUrl);
   if (!res.ok) throw new Error(`getPlaylists returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -358,11 +384,12 @@ export async function fetchPlaylistTracks(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  playlistId: string
+  playlistId: string,
+  altUrl?: string
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", playlistId);
-  const res = await apiPost(baseUrl, "getPlaylist", params);
+  const res = await apiPost(baseUrl, "getPlaylist", params, altUrl);
   if (!res.ok) throw new Error(`getPlaylist returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -382,11 +409,12 @@ export async function createNavidromePlaylist(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  name: string
+  name: string,
+  altUrl?: string
 ): Promise<NavidromePlaylist> {
   const params = buildAuthParams(username, credential);
   params.set("name", name);
-  const res = await apiPost(baseUrl, "createPlaylist", params);
+  const res = await apiPost(baseUrl, "createPlaylist", params, altUrl);
   if (!res.ok) throw new Error(`createPlaylist returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": {
@@ -407,9 +435,10 @@ export function deleteNavidromePlaylist(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativePlaylistId: string
+  nativePlaylistId: string,
+  altUrl?: string
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "deletePlaylist", { id: nativePlaylistId });
+  return callSubsonicVoid(baseUrl, username, credential, "deletePlaylist", { id: nativePlaylistId }, altUrl);
 }
 
 export function addTrackToNavidromePlaylist(
@@ -417,12 +446,49 @@ export function addTrackToNavidromePlaylist(
   username: string,
   credential: NavidromeCredential,
   nativePlaylistId: string,
-  nativeTrackId: string
+  nativeTrackId: string,
+  altUrl?: string
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", {
     playlistId: nativePlaylistId,
     songIdToAdd: nativeTrackId,
-  });
+  }, altUrl);
+}
+
+export async function addTracksToNavidromePlaylist(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativePlaylistId: string,
+  nativeTrackIds: string[],
+  altUrl?: string
+): Promise<void> {
+  const params = buildAuthParams(username, credential);
+  params.set("playlistId", nativePlaylistId);
+  for (const id of nativeTrackIds) params.append("songIdToAdd", id);
+  const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
+  if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { message: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "updatePlaylist failed");
+  }
+}
+
+export async function updateNavidromePlaylist(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativePlaylistId: string,
+  name: string,
+  comment?: string,
+  altUrl?: string
+): Promise<void> {
+  const extra: Record<string, string> = { playlistId: nativePlaylistId, name };
+  if (comment !== undefined) extra["comment"] = comment;
+  return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", extra, altUrl);
 }
 
 export function removeTrackFromNavidromePlaylist(
@@ -430,12 +496,13 @@ export function removeTrackFromNavidromePlaylist(
   username: string,
   credential: NavidromeCredential,
   nativePlaylistId: string,
-  songIndex: number
+  songIndex: number,
+  altUrl?: string
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", {
     playlistId: nativePlaylistId,
     songIndexToRemove: String(songIndex),
-  });
+  }, altUrl);
 }
 
 export function scrobbleTrack(
@@ -443,35 +510,39 @@ export function scrobbleTrack(
   username: string,
   credential: NavidromeCredential,
   nativeTrackId: string,
-  timestampMs: number
+  timestampMs: number,
+  altUrl?: string
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "scrobble.view", {
     id: nativeTrackId,
     time: String(timestampMs),
     submission: "true",
-  });
+  }, altUrl);
 }
 
 export function reportNowPlaying(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  nativeTrackId: string
+  nativeTrackId: string,
+  altUrl?: string
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "scrobble.view", {
     id: nativeTrackId,
     submission: "false",
-  });
+  }, altUrl);
 }
 
 export async function fetchAndStoreOpenSubsonicExtensions(
   baseUrl: string,
   username: string,
-  credential: NavidromeCredential
+  credential: NavidromeCredential,
+  serverId: string,
+  altUrl?: string
 ): Promise<string[]> {
   try {
     const params = buildAuthParams(username, credential);
-    const res = await apiPost(baseUrl, "getOpenSubsonicExtensions", params);
+    const res = await apiPost(baseUrl, "getOpenSubsonicExtensions", params, altUrl);
     if (!res.ok) return [];
     const data = (await res.json()) as {
       "subsonic-response": {
@@ -485,8 +556,8 @@ export async function fetchAndStoreOpenSubsonicExtensions(
     const { getDb } = await import("../db");
     const db = await getDb();
     await db.execute(
-      "INSERT OR REPLACE INTO settings (key, value) VALUES ('server.opensub_extensions', ?)",
-      [JSON.stringify(extensions)]
+      "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+      [`server.opensub_extensions.${serverId}`, JSON.stringify(extensions)]
     );
     return extensions;
   } catch {
@@ -494,12 +565,13 @@ export async function fetchAndStoreOpenSubsonicExtensions(
   }
 }
 
-export async function getStoredOpenSubsonicExtensions(): Promise<string[]> {
+export async function getStoredOpenSubsonicExtensions(serverId: string): Promise<string[]> {
   try {
     const { getDb } = await import("../db");
     const db = await getDb();
     const rows = await db.select<{ value: string }[]>(
-      "SELECT value FROM settings WHERE key = 'server.opensub_extensions'"
+      "SELECT value FROM settings WHERE key = ?",
+      [`server.opensub_extensions.${serverId}`]
     );
     if (!rows[0]) return [];
     return JSON.parse(rows[0].value) as string[];
@@ -523,12 +595,13 @@ export async function fetchLyricsBySongId(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  trackId: string
+  trackId: string,
+  altUrl?: string
 ): Promise<{ plain: string | null; synced: string | null } | null> {
   try {
     const params = buildAuthParams(username, credential);
     params.set("id", trackId);
-    const res = await apiPost(baseUrl, "getLyricsBySongId", params);
+    const res = await apiPost(baseUrl, "getLyricsBySongId", params, altUrl);
     if (!res.ok) return null;
     const data = (await res.json()) as {
       "subsonic-response": {

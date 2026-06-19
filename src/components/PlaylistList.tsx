@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Music } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { getCoverArtUrl } from "../lib/navidrome";
 import "./PlaylistList.css";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function PlaylistList({ playlists, serverWithCredential, onSelect, onCreatePlaylist }: Props) {
+  const { server, credential } = serverWithCredential;
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -21,7 +23,7 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
     if (creating) inputRef.current?.focus();
   }, [creating]);
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const name = newName.trim();
     if (!name || saving) return;
@@ -76,18 +78,36 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
       {playlists.length === 0 && !creating && (
         <p className="empty-state">No playlists. Create one or Rescan.</p>
       )}
-      {playlists.map((pl) => (
-        <button
-          key={pl.id}
-          className="playlist-row"
-          onClick={() => onSelect(pl)}
-        >
-          <span className="playlist-row-name">{pl.name}</span>
-          <span className="playlist-row-meta">
-            {pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
-          </span>
-        </button>
-      ))}
+      <div className="playlist-card-grid">
+        {playlists.map((pl) => {
+          const artUrl = pl.cover_art_url
+            ? getCoverArtUrl(server.url, server.username, credential, pl.cover_art_url, 300)
+            : null;
+          return (
+            <button
+              key={pl.id}
+              className="playlist-card"
+              onClick={() => onSelect(pl)}
+            >
+              <div className="playlist-card-art">
+                {artUrl ? (
+                  <img src={artUrl} alt={pl.name} draggable={false} />
+                ) : (
+                  <div className="playlist-card-art-placeholder">
+                    <Music size={32} />
+                  </div>
+                )}
+              </div>
+              <div className="playlist-card-info">
+                <span className="playlist-card-name">{pl.name}</span>
+                <span className="playlist-card-meta">
+                  {pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

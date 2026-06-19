@@ -9,9 +9,11 @@ import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
 import { useBoolSetting } from "../hooks/useSetting";
 import { getCoverArtUrl } from "../lib/navidrome";
-import { ContextMenu } from "./ContextMenu";
+import { AlbumArt } from "./AlbumArt";
+import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import type { RadioMode } from "../store/player";
+import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./AlbumGrid.css";
 
 const PADDING = 20;
@@ -29,6 +31,8 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (album: AlbumRow) => void;
   onStartRadio?: (album: AlbumRow, mode: RadioMode) => void;
+  onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
+  playlists?: PlaylistRow[];
   emptyMessage?: string;
   scrollKey?: string;
   sort?: AlbumSort;
@@ -56,7 +60,15 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
       onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, album); }}
     >
       {artUrl ? (
-        <img className="album-art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+        <AlbumArt
+          src={artUrl}
+          artist={album.artist}
+          album={album.name}
+          alt={album.name}
+          className="album-art"
+          decoding="async"
+          loading="lazy"
+        />
       ) : (
         <div className="album-art album-art--placeholder" />
       )}
@@ -80,7 +92,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
   );
 });
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, emptyMessage, scrollKey, sort }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
@@ -281,6 +293,18 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
             <StartRadioSubmenu
               onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
             />
+          )}
+          {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
+            <ContextMenuSubmenu label="Add to Playlist">
+              {playlists.map((pl) => (
+                <button
+                  key={pl.id}
+                  onClick={() => { onAddAlbumToPlaylist(contextMenu.album, pl); setContextMenu(null); }}
+                >
+                  {pl.name}
+                </button>
+              ))}
+            </ContextMenuSubmenu>
           )}
         </ContextMenu>
       )}

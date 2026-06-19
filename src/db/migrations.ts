@@ -451,4 +451,12 @@ export const migrations: Migration[] = [
     version: 29,
     sql: `ALTER TABLE lyrics ADD COLUMN offset_ms INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    version: 30,
+    sql: `ALTER TABLE servers ADD COLUMN alt_url TEXT;`,
+  },
+  {
+    version: 31,
+    sql: `ALTER TABLE playlists ADD COLUMN cover_art_url TEXT;`,
+  },
 ];

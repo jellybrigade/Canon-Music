@@ -27,9 +27,10 @@ export async function syncLibrary(
     throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
   }
 
-  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential);
+  const altUrl = server.alt_url ?? undefined;
+  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential, server.id, altUrl);
 
-  const albums = await fetchAllAlbums(server.url, server.username, credential);
+  const albums = await fetchAllAlbums(server.url, server.username, credential, altUrl);
 
   const db = await getDb();
   let failedAlbums = 0;
@@ -85,7 +86,7 @@ export async function syncLibrary(
 
     let tracks;
     try {
-      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id);
+      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
     } catch (err) {
       console.error(`sync: failed to fetch tracks for album "${album.name}" (${album.id}):`, err);
       failedAlbums++;
@@ -147,7 +148,7 @@ export async function syncLibrary(
   );
 
   // Sync loved state via getStarred2 — independent of incremental skip logic
-  const starred = await fetchStarred2(server.url, server.username, credential);
+  const starred = await fetchStarred2(server.url, server.username, credential, altUrl);
 
   await db.execute(
     "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
@@ -172,13 +173,13 @@ export async function syncLibrary(
   }
 
   // Sync playlists — collect all track lists before deleting to avoid wipe on partial failure
-  const playlists = await fetchPlaylists(server.url, server.username, credential);
+  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl);
   let failedPlaylists = 0;
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
   const playlistsWithTracks: PlaylistWithTracks[] = [];
   for (const pl of playlists) {
     try {
-      const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id);
+      const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id, altUrl);
       playlistsWithTracks.push({ pl, tracks });
     } catch (err) {
       console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
@@ -194,8 +195,8 @@ export async function syncLibrary(
   for (const { pl, tracks } of playlistsWithTracks) {
     const plDbId = `${server.id}:${pl.id}`;
     await db.execute(
-      "INSERT INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
-      [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount]
+      "INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url) VALUES (?, ?, ?, ?, ?, ?)",
+      [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
     );
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i]!;
