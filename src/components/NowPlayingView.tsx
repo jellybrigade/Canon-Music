@@ -19,6 +19,7 @@ import { useBoolSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
+import { AlbumArt } from "./AlbumArt";
 import "./NowPlayingView.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -360,7 +361,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
           {largeArtUrl ? (
-            <img className="now-playing-art" src={largeArtUrl} alt={currentTrack.title} />
+            <AlbumArt
+              src={largeArtUrl}
+              artist={currentTrack.artist}
+              album={currentTrack.album ?? null}
+              alt={currentTrack.title}
+              className="now-playing-art"
+            />
           ) : (
             <div className="now-playing-art now-playing-art--placeholder" />
           )}

@@ -13,7 +13,7 @@ export function useCarouselAlbums(
     enabled: !!serverWithCred,
     queryFn: async () => {
       const { server, credential } = serverWithCred!;
-      return fetchAlbumListByType(server.url, server.username, credential, type, 20);
+      return fetchAlbumListByType(server.url, server.username, credential, type, 20, server.alt_url ?? undefined);
     },
     staleTime: 5 * 60 * 1000,
   });

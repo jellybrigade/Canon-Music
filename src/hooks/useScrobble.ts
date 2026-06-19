@@ -28,7 +28,7 @@ export function useScrobble(
     const { server, credential } = serverWithCred;
     if (!track.id.startsWith(server.id + ":")) return;
     const nativeId = stripServerPrefix(track.id, server.id);
-    reportNowPlaying(server.url, server.username, credential, nativeId).catch(
+    reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined).catch(
       () => {} // server unreachable — silently skip
     );
   }, [playStartedAt, track, serverWithCred]); // eslint-disable-line react-hooks/exhaustive-deps

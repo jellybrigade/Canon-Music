@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QK } from "../../lib/query-keys";
-import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
+import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import { getDb } from "../../db";
@@ -22,6 +22,7 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
 
   const [serverEditing, setServerEditing] = useState(false);
   const [editUrl, setEditUrl] = useState("");
+  const [editAltUrl, setEditAltUrl] = useState("");
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editUsername, setEditUsername] = useState("");
   const [editPassword, setEditPassword] = useState("");
@@ -41,6 +42,7 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
   function beginEditServer() {
     if (!server) return;
     setEditUrl(server.url);
+    setEditAltUrl(server.alt_url ?? "");
     setEditDisplayName(server.display_name);
     setEditUsername(server.username);
     setEditPassword("");
@@ -54,8 +56,9 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     setServerEditing(true);
   }
 
-  function handleEditCredentialChange(key: "url" | "username" | "password" | "apiKey", v: string) {
+  function handleEditCredentialChange(key: "url" | "altUrl" | "username" | "password" | "apiKey", v: string) {
     if (key === "url") setEditUrl(v);
+    else if (key === "altUrl") { setEditAltUrl(v); return; }
     else if (key === "username") setEditUsername(v);
     else if (key === "apiKey") setEditApiKey(v);
     else setEditPassword(v);
@@ -109,9 +112,17 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
     try {
       await keychain.set(`canon.server.${server.id}`, "credential", JSON.stringify(serverTestedCredential));
       const db = await getDb();
+      const cleanAltUrl = editAltUrl.trim().replace(/\/+$/, "") || null;
       await db.execute(
-        "UPDATE servers SET url=?, display_name=?, username=? WHERE id=?",
-        [editUrl.trim().replace(/\/+$/, ""), editDisplayName.trim(), editUsername.trim(), server.id]
+        "UPDATE servers SET url=?, alt_url=?, display_name=?, username=? WHERE id=?",
+        [editUrl.trim().replace(/\/+$/, ""), cleanAltUrl, editDisplayName.trim(), editUsername.trim(), server.id]
+      );
+      void fetchAndStoreOpenSubsonicExtensions(
+        editUrl.trim().replace(/\/+$/, ""),
+        editUsername.trim(),
+        serverTestedCredential,
+        server.id,
+        cleanAltUrl ?? undefined
       );
       await queryClient.invalidateQueries({ queryKey: QK.servers() });
       await queryClient.invalidateQueries({ queryKey: QK.serverCredential(server.id) });
@@ -144,7 +155,7 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
             <div className="settings-server-card">
               <div className="settings-server-info">
                 <span className="settings-server-name">{server.display_name}</span>
-                <span className="settings-server-meta">{server.url} · {server.username}</span>
+                <span className="settings-server-meta">{server.url} · {server.username}{server.alt_url ? ` · alt: ${server.alt_url}` : ""}</span>
               </div>
               <button className="settings-btn" onClick={beginEditServer}>Edit</button>
             </div>
@@ -156,6 +167,15 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
                   type="url"
                   value={editUrl}
                   onChange={(e) => handleEditCredentialChange("url", e.target.value)}
+                />
+              </label>
+              <label className="settings-field">
+                <span>Alternate URL <span style={{ fontWeight: "normal", opacity: 0.6 }}>(optional — used as fallback if primary is unreachable)</span></span>
+                <input
+                  type="url"
+                  value={editAltUrl}
+                  placeholder="e.g. https://music.yourserver.com"
+                  onChange={(e) => handleEditCredentialChange("altUrl", e.target.value)}
                 />
               </label>
               <label className="settings-field">

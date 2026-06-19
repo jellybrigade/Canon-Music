@@ -63,12 +63,13 @@ export function useLoved() {
     }
     void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });
     const nativeId = stripServerPrefix(trackId, server.id);
+    const altUrl = server.alt_url ?? undefined;
     if (loved) {
-      unstarTrack(server.url, server.username, credential, nativeId).catch((err) =>
+      unstarTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
         console.error("unstar track failed:", err)
       );
     } else {
-      starTrack(server.url, server.username, credential, nativeId).catch((err) =>
+      starTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
         console.error("star track failed:", err)
       );
     }
@@ -85,12 +86,13 @@ export function useLoved() {
     }
     void queryClient.invalidateQueries({ queryKey: QK.loved_albums() });
     const nativeId = stripServerPrefix(albumId, server.id);
+    const altUrl = server.alt_url ?? undefined;
     if (loved) {
-      unstarAlbum(server.url, server.username, credential, nativeId).catch((err) =>
+      unstarAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
         console.error("unstar album failed:", err)
       );
     } else {
-      starAlbum(server.url, server.username, credential, nativeId).catch((err) =>
+      starAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
         console.error("star album failed:", err)
       );
     }

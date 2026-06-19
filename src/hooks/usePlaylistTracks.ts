@@ -36,7 +36,7 @@ export function usePlaylistTracks(playlistId: string | null) {
   ): Promise<void> {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
-    await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position);
+    await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position, server.alt_url ?? undefined);
     const db = await getDb();
     await db.execute(
       "DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?",

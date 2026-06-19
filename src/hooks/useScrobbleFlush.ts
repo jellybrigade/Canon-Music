@@ -24,7 +24,7 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
           if (!row.track_id.startsWith(server.id + ":")) continue;
           try {
             const nativeId = stripServerPrefix(row.track_id, server.id);
-            await scrobbleTrack(server.url, server.username, credential, nativeId, row.timestamp * 1000);
+            await scrobbleTrack(server.url, server.username, credential, nativeId, row.timestamp * 1000, server.alt_url ?? undefined);
             await db.execute(
               "INSERT OR IGNORE INTO scrobble_history (track_id, timestamp) VALUES (?, ?)",
               [row.track_id, row.timestamp]

@@ -14,6 +14,7 @@ import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
+import { AlbumArt } from "./AlbumArt";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -105,7 +106,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
         serverWithCred!.server.url,
         serverWithCred!.server.username,
         serverWithCred!.credential,
-        nativeTrackId!
+        nativeTrackId!,
+        serverWithCred!.server.alt_url ?? undefined
       ),
     enabled: !!nativeTrackId,
     staleTime: Infinity,
@@ -195,7 +197,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
     const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
-      setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(() => {
+      setRating(server.url, server.username, credential, nativeTrackId, newRating, server.alt_url ?? undefined).catch(() => {
         queryClient.invalidateQueries({ queryKey: QK.trackRating(nativeTrackId) });
       });
     }, 200);
@@ -279,9 +281,12 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               }}
               aria-label="Go to album"
             >
-              {currentTrack.coverArtUrl && (
-                <img src={currentTrack.coverArtUrl} alt="" />
-              )}
+              <AlbumArt
+                src={currentTrack.coverArtUrl ?? null}
+                artist={currentTrack.artist}
+                album={currentTrack.album ?? null}
+                alt=""
+              />
             </button>
             <button
               className="player-thumb-expand"
