@@ -1,4 +1,5 @@
 mod streaming;
+mod upnp;
 use streaming::StreamingBuffer;
 
 /// Combines Read + Seek + Send into a single object-safe trait so we can
@@ -612,6 +613,14 @@ async fn audio_extract_waveform(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::RawRenderer>, String> {
+    // Run blocking SSDP UDP discovery on a thread so we don't block the async runtime.
+    tokio::task::spawn_blocking(move || upnp::discover(timeout_ms))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // WebKitGTK renders a native GTK overlay scrollbar (thick on hover) on top of
@@ -670,6 +679,7 @@ pub fn run() {
             audio_set_speed,
             audio_seek,
             audio_extract_waveform,
+            discover_upnp_renderers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

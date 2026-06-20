@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
@@ -26,6 +27,14 @@ export function PlaybackTab({ searchQuery }: Props) {
 
   const [autoSyncIntervalMin, setAutoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const [streamMaxBitrate, setStreamMaxBitrate] = useSetting("stream.max_bitrate", "0");
+  const [castMaxBitrate, setCastMaxBitrate] = useSetting("cast.max_bitrate", "320");
+
+  const availableRenderers  = usePlayerStore((s) => s.availableRenderers);
+  const isScanningRenderers = usePlayerStore((s) => s.isScanningRenderers);
+  const scanRenderers       = usePlayerStore((s) => s.scanRenderers);
+  const castDevice          = usePlayerStore((s) => s.castDevice);
+  const setCastDevice       = usePlayerStore((s) => s.setCastDevice);
+  const [scanRan, setScanRan] = useState(false);
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
@@ -193,6 +202,58 @@ export function PlaybackTab({ searchQuery }: Props) {
               value={thresholdPct}
               onChange={(e) => void setThresholdPct(e.target.value)}
             />
+          </SettingRow>
+        </section>
+      )}
+
+      {show("cast", "casting", "dlna", "upnp", "renderer", "airplay", "wireless", "device") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Casting</h3>
+          <SettingRow
+            title="Cast quality"
+            description="Max bitrate when streaming to a DLNA renderer. Many renderers cannot play high-bitrate FLAC — transcoding to a lower bitrate improves compatibility."
+          >
+            <select
+              value={castMaxBitrate}
+              onChange={(e) => void setCastMaxBitrate(e.target.value)}
+              className="settings-select"
+            >
+              <option value="0">Raw (original)</option>
+              <option value="320">320 kbps</option>
+              <option value="192">192 kbps</option>
+              <option value="128">128 kbps</option>
+            </select>
+          </SettingRow>
+          <SettingRow
+            title="Devices"
+            description={
+              scanRan
+                ? isScanningRenderers
+                  ? "Scanning for UPnP/DLNA renderers…"
+                  : availableRenderers.length === 0
+                    ? "No renderers found."
+                    : `${availableRenderers.length} renderer${availableRenderers.length === 1 ? "" : "s"} found.`
+                : "Scan the network for UPnP/DLNA renderers."
+            }
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
+              <button
+                className="settings-btn"
+                disabled={isScanningRenderers}
+                onClick={() => { setScanRan(true); void scanRenderers(); }}
+              >
+                {isScanningRenderers ? "Scanning…" : "Scan now"}
+              </button>
+              {availableRenderers.map((r) => (
+                <button
+                  key={r.baseUrl}
+                  className={`settings-btn${castDevice?.baseUrl === r.baseUrl ? " settings-btn--active" : ""}`}
+                  onClick={() => void setCastDevice(castDevice?.baseUrl === r.baseUrl ? null : r)}
+                >
+                  {castDevice?.baseUrl === r.baseUrl ? `✓ ${r.name}` : r.name}
+                </button>
+              ))}
+            </div>
           </SettingRow>
         </section>
       )}

@@ -47,7 +47,9 @@ To release, run `/commit`. That skill handles code review, version bump, merge, 
 Canonical map of every file, its purpose, data flow, and key invariants. Any change that adds, moves, deletes, or substantially repurposes a file must update `ARCHITECTURE.md` in the same commit. New Tauri commands, new migrations, and new architectural invariants belong there too. Part of "done".
 
 ### Rust stays thin
-Only `#[tauri::command]` for: audio control, OS keychain access. No business logic in Rust. See `.claude/rules/audio-playback.md`.
+Only `#[tauri::command]` for: audio control, OS keychain access, and network discovery primitives. No business logic in Rust. See `.claude/rules/audio-playback.md`.
+
+**Deliberate exception:** `discover_upnp_renderers` in `src-tauri/src/upnp.rs` does SSDP UDP multicast discovery because WebKit/JS cannot send UDP multicast. It returns raw LOCATION URLs; all SOAP control, renderer state management, and business logic stay in TypeScript (`src/lib/dlna.ts`, `src/store/playbackTarget.ts`).
 
 ### Enrichment is local-only — no file writes
 Metadata enrichment (Last.fm tags, artist bio/stats/similar, MusicBrainz identity) writes only to SQLite. Canon never modifies the user's music files. The sidecar file-write subsystem was removed; `pending_edits` / `edit_history` tables and `servers.sidecar_*` columns are inert legacy schema. File-write design is TBD for a future version.
@@ -59,7 +61,7 @@ Do not flatten to single-parent. Do not merge `canon-tree.json` and `user-tree.j
 
 ## Status
 
-**v0.5.x — active development.** Schema v20, all workstreams shipped:
+**v0.6.x — active development.** Schema v20, all workstreams shipped:
 
 - Full library sync (incremental, artists table, tag issues scan)
 - Scrobble queue + flush to Navidrome (`useScrobbleFlush`)
