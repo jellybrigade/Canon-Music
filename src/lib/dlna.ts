@@ -10,80 +10,26 @@ export interface DlnaRenderer {
   supportsSetNext: boolean;
 }
 
-interface RawRenderer {
-  location: string;
-  usn: string;
-  server: string;
+interface ResolvedRenderer {
+  name: string;
+  base_url: string;
+  av_transport_control_url: string;
+  rendering_control_url: string;
+  supports_volume: boolean;
 }
 
 // ── Discovery ──────────────────────────────────────────────────────────────
 
 export async function discoverRenderers(timeoutMs = 4000): Promise<DlnaRenderer[]> {
-  const raw = await invoke<RawRenderer[]>("discover_upnp_renderers", { timeoutMs });
-  const results: DlnaRenderer[] = [];
-  await Promise.all(
-    raw.map(async (r) => {
-      const renderer = await fetchDeviceDescription(r.location);
-      if (renderer) results.push(renderer);
-    })
-  );
-  return results;
-}
-
-async function fetchDeviceDescription(location: string): Promise<DlnaRenderer | null> {
-  try {
-    const res = await fetch(location);
-    if (!res.ok) return null;
-    const xml = await res.text();
-    const doc = new DOMParser().parseFromString(xml, "application/xml");
-
-    const base = resolveBase(location, doc);
-
-    const friendlyName =
-      doc.querySelector("device > friendlyName")?.textContent?.trim() ?? location;
-
-    const avTransportControlUrl = findControlUrl(doc, "AVTransport", base);
-    if (!avTransportControlUrl) return null;
-
-    const renderingControlUrl = findControlUrl(doc, "RenderingControl", base);
-
-    return {
-      name: friendlyName,
-      baseUrl: base,
-      avTransportControlUrl,
-      renderingControlUrl: renderingControlUrl ?? "",
-      supportsVolume: !!renderingControlUrl,
-      // We assume support and disable on first 501/optionally 500.
-      supportsSetNext: true,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function resolveBase(location: string, doc: Document): string {
-  const urlBase = doc.querySelector("URLBase")?.textContent?.trim();
-  if (urlBase) return urlBase.replace(/\/$/, "");
-  try {
-    const u = new URL(location);
-    return `${u.protocol}//${u.host}`;
-  } catch {
-    return location;
-  }
-}
-
-function findControlUrl(doc: Document, serviceType: string, base: string): string | null {
-  const services = doc.querySelectorAll("service");
-  for (const svc of Array.from(services)) {
-    const type = svc.querySelector("serviceType")?.textContent ?? "";
-    if (type.includes(serviceType)) {
-      const controlUrl = svc.querySelector("controlURL")?.textContent?.trim() ?? "";
-      if (!controlUrl) continue;
-      if (controlUrl.startsWith("http")) return controlUrl;
-      return `${base}${controlUrl.startsWith("/") ? "" : "/"}${controlUrl}`;
-    }
-  }
-  return null;
+  const raw = await invoke<ResolvedRenderer[]>("discover_upnp_renderers", { timeoutMs });
+  return raw.map((r) => ({
+    name: r.name,
+    baseUrl: r.base_url,
+    avTransportControlUrl: r.av_transport_control_url,
+    renderingControlUrl: r.rendering_control_url,
+    supportsVolume: r.supports_volume,
+    supportsSetNext: true,
+  }));
 }
 
 // ── SOAP helpers ───────────────────────────────────────────────────────────
@@ -103,18 +49,12 @@ async function soapAction(
   </s:Body>
 </s:Envelope>`;
 
-  const res = await fetch(controlUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "text/xml; charset=utf-8",
-      SOAPAction: `"${serviceType}#${action}"`,
-    },
+  // Native fetch() is blocked by CORS for LAN UPnP devices; route through Rust.
+  return invoke<string>("upnp_soap", {
+    url: controlUrl,
+    soapAction: `"${serviceType}#${action}"`,
     body: envelope,
   });
-  if (!res.ok && res.status !== 500) {
-    throw new Error(`SOAP ${action} failed: ${res.status}`);
-  }
-  return res.text();
 }
 
 const AV_SERVICE = "urn:schemas-upnp-org:service:AVTransport:1";

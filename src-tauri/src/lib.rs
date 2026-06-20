@@ -614,11 +614,35 @@ async fn audio_extract_waveform(
 }
 
 #[tauri::command]
-async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::RawRenderer>, String> {
-    // Run blocking SSDP UDP discovery on a thread so we don't block the async runtime.
-    tokio::task::spawn_blocking(move || upnp::discover(timeout_ms))
+async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::ResolvedRenderer>, String> {
+    // Run blocking SSDP discovery + HTTP description fetches on a thread.
+    tokio::task::spawn_blocking(move || upnp::discover_and_resolve(timeout_ms))
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<String, String> {
+    // CORS blocks native WebView fetch() for LAN UPnP devices; proxy through Rust.
+    tokio::task::spawn_blocking(move || {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| e.to_string())?;
+        let resp = client
+            .post(&url)
+            .header("Content-Type", "text/xml; charset=utf-8")
+            .header("SOAPAction", &soap_action)
+            .body(body)
+            .send()
+            .map_err(|e| e.to_string())?;
+        if !resp.status().is_success() && resp.status().as_u16() != 500 {
+            return Err(format!("SOAP failed: {}", resp.status()));
+        }
+        resp.text().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -680,6 +704,7 @@ pub fn run() {
             audio_seek,
             audio_extract_waveform,
             discover_upnp_renderers,
+            upnp_soap,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
