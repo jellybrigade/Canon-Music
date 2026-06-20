@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X, SlidersHorizontal } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
+import { AlbumGenreEditor } from "./AlbumGenreEditor";
+import type { DisplayGenre, GenreGroups } from "./AlbumGenreEditor";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import type { AlbumRow, TrackRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -22,8 +24,7 @@ import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { rawGenreId, getCanonTree } from "../lib/canonicalize";
-import type { TreeNode } from "../lib/canonicalize";
+import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
@@ -190,98 +191,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return () => document.removeEventListener("mousedown", close);
   }, [showColPicker]);
 
-  const [showGenreInput, setShowGenreInput] = useState(false);
-  const [genreInput, setGenreInput] = useState("");
-  const [autocomplete, setAutocomplete] = useState<TreeNode[]>([]);
-  const [isGenreUpdating, setIsGenreUpdating] = useState(false);
-  const genreInputRef = useRef<HTMLInputElement>(null);
-
-  const handleGenreInputChange = useCallback(async (value: string) => {
-    setGenreInput(value);
-    if (!value.trim()) { setAutocomplete([]); return; }
-    const tree = await getCanonTree();
-    const q = value.toLowerCase();
-    const matches = tree.nodes
-      .filter((n) => n.type === "genre" && n.name.toLowerCase().includes(q))
-      .slice(0, 8);
-    setAutocomplete(matches);
-  }, []);
-
-  const handleAddUserGenre = useCallback(async (canonicalId: string, name: string) => {
-    setIsGenreUpdating(true);
-    setShowGenreInput(false);
-    setGenreInput("");
-    setAutocomplete([]);
-    try {
-      const db = await getDb();
-      await db.execute(
-        "INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name) VALUES (?, ?, ?)",
-        [album.id, canonicalId, name]
-      );
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
-      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-    } finally {
-      setIsGenreUpdating(false);
-    }
-  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
-
-  const handleRemoveUserGenre = useCallback(async (canonicalId: string) => {
-    setIsGenreUpdating(true);
-    try {
-      const db = await getDb();
-      await db.execute(
-        "DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?",
-        [album.id, canonicalId]
-      );
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
-      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-    } finally {
-      setIsGenreUpdating(false);
-    }
-  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
-
-  const handleExcludeGenre = useCallback(async (canonicalId: string) => {
-    setIsGenreUpdating(true);
-    try {
-      const db = await getDb();
-      await db.execute(
-        "INSERT OR IGNORE INTO album_genre_exclusions (album_id, canonical_id) VALUES (?, ?)",
-        [album.id, canonicalId]
-      );
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
-      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-      await queryClient.invalidateQueries({ queryKey: QK.albumGenreExclusions(album.id) });
-    } finally {
-      setIsGenreUpdating(false);
-    }
-  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+  const [showGenreEditor, setShowGenreEditor] = useState(false);
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -350,8 +260,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return map;
   }, [rawSourceRows]);
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }> => {
-    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }>;
+  const displayGenres = useMemo((): DisplayGenre[] => {
+    let raw: DisplayGenre[];
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -379,13 +289,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     });
   }, [normalizedTags, tracks, genreMappings]);
 
-  const genreGroups = useMemo(() => {
-    const manual: typeof displayGenres = [];
-    const file: typeof displayGenres = [];
-    const lastfm: typeof displayGenres = [];
-    const musicbrainz: typeof displayGenres = [];
-    const folksonomy: typeof displayGenres = [];
-    const unsourced: typeof displayGenres = [];
+  const genreGroups = useMemo((): GenreGroups => {
+    const manual: DisplayGenre[] = [];
+    const file: DisplayGenre[] = [];
+    const lastfm: DisplayGenre[] = [];
+    const musicbrainz: DisplayGenre[] = [];
+    const folksonomy: DisplayGenre[] = [];
+    const unsourced: DisplayGenre[] = [];
     for (const g of displayGenres) {
       if (g.source === "manual") manual.push(g);
       else if (g.source === "file") file.push(g);
@@ -563,40 +473,25 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       {hasTags && (
         <section className="album-tag-band" aria-label="Album tags">
           {(() => {
-            const renderGenreChip = (tag: typeof displayGenres[0]) => {
+            const renderGenreChip = (tag: DisplayGenre) => {
               const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
               const chipTitle = rawSources.length > 0
                 ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
                 : undefined;
               const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
-              const excludableClass = tag.id !== null ? " album-tag-chip--excludable" : "";
               return (
-                <span
+                <button
                   key={tag.id ?? tag.name}
-                  className={`album-tag-chip${sourceClass}${excludableClass}`}
+                  className={`album-tag-chip${sourceClass}`}
+                  title={chipTitle}
+                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setDrawerState({ albumId: album.id });
+                  }}
                 >
-                  <button
-                    className="album-tag-chip-label"
-                    title={chipTitle}
-                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setDrawerState({ albumId: album.id });
-                    }}
-                  >
-                    {tag.name}
-                  </button>
-                  {tag.id !== null && (
-                    <button
-                      className="album-tag-chip-remove"
-                      onClick={() => void handleExcludeGenre(tag.id!)}
-                      title="Exclude genre from this album"
-                      disabled={isGenreUpdating}
-                    >
-                      <X size={9} />
-                    </button>
-                  )}
-                </span>
+                  {tag.name}
+                </button>
               );
             };
 
@@ -608,43 +503,19 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               <div className={`album-tag-column${showGrouped ? " album-tag-column--grouped" : ""}`}>
                 <div className="album-tag-column-header">
                   <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
-                  {!showGenreInput && (
-                    <button
-                      className="album-tag-add-genre-btn"
-                      onClick={() => {
-                        setShowGenreInput(true);
-                        setTimeout(() => genreInputRef.current?.focus(), 0);
-                      }}
-                      title="Add genre"
-                      disabled={isGenreUpdating}
-                    >
-                      <Plus size={10} />
-                    </button>
-                  )}
+                  <button
+                    className="album-tag-add-genre-btn"
+                    onClick={() => setShowGenreEditor((v) => !v)}
+                    title={showGenreEditor ? "Close genre editor" : "Edit genres"}
+                  >
+                    <Pencil size={10} />
+                  </button>
                 </div>
 
                 {genreGroups.manual.length > 0 && (
                   <div className="album-tag-source-group">
                     {showGrouped && <span className="album-tag-source-label">Added</span>}
-                    {genreGroups.manual.map((tag) => (
-                      <span key={tag.id ?? tag.name} className="album-tag-chip album-tag-chip--manual">
-                        <button
-                          className="album-tag-chip-label"
-                          onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                          title="Filter by this genre"
-                        >
-                          {tag.name}
-                        </button>
-                        <button
-                          className="album-tag-chip-remove"
-                          onClick={() => void handleRemoveUserGenre(tag.id!)}
-                          title="Remove"
-                          disabled={isGenreUpdating}
-                        >
-                          <X size={9} />
-                        </button>
-                      </span>
-                    ))}
+                    {genreGroups.manual.map(renderGenreChip)}
                   </div>
                 )}
 
@@ -690,49 +561,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
                 )}
 
-                {unmatchedCount > 0 && !showGenreInput && (
+                {unmatchedCount > 0 && !showGenreEditor && (
                   <button
                     className="album-unmatched-hint"
-                    onClick={() => setDrawerState({ albumId: album.id })}
-                    title="Open tag drawer to map unmatched genres"
+                    onClick={() => setShowGenreEditor(true)}
+                    title="Open genre editor to map unmatched genres"
                   >
                     {unmatchedCount} unmatched →
                   </button>
-                )}
-
-                {showGenreInput && (
-                  <div className="album-genre-input-wrapper">
-                    <input
-                      ref={genreInputRef}
-                      className="album-genre-input"
-                      type="text"
-                      placeholder="Search genres…"
-                      value={genreInput}
-                      onChange={(e) => void handleGenreInputChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setShowGenreInput(false);
-                          setGenreInput("");
-                          setAutocomplete([]);
-                        } else if (e.key === "Enter" && autocomplete.length > 0) {
-                          void handleAddUserGenre(autocomplete[0]!.id, autocomplete[0]!.name);
-                        }
-                      }}
-                    />
-                    {autocomplete.length > 0 && (
-                      <ul className="album-genre-autocomplete">
-                        {autocomplete.map((node) => (
-                          <li
-                            key={node.id}
-                            className="album-genre-autocomplete-item"
-                            onClick={() => void handleAddUserGenre(node.id, node.name)}
-                          >
-                            {node.name}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
                 )}
               </div>
             );
@@ -790,6 +626,18 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
             </div>
           )}
         </section>
+      )}
+
+      {showGenreEditor && (
+        <AlbumGenreEditor
+          albumId={album.id}
+          albumArtist={album.artist ?? ""}
+          albumName={album.name}
+          genreGroups={genreGroups}
+          rawSourcesByCanonicalId={rawSourcesByCanonicalId}
+          onTagFilter={onTagFilter}
+          onClose={() => setShowGenreEditor(false)}
+        />
       )}
 
       <div className="album-detail-body">

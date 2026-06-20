@@ -160,7 +160,7 @@ interface UnmatchedSectionProps {
   albumName: string;
 }
 
-function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionProps) {
+export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedSectionProps) {
   const { data: unmatched = [] } = useAlbumUnmatchedGenres(albumId);
   const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();

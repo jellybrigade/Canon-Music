@@ -5,6 +5,8 @@ import { Play, Disc, Radio } from "lucide-react";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
+import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import type { ArtistRow, AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { Server } from "../types/server";
@@ -201,9 +203,10 @@ interface TrackRowProps {
   onPlay: (track: TopTrack) => void;
   lastfmPlaycount?: number;
   onAlbumClick?: (albumId: string) => void;
+  onContextMenu?: (e: React.MouseEvent, track: TopTrack) => void;
 }
 
-function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick }: TrackRowProps) {
+function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick, onContextMenu }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
   const rank = topTracks.indexOf(track);
@@ -218,6 +221,7 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
     <div
       className={`artist-track-row${isActive ? " artist-track-row--active" : ""}`}
       onClick={() => onPlay(track)}
+      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, track); }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onPlay(track)}
@@ -272,9 +276,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { lovedTrackIds } = useLoved();
+
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
   const topTracks = rawTracks && lastfmTitles
     ? rankByLastfm(rawTracks, lastfmTitles)
@@ -362,7 +370,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   function handleStartRadio() {
     const seed = topTracks[0];
     if (!seed) return;
-    startRadio(buildTrackObj(seed));
+    const track = buildTrackObj(seed);
+    void playQueue([track], streamUrlFor, 0);
+    startRadio(track);
+  }
+
+  function handleTrackContextMenu(e: React.MouseEvent, track: TopTrack) {
+    setContextMenu({ x: e.clientX, y: e.clientY, track });
   }
 
   return (
@@ -447,6 +461,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                     onPlay={handlePlayTrack}
                     lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
                     onAlbumClick={handleAlbumClick}
+                    onContextMenu={handleTrackContextMenu}
                   />
                 ))}
               </div>
@@ -491,6 +506,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                     onPlay={handlePlayTrack}
                     lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
                     onAlbumClick={handleAlbumClick}
+                    onContextMenu={handleTrackContextMenu}
                   />
                 ))}
               </div>
@@ -582,6 +598,47 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           artistName={artist.name}
           onClose={() => setShowIdentify(false)}
         />
+      )}
+
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        >
+          <button
+            onClick={() => {
+              handlePlayTrack(contextMenu.track);
+              setContextMenu(null);
+            }}
+          >
+            Play Now
+          </button>
+          <button
+            onClick={() => {
+              playNext(buildTrackObj(contextMenu.track), streamUrlFor);
+              setContextMenu(null);
+            }}
+          >
+            Play Next
+          </button>
+          <button
+            onClick={() => {
+              addToQueue(buildTrackObj(contextMenu.track), streamUrlFor);
+              setContextMenu(null);
+            }}
+          >
+            Add to Queue
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              const track = buildTrackObj(contextMenu.track);
+              void playQueue([track], streamUrlFor, 0);
+              startRadio(track, mode);
+              setContextMenu(null);
+            }}
+          />
+        </ContextMenu>
       )}
     </div>
   );
