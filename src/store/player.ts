@@ -465,10 +465,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (get().currentTrack?.id !== track.id) return;
         set({ isPlaying: true, isLoading: false });
         startElapsedTimer();
-        if (!castDevice) {
-          void fetchWaveform(track.id, url);
-          void preloadWaveforms();
-        }
+        void fetchWaveform(track.id, url);
+        void preloadWaveforms();
       } catch (e) {
         if (get().currentTrack?.id !== track.id) return;
         set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });

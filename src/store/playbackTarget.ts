@@ -85,7 +85,8 @@ export class DlnaTarget implements PlaybackTarget {
   private failedToSetNext = false;
   private positionSeconds = 0;
   private positionUpdatedAt = 0;
-  private positionPollTimer: ReturnType<typeof setInterval> | null = null;
+  private currentDuration = 0;
+  private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private trackEndTimer: ReturnType<typeof setTimeout> | null = null;
   private onTrackEnd: (() => void) | null = null;
   private playing = false;
@@ -117,22 +118,28 @@ export class DlnaTarget implements PlaybackTarget {
     this.playing = true;
     this.positionSeconds = 0;
     this.positionUpdatedAt = Date.now();
-    this.startPositionPoll();
+    this.currentDuration = track.duration ?? 0;
+    this.scheduleReconcile(2000);
     if (track.duration) {
       this.scheduleTrackEndTimer(track.duration);
     }
   }
 
   pause(): void {
+    if (this.playing) {
+      this.positionSeconds += (Date.now() - this.positionUpdatedAt) / 1000;
+      this.positionUpdatedAt = Date.now();
+    }
     this.playing = false;
     this.clearTimers();
     void avPause(this.renderer.avTransportControlUrl).catch(() => {});
   }
 
   resume(): void {
+    this.positionUpdatedAt = Date.now();
     this.playing = true;
     void avPlay(this.renderer.avTransportControlUrl).catch(() => {});
-    this.startPositionPoll();
+    this.scheduleReconcile(2000);
   }
 
   stop(): void {
@@ -145,6 +152,7 @@ export class DlnaTarget implements PlaybackTarget {
     await avSeek(this.renderer.avTransportControlUrl, seconds);
     this.positionSeconds = seconds;
     this.positionUpdatedAt = Date.now();
+    if (this.playing) this.scheduleReconcile(3000);
   }
 
   async setVolume(volume: number): Promise<void> {
@@ -187,18 +195,31 @@ export class DlnaTarget implements PlaybackTarget {
 
   // ── internals ──
 
-  private startPositionPoll() {
-    if (this.positionPollTimer) clearInterval(this.positionPollTimer);
-    this.positionPollTimer = setInterval(async () => {
+  private scheduleReconcile(delayMs: number) {
+    if (this.reconcileTimer) clearTimeout(this.reconcileTimer);
+    this.reconcileTimer = setTimeout(async () => {
+      this.reconcileTimer = null;
       if (!this.playing) return;
       try {
-        const pos = await getPositionInfo(this.renderer.avTransportControlUrl);
-        this.positionSeconds = pos;
-        this.positionUpdatedAt = Date.now();
+        const t0 = Date.now();
+        const reported = await getPositionInfo(this.renderer.avTransportControlUrl);
+        const rtt = Date.now() - t0;
+        const effective = reported + rtt / 2000;
+        const localPos = this.positionSeconds + (Date.now() - this.positionUpdatedAt) / 1000;
+        // Reject: renderer returned 0 (bad/unsupported) while we're already past 3s.
+        const valid =
+          (reported > 0 || localPos <= 3) &&
+          (this.currentDuration <= 0 || effective < this.currentDuration + 5);
+        // Only re-baseline on significant drift to avoid visible snaps.
+        if (valid && Math.abs(effective - localPos) > 1.5) {
+          this.positionSeconds = effective;
+          this.positionUpdatedAt = Date.now();
+        }
       } catch {
         // transient SOAP failure — keep interpolating
       }
-    }, 1000);
+      if (this.playing) this.scheduleReconcile(5000);
+    }, delayMs);
   }
 
   private scheduleTrackEndTimer(durationSeconds: number) {
@@ -229,7 +250,7 @@ export class DlnaTarget implements PlaybackTarget {
   }
 
   private clearTimers() {
-    if (this.positionPollTimer) { clearInterval(this.positionPollTimer); this.positionPollTimer = null; }
+    if (this.reconcileTimer) { clearTimeout(this.reconcileTimer); this.reconcileTimer = null; }
     if (this.trackEndTimer) { clearTimeout(this.trackEndTimer); this.trackEndTimer = null; }
   }
 }
