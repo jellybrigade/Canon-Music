@@ -93,6 +93,26 @@ export function useAlbumSuffixAllowlist(): [
   return [list, add, remove, edit];
 }
 
+/** Manages the set of album IDs excluded from suffix stripping. */
+export function useAlbumSuffixExclusions(): [
+  excludedIds: string[],
+  exclude: (albumId: string) => Promise<void>,
+  unexclude: (albumId: string) => Promise<void>,
+] {
+  const [raw, setRaw] = useSetting("display.album_suffix_excluded_ids", "[]");
+  const excludedIds = useMemo(() => {
+    try { return JSON.parse(raw) as string[]; } catch { return []; }
+  }, [raw]);
+  const exclude = useCallback(async (albumId: string) => {
+    if (excludedIds.includes(albumId)) return;
+    await setRaw(JSON.stringify([...excludedIds, albumId]));
+  }, [excludedIds, setRaw]);
+  const unexclude = useCallback(async (albumId: string) => {
+    await setRaw(JSON.stringify(excludedIds.filter((id) => id !== albumId)));
+  }, [excludedIds, setRaw]);
+  return [excludedIds, exclude, unexclude];
+}
+
 /** Manages the set of disabled built-in pattern IDs stored in settings. */
 export function useDisabledBuiltinIds(): [
   disabled: string[],
@@ -114,9 +134,12 @@ export function useDisabledBuiltinIds(): [
 }
 
 /** Returns a display transform: identity when suffixes shown, stripper when hidden. */
-export function useAlbumDisplayName(): (name: string) => string {
+export function useAlbumDisplayName(): (name: string, albumId?: string) => string {
   const [show] = useBoolSetting("display.show_album_suffixes", true);
   const [userAllowlist] = useAlbumSuffixAllowlist();
   const [disabledIds] = useDisabledBuiltinIds();
-  return show ? (n) => n : (n) => stripAlbumSuffix(n, userAllowlist, disabledIds);
+  const [excludedIds] = useAlbumSuffixExclusions();
+  return show
+    ? (n) => n
+    : (n, albumId) => (albumId && excludedIds.includes(albumId) ? n : stripAlbumSuffix(n, userAllowlist, disabledIds));
 }

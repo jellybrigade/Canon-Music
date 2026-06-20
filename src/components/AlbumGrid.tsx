@@ -85,7 +85,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
         </div>
       )}
       <div className="album-overlay">
-        <span className="album-name">{albumDisplayName(album.name)}</span>
+        <span className="album-name">{albumDisplayName(album.name, album.id)}</span>
         {album.artist && <span className="album-artist">{album.artist}</span>}
       </div>
     </div>

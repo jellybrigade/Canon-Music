@@ -2,16 +2,59 @@ import { useMemo, useState } from "react";
 import {
   BUILTIN_PATTERNS,
   useAlbumSuffixAllowlist,
+  useAlbumSuffixExclusions,
   useDisabledBuiltinIds,
   extractSuffix,
 } from "../hooks/useAlbumDisplayName";
 import { useAlbums } from "../hooks/useAlbums";
 
-function AlbumList({ albums }: { albums: { id: string; name: string; artist: string | null }[] }) {
+type AlbumEntry = { id: string; name: string; artist: string | null };
+
+function AlbumList({
+  albums,
+  excludedIds,
+  onExclude,
+  onUnexclude,
+}: {
+  albums: AlbumEntry[];
+  excludedIds: string[];
+  onExclude: (id: string) => void;
+  onUnexclude: (id: string) => void;
+}) {
+  const active = albums.filter((a) => !excludedIds.includes(a.id));
+  const kept = albums.filter((a) => excludedIds.includes(a.id));
   return (
-    <ul className="title-cleanup-album-list">
-      {albums.map((a) => <li key={a.id}>{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</li>)}
-    </ul>
+    <div className="title-cleanup-album-list">
+      {active.map((a) => (
+        <div key={a.id} className="title-cleanup-album-row">
+          <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</span>
+          <button
+            className="title-cleanup-album-exclude"
+            title="Keep suffix visible for this album"
+            onClick={() => onExclude(a.id)}
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      {kept.length > 0 && (
+        <div className="title-cleanup-kept-section">
+          <span className="title-cleanup-kept-label">Kept</span>
+          {kept.map((a) => (
+            <div key={a.id} className="title-cleanup-album-row title-cleanup-album-row--kept">
+              <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</span>
+              <button
+                className="title-cleanup-album-unexclude"
+                title="Re-apply suffix stripping"
+                onClick={() => onUnexclude(a.id)}
+              >
+                ↩
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -33,12 +76,18 @@ function BuiltinRow({
   label,
   disabled,
   affectedAlbums,
+  excludedIds,
   onToggle,
+  onExclude,
+  onUnexclude,
 }: {
   label: string;
   disabled: boolean;
-  affectedAlbums: { id: string; name: string; artist: string | null }[];
+  affectedAlbums: AlbumEntry[];
+  excludedIds: string[];
   onToggle: () => void;
+  onExclude: (id: string) => void;
+  onUnexclude: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -53,7 +102,14 @@ function BuiltinRow({
           {disabled ? "Enable" : "Disable"}
         </button>
       </div>
-      {open && <AlbumList albums={affectedAlbums} />}
+      {open && (
+        <AlbumList
+          albums={affectedAlbums}
+          excludedIds={excludedIds}
+          onExclude={onExclude}
+          onUnexclude={onUnexclude}
+        />
+      )}
     </li>
   );
 }
@@ -61,13 +117,19 @@ function BuiltinRow({
 function CustomRow({
   suffix,
   affectedAlbums,
+  excludedIds,
   onRemove,
   onEdit,
+  onExclude,
+  onUnexclude,
 }: {
   suffix: string;
-  affectedAlbums: { id: string; name: string; artist: string | null }[];
+  affectedAlbums: AlbumEntry[];
+  excludedIds: string[];
   onRemove: () => void;
   onEdit: (next: string) => void;
+  onExclude: (id: string) => void;
+  onUnexclude: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [open, setOpen] = useState(false);
@@ -114,7 +176,14 @@ function CustomRow({
           ×
         </button>
       </div>
-      {open && <AlbumList albums={affectedAlbums} />}
+      {open && (
+        <AlbumList
+          albums={affectedAlbums}
+          excludedIds={excludedIds}
+          onExclude={onExclude}
+          onUnexclude={onUnexclude}
+        />
+      )}
     </li>
   );
 }
@@ -122,6 +191,7 @@ function CustomRow({
 export function TitleCleanupTab() {
   const [allowlist, addSuffix, removeSuffix, editSuffix] = useAlbumSuffixAllowlist();
   const [disabledIds, disableBuiltin, enableBuiltin] = useDisabledBuiltinIds();
+  const [excludedAlbumIds, excludeAlbum, unexcludeAlbum] = useAlbumSuffixExclusions();
   const [inputValue, setInputValue] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
   const { data: allAlbums = [] } = useAlbums();
@@ -203,8 +273,11 @@ export function TitleCleanupTab() {
                   key={suffix}
                   suffix={suffix}
                   affectedAlbums={customMatches(suffix)}
+                  excludedIds={excludedAlbumIds}
                   onRemove={() => void removeSuffix(suffix)}
                   onEdit={(next) => void editSuffix(suffix, next)}
+                  onExclude={(id) => void excludeAlbum(id)}
+                  onUnexclude={(id) => void unexcludeAlbum(id)}
                 />
               ))}
             </ul>
@@ -220,7 +293,10 @@ export function TitleCleanupTab() {
                 label={p.label}
                 disabled={disabledIds.includes(p.id)}
                 affectedAlbums={builtinMatchesMap.get(p.id) ?? []}
+                excludedIds={excludedAlbumIds}
                 onToggle={() => void (disabledIds.includes(p.id) ? enableBuiltin(p.id) : disableBuiltin(p.id))}
+                onExclude={(id) => void excludeAlbum(id)}
+                onUnexclude={(id) => void unexcludeAlbum(id)}
               />
             ))}
           </ul>

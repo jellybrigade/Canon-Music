@@ -1344,7 +1344,6 @@
 .title-cleanup-album-list {
   margin: 0 8px 6px;
   padding: 6px 10px;
-  list-style: none;
   background: var(--surface-1, var(--bg-card));
   border-radius: 4px;
   display: flex;
@@ -1352,8 +1351,64 @@
   gap: 2px;
 }
 
-.title-cleanup-album-list li {
+.title-cleanup-album-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.title-cleanup-album-name {
+  flex: 1;
   font-size: 0.8rem;
   color: var(--text-secondary);
   line-height: 1.4;
+}
+
+.title-cleanup-album-row--kept .title-cleanup-album-name {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.title-cleanup-album-exclude,
+.title-cleanup-album-unexclude {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0;
+  transition: color 0.1s, opacity 0.1s;
+}
+
+.title-cleanup-album-row:hover .title-cleanup-album-exclude,
+.title-cleanup-album-row:hover .title-cleanup-album-unexclude {
+  opacity: 1;
+}
+
+.title-cleanup-album-exclude:hover {
+  color: var(--danger, #e05);
+}
+
+.title-cleanup-album-unexclude:hover {
+  color: var(--text-primary);
+}
+
+.title-cleanup-kept-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title-cleanup-kept-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
 }

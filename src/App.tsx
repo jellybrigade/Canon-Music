@@ -97,11 +97,11 @@ export default function App() {
     selectedArtist,
     selectedPlaylist,
     setSelectedAlbum,
-    setSelectedArtist,
     setSelectedPlaylist,
     navigateTo,
+    openAlbum,
+    openArtist,
     goBack,
-    peekBack,
   } = useAppNavigation();
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
@@ -413,7 +413,7 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
-          onSelectAlbum={(album) => { setSelectedAlbum(album); }}
+          onSelectAlbum={openAlbum}
           onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
@@ -437,7 +437,7 @@ export default function App() {
       <AlbumGrid
         albums={visibleAlbums}
         serverWithCredential={serverWithCred}
-        onSelect={setSelectedAlbum}
+        onSelect={openAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
         onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         playlists={playlists}
@@ -454,7 +454,7 @@ export default function App() {
       <AlbumDetail
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
-        onClose={() => { if (peekBack() !== null && peekBack() !== "library") goBack(); else setSelectedAlbum(null); }}
+        onClose={goBack}
         onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
         onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); navigateTo("library"); }}
       />
@@ -476,9 +476,9 @@ export default function App() {
           <ArtistDetail
             artist={selectedArtist}
             serverWithCredential={serverWithCred}
-            onClose={() => { if (peekBack() !== null && peekBack() !== "artists") goBack(); else setSelectedArtist(null); }}
-            onSelectAlbum={setSelectedAlbum}
-            onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+            onClose={goBack}
+            onSelectAlbum={openAlbum}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
           />
         </main>
       );
@@ -501,8 +501,8 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
-              onSelectAlbum={(album) => { setSelectedAlbum(album); }}
-              onSelectArtist={(artist) => { setSelectedArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
+              onSelectAlbum={openAlbum}
+              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (
@@ -519,8 +519,8 @@ export default function App() {
             {serverWithCred ? (
               <HomeView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={setSelectedAlbum}
-                onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+                onSelectAlbum={openAlbum}
+                onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -696,7 +696,7 @@ export default function App() {
               <ArtistGrid
                 artists={artists ?? []}
                 serverWithCredential={serverWithCred}
-                onSelect={setSelectedArtist}
+                onSelect={openArtist}
                 onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
                 scrollKey="artists"
               />
@@ -727,7 +727,7 @@ export default function App() {
             {serverWithCred ? (
               <YearsView
                 serverWithCredential={serverWithCred}
-                onSelect={setSelectedAlbum}
+                onSelect={openAlbum}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 serverDisplayName={server?.display_name}
               />
@@ -854,11 +854,11 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
-          onSelectArtist={(name: string) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+          onSelectArtist={(name: string) => openArtist({ name, album_count: 0, artwork_url: null })}
           onSelectAlbumById={async (albumId: string) => {
             const db = await getDb();
             const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-            if (rows[0]) setSelectedAlbum(rows[0]);
+            if (rows[0]) openAlbum(rows[0]);
           }}
           serverWithCred={serverWithCred ?? undefined}
         />
@@ -867,8 +867,8 @@ export default function App() {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
-        onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { setSelectedArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
+        onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

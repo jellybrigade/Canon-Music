@@ -32,6 +32,16 @@ export function useAppNavigation() {
     setSelectedPlaylist(null);
   }
 
+  function openAlbum(album: AlbumRow) {
+    historyRef.current.push({ view, selectedAlbum, selectedArtist, selectedPlaylist });
+    setSelectedAlbum(album);
+  }
+
+  function openArtist(artist: ArtistRow) {
+    historyRef.current.push({ view, selectedAlbum, selectedArtist, selectedPlaylist });
+    setSelectedArtist(artist);
+  }
+
   function goBack() {
     const prev = historyRef.current.pop();
     if (!prev) return;
@@ -55,6 +65,8 @@ export function useAppNavigation() {
     setSelectedArtist,
     setSelectedPlaylist,
     navigateTo,
+    openAlbum,
+    openArtist,
     goBack,
     peekBack,
   };

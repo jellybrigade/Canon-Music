@@ -8,6 +8,49 @@ import { rebuildTagVocabCache } from "./tag-normalize";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
+export async function syncAlbumTracks(
+  server: Server,
+  credential: NavidromeCredential,
+  dbAlbumId: string,
+): Promise<void> {
+  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
+  const altUrl = server.alt_url ?? undefined;
+  const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
+  const db = await getDb();
+  for (const track of tracks) {
+    const trackDbId = `${server.id}:${track.id}`;
+    await db.execute(
+      `INSERT OR REPLACE INTO tracks
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        trackDbId,
+        server.id,
+        server.type,
+        track.title,
+        track.artist ?? null,
+        dbAlbumId,
+        track.genre ?? null,
+        track.track ?? null,
+        track.discNumber ?? null,
+        track.year ?? null,
+        track.duration ?? null,
+        track.path ?? null,
+        track.playCount ?? 0,
+        track.bitRate ?? null,
+        track.suffix ?? null,
+        track.size ?? null,
+      ]
+    );
+    if (track.genre) {
+      await db.execute(
+        `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, 'server')`,
+        [trackDbId, track.genre]
+      );
+    }
+  }
+}
+
 export async function syncLibrary(
   server: Server,
   onAlbumBatch?: () => void,
