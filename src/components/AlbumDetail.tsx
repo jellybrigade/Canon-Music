@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
+import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X, SlidersHorizontal } from "lucide-react";
@@ -20,6 +20,7 @@ import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId, getCanonTree } from "../lib/canonicalize";
 import type { TreeNode } from "../lib/canonicalize";
@@ -61,11 +62,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   const albumDisplayName = useAlbumDisplayName();
   const [suffixAllowlist, addToSuffixAllowlist] = useAlbumSuffixAllowlist();
+  const [suffixExcludedIds, excludeFromSuffix, unexcludeFromSuffix] = useAlbumSuffixExclusions();
   const [showFullTitle, setShowFullTitle] = useState(false);
   const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
   const strippingEnabled = !showAlbumSuffixes;
   const detectedSuffix = extractSuffix(album.name);
-  const suffixWasStripped = albumDisplayName(album.name) !== album.name;
+  const suffixIsExcluded = suffixExcludedIds.includes(album.id);
+  const suffixWasStripped = !suffixIsExcluded && albumDisplayName(album.name, album.id) !== album.name;
   const suffixCanBeAdded = strippingEnabled && detectedSuffix !== null && !suffixWasStripped &&
     !suffixAllowlist.some((s) => s.toLowerCase() === detectedSuffix.toLowerCase());
   const queryClient = useQueryClient();
@@ -77,10 +80,25 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
+
+  const doSyncTracks = useCallback(async () => {
+    await syncAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
+    await queryClient.invalidateQueries({ queryKey: QK.tracks(album.id) });
+  }, [album.id, serverWithCredential, queryClient]);
+
+  // Auto-sync when all tracks are missing bit_rate — leftover from v32 migration
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return;
+    if (tracks.every((t) => t.bit_rate === null)) {
+      void doSyncTracks();
+    }
+  }, [tracks, doSyncTracks]);
+
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
     setIsTagRefreshing(true);
     try {
+      await doSyncTracks();
       await normalizeAlbum(album.id, album.artist ?? "", album.name, {
         lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
         lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
@@ -98,7 +116,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     } finally {
       setIsTagRefreshing(false);
     }
-  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient]);
+  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient, doSyncTracks]);
   const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
@@ -235,6 +253,31 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           : null,
       });
       await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
+    } finally {
+      setIsGenreUpdating(false);
+    }
+  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+
+  const handleExcludeGenre = useCallback(async (canonicalId: string) => {
+    setIsGenreUpdating(true);
+    try {
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR IGNORE INTO album_genre_exclusions (album_id, canonical_id) VALUES (?, ?)",
+        [album.id, canonicalId]
+      );
+      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
+        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
+        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
+        combinedMbGenres: albumIdentity?.combined_genres_json
+          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
+          : null,
+        combinedMbTags: albumIdentity?.combined_tags_json
+          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
+          : null,
+      });
+      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
+      await queryClient.invalidateQueries({ queryKey: QK.albumGenreExclusions(album.id) });
     } finally {
       setIsGenreUpdating(false);
     }
@@ -400,7 +443,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           <div className="album-detail-meta">
             <div className="album-detail-title-row">
               <h2 className="album-detail-title">
-                {showFullTitle ? album.name : albumDisplayName(album.name)}
+                {showFullTitle ? album.name : albumDisplayName(album.name, album.id)}
               </h2>
               {suffixWasStripped && (
                 <button
@@ -411,6 +454,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   {showFullTitle ? "Hide" : "···"}
                 </button>
               )}
+              {suffixWasStripped && showFullTitle && detectedSuffix && (
+                <button
+                  className="album-suffix-toggle-btn"
+                  onClick={() => { void excludeFromSuffix(album.id); setShowFullTitle(false); }}
+                  title="Keep the suffix visible for this album only."
+                >
+                  Keep
+                </button>
+              )}
             </div>
             {suffixCanBeAdded && detectedSuffix && (
               <button
@@ -419,6 +471,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 title="Strips this parenthetical from all albums. Manage in Tags › Title Cleanup."
               >
                 + Strip "({detectedSuffix})" from all albums
+              </button>
+            )}
+            {suffixIsExcluded && detectedSuffix && (
+              <button
+                className="album-suffix-add-btn album-suffix-add-btn--undo"
+                onClick={() => void unexcludeFromSuffix(album.id)}
+                title="Re-apply suffix stripping to this album."
+              >
+                ↩ Strip "({detectedSuffix})" again
               </button>
             )}
             {album.artist && (
@@ -508,19 +569,34 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
                 : undefined;
               const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
+              const excludableClass = tag.id !== null ? " album-tag-chip--excludable" : "";
               return (
-                <button
+                <span
                   key={tag.id ?? tag.name}
-                  className={`album-tag-chip${sourceClass}`}
-                  title={chipTitle}
-                  onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setDrawerState({ albumId: album.id });
-                  }}
+                  className={`album-tag-chip${sourceClass}${excludableClass}`}
                 >
-                  {tag.name}
-                </button>
+                  <button
+                    className="album-tag-chip-label"
+                    title={chipTitle}
+                    onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setDrawerState({ albumId: album.id });
+                    }}
+                  >
+                    {tag.name}
+                  </button>
+                  {tag.id !== null && (
+                    <button
+                      className="album-tag-chip-remove"
+                      onClick={() => void handleExcludeGenre(tag.id!)}
+                      title="Exclude genre from this album"
+                      disabled={isGenreUpdating}
+                    >
+                      <X size={9} />
+                    </button>
+                  )}
+                </span>
               );
             };
 

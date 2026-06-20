@@ -98,12 +98,15 @@
 }
 
 .album-suffix-toggle-btn {
+  appearance: none;
   background: none;
   border: none;
+  border-radius: 0;
   padding: 0 0.125rem;
   color: var(--text-tertiary);
   cursor: pointer;
   font-size: 0.8125rem;
+  font-family: inherit;
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 1;
@@ -121,6 +124,8 @@
   font-family: inherit;
 }
 .album-suffix-add-btn:hover { color: var(--accent); }
+.album-suffix-add-btn--undo { color: var(--text-tertiary); }
+.album-suffix-add-btn--undo:hover { color: var(--text-primary); }
 
 .album-detail-artist {
   font-size: 0.9375rem;
@@ -277,6 +282,8 @@
 }
 
 .album-tag-chip {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -284,9 +291,13 @@
   font-size: 0.6875rem;
   font-weight: 500;
   color: var(--text-secondary);
-  cursor: pointer;
   white-space: nowrap;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.album-tag-chip--excludable {
+  padding: 1px 4px 1px 7px;
+  gap: 2px;
 }
 
 .album-tag-chip:hover {
@@ -639,14 +650,12 @@
 
 /* ── Tracklist wrapper + floating column picker ── */
 .tracklist-wrapper {
-  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .tracklist-wrapper > .tracklist-col-picker-anchor {
-  position: absolute;
-  top: 0;
-  right: 0;
-  z-index: 10;
+  align-self: flex-end;
   padding: 0.25rem;
 }
 

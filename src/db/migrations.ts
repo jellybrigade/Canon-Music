@@ -467,4 +467,15 @@ export const migrations: Migration[] = [
       ALTER TABLE tracks ADD COLUMN file_size INTEGER;
     `,
   },
+  {
+    version: 33,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_genre_exclusions (
+        album_id TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        excluded_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (album_id, canonical_id)
+      );
+    `,
+  },
 ];

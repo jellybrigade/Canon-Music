@@ -222,6 +222,13 @@ async function _doNormalizeAlbum(
     );
   }
 
+  type ExclusionRow = { canonical_id: string };
+  const exclusionRows = await db.select<ExclusionRow[]>(
+    "SELECT canonical_id FROM album_genre_exclusions WHERE album_id = ?",
+    [albumId]
+  );
+  const excludedIds = new Set(exclusionRows.map((r) => r.canonical_id));
+
   const seenIds = new Set<string>();
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
@@ -252,13 +259,13 @@ async function _doNormalizeAlbum(
     if (manualId && manualId !== "__accepted__") {
       // Manual mapping overrides auto tree-matching
       const node = tree.byId.get(manualId);
-      if (node && !seenIds.has(node.id)) {
+      if (node && !seenIds.has(node.id) && !excludedIds.has(node.id)) {
         seenIds.add(node.id);
         mapped.push({ id: node.id, name: node.name, source: entry.source, confidence });
       }
     } else {
       const match = findCanonicalSync(entry.name, "genre", tree);
-      if (match.node && !seenIds.has(match.node.id)) {
+      if (match.node && !seenIds.has(match.node.id) && !excludedIds.has(match.node.id)) {
         seenIds.add(match.node.id);
         mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
       } else if (!match.node) {
@@ -339,7 +346,7 @@ async function _doNormalizeAlbum(
 
   // Atomically replace album_genres and album_unresolved_genres for this album
   await db.execute("DELETE FROM album_genres WHERE album_id = ?", [albumId]);
-  for (const row of genreRows) {
+  for (const row of genreRows.filter((r) => !excludedIds.has(r.canonical_id))) {
     await db.execute(
       "INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES (?, ?, ?, ?, ?)",
       [albumId, row.canonical_id, row.relation, row.section, row.name]
