@@ -16,7 +16,8 @@ export function usePlaylistTracks(playlistId: string | null) {
       if (!playlistId) return [];
       const db = await getDb();
       return db.select<PlaylistTrackRow[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.track_number,
+        `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
+                t.bit_rate, t.suffix,
                 pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
          FROM playlist_tracks pt
          JOIN tracks t ON pt.track_id = t.id

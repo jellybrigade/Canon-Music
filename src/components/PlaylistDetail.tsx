@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, Trash2, Music, Pencil, Check, X } from "lucide-react";
+import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../types/library";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
@@ -50,6 +50,30 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
 
   const genreMappings = useGenreMappings();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: PlaylistTrackRow } | null>(null);
+
+  const [playlistCols, setPlaylistCols] = useState<{
+    artist: boolean; genre: boolean; album: boolean; year: boolean;
+    duration: boolean; format: boolean; bitrate: boolean;
+  }>(() => {
+    const defaults = { artist: true, genre: true, album: false, year: false, duration: true, format: false, bitrate: false };
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-playlist-cols") ?? "null") }; }
+    catch { return defaults; }
+  });
+  const [showColPicker, setShowColPicker] = useState(false);
+  const colPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("canon-playlist-cols", JSON.stringify(playlistCols));
+  }, [playlistCols]);
+
+  useEffect(() => {
+    if (!showColPicker) return;
+    const close = (e: MouseEvent) => {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showColPicker]);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -77,6 +101,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     estimateSize: () => PLAYLIST_ROW_HEIGHT,
     overscan: 5,
   });
+
+  const gridTemplate = [
+    "2.5rem",
+    "minmax(0, 2fr)",
+    playlistCols.artist ? "minmax(0, 1.25fr)" : null,
+    playlistCols.genre ? "minmax(0, 1fr)" : null,
+    playlistCols.album ? "minmax(0, 1fr)" : null,
+    playlistCols.year ? "3.5rem" : null,
+    playlistCols.format ? "3.5rem" : null,
+    playlistCols.bitrate ? "4.5rem" : null,
+    playlistCols.duration ? "auto" : null,
+  ].filter(Boolean).join(" ");
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -289,6 +325,53 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
         </div>
       </div>
 
+      <div className="playlist-list-controls">
+        <div className="playlist-col-header" style={{ gridTemplateColumns: gridTemplate }}>
+          <span className="playlist-col-header-cell">#</span>
+          <span className="playlist-col-header-cell">Title</span>
+          {playlistCols.artist && <span className="playlist-col-header-cell">Artist</span>}
+          {playlistCols.genre && <span className="playlist-col-header-cell">Genre</span>}
+          {playlistCols.album && <span className="playlist-col-header-cell">Album</span>}
+          {playlistCols.year && <span className="playlist-col-header-cell">Year</span>}
+          {playlistCols.format && <span className="playlist-col-header-cell">Format</span>}
+          {playlistCols.bitrate && <span className="playlist-col-header-cell">Bitrate</span>}
+          {playlistCols.duration && <span className="playlist-col-header-cell playlist-col-header-cell--right">Duration</span>}
+        </div>
+        <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
+          <button
+            className="tracklist-col-picker-btn"
+            title="Show/hide columns"
+            onClick={() => setShowColPicker((v) => !v)}
+          >
+            <SlidersHorizontal size={13} />
+          </button>
+          {showColPicker && (
+            <div className="tracklist-col-picker-popup tracklist-col-picker-popup--left">
+              {(
+                [
+                  ["artist", "Artist"],
+                  ["genre", "Genre"],
+                  ["album", "Album"],
+                  ["year", "Year"],
+                  ["duration", "Duration"],
+                  ["format", "Format"],
+                  ["bitrate", "Bitrate"],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={playlistCols[key]}
+                    onChange={(e) => setPlaylistCols((c) => ({ ...c, [key]: e.target.checked }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="album-detail-body" ref={scrollRef}>
         {isLoading ? (
           <p className="empty-state">Loading…</p>
@@ -311,6 +394,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                     left: 0,
                     width: "100%",
                     transform: `translateY(${virtualItem.start}px)`,
+                    gridTemplateColumns: gridTemplate,
                   }}
                   className={`playlist-vrow${isCurrentTrack ? " playlist-vrow--active" : ""}`}
                   onClick={() => handlePlayTrack(track)}
@@ -325,11 +409,15 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                       : track.position + 1}
                   </span>
                   <span className="playlist-vrow-title">{track.title}</span>
-                  <span className="playlist-vrow-artist">{track.artist ?? ""}</span>
-                  <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>
-                  <span className="playlist-vrow-duration">
+                  {playlistCols.artist && <span className="playlist-vrow-artist">{track.artist ?? ""}</span>}
+                  {playlistCols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
+                  {playlistCols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
+                  {playlistCols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
+                  {playlistCols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
+                  {playlistCols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
+                  {playlistCols.duration && <span className="playlist-vrow-duration">
                     {track.duration ? formatDuration(track.duration) : ""}
-                  </span>
+                  </span>}
                 </div>
               );
             })}

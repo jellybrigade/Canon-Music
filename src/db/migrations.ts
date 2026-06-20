@@ -459,4 +459,12 @@ export const migrations: Migration[] = [
     version: 31,
     sql: `ALTER TABLE playlists ADD COLUMN cover_art_url TEXT;`,
   },
+  {
+    version: 32,
+    sql: `
+      ALTER TABLE tracks ADD COLUMN bit_rate INTEGER;
+      ALTER TABLE tracks ADD COLUMN suffix TEXT;
+      ALTER TABLE tracks ADD COLUMN file_size INTEGER;
+    `,
+  },
 ];

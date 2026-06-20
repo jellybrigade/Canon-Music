@@ -28,6 +28,10 @@ export interface TrackRow {
   year: number | null;
   duration: number | null;
   file_path: string | null;
+  play_count: number | null;
+  bit_rate: number | null;
+  suffix: string | null;
+  file_size: number | null;
 }
 
 export interface PlaylistTrackRow {
@@ -36,9 +40,12 @@ export interface PlaylistTrackRow {
   artist: string | null;
   duration: number | null;
   genre: string | null;
+  year: number | null;
   track_number: number | null;
   position: number;
   artwork_url: string | null;
   album_name: string | null;
   album_id: string | null;
+  bit_rate: number | null;
+  suffix: string | null;
 }

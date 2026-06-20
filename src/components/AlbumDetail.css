@@ -605,12 +605,187 @@
   letter-spacing: 0.01em;
 }
 
+.track-disc {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  text-align: center;
+  white-space: nowrap;
+}
 
+.track-format {
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.track-bitrate {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track-plays {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
+
+/* ── Tracklist wrapper + floating column picker ── */
+.tracklist-wrapper {
+  position: relative;
+}
+
+.tracklist-wrapper > .tracklist-col-picker-anchor {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  padding: 0.25rem;
+}
+
+/* ── Column picker ── */
+.tracklist-col-picker-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tracklist-col-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 2px 4px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.1s, background 0.1s;
+}
+
+.tracklist-col-picker-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tracklist-col-picker-popup {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0;
+  z-index: 200;
+  min-width: 130px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.tracklist-col-picker-popup--left {
+  right: auto;
+  left: 0;
+}
+
+.tracklist-col-picker-popup label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tracklist-col-picker-popup label:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.tracklist-col-picker-popup input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+/* ── Playlist list controls (header + col picker) ── */
+.playlist-list-controls {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.playlist-list-controls > .tracklist-col-picker-anchor {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 0.25rem;
+}
+
+/* ── Playlist column header ── */
+.playlist-col-header {
+  display: grid;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-col-header-cell {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  padding: 0.35rem 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-col-header-cell--right {
+  text-align: right;
+}
+
+/* ── Playlist vrow extra columns ── */
+.playlist-vrow-album {
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-vrow-year {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.playlist-vrow-format {
+  color: var(--text-tertiary);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.playlist-vrow-bitrate {
+  color: var(--text-tertiary);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Virtualized playlist track rows ── */
+/* grid-template-columns set inline via style prop to match active columns */
 .playlist-vrow {
   display: grid;
-  grid-template-columns: 2.5rem minmax(0, 2fr) minmax(0, 1.25fr) minmax(0, 1fr) auto;
   align-items: center;
   border-bottom: 1px solid var(--border);
   cursor: pointer;

@@ -48,6 +48,29 @@ export function similarity(a: string, b: string): number {
 }
 
 /**
+ * Artist similarity that handles collaborative credits.
+ * "Filow & Ski Aggu" vs "Filow" → 1.0 because one contains the other.
+ * Also splits on feat/ft/& and takes the best component match.
+ */
+function artistSimilarity(a: string, b: string): number {
+  const base = similarity(a, b);
+  const na = normalizeForMatch(a);
+  const nb = normalizeForMatch(b);
+  if (na.includes(nb) || nb.includes(na)) return 1.0;
+  // Split on collaboration separators and take best partial match
+  const splitRe = /\s*[&,]\s*|\s+(?:feat|ft|featuring|vs|and)\s+/i;
+  const partsA = a.split(splitRe);
+  const partsB = b.split(splitRe);
+  let best = base;
+  for (const pa of partsA) {
+    for (const pb of partsB) {
+      best = Math.max(best, similarity(pa, pb));
+    }
+  }
+  return best;
+}
+
+/**
  * Score a release group candidate against query artist + album strings.
  * Title weighted 60%, artist weighted 40% (title match matters more).
  */
@@ -56,7 +79,7 @@ export function scoreReleaseGroup(
   artist: string,
   album: string
 ): number {
-  return 0.6 * similarity(c.title, album) + 0.4 * similarity(c.artistName, artist);
+  return 0.6 * similarity(c.title, album) + 0.4 * artistSimilarity(c.artistName, artist);
 }
 
 export interface RankedCandidate {

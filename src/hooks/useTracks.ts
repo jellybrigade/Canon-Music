@@ -11,7 +11,7 @@ export function useTracks(albumId: string | null) {
     queryFn: async () => {
       const db = await getDb();
       return db.select<TrackRow[]>(
-        `SELECT id, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, file_path
+        `SELECT id, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size
          FROM tracks
          WHERE album_id = ?
          ORDER BY disc_number, track_number`,

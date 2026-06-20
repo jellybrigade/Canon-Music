@@ -180,6 +180,9 @@ export interface NavidromeTrack {
   starred?: string;
   path?: string;
   playCount?: number;
+  bitRate?: number;
+  suffix?: string;
+  size?: number;
 }
 
 export function getStreamUrl(

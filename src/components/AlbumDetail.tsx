@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X, SlidersHorizontal } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
@@ -17,7 +17,7 @@ import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useBoolSetting, useSetting } from "../hooks/useSetting";
-import { useGenreMappings } from "../hooks/useGenreDisplay";
+import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
@@ -147,6 +147,30 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [contextMenuMode, setContextMenuMode] = useState<"main" | "playlist">("main");
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
   const [showIdentify, setShowIdentify] = useState(false);
+
+  const [trackCols, setTrackCols] = useState<{
+    artist: boolean; genre: boolean; year: boolean; disc: boolean;
+    duration: boolean; format: boolean; bitrate: boolean; plays: boolean;
+  }>(() => {
+    const defaults = { artist: true, genre: true, year: true, disc: false, duration: true, format: false, bitrate: false, plays: false };
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-album-track-cols") ?? "null") }; }
+    catch { return defaults; }
+  });
+  const [showColPicker, setShowColPicker] = useState(false);
+  const colPickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("canon-album-track-cols", JSON.stringify(trackCols));
+  }, [trackCols]);
+
+  useEffect(() => {
+    if (!showColPicker) return;
+    const close = (e: MouseEvent) => {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showColPicker]);
 
   const [showGenreInput, setShowGenreInput] = useState(false);
   const [genreInput, setGenreInput] = useState("");
@@ -698,62 +722,120 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         ) : !tracks || tracks.length === 0 ? (
           <p className="empty-state">No tracks synced yet.</p>
         ) : (
-          <table className="tracklist">
-            <tbody>
-              {tracks.map((track) => {
-                const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
-                const isCurrentTrack = currentTrack?.id === track.id;
-                return (
-                  <tr
-                    key={track.id}
-                    className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
-                    onClick={() => handlePlayTrack(track)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({ x: e.clientX, y: e.clientY, track });
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
-                  >
-                    <td className="track-number">
-                      {isCurrentlyPlaying ? (
-                        <span className="track-playing-indicator">
-                          <Play size={12} />
-                        </span>
-                      ) : (
-                        track.track_number ?? "—"
+          <div className="tracklist-wrapper">
+            <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
+              <button
+                className="tracklist-col-picker-btn"
+                title="Show/hide columns"
+                onClick={() => setShowColPicker((v) => !v)}
+              >
+                <SlidersHorizontal size={13} />
+              </button>
+              {showColPicker && (
+                <div className="tracklist-col-picker-popup">
+                  {(
+                    [
+                      ["artist", "Artist"],
+                      ["genre", "Genre"],
+                      ["year", "Year"],
+                      ["disc", "Disc #"],
+                      ["duration", "Duration"],
+                      ["format", "Format"],
+                      ["bitrate", "Bitrate"],
+                      ["plays", "Play count"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      <input
+                        type="checkbox"
+                        checked={trackCols[key]}
+                        onChange={(e) => setTrackCols((c) => ({ ...c, [key]: e.target.checked }))}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <table className="tracklist">
+              <tbody>
+                {tracks.map((track) => {
+                  const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
+                  const isCurrentTrack = currentTrack?.id === track.id;
+                  const trackGenres = applyGenreMappings(track.genre, genreMappings);
+                  return (
+                    <tr
+                      key={track.id}
+                      className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
+                      onClick={() => handlePlayTrack(track)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, track });
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
+                    >
+                      <td className="track-number">
+                        {isCurrentlyPlaying ? (
+                          <span className="track-playing-indicator">
+                            <Play size={12} />
+                          </span>
+                        ) : (
+                          track.track_number ?? "—"
+                        )}
+                      </td>
+                      <td className="track-title">{track.title}</td>
+                      {trackCols.artist && <td className="track-artist">{track.artist ?? ""}</td>}
+                      {trackCols.genre && (
+                        <td className="track-genre">
+                          {trackGenres.map((g, i) => (
+                            <span key={i} className="track-genre-chip">{g}</span>
+                          ))}
+                        </td>
                       )}
-                    </td>
-                    <td className="track-title">{track.title}</td>
-                    <td className="track-artist">{track.artist ?? ""}</td>
-                    {track.year && track.year !== album.year
-                      ? <td className="track-year" title="Track year differs from album year">{track.year}</td>
-                      : <td className="track-year" />}
-                    <td className="track-duration">
-                      {track.duration ? formatDuration(track.duration) : ""}
-                    </td>
-                    <td className="track-heart-cell">
-                      <button
-                        className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
-                        aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void toggleTrackLove(track.id, serverWithCredential);
-                        }}
-                      >
-                        <Heart
-                          size={15}
-                          fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"}
-                          strokeWidth={2}
-                        />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {trackCols.year && (
+                        <td className="track-year" title={track.year && track.year !== album.year ? "Track year differs from album year" : undefined}>
+                          {track.year && track.year !== album.year ? track.year : ""}
+                        </td>
+                      )}
+                      {trackCols.disc && <td className="track-disc">{track.disc_number ?? ""}</td>}
+                      {trackCols.duration && (
+                        <td className="track-duration">
+                          {track.duration ? formatDuration(track.duration) : ""}
+                        </td>
+                      )}
+                      {trackCols.format && (
+                        <td className="track-format">{track.suffix ? track.suffix.toUpperCase() : ""}</td>
+                      )}
+                      {trackCols.bitrate && (
+                        <td className="track-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</td>
+                      )}
+                      {trackCols.plays && (
+                        <td className="track-plays">{track.play_count ?? ""}</td>
+                      )}
+                      <td className="track-heart-cell">
+                        <button
+                          className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
+                          aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void toggleTrackLove(track.id, serverWithCredential);
+                          }}
+                        >
+                          <Heart
+                            size={15}
+                            fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"}
+                            strokeWidth={2}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
