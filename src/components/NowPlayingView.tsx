@@ -173,10 +173,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
   const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
 
-  const { data: artistAlbums } = useArtistAlbums(currentTrack?.artist ?? null);
-  const { data: topTracks } = useArtistTopTracks(currentTrack?.artist ?? null);
+  const primaryArtist = currentTrack?.artist
+    ? (currentTrack.artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? currentTrack.artist)
+    : null;
+  const { data: artistAlbums } = useArtistAlbums(primaryArtist);
+  const { data: topTracks } = useArtistTopTracks(primaryArtist);
   const { data: suggestedTracks } = useSuggestedTracks(
-    currentTrack?.artist ?? null,
+    primaryArtist,
     currentTrack?.id ?? null
   );
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
