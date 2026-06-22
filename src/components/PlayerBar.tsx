@@ -57,7 +57,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const repeat        = usePlayerStore((s) => s.repeat);
   const isShuffled    = usePlayerStore((s) => s.isShuffled);
   const isQueueOpen   = usePlayerStore((s) => s.isQueueOpen);
-  const accentColor   = usePlayerStore((s) => s.accentColor);
+
   const pause         = usePlayerStore((s) => s.pause);
   const resume        = usePlayerStore((s) => s.resume);
   const next          = usePlayerStore((s) => s.next);
@@ -277,7 +277,6 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
       )}
       {!currentTrack ? null : <div
         className="player-bar"
-        style={accentColor ? { '--accent': accentColor, '--accent-hover': accentColor } as React.CSSProperties : undefined}
       >
         <div className="player-section player-section--left">
           <div className="player-thumb-wrap">

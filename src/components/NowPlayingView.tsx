@@ -352,7 +352,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       className="now-playing-view"
       style={{
         ...(largeArtUrl ? { '--art-bg': `url("${largeArtUrl.replace(/"/g, '%22')}")` } : {}),
-        ...(accent ? { '--accent': accent, '--accent-hover': accent, '--np-dominant': accent } : {}),
+        ...(accent ? { '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
       {onBack && (
@@ -721,6 +721,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     <div className="now-playing-top-tracks-grid">
                       {suggestedTracks.slice(0, 10).map((track) => (
                         <div key={track.id} className="now-playing-track-row">
+                          {track.artwork_url
+                            ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
+                            : <span className="now-playing-track-num" />}
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             <span className="now-playing-track-album">

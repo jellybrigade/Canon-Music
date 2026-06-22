@@ -228,10 +228,26 @@ export default function App() {
 
   useEffect(() => {
     const artUrl = currentTrack?.coverArtUrl ?? null;
-    if (!artUrl) { setAccentColor(null); return; }
+    if (!artUrl) {
+      setAccentColor(null);
+      document.documentElement.style.removeProperty('--accent');
+      document.documentElement.style.removeProperty('--accent-hover');
+      document.documentElement.style.removeProperty('--accent-subtle');
+      return;
+    }
     let cancelled = false;
     void extractAccent(artUrl).then((color) => {
-      if (!cancelled) setAccentColor(color);
+      if (cancelled) return;
+      setAccentColor(color);
+      if (color) {
+        document.documentElement.style.setProperty('--accent', color);
+        document.documentElement.style.setProperty('--accent-hover', color);
+        // parse rgb(...) to build subtle
+        const m = color.match(/\d+/g);
+        if (m) {
+          document.documentElement.style.setProperty('--accent-subtle', `rgba(${m[0]}, ${m[1]}, ${m[2]}, 0.18)`);
+        }
+      }
     });
     return () => { cancelled = true; };
   }, [currentTrack?.coverArtUrl, setAccentColor]);
