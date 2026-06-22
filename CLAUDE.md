@@ -37,7 +37,9 @@ Two branches:
 - `development` — all work happens here. Commit whenever a logical unit of work is done. The auto-commit hook will also pick up uncommitted changes on stop.
 - `main` — releases only. One commit per release, tagged `vX.Y.Z` by CI. Never commit to main directly.
 
-To release, run `/commit`. That skill handles code review, version bump, merge, and push.
+**Always commit after completing a change**, even when the user didn't invoke `/next` or `/commit` explicitly. Every finished logical unit of work should land in a commit before the session ends or moves on.
+
+To release, run `/release`. That skill handles code review, version bump, merge, and push.
 
 ---
 
