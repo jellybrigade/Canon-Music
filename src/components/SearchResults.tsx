@@ -3,7 +3,7 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Music, User } from "lucide-react";
 import type { SearchAlbum, SearchTrack, SearchArtist } from "../hooks/useSearch";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl } from "../lib/navidrome";
 import "./SearchResults.css";
 

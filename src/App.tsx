@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -15,6 +15,7 @@ const SettingsView   = lazy(() => import("./components/SettingsView").then((m) =
 const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
 const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
+const YearsView      = lazy(() => import("./components/YearsView").then((m) => ({ default: m.YearsView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { CanonLockup } from "./components/CanonIcon";
@@ -48,12 +49,11 @@ import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { FeedbackModal } from "./components/FeedbackModal";
-import { getCoverArtUrl, getStreamUrl } from "./lib/navidrome";
-import { stripServerPrefix } from "./lib/ids";
+import { getCoverArtUrl, getStreamUrl, setStreamMaxBitrate } from "./lib/navidrome";
+import { stripServerPrefix } from "./utils/ids";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
-import type { AlbumRow, AlbumSort } from "./hooks/useAlbums";
-import type { ArtistRow } from "./hooks/useArtists";
+import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
 import "./styles/tokens.css";
 import "./styles/library.css";
 import "./styles/base.css";
@@ -97,11 +97,11 @@ export default function App() {
     selectedArtist,
     selectedPlaylist,
     setSelectedAlbum,
-    setSelectedArtist,
     setSelectedPlaylist,
     navigateTo,
+    openAlbum,
+    openArtist,
     goBack,
-    peekBack,
   } = useAppNavigation();
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
@@ -136,7 +136,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, deletePlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
 
@@ -164,6 +164,8 @@ export default function App() {
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
   const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
+  const [streamMaxBitrate] = useSetting("stream.max_bitrate", "0");
+  useEffect(() => { setStreamMaxBitrate(parseInt(streamMaxBitrate, 10)); }, [streamMaxBitrate]);
   useEffect(() => {
     void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
   }, []);
@@ -350,6 +352,7 @@ export default function App() {
     { id: "library", label: "Library", icon: <Music size={24} /> },
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
     { id: "genres", label: "Genres", icon: <Layers size={24} /> },
+    { id: "years", label: "Years", icon: <Calendar size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
@@ -410,7 +413,7 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
-          onSelectAlbum={(album) => { setSelectedAlbum(album); }}
+          onSelectAlbum={openAlbum}
           onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
         />
@@ -434,8 +437,10 @@ export default function App() {
       <AlbumGrid
         albums={visibleAlbums}
         serverWithCredential={serverWithCred}
-        onSelect={setSelectedAlbum}
+        onSelect={openAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+        onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
+        playlists={playlists}
         emptyMessage={emptyMessage}
         scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}-${yearFromInput}-${yearToInput}`}
         sort={sort}
@@ -449,7 +454,7 @@ export default function App() {
       <AlbumDetail
         album={selectedAlbum}
         serverWithCredential={serverWithCred}
-        onClose={() => { if (peekBack() !== null && peekBack() !== "library") goBack(); else setSelectedAlbum(null); }}
+        onClose={goBack}
         onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
         onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); navigateTo("library"); }}
       />
@@ -471,9 +476,9 @@ export default function App() {
           <ArtistDetail
             artist={selectedArtist}
             serverWithCredential={serverWithCred}
-            onClose={() => { if (peekBack() !== null && peekBack() !== "artists") goBack(); else setSelectedArtist(null); }}
-            onSelectAlbum={setSelectedAlbum}
-            onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+            onClose={goBack}
+            onSelectAlbum={openAlbum}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
           />
         </main>
       );
@@ -496,8 +501,8 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
-              onSelectAlbum={(album) => { setSelectedAlbum(album); }}
-              onSelectArtist={(artist) => { setSelectedArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
+              onSelectAlbum={openAlbum}
+              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
             />
           ) : (
@@ -514,8 +519,8 @@ export default function App() {
             {serverWithCred ? (
               <HomeView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={setSelectedAlbum}
-                onSelectArtist={(name) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+                onSelectAlbum={openAlbum}
+                onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
@@ -691,7 +696,7 @@ export default function App() {
               <ArtistGrid
                 artists={artists ?? []}
                 serverWithCredential={serverWithCred}
-                onSelect={setSelectedArtist}
+                onSelect={openArtist}
                 onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
                 scrollKey="artists"
               />
@@ -716,6 +721,20 @@ export default function App() {
           </Suspense>
         );
 
+      case "years":
+        return (
+          <Suspense fallback={null}>
+            {serverWithCred ? (
+              <YearsView
+                serverWithCredential={serverWithCred}
+                onSelect={openAlbum}
+                onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+                serverDisplayName={server?.display_name}
+              />
+            ) : <main className="content-main" />}
+          </Suspense>
+        );
+
       case "playlists":
         return (
           <main className={`library${queueClass}`}>
@@ -728,6 +747,7 @@ export default function App() {
                   await deletePlaylist(selectedPlaylist, serverWithCred);
                   setSelectedPlaylist(null);
                 }}
+                onRename={renamePlaylist}
               />
             ) : (
               <>
@@ -834,11 +854,11 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
-          onSelectArtist={(name: string) => setSelectedArtist({ name, album_count: 0, artwork_url: null })}
+          onSelectArtist={(name: string) => openArtist({ name, album_count: 0, artwork_url: null })}
           onSelectAlbumById={async (albumId: string) => {
             const db = await getDb();
             const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-            if (rows[0]) setSelectedAlbum(rows[0]);
+            if (rows[0]) openAlbum(rows[0]);
           }}
           serverWithCred={serverWithCred ?? undefined}
         />
@@ -847,8 +867,8 @@ export default function App() {
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
-        onSelectAlbum={(album) => { setSelectedAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { setSelectedArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
+        onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

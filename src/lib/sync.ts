@@ -8,6 +8,49 @@ import { rebuildTagVocabCache } from "./tag-normalize";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
+export async function syncAlbumTracks(
+  server: Server,
+  credential: NavidromeCredential,
+  dbAlbumId: string,
+): Promise<void> {
+  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
+  const altUrl = server.alt_url ?? undefined;
+  const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
+  const db = await getDb();
+  for (const track of tracks) {
+    const trackDbId = `${server.id}:${track.id}`;
+    await db.execute(
+      `INSERT OR REPLACE INTO tracks
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        trackDbId,
+        server.id,
+        server.type,
+        track.title,
+        track.artist ?? null,
+        dbAlbumId,
+        track.genre ?? null,
+        track.track ?? null,
+        track.discNumber ?? null,
+        track.year ?? null,
+        track.duration ?? null,
+        track.path ?? null,
+        track.playCount ?? 0,
+        track.bitRate ?? null,
+        track.suffix ?? null,
+        track.size ?? null,
+      ]
+    );
+    if (track.genre) {
+      await db.execute(
+        `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, 'server')`,
+        [trackDbId, track.genre]
+      );
+    }
+  }
+}
+
 export async function syncLibrary(
   server: Server,
   onAlbumBatch?: () => void,
@@ -27,9 +70,10 @@ export async function syncLibrary(
     throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
   }
 
-  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential);
+  const altUrl = server.alt_url ?? undefined;
+  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential, server.id, altUrl);
 
-  const albums = await fetchAllAlbums(server.url, server.username, credential);
+  const albums = await fetchAllAlbums(server.url, server.username, credential, altUrl);
 
   const db = await getDb();
   let failedAlbums = 0;
@@ -85,7 +129,7 @@ export async function syncLibrary(
 
     let tracks;
     try {
-      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id);
+      tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
     } catch (err) {
       console.error(`sync: failed to fetch tracks for album "${album.name}" (${album.id}):`, err);
       failedAlbums++;
@@ -95,8 +139,8 @@ export async function syncLibrary(
       const trackDbId = `${server.id}:${track.id}`;
       await db.execute(
         `INSERT OR REPLACE INTO tracks
-           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trackDbId,
           server.id,
@@ -111,6 +155,9 @@ export async function syncLibrary(
           track.duration ?? null,
           track.path ?? null,
           track.playCount ?? 0,
+          track.bitRate ?? null,
+          track.suffix ?? null,
+          track.size ?? null,
         ]
       );
       if (track.genre) {
@@ -147,7 +194,7 @@ export async function syncLibrary(
   );
 
   // Sync loved state via getStarred2 — independent of incremental skip logic
-  const starred = await fetchStarred2(server.url, server.username, credential);
+  const starred = await fetchStarred2(server.url, server.username, credential, altUrl);
 
   await db.execute(
     "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
@@ -172,13 +219,13 @@ export async function syncLibrary(
   }
 
   // Sync playlists — collect all track lists before deleting to avoid wipe on partial failure
-  const playlists = await fetchPlaylists(server.url, server.username, credential);
+  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl);
   let failedPlaylists = 0;
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
   const playlistsWithTracks: PlaylistWithTracks[] = [];
   for (const pl of playlists) {
     try {
-      const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id);
+      const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id, altUrl);
       playlistsWithTracks.push({ pl, tracks });
     } catch (err) {
       console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
@@ -194,8 +241,8 @@ export async function syncLibrary(
   for (const { pl, tracks } of playlistsWithTracks) {
     const plDbId = `${server.id}:${pl.id}`;
     await db.execute(
-      "INSERT INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
-      [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount]
+      "INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url) VALUES (?, ?, ?, ?, ?, ?)",
+      [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
     );
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i]!;

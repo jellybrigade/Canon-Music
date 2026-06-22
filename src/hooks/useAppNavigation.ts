@@ -1,10 +1,9 @@
 import { useRef, useState } from "react";
 import { usePlayerStore } from "../store/player";
-import type { AlbumRow } from "./useAlbums";
-import type { ArtistRow } from "./useArtists";
+import type { AlbumRow, ArtistRow } from "../types/library";
 import type { PlaylistRow } from "./usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "playlists" | "tags" | "settings";
+export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tags" | "settings";
 
 type NavEntry = {
   view: AppView;
@@ -33,9 +32,24 @@ export function useAppNavigation() {
     setSelectedPlaylist(null);
   }
 
+  function openAlbum(album: AlbumRow) {
+    historyRef.current.push({ view, selectedAlbum, selectedArtist, selectedPlaylist });
+    setSelectedAlbum(album);
+  }
+
+  function openArtist(artist: ArtistRow) {
+    historyRef.current.push({ view, selectedAlbum, selectedArtist, selectedPlaylist });
+    setSelectedArtist(artist);
+  }
+
   function goBack() {
     const prev = historyRef.current.pop();
-    if (!prev) return;
+    if (!prev) {
+      setSelectedAlbum(null);
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      return;
+    }
     setView(prev.view);
     setSelectedAlbum(prev.selectedAlbum);
     setSelectedArtist(prev.selectedArtist);
@@ -56,6 +70,8 @@ export function useAppNavigation() {
     setSelectedArtist,
     setSelectedPlaylist,
     navigateTo,
+    openAlbum,
+    openArtist,
     goBack,
     peekBack,
   };

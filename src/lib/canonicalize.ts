@@ -81,8 +81,39 @@ const RAW_ALIASES: Record<string, string> = {
   "rhythm & blues": "r&b",
 };
 
+// Fallback aliases: only tried when primary lookup fails. Used when "rap" and
+// "hip hop" are interchangeable in compound tags (e.g. "midwest rap" → "midwest
+// hip hop") but the base word also appears as-is in tree nodes ("gangsta rap").
+const RAW_FALLBACK_ALIASES: Record<string, string> = {
+  "rap": "hip hop",
+};
+
+function buildPatterns(aliases: Record<string, string>): Array<[RegExp, string]> {
+  return Object.entries(aliases)
+    .sort((a, b) => b[0].length - a[0].length)
+    .map(([alias, canonical]) => {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return [new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, "gi"), canonical] as [RegExp, string];
+    });
+}
+
+const ALIAS_PATTERNS = buildPatterns(RAW_ALIASES);
+const FALLBACK_ALIAS_PATTERNS = buildPatterns(RAW_FALLBACK_ALIASES);
+
 function applyAliases(raw: string): string {
-  return RAW_ALIASES[raw.toLowerCase().trim()] ?? raw;
+  let result = raw.trim();
+  for (const [pattern, canonical] of ALIAS_PATTERNS) {
+    result = result.replace(pattern, canonical);
+  }
+  return result;
+}
+
+function applyFallbackAliases(raw: string): string {
+  let result = raw.trim();
+  for (const [pattern, canonical] of FALLBACK_ALIAS_PATTERNS) {
+    result = result.replace(pattern, canonical);
+  }
+  return result;
 }
 
 export function canonicalKey(name: string): string {
@@ -190,6 +221,19 @@ export async function findCanonical(
   const crossType = tree.nodes.find((n) => n.canonical_key === key);
   if (crossType) return { node: crossType, matchType: "cross-type" };
 
+  // Fallback aliases (e.g. "rap" → "hip hop"): only tried when primary key fails,
+  // so "gangsta rap" still matches its tree node before trying "gangsta hip hop".
+  const fallbackRaw = applyFallbackAliases(rawValue);
+  if (fallbackRaw !== rawValue) {
+    const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
+    if (fallbackKey !== key) {
+      const fallbackExact = kindNodes.find((n) => n.canonical_key === fallbackKey);
+      if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
+      const fallbackCross = tree.nodes.find((n) => n.canonical_key === fallbackKey);
+      if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
+    }
+  }
+
   // Fuzzy Levenshtein ≤ 2 (skip short strings to avoid false positives)
   if (key.length >= 5) {
     let bestNode: TreeNode | null = null;
@@ -233,6 +277,17 @@ export function findCanonicalSync(
   // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
   const crossType = tree.nodes.find((n) => n.canonical_key === key);
   if (crossType) return { node: crossType, matchType: "cross-type" };
+
+  const fallbackRaw = applyFallbackAliases(rawValue);
+  if (fallbackRaw !== rawValue) {
+    const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
+    if (fallbackKey !== key) {
+      const fallbackExact = kindNodes.find((n) => n.canonical_key === fallbackKey);
+      if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
+      const fallbackCross = tree.nodes.find((n) => n.canonical_key === fallbackKey);
+      if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
+    }
+  }
 
   if (key.length >= 5) {
     let bestNode: TreeNode | null = null;

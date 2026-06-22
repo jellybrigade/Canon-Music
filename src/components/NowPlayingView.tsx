@@ -9,16 +9,17 @@ import { usePlayerStore, type CurrentTrack } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { RadioChip } from "./RadioChip";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
+import { AlbumArt } from "./AlbumArt";
 import "./NowPlayingView.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -83,8 +84,8 @@ function useArtistTopTracks(artistName: string | null) {
           `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
                   t.album_id, a.artwork_url
            FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-           WHERE t.artist = ?`,
-          [artistName]
+           WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'`,
+          [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
         );
         const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
         const matched: TopTrack[] = [];
@@ -103,10 +104,10 @@ function useArtistTopTracks(artistName: string | null) {
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
                 t.album_id, a.artwork_url
          FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ?
+         WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'
          ORDER BY t.track_number, t.title
          LIMIT 10`,
-        [artistName]
+        [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
       );
     },
     enabled: !!artistName,
@@ -172,10 +173,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
   const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
 
-  const { data: artistAlbums } = useArtistAlbums(currentTrack?.artist ?? null);
-  const { data: topTracks } = useArtistTopTracks(currentTrack?.artist ?? null);
+  const primaryArtist = currentTrack?.artist
+    ? (currentTrack.artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? currentTrack.artist)
+    : null;
+  const { data: artistAlbums } = useArtistAlbums(primaryArtist);
+  const { data: topTracks } = useArtistTopTracks(primaryArtist);
   const { data: suggestedTracks } = useSuggestedTracks(
-    currentTrack?.artist ?? null,
+    primaryArtist,
     currentTrack?.id ?? null
   );
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
@@ -360,7 +364,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
           {largeArtUrl ? (
-            <img className="now-playing-art" src={largeArtUrl} alt={currentTrack.title} />
+            <AlbumArt
+              src={largeArtUrl}
+              artist={currentTrack.artist}
+              album={currentTrack.album ?? null}
+              alt={currentTrack.title}
+              className="now-playing-art"
+            />
           ) : (
             <div className="now-playing-art now-playing-art--placeholder" />
           )}
@@ -631,7 +641,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               <>
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">More from {currentTrack.artist}</h3>
+                    <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
                     <div className="now-playing-album-scroll">
                       {otherAlbums.map((album) => {
                         const thumbUrl = album.artwork_url
@@ -658,15 +668,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
                 {topTracks && topTracks.length > 0 && (
                   <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">Top tracks — {currentTrack.artist}</h3>
+                    <h3 className="now-playing-section-title">Top tracks — {primaryArtist}</h3>
                     <div className="now-playing-top-tracks-grid">
                       {topTracks.slice(0, 10).map((track, i) => (
                         <div key={track.id} className="now-playing-track-row">
-                          <span className="now-playing-track-num">{i + 1}</span>
+                          {track.artwork_url
+                            ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
+                            : <span className="now-playing-track-num">{i + 1}</span>}
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             {track.album_name && (
-                              <span className="now-playing-track-album">{track.album_name}</span>
+                              <span className="now-playing-track-album">{albumDisplayName(track.album_name, track.album_id ?? undefined)}</span>
                             )}
                           </div>
                           {track.duration && (
@@ -712,7 +724,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             <span className="now-playing-track-album">
-                              {[track.artist, track.album_name].filter(Boolean).join(" — ")}
+                              {[track.artist, track.album_name ? albumDisplayName(track.album_name, track.album_id ?? undefined) : null].filter(Boolean).join(" — ")}
                             </span>
                           </div>
                           {track.duration && (

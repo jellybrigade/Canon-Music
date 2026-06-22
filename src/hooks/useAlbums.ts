@@ -1,18 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
-
-export interface AlbumRow {
-  id: string;
-  server_id: string;
-  name: string;
-  artist: string | null;
-  year: number | null;
-  artwork_url: string | null;
-  release_type?: string | null;
-}
-
-export type AlbumSort = "artist" | "alphabetical" | "year" | "recently_added";
+import type { AlbumRow, AlbumSort } from "../types/library";
+export type { AlbumRow, AlbumSort } from "../types/library";
 
 const ORDER_BY: Record<AlbumSort, string> = {
   artist: "a.artist COLLATE NOCASE, a.name COLLATE NOCASE",

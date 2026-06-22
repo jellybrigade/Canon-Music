@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
-import { fetchLyricsBySongId } from "../lib/navidrome";
+import { fetchLyricsBySongId, getStoredOpenSubsonicExtensions } from "../lib/navidrome";
+import { fetchLyricsOvh } from "../lib/lyrics-ovh";
 import { QK } from "../lib/query-keys";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
 
@@ -75,8 +76,11 @@ export function useLyrics(
       // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib
       if (serverWithCredential) {
         const { server, credential } = serverWithCredential;
+        const extensions = await getStoredOpenSubsonicExtensions(server.id);
         const navTrackId = stripServerPrefix(track.id, server.id);
-        const serverLyrics = await fetchLyricsBySongId(server.url, server.username, credential, navTrackId);
+        const serverLyrics = extensions.includes("songLyrics")
+          ? await fetchLyricsBySongId(server.url, server.username, credential, navTrackId, server.alt_url ?? undefined)
+          : null;
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
           await db.execute(
             `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
@@ -94,25 +98,34 @@ export function useLyrics(
 
       if (!track.artist || !track.album) return { plain: null, synced: null };
 
-      const result = await fetchLyrics({
+      const lrclibResult = await fetchLyrics({
         artist: track.artist,
         album: track.album,
         title: track.title,
         durationSec: track.duration ?? null,
       }).catch(() => null);
 
-      const plain = result?.plain ?? null;
-      const synced = result?.synced ?? null;
+      let plain = lrclibResult?.plain ?? null;
+      let synced = lrclibResult?.synced ?? null;
+      let source = "lrclib";
+
+      if (!plain && !synced) {
+        const ovhPlain = await fetchLyricsOvh(track.artist, track.title).catch(() => null);
+        if (ovhPlain) {
+          plain = ovhPlain;
+          source = "lyrics.ovh";
+        }
+      }
 
       await db.execute(
         `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
-         VALUES (?, ?, ?, 'lrclib', datetime('now'))
+         VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(track_id) DO UPDATE SET
            plain = excluded.plain,
            synced = excluded.synced,
            source = excluded.source,
            fetched_at = excluded.fetched_at`,
-        [track.id, plain, synced]
+        [track.id, plain, synced, source]
       );
 
       return { plain, synced };

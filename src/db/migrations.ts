@@ -451,4 +451,31 @@ export const migrations: Migration[] = [
     version: 29,
     sql: `ALTER TABLE lyrics ADD COLUMN offset_ms INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    version: 30,
+    sql: `ALTER TABLE servers ADD COLUMN alt_url TEXT;`,
+  },
+  {
+    version: 31,
+    sql: `ALTER TABLE playlists ADD COLUMN cover_art_url TEXT;`,
+  },
+  {
+    version: 32,
+    sql: `
+      ALTER TABLE tracks ADD COLUMN bit_rate INTEGER;
+      ALTER TABLE tracks ADD COLUMN suffix TEXT;
+      ALTER TABLE tracks ADD COLUMN file_size INTEGER;
+    `,
+  },
+  {
+    version: 33,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_genre_exclusions (
+        album_id TEXT NOT NULL,
+        canonical_id TEXT NOT NULL,
+        excluded_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (album_id, canonical_id)
+      );
+    `,
+  },
 ];

@@ -4,7 +4,7 @@ import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp,
+  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -14,8 +14,9 @@ import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
+import { AlbumArt } from "./AlbumArt";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
 
@@ -77,9 +78,20 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
   const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
+  const castDevice           = usePlayerStore((s) => s.castDevice);
+  const availableRenderers   = usePlayerStore((s) => s.availableRenderers);
+  const isScanningRenderers  = usePlayerStore((s) => s.isScanningRenderers);
+  const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
+  const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
+
   const [moreOpen, setMoreOpen] = useState(false);
   const morePanelRef = useRef<HTMLDivElement>(null);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
+
+  const [castOpen, setCastOpen] = useState(false);
+  const [castPopoverPos, setCastPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
+  const castBtnRef = useRef<HTMLButtonElement>(null);
+  const castPopoverRef = useRef<HTMLDivElement>(null);
   const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
@@ -105,7 +117,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
         serverWithCred!.server.url,
         serverWithCred!.server.username,
         serverWithCred!.credential,
-        nativeTrackId!
+        nativeTrackId!,
+        serverWithCred!.server.alt_url ?? undefined
       ),
     enabled: !!nativeTrackId,
     staleTime: Infinity,
@@ -187,6 +200,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
 
   useClickOutside([timerPopoverRef, timerBtnRef], () => setTimerOpen(false), timerOpen);
   useClickOutside([morePanelRef, moreBtnRef], () => setMoreOpen(false), moreOpen);
+  useClickOutside([castPopoverRef, castBtnRef], () => setCastOpen(false), castOpen);
 
   function handleStarClick(star: number) {
     if (!currentTrack || !serverWithCred || !nativeTrackId) return;
@@ -195,7 +209,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
     const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
-      setRating(server.url, server.username, credential, nativeTrackId, newRating).catch(() => {
+      setRating(server.url, server.username, credential, nativeTrackId, newRating, server.alt_url ?? undefined).catch(() => {
         queryClient.invalidateQueries({ queryKey: QK.trackRating(nativeTrackId) });
       });
     }, 200);
@@ -279,9 +293,12 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               }}
               aria-label="Go to album"
             >
-              {currentTrack.coverArtUrl && (
-                <img src={currentTrack.coverArtUrl} alt="" />
-              )}
+              <AlbumArt
+                src={currentTrack.coverArtUrl ?? null}
+                artist={currentTrack.artist}
+                album={currentTrack.album ?? null}
+                alt=""
+              />
             </button>
             <button
               className="player-thumb-expand"
@@ -306,8 +323,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
                 <span className="player-artist">{currentTrack.artist}</span>
               )
             )}
+            <RadioChip />
           </div>
-          <RadioChip />
         </div>
 
         <div className="player-section player-section--center">
@@ -417,6 +434,22 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             )}
           </button>
           <button
+            ref={castBtnRef}
+            className={`player-btn player-btn--icon player-btn--hide-narrow${castDevice ? " player-btn--active" : ""}`}
+            onClick={() => {
+              if (castBtnRef.current) {
+                const r = castBtnRef.current.getBoundingClientRect();
+                setCastPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+              }
+              if (!castOpen) void scanRenderers();
+              setCastOpen((o) => !o);
+            }}
+            title={castDevice ? `Casting to ${castDevice.name}` : "Cast to device"}
+            aria-label="Cast to device"
+          >
+            <Cast size={18} />
+          </button>
+          <button
             className="player-btn player-btn--icon player-btn--hide-narrow"
             onClick={onNowPlaying}
             title="Now playing"
@@ -500,6 +533,20 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               )}
             </button>
             <button
+              className={`player-btn player-btn--icon${castDevice ? " player-btn--active" : ""}`}
+              onClick={() => {
+                const pbh = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--player-bar-height")) || 92;
+                setCastPopoverPos({ right: 8, bottom: pbh + 56 });
+                if (!castOpen) void scanRenderers();
+                setCastOpen((o) => !o);
+                setMoreOpen(false);
+              }}
+              title={castDevice ? `Casting to ${castDevice.name}` : "Cast to device"}
+              aria-label="Cast to device"
+            >
+              <Cast size={18} />
+            </button>
+            <button
               className="player-btn player-btn--icon"
               onClick={() => { onNowPlaying(); setMoreOpen(false); }}
               title="Now playing"
@@ -555,6 +602,41 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             >
               Off
             </button>
+          )}
+        </div>
+      )}
+
+      {castOpen && (
+        <div
+          ref={castPopoverRef}
+          className="cast-popover"
+          style={castPopoverPos ? { right: castPopoverPos.right, bottom: castPopoverPos.bottom } : undefined}
+        >
+          <button
+            className={`cast-popover-item${castDevice === null ? " cast-popover-item--active" : ""}`}
+            onClick={() => { void setCastDevice(null); setCastOpen(false); }}
+          >
+            <Check size={14} className="cast-popover-item__check" />
+            This computer
+          </button>
+          {(availableRenderers.length > 0 || isScanningRenderers) && (
+            <div className="cast-popover-separator" />
+          )}
+          {isScanningRenderers && (
+            <div className="cast-popover-scanning">Scanning…</div>
+          )}
+          {availableRenderers.map((r) => (
+            <button
+              key={r.baseUrl}
+              className={`cast-popover-item${castDevice?.baseUrl === r.baseUrl ? " cast-popover-item--active" : ""}`}
+              onClick={() => { void setCastDevice(r); setCastOpen(false); }}
+            >
+              <Check size={14} className="cast-popover-item__check" />
+              {r.name}
+            </button>
+          ))}
+          {!isScanningRenderers && availableRenderers.length === 0 && (
+            <div className="cast-popover-empty">No devices found</div>
           )}
         </div>
       )}

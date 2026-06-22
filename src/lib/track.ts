@@ -1,5 +1,5 @@
 import { getStreamUrl } from "./navidrome";
-import { stripServerPrefix } from "./ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { Server } from "../types/server";
 import type { NavidromeCredential } from "./navidrome";
 import type { CurrentTrack } from "../store/player";

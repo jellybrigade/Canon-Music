@@ -1,4 +1,5 @@
 mod streaming;
+mod upnp;
 use streaming::StreamingBuffer;
 
 /// Combines Read + Seek + Send into a single object-safe trait so we can
@@ -612,6 +613,45 @@ async fn audio_extract_waveform(
     .map_err(|e| e.to_string())?
 }
 
+#[tauri::command]
+async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::ResolvedRenderer>, String> {
+    // Run blocking SSDP discovery + HTTP description fetches on a thread.
+    tokio::task::spawn_blocking(move || upnp::discover_and_resolve(timeout_ms))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+static SOAP_CLIENT: std::sync::OnceLock<reqwest::blocking::Client> = std::sync::OnceLock::new();
+
+fn soap_client() -> &'static reqwest::blocking::Client {
+    SOAP_CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("reqwest SOAP client init failed")
+    })
+}
+
+#[tauri::command]
+async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<String, String> {
+    // CORS blocks native WebView fetch() for LAN UPnP devices; proxy through Rust.
+    tokio::task::spawn_blocking(move || {
+        let resp = soap_client()
+            .post(&url)
+            .header("Content-Type", "text/xml; charset=utf-8")
+            .header("SOAPAction", &soap_action)
+            .body(body)
+            .send()
+            .map_err(|e| e.to_string())?;
+        if !resp.status().is_success() && resp.status().as_u16() != 500 {
+            return Err(format!("SOAP failed: {}", resp.status()));
+        }
+        resp.text().map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // WebKitGTK renders a native GTK overlay scrollbar (thick on hover) on top of
@@ -670,6 +710,8 @@ pub fn run() {
             audio_set_speed,
             audio_seek,
             audio_extract_waveform,
+            discover_upnp_renderers,
+            upnp_soap,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

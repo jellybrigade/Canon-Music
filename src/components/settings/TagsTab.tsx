@@ -68,6 +68,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
+  const [skipYearGenres, setSkipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
 
   const { data: minTagCount } = useQuery({
@@ -330,7 +331,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
         </section>
       )}
 
-      {show("mapping", "rap", "hip hop", "genre", "badge", "tag issues", "hide") && (
+      {show("mapping", "rap", "hip hop", "genre", "badge", "tag issues", "hide", "year", "decade", "skip") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Display</h3>
           <SettingRow
@@ -341,6 +342,16 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               type="checkbox"
               checked={rapToHipHop}
               onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
+            />
+          </SettingRow>
+          <SettingRow
+            title="Skip year/decade genre tags"
+            description='Ignores tags like "1969", "90s", "2000s" during normalization. Takes effect on next refresh.'
+          >
+            <input
+              type="checkbox"
+              checked={skipYearGenres}
+              onChange={(e) => void setSkipYearGenres(e.target.checked)}
             />
           </SettingRow>
           <SettingRow

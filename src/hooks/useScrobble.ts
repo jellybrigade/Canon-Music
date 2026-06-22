@@ -3,7 +3,7 @@ import { getDb } from "../db";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/player";
 import { reportNowPlaying } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
 
@@ -28,7 +28,7 @@ export function useScrobble(
     const { server, credential } = serverWithCred;
     if (!track.id.startsWith(server.id + ":")) return;
     const nativeId = stripServerPrefix(track.id, server.id);
-    reportNowPlaying(server.url, server.username, credential, nativeId).catch(
+    reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined).catch(
       () => {} // server unreachable — silently skip
     );
   }, [playStartedAt, track, serverWithCred]); // eslint-disable-line react-hooks/exhaustive-deps

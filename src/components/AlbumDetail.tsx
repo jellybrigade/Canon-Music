@@ -1,15 +1,16 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { useAlbumDisplayName, useAlbumSuffixAllowlist, extractSuffix } from "../hooks/useAlbumDisplayName";
+import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Plus, X } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal } from "lucide-react";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
+import { AlbumGenreEditor } from "./AlbumGenreEditor";
+import type { DisplayGenre, GenreGroups } from "./AlbumGenreEditor";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
-import type { AlbumRow } from "../hooks/useAlbums";
+import type { AlbumRow, TrackRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { TrackRow } from "../hooks/useTracks";
 import { useTracks } from "../hooks/useTracks";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
@@ -18,12 +19,12 @@ import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useBoolSetting, useSetting } from "../hooks/useSetting";
-import { useGenreMappings } from "../hooks/useGenreDisplay";
+import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { rawGenreId, getCanonTree } from "../lib/canonicalize";
-import type { TreeNode } from "../lib/canonicalize";
+import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
@@ -62,11 +63,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   const albumDisplayName = useAlbumDisplayName();
   const [suffixAllowlist, addToSuffixAllowlist] = useAlbumSuffixAllowlist();
+  const [suffixExcludedIds, excludeFromSuffix, unexcludeFromSuffix] = useAlbumSuffixExclusions();
   const [showFullTitle, setShowFullTitle] = useState(false);
   const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
   const strippingEnabled = !showAlbumSuffixes;
   const detectedSuffix = extractSuffix(album.name);
-  const suffixWasStripped = albumDisplayName(album.name) !== album.name;
+  const suffixIsExcluded = suffixExcludedIds.includes(album.id);
+  const suffixWasStripped = !suffixIsExcluded && albumDisplayName(album.name, album.id) !== album.name;
   const suffixCanBeAdded = strippingEnabled && detectedSuffix !== null && !suffixWasStripped &&
     !suffixAllowlist.some((s) => s.toLowerCase() === detectedSuffix.toLowerCase());
   const queryClient = useQueryClient();
@@ -78,10 +81,25 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
+
+  const doSyncTracks = useCallback(async () => {
+    await syncAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
+    await queryClient.invalidateQueries({ queryKey: QK.tracks(album.id) });
+  }, [album.id, serverWithCredential, queryClient]);
+
+  // Auto-sync when all tracks are missing bit_rate — leftover from v32 migration
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return;
+    if (tracks.every((t) => t.bit_rate === null)) {
+      void doSyncTracks();
+    }
+  }, [tracks, doSyncTracks]);
+
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
     setIsTagRefreshing(true);
     try {
+      await doSyncTracks();
       await normalizeAlbum(album.id, album.artist ?? "", album.name, {
         lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
         lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
@@ -99,7 +117,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     } finally {
       setIsTagRefreshing(false);
     }
-  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient]);
+  }, [album.id, album.artist, album.name, albumIdentity, isTagRefreshing, queryClient, doSyncTracks]);
   const [playAction] = useSetting("album.play_action", "replace");
 
   const saveIdentity = useSaveAlbumIdentity();
@@ -149,73 +167,31 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
   const [showIdentify, setShowIdentify] = useState(false);
 
-  const [showGenreInput, setShowGenreInput] = useState(false);
-  const [genreInput, setGenreInput] = useState("");
-  const [autocomplete, setAutocomplete] = useState<TreeNode[]>([]);
-  const [isGenreUpdating, setIsGenreUpdating] = useState(false);
-  const genreInputRef = useRef<HTMLInputElement>(null);
+  const [trackCols, setTrackCols] = useState<{
+    artist: boolean; genre: boolean; year: boolean; disc: boolean;
+    duration: boolean; format: boolean; bitrate: boolean; plays: boolean;
+  }>(() => {
+    const defaults = { artist: true, genre: true, year: true, disc: false, duration: true, format: false, bitrate: false, plays: false };
+    try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-album-track-cols") ?? "null") }; }
+    catch { return defaults; }
+  });
+  const [showColPicker, setShowColPicker] = useState(false);
+  const colPickerRef = useRef<HTMLDivElement>(null);
 
-  const handleGenreInputChange = useCallback(async (value: string) => {
-    setGenreInput(value);
-    if (!value.trim()) { setAutocomplete([]); return; }
-    const tree = await getCanonTree();
-    const q = value.toLowerCase();
-    const matches = tree.nodes
-      .filter((n) => n.type === "genre" && n.name.toLowerCase().includes(q))
-      .slice(0, 8);
-    setAutocomplete(matches);
-  }, []);
+  useEffect(() => {
+    localStorage.setItem("canon-album-track-cols", JSON.stringify(trackCols));
+  }, [trackCols]);
 
-  const handleAddUserGenre = useCallback(async (canonicalId: string, name: string) => {
-    setIsGenreUpdating(true);
-    setShowGenreInput(false);
-    setGenreInput("");
-    setAutocomplete([]);
-    try {
-      const db = await getDb();
-      await db.execute(
-        "INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name) VALUES (?, ?, ?)",
-        [album.id, canonicalId, name]
-      );
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
-      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-    } finally {
-      setIsGenreUpdating(false);
-    }
-  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+  useEffect(() => {
+    if (!showColPicker) return;
+    const close = (e: MouseEvent) => {
+      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [showColPicker]);
 
-  const handleRemoveUserGenre = useCallback(async (canonicalId: string) => {
-    setIsGenreUpdating(true);
-    try {
-      const db = await getDb();
-      await db.execute(
-        "DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?",
-        [album.id, canonicalId]
-      );
-      await normalizeAlbum(album.id, album.artist ?? "", album.name, {
-        lastfmArtistName: albumIdentity?.lastfm_artist_name ?? null,
-        lastfmAlbumName: albumIdentity?.lastfm_album_name ?? null,
-        combinedMbGenres: albumIdentity?.combined_genres_json
-          ? (JSON.parse(albumIdentity.combined_genres_json) as Array<{ name: string; count: number }>)
-          : null,
-        combinedMbTags: albumIdentity?.combined_tags_json
-          ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
-          : null,
-      });
-      await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-    } finally {
-      setIsGenreUpdating(false);
-    }
-  }, [album.id, album.artist, album.name, albumIdentity, queryClient]);
+  const [showGenreEditor, setShowGenreEditor] = useState(false);
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -284,8 +260,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     return map;
   }, [rawSourceRows]);
 
-  const displayGenres = useMemo((): Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }> => {
-    let raw: Array<{ id: string | null; name: string; source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy" }>;
+  const displayGenres = useMemo((): DisplayGenre[] => {
+    let raw: DisplayGenre[];
     if (normalizedTags?.genres.length) {
       raw = normalizedTags.genres;
     } else if (tracks) {
@@ -313,13 +289,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     });
   }, [normalizedTags, tracks, genreMappings]);
 
-  const genreGroups = useMemo(() => {
-    const manual: typeof displayGenres = [];
-    const file: typeof displayGenres = [];
-    const lastfm: typeof displayGenres = [];
-    const musicbrainz: typeof displayGenres = [];
-    const folksonomy: typeof displayGenres = [];
-    const unsourced: typeof displayGenres = [];
+  const genreGroups = useMemo((): GenreGroups => {
+    const manual: DisplayGenre[] = [];
+    const file: DisplayGenre[] = [];
+    const lastfm: DisplayGenre[] = [];
+    const musicbrainz: DisplayGenre[] = [];
+    const folksonomy: DisplayGenre[] = [];
+    const unsourced: DisplayGenre[] = [];
     for (const g of displayGenres) {
       if (g.source === "manual") manual.push(g);
       else if (g.source === "file") file.push(g);
@@ -377,7 +353,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           <div className="album-detail-meta">
             <div className="album-detail-title-row">
               <h2 className="album-detail-title">
-                {showFullTitle ? album.name : albumDisplayName(album.name)}
+                {showFullTitle ? album.name : albumDisplayName(album.name, album.id)}
               </h2>
               {suffixWasStripped && (
                 <button
@@ -388,6 +364,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   {showFullTitle ? "Hide" : "···"}
                 </button>
               )}
+              {suffixWasStripped && showFullTitle && detectedSuffix && (
+                <button
+                  className="album-suffix-toggle-btn"
+                  onClick={() => { void excludeFromSuffix(album.id); setShowFullTitle(false); }}
+                  title="Keep the suffix visible for this album only."
+                >
+                  Keep
+                </button>
+              )}
             </div>
             {suffixCanBeAdded && detectedSuffix && (
               <button
@@ -396,6 +381,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 title="Strips this parenthetical from all albums. Manage in Tags › Title Cleanup."
               >
                 + Strip "({detectedSuffix})" from all albums
+              </button>
+            )}
+            {suffixIsExcluded && detectedSuffix && (
+              <button
+                className="album-suffix-add-btn album-suffix-add-btn--undo"
+                onClick={() => void unexcludeFromSuffix(album.id)}
+                title="Re-apply suffix stripping to this album."
+              >
+                ↩ Strip "({detectedSuffix})" again
               </button>
             )}
             {album.artist && (
@@ -479,7 +473,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       {hasTags && (
         <section className="album-tag-band" aria-label="Album tags">
           {(() => {
-            const renderGenreChip = (tag: typeof displayGenres[0]) => {
+            const renderGenreChip = (tag: DisplayGenre) => {
               const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
               const chipTitle = rawSources.length > 0
                 ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
@@ -509,43 +503,19 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               <div className={`album-tag-column${showGrouped ? " album-tag-column--grouped" : ""}`}>
                 <div className="album-tag-column-header">
                   <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
-                  {!showGenreInput && (
-                    <button
-                      className="album-tag-add-genre-btn"
-                      onClick={() => {
-                        setShowGenreInput(true);
-                        setTimeout(() => genreInputRef.current?.focus(), 0);
-                      }}
-                      title="Add genre"
-                      disabled={isGenreUpdating}
-                    >
-                      <Plus size={10} />
-                    </button>
-                  )}
+                  <button
+                    className="album-tag-add-genre-btn"
+                    onClick={() => setShowGenreEditor((v) => !v)}
+                    title={showGenreEditor ? "Close genre editor" : "Edit genres"}
+                  >
+                    <Pencil size={10} />
+                  </button>
                 </div>
 
                 {genreGroups.manual.length > 0 && (
                   <div className="album-tag-source-group">
                     {showGrouped && <span className="album-tag-source-label">Added</span>}
-                    {genreGroups.manual.map((tag) => (
-                      <span key={tag.id ?? tag.name} className="album-tag-chip album-tag-chip--manual">
-                        <button
-                          className="album-tag-chip-label"
-                          onClick={() => onTagFilter?.(tag.id !== null ? tag.id : rawGenreId(tag.name))}
-                          title="Filter by this genre"
-                        >
-                          {tag.name}
-                        </button>
-                        <button
-                          className="album-tag-chip-remove"
-                          onClick={() => void handleRemoveUserGenre(tag.id!)}
-                          title="Remove"
-                          disabled={isGenreUpdating}
-                        >
-                          <X size={9} />
-                        </button>
-                      </span>
-                    ))}
+                    {genreGroups.manual.map(renderGenreChip)}
                   </div>
                 )}
 
@@ -591,49 +561,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
                 )}
 
-                {unmatchedCount > 0 && !showGenreInput && (
+                {unmatchedCount > 0 && !showGenreEditor && (
                   <button
                     className="album-unmatched-hint"
-                    onClick={() => setDrawerState({ albumId: album.id })}
-                    title="Open tag drawer to map unmatched genres"
+                    onClick={() => setShowGenreEditor(true)}
+                    title="Open genre editor to map unmatched genres"
                   >
                     {unmatchedCount} unmatched →
                   </button>
-                )}
-
-                {showGenreInput && (
-                  <div className="album-genre-input-wrapper">
-                    <input
-                      ref={genreInputRef}
-                      className="album-genre-input"
-                      type="text"
-                      placeholder="Search genres…"
-                      value={genreInput}
-                      onChange={(e) => void handleGenreInputChange(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Escape") {
-                          setShowGenreInput(false);
-                          setGenreInput("");
-                          setAutocomplete([]);
-                        } else if (e.key === "Enter" && autocomplete.length > 0) {
-                          void handleAddUserGenre(autocomplete[0]!.id, autocomplete[0]!.name);
-                        }
-                      }}
-                    />
-                    {autocomplete.length > 0 && (
-                      <ul className="album-genre-autocomplete">
-                        {autocomplete.map((node) => (
-                          <li
-                            key={node.id}
-                            className="album-genre-autocomplete-item"
-                            onClick={() => void handleAddUserGenre(node.id, node.name)}
-                          >
-                            {node.name}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
                 )}
               </div>
             );
@@ -693,68 +628,138 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         </section>
       )}
 
+      {showGenreEditor && (
+        <AlbumGenreEditor
+          albumId={album.id}
+          albumArtist={album.artist ?? ""}
+          albumName={album.name}
+          genreGroups={genreGroups}
+          rawSourcesByCanonicalId={rawSourcesByCanonicalId}
+          onTagFilter={onTagFilter}
+          onClose={() => setShowGenreEditor(false)}
+        />
+      )}
+
       <div className="album-detail-body">
         {isLoading ? (
           <p className="empty-state">Loading tracks…</p>
         ) : !tracks || tracks.length === 0 ? (
           <p className="empty-state">No tracks synced yet.</p>
         ) : (
-          <table className="tracklist">
-            <tbody>
-              {tracks.map((track) => {
-                const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
-                const isCurrentTrack = currentTrack?.id === track.id;
-                return (
-                  <tr
-                    key={track.id}
-                    className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
-                    onClick={() => handlePlayTrack(track)}
-                    onContextMenu={(e) => {
-                      e.preventDefault();
-                      setContextMenu({ x: e.clientX, y: e.clientY, track });
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
-                  >
-                    <td className="track-number">
-                      {isCurrentlyPlaying ? (
-                        <span className="track-playing-indicator">
-                          <Play size={12} />
-                        </span>
-                      ) : (
-                        track.track_number ?? "—"
+          <div className="tracklist-wrapper">
+            <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
+              <button
+                className="tracklist-col-picker-btn"
+                title="Show/hide columns"
+                onClick={() => setShowColPicker((v) => !v)}
+              >
+                <SlidersHorizontal size={13} />
+              </button>
+              {showColPicker && (
+                <div className="tracklist-col-picker-popup">
+                  {(
+                    [
+                      ["artist", "Artist"],
+                      ["genre", "Genre"],
+                      ["year", "Year"],
+                      ["disc", "Disc #"],
+                      ["duration", "Duration"],
+                      ["format", "Format"],
+                      ["bitrate", "Bitrate"],
+                      ["plays", "Play count"],
+                    ] as const
+                  ).map(([key, label]) => (
+                    <label key={key}>
+                      <input
+                        type="checkbox"
+                        checked={trackCols[key]}
+                        onChange={(e) => setTrackCols((c) => ({ ...c, [key]: e.target.checked }))}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <table className="tracklist">
+              <tbody>
+                {tracks.map((track) => {
+                  const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
+                  const isCurrentTrack = currentTrack?.id === track.id;
+                  const trackGenres = applyGenreMappings(track.genre, genreMappings);
+                  return (
+                    <tr
+                      key={track.id}
+                      className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
+                      onClick={() => handlePlayTrack(track)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setContextMenu({ x: e.clientX, y: e.clientY, track });
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
+                    >
+                      <td className="track-number">
+                        {isCurrentlyPlaying ? (
+                          <span className="track-playing-indicator">
+                            <Play size={12} />
+                          </span>
+                        ) : (
+                          track.track_number ?? "—"
+                        )}
+                      </td>
+                      <td className="track-title">{track.title}</td>
+                      {trackCols.artist && <td className="track-artist">{track.artist ?? ""}</td>}
+                      {trackCols.genre && (
+                        <td className="track-genre">
+                          {trackGenres.map((g, i) => (
+                            <span key={i} className="track-genre-chip">{g}</span>
+                          ))}
+                        </td>
                       )}
-                    </td>
-                    <td className="track-title">{track.title}</td>
-                    <td className="track-artist">{track.artist ?? ""}</td>
-                    {track.year && track.year !== album.year
-                      ? <td className="track-year" title="Track year differs from album year">{track.year}</td>
-                      : <td className="track-year" />}
-                    <td className="track-duration">
-                      {track.duration ? formatDuration(track.duration) : ""}
-                    </td>
-                    <td className="track-heart-cell">
-                      <button
-                        className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
-                        aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void toggleTrackLove(track.id, serverWithCredential);
-                        }}
-                      >
-                        <Heart
-                          size={15}
-                          fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"}
-                          strokeWidth={2}
-                        />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      {trackCols.year && (
+                        <td className="track-year" title={track.year && track.year !== album.year ? "Track year differs from album year" : undefined}>
+                          {track.year && track.year !== album.year ? track.year : ""}
+                        </td>
+                      )}
+                      {trackCols.disc && <td className="track-disc">{track.disc_number ?? ""}</td>}
+                      {trackCols.duration && (
+                        <td className="track-duration">
+                          {track.duration ? formatDuration(track.duration) : ""}
+                        </td>
+                      )}
+                      {trackCols.format && (
+                        <td className="track-format">{track.suffix ? track.suffix.toUpperCase() : ""}</td>
+                      )}
+                      {trackCols.bitrate && (
+                        <td className="track-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</td>
+                      )}
+                      {trackCols.plays && (
+                        <td className="track-plays">{track.play_count ?? ""}</td>
+                      )}
+                      <td className="track-heart-cell">
+                        <button
+                          className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
+                          aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void toggleTrackLove(track.id, serverWithCredential);
+                          }}
+                        >
+                          <Heart
+                            size={15}
+                            fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"}
+                            strokeWidth={2}
+                          />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 

@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { create } from "zustand";
 import { getDb } from "../db";
+import { LocalTarget, DlnaTarget, type PlaybackTarget } from "./playbackTarget";
+import { discoverRenderers, type DlnaRenderer } from "../lib/dlna";
 
 export interface CurrentTrack {
   id: string;
@@ -125,6 +127,12 @@ interface PlayerState {
   consumeOnSkip: boolean;
   audioFormat: { sampleRate: number; channels: number; codec: string } | null;
 
+  castDevice: DlnaRenderer | null;
+  availableRenderers: DlnaRenderer[];
+  isScanningRenderers: boolean;
+  scanRenderers: () => Promise<void>;
+  setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
+
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
@@ -148,12 +156,17 @@ interface PlayerState {
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
+  removeManyFromQueue: (positions: number[]) => Promise<void>;
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
   setWaveformPeaks: (peaks: number[] | null) => void;
   setPauseFadeMs: (ms: number) => Promise<void>;
 }
+
+// Active playback target — swapped when casting to a DLNA renderer.
+// Lives outside the store to avoid serialization; all state mutations go through store actions.
+let activeTarget: PlaybackTarget = new LocalTarget();
 
 export const usePlayerStore = create<PlayerState>((set, get) => {
   let elapsedInterval: ReturnType<typeof setInterval> | null = null;
@@ -173,19 +186,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     let stallPos: number | null = null;
     let stallSince: number | null = null;
     elapsedInterval = setInterval(() => {
-      invoke<number>("audio_get_pos")
+      activeTarget.getPosition()
         .then((pos) => {
           set({ elapsed: pos });
-          // Stall watchdog: if position hasn't moved in 5s while playing, retry audio_play.
-          const { isPlaying, isLoading, streamUrl } = get();
-          if (isPlaying && !isLoading) {
+          const { isPlaying, isLoading, streamUrl, currentTrack, castDevice } = get();
+          // Stall watchdog: only for local target (DLNA handles its own timing).
+          if (!castDevice && isPlaying && !isLoading) {
             if (stallPos !== pos) {
               stallPos = pos;
               stallSince = Date.now();
             } else if (stallSince !== null && Date.now() - stallSince >= 5000) {
               stallSince = null;
-              if (streamUrl) {
-                void invoke("audio_play", { url: streamUrl }).then(() => {
+              if (streamUrl && currentTrack) {
+                void activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null).then(() => {
                   if (get().streamUrl !== streamUrl) return;
                   set({ isPlaying: true, isLoading: false });
                   startElapsedTimer();
@@ -196,7 +209,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             stallPos = null;
             stallSince = null;
           }
-          const { queue, queueIndex, streamUrlFor, currentTrack, isShuffled, shuffleOrder } = get();
+          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
           if (
@@ -209,11 +222,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             prefetchedForIndex = queueIndex;
             const nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
             if (nextTrack) {
-              invoke("audio_prefetch", { url: streamUrlFor(nextTrack) }).catch(() => {});
+              void activeTarget.setNext(streamUrlFor(nextTrack), nextTrack, nextTrack.coverArtUrl ?? null);
             }
           }
-          // Fallback: advance when pos reaches end in case Rust track-ended event doesn't fire.
-          if (duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
+          // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
+          // For DLNA targets the DlnaTarget fires onTrackEnd directly, so skip fallback there.
+          if (!castDevice && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
             naturalEndFiredForIndex = queueIndex;
             void get().next(true);
           }
@@ -444,9 +458,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     cancelAudioError = null;
 
     const doPlay = async () => {
-      void setupAudioErrorListener(url);
+      const { castDevice } = get();
+      if (!castDevice) void setupAudioErrorListener(url);
       try {
-        await invoke("audio_play", { url });
+        await activeTarget.load(url, track, track.coverArtUrl ?? null);
         if (get().currentTrack?.id !== track.id) return;
         set({ isPlaying: true, isLoading: false });
         startElapsedTimer();
@@ -539,6 +554,79 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     consumeMode: false,
     consumeOnSkip: false,
     audioFormat: null,
+
+    castDevice: null,
+    availableRenderers: [],
+    isScanningRenderers: false,
+
+    scanRenderers: async () => {
+      set({ isScanningRenderers: true });
+      try {
+        const renderers = await discoverRenderers(4000);
+        set({ availableRenderers: renderers });
+      } catch (e) {
+        console.error("DLNA discovery failed:", e);
+      } finally {
+        set({ isScanningRenderers: false });
+      }
+    },
+
+    setCastDevice: async (renderer) => {
+      const { isPlaying, elapsed, streamUrl, currentTrack } = get();
+
+      // Tear down old target and park playback.
+      activeTarget.teardown();
+
+      if (!renderer) {
+        activeTarget = new LocalTarget();
+        set({ castDevice: null });
+        // Restore local playback at the parked position.
+        if (currentTrack && streamUrl) {
+          try {
+            await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
+            if (elapsed > 0) await activeTarget.seek(elapsed);
+            if (isPlaying) startElapsedTimer();
+            set({ isPlaying, isLoading: false });
+          } catch (e) {
+            set({ isPlaying: false, isLoading: false, error: String(e) });
+          }
+        }
+      } else {
+        let castBitrate = 320;
+        try {
+          const db2 = await getDb();
+          const rows2 = await db2.select<{ value: string }[]>(
+            "SELECT value FROM settings WHERE key = 'cast.max_bitrate'", []
+          );
+          if (rows2[0]) castBitrate = parseInt(rows2[0].value, 10) || 320;
+        } catch { /* use default */ }
+        activeTarget = new DlnaTarget(renderer, () => {
+          // Called by DlnaTarget when track ends on renderer.
+          void get().next(true);
+        }, castBitrate);
+        set({ castDevice: renderer });
+        // Resume on renderer at parked position.
+        if (currentTrack && streamUrl) {
+          try {
+            set({ isLoading: true });
+            await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
+            if (elapsed > 0) await activeTarget.seek(elapsed);
+            if (isPlaying) startElapsedTimer();
+            set({ isPlaying, isLoading: false });
+          } catch (e) {
+            set({ isPlaying: false, isLoading: false, error: String(e) });
+          }
+        }
+      }
+
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('cast.device', ?)",
+          [renderer ? JSON.stringify(renderer) : ""]
+        );
+      } catch { /* non-fatal */ }
+    },
 
     setWaveformPeaks: (peaks) => {
       set({ waveformPeaks: peaks });
@@ -694,20 +782,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     pause: () => {
       const fadeMs = get().pauseFadeMs;
-      invoke("audio_pause", { fadeMs }).catch(console.error);
+      activeTarget.pause(fadeMs);
       stopElapsedTimer();
       set({ isPlaying: false });
     },
 
     resume: () => {
       const fadeMs = get().pauseFadeMs;
-      invoke("audio_resume", { fadeMs }).catch(console.error);
+      activeTarget.resume(fadeMs);
       startElapsedTimer();
       set({ isPlaying: true });
     },
 
     stop: () => {
-      invoke("audio_stop").catch(console.error);
+      activeTarget.stop();
       stopElapsedTimer();
       set({
         currentTrack: null,
@@ -722,8 +810,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     setVolume: async (volume: number) => {
       set({ volume });
-      // Square-law perceptual scaling: linear knob maps to perceived loudness
-      await invoke("audio_volume", { volume: volume ** 2 });
+      await activeTarget.setVolume(volume);
       try {
         const db = await getDb();
         await db.execute(
@@ -737,7 +824,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     seek: async (seconds: number) => {
       set({ elapsed: seconds });
-      await invoke("audio_seek", { seconds });
+      await activeTarget.seek(seconds);
     },
 
     setSpeed: async (speed: number) => {
@@ -900,6 +987,49 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistQueueState();
     },
 
+    removeManyFromQueue: async (positions: number[]) => {
+      if (positions.length === 0) return;
+      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+
+      // Sort descending so we remove high indices first — avoids index drift
+      const sorted = [...new Set(positions)].sort((a, b) => b - a);
+
+      let newQueue = [...queue];
+      let newShuffleOrder = [...shuffleOrder];
+      let newQueueIndex = queueIndex;
+      let removedCurrentTrack = false;
+
+      for (const pos of sorted) {
+        if (pos < 0 || pos >= newQueue.length) continue;
+        if (isShuffled && newShuffleOrder.length > 0) {
+          const actualIdx = newShuffleOrder[pos]!;
+          newQueue.splice(actualIdx, 1);
+          newShuffleOrder = newShuffleOrder
+            .filter((_, i) => i !== pos)
+            .map((idx) => (idx > actualIdx ? idx - 1 : idx));
+          if (pos < newQueueIndex) newQueueIndex--;
+          else if (pos === newQueueIndex) removedCurrentTrack = true;
+        } else {
+          newQueue.splice(pos, 1);
+          if (pos < newQueueIndex) newQueueIndex--;
+          else if (pos === newQueueIndex) removedCurrentTrack = true;
+        }
+      }
+
+      newQueueIndex = Math.min(newQueueIndex, Math.max(0, newQueue.length - 1));
+      set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
+
+      if (removedCurrentTrack) {
+        if (newQueue.length > 0 && streamUrlFor) {
+          const next = resolveTrack(newQueue, newShuffleOrder, isShuffled, newQueueIndex);
+          if (next) await playTrack(next, streamUrlFor(next));
+        } else {
+          get().stop();
+        }
+      }
+      void persistQueueState();
+    },
+
     playFromQueueIndex: async (position: number) => {
       const { queue, streamUrlFor, isShuffled, shuffleOrder } = get();
       if (position < 0 || position >= queue.length || !streamUrlFor) return;
@@ -932,10 +1062,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
+        let showWaveform = false;
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
@@ -995,6 +1126,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {
             set({ consumeOnSkip: row.value === "true" });
+          } else if (row.key === "player.show_waveform") {
+            showWaveform = row.value === "true";
+          } else if (row.key === "cast.device" && row.value) {
+            try {
+              const savedRenderer = JSON.parse(row.value) as DlnaRenderer;
+              const bitrateRow = rows.find((r2) => r2.key === "cast.max_bitrate");
+              const savedBitrate = bitrateRow ? (parseInt(bitrateRow.value, 10) || 320) : 320;
+              activeTarget = new DlnaTarget(savedRenderer, () => { void get().next(true); }, savedBitrate);
+              set({ castDevice: savedRenderer });
+            } catch { /* malformed, ignore */ }
+          }
+        }
+        // Load waveform from cache for the restored track — fetchWaveform is only
+        // called from playTrack, so a session-restored track would show nothing until
+        // the user navigated away and back.
+        if (showWaveform) {
+          const restoredTrack = get().currentTrack;
+          if (restoredTrack) {
+            type WRow = { peaks_json: string };
+            const wrows = await db.select<WRow[]>(
+              "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
+              [restoredTrack.id]
+            );
+            if (wrows[0]) {
+              try {
+                const peaks = JSON.parse(wrows[0].peaks_json) as number[];
+                const lastMeaningful = peaks.reduce((last, v, i) => (v > 0.01 ? i : last), -1);
+                const coverage = peaks.length > 0 ? (lastMeaningful + 1) / peaks.length : 0;
+                if (coverage >= 0.5 && get().currentTrack?.id === restoredTrack.id) {
+                  set({ waveformPeaks: peaks });
+                }
+              } catch { /* malformed peaks, ignore */ }
+            }
           }
         }
       } catch (e) {

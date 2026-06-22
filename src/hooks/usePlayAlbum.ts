@@ -1,12 +1,12 @@
 import { useCallback } from "react";
 import { getDb } from "../db";
-import type { AlbumRow } from "./useAlbums";
+import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useSetting } from "./useSetting";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 
 interface MinTrack {
   id: string;

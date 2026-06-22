@@ -41,6 +41,19 @@ export interface NormalizedTags {
 const STALE_DAYS_DEFAULT = 30;
 const CAPS = { genres: 6, descriptors: 6, scenes: 4 };
 
+const YEAR_LIKE_RE = /^\d{4}s?$|^\d{2}s$|^'\d{2}s$/i;
+export function isYearLikeGenre(s: string): boolean {
+  return YEAR_LIKE_RE.test(s.trim());
+}
+
+export async function getSkipYearGenres(): Promise<boolean> {
+  const db = await getDb();
+  const rows = await db.select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key = 'tags.skip_year_genres'"
+  );
+  return rows[0]?.value === "true";
+}
+
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {
   const db = await getDb();
   type Row = { normalized_tags_json: string | null };
@@ -89,6 +102,7 @@ async function _doNormalizeAlbum(
 ): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
+  const skipYearGenres = await getSkipYearGenres();
 
   type TagRow = { raw_value: string };
   const fileTagRows = await db.select<TagRow[]>(
@@ -153,17 +167,21 @@ async function _doNormalizeAlbum(
   type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
+    if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
     byKey.set(canonicalKey(row.raw_value), { name: row.raw_value, source: "file" });
   }
   for (const raw of lastfmRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "lastfm" });
   }
   for (const raw of mbRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
   for (const raw of mbFolkRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
@@ -204,6 +222,13 @@ async function _doNormalizeAlbum(
     );
   }
 
+  type ExclusionRow = { canonical_id: string };
+  const exclusionRows = await db.select<ExclusionRow[]>(
+    "SELECT canonical_id FROM album_genre_exclusions WHERE album_id = ?",
+    [albumId]
+  );
+  const excludedIds = new Set(exclusionRows.map((r) => r.canonical_id));
+
   const seenIds = new Set<string>();
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
@@ -234,13 +259,13 @@ async function _doNormalizeAlbum(
     if (manualId && manualId !== "__accepted__") {
       // Manual mapping overrides auto tree-matching
       const node = tree.byId.get(manualId);
-      if (node && !seenIds.has(node.id)) {
+      if (node && !seenIds.has(node.id) && !excludedIds.has(node.id)) {
         seenIds.add(node.id);
         mapped.push({ id: node.id, name: node.name, source: entry.source, confidence });
       }
     } else {
       const match = findCanonicalSync(entry.name, "genre", tree);
-      if (match.node && !seenIds.has(match.node.id)) {
+      if (match.node && !seenIds.has(match.node.id) && !excludedIds.has(match.node.id)) {
         seenIds.add(match.node.id);
         mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
       } else if (!match.node) {
@@ -321,7 +346,7 @@ async function _doNormalizeAlbum(
 
   // Atomically replace album_genres and album_unresolved_genres for this album
   await db.execute("DELETE FROM album_genres WHERE album_id = ?", [albumId]);
-  for (const row of genreRows) {
+  for (const row of genreRows.filter((r) => !excludedIds.has(r.canonical_id))) {
     await db.execute(
       "INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES (?, ?, ?, ?, ?)",
       [albumId, row.canonical_id, row.relation, row.section, row.name]

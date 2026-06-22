@@ -2,21 +2,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { removeTrackFromNavidromePlaylist } from "../lib/navidrome";
-import { stripServerPrefix } from "../lib/ids";
+import { stripServerPrefix } from "../utils/ids";
 import { QK } from "../lib/query-keys";
-
-export interface PlaylistTrackRow {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  genre: string | null;
-  track_number: number | null;
-  position: number;
-  artwork_url: string | null;
-  album_name: string | null;
-  album_id: string | null;
-}
+import type { PlaylistTrackRow } from "../types/library";
+export type { PlaylistTrackRow } from "../types/library";
 
 export function usePlaylistTracks(playlistId: string | null) {
   const queryClient = useQueryClient();
@@ -27,7 +16,8 @@ export function usePlaylistTracks(playlistId: string | null) {
       if (!playlistId) return [];
       const db = await getDb();
       return db.select<PlaylistTrackRow[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.track_number,
+        `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
+                t.bit_rate, t.suffix,
                 pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
          FROM playlist_tracks pt
          JOIN tracks t ON pt.track_id = t.id
@@ -47,7 +37,7 @@ export function usePlaylistTracks(playlistId: string | null) {
   ): Promise<void> {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
-    await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position);
+    await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position, server.alt_url ?? undefined);
     const db = await getDb();
     await db.execute(
       "DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?",

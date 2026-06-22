@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, GripVertical, Play, Search } from "lucide-react";
 import { usePlayerStore } from "../store/player";
@@ -10,7 +10,7 @@ import { useSidebarResize } from "../hooks/useSidebarResize";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./QueuePanel.css";
 
-type ContextMenu = { x: number; y: number; position: number } | null;
+type ContextMenuState = { x: number; y: number; position: number } | null;
 
 const QUEUE_ROW_HEIGHT = 52;
 const DND_MAX_QUEUE = 300;
@@ -24,16 +24,17 @@ const MAX_QUEUE_WIDTH = 500;
 const DEFAULT_QUEUE_WIDTH = 280;
 
 export function QueuePanel({ serverWithCred }: QueuePanelProps) {
-  const queue          = usePlayerStore((s) => s.queue);
-  const queueIndex     = usePlayerStore((s) => s.queueIndex);
-  const isShuffled     = usePlayerStore((s) => s.isShuffled);
-  const shuffleOrder   = usePlayerStore((s) => s.shuffleOrder);
-  const isQueueOpen    = usePlayerStore((s) => s.isQueueOpen);
-  const toggleQueue    = usePlayerStore((s) => s.toggleQueue);
-  const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
-  const moveQueueItem  = usePlayerStore((s) => s.moveQueueItem);
+  const queue              = usePlayerStore((s) => s.queue);
+  const queueIndex         = usePlayerStore((s) => s.queueIndex);
+  const isShuffled         = usePlayerStore((s) => s.isShuffled);
+  const shuffleOrder       = usePlayerStore((s) => s.shuffleOrder);
+  const isQueueOpen        = usePlayerStore((s) => s.isQueueOpen);
+  const toggleQueue        = usePlayerStore((s) => s.toggleQueue);
+  const removeFromQueue    = usePlayerStore((s) => s.removeFromQueue);
+  const removeManyFromQueue = usePlayerStore((s) => s.removeManyFromQueue);
+  const moveQueueItem      = usePlayerStore((s) => s.moveQueueItem);
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
-  const startRadio     = usePlayerStore((s) => s.startRadio);
+  const startRadio         = usePlayerStore((s) => s.startRadio);
 
   const { liveWidth, savedWidth, handleMouseDown: handleResizeMouseDown } = useSidebarResize({
     direction: "rtl",
@@ -50,12 +51,22 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
     return () => { document.documentElement.style.removeProperty("--queue-panel-width"); };
   }, [panelWidth, isQueueOpen]);
 
-  const [contextMenu, setContextMenu] = useState<ContextMenu>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>(null);
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
   const [filter, setFilter] = useState("");
+  const [selectedPositions, setSelectedPositions] = useState<Set<number>>(new Set());
   const filterInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const lastClickedRef = useRef<number | null>(null);
+
+  // Clear selection when filter activates or queue changes size
+  useEffect(() => {
+    if (filter) setSelectedPositions(new Set());
+  }, [filter]);
+  useEffect(() => {
+    setSelectedPositions(new Set());
+  }, [queue.length]);
 
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, i) => {
@@ -76,7 +87,56 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
     [orderedTracks, filter, filterLower]
   );
 
-  const dndEnabled = !filter && queue.length <= DND_MAX_QUEUE;
+  const dndEnabled = !filter && queue.length <= DND_MAX_QUEUE && selectedPositions.size === 0;
+  const selectionEnabled = !filter;
+
+  const handleRowClick = useCallback((e: React.MouseEvent, position: number) => {
+    if (!selectionEnabled) {
+      void playFromQueueIndex(position);
+      return;
+    }
+    const isCtrl = e.ctrlKey || e.metaKey;
+    const isShift = e.shiftKey;
+
+    if (isCtrl) {
+      setSelectedPositions((prev) => {
+        const next = new Set(prev);
+        if (next.has(position)) next.delete(position);
+        else next.add(position);
+        return next;
+      });
+      lastClickedRef.current = position;
+    } else if (isShift && lastClickedRef.current !== null) {
+      const from = Math.min(lastClickedRef.current, position);
+      const to = Math.max(lastClickedRef.current, position);
+      setSelectedPositions((prev) => {
+        const next = new Set(prev);
+        for (let i = from; i <= to; i++) next.add(i);
+        return next;
+      });
+    } else {
+      setSelectedPositions(new Set());
+      lastClickedRef.current = position;
+      void playFromQueueIndex(position);
+    }
+  }, [selectionEnabled, playFromQueueIndex]);
+
+  // Escape clears selection; Delete removes selected
+  useEffect(() => {
+    if (!isQueueOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && selectedPositions.size > 0) {
+        setSelectedPositions(new Set());
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedPositions.size > 0) {
+        if (document.activeElement?.tagName === "INPUT") return;
+        void removeManyFromQueue([...selectedPositions]);
+        setSelectedPositions(new Set());
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isQueueOpen, selectedPositions, removeManyFromQueue]);
 
   const virtualizer = useVirtualizer({
     count: visibleTracks.length,
@@ -88,6 +148,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
   if (!isQueueOpen) return null;
 
   const lastPosition = queue.length - 1;
+  const virtualItems = virtualizer.getVirtualItems();
 
   function handleDragStart(e: React.DragEvent, position: number) {
     setDragFrom(position);
@@ -114,17 +175,32 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
     setDropTarget(null);
   }
 
-  const virtualItems = virtualizer.getVirtualItems();
+  const selCount = selectedPositions.size;
 
   return (
     <div className="queue-panel" style={{ width: `${panelWidth}px` }}>
       <div className="queue-panel-resize-handle" onMouseDown={handleResizeMouseDown} />
       <div className="queue-panel-header">
-        <span className="queue-panel-title">Queue ({queue.length})</span>
-        <RadioChip />
-        <button className="queue-panel-close" onClick={toggleQueue} aria-label="Close queue">
-          <X size={16} />
-        </button>
+        {selCount > 0 ? (
+          <>
+            <span className="queue-panel-title">{selCount} selected</span>
+            <button
+              className="queue-panel-close queue-deselect"
+              onClick={() => setSelectedPositions(new Set())}
+              aria-label="Clear selection"
+            >
+              <X size={16} />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="queue-panel-title">Queue ({queue.length})</span>
+            <RadioChip />
+            <button className="queue-panel-close" onClick={toggleQueue} aria-label="Close queue">
+              <X size={16} />
+            </button>
+          </>
+        )}
       </div>
       <div className="queue-filter">
         <Search size={13} className="queue-filter-icon" aria-hidden />
@@ -159,6 +235,7 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
                 ?? (track.artworkRef && serverWithCred
                   ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, track.artworkRef, 64)
                   : null);
+              const isSelected = selectedPositions.has(position);
               return (
                 <div
                   key={`${track.id}-${position}`}
@@ -175,13 +252,14 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
                     "queue-row",
                     position === queueIndex ? "queue-row--active" : "",
                     dropTarget === position && dragFrom !== position ? "queue-row--drop-target" : "",
+                    isSelected ? "queue-row--selected" : "",
                   ].filter(Boolean).join(" ")}
                   draggable={dndEnabled}
                   onDragStart={dndEnabled ? (e) => handleDragStart(e, position) : undefined}
                   onDragOver={dndEnabled ? (e) => handleDragOver(e, position) : undefined}
                   onDrop={dndEnabled ? (e) => handleDrop(e, position) : undefined}
                   onDragEnd={dndEnabled ? handleDragEnd : undefined}
-                  onClick={() => void playFromQueueIndex(position)}
+                  onClick={(e) => handleRowClick(e, position)}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     setContextMenu({ x: e.clientX, y: e.clientY, position });
@@ -207,56 +285,71 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
 
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          {contextMenu.position !== 0 && (
+          {selCount > 1 ? (
             <button
+              className="context-menu-danger"
               onClick={() => {
-                moveQueueItem(contextMenu.position, 0);
+                void removeManyFromQueue([...selectedPositions]);
+                setSelectedPositions(new Set());
                 setContextMenu(null);
               }}
             >
-              Move to Top
+              Remove {selCount} tracks
             </button>
+          ) : (
+            <>
+              {contextMenu.position !== 0 && (
+                <button
+                  onClick={() => {
+                    moveQueueItem(contextMenu.position, 0);
+                    setContextMenu(null);
+                  }}
+                >
+                  Move to Top
+                </button>
+              )}
+              {contextMenu.position !== queueIndex + 1 && contextMenu.position !== queueIndex && (
+                <button
+                  onClick={() => {
+                    moveQueueItem(contextMenu.position, queueIndex + 1);
+                    setContextMenu(null);
+                  }}
+                >
+                  Play Next
+                </button>
+              )}
+              {contextMenu.position !== lastPosition && (
+                <button
+                  onClick={() => {
+                    moveQueueItem(contextMenu.position, lastPosition);
+                    setContextMenu(null);
+                  }}
+                >
+                  Move to Bottom
+                </button>
+              )}
+              <StartRadioSubmenu
+                onSelect={(mode) => {
+                  const entry = orderedTracks.find((t) => t.position === contextMenu.position);
+                  if (entry) {
+                    void playFromQueueIndex(contextMenu.position).then(() => {
+                      startRadio(entry.track, mode);
+                    });
+                  }
+                  setContextMenu(null);
+                }}
+              />
+              <button
+                className="context-menu-danger"
+                onClick={() => {
+                  void removeFromQueue(contextMenu.position);
+                  setContextMenu(null);
+                }}
+              >
+                Remove
+              </button>
+            </>
           )}
-          {contextMenu.position !== queueIndex + 1 && contextMenu.position !== queueIndex && (
-            <button
-              onClick={() => {
-                moveQueueItem(contextMenu.position, queueIndex + 1);
-                setContextMenu(null);
-              }}
-            >
-              Play Next
-            </button>
-          )}
-          {contextMenu.position !== lastPosition && (
-            <button
-              onClick={() => {
-                moveQueueItem(contextMenu.position, lastPosition);
-                setContextMenu(null);
-              }}
-            >
-              Move to Bottom
-            </button>
-          )}
-          <StartRadioSubmenu
-            onSelect={(mode) => {
-              const entry = orderedTracks.find((t) => t.position === contextMenu.position);
-              if (entry) {
-                void playFromQueueIndex(contextMenu.position).then(() => {
-                  startRadio(entry.track, mode);
-                });
-              }
-              setContextMenu(null);
-            }}
-          />
-          <button
-            className="context-menu-danger"
-            onClick={() => {
-              void removeFromQueue(contextMenu.position);
-              setContextMenu(null);
-            }}
-          >
-            Remove
-          </button>
         </ContextMenu>
       )}
     </div>

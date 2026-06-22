@@ -53,6 +53,7 @@ export const QK = {
   normalizedTagsAll: () => ["normalized-tags"] as const,
   albumUnmatchedGenres: (albumId: string) => ["album-unmatched-genres", albumId] as const,
   albumGenreRawSources: (albumId: string) => ["album-genre-raw-sources", albumId] as const,
+  albumGenreExclusions: (albumId: string) => ["album-genre-exclusions", albumId] as const,
   albumsLastComputedAt: () => ["albums", "last-computed-at"] as const,
   albumIdentityAll: () => ["album-identity"] as const,
 
