@@ -44,7 +44,12 @@ export function useAppNavigation() {
 
   function goBack() {
     const prev = historyRef.current.pop();
-    if (!prev) return;
+    if (!prev) {
+      setSelectedAlbum(null);
+      setSelectedArtist(null);
+      setSelectedPlaylist(null);
+      return;
+    }
     setView(prev.view);
     setSelectedAlbum(prev.selectedAlbum);
     setSelectedArtist(prev.selectedArtist);

@@ -621,15 +621,22 @@ async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::ResolvedRe
         .map_err(|e| e.to_string())
 }
 
+static SOAP_CLIENT: std::sync::OnceLock<reqwest::blocking::Client> = std::sync::OnceLock::new();
+
+fn soap_client() -> &'static reqwest::blocking::Client {
+    SOAP_CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("reqwest SOAP client init failed")
+    })
+}
+
 #[tauri::command]
 async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<String, String> {
     // CORS blocks native WebView fetch() for LAN UPnP devices; proxy through Rust.
     tokio::task::spawn_blocking(move || {
-        let client = reqwest::blocking::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .map_err(|e| e.to_string())?;
-        let resp = client
+        let resp = soap_client()
             .post(&url)
             .header("Content-Type", "text/xml; charset=utf-8")
             .header("SOAPAction", &soap_action)

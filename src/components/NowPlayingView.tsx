@@ -84,8 +84,8 @@ function useArtistTopTracks(artistName: string | null) {
           `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
                   t.album_id, a.artwork_url
            FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-           WHERE t.artist = ?`,
-          [artistName]
+           WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'`,
+          [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
         );
         const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
         const matched: TopTrack[] = [];
@@ -104,10 +104,10 @@ function useArtistTopTracks(artistName: string | null) {
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
                 t.album_id, a.artwork_url
          FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ?
+         WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'
          ORDER BY t.track_number, t.title
          LIMIT 10`,
-        [artistName]
+        [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
       );
     },
     enabled: !!artistName,
@@ -641,7 +641,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               <>
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">More from {currentTrack.artist}</h3>
+                    <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
                     <div className="now-playing-album-scroll">
                       {otherAlbums.map((album) => {
                         const thumbUrl = album.artwork_url
@@ -668,15 +668,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
                 {topTracks && topTracks.length > 0 && (
                   <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">Top tracks — {currentTrack.artist}</h3>
+                    <h3 className="now-playing-section-title">Top tracks — {primaryArtist}</h3>
                     <div className="now-playing-top-tracks-grid">
                       {topTracks.slice(0, 10).map((track, i) => (
                         <div key={track.id} className="now-playing-track-row">
-                          <span className="now-playing-track-num">{i + 1}</span>
+                          {track.artwork_url
+                            ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
+                            : <span className="now-playing-track-num">{i + 1}</span>}
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             {track.album_name && (
-                              <span className="now-playing-track-album">{track.album_name}</span>
+                              <span className="now-playing-track-album">{albumDisplayName(track.album_name, track.album_id ?? undefined)}</span>
                             )}
                           </div>
                           {track.duration && (
@@ -722,7 +724,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             <span className="now-playing-track-album">
-                              {[track.artist, track.album_name].filter(Boolean).join(" — ")}
+                              {[track.artist, track.album_name ? albumDisplayName(track.album_name, track.album_id ?? undefined) : null].filter(Boolean).join(" — ")}
                             </span>
                           </div>
                           {track.duration && (

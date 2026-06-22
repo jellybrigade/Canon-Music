@@ -622,6 +622,14 @@
   flex-shrink: 0;
 }
 
+.now-playing-track-thumb {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 3px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
 .now-playing-track-info {
   display: flex;
   flex-direction: column;

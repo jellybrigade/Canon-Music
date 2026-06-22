@@ -41,6 +41,14 @@ const M_SEARCH_RENDERER: &str = "M-SEARCH * HTTP/1.1\r\n\
 pub fn discover_and_resolve(timeout_ms: u64) -> Vec<ResolvedRenderer> {
     let raw = discover(timeout_ms);
 
+    let client = match reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+
     // Dedup by location URL — SSDP returns one entry per service type.
     let mut seen_locations: HashMap<String, ()> = HashMap::new();
     let mut results = Vec::new();
@@ -51,7 +59,7 @@ pub fn discover_and_resolve(timeout_ms: u64) -> Vec<ResolvedRenderer> {
         }
         seen_locations.insert(r.location.clone(), ());
 
-        if let Some(renderer) = fetch_device_description(&r.location) {
+        if let Some(renderer) = fetch_device_description(&client, &r.location) {
             results.push(renderer);
         }
     }
@@ -59,12 +67,7 @@ pub fn discover_and_resolve(timeout_ms: u64) -> Vec<ResolvedRenderer> {
     results
 }
 
-fn fetch_device_description(location: &str) -> Option<ResolvedRenderer> {
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .ok()?;
-
+fn fetch_device_description(client: &reqwest::blocking::Client, location: &str) -> Option<ResolvedRenderer> {
     let resp = client.get(location).send().ok()?;
     if !resp.status().is_success() {
         return None;
