@@ -10,6 +10,7 @@ import { makeStreamUrlBuilder } from "../lib/track";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
+import { getDb } from "../db";
 import "./AlbumDetail.css";
 import "./PlaylistList.css";
 
@@ -37,9 +38,11 @@ interface Props {
   onClose: () => void;
   onDelete: () => Promise<void>;
   onRename: (playlist: PlaylistRow, name: string, comment: string | null, swc: ServerWithCredential) => Promise<void>;
+  onSelectAlbum?: (albumId: string) => void;
+  onSelectArtist?: (artistName: string) => void;
 }
 
-export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename }: Props) {
+export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -95,12 +98,34 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     setDescValue(playlist.comment ?? "");
   }, [playlist.id, playlist.name, playlist.comment]);
 
+  const [resumeIndex, setResumeIndex] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getDb().then(async (db) => {
+      type Row = { last_track_id: string; track_position: number };
+      const rows = await db.select<Row[]>(
+        "SELECT last_track_id, track_position FROM playlist_resume WHERE playlist_id = ?",
+        [playlist.id]
+      );
+      if (!cancelled && rows[0]) setResumeIndex(rows[0].track_position);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [playlist.id]);
+
   const virtualizer = useVirtualizer({
     count: tracks?.length ?? 0,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => PLAYLIST_ROW_HEIGHT,
     overscan: 5,
   });
+
+  useEffect(() => {
+    if (resumeIndex !== null && tracks && tracks.length > 0) {
+      virtualizer.scrollToIndex(resumeIndex, { align: "start" });
+    }
+  // Only run once after tracks load + resumeIndex is known
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resumeIndex, tracks !== undefined]);
 
   const gridTemplate = [
     "2.5rem",
@@ -171,7 +196,16 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   function handlePlayTrack(track: PlaylistTrackRow) {
     if (!tracks) return;
     const startIndex = tracks.findIndex((t) => t.id === track.id && t.position === track.position);
-    playQueue(tracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+    const idx = startIndex >= 0 ? startIndex : 0;
+    playQueue(tracks.map(buildTrackObj), streamUrlFor, idx);
+    getDb().then(async (db) => {
+      await db.execute(
+        `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position, updated_at)
+         VALUES (?, ?, ?, datetime('now'))
+         ON CONFLICT(playlist_id) DO UPDATE SET last_track_id=excluded.last_track_id, track_position=excluded.track_position, updated_at=excluded.updated_at`,
+        [playlist.id, track.id, idx]
+      );
+    }).catch(() => {});
   }
 
   function handlePlayAll() {
@@ -440,6 +474,16 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           <button onClick={() => { addToQueue(buildTrackObj(contextMenu.track), streamUrlFor); setContextMenu(null); }}>
             Add to Queue
           </button>
+          {onSelectAlbum && contextMenu.track.album_id && (
+            <button onClick={() => { onSelectAlbum(contextMenu.track.album_id!); setContextMenu(null); }}>
+              Go to Album
+            </button>
+          )}
+          {onSelectArtist && contextMenu.track.artist && (
+            <button onClick={() => { onSelectArtist(contextMenu.track.artist!); setContextMenu(null); }}>
+              Go to Artist
+            </button>
+          )}
           <button className="context-menu-danger" onClick={() => void handleRemoveTrack(contextMenu.track)}>
             Remove from Playlist
           </button>
