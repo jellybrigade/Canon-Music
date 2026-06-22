@@ -9,7 +9,7 @@ interface Props {
 
 export function PlaybackTab({ searchQuery }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", false);
-  const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
+  const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
 

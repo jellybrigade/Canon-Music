@@ -135,7 +135,7 @@ export function useDisabledBuiltinIds(): [
 
 /** Returns a display transform: identity when suffixes shown, stripper when hidden. */
 export function useAlbumDisplayName(): (name: string, albumId?: string) => string {
-  const [show] = useBoolSetting("display.show_album_suffixes", true);
+  const [show] = useBoolSetting("display.show_album_suffixes", false);
   const [userAllowlist] = useAlbumSuffixAllowlist();
   const [disabledIds] = useDisabledBuiltinIds();
   const [excludedIds] = useAlbumSuffixExclusions();
