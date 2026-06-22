@@ -1,6 +1,6 @@
 ---
 name: next
-description: Pick 1-3 items from what-to-do.md, plan and implement them, then commit. Use when user says "next", "what's next", "do the next thing", or invokes /next.
+description: Pick items from what-to-do.md prioritizing high user impact, plan and implement them, then commit. Use when user says "next", "what's next", "do the next thing", or invokes /next.
 ---
 
 You are invoked in plan mode. Work through these phases in order.
@@ -11,13 +11,16 @@ Read `instructions/what-to-do.md`.
 
 ## Phase 2 — Pick work
 
-Start by picking **1–2 items** as your anchor:
-- Bugs over enhancements when both are present
-- Smaller, self-contained items over large open-ended ones
+**Prioritize high user impact first:** great new features and meaningful UX/UI improvements over smaller code-quality or internal improvements. An item that delights the user beats one that tidies the codebase.
 
-Then scan the rest of the backlog: for each remaining item, check whether it touches the same files, components, or logic as your anchor. If it does, pull it into the batch — do all related work in one pass rather than revisiting the same area twice.
+Then estimate effort for your top candidates:
+- **Low effort** (cosmetic, config, small isolated change) → pick up to **5** items
+- **Medium effort** (single feature, moderate cross-file change) → pick up to **3** items
+- **High effort** (new subsystem, broad refactor, complex feature) → pick **1** item
 
-There is no hard cap, but the batch must stay coherent. If an item touches the same files but pulls in unrelated scope, leave it out.
+Use that cap as the batch size. Then scan the remaining backlog: for each item, check whether it touches the same files, components, or logic as your anchor picks. If it does and stays within the cap, pull it in — do all related work in one pass rather than revisiting the same area twice.
+
+The batch must stay coherent. If an item touches the same files but pulls in unrelated scope, leave it out.
 
 ## Phase 2.5 — Research reference projects
 
@@ -34,7 +37,7 @@ Present the plan to the user:
 - Files likely touched
 - Any risks or open questions
 
-Wait for user approval before proceeding. If the user wants to adjust scope or approach, revise the plan until they approve.
+Then immediately proceed to Phase 4 — do not wait for approval.
 
 ## Phase 4 — Implement
 
