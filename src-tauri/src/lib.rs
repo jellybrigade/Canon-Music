@@ -94,6 +94,8 @@ struct AudioState {
     prefetch_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
     // Bumped on every pause/resume to cancel in-flight fade threads.
     fade_gen: Arc<AtomicU64>,
+    // Set when a next track has been appended for gapless playback; cleared on transition or explicit play.
+    gapless_queued: Arc<AtomicBool>,
 }
 
 #[tauri::command]
@@ -150,6 +152,10 @@ async fn audio_play(
     let pos_arc = Arc::clone(&state.pos);
     let volume_arc = Arc::clone(&state.volume);
     let speed_arc = Arc::clone(&state.speed);
+    let gapless_queued_arc = Arc::clone(&state.gapless_queued);
+
+    // Reset gapless state — any pending enqueue is now stale.
+    state.gapless_queued.store(false, Ordering::Relaxed);
 
     // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
@@ -259,20 +265,42 @@ async fn audio_play(
         })).ok();
 
         // Poll-based watcher: checks every 100ms so it can't hang if sink never empties.
+        // Also detects gapless track transitions by watching sink.len() decrease.
         let play_id_watcher = Arc::clone(&play_id_arc);
         let sink_watcher = Arc::clone(&sink);
+        let gapless_queued_watcher = Arc::clone(&gapless_queued_arc);
+        let pos_watcher = Arc::clone(&pos_arc);
+        let app_watcher = app.clone();
         std::thread::spawn(move || {
+            let mut prev_sink_len = sink_watcher.len();
             loop {
                 std::thread::sleep(Duration::from_millis(100));
                 if play_id_watcher.load(Ordering::Relaxed) != this_id {
                     return;
                 }
+                let sink_len = sink_watcher.len();
+                // Gapless transition: a source was consumed (len decreased) while another is queued.
+                if sink_len < prev_sink_len
+                    && gapless_queued_watcher.load(Ordering::Relaxed)
+                    && !sink_watcher.empty()
+                {
+                    gapless_queued_watcher.store(false, Ordering::Relaxed);
+                    {
+                        let mut pos = pos_watcher.lock().unwrap();
+                        pos.offset = 0.0;
+                        pos.play_start = Some(Instant::now());
+                    }
+                    app_watcher.emit("track-advanced", ()).ok();
+                    prev_sink_len = sink_len;
+                    continue;
+                }
+                prev_sink_len = sink_len;
                 if sink_watcher.empty() {
                     break;
                 }
             }
             if play_id_watcher.load(Ordering::Relaxed) == this_id {
-                app.emit("track-ended", ()).ok();
+                app_watcher.emit("track-ended", ()).ok();
             }
         });
 
@@ -325,6 +353,69 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
         pos.offset = seconds;
         pos.play_start = Some(Instant::now());
     }
+}
+
+/// Appends the next track to the current sink for gapless playback.
+/// Called by JS at ~80% of the current track. Downloads the file (or uses the
+/// prefetch cache if available), decodes it, and appends it to the active sink so
+/// rodio transitions without silence. Emits `track-advanced` when the current
+/// source finishes and the next one begins.
+#[tauri::command]
+async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
+    // Already queued — ignore duplicate calls.
+    if state.gapless_queued.load(Ordering::Relaxed) {
+        return Ok(());
+    }
+
+    let sink_arc = Arc::clone(&state.sink);
+    let gapless_queued = Arc::clone(&state.gapless_queued);
+    let play_id_arc = Arc::clone(&state.play_id);
+    let snap_id = play_id_arc.load(Ordering::Relaxed);
+    let cache_arc = Arc::clone(&state.prefetch_cache);
+
+    std::thread::spawn(move || {
+        // Use prefetch cache if a concurrent audio_prefetch already downloaded this URL.
+        let cached = { cache_arc.lock().unwrap().remove(&url) };
+        let bytes = if let Some(b) = cached {
+            b
+        } else {
+            match http_client_long().get(&url).send().and_then(|r| r.bytes()) {
+                Ok(b) => b.to_vec(),
+                Err(e) => {
+                    eprintln!("audio_enqueue_next fetch error: {e}");
+                    return;
+                }
+            }
+        };
+
+        // Abort if a newer explicit play started while we were downloading.
+        if play_id_arc.load(Ordering::Relaxed) != snap_id {
+            return;
+        }
+
+        let cursor = std::io::Cursor::new(bytes);
+        let source = match Decoder::new(cursor) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("audio_enqueue_next decode error: {e}");
+                return;
+            }
+        };
+
+        // Final play_id check before appending — guards against the decode
+        // completing just as the user skips to a different track.
+        if play_id_arc.load(Ordering::Relaxed) != snap_id {
+            return;
+        }
+
+        let sink_opt = sink_arc.lock().unwrap().clone();
+        if let Some(sink) = sink_opt {
+            sink.append(source);
+            gapless_queued.store(true, Ordering::Relaxed);
+        }
+    });
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -416,6 +507,7 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
     // Bump play_id first so the watcher thread won't emit track-ended after stop.
     state.play_id.fetch_add(1, Ordering::Relaxed);
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
+    state.gapless_queued.store(false, Ordering::Relaxed);
     let old_sink = state.sink.lock().unwrap().take();
     if let Some(sink) = old_sink {
         sink.stop();
@@ -695,12 +787,14 @@ pub fn run() {
             speed: Arc::new(Mutex::new(1.0_f32)),
             prefetch_cache: Arc::new(Mutex::new(HashMap::new())),
             fade_gen: Arc::new(AtomicU64::new(0)),
+            gapless_queued: Arc::new(AtomicBool::new(false)),
         })
         .invoke_handler(tauri::generate_handler![
             set_credential,
             get_credential,
             delete_credential,
             audio_play,
+            audio_enqueue_next,
             audio_prefetch,
             audio_pause,
             audio_resume,

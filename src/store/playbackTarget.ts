@@ -34,7 +34,7 @@ export interface PlaybackTarget {
 
 export class LocalTarget implements PlaybackTarget {
   readonly supportsVolume = true;
-  readonly supportsGapless = false;
+  readonly supportsGapless = true;
 
   async load(url: string): Promise<void> {
     await invoke("audio_play", { url });
