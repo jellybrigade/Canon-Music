@@ -44,6 +44,10 @@ const PREV_RESTART_THRESHOLD_S = 3;
 // Deduplicates natural-end advances triggered by both the Rust event and the TS fallback.
 let lastEndedTrackId: string | null = null;
 
+// True while a next track has been enqueued via audio_enqueue_next for gapless playback.
+// Suppresses the position-based fallback advance so it doesn't interrupt the gapless transition.
+let gaplessActive = false;
+
 // Cancels in-flight audio-error retry listener when a new track starts.
 let cancelAudioError: (() => void) | null = null;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
@@ -125,6 +129,7 @@ interface PlayerState {
   pauseFadeMs: number;
   consumeMode: boolean;
   consumeOnSkip: boolean;
+  gapless: boolean;
   audioFormat: { sampleRate: number; channels: number; codec: string } | null;
 
   castDevice: DlnaRenderer | null;
@@ -151,6 +156,7 @@ interface PlayerState {
   setRadioMode: (mode: RadioMode) => void;
   toggleConsumeMode: () => Promise<void>;
   toggleConsumeOnSkip: () => Promise<void>;
+  toggleGapless: () => Promise<void>;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -178,6 +184,44 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   // Global listener: update audioFormat whenever Rust emits it at play start.
   void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
     set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
+  });
+
+  // Gapless transition: Rust reports that the current source finished and the queued next one started.
+  // Advance queue state without calling audio_play — the audio is already playing.
+  void listen("track-advanced", () => {
+    gaplessActive = false;
+    naturalEndFiredForIndex = null;
+    lastEndedTrackId = null;
+    const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, repeat } = get();
+    if (!streamUrlFor) return;
+    const nextPosition = queueIndex + 1;
+    let newQueueIndex = nextPosition;
+    let newShuffleOrder = shuffleOrder;
+    if (nextPosition < queue.length) {
+      newQueueIndex = nextPosition;
+    } else if (repeat === "repeat-all") {
+      newQueueIndex = 0;
+      newShuffleOrder = isShuffled && queue.length > 1 ? buildShuffleOrder(queue.length, 0) : shuffleOrder;
+    } else {
+      return;
+    }
+    const nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
+    if (!nextTrack) return;
+    set({
+      queueIndex: newQueueIndex,
+      shuffleOrder: newShuffleOrder,
+      currentTrack: nextTrack,
+      streamUrl: streamUrlFor(nextTrack),
+      elapsed: 0,
+      playStartedAt: Date.now(),
+      isPlaying: true,
+      isLoading: false,
+      waveformPeaks: null,
+    });
+    startElapsedTimer();
+    void preloadWaveforms();
+    void fetchWaveform(nextTrack.id, streamUrlFor(nextTrack));
+    void persistQueueState();
   });
 
   function startElapsedTimer() {
@@ -209,25 +253,40 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             stallPos = null;
             stallSince = null;
           }
-          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder } = get();
+          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, gapless, repeat, consumeMode } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
+          const hasNext = nextPosition < queue.length || repeat === "repeat-all";
           if (
             duration &&
             pos / duration >= 0.8 &&
-            nextPosition < queue.length &&
+            hasNext &&
             streamUrlFor &&
             prefetchedForIndex !== queueIndex
           ) {
             prefetchedForIndex = queueIndex;
-            const nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
+            const effectiveNext = nextPosition < queue.length ? nextPosition : 0;
+            const nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, effectiveNext);
             if (nextTrack) {
-              void activeTarget.setNext(streamUrlFor(nextTrack), nextTrack, nextTrack.coverArtUrl ?? null);
+              const nextUrl = streamUrlFor(nextTrack);
+              // Gapless: enqueue directly into the audio engine so the transition is seamless.
+              // Disabled for DLNA (handles its own gapless), repeat-one (would enqueue wrong track),
+              // and consume mode (index shifts after removal would desync the gapless queue).
+              const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
+              if (canGapless) {
+                gaplessActive = true;
+                void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
+                  gaplessActive = false;
+                });
+              } else {
+                void activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
+              }
             }
           }
           // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
+          // Suppressed while gaplessActive — the Rust engine is handling the transition.
           // For DLNA targets the DlnaTarget fires onTrackEnd directly, so skip fallback there.
-          if (!castDevice && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
+          if (!castDevice && !gaplessActive && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
             naturalEndFiredForIndex = queueIndex;
             void get().next(true);
           }
@@ -451,6 +510,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   async function playTrack(track: CurrentTrack, url: string, nav = false) {
     naturalEndFiredForIndex = null;
     lastEndedTrackId = null;
+    gaplessActive = false;
     set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
 
@@ -553,6 +613,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     sleepTimerEndOfTrack: false,
     consumeMode: false,
     consumeOnSkip: false,
+    gapless: false,
     audioFormat: null,
 
     castDevice: null,
@@ -657,6 +718,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist consume on skip:", e);
+      }
+    },
+
+    toggleGapless: async () => {
+      const next = !get().gapless;
+      set({ gapless: next });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.gapless', ?)",
+          [next ? "true" : "false"]
+        );
+      } catch (e) {
+        console.error("Failed to persist gapless:", e);
       }
     },
 
@@ -1062,7 +1137,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -1126,6 +1201,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {
             set({ consumeOnSkip: row.value === "true" });
+          } else if (row.key === "player.gapless") {
+            set({ gapless: row.value === "true" });
           } else if (row.key === "player.show_waveform") {
             showWaveform = row.value === "true";
           } else if (row.key === "cast.device" && row.value) {

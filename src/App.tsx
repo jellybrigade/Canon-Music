@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -139,6 +139,7 @@ export default function App() {
   const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
+  const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
   const genreDropdownRef = useRef<HTMLDivElement>(null);
@@ -227,10 +228,26 @@ export default function App() {
 
   useEffect(() => {
     const artUrl = currentTrack?.coverArtUrl ?? null;
-    if (!artUrl) { setAccentColor(null); return; }
+    if (!artUrl) {
+      setAccentColor(null);
+      document.documentElement.style.removeProperty('--accent');
+      document.documentElement.style.removeProperty('--accent-hover');
+      document.documentElement.style.removeProperty('--accent-subtle');
+      return;
+    }
     let cancelled = false;
     void extractAccent(artUrl).then((color) => {
-      if (!cancelled) setAccentColor(color);
+      if (cancelled) return;
+      setAccentColor(color);
+      if (color) {
+        document.documentElement.style.setProperty('--accent', color);
+        document.documentElement.style.setProperty('--accent-hover', `color-mix(in oklab, ${color} 85%, black)`);
+        // parse rgb(...) to build subtle
+        const m = color.match(/\d+/g);
+        if (m) {
+          document.documentElement.style.setProperty('--accent-subtle', `rgba(${m[0]}, ${m[1]}, ${m[2]}, 0.18)`);
+        }
+      }
     });
     return () => { cancelled = true; };
   }, [currentTrack?.coverArtUrl, setAccentColor]);
@@ -680,6 +697,14 @@ export default function App() {
                   Rescan
                 </button>
               )}
+              <button
+                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                onClick={() => void setAlbumsPaginated(!albumsPaginated)}
+                title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
+              >
+                <LayoutList size={14} />
+                Pages
+              </button>
             </header>
             {renderLibraryContent()}
           </main>
@@ -748,6 +773,12 @@ export default function App() {
                   setSelectedPlaylist(null);
                 }}
                 onRename={renamePlaylist}
+                onSelectAlbum={async (albumId) => {
+                  const db = await getDb();
+                  const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
+                  if (rows[0]) openAlbum(rows[0]);
+                }}
+                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
               />
             ) : (
               <>

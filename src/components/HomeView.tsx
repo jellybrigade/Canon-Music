@@ -250,16 +250,14 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   useEffect(() => {
     if (!artUrl) { setAccentColor(null); return; }
     let cancelled = false;
-    void extractAccent(artUrl).then(color => {
-      if (!cancelled) setAccentColor(color);
-    });
+    void extractAccent(artUrl).then(color => { if (!cancelled) setAccentColor(color); });
     return () => { cancelled = true; };
   }, [artUrl]);
 
   return (
     <section
       className="home-spotlight"
-      style={{ "--spotlight-accent": accentColor ?? "transparent" } as React.CSSProperties}
+      style={(accentColor ? { "--spotlight-accent": accentColor } : {}) as React.CSSProperties}
     >
       <div className="home-spotlight__wash" />
       <div className="home-spotlight__rule" />
@@ -315,6 +313,7 @@ interface ForYouRailProps {
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
   onRefresh: () => void;
+  onStartRadio?: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   config: ForYouCategoryConfig[];
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
@@ -501,7 +500,7 @@ const KICKER_COLORS: Record<string, string> = {
   _default:           "#6b7280",
 };
 
-function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
+function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const [showCustomize, setShowCustomize] = useState(false);
@@ -555,6 +554,11 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     <section className="home-rail">
       <div className="home-rail__header">
         <p className="home-section-label" style={{ margin: 0 }}>For You</p>
+        {onStartRadio && groups[0]?.albums[0] && (
+          <button className="home-section__radio-btn" onClick={() => onStartRadio(groups[0]!.albums[0]!)} aria-label="Start For You radio" title="Start radio">
+            <Radio size={13} />
+          </button>
+        )}
         <button className="home-rail__refresh" onClick={onRefresh} aria-label="Refresh suggestions">
           <RefreshCw size={11} />
         </button>
@@ -1006,6 +1010,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
             onRefresh={refreshForYou}
+            onStartRadio={(album) => onStartRadio(album, "same-genre")}
             onCardContextMenu={openCardContextMenu}
             config={categoryConfig}
             onConfigChange={handleForYouConfigChange}

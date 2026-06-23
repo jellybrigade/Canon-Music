@@ -1,4 +1,4 @@
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -12,9 +12,12 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import { AlbumArt } from "./AlbumArt";
 import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import { Pagination } from "./TagsViewHelpers";
 import type { RadioMode } from "../store/player";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./AlbumGrid.css";
+
+const PAGE_SIZE = 100;
 
 const PADDING = 20;
 const COL_GAP = 16;
@@ -96,6 +99,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const { server, credential } = serverWithCredential;
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
+  const [paginated] = useBoolSetting("albums.pagination", false);
+  const [page, setPage] = useState(1);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
@@ -124,7 +129,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     void toggleAlbumLove(albumId, serverWithCredential);
   }, [toggleAlbumLove, serverWithCredential]);
 
-  // Re-measure when albums transition from empty to non-empty
+  // Reset to page 1 when sort/filter changes
   const prevAlbumsLen = useRef(albums.length);
   useLayoutEffect(() => {
     const wasEmpty = prevAlbumsLen.current === 0;
@@ -134,6 +139,12 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       if (el) setContainerWidth(el.offsetWidth);
     }
   }, [albums.length]);
+
+  useEffect(() => { setPage(1); }, [paginated, sort]);
+
+  const visibleAlbums = paginated
+    ? albums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : albums;
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
@@ -152,7 +163,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           result.push({ type: "albums", items: batch.slice(i, i + cols) });
         batch = [];
       };
-      for (const album of albums) {
+      for (const album of visibleAlbums) {
         if (album.year !== lastYear) {
           flush();
           result.push({ type: "year-header", label: album.year ? String(album.year) : "Unknown" });
@@ -164,10 +175,10 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       return result;
     }
     const result: GridRow[] = [];
-    for (let i = 0; i < albums.length; i += cols)
-      result.push({ type: "albums", items: albums.slice(i, i + cols) });
+    for (let i = 0; i < visibleAlbums.length; i += cols)
+      result.push({ type: "albums", items: visibleAlbums.slice(i, i + cols) });
     return result;
-  }, [albums, sort, cols]);
+  }, [visibleAlbums, sort, cols]);
 
   const scrubberSections = useMemo(() => {
     if (!sort || sort === "recently_added" || cols === 0) return [];
@@ -271,7 +282,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         </div>
         )}
       </div>
-      {scrubberSections.length > 1 && (
+      {!paginated && scrubberSections.length > 1 && (
         <div className="album-grid-scrubber">
           {scrubberSections.map(({ label, rowIndex }) => (
             <button
@@ -282,6 +293,11 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
               {label}
             </button>
           ))}
+        </div>
+      )}
+      {paginated && albums.length > PAGE_SIZE && (
+        <div className="album-grid-pagination">
+          <Pagination page={page} total={albums.length} pageSize={PAGE_SIZE} onChange={(p) => { setPage(p); containerRef.current?.scrollTo({ top: 0 }); }} />
         </div>
       )}
       {contextMenu && (

@@ -478,4 +478,15 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 34,
+    sql: `
+      CREATE TABLE IF NOT EXISTS playlist_resume (
+        playlist_id TEXT NOT NULL PRIMARY KEY,
+        last_track_id TEXT NOT NULL,
+        track_position INTEGER NOT NULL,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+    `,
+  },
 ];

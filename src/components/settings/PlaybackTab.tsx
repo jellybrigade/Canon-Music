@@ -9,7 +9,7 @@ interface Props {
 
 export function PlaybackTab({ searchQuery }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", false);
-  const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
+  const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
 
@@ -21,6 +21,8 @@ export function PlaybackTab({ searchQuery }: Props) {
   const toggleConsumeMode = usePlayerStore((s) => s.toggleConsumeMode);
   const consumeOnSkip = usePlayerStore((s) => s.consumeOnSkip);
   const toggleConsumeOnSkip = usePlayerStore((s) => s.toggleConsumeOnSkip);
+  const gapless = usePlayerStore((s) => s.gapless);
+  const toggleGapless = usePlayerStore((s) => s.toggleGapless);
 
   const [minSeconds, setMinSeconds] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
@@ -87,6 +89,22 @@ export function PlaybackTab({ searchQuery }: Props) {
               <option value="queue_last">Add to end</option>
               <option value="shuffle">Shuffle &amp; play</option>
             </select>
+          </SettingRow>
+        </section>
+      )}
+
+      {show("gapless", "seamless", "silence", "gap") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Gapless playback</h3>
+          <SettingRow
+            title="Gapless playback"
+            description="Eliminates silence between tracks by queuing the next track before the current one ends. Disabled during casting, repeat-one, and consume mode."
+          >
+            <input
+              type="checkbox"
+              checked={gapless}
+              onChange={() => void toggleGapless()}
+            />
           </SettingRow>
         </section>
       )}

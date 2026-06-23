@@ -132,3 +132,4 @@ export function extractAccent(imageUrl: string): Promise<string | null> {
     img.src = imageUrl;
   });
 }
+
