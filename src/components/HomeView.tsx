@@ -259,7 +259,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   return (
     <section
       className="home-spotlight"
-      style={{ "--spotlight-accent": accentColor ?? "transparent" } as React.CSSProperties}
+      style={(accentColor ? { "--spotlight-accent": accentColor } : {}) as React.CSSProperties}
     >
       <div className="home-spotlight__wash" />
       <div className="home-spotlight__rule" />
