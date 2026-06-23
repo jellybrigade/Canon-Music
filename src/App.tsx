@@ -241,7 +241,7 @@ export default function App() {
       setAccentColor(color);
       if (color) {
         document.documentElement.style.setProperty('--accent', color);
-        document.documentElement.style.setProperty('--accent-hover', color);
+        document.documentElement.style.setProperty('--accent-hover', `color-mix(in oklab, ${color} 85%, black)`);
         // parse rgb(...) to build subtle
         const m = color.match(/\d+/g);
         if (m) {

@@ -362,8 +362,9 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
 /// source finishes and the next one begins.
 #[tauri::command]
 async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
-    // Already queued — ignore duplicate calls.
-    if state.gapless_queued.load(Ordering::Relaxed) {
+    // Atomically claim the gapless slot — guards against two concurrent calls both
+    // seeing false and both appending a source (TOCTOU).
+    if state.gapless_queued.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {
         return Ok(());
     }
 
@@ -383,6 +384,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
                 Ok(b) => b.to_vec(),
                 Err(e) => {
                     eprintln!("audio_enqueue_next fetch error: {e}");
+                    gapless_queued.store(false, Ordering::Release);
                     return;
                 }
             }
@@ -390,6 +392,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
 
         // Abort if a newer explicit play started while we were downloading.
         if play_id_arc.load(Ordering::Relaxed) != snap_id {
+            gapless_queued.store(false, Ordering::Release);
             return;
         }
 
@@ -398,6 +401,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
             Ok(s) => s,
             Err(e) => {
                 eprintln!("audio_enqueue_next decode error: {e}");
+                gapless_queued.store(false, Ordering::Release);
                 return;
             }
         };
@@ -405,13 +409,16 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
         // Final play_id check before appending — guards against the decode
         // completing just as the user skips to a different track.
         if play_id_arc.load(Ordering::Relaxed) != snap_id {
+            gapless_queued.store(false, Ordering::Release);
             return;
         }
 
         let sink_opt = sink_arc.lock().unwrap().clone();
         if let Some(sink) = sink_opt {
             sink.append(source);
-            gapless_queued.store(true, Ordering::Relaxed);
+            // Flag stays true — set in compare_exchange above; watcher clears it on transition.
+        } else {
+            gapless_queued.store(false, Ordering::Release);
         }
     });
 

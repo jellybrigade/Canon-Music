@@ -120,12 +120,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   });
 
   useEffect(() => {
-    if (resumeIndex !== null && tracks && tracks.length > 0) {
+    if (resumeIndex !== null && tracks && resumeIndex < tracks.length) {
       virtualizer.scrollToIndex(resumeIndex, { align: "start" });
     }
-  // Only run once after tracks load + resumeIndex is known
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeIndex, tracks !== undefined]);
+  }, [resumeIndex, tracks]);
 
   const gridTemplate = [
     "2.5rem",
