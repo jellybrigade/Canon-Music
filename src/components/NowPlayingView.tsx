@@ -404,10 +404,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     artwork_url: currentTrack.artworkRef ?? null,
                   })}
                 >
-                  {currentTrack.album}
+                  {albumDisplayName(currentTrack.album!)}
                 </button>
               ) : (
-                <p className="now-playing-album">{currentTrack.album}</p>
+                <p className="now-playing-album">{albumDisplayName(currentTrack.album!)}</p>
               )
             )}
           </div>
@@ -628,7 +628,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                           )}
                         </div>
                         <span className="now-playing-up-next-meta">
-                          {[track.artist, track.album].filter(Boolean).join(" • ")}
+                          {[track.artist, track.album ? albumDisplayName(track.album) : null].filter(Boolean).join(" • ")}
                         </span>
                       </div>
                     </button>
