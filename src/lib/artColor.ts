@@ -4,13 +4,10 @@
 
 const CANVAS_SIZE = 32;
 const accentCache = new Map<string, string | null>();
-const accentButtonCache = new Map<string, string | null>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
 const OKLAB_MIN_L = 0.55;
-// Button bg with white text needs L ≤ 0.42 for WCAG AA contrast.
-const OKLAB_MAX_BTN_L = 0.42;
 
 // OKLab color math — perceptually uniform, so the L floor is consistent across
 // all hues (blues/greens don't need as much lifting as HSL-based floor did).
@@ -57,12 +54,6 @@ function ensureReadable(r: number, g: number, b: number): [number, number, numbe
   const [L, a, ob] = rgbToOklab(r, g, b);
   if (L >= OKLAB_MIN_L) return [r, g, b];
   return oklabToRgb(OKLAB_MIN_L, a, ob);
-}
-
-function ensureDarkEnough(r: number, g: number, b: number): [number, number, number] {
-  const [L, a, ob] = rgbToOklab(r, g, b);
-  if (L <= OKLAB_MAX_BTN_L) return [r, g, b];
-  return oklabToRgb(OKLAB_MAX_BTN_L, a, ob);
 }
 
 function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
@@ -142,60 +133,3 @@ export function extractAccent(imageUrl: string): Promise<string | null> {
   });
 }
 
-export function extractAccentButton(imageUrl: string): Promise<string | null> {
-  if (accentButtonCache.has(imageUrl)) return Promise.resolve(accentButtonCache.get(imageUrl)!);
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = CANVAS_SIZE;
-        canvas.height = CANVAS_SIZE;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) { accentButtonCache.set(imageUrl, null); resolve(null); return; }
-
-        ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
-        const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-        let bestScore = -1;
-        let bestR = 0;
-        let bestG = 0;
-        let bestB = 0;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = (data[i] ?? 0) / 255;
-          const g = (data[i + 1] ?? 0) / 255;
-          const b = (data[i + 2] ?? 0) / 255;
-
-          const { s, l } = rgbToHsl(r, g, b);
-
-          if (s < MIN_SATURATION) continue;
-          if (l < MIN_BRIGHTNESS || l > MAX_BRIGHTNESS) continue;
-
-          const score = s * (1 - Math.abs(l - 0.5) * 1.4);
-          if (score > bestScore) {
-            bestScore = score;
-            bestR = data[i] ?? 0;
-            bestG = data[i + 1] ?? 0;
-            bestB = data[i + 2] ?? 0;
-          }
-        }
-
-        if (bestScore < 0) { accentButtonCache.set(imageUrl, null); resolve(null); return; }
-
-        const [fr, fg, fb] = ensureDarkEnough(bestR, bestG, bestB);
-        const color = `rgb(${fr}, ${fg}, ${fb})`;
-        accentButtonCache.set(imageUrl, color);
-        resolve(color);
-      } catch {
-        accentButtonCache.set(imageUrl, null);
-        resolve(null);
-      }
-    };
-
-    img.onerror = () => { accentButtonCache.set(imageUrl, null); resolve(null); };
-    img.src = imageUrl;
-  });
-}

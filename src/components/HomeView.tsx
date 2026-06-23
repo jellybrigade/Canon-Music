@@ -22,7 +22,7 @@ import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
 import type { RadioMode, CurrentTrack } from "../store/player";
-import { extractAccent, extractAccentButton } from "../lib/artColor";
+import { extractAccent } from "../lib/artColor";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../utils/ids";
@@ -231,7 +231,6 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const [accentColor, setAccentColor] = useState<string | null>(null);
-  const [accentButtonColor, setAccentButtonColor] = useState<string | null>(null);
   const { data: genres } = useQuery({
     queryKey: QK.spotlightGenres(pick.album.id),
     queryFn: async () => {
@@ -249,20 +248,16 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
     : null;
 
   useEffect(() => {
-    if (!artUrl) { setAccentColor(null); setAccentButtonColor(null); return; }
+    if (!artUrl) { setAccentColor(null); return; }
     let cancelled = false;
     void extractAccent(artUrl).then(color => { if (!cancelled) setAccentColor(color); });
-    void extractAccentButton(artUrl).then(color => { if (!cancelled) setAccentButtonColor(color); });
     return () => { cancelled = true; };
   }, [artUrl]);
 
   return (
     <section
       className="home-spotlight"
-      style={{
-        ...(accentColor ? { "--spotlight-accent": accentColor } : {}),
-        ...(accentButtonColor ? { "--spotlight-accent-btn": accentButtonColor } : {}),
-      } as React.CSSProperties}
+      style={(accentColor ? { "--spotlight-accent": accentColor } : {}) as React.CSSProperties}
     >
       <div className="home-spotlight__wash" />
       <div className="home-spotlight__rule" />

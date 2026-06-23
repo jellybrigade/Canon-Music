@@ -288,7 +288,7 @@
   align-items: center;
   gap: 7px;
   padding: 9px 20px;
-  background: var(--spotlight-accent-btn, #396cd8);
+  background: color-mix(in oklab, var(--spotlight-accent, var(--accent, #396cd8)) 70%, black);
   color: #fff;
   border: none;
   border-radius: var(--radius-md, 8px);
@@ -300,7 +300,7 @@
 }
 
 .home-spotlight__play:hover {
-  background: var(--spotlight-accent-btn, #2d5bbf);
+  background: color-mix(in oklab, var(--spotlight-accent, var(--accent, #396cd8)) 60%, black);
   transform: translateY(-1px);
 }
 
