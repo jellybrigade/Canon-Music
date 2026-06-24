@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
+import type { AlbumRow } from "../types/library";
 import {
   searchReleaseGroups,
   lookupReleaseGroup,
@@ -250,6 +251,7 @@ export function useSaveAlbumIdentity() {
       void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(input.albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(input.albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbumIds() });
+      void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbums() });
     },
   });
 }
@@ -294,6 +296,23 @@ export function useRecordFailedLookup() {
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(input.albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbumIds() });
+      void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbums() });
+    },
+  });
+}
+
+/** Returns full AlbumRow for albums that were looked up but yielded no MB match. */
+export function useFailedLookupAlbums() {
+  return useQuery({
+    queryKey: QK.failedLookupAlbums(),
+    queryFn: async (): Promise<AlbumRow[]> => {
+      const db = await getDb();
+      return db.select<AlbumRow[]>(
+        `SELECT a.* FROM albums a
+         INNER JOIN album_identity ai ON ai.album_id = a.id
+         WHERE ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
+         ORDER BY a.artist, a.name`
+      );
     },
   });
 }

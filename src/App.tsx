@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList } from "lucide-react";
+import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -12,7 +12,8 @@ const PlaylistDetail = lazy(() => import("./components/PlaylistDetail").then((m)
 const SearchResults  = lazy(() => import("./components/SearchResults").then((m) => ({ default: m.SearchResults })));
 const CommandPalette = lazy(() => import("./components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
 const SettingsView   = lazy(() => import("./components/SettingsView").then((m) => ({ default: m.SettingsView })));
-const TagsView       = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
+const TagsView           = lazy(() => import("./components/TagsView").then((m) => ({ default: m.TagsView })));
+const UnidentifiedView   = lazy(() => import("./components/UnidentifiedView").then((m) => ({ default: m.UnidentifiedView })));
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
 const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
 const YearsView      = lazy(() => import("./components/YearsView").then((m) => ({ default: m.YearsView })));
@@ -32,6 +33,7 @@ import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
 import { useTagVocab } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
+import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
@@ -139,6 +141,8 @@ export default function App() {
   const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
+  const { data: failedLookupIds } = useFailedLookupAlbumIds();
+  const unidentifiedCount = failedLookupIds?.length ?? 0;
   const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
   const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
@@ -372,6 +376,7 @@ export default function App() {
     { id: "years", label: "Years", icon: <Calendar size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
+    { id: "unidentified", label: "Unidentified", icon: <CircleHelp size={24} />, badge: unidentifiedCount || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
   ];
 
@@ -805,6 +810,18 @@ export default function App() {
         return (
           <Suspense fallback={null}>
             <TagsView />
+          </Suspense>
+        );
+
+      case "unidentified":
+        return (
+          <Suspense fallback={null}>
+            {serverWithCred ? (
+              <UnidentifiedView
+                serverWithCredential={serverWithCred}
+                onSelectAlbum={openAlbum}
+              />
+            ) : <main className="content-main" />}
           </Suspense>
         );
 

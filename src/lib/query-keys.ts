@@ -76,6 +76,7 @@ export const QK = {
     ["identify-album", albumId, mbRgId, mbReleaseId, artist, album] as const,
   autoIdentifyAlbum: (albumId: string) => ["auto-identify-album", albumId] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
+  failedLookupAlbums: () => ["failed-lookup-albums"] as const,
 
   nowPlayingAlbums: (artistName: string | null) => ["nowplaying-albums", artistName] as const,
   nowPlayingTopTracks: (artistName: string | null) => ["nowplaying-top-tracks", artistName] as const,
