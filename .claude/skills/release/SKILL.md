@@ -5,7 +5,7 @@ description: Merge development to main and publish a new release. Use when user 
 
 Release Canon to main. Run these steps in order — do not skip any.
 
-1. **Code review** — run `/code-review` on development. Fix every blocker before continuing.
+1. **Code review** — run `/code-review` on development. Then fix **every finding** returned (blockers and non-blockers alike) without asking for confirmation. Commit all fixes on development before continuing.
 
 2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. For each semver bump level, identify the single strongest reason from the commit list:
    - **Major** (`X.0.0`): breaking change or architectural overhaul — quote the most significant commit
