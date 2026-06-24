@@ -292,15 +292,14 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
           </p>
         )}
         <div className="home-spotlight__actions">
-          {onAddToQueue ? (
+          <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
+            <div><Play size={13} fill="currentColor" /></div>
+            Play
+          </button>
+          {onAddToQueue && (
             <button className="home-spotlight__play" onClick={() => onAddToQueue(pick.album)}>
               <div><ListEnd size={13} /></div>
               Add to Queue
-            </button>
-          ) : (
-            <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-              <div><Play size={13} fill="currentColor" /></div>
-              Play
             </button>
           )}
           <button className="home-spotlight__open" onClick={() => onSelectAlbum(pick.album)}>
@@ -863,7 +862,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       if (!currentAlbumId) return null;
       const db = await getDb();
       const rows = await db.select<RecommendedRow[]>(
-        `SELECT a.id, a.name, a.artist, a.year, a.artwork_url, COUNT(*) AS genre_match
+        `SELECT a.id, a.name, a.artist, a.year, a.artwork_url,
+                COUNT(*) AS genre_match,
+                (SELECT COUNT(*) FROM album_genres WHERE album_id = a.id AND relation = 'direct') AS genre_total
          FROM album_genres ag
          JOIN albums a ON a.id = ag.album_id
          WHERE ag.canonical_id IN (
@@ -873,6 +874,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
          AND ag.album_id != ?
          AND a.artwork_url IS NOT NULL
          GROUP BY ag.album_id
+         HAVING genre_match * 1.0 / genre_total >= 0.5
          ORDER BY genre_match DESC, RANDOM()
          LIMIT 1`,
         [currentAlbumId, currentAlbumId]
