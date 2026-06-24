@@ -12,6 +12,10 @@ import {
   type MbReleaseDetail,
   type MbGenre,
 } from "../lib/musicbrainz";
+import { rankCandidates, filterByTrackCount } from "../lib/fuzzy-match";
+
+const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
+const DIALOG_MIN_GAP = 0.08;
 
 // ── Stored identity row ────────────────────────────────────────────────────────
 
@@ -79,6 +83,7 @@ export function useIdentifyAlbum({
   album,
   overrideMbRgId,
   overrideMbReleaseId,
+  trackCount,
   enabled,
 }: {
   albumId: string;
@@ -86,10 +91,11 @@ export function useIdentifyAlbum({
   album: string;
   overrideMbRgId?: string | null;
   overrideMbReleaseId?: string | null;
+  trackCount?: number;
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album),
+    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
         // Step 1: resolve RG MBID — prefer explicit override, then search
@@ -109,19 +115,30 @@ export function useIdentifyAlbum({
               error: null,
             };
           }
-          if (candidates.length > 1) {
-            // Multiple candidates — caller shows picker
+
+          // Filter by track count, then rank by fuzzy score
+          const filtered = filterByTrackCount(candidates, trackCount ?? 0);
+          const ranked = rankCandidates(filtered, artist, album);
+          const top = ranked[0]!;
+          const second = ranked[1];
+          const gap = second ? top.score - second.score : Infinity;
+
+          // Auto-pick if one clear winner — user still confirms in dialog
+          if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && gap >= DIALOG_MIN_GAP) {
+            rgId = top.candidate.id;
+            candidates = filtered;
+          } else {
+            // Return ranked candidates so picker shows best match first
             return {
               mbStatus: "ambiguous",
               mbDetail: null,
               mbRelease: null,
-              mbCandidates: candidates,
+              mbCandidates: ranked.map((r) => r.candidate),
               combinedGenres: [],
               combinedTags: [],
               error: null,
             };
           }
-          rgId = candidates[0]!.id;
         }
 
         // Step 2: full RG lookup (genres + releases)

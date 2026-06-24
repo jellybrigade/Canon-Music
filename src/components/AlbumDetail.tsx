@@ -854,6 +854,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           albumId={album.id}
           artist={album.artist ?? ""}
           album={album.name}
+          trackCount={tracks?.length ?? 0}
           onClose={() => setShowIdentify(false)}
         />
       )}

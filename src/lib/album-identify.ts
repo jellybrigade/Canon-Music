@@ -12,7 +12,7 @@ import {
   type MbGenre,
   type MbReleaseGroupCandidate,
 } from "./musicbrainz";
-import { rankCandidates } from "./fuzzy-match";
+import { rankCandidates, filterByTrackCount } from "./fuzzy-match";
 
 export type AutoDecision =
   | "auto_confirmed"
@@ -38,32 +38,6 @@ const MIN_SCORE_GAP = 0.10;
 function stripTrailingBrackets(title: string): string | null {
   const stripped = title.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
   return stripped !== title && stripped.length > 0 ? stripped : null;
-}
-
-function filterByTrackCount(
-  candidates: MbReleaseGroupCandidate[],
-  trackCount: number
-): MbReleaseGroupCandidate[] {
-  if (trackCount <= 0) return candidates;
-
-  const allowed = new Set<string>();
-  if (trackCount <= 3) {
-    allowed.add("Single");
-    allowed.add("Album"); // short albums exist
-  } else if (trackCount <= 6) {
-    allowed.add("EP");
-    allowed.add("Album");
-  } else {
-    allowed.add("Album");
-    allowed.add("Broadcast");
-    allowed.add("Other");
-  }
-
-  const filtered = candidates.filter(
-    (c) => c.primaryType === null || allowed.has(c.primaryType)
-  );
-  // Fall back to unfiltered if filtering wiped everything
-  return filtered.length > 0 ? filtered : candidates;
 }
 
 export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { artist: string; album: string; trackCount?: number }): Promise<AutoIdentifyResult> {

@@ -124,10 +124,10 @@ export async function searchReleaseGroups(
   artist: string,
   album: string
 ): Promise<MbReleaseGroupCandidate[]> {
-  const query = `release:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
+  const query = `releasegroup:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
   const data = await mbGet<MbSearchRGResponse>("release-group", {
     query,
-    limit: "10",
+    limit: "25",
   });
 
   return (data["release-groups"] ?? []).map((rg) => {

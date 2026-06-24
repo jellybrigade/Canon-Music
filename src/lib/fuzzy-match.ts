@@ -71,6 +71,19 @@ function artistSimilarity(a: string, b: string): number {
 }
 
 /**
+ * Title similarity with containment boost.
+ * "Twin Peaks" inside "Soundtrack From Twin Peaks" scores 0.75 instead of ~0.38.
+ * Prevents exact-match penalty when album is part of a longer title.
+ */
+function titleSimilarity(query: string, candidate: string): number {
+  const base = similarity(query, candidate);
+  const nq = normalizeForMatch(query);
+  const nc = normalizeForMatch(candidate);
+  if (nq.length >= 4 && nc.includes(nq)) return Math.max(base, 0.75);
+  return base;
+}
+
+/**
  * Score a release group candidate against query artist + album strings.
  * Title weighted 60%, artist weighted 40% (title match matters more).
  */
@@ -79,7 +92,36 @@ export function scoreReleaseGroup(
   artist: string,
   album: string
 ): number {
-  return 0.6 * similarity(c.title, album) + 0.4 * artistSimilarity(c.artistName, artist);
+  return 0.6 * titleSimilarity(album, c.title) + 0.4 * artistSimilarity(c.artistName, artist);
+}
+
+/**
+ * Filter candidates to types compatible with the known track count.
+ * Falls back to unfiltered if filtering wipes everything out.
+ */
+export function filterByTrackCount(
+  candidates: MbReleaseGroupCandidate[],
+  trackCount: number
+): MbReleaseGroupCandidate[] {
+  if (trackCount <= 0) return candidates;
+
+  const allowed = new Set<string>();
+  if (trackCount <= 3) {
+    allowed.add("Single");
+    allowed.add("Album");
+  } else if (trackCount <= 6) {
+    allowed.add("EP");
+    allowed.add("Album");
+  } else {
+    allowed.add("Album");
+    allowed.add("Broadcast");
+    allowed.add("Other");
+  }
+
+  const filtered = candidates.filter(
+    (c) => c.primaryType === null || allowed.has(c.primaryType)
+  );
+  return filtered.length > 0 ? filtered : candidates;
 }
 
 export interface RankedCandidate {
@@ -87,7 +129,7 @@ export interface RankedCandidate {
   score: number;
 }
 
-/** Sort candidates descending by our fuzzy score (highest confidence first). */
+/** Sort candidates descending by our fuzzy score; use MB's own score as tiebreaker. */
 export function rankCandidates(
   cands: MbReleaseGroupCandidate[],
   artist: string,
@@ -95,5 +137,9 @@ export function rankCandidates(
 ): RankedCandidate[] {
   return cands
     .map((c) => ({ candidate: c, score: scoreReleaseGroup(c, artist, album) }))
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) =>
+      b.score !== a.score
+        ? b.score - a.score
+        : (b.candidate.score ?? 0) - (a.candidate.score ?? 0)
+    );
 }

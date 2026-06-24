@@ -12,10 +12,11 @@ interface AlbumIdentifyDialogProps {
   albumId: string;
   artist: string;
   album: string;
+  trackCount?: number;
   onClose: () => void;
 }
 
-export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumIdentifyDialogProps) {
+export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClose }: AlbumIdentifyDialogProps) {
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
 
@@ -45,6 +46,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumId
     album: lfmAlbum.trim() || album,
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
+    trackCount,
     enabled: fetchEnabled,
   });
 
