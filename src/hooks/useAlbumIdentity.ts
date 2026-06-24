@@ -135,8 +135,13 @@ export function useIdentifyAlbum({
           const second = ranked[1];
           const gap = second ? top.score - second.score : Infinity;
 
+          // Also auto-pick when top wins on type alone (Album over Single with same title)
+          const typeWins =
+            top.candidate.primaryType !== "Single" &&
+            second?.candidate.primaryType === "Single";
+
           // Auto-pick if one clear winner — user still confirms in dialog
-          if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && gap >= DIALOG_MIN_GAP) {
+          if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
             rgId = top.candidate.id;
             candidates = filtered;
           } else {
