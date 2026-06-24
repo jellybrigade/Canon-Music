@@ -33,7 +33,7 @@ function pickFromTop(candidates: { id: string; score: number }[]): { id: string;
 }
 
 export function useRadio() {
-  const { currentTrack, queue, queueIndex, radioActive, radioMode, addToQueue, streamUrlFor } = usePlayerStore();
+  const { currentTrack, queue, queueIndex, radioActive, radioMode, addToQueue, streamUrlFor, isPlaying, playFromQueueIndex } = usePlayerStore();
   const fillingRef = useRef(false);
 
   useEffect(() => {
@@ -88,7 +88,9 @@ export function useRadio() {
             artworkRef: row2.artwork_url, albumId: row2.album_id, album: row2.album_name, coverArtUrl: null,
           };
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
+          const wasAtEnd2 = !isPlaying && queueIndex === queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
+          if (wasAtEnd2) void playFromQueueIndex(queue.length);
           return;
         }
 
@@ -144,7 +146,9 @@ export function useRadio() {
           coverArtUrl: null,
         };
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
+        const wasAtEnd = !isPlaying && queueIndex === queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
+        if (wasAtEnd) void playFromQueueIndex(queue.length);
       } finally {
         fillingRef.current = false;
       }
