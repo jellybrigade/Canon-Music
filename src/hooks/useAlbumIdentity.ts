@@ -13,6 +13,7 @@ import {
   type MbGenre,
 } from "../lib/musicbrainz";
 import { rankCandidates, filterByTrackCount } from "../lib/fuzzy-match";
+import { stripTrailingBrackets } from "../lib/album-identify";
 
 const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
@@ -103,7 +104,18 @@ export function useIdentifyAlbum({
         let candidates: MbReleaseGroupCandidate[] = [];
 
         if (!rgId) {
+          let searchTitle = album;
           candidates = await searchReleaseGroups(artist, album);
+
+          // Retry without edition noise — "The Suburbs (Deluxe Edition)" → "The Suburbs"
+          if (candidates.length === 0) {
+            const stripped = stripTrailingBrackets(album);
+            if (stripped) {
+              candidates = await searchReleaseGroups(artist, stripped);
+              if (candidates.length > 0) searchTitle = stripped;
+            }
+          }
+
           if (candidates.length === 0) {
             return {
               mbStatus: "not_found",
@@ -118,7 +130,7 @@ export function useIdentifyAlbum({
 
           // Filter by track count, then rank by fuzzy score
           const filtered = filterByTrackCount(candidates, trackCount ?? 0);
-          const ranked = rankCandidates(filtered, artist, album);
+          const ranked = rankCandidates(filtered, artist, searchTitle);
           const top = ranked[0]!;
           const second = ranked[1];
           const gap = second ? top.score - second.score : Infinity;

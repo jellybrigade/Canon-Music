@@ -129,7 +129,9 @@ export interface RankedCandidate {
   score: number;
 }
 
-/** Sort candidates descending by our fuzzy score; use MB's own score as tiebreaker. */
+const TYPE_RANK: Record<string, number> = { Album: 3, Other: 2, Broadcast: 2, EP: 1, Single: 0 };
+
+/** Sort candidates descending by fuzzy score; prefer Album type and MB score as tiebreakers. */
 export function rankCandidates(
   cands: MbReleaseGroupCandidate[],
   artist: string,
@@ -137,9 +139,12 @@ export function rankCandidates(
 ): RankedCandidate[] {
   return cands
     .map((c) => ({ candidate: c, score: scoreReleaseGroup(c, artist, album) }))
-    .sort((a, b) =>
-      b.score !== a.score
-        ? b.score - a.score
-        : (b.candidate.score ?? 0) - (a.candidate.score ?? 0)
-    );
+    .sort((a, b) => {
+      if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score;
+      // Same fuzzy score — prefer Album over Single, then MB's own relevance score
+      const typeA = TYPE_RANK[a.candidate.primaryType ?? ""] ?? 1;
+      const typeB = TYPE_RANK[b.candidate.primaryType ?? ""] ?? 1;
+      if (typeB !== typeA) return typeB - typeA;
+      return (b.candidate.score ?? 0) - (a.candidate.score ?? 0);
+    });
 }
