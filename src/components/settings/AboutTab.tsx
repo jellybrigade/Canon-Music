@@ -32,14 +32,18 @@ export function AboutTab({ searchQuery }: Props) {
         <span className="settings-diag-value">{appVersion ?? "…"}</span>
       </div>
       <SettingRow title="Auto check for updates">
-        <input
-          type="checkbox"
-          checked={autoCheck}
-          onChange={(e) => void setAutoCheck(e.target.checked)}
-        />
+        <label className="toggle-switch">
+          <input
+            type="checkbox"
+            checked={autoCheck}
+            onChange={(e) => void setAutoCheck(e.target.checked)}
+          />
+          <span className="toggle-track" />
+        </label>
       </SettingRow>
       <SettingRow title="Check interval" description="How often to check in the background.">
         <select
+          className="settings-select"
           value={intervalMin}
           disabled={!autoCheck}
           onChange={(e) => void setIntervalMin(e.target.value)}
