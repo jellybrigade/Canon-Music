@@ -288,8 +288,14 @@
 .now-playing-extras {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   width: 100%;
+}
+
+.now-playing-extras-right {
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .now-playing-volume-wrap {

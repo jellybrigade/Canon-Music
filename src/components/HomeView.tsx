@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListEnd, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -224,10 +224,11 @@ interface SpotlightProps {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (name: string) => void;
   playAlbum: (album: AlbumRow) => void;
+  onAddToQueue?: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
-function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onCardContextMenu }: SpotlightProps) {
+function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const [accentColor, setAccentColor] = useState<string | null>(null);
@@ -291,10 +292,17 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
           </p>
         )}
         <div className="home-spotlight__actions">
-          <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-            <Play size={13} fill="currentColor" />
-            Play
-          </button>
+          {onAddToQueue ? (
+            <button className="home-spotlight__play" onClick={() => onAddToQueue(pick.album)}>
+              <div><ListEnd size={13} /></div>
+              Add to Queue
+            </button>
+          ) : (
+            <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
+              <div><Play size={13} fill="currentColor" /></div>
+              Play
+            </button>
+          )}
           <button className="home-spotlight__open" onClick={() => onSelectAlbum(pick.album)}>
             Open
           </button>
@@ -847,6 +855,72 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     [currentTrack, onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id, unplayedWithArt]
   );
 
+  const currentAlbumId = currentTrack?.albumId ?? null;
+  type RecommendedRow = { id: string; name: string; artist: string | null; year: number | null; artwork_url: string | null };
+  const { data: recommendedAlbum } = useQuery({
+    queryKey: QK.recommendedSpotlight(currentAlbumId),
+    queryFn: async () => {
+      if (!currentAlbumId) return null;
+      const db = await getDb();
+      const rows = await db.select<RecommendedRow[]>(
+        `SELECT a.id, a.name, a.artist, a.year, a.artwork_url, COUNT(*) AS genre_match
+         FROM album_genres ag
+         JOIN albums a ON a.id = ag.album_id
+         WHERE ag.canonical_id IN (
+           SELECT canonical_id FROM album_genres WHERE album_id = ? AND relation = 'direct'
+         )
+         AND ag.relation = 'direct'
+         AND ag.album_id != ?
+         AND a.artwork_url IS NOT NULL
+         GROUP BY ag.album_id
+         ORDER BY genre_match DESC, RANDOM()
+         LIMIT 1`,
+        [currentAlbumId, currentAlbumId]
+      );
+      return rows[0] ?? null;
+    },
+    enabled: !!currentAlbumId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const recommendedPick = useMemo<SpotlightPick | null>(() => {
+    if (!currentTrack || !recommendedAlbum) return null;
+    const album: AlbumRow = {
+      id: recommendedAlbum.id,
+      server_id: server.id,
+      name: recommendedAlbum.name,
+      artist: recommendedAlbum.artist,
+      year: recommendedAlbum.year,
+      artwork_url: recommendedAlbum.artwork_url,
+    };
+    const kicker = currentTrack.artist
+      ? `Because you're listening to ${currentTrack.artist}`
+      : "You might also like";
+    return { kicker, album };
+  }, [currentTrack, recommendedAlbum, server.id]);
+
+  const addAlbumToQueue = usePlayerStore(s => s.addToQueue);
+  const handleAddToQueue = useCallback(async (album: AlbumRow) => {
+    const db = await getDb();
+    type MinTrack = { id: string; title: string; artist: string | null; duration: number | null };
+    const tracks = await db.select<MinTrack[]>(
+      `SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY disc_number, track_number`,
+      [album.id]
+    );
+    if (tracks.length === 0) return;
+    const coverArtUrl = album.artwork_url
+      ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
+      : null;
+    const streamUrlFor = (t: CurrentTrack) =>
+      getStreamUrl(server.url, server.username, credential, stripServerPrefix(t.id, server.id));
+    for (const t of tracks) {
+      addAlbumToQueue(
+        { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id },
+        streamUrlFor,
+      );
+    }
+  }, [server, credential, addAlbumToQueue]);
+
   const lovedItems = useMemo(
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
     [allAlbums, lovedAlbumIds]
@@ -989,13 +1063,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {spotlight && (
+          {(recommendedPick ?? spotlight) && (
             <Spotlight
-              pick={spotlight}
+              pick={(recommendedPick ?? spotlight)!}
               serverWithCred={serverWithCredential}
               onSelectAlbum={onSelectAlbum}
               onSelectArtist={onSelectArtist}
               playAlbum={play}
+              onAddToQueue={recommendedPick ? handleAddToQueue : undefined}
               onCardContextMenu={openCardContextMenu}
             />
           )}
