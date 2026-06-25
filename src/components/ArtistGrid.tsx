@@ -5,6 +5,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import { useScrollMemory } from "../hooks/useScrollMemory";
 
@@ -24,6 +25,7 @@ interface Props {
 export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, scrollKey }: Props) {
   const { server, credential } = serverWithCredential;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
+  const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -137,7 +139,16 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
               onSelect={(mode) => { onStartRadio(contextMenu.artist, mode); setContextMenu(null); }}
             />
           )}
+          <button onClick={() => { setIdentifyArtist(contextMenu.artist); setContextMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
         </ContextMenu>
+      )}
+      {identifyArtist && (
+        <ArtistIdentifyDialog
+          artistName={identifyArtist.name}
+          onClose={() => setIdentifyArtist(null)}
+        />
       )}
     </>
   );

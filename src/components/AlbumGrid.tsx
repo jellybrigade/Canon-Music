@@ -13,6 +13,7 @@ import { AlbumArt } from "./AlbumArt";
 import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { Pagination } from "./TagsViewHelpers";
+import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./AlbumGrid.css";
@@ -104,6 +105,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
+  const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -322,7 +324,18 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
               ))}
             </ContextMenuSubmenu>
           )}
+          <button onClick={() => { setIdentifyAlbum(contextMenu.album); setContextMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
         </ContextMenu>
+      )}
+      {identifyAlbum && (
+        <AlbumIdentifyDialog
+          albumId={identifyAlbum.id}
+          artist={identifyAlbum.artist ?? ""}
+          album={identifyAlbum.name}
+          onClose={() => setIdentifyAlbum(null)}
+        />
       )}
     </div>
   );
