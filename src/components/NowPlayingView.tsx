@@ -494,39 +494,39 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           </div>
 
           <div className="now-playing-extras">
-            <RadioChip />
-            <div className="now-playing-extras-right">
-            <button
-              className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
-              onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
-              title={isLoved ? "Unlove" : "Love"}
-              aria-label={isLoved ? "Unlove" : "Love"}
-            >
-              <Heart size={22} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-            </button>
-            <div className="now-playing-volume-wrap">
-              {volumeOpen && (
-                <div className="now-playing-volume-popover">
-                  <input
-                    type="range"
-                    className="player-volume-slider now-playing-volume-slider"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={volume}
-                    onChange={(e) => void setVolume(parseFloat(e.target.value))}
-                    aria-label="Volume"
-                  />
-                </div>
-              )}
+            <div className="now-playing-extras-side"><RadioChip /></div>
+            <div className="now-playing-extras-center">
               <button
-                className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
-                onClick={() => setVolumeOpen((o) => !o)}
-                title="Volume"
+                className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
+                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
+                title={isLoved ? "Unlove" : "Love"}
+                aria-label={isLoved ? "Unlove" : "Love"}
               >
-                <Volume2 size={18} />
+                <Heart size={22} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
               </button>
-            </div>
+              <div className="now-playing-volume-wrap">
+                {volumeOpen && (
+                  <div className="now-playing-volume-popover">
+                    <input
+                      type="range"
+                      className="player-volume-slider now-playing-volume-slider"
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      value={volume}
+                      onChange={(e) => void setVolume(parseFloat(e.target.value))}
+                      aria-label="Volume"
+                    />
+                  </div>
+                )}
+                <button
+                  className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
+                  onClick={() => setVolumeOpen((o) => !o)}
+                  title="Volume"
+                >
+                  <Volume2 size={18} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
