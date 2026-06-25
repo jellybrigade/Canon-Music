@@ -284,18 +284,22 @@
   transition: box-shadow 0.5s ease;
 }
 
-/* ── Volume toggle ── */
+/* ── Extras row (love, volume, radio chip) ── */
 .now-playing-extras {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: 100%;
 }
 
-.now-playing-extras-right {
+.now-playing-extras-side {
+  /* left column: holds RadioChip */
+}
+
+.now-playing-extras-center {
+  grid-column: 2;
   display: flex;
   align-items: center;
-  gap: 0;
-  margin-left: auto;
 }
 
 .now-playing-volume-wrap {
