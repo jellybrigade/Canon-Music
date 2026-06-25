@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { Disc, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFailedLookupAlbums, persistAlbumIdentity } from "../hooks/useAlbumIdentity";
+import { useFailedLookupAlbums, persistAlbumIdentity, type FailedAlbumRow } from "../hooks/useAlbumIdentity";
 import { autoIdentifyAlbum } from "../lib/album-identify";
 import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
@@ -30,9 +30,9 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
     setRescanProgress({ done: 0, total: albums.length });
 
     for (let i = 0; i < albums.length; i++) {
-      const album = albums[i]!;
+      const album = albums[i] as FailedAlbumRow;
       try {
-        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name });
+        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, trackCount: album.track_count });
         if (result.decision === "auto_confirmed" && result.detail) {
           await persistAlbumIdentity({
             albumId: album.id,
@@ -52,14 +52,16 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
             autoMatched: true,
             matchScore: Math.round(result.score * 100),
           });
+          void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(album.id) });
+          void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
         } else {
           // Update the failed row so looked_up_at reflects this rescan
           const now = Math.floor(Date.now() / 1000);
           await db.execute(
-            `INSERT OR REPLACE INTO album_identity
-               (album_id, auto_matched, match_score, looked_up_at, lastfm_match_confirmed)
-             VALUES (?, 0, ?, ?, 0)`,
-            [album.id, Math.round(result.score * 100), now]
+            `UPDATE album_identity
+             SET auto_matched = 0, match_score = ?, looked_up_at = ?
+             WHERE album_id = ? AND mb_release_group_id IS NULL`,
+            [Math.round(result.score * 100), now, album.id]
           );
         }
       } catch (e) {

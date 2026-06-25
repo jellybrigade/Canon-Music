@@ -96,11 +96,14 @@ export function PlaybackTab({ searchQuery }: Props) {
             title="Continue with radio when queue ends"
             description="When your queue runs out, Canon automatically starts radio from the last track that played."
           >
-            <input
-              type="checkbox"
-              checked={radioOnQueueEnd}
-              onChange={() => void toggleRadioOnQueueEnd()}
-            />
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={radioOnQueueEnd}
+                onChange={() => void toggleRadioOnQueueEnd()}
+              />
+              <span className="toggle-track" />
+            </label>
           </SettingRow>
         </section>
       )}

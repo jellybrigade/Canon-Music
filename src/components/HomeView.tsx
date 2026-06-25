@@ -16,7 +16,8 @@ import { useCarouselAlbums } from "../hooks/useCarouselAlbums";
 import { useListeningStats } from "../hooks/useListeningStats";
 import type { AlbumStatRow } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
-import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import { usePlayAlbum, useAddAlbumToQueue } from "../hooks/usePlayAlbum";
+import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
 import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
 import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
@@ -855,35 +856,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   );
 
   const currentAlbumId = currentTrack?.albumId ?? null;
-  type RecommendedRow = { id: string; name: string; artist: string | null; year: number | null; artwork_url: string | null };
-  const { data: recommendedAlbum } = useQuery({
-    queryKey: QK.recommendedSpotlight(currentAlbumId),
-    queryFn: async () => {
-      if (!currentAlbumId) return null;
-      const db = await getDb();
-      const rows = await db.select<RecommendedRow[]>(
-        `SELECT a.id, a.name, a.artist, a.year, a.artwork_url,
-                COUNT(*) AS genre_match,
-                (SELECT COUNT(*) FROM album_genres WHERE album_id = a.id AND relation = 'direct') AS genre_total
-         FROM album_genres ag
-         JOIN albums a ON a.id = ag.album_id
-         WHERE ag.canonical_id IN (
-           SELECT canonical_id FROM album_genres WHERE album_id = ? AND relation = 'direct'
-         )
-         AND ag.relation = 'direct'
-         AND ag.album_id != ?
-         AND a.artwork_url IS NOT NULL
-         GROUP BY ag.album_id
-         HAVING genre_match * 1.0 / genre_total >= 0.5
-         ORDER BY genre_match DESC, RANDOM()
-         LIMIT 1`,
-        [currentAlbumId, currentAlbumId]
-      );
-      return rows[0] ?? null;
-    },
-    enabled: !!currentAlbumId,
-    staleTime: 5 * 60 * 1000,
-  });
+  const { data: recommendedAlbum } = useRecommendedAlbum(currentAlbumId);
 
   const recommendedPick = useMemo<SpotlightPick | null>(() => {
     if (!currentTrack || !recommendedAlbum) return null;
@@ -901,27 +874,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
 
-  const addAlbumToQueue = usePlayerStore(s => s.addToQueue);
-  const handleAddToQueue = useCallback(async (album: AlbumRow) => {
-    const db = await getDb();
-    type MinTrack = { id: string; title: string; artist: string | null; duration: number | null };
-    const tracks = await db.select<MinTrack[]>(
-      `SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY disc_number, track_number`,
-      [album.id]
-    );
-    if (tracks.length === 0) return;
-    const coverArtUrl = album.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-      : null;
-    const streamUrlFor = (t: CurrentTrack) =>
-      getStreamUrl(server.url, server.username, credential, stripServerPrefix(t.id, server.id));
-    for (const t of tracks) {
-      addAlbumToQueue(
-        { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id },
-        streamUrlFor,
-      );
-    }
-  }, [server, credential, addAlbumToQueue]);
+  const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
 
   const lovedItems = useMemo(
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),

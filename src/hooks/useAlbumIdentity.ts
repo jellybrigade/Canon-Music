@@ -143,7 +143,7 @@ export function useIdentifyAlbum({
           // Auto-pick if one clear winner — user still confirms in dialog
           if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
             rgId = top.candidate.id;
-            candidates = filtered;
+            candidates = ranked.map((r) => r.candidate);
           } else {
             // Return ranked candidates so picker shows best match first
             return {
@@ -335,14 +335,20 @@ export function useRecordFailedLookup() {
   });
 }
 
-/** Returns full AlbumRow for albums that were looked up but yielded no MB match. */
+export interface FailedAlbumRow extends AlbumRow {
+  track_count: number;
+}
+
+/** Returns full album rows (plus track_count) for albums that were looked up but yielded no MB match. */
 export function useFailedLookupAlbums() {
   return useQuery({
     queryKey: QK.failedLookupAlbums(),
-    queryFn: async (): Promise<AlbumRow[]> => {
+    queryFn: async (): Promise<FailedAlbumRow[]> => {
       const db = await getDb();
-      return db.select<AlbumRow[]>(
-        `SELECT a.* FROM albums a
+      return db.select<FailedAlbumRow[]>(
+        `SELECT a.*,
+                (SELECT COUNT(*) FROM tracks WHERE album_id = a.id) AS track_count
+         FROM albums a
          INNER JOIN album_identity ai ON ai.album_id = a.id
          WHERE ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
          ORDER BY a.artist, a.name`
