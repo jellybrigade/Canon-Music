@@ -23,6 +23,8 @@ export function PlaybackTab({ searchQuery }: Props) {
   const toggleConsumeOnSkip = usePlayerStore((s) => s.toggleConsumeOnSkip);
   const gapless = usePlayerStore((s) => s.gapless);
   const toggleGapless = usePlayerStore((s) => s.toggleGapless);
+  const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
+  const toggleRadioOnQueueEnd = usePlayerStore((s) => s.toggleRadioOnQueueEnd);
 
   const [minSeconds, setMinSeconds] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
@@ -65,7 +67,7 @@ export function PlaybackTab({ searchQuery }: Props) {
         </section>
       )}
 
-      {show("queue", "restore", "play album", "action") && (
+      {show("queue", "restore", "play album", "action", "radio", "continuous", "autoplay") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Queue</h3>
           <SettingRow
@@ -89,6 +91,19 @@ export function PlaybackTab({ searchQuery }: Props) {
               <option value="queue_last">Add to end</option>
               <option value="shuffle">Shuffle &amp; play</option>
             </select>
+          </SettingRow>
+          <SettingRow
+            title="Continue with radio when queue ends"
+            description="When your queue runs out, Canon automatically starts radio from the last track that played."
+          >
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={radioOnQueueEnd}
+                onChange={() => void toggleRadioOnQueueEnd()}
+              />
+              <span className="toggle-track" />
+            </label>
           </SettingRow>
         </section>
       )}

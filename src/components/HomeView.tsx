@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListEnd, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -16,7 +16,8 @@ import { useCarouselAlbums } from "../hooks/useCarouselAlbums";
 import { useListeningStats } from "../hooks/useListeningStats";
 import type { AlbumStatRow } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
-import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import { usePlayAlbum, useAddAlbumToQueue } from "../hooks/usePlayAlbum";
+import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
 import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
 import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
@@ -224,10 +225,11 @@ interface SpotlightProps {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (name: string) => void;
   playAlbum: (album: AlbumRow) => void;
+  onAddToQueue?: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
 }
 
-function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onCardContextMenu }: SpotlightProps) {
+function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const [accentColor, setAccentColor] = useState<string | null>(null);
@@ -292,9 +294,15 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
         )}
         <div className="home-spotlight__actions">
           <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-            <Play size={13} fill="currentColor" />
+            <div><Play size={13} fill="currentColor" /></div>
             Play
           </button>
+          {onAddToQueue && (
+            <button className="home-spotlight__play" onClick={() => onAddToQueue(pick.album)}>
+              <div><ListEnd size={13} /></div>
+              Add to Queue
+            </button>
+          )}
           <button className="home-spotlight__open" onClick={() => onSelectAlbum(pick.album)}>
             Open
           </button>
@@ -847,6 +855,27 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     [currentTrack, onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id, unplayedWithArt]
   );
 
+  const currentAlbumId = currentTrack?.albumId ?? null;
+  const { data: recommendedAlbum } = useRecommendedAlbum(currentAlbumId);
+
+  const recommendedPick = useMemo<SpotlightPick | null>(() => {
+    if (!currentTrack || !recommendedAlbum) return null;
+    const album: AlbumRow = {
+      id: recommendedAlbum.id,
+      server_id: server.id,
+      name: recommendedAlbum.name,
+      artist: recommendedAlbum.artist,
+      year: recommendedAlbum.year,
+      artwork_url: recommendedAlbum.artwork_url,
+    };
+    const kicker = currentTrack.artist
+      ? `Because you're listening to ${currentTrack.artist}`
+      : "You might also like";
+    return { kicker, album };
+  }, [currentTrack, recommendedAlbum, server.id]);
+
+  const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
+
   const lovedItems = useMemo(
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
     [allAlbums, lovedAlbumIds]
@@ -989,13 +1018,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {spotlight && (
+          {(recommendedPick ?? spotlight) && (
             <Spotlight
-              pick={spotlight}
+              pick={(recommendedPick ?? spotlight)!}
               serverWithCred={serverWithCredential}
               onSelectAlbum={onSelectAlbum}
               onSelectArtist={onSelectArtist}
               playAlbum={play}
+              onAddToQueue={recommendedPick ? handleAddToQueue : undefined}
               onCardContextMenu={openCardContextMenu}
             />
           )}

@@ -39,6 +39,7 @@ export const QK = {
 
   recentlyReleased: (limit: number) => ["recently-released", limit] as const,
   spotlightGenres: (albumId: string) => ["spotlight-genres", albumId] as const,
+  recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
   artistAlbums: (artistName: string) => ["artist-albums", artistName] as const,
   artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
@@ -71,10 +72,11 @@ export const QK = {
     ["identify-artist", artistName, mbArtistId] as const,
 
   albumIdentity: (albumId: string) => ["album-identity", albumId] as const,
-  identifyAlbum: (albumId: string, mbRgId?: string | null, mbReleaseId?: string | null, artist?: string, album?: string) =>
-    ["identify-album", albumId, mbRgId, mbReleaseId, artist, album] as const,
+  identifyAlbum: (albumId: string, mbRgId?: string | null, mbReleaseId?: string | null, artist?: string, album?: string, trackCount?: number) =>
+    ["identify-album", albumId, mbRgId, mbReleaseId, artist, album, trackCount],
   autoIdentifyAlbum: (albumId: string) => ["auto-identify-album", albumId] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
+  failedLookupAlbums: () => ["failed-lookup-albums"] as const,
 
   nowPlayingAlbums: (artistName: string | null) => ["nowplaying-albums", artistName] as const,
   nowPlayingTopTracks: (artistName: string | null) => ["nowplaying-top-tracks", artistName] as const,

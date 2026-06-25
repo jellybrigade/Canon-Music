@@ -12,10 +12,11 @@ interface AlbumIdentifyDialogProps {
   albumId: string;
   artist: string;
   album: string;
+  trackCount?: number;
   onClose: () => void;
 }
 
-export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumIdentifyDialogProps) {
+export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClose }: AlbumIdentifyDialogProps) {
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
 
@@ -45,6 +46,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumId
     album: lfmAlbum.trim() || album,
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
+    trackCount,
     enabled: fetchEnabled,
   });
 
@@ -176,7 +178,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, onClose }: AlbumId
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">Multiple matches — select one:</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
@@ -377,7 +379,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">Multiple matches — select one:</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}

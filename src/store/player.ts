@@ -130,6 +130,7 @@ interface PlayerState {
   consumeMode: boolean;
   consumeOnSkip: boolean;
   gapless: boolean;
+  radioOnQueueEnd: boolean;
   audioFormat: { sampleRate: number; channels: number; codec: string } | null;
 
   castDevice: DlnaRenderer | null;
@@ -157,6 +158,7 @@ interface PlayerState {
   toggleConsumeMode: () => Promise<void>;
   toggleConsumeOnSkip: () => Promise<void>;
   toggleGapless: () => Promise<void>;
+  toggleRadioOnQueueEnd: () => Promise<void>;
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
@@ -614,6 +616,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     consumeMode: false,
     consumeOnSkip: false,
     gapless: false,
+    radioOnQueueEnd: false,
     audioFormat: null,
 
     castDevice: null,
@@ -735,6 +738,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
     },
 
+    toggleRadioOnQueueEnd: async () => {
+      const next = !get().radioOnQueueEnd;
+      set({ radioOnQueueEnd: next });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.radio_on_queue_end', ?)",
+          [next ? "true" : "false"]
+        );
+      } catch (e) {
+        console.error("Failed to persist radio_on_queue_end:", e);
+      }
+    },
+
     play: async (track, streamUrl) => {
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });
       await playTrack(track, streamUrl);
@@ -838,7 +855,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         const track = resolveTrack(queue, newShuffleOrder, isShuffled, 0);
         if (track) await playTrack(track, streamUrlFor(track), true);
       } else {
-        get().stop();
+        if (get().radioOnQueueEnd) {
+          const seed = get().currentTrack;
+          if (seed) {
+            activeTarget.stop();
+            stopElapsedTimer();
+            set({ isPlaying: false, isLoading: false, radioActive: true, radioSeed: seed });
+          } else {
+            get().stop();
+          }
+        } else {
+          get().stop();
+        }
       }
       void persistQueueState();
     },
@@ -1137,7 +1165,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -1203,6 +1231,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             set({ consumeOnSkip: row.value === "true" });
           } else if (row.key === "player.gapless") {
             set({ gapless: row.value === "true" });
+          } else if (row.key === "player.radio_on_queue_end") {
+            set({ radioOnQueueEnd: row.value === "true" });
           } else if (row.key === "player.show_waveform") {
             showWaveform = row.value === "true";
           } else if (row.key === "cast.device" && row.value) {

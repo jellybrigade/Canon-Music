@@ -15,6 +15,34 @@ interface MinTrack {
   duration: number | null;
 }
 
+/** Always appends the album's tracks to the end of the queue (no setting override). */
+export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
+  const { server, credential } = serverWithCred;
+  const addToQueue = usePlayerStore(s => s.addToQueue);
+
+  return useCallback(async (album: AlbumRow) => {
+    const db = await getDb();
+    const tracks = await db.select<MinTrack[]>(
+      `SELECT id, title, artist, duration
+       FROM tracks WHERE album_id = ?
+       ORDER BY disc_number, track_number`,
+      [album.id]
+    );
+    if (tracks.length === 0) return;
+    const coverArtUrl = album.artwork_url
+      ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
+      : null;
+    const streamUrlFor = (track: CurrentTrack): string =>
+      getStreamUrl(server.url, server.username, credential, stripServerPrefix(track.id, server.id));
+    for (const t of tracks) {
+      addToQueue(
+        { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id },
+        streamUrlFor,
+      );
+    }
+  }, [server, credential, addToQueue]);
+}
+
 export function usePlayAlbum(serverWithCred: ServerWithCredential) {
   const { server, credential } = serverWithCred;
   const playQueue = usePlayerStore(s => s.playQueue);

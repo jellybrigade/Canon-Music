@@ -489,6 +489,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <div className="now-playing-extras">
             <RadioChip />
+            <div className="now-playing-extras-right">
             <button
               className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
               onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
@@ -519,6 +520,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               >
                 <Volume2 size={18} />
               </button>
+            </div>
             </div>
           </div>
         </div>
