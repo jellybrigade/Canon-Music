@@ -438,6 +438,8 @@ export default function App() {
           onSelectAlbum={openAlbum}
           onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
+          onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+          onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
         />
       );
     }
@@ -526,6 +528,8 @@ export default function App() {
               onSelectAlbum={openAlbum}
               onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
+              onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+              onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
             />
           ) : (
             <p className="empty-state">{searchQuery ? "Searching…" : "Start typing to search"}</p>
@@ -544,6 +548,7 @@ export default function App() {
                 onSelectAlbum={openAlbum}
                 onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+                onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
                 onOpenCommandPalette={() => setCommandPaletteOpen(true)}
                 homeSearchRaw={homeSearchRaw}
@@ -562,6 +567,7 @@ export default function App() {
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={(album) => navigateTo("library", { album })}
                 onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+                onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onBack={goBack}
               />
             ) : <main className="content-main" />}

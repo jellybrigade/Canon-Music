@@ -5,13 +5,15 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
 } from "lucide-react";
-import { usePlayerStore, type CurrentTrack } from "../store/player";
+import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { RadioChip } from "./RadioChip";
+import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
@@ -144,10 +146,11 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (artistName: string) => void;
+  onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
   onBack?: () => void;
 }
 
-export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onBack }: Props) {
+export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onBack }: Props) {
   const {
     currentTrack, isPlaying, isLoading, elapsed, volume,
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
@@ -165,6 +168,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
+  const [albumChipMenu, setAlbumChipMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
+  const [aboutTrackMenu, setAboutTrackMenu] = useState<{ x: number; y: number; track: TopTrack | SuggestedTrack } | null>(null);
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
@@ -348,6 +353,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
 
   return (
+    <>
     <div
       className="now-playing-view"
       style={{
@@ -654,6 +660,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                             key={album.id}
                             className="now-playing-album-chip"
                             onClick={() => onSelectAlbum(album)}
+                            onContextMenu={(e) => { e.preventDefault(); setAlbumChipMenu({ x: e.clientX, y: e.clientY, album }); }}
                           >
                             {thumbUrl
                               ? <img src={thumbUrl} alt={album.name} className="now-playing-album-chip-art" />
@@ -673,7 +680,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     <h3 className="now-playing-section-title">Top tracks — {primaryArtist}</h3>
                     <div className="now-playing-top-tracks-grid">
                       {topTracks.slice(0, 10).map((track, i) => (
-                        <div key={track.id} className="now-playing-track-row">
+                        <div key={track.id} className="now-playing-track-row" onContextMenu={(e) => { e.preventDefault(); setAboutTrackMenu({ x: e.clientX, y: e.clientY, track }); }}>
                           {track.artwork_url
                             ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
                             : <span className="now-playing-track-num">{i + 1}</span>}
@@ -722,7 +729,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     <h3 className="now-playing-section-title">Suggested</h3>
                     <div className="now-playing-top-tracks-grid">
                       {suggestedTracks.slice(0, 10).map((track) => (
-                        <div key={track.id} className="now-playing-track-row">
+                        <div key={track.id} className="now-playing-track-row" onContextMenu={(e) => { e.preventDefault(); setAboutTrackMenu({ x: e.clientX, y: e.clientY, track }); }}>
                           {track.artwork_url
                             ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
                             : <span className="now-playing-track-num" />}
@@ -859,5 +866,23 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         </div>
       </div>
     </div>
+
+    {albumChipMenu && (
+      <ContextMenu x={albumChipMenu.x} y={albumChipMenu.y} onClose={() => setAlbumChipMenu(null)}>
+        <button onClick={() => { onSelectAlbum(albumChipMenu.album); setAlbumChipMenu(null); }}>Go to Album</button>
+        <StartRadioSubmenu
+          onSelect={(mode) => { onStartRadio(albumChipMenu.album, mode); setAlbumChipMenu(null); }}
+        />
+      </ContextMenu>
+    )}
+
+    {aboutTrackMenu && (
+      <ContextMenu x={aboutTrackMenu.x} y={aboutTrackMenu.y} onClose={() => setAboutTrackMenu(null)}>
+        <button onClick={() => { handlePlayTrack(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play now</button>
+        <button onClick={() => { handlePlayNext(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play next</button>
+        <button onClick={() => { handleAddToQueue(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Add to queue</button>
+      </ContextMenu>
+    )}
+    </>
   );
 }
