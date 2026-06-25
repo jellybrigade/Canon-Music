@@ -10,7 +10,7 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow } from "../types/library";
+import type { AlbumRow, ArtistRow } from "../types/library";
 import { useAlbums } from "../hooks/useAlbums";
 import { useCarouselAlbums } from "../hooks/useCarouselAlbums";
 import { useListeningStats } from "../hooks/useListeningStats";
@@ -40,6 +40,7 @@ interface Props {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (name: string) => void;
   onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
+  onStartRadioFromArtist: (artist: ArtistRow, mode: RadioMode) => void;
   onPlayTrack: (trackId: string) => void;
   onOpenCommandPalette: () => void;
   homeSearchRaw: string;
@@ -796,7 +797,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 
 // ── HomeView ──────────────────────────────────────────────────────────────────
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onStartRadioFromArtist, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
   const { server, credential } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const playQueue = usePlayerStore(s => s.playQueue);
@@ -1012,6 +1013,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onSelectAlbum={onSelectAlbum}
             onSelectArtist={(artist) => { onHomeSearchRawChange(""); onSelectArtist?.(artist.name); }}
             onPlayTrack={onPlayTrack}
+            onStartRadioFromAlbum={(album, mode) => onStartRadio(album, mode)}
+            onStartRadioFromArtist={(artist, mode) => onStartRadioFromArtist(artist, mode)}
           />
         ) : (
           <p className="empty-state">Searching…</p>

@@ -124,13 +124,8 @@ export async function searchReleaseGroups(
   artist: string,
   album: string
 ): Promise<MbReleaseGroupCandidate[]> {
-  const query = `releasegroup:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
-  const data = await mbGet<MbSearchRGResponse>("release-group", {
-    query,
-    limit: "25",
-  });
-
-  return (data["release-groups"] ?? []).map((rg) => {
+  type RgHit = NonNullable<MbSearchRGResponse["release-groups"]>[number];
+  const toCandidate = (rg: RgHit) => {
     const credit = rg["artist-credit"]?.[0]?.artist;
     return {
       id: rg.id,
@@ -141,7 +136,26 @@ export async function searchReleaseGroups(
       artistMbid: credit?.id ?? null,
       score: rg.score ?? null,
     };
+  };
+
+  const fullQuery = `releasegroup:${JSON.stringify(album)} AND artist:${JSON.stringify(artist)}`;
+  const data = await mbGet<MbSearchRGResponse>("release-group", {
+    query: fullQuery,
+    limit: "25",
   });
+
+  const results = data["release-groups"] ?? [];
+  const bestScore = results.length > 0 ? Math.max(...results.map(r => r.score ?? 0)) : 0;
+  if (bestScore >= 50) return results.map(toCandidate);
+
+  // Fallback: artist-name exact match can fail for aliases/credits (e.g. "Brian Eno" vs "Eno"),
+  // or when MB returns hits with score < 50 that don't actually match.
+  // Retry with album title only; caller's rankCandidates will filter by artist similarity.
+  const albumOnlyData = await mbGet<MbSearchRGResponse>("release-group", {
+    query: `releasegroup:${JSON.stringify(album)}`,
+    limit: "25",
+  });
+  return (albumOnlyData["release-groups"] ?? []).map(toCandidate);
 }
 
 // ── Release Group lookup ───────────────────────────────────────────────────────

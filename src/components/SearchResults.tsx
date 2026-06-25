@@ -3,8 +3,11 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Music, User } from "lucide-react";
 import type { SearchAlbum, SearchTrack, SearchArtist } from "../hooks/useSearch";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow } from "../types/library";
+import type { AlbumRow, ArtistRow } from "../types/library";
+import type { RadioMode } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./SearchResults.css";
 
 interface Props {
@@ -15,7 +18,13 @@ interface Props {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (artist: SearchArtist) => void;
   onPlayTrack: (trackId: string) => void;
+  onStartRadioFromAlbum: (album: AlbumRow, mode: RadioMode) => void;
+  onStartRadioFromArtist: (artist: ArtistRow, mode: RadioMode) => void;
 }
+
+type AlbumMenu = { x: number; y: number; album: SearchAlbum };
+type TrackMenu = { x: number; y: number; track: SearchTrack };
+type ArtistMenu = { x: number; y: number; artist: SearchArtist };
 
 const ARTIST_LIMIT = 12;
 const ALBUM_LIMIT = 12;
@@ -28,6 +37,18 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function toAlbumRow(album: SearchAlbum, serverId: string): AlbumRow {
+  return { id: album.id, server_id: serverId, name: album.name, artist: album.artist, year: null, artwork_url: album.artwork_url };
+}
+
+function trackAlbumRow(track: SearchTrack, serverId: string): AlbumRow {
+  return { id: track.album_id, server_id: serverId, name: track.album_name ?? "", artist: track.artist, year: null, artwork_url: null };
+}
+
+function toArtistRow(artist: SearchArtist): ArtistRow {
+  return { name: artist.name, album_count: artist.album_count, artwork_url: null };
+}
+
 export function SearchResults({
   albums,
   tracks,
@@ -36,12 +57,17 @@ export function SearchResults({
   onSelectAlbum,
   onSelectArtist,
   onPlayTrack,
+  onStartRadioFromAlbum,
+  onStartRadioFromArtist,
 }: Props) {
   const { server, credential } = serverWithCredential;
   const albumDisplayName = useAlbumDisplayName();
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllTracks, setShowAllTracks] = useState(false);
+  const [albumMenu, setAlbumMenu] = useState<AlbumMenu | null>(null);
+  const [trackMenu, setTrackMenu] = useState<TrackMenu | null>(null);
+  const [artistMenu, setArtistMenu] = useState<ArtistMenu | null>(null);
 
   const visibleArtists = showAllArtists ? artists : artists.slice(0, ARTIST_LIMIT);
   const visibleAlbums = showAllAlbums ? albums : albums.slice(0, ALBUM_LIMIT);
@@ -68,6 +94,7 @@ export function SearchResults({
                 key={artist.name}
                 className="search-artist-row"
                 onClick={() => onSelectArtist(artist)}
+                onContextMenu={(e) => { e.preventDefault(); setArtistMenu({ x: e.clientX, y: e.clientY, artist }); }}
               >
                 <div className="search-artist-icon">
                   <User size={16} />
@@ -97,16 +124,8 @@ export function SearchResults({
               <button
                 key={album.id}
                 className="search-album-row"
-                onClick={() =>
-                  onSelectAlbum({
-                    id: album.id,
-                    server_id: server.id,
-                    name: album.name,
-                    artist: album.artist,
-                    year: null,
-                    artwork_url: album.artwork_url,
-                  })
-                }
+                onClick={() => onSelectAlbum(toAlbumRow(album, server.id))}
+                onContextMenu={(e) => { e.preventDefault(); setAlbumMenu({ x: e.clientX, y: e.clientY, album }); }}
               >
                 <div className="search-album-thumb">
                   {album.artwork_url ? (
@@ -145,6 +164,7 @@ export function SearchResults({
                 key={track.id}
                 className="search-track-row"
                 onClick={() => onPlayTrack(track.id)}
+                onContextMenu={(e) => { e.preventDefault(); setTrackMenu({ x: e.clientX, y: e.clientY, track }); }}
               >
                 <div className="search-track-info">
                   <span className="search-item-primary">{track.title}</span>
@@ -164,6 +184,31 @@ export function SearchResults({
             </button>
           )}
         </section>
+      )}
+
+      {albumMenu && (
+        <ContextMenu x={albumMenu.x} y={albumMenu.y} onClose={() => setAlbumMenu(null)}>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album, server.id), mode); setAlbumMenu(null); }}
+          />
+        </ContextMenu>
+      )}
+
+      {trackMenu && (
+        <ContextMenu x={trackMenu.x} y={trackMenu.y} onClose={() => setTrackMenu(null)}>
+          <button onClick={() => { onPlayTrack(trackMenu.track.id); setTrackMenu(null); }}>Play</button>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track, server.id), mode); setTrackMenu(null); }}
+          />
+        </ContextMenu>
+      )}
+
+      {artistMenu && (
+        <ContextMenu x={artistMenu.x} y={artistMenu.y} onClose={() => setArtistMenu(null)}>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode); setArtistMenu(null); }}
+          />
+        </ContextMenu>
       )}
     </div>
   );
