@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Play, Disc, Radio } from "lucide-react";
+import { Play, Disc, Radio, ExternalLink } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -438,6 +439,16 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               <Disc size={13} />
               Identify
             </button>
+            {enrichment?.confirmed_at && enrichment.mb_artist_id && (
+              <button
+                className="artist-identify-btn"
+                onClick={() => void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`)}
+                aria-label="Open on MusicBrainz"
+                title="Open on MusicBrainz"
+              >
+                <ExternalLink size={13} />
+              </button>
+            )}
           </div>
         </div>
       </div>
