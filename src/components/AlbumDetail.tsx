@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
@@ -465,6 +466,16 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               >
                 <Disc size={14} />
               </button>
+              {albumIdentity?.confirmed_at && albumIdentity.mb_release_id && (
+                <button
+                  className="album-identify-btn"
+                  onClick={() => void openUrl(`https://musicbrainz.org/release/${albumIdentity.mb_release_id}`)}
+                  aria-label="Open on MusicBrainz"
+                  title="Open on MusicBrainz"
+                >
+                  <ExternalLink size={14} />
+                </button>
+              )}
             </div>
           </div>
         </div>
