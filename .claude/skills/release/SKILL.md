@@ -7,17 +7,16 @@ Release Canon to main. Run these steps in order — do not skip any.
 
 1. **Code review** — run `/code-review` on development. Then fix **every finding** returned (blockers and non-blockers alike) without asking for confirmation. Commit all fixes on development before continuing.
 
-2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. For each semver bump level, identify the single strongest reason from the commit list:
-   - **Major** (`X.0.0`): breaking change or architectural overhaul — quote the most significant commit
-   - **Minor** (`x.Y.0`): new user-visible feature — quote the most significant commit
-   - **Patch** (`x.y.Z`): bugfixes / polish only — quote the most significant commit
+2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. Then pick the correct bump:
 
-   Then use `AskUserQuestion` to present all three options with their reasons. Example shape:
-   - Option "Major X.0.0" → description: biggest breaking-change commit summary
-   - Option "Minor x.Y.0" → description: biggest new-feature commit summary
-   - Option "Patch x.y.Z" → description: biggest bugfix commit summary
+   - **Major** is never auto-selected — only present it if there is an explicit breaking change or architectural overhaul. This project is pre-1.0 so major bumps are extremely rare.
+   - **Minor** (`x.Y.0`): one or more new user-visible features were added.
+   - **Patch** (`x.y.Z`): only bugfixes, polish, or internal changes — no new features.
 
-   Wait for the user to choose before proceeding.
+   **Default behavior**: identify the single most appropriate level and proceed without asking:
+   - Any new user-visible feature present → **minor**, even if there are also bugfixes.
+   - Bugfixes / polish / internal changes only → **patch**.
+   - Only use `AskUserQuestion` when it is genuinely unclear whether a change counts as a new feature or a bugfix. When you do ask, present only the two relevant options with a one-line reason each; never include major unless commits justify it.
 
 3. **Bump version** — update `"version"` in both `src-tauri/tauri.conf.json` and `package.json`, then commit on development:
    ```bash
