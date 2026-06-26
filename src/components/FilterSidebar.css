@@ -1,0 +1,241 @@
+.filter-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 36px;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+  transition: width 0.18s ease;
+  position: relative;
+  background: var(--bg-base);
+}
+
+.filter-sidebar--open {
+  width: 200px;
+}
+
+.filter-sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  flex-shrink: 0;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  transition: color 0.12s;
+}
+
+.filter-sidebar-toggle:hover {
+  color: var(--text-primary);
+}
+
+.filter-sidebar-dot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.filter-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-sidebar-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.filter-sidebar-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.filter-sidebar-clear-all {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.68rem;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.filter-sidebar-clear-all:hover {
+  color: var(--danger);
+}
+
+.filter-sidebar-loved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  padding: 5px 8px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+  box-shadow: none;
+}
+
+.filter-sidebar-loved:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.filter-sidebar-loved--active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: rgba(57, 108, 216, 0.25);
+}
+
+.filter-sidebar-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.filter-sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.filter-sidebar-clear-btn {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 1px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  border-radius: 3px;
+}
+
+.filter-sidebar-clear-btn:hover {
+  color: var(--text-primary);
+}
+
+.filter-sidebar-year-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+}
+
+.filter-sidebar-year-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.7rem;
+  padding: 0.22em 0.35em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  box-shadow: none;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.filter-sidebar-year-input::-webkit-outer-spin-button,
+.filter-sidebar-year-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.filter-sidebar-year-input:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  outline: none;
+  box-shadow: none;
+}
+
+.filter-sidebar-year-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.filter-sidebar-year-sep {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.filter-sidebar-genre-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.filter-sidebar-genre-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.filter-sidebar-genre-item:hover {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.filter-sidebar-genre-item--active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.filter-sidebar-genre-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.filter-sidebar-genre-count {
+  font-size: 0.67rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.filter-sidebar-genre-item--active .filter-sidebar-genre-count {
+  color: var(--accent);
+  opacity: 0.7;
+}

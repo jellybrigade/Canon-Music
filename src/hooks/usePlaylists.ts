@@ -18,6 +18,7 @@ export interface PlaylistRow {
   comment: string | null;
   track_count: number;
   cover_art_url: string | null;
+  custom_cover_data: string | null;
 }
 
 export function usePlaylists() {
@@ -28,7 +29,7 @@ export function usePlaylists() {
     queryFn: async () => {
       const db = await getDb();
       return db.select<PlaylistRow[]>(
-        "SELECT id, server_id, name, comment, track_count, cover_art_url FROM playlists ORDER BY name ASC",
+        "SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data FROM playlists ORDER BY name ASC",
         []
       );
     },
@@ -134,5 +135,11 @@ export function usePlaylists() {
     await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
   }
 
-  return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist };
+  async function setCustomCover(playlistId: string, dataUri: string | null): Promise<void> {
+    const db = await getDb();
+    await db.execute("UPDATE playlists SET custom_cover_data = ? WHERE id = ?", [dataUri, playlistId]);
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+  }
+
+  return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover };
 }

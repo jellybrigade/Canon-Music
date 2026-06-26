@@ -8,6 +8,19 @@
   animation: fadeIn var(--motion-med);
 }
 
+.library-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.library-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .content-placeholder {
   flex: 1;
   display: flex;

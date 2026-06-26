@@ -670,6 +670,65 @@ export async function authenticate(
   return { type: "md5", token, salt };
 }
 
+export interface SavedPlayQueue {
+  trackIds: string[];
+  currentId: string | null;
+  positionMs: number;
+}
+
+export async function savePlayQueue(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  trackIds: string[],
+  currentId: string | null,
+  positionMs: number,
+  altUrl?: string
+): Promise<void> {
+  if (trackIds.length === 0) return;
+  const params = buildAuthParams(username, credential);
+  for (const id of trackIds) params.append("id", id);
+  if (currentId) params.set("current", currentId);
+  params.set("position", String(Math.round(positionMs)));
+  const res = await apiPost(baseUrl, "savePlayQueue", params, altUrl);
+  if (!res.ok) return;
+}
+
+export async function getPlayQueue(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  altUrl?: string
+): Promise<SavedPlayQueue | null> {
+  try {
+    const params = buildAuthParams(username, credential);
+    const res = await apiPost(baseUrl, "getPlayQueue", params, altUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        playQueue?: {
+          entry?: Array<{ id: string }>;
+          current?: string | number;
+          position?: number;
+        };
+      };
+    };
+    const response = data["subsonic-response"];
+    if (response.status !== "ok" || !response.playQueue) return null;
+    const queue = response.playQueue;
+    const trackIds = (queue.entry ?? []).map((e) => e.id);
+    if (trackIds.length === 0) return null;
+    return {
+      trackIds,
+      currentId: queue.current != null ? String(queue.current) : null,
+      positionMs: queue.position ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function authenticateWithApiKey(
   baseUrl: string,
   username: string,
