@@ -4,7 +4,7 @@ import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ContextMenu } from "./ContextMenu";
+import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { TagDrawer } from "./TagDrawer";
 import { AlbumGenreEditor } from "./AlbumGenreEditor";
@@ -16,6 +16,7 @@ import { useTracks } from "../hooks/useTracks";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { useEnrichAlbumTracks } from "../hooks/useEnrichAlbumTracks";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
@@ -76,7 +77,41 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
+  useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
+
+  const { data: trackTagRows = [] } = useQuery({
+    queryKey: QK.trackTagsAlbum(album.id),
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<{ track_id: string; raw_value: string; canonical_id: string | null; source: string }[]>(
+        `SELECT tt.track_id, tt.raw_value, tt.canonical_id, tt.source
+         FROM track_tags tt
+         JOIN tracks t ON tt.track_id = t.id
+         WHERE t.album_id = ? AND tt.kind = 'genre'
+         ORDER BY tt.track_id,
+                  CASE tt.source WHEN 'server' THEN 0 WHEN 'lastfm-track' THEN 1 ELSE 2 END`,
+        [album.id]
+      );
+    },
+    staleTime: Infinity,
+  });
+
+  const trackTagGenresMap = useMemo(() => {
+    const map = new Map<string, { display: string; canonicalId: string }[]>();
+    for (const row of trackTagRows) {
+      const display = genreMappings.has(row.raw_value)
+        ? (genreMappings.get(row.raw_value) ?? null)
+        : row.raw_value;
+      if (display === null) continue;
+      if (!map.has(row.track_id)) map.set(row.track_id, []);
+      const genres = map.get(row.track_id)!;
+      if (!genres.some((g) => g.display === display)) {
+        genres.push({ display, canonicalId: row.canonical_id ?? rawGenreId(row.raw_value) });
+      }
+    }
+    return map;
+  }, [trackTagRows, genreMappings]);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
@@ -169,10 +204,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const [showIdentify, setShowIdentify] = useState(false);
 
   const [trackCols, setTrackCols] = useState<{
-    artist: boolean; genre: boolean; year: boolean; disc: boolean;
+    artist: boolean; genre: boolean; disc: boolean;
     duration: boolean; format: boolean; bitrate: boolean; plays: boolean;
   }>(() => {
-    const defaults = { artist: true, genre: true, year: true, disc: false, duration: true, format: false, bitrate: false, plays: false };
+    const defaults = { artist: true, genre: true, disc: false, duration: true, format: false, bitrate: false, plays: true };
     try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-album-track-cols") ?? "null") }; }
     catch { return defaults; }
   });
@@ -488,7 +523,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
               const chipTitle = rawSources.length > 0
                 ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
-                : undefined;
+                : tag.source ?? undefined;
               const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
               return (
                 <button
@@ -506,12 +541,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               );
             };
 
-            const hasAutoGenres = genreGroups.file.length > 0 || genreGroups.lastfm.length > 0 ||
-              genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0 || genreGroups.unsourced.length > 0;
-            const showGrouped = genreGroups.multiSource;
-
             return (
-              <div className={`album-tag-column${showGrouped ? " album-tag-column--grouped" : ""}`}>
+              <div className="album-tag-column">
                 <div className="album-tag-column-header">
                   <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
                   <button
@@ -523,54 +554,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   </button>
                 </div>
 
-                {genreGroups.manual.length > 0 && (
-                  <div className="album-tag-source-group">
-                    {showGrouped && <span className="album-tag-source-label">Added</span>}
-                    {genreGroups.manual.map(renderGenreChip)}
-                  </div>
-                )}
-
-                {hasAutoGenres && showGrouped && (
-                  <>
-                    {genreGroups.file.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">File</span>
-                        {genreGroups.file.map(renderGenreChip)}
-                      </div>
-                    )}
-                    {genreGroups.lastfm.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">Last.fm</span>
-                        {genreGroups.lastfm.map(renderGenreChip)}
-                      </div>
-                    )}
-                    {(genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0) && (
-                      <div className="album-tag-mb-row">
-                        {genreGroups.musicbrainz.length > 0 && (
-                          <div className="album-tag-source-group">
-                            <span className="album-tag-source-label">MusicBrainz</span>
-                            {genreGroups.musicbrainz.map(renderGenreChip)}
-                          </div>
-                        )}
-                        {genreGroups.folksonomy.length > 0 && (
-                          <div className="album-tag-source-group">
-                            <span className="album-tag-source-label">Folksonomy</span>
-                            {genreGroups.folksonomy.map(renderGenreChip)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {genreGroups.unsourced.length > 0 && (
-                      <div className="album-tag-source-group">
-                        {genreGroups.unsourced.map(renderGenreChip)}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {hasAutoGenres && !showGrouped && (
-                  displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
-                )}
+                {displayGenres.map(renderGenreChip)}
 
                 {unmatchedCount > 0 && !showGenreEditor && (
                   <button
@@ -672,7 +656,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                     [
                       ["artist", "Artist"],
                       ["genre", "Genre"],
-                      ["year", "Year"],
                       ["disc", "Disc #"],
                       ["duration", "Duration"],
                       ["format", "Format"],
@@ -697,7 +680,13 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                 {tracks.map((track) => {
                   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
                   const isCurrentTrack = currentTrack?.id === track.id;
-                  const trackGenres = applyGenreMappings(track.genre, genreMappings);
+                  const allTrackGenres: { display: string; canonicalId: string }[] =
+                    trackTagGenresMap.get(track.id) ??
+                    applyGenreMappings(track.genre, genreMappings).map((g) => ({
+                      display: g,
+                      canonicalId: rawGenreId(g),
+                    }));
+                  const trackGenres = allTrackGenres.slice(0, 3);
                   return (
                     <tr
                       key={track.id}
@@ -725,13 +714,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                       {trackCols.genre && (
                         <td className="track-genre">
                           {trackGenres.map((g, i) => (
-                            <span key={i} className="track-genre-chip">{g}</span>
+                            <span key={i} className="track-genre-chip">{g.display}</span>
                           ))}
-                        </td>
-                      )}
-                      {trackCols.year && (
-                        <td className="track-year" title={track.year && track.year !== album.year ? "Track year differs from album year" : undefined}>
-                          {track.year && track.year !== album.year ? track.year : ""}
                         </td>
                       )}
                       {trackCols.disc && <td className="track-disc">{track.disc_number ?? ""}</td>}
@@ -825,6 +809,30 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               >
                 Show tags
               </button>
+              {(() => {
+                const allGenres =
+                  trackTagGenresMap.get(contextMenu.track.id) ??
+                  applyGenreMappings(contextMenu.track.genre, genreMappings).map((g) => ({
+                    display: g,
+                    canonicalId: rawGenreId(g),
+                  }));
+                const overflow = allGenres.slice(3);
+                return overflow.length > 0 ? (
+                  <ContextMenuSubmenu label="More genres">
+                    {overflow.map((g) => (
+                      <button
+                        key={g.canonicalId}
+                        onClick={() => {
+                          onTagFilter?.(g.canonicalId);
+                          setContextMenu(null);
+                        }}
+                      >
+                        {g.display}
+                      </button>
+                    ))}
+                  </ContextMenuSubmenu>
+                ) : null;
+              })()}
               {playlists && playlists.length > 0 && (
                 <button onClick={() => setContextMenuMode("playlist")}>
                   Add to Playlist <ChevronRight size={16} />

@@ -5,7 +5,7 @@ import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import { getMinFolksonomyCount } from "./musicbrainz";
 import type { MbGenre } from "./musicbrainz";
 
-export type TagSource = "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();
@@ -109,7 +109,7 @@ async function _doNormalizeAlbum(
     `SELECT DISTINCT tt.raw_value
      FROM track_tags tt
      JOIN tracks t ON t.id = tt.track_id
-     WHERE t.album_id = ? AND tt.kind = 'genre'`,
+     WHERE t.album_id = ? AND tt.kind = 'genre' AND tt.source != 'lastfm-track'`,
     [albumId]
   );
 
@@ -164,6 +164,36 @@ async function _doNormalizeAlbum(
     }
   }
 
+  type TrackIdRow = { id: string };
+  const albumTracks = await db.select<TrackIdRow[]>(
+    "SELECT id FROM tracks WHERE album_id = ?",
+    [albumId]
+  );
+
+  // Consensus promotion: per-track Last.fm genres that appear on ≥50% of the album's
+  // tracks are promoted into the album genre pipeline with lastfm-level confidence.
+  // Genres below the threshold are kept radio-only (track_tags only, not album_genres).
+  const TRACK_GENRE_ALBUM_CONSENSUS = 0.5;
+  type ConsensusRow = { canonical_id: string; track_count: number };
+  const totalTrackCount = albumTracks.length;
+  const consensusPromoted: string[] = []; // canonical_ids to inject
+  if (totalTrackCount > 0) {
+    const consensusRows = await db.select<ConsensusRow[]>(
+      `SELECT tt.canonical_id, COUNT(DISTINCT tt.track_id) AS track_count
+       FROM track_tags tt
+       WHERE tt.track_id IN (SELECT id FROM tracks WHERE album_id = ?)
+         AND tt.kind = 'genre'
+         AND tt.source = 'lastfm-track'
+         AND tt.canonical_id IS NOT NULL
+       GROUP BY tt.canonical_id
+       HAVING COUNT(DISTINCT tt.track_id) >= ?`,
+      [albumId, Math.ceil(totalTrackCount * TRACK_GENRE_ALBUM_CONSENSUS)]
+    );
+    for (const row of consensusRows) {
+      consensusPromoted.push(row.canonical_id);
+    }
+  }
+
   type RawEntry = { name: string; source: TagSource };
   const byKey = new Map<string, RawEntry>();
   for (const row of fileTagRows) {
@@ -185,15 +215,17 @@ async function _doNormalizeAlbum(
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz-folksonomy" });
   }
+  // Inject consensus-promoted per-track genres (≥50% of tracks share them) at lastfm confidence.
+  for (const canonId of consensusPromoted) {
+    const node = tree.byId.get(canonId);
+    if (!node) continue;
+    const k = canonicalKey(node.name);
+    if (!byKey.has(k)) byKey.set(k, { name: node.name, source: "lastfm" });
+  }
 
   // Write lastfm-sourced tags to track_tags so the vocab query can count them.
   // File tags get written during sync; lastfm tags must be written here or they
   // appear as orphaned in Cleanup even though normalization applies them.
-  type TrackIdRow = { id: string };
-  const albumTracks = await db.select<TrackIdRow[]>(
-    "SELECT id FROM tracks WHERE album_id = ?",
-    [albumId]
-  );
   if (albumTracks.length > 0) {
     for (const entry of byKey.values()) {
       if (entry.source === "file") continue;
@@ -215,7 +247,7 @@ async function _doNormalizeAlbum(
            AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
          LIMIT 1
        )
-       WHERE source IN ('lastfm', 'musicbrainz', 'musicbrainz-folksonomy')
+       WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'musicbrainz-folksonomy')
          AND canonical_id IS NULL
          AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
       [albumId]

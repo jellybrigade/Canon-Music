@@ -489,4 +489,26 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 35,
+    sql: `
+      ALTER TABLE tracks ADD COLUMN tags_enriched_at INTEGER;
+
+      CREATE TABLE track_tags_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        track_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('genre','mood')),
+        raw_value TEXT NOT NULL,
+        canonical_id TEXT,
+        source TEXT NOT NULL CHECK (source IN ('server','lastfm','lastfm-track','manual','musicbrainz','musicbrainz-folksonomy')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(track_id, kind, raw_value, source)
+      );
+      INSERT INTO track_tags_new SELECT * FROM track_tags;
+      DROP TABLE track_tags;
+      ALTER TABLE track_tags_new RENAME TO track_tags;
+      CREATE INDEX IF NOT EXISTS idx_track_tags_canonical ON track_tags(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
+    `,
+  },
 ];

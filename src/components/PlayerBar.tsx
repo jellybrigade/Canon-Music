@@ -241,6 +241,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
           <button
             className="normalizing-bar__more"
             onClick={(e) => {
+              e.stopPropagation();
               const r = e.currentTarget.getBoundingClientRect();
               setSnoozeMenu({ x: r.left, y: r.bottom });
             }}
