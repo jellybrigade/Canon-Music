@@ -103,3 +103,86 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  finalize:
+    needs: release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild latest.json from all platform artifacts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh release download "$TAG" -D /tmp/assets --repo "$REPO"
+          git log -1 --format=%B | tail -n +3 > /tmp/notes.txt
+
+          cat > /tmp/build_json.py << 'PYEOF'
+          import json, os, glob, subprocess
+
+          assets = '/tmp/assets'
+          base_url = "https://github.com/{}/releases/download/{}".format(os.environ['REPO'], os.environ['TAG'])
+          version = os.environ['VERSION']
+          notes = open('/tmp/notes.txt').read().strip()
+
+          def first_sig(pattern):
+              files = sorted(glob.glob('{}/{}'.format(assets, pattern)))
+              return open(files[0]).read().strip() if files else None
+
+          def first_url(pattern):
+              files = sorted(glob.glob('{}/{}'.format(assets, pattern)))
+              return "{}/{}".format(base_url, os.path.basename(files[0])) if files else None
+
+          platforms = {}
+
+          for pat, keys in [
+              ('*.AppImage',     ['linux-x86_64', 'linux-x86_64-appimage']),
+              ('*.deb',          ['linux-x86_64-deb']),
+              ('*.rpm',          ['linux-x86_64-rpm']),
+          ]:
+              s = first_sig(pat + '.sig')
+              u = first_url(pat)
+              if s and u:
+                  for k in keys:
+                      platforms[k] = {'signature': s, 'url': u}
+
+          s = first_sig('*.app.tar.gz.sig')
+          u = first_url('*.app.tar.gz')
+          if s and u:
+              for k in ['darwin-aarch64', 'darwin-x86_64', 'darwin-aarch64-app', 'darwin-x86_64-app']:
+                  platforms[k] = {'signature': s, 'url': u}
+
+          s = first_sig('*_en-US.msi.sig')
+          u = first_url('*_en-US.msi')
+          if s and u:
+              platforms['windows-x86_64'] = {'signature': s, 'url': u}
+              platforms['windows-x86_64-msi'] = {'signature': s, 'url': u}
+
+          s = first_sig('*-setup.exe.sig')
+          u = first_url('*-setup.exe')
+          if s and u:
+              platforms['windows-x86_64-nsis'] = {'signature': s, 'url': u}
+
+          pub_date = subprocess.check_output(['date', '-u', '+%Y-%m-%dT%H:%M:%S.000Z']).decode().strip()
+          result = {'version': version, 'notes': notes, 'pub_date': pub_date, 'platforms': platforms}
+
+          with open('/tmp/latest.json', 'w') as f:
+              json.dump(result, f, indent=2)
+
+          print('Platforms in latest.json:', list(platforms.keys()))
+          PYEOF
+
+          python3 /tmp/build_json.py
+          gh release upload "$TAG" /tmp/latest.json --clobber --repo "$REPO"
