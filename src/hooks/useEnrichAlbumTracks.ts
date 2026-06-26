@@ -58,11 +58,11 @@ async function enrichAlbumTracks(
 
   // Load canon tree + manual mappings once for the whole album run.
   const tree = await getCanonTree();
-  type MappingRow = { raw_value: string; canonical_id: string };
+  type MappingRow = { raw_value: string; canonical_id: string; kind: string };
   const manualRows = await db.select<MappingRow[]>(
-    "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'"
+    "SELECT raw_value, canonical_id, kind FROM tag_mappings WHERE source = 'manual'"
   );
-  const manualMap = new Map(manualRows.map((r) => [`${r.raw_value}:genre`, r.canonical_id]));
+  const manualMap = new Map(manualRows.map((r) => [`${r.raw_value}:${r.kind}`, r.canonical_id]));
 
   let anySucceeded = false;
 
@@ -87,11 +87,13 @@ async function enrichAlbumTracks(
 
     for (const { raw, kind } of allTags) {
       const manualId = manualMap.get(`${raw}:${kind}`);
+      // Skip tags the user explicitly ignored.
+      if (manualId === "__ignored__") continue;
       let canonId: string | null = null;
 
-      if (manualId && manualId !== "__ignored__" && manualId !== "__accepted__") {
+      if (manualId && manualId !== "__accepted__") {
         canonId = manualId;
-      } else if (manualId !== "__ignored__") {
+      } else {
         const match = findCanonicalSync(raw, kind, tree);
         canonId = match.node?.id ?? null;
       }
@@ -138,26 +140,31 @@ export function useEnrichAlbumTracks(
   const queryClient = useQueryClient();
   const [enrichTracks] = useSetting("tags.enrich_tracks", "true");
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
-  const staleDays = Number(staleDaysStr) || 30;
-  const { data: identity } = useAlbumIdentity(albumId);
+  const parsed = Number(staleDaysStr);
+  const staleDays = Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
+  const { data: identity, isSuccess: identityReady } = useAlbumIdentity(albumId);
   const ranRef = useRef(false);
 
   useEffect(() => {
     if (enrichTracks !== "true") return;
     if (!albumId || !albumArtist) return;
+    // Wait for identity query to settle (may be null for albums with no identity).
+    if (!identityReady) return;
     if (ranRef.current) return;
-    ranRef.current = true;
-
+    // Check inFlight before locking ranRef so a failed in-progress run doesn't
+    // permanently prevent this mount from retrying.
     if (inFlight.has(albumId)) return;
+    ranRef.current = true;
 
     const promise = enrichAlbumTracks(albumId, albumArtist, albumName, staleDays, identity ?? null)
       .then(() => {
         void queryClient.invalidateQueries({ queryKey: QK.tracks(albumId) });
         void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
+        void queryClient.invalidateQueries({ queryKey: QK.trackTagsAlbum(albumId) });
       })
       .catch(() => { /* silent */ })
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);
-  }, [albumId, albumArtist, albumName, enrichTracks, staleDays, identity, queryClient]);
+  }, [albumId, albumArtist, albumName, enrichTracks, staleDays, identityReady, identity, queryClient]);
 }
