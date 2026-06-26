@@ -13,7 +13,7 @@ import "./AlbumGenreEditor.css";
 export type DisplayGenre = {
   id: string | null;
   name: string;
-  source?: "file" | "lastfm" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+  source?: "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 };
 
 export type GenreGroups = {

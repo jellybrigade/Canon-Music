@@ -67,6 +67,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
 
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
+  const [enrichTracks, setEnrichTracks] = useBoolSetting("tags.enrich_tracks", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
   const [skipYearGenres, setSkipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
@@ -198,6 +199,16 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               onFocus={() => setLastfmKeyFocused(true)}
               onBlur={() => setLastfmKeyFocused(false)}
               onChange={(e) => void setLastfmKey(e.target.value)}
+            />
+          </SettingRow>
+          <SettingRow
+            title="Enrich per-track genres"
+            description="Fetch track.getTopTags from Last.fm when you open an album. Gives radio finer-grained genre data per track."
+          >
+            <input
+              type="checkbox"
+              checked={enrichTracks}
+              onChange={(e) => void setEnrichTracks(e.target.checked)}
             />
           </SettingRow>
           <SettingRow

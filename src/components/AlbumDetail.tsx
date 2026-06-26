@@ -16,6 +16,7 @@ import { useTracks } from "../hooks/useTracks";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { useEnrichAlbumTracks } from "../hooks/useEnrichAlbumTracks";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
@@ -76,6 +77,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const queryClient = useQueryClient();
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
+  useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
@@ -488,7 +490,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
               const chipTitle = rawSources.length > 0
                 ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
-                : undefined;
+                : tag.source ?? undefined;
               const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
               return (
                 <button
@@ -506,12 +508,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               );
             };
 
-            const hasAutoGenres = genreGroups.file.length > 0 || genreGroups.lastfm.length > 0 ||
-              genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0 || genreGroups.unsourced.length > 0;
-            const showGrouped = genreGroups.multiSource;
-
             return (
-              <div className={`album-tag-column${showGrouped ? " album-tag-column--grouped" : ""}`}>
+              <div className="album-tag-column">
                 <div className="album-tag-column-header">
                   <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
                   <button
@@ -523,54 +521,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
                   </button>
                 </div>
 
-                {genreGroups.manual.length > 0 && (
-                  <div className="album-tag-source-group">
-                    {showGrouped && <span className="album-tag-source-label">Added</span>}
-                    {genreGroups.manual.map(renderGenreChip)}
-                  </div>
-                )}
-
-                {hasAutoGenres && showGrouped && (
-                  <>
-                    {genreGroups.file.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">File</span>
-                        {genreGroups.file.map(renderGenreChip)}
-                      </div>
-                    )}
-                    {genreGroups.lastfm.length > 0 && (
-                      <div className="album-tag-source-group">
-                        <span className="album-tag-source-label">Last.fm</span>
-                        {genreGroups.lastfm.map(renderGenreChip)}
-                      </div>
-                    )}
-                    {(genreGroups.musicbrainz.length > 0 || genreGroups.folksonomy.length > 0) && (
-                      <div className="album-tag-mb-row">
-                        {genreGroups.musicbrainz.length > 0 && (
-                          <div className="album-tag-source-group">
-                            <span className="album-tag-source-label">MusicBrainz</span>
-                            {genreGroups.musicbrainz.map(renderGenreChip)}
-                          </div>
-                        )}
-                        {genreGroups.folksonomy.length > 0 && (
-                          <div className="album-tag-source-group">
-                            <span className="album-tag-source-label">Folksonomy</span>
-                            {genreGroups.folksonomy.map(renderGenreChip)}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {genreGroups.unsourced.length > 0 && (
-                      <div className="album-tag-source-group">
-                        {genreGroups.unsourced.map(renderGenreChip)}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {hasAutoGenres && !showGrouped && (
-                  displayGenres.filter((g) => g.source !== "manual").map(renderGenreChip)
-                )}
+                {displayGenres.map(renderGenreChip)}
 
                 {unmatchedCount > 0 && !showGenreEditor && (
                   <button

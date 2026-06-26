@@ -101,6 +101,21 @@ export async function fetchAlbumTags(artist: string, album: string): Promise<Las
   return { genres: tags, moods: [] };
 }
 
+export async function fetchTrackTags(artist: string, track: string): Promise<LastfmTagResult> {
+  const apiKey = await getApiKey();
+  if (!apiKey) throw new Error("Last.fm API key not configured");
+  const minCount = await getMinTagCount();
+  const tags = await fetchTags("track.getTopTags", { artist, track }, apiKey, minCount);
+  const genres: string[] = [];
+  const moods: string[] = [];
+  for (const t of tags) {
+    const kind = await classifyTag(t);
+    if (kind === "genre") genres.push(t);
+    else if (kind === "mood") moods.push(t);
+  }
+  return { genres, moods };
+}
+
 export async function fetchArtistGenreTags(artist: string): Promise<string[]> {
   const apiKey = await getApiKey();
   if (!apiKey) return [];
