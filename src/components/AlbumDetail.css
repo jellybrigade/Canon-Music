@@ -166,13 +166,13 @@
   font-size: 0.8125rem;
   padding: 0.4em 1.1em;
   box-shadow: none;
-  background-color: var(--accent);
+  background-color: color-mix(in oklab, var(--accent) 70%, black);
   color: #fff;
   border-color: transparent;
 }
 
 .play-album-btn:hover:not(:disabled) {
-  background-color: var(--accent-hover);
+  background-color: color-mix(in oklab, var(--accent) 60%, black);
   border-color: transparent;
 }
 
