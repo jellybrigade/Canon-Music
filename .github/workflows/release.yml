@@ -126,56 +126,64 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
           REPO: ${{ github.repository }}
         run: |
-          gh release download "$TAG" -D /tmp/assets --repo "$REPO"
-          git log -1 --format=%B | tail -n +3 > /tmp/notes.txt
+          gh release download "$TAG" -D /tmp/assets --pattern "*.sig" --repo "$REPO"
+
+          NOTES=$(gh release view "$TAG" --json body --jq '.body' --repo "$REPO")
+          PUB_DATE=$(gh release view "$TAG" --json publishedAt --jq '.publishedAt' --repo "$REPO")
 
           cat > /tmp/build_json.py << 'PYEOF'
-          import json, os, glob, subprocess
+          import json, os, glob, sys
 
           assets = '/tmp/assets'
           base_url = "https://github.com/{}/releases/download/{}".format(os.environ['REPO'], os.environ['TAG'])
           version = os.environ['VERSION']
-          notes = open('/tmp/notes.txt').read().strip()
+          notes = os.environ['NOTES']
+          pub_date = os.environ['PUB_DATE']
 
-          def first_sig(pattern):
-              files = sorted(glob.glob('{}/{}'.format(assets, pattern)))
-              return open(files[0]).read().strip() if files else None
+          def entry(sig_path):
+              sig = open(sig_path).read().strip()
+              binary = sig_path[:-4]  # strip .sig — URL derived from same file, never mismatched
+              url = "{}/{}".format(base_url, os.path.basename(binary))
+              return sig, url
 
-          def first_url(pattern):
+          def first(pattern):
               files = sorted(glob.glob('{}/{}'.format(assets, pattern)))
-              return "{}/{}".format(base_url, os.path.basename(files[0])) if files else None
+              return files[0] if files else None
 
           platforms = {}
 
-          for pat, keys in [
-              ('*.AppImage',     ['linux-x86_64', 'linux-x86_64-appimage']),
-              ('*.deb',          ['linux-x86_64-deb']),
-              ('*.rpm',          ['linux-x86_64-rpm']),
+          for sig_pat, keys in [
+              ('*.AppImage.sig',   ['linux-x86_64', 'linux-x86_64-appimage']),
+              ('*.deb.sig',        ['linux-x86_64-deb']),
+              ('*.rpm.sig',        ['linux-x86_64-rpm']),
           ]:
-              s = first_sig(pat + '.sig')
-              u = first_url(pat)
-              if s and u:
+              f = first(sig_pat)
+              if f:
+                  s, u = entry(f)
                   for k in keys:
                       platforms[k] = {'signature': s, 'url': u}
 
-          s = first_sig('*.app.tar.gz.sig')
-          u = first_url('*.app.tar.gz')
-          if s and u:
+          f = first('*.app.tar.gz.sig')
+          if f:
+              s, u = entry(f)
               for k in ['darwin-aarch64', 'darwin-x86_64', 'darwin-aarch64-app', 'darwin-x86_64-app']:
                   platforms[k] = {'signature': s, 'url': u}
 
-          s = first_sig('*_en-US.msi.sig')
-          u = first_url('*_en-US.msi')
-          if s and u:
+          f = first('*_en-US.msi.sig')
+          if f:
+              s, u = entry(f)
               platforms['windows-x86_64'] = {'signature': s, 'url': u}
               platforms['windows-x86_64-msi'] = {'signature': s, 'url': u}
 
-          s = first_sig('*-setup.exe.sig')
-          u = first_url('*-setup.exe')
-          if s and u:
+          f = first('*-setup.exe.sig')
+          if f:
+              s, u = entry(f)
               platforms['windows-x86_64-nsis'] = {'signature': s, 'url': u}
 
-          pub_date = subprocess.check_output(['date', '-u', '+%Y-%m-%dT%H:%M:%S.000Z']).decode().strip()
+          if not platforms:
+              print('ERROR: no platform entries built — aborting upload', flush=True)
+              sys.exit(1)
+
           result = {'version': version, 'notes': notes, 'pub_date': pub_date, 'platforms': platforms}
 
           with open('/tmp/latest.json', 'w') as f:
@@ -184,5 +192,5 @@ jobs:
           print('Platforms in latest.json:', list(platforms.keys()))
           PYEOF
 
-          python3 /tmp/build_json.py
+          NOTES="$NOTES" PUB_DATE="$PUB_DATE" python3 /tmp/build_json.py
           gh release upload "$TAG" /tmp/latest.json --clobber --repo "$REPO"
