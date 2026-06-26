@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal } from "lucide-react";
+import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../types/library";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
@@ -38,11 +38,12 @@ interface Props {
   onClose: () => void;
   onDelete: () => Promise<void>;
   onRename: (playlist: PlaylistRow, name: string, comment: string | null, swc: ServerWithCredential) => Promise<void>;
+  onSetCustomCover?: (playlistId: string, dataUri: string | null) => Promise<void>;
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
 }
 
-export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onSelectAlbum, onSelectArtist }: Props) {
+export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onSetCustomCover, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -88,6 +89,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const [saving, setSaving] = useState(false);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const descInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
   useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
@@ -232,9 +234,22 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
 
   const totalSeconds = tracks?.reduce((sum, t) => sum + (t.duration ?? 0), 0) ?? 0;
 
-  const coverArtUrl = playlist.cover_art_url
-    ? getCoverArtUrl(server.url, server.username, credential, playlist.cover_art_url, 300)
-    : null;
+  function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !onSetCustomCover) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = reader.result as string;
+      void onSetCustomCover(playlist.id, dataUri);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  }
+
+  const displayCoverUrl = playlist.custom_cover_data
+    ?? (playlist.cover_art_url
+      ? getCoverArtUrl(server.url, server.username, credential, playlist.cover_art_url, 300)
+      : null);
 
   return (
     <div className="album-detail">
@@ -243,10 +258,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           ← Playlists
         </button>
         <div className="album-detail-hero">
-          <div className="album-detail-art">
-            {coverArtUrl ? (
+          <div className="album-detail-art playlist-art-wrapper">
+            {displayCoverUrl ? (
               <img
-                src={coverArtUrl}
+                src={displayCoverUrl}
                 alt={playlist.name}
                 className="album-detail-art-img"
                 draggable={false}
@@ -256,6 +271,33 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                 <Music size={40} />
               </div>
             )}
+            {onSetCustomCover && (
+              <div className="playlist-cover-overlay">
+                <button
+                  className="playlist-cover-pick-btn"
+                  onClick={() => coverInputRef.current?.click()}
+                  title="Set custom cover image"
+                >
+                  <Camera size={14} />
+                </button>
+                {playlist.custom_cover_data && (
+                  <button
+                    className="playlist-cover-remove-btn"
+                    onClick={() => void onSetCustomCover(playlist.id, null)}
+                    title="Remove custom cover"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+            )}
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={handleCoverPick}
+            />
           </div>
           <div className="album-detail-meta">
             <div className="playlist-name-row">

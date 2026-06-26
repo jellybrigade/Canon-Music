@@ -80,9 +80,10 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
       )}
       <div className="playlist-card-grid">
         {playlists.map((pl) => {
-          const artUrl = pl.cover_art_url
-            ? getCoverArtUrl(server.url, server.username, credential, pl.cover_art_url, 300)
-            : null;
+          const artUrl = pl.custom_cover_data
+            ?? (pl.cover_art_url
+              ? getCoverArtUrl(server.url, server.username, credential, pl.cover_art_url, 300)
+              : null);
           return (
             <button
               key={pl.id}

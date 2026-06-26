@@ -511,4 +511,8 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
     `,
   },
+  {
+    version: 36,
+    sql: `ALTER TABLE playlists ADD COLUMN custom_cover_data TEXT;`,
+  },
 ];

@@ -1,8 +1,8 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import { useClickOutside } from "./hooks/useClickOutside";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, Heart, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
+import { Music, Users, Tag, Settings, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
+import { FilterSidebar } from "./components/FilterSidebar";
 const Wizard       = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 const AlbumDetail  = lazy(() => import("./components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
 const ArtistGrid   = lazy(() => import("./components/ArtistGrid").then((m) => ({ default: m.ArtistGrid })));
@@ -38,6 +38,7 @@ import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { useScrobble } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useSidebarResize } from "./hooks/useSidebarResize";
@@ -125,6 +126,7 @@ export default function App() {
   const { syncStatus, syncError, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
 
   useGlobalShortcuts(serverWithCred);
+  useQueueSync(serverWithCred);
   useScrobbleFlush(serverWithCred);
   useScrobble(currentTrack, elapsed, serverWithCred);
 
@@ -138,16 +140,14 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const unidentifiedCount = failedLookupIds?.length ?? 0;
   const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
-  const [genreDropdownOpen, setGenreDropdownOpen] = useState(false);
-  const genreDropdownRef = useRef<HTMLDivElement>(null);
-  useClickOutside(genreDropdownRef, () => setGenreDropdownOpen(false), genreDropdownOpen);
+  const [filterSidebarOpen, setFilterSidebarOpen] = useBoolSetting("filter_sidebar_open", true);
 
   const [searchRaw, setSearchRaw] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
@@ -609,36 +609,6 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <div className="year-range-filter">
-                <input
-                  className="year-range-input"
-                  type="number"
-                  placeholder="From"
-                  value={yearFromInput}
-                  onChange={(e) => setYearFromInput(e.target.value)}
-                  min={1900}
-                  max={2100}
-                />
-                <span className="year-range-sep">–</span>
-                <input
-                  className="year-range-input"
-                  type="number"
-                  placeholder="To"
-                  value={yearToInput}
-                  onChange={(e) => setYearToInput(e.target.value)}
-                  min={1900}
-                  max={2100}
-                />
-                {(yearFromInput !== "" || yearToInput !== "") && (
-                  <button
-                    className="year-range-clear"
-                    onClick={() => { setYearFromInput(""); setYearToInput(""); }}
-                    title="Clear year filter"
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
               <button
                 className="search-trigger-btn"
                 onClick={() => { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); }}
@@ -646,58 +616,6 @@ export default function App() {
               >
                 <Search size={15} />
                 Search…
-              </button>
-              {genres && genres.length > 0 && (
-                <div className="genre-filter" ref={genreDropdownRef}>
-                  <button
-                    className={`genre-filter-btn${canonicalIdFilters.length > 0 ? " genre-filter-btn--active" : ""}`}
-                    onClick={() => setGenreDropdownOpen((v) => !v)}
-                    title="Filter by genre"
-                  >
-                    <Tag size={14} />
-                    {canonicalIdFilters.length > 0 ? `Genre (${canonicalIdFilters.length})` : "Genre"}
-                  </button>
-                  {genreDropdownOpen && (
-                    <div className="genre-dropdown">
-                      {canonicalIdFilters.length > 0 && (
-                        <button
-                          className="genre-dropdown-clear"
-                          onClick={() => setCanonicalIdFilters([])}
-                        >
-                          Clear
-                        </button>
-                      )}
-                      {genres.map((g) => (
-                        <button
-                          key={g.canonical_id}
-                          className={`genre-dropdown-item${canonicalIdFilters.includes(g.canonical_id) ? " genre-dropdown-item--active" : ""}`}
-                          onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
-                        >
-                          <span className="genre-dropdown-name">{g.name}</span>
-                          <span className="genre-dropdown-count">{g.album_count}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {canonicalIdFilters.length > 0 && (
-                <button
-                  className="genre-filter-btn genre-filter-btn--active"
-                  onClick={() => setCanonicalIdFilters([])}
-                  title="Clear tag filter"
-                >
-                  <X size={14} />
-                  Tag filter
-                </button>
-              )}
-              <button
-                className={`loved-filter-btn${lovedOnly ? " loved-filter-btn--active" : ""}`}
-                onClick={toggleLovedOnly}
-                title={lovedOnly ? "Show all albums" : "Show loved albums"}
-              >
-                <Heart size={14} fill={lovedOnly ? "currentColor" : "none"} strokeWidth={2} />
-                Loved
               </button>
               {server && (
                 <button
@@ -717,7 +635,25 @@ export default function App() {
                 Pages
               </button>
             </header>
-            {renderLibraryContent()}
+            <div className="library-body">
+              <FilterSidebar
+                genres={genres ?? []}
+                canonicalIdFilters={canonicalIdFilters}
+                toggleCanonicalIdFilter={toggleCanonicalIdFilter}
+                clearGenreFilters={() => setCanonicalIdFilters([])}
+                yearFromInput={yearFromInput}
+                yearToInput={yearToInput}
+                setYearFromInput={setYearFromInput}
+                setYearToInput={setYearToInput}
+                lovedOnly={lovedOnly}
+                toggleLovedOnly={toggleLovedOnly}
+                isOpen={filterSidebarOpen}
+                onToggle={() => void setFilterSidebarOpen(!filterSidebarOpen)}
+              />
+              <div className="library-content">
+                {renderLibraryContent()}
+              </div>
+            </div>
           </main>
         );
 
@@ -784,6 +720,7 @@ export default function App() {
                   setSelectedPlaylist(null);
                 }}
                 onRename={renamePlaylist}
+                onSetCustomCover={setCustomCover}
                 onSelectAlbum={async (albumId) => {
                   const db = await getDb();
                   const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);

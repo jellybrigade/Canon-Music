@@ -214,7 +214,11 @@
 }
 
 .update-prompt-btn--primary {
-  background: var(--accent, var(--surface-3));
+  background: color-mix(in oklab, var(--accent, #396cd8) 70%, black);
   border-color: transparent;
-  color: var(--text-on-accent, var(--text-primary));
+  color: #fff;
+}
+
+.update-prompt-btn--primary:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--accent, #396cd8) 60%, black);
 }

@@ -164,6 +164,59 @@
   color: var(--text-tertiary);
 }
 
+/* ── Playlist custom cover overlay ── */
+.playlist-art-wrapper {
+  position: relative;
+}
+
+.playlist-cover-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  border-radius: inherit;
+}
+
+.playlist-art-wrapper:hover .playlist-cover-overlay {
+  opacity: 1;
+}
+
+.playlist-cover-pick-btn,
+.playlist-cover-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  color: #fff;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background 0.1s;
+}
+
+.playlist-cover-pick-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.playlist-cover-remove-btn {
+  width: 24px;
+  height: 24px;
+}
+
+.playlist-cover-pick-btn:hover,
+.playlist-cover-remove-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
 /* ── Inline edit ── */
 .playlist-name-row {
   display: flex;
