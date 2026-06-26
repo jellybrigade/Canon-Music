@@ -126,6 +126,12 @@ function naviToAlbumRow(album: NavidromeAlbum, serverId: string): AlbumRow {
 }
 
 
+const FEAT_RE = /\s*\(?(?:feat\.?|ft\.?|featuring)\s+.*/i;
+
+function stripFeaturedArtists(artist: string): string {
+  return artist.replace(FEAT_RE, "").trim();
+}
+
 function buildSpotlight(
   currentArtist: string | null,
   currentAlbumId: string | null,
@@ -138,21 +144,22 @@ function buildSpotlight(
   unplayedWithArt: AlbumRow[],
 ): SpotlightPick | null {
   if (currentArtist) {
+    const displayArtist = stripFeaturedArtists(currentArtist);
     const fromStats =
       onRepeat.find(a => a.artist === currentArtist && a.id !== currentAlbumId) ??
       rediscover.find(a => a.artist === currentArtist && a.id !== currentAlbumId);
-    if (fromStats) return { kicker: `More from ${currentArtist}`, album: fromStats };
+    if (fromStats) return { kicker: `More from ${displayArtist}`, album: fromStats };
 
     const fromFrequent = frequentRaw?.find(a => {
       const id = `${serverId}:${a.id}`;
       return a.artist === currentArtist && id !== currentAlbumId && !!a.coverArt;
     });
-    if (fromFrequent) return { kicker: `More from ${currentArtist}`, album: naviToAlbumRow(fromFrequent, serverId) };
+    if (fromFrequent) return { kicker: `More from ${displayArtist}`, album: naviToAlbumRow(fromFrequent, serverId) };
 
     const fromAlbums = allAlbums?.find(
       a => a.artist === currentArtist && a.id !== currentAlbumId && a.artwork_url
     );
-    if (fromAlbums) return { kicker: `More from ${currentArtist}`, album: fromAlbums };
+    if (fromAlbums) return { kicker: `More from ${displayArtist}`, album: fromAlbums };
   }
 
   if (recentRaw?.[0]) return { kicker: "Jump back in", album: naviToAlbumRow(recentRaw[0], serverId) };
@@ -869,8 +876,11 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       year: recommendedAlbum.year,
       artwork_url: recommendedAlbum.artwork_url,
     };
-    const kicker = currentTrack.artist
-      ? `Because you're listening to ${currentTrack.artist}`
+    const primaryArtist = currentTrack.artist
+      ? stripFeaturedArtists(currentTrack.artist)
+      : null;
+    const kicker = primaryArtist
+      ? `Because you're listening to ${primaryArtist}`
       : "You might also like";
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
