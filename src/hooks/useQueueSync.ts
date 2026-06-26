@@ -1,14 +1,13 @@
 import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
-import { savePlayQueue, getPlayQueue } from "../lib/navidrome";
+import { savePlayQueue, getPlayQueue, getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { getDb } from "../db";
-import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
+import { stripServerPrefix } from "../utils/ids";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const queue = usePlayerStore((s) => s.queue);
-  const elapsed = usePlayerStore((s) => s.elapsed);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
@@ -17,7 +16,8 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
   // Restore queue from server on first connect (only if nothing is already playing)
   useEffect(() => {
-    if (!serverWithCred || restoredRef.current || isPlaying || currentTrack) return;
+    restoredRef.current = false;
+    if (!serverWithCred || isPlaying || currentTrack) return;
     restoredRef.current = true;
 
     const { server, credential } = serverWithCred;
@@ -50,10 +50,8 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
       if (orderedTracks.length === 0) return;
 
-      const streamUrlFn = (t: { id: string }) => {
-        const navId = t.id.slice(server.id.length + 1);
-        return getStreamUrl(server.url, server.username, credential, navId);
-      };
+      const streamUrlFn = (t: { id: string }) =>
+        getStreamUrl(server.url, server.username, credential, stripServerPrefix(t.id, server.id));
 
       const trackObjs = orderedTracks.map((r) => ({
         id: r.id,
@@ -99,19 +97,20 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         ? currentTrack.id.slice(server.id.length + 1)
         : null;
 
+      const { elapsed: el } = usePlayerStore.getState();
       void savePlayQueue(
         server.url,
         server.username,
         credential,
         nativeIds,
         currentNativeId,
-        Math.round((elapsed ?? 0) * 1000),
+        Math.round((el ?? 0) * 1000),
         server.alt_url ?? undefined
       );
     }, 10_000);
 
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [serverWithCred, currentTrack?.id, queue.length, elapsed]);
+  }, [serverWithCred, currentTrack?.id, queue.length]);
 
   // Save immediately on visibility change (tab loses focus) or page unload
   useEffect(() => {
