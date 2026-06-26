@@ -187,6 +187,28 @@
   flex-shrink: 0;
 }
 
+.filter-sidebar-genre-search {
+  width: 100%;
+  font-size: 0.7rem;
+  padding: 0.22em 0.45em;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.filter-sidebar-genre-search:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  outline: none;
+  box-shadow: none;
+}
+
+.filter-sidebar-genre-search::placeholder {
+  color: var(--text-tertiary);
+}
+
 .filter-sidebar-genre-list {
   display: flex;
   flex-direction: column;

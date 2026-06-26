@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ChevronLeft, ChevronRight, Heart, X } from "lucide-react";
 import type { GenreRow } from "../hooks/useGenres";
 import "./FilterSidebar.css";
@@ -41,6 +42,7 @@ export function FilterSidebar({
   onToggle,
 }: Props) {
   const filtersActive = hasActiveFilters(canonicalIdFilters, yearFromInput, yearToInput, lovedOnly);
+  const [genreSearch, setGenreSearch] = useState("");
 
   function clearAll() {
     clearGenreFilters();
@@ -123,17 +125,26 @@ export function FilterSidebar({
                   </button>
                 )}
               </div>
+              <input
+                className="filter-sidebar-genre-search"
+                type="text"
+                placeholder="Search…"
+                value={genreSearch}
+                onChange={(e) => setGenreSearch(e.target.value)}
+              />
               <div className="filter-sidebar-genre-list">
-                {genres.map((g) => (
-                  <button
-                    key={g.canonical_id}
-                    className={`filter-sidebar-genre-item${canonicalIdFilters.includes(g.canonical_id) ? " filter-sidebar-genre-item--active" : ""}`}
-                    onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
-                  >
-                    <span className="filter-sidebar-genre-name">{g.name}</span>
-                    <span className="filter-sidebar-genre-count">{g.album_count}</span>
-                  </button>
-                ))}
+                {genres
+                  .filter((g) => g.name.toLowerCase().includes(genreSearch.toLowerCase()))
+                  .map((g) => (
+                    <button
+                      key={g.canonical_id}
+                      className={`filter-sidebar-genre-item${canonicalIdFilters.includes(g.canonical_id) ? " filter-sidebar-genre-item--active" : ""}`}
+                      onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
+                    >
+                      <span className="filter-sidebar-genre-name">{g.name}</span>
+                      <span className="filter-sidebar-genre-count">{g.album_count}</span>
+                    </button>
+                  ))}
               </div>
             </div>
           )}
