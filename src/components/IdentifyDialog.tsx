@@ -27,6 +27,13 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
   const [lfmAlbum, setLfmAlbum] = useState("");
   const [fetchEnabled, setFetchEnabled] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  // Track original saved values and whether lfm fields were used as search queries.
+  // If user edits lfm fields, clicks "Look up", then confirms without further edits,
+  // those values were search queries — not intended overrides — so we restore originals.
+  const [initialLfmArtist, setInitialLfmArtist] = useState("");
+  const [initialLfmAlbum, setInitialLfmAlbum] = useState("");
+  const [lfmArtistUsedForSearch, setLfmArtistUsedForSearch] = useState(false);
+  const [lfmAlbumUsedForSearch, setLfmAlbumUsedForSearch] = useState(false);
 
   // Populate fields from saved identity when loaded
   useEffect(() => {
@@ -34,8 +41,12 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
     setMbRgId(savedIdentity.mb_release_group_id ?? "");
     setMbReleaseId(savedIdentity.mb_release_id ?? "");
     setMbArtistId(savedIdentity.mb_artist_id ?? "");
-    setLfmArtist(savedIdentity.lastfm_artist_name ?? "");
-    setLfmAlbum(savedIdentity.lastfm_album_name ?? "");
+    const a = savedIdentity.lastfm_artist_name ?? "";
+    const b = savedIdentity.lastfm_album_name ?? "";
+    setLfmArtist(a);
+    setLfmAlbum(b);
+    setInitialLfmArtist(a);
+    setInitialLfmAlbum(b);
   }, [savedIdentity]);
 
   const effectiveMbRgId = selectedCandidate ?? (mbRgId.trim() || null);
@@ -52,6 +63,8 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
 
   function handleFetch() {
     setSelectedCandidate(null);
+    setLfmArtistUsedForSearch(true);
+    setLfmAlbumUsedForSearch(true);
     setFetchEnabled(true);
   }
 
@@ -65,13 +78,18 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
     const rgDetail = lookupResult?.mbDetail;
     const releaseDetail = lookupResult?.mbRelease;
 
+    // If lfm fields were used as search queries (not changed after "Look up"), restore
+    // the original saved values rather than persisting the search string as an override.
+    const lastfmArtist = lfmArtistUsedForSearch ? (initialLfmArtist || null) : (lfmArtist.trim() || null);
+    const lastfmAlbum = lfmAlbumUsedForSearch ? (initialLfmAlbum || null) : (lfmAlbum.trim() || null);
+
     await saveIdentity.mutateAsync({
       albumId,
       mbReleaseGroupId: effectiveMbRgId ?? rgDetail?.id ?? null,
       mbReleaseId: mbReleaseId.trim() || releaseDetail?.id || null,
       mbArtistId: mbArtistId.trim() || rgDetail?.artistMbid || null,
-      lastfmArtistName: lfmArtist.trim() || null,
-      lastfmAlbumName: lfmAlbum.trim() || null,
+      lastfmArtistName: lastfmArtist,
+      lastfmAlbumName: lastfmAlbum,
       lastfmMatchConfirmed: true,
       combinedGenres: lookupResult?.combinedGenres ?? [],
       combinedTags: lookupResult?.combinedTags ?? [],
@@ -109,7 +127,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                 type="text"
                 placeholder={artist}
                 value={lfmArtist}
-                onChange={(e) => { setLfmArtist(e.target.value); setFetchEnabled(false); }}
+                onChange={(e) => { setLfmArtist(e.target.value); setLfmArtistUsedForSearch(false); setFetchEnabled(false); }}
               />
             </label>
             <label className="identify-field">
@@ -118,7 +136,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                 type="text"
                 placeholder={album}
                 value={lfmAlbum}
-                onChange={(e) => { setLfmAlbum(e.target.value); setFetchEnabled(false); }}
+                onChange={(e) => { setLfmAlbum(e.target.value); setLfmAlbumUsedForSearch(false); setFetchEnabled(false); }}
               />
             </label>
           </section>
@@ -286,11 +304,15 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
   const [lfmArtist, setLfmArtist] = useState("");
   const [fetchEnabled, setFetchEnabled] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const [initialLfmArtist, setInitialLfmArtist] = useState("");
+  const [lfmArtistUsedForSearch, setLfmArtistUsedForSearch] = useState(false);
 
   useEffect(() => {
     if (!savedIdentity) return;
     setMbArtistId(savedIdentity.mb_artist_id ?? "");
-    setLfmArtist(savedIdentity.lastfm_artist_name ?? "");
+    const a = savedIdentity.lastfm_artist_name ?? "";
+    setLfmArtist(a);
+    setInitialLfmArtist(a);
   }, [savedIdentity]);
 
   const effectiveMbArtistId = selectedCandidate ?? (mbArtistId.trim() || null);
@@ -303,6 +325,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
   function handleFetch() {
     setSelectedCandidate(null);
+    setLfmArtistUsedForSearch(true);
     setFetchEnabled(true);
   }
 
@@ -312,10 +335,11 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
   }
 
   async function handleConfirm() {
+    const lastfmArtist = lfmArtistUsedForSearch ? (initialLfmArtist || null) : (lfmArtist.trim() || lookupResult?.mbDetail?.name || null);
     await saveIdentity.mutateAsync({
       artistName,
       mbArtistId: effectiveMbArtistId ?? lookupResult?.mbDetail?.id ?? null,
-      lastfmArtistName: lfmArtist.trim() || lookupResult?.mbDetail?.name || null,
+      lastfmArtistName: lastfmArtist,
     });
     onClose();
   }
@@ -341,7 +365,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                 type="text"
                 placeholder={artistName}
                 value={lfmArtist}
-                onChange={(e) => { setLfmArtist(e.target.value); setFetchEnabled(false); }}
+                onChange={(e) => { setLfmArtist(e.target.value); setLfmArtistUsedForSearch(false); setFetchEnabled(false); }}
               />
             </label>
           </section>

@@ -30,6 +30,7 @@ import { stripServerPrefix } from "../utils/ids";
 import { SearchResults } from "./SearchResults";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import "../styles/home.css";
 import "../styles/genres.css";
 
@@ -727,6 +728,7 @@ const CARD_WIDTH = 168 + 14;
 function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
+  const albumDisplayName = useAlbumDisplayName();
 
   if (!isLoading && (!items || items.length === 0)) return null;
 
@@ -788,7 +790,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                         <Play size={13} fill="currentColor" />
                       </button>
                     </div>
-                    <p className="carousel-card__name">{item.name}</p>
+                    <p className="carousel-card__name">{albumDisplayName(item.name, item.id)}</p>
                     {item.artist && <p className="carousel-card__artist">{item.artist}</p>}
                   </div>
                 );
@@ -827,6 +829,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     void setRawCategoryConfig(JSON.stringify(config));
   }, [setRawCategoryConfig]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
+  const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
   const openCardContextMenu = useCallback((e: React.MouseEvent, album: AlbumRow) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, album });
@@ -1075,7 +1078,18 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <StartRadioSubmenu
             onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
           />
+          <button onClick={() => { setIdentifyAlbum(contextMenu.album); setContextMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
         </ContextMenu>
+      )}
+      {identifyAlbum && (
+        <AlbumIdentifyDialog
+          albumId={identifyAlbum.id}
+          artist={identifyAlbum.artist ?? ""}
+          album={identifyAlbum.name}
+          onClose={() => setIdentifyAlbum(null)}
+        />
       )}
     </div>
   );
