@@ -21,8 +21,8 @@ export async function syncAlbumTracks(
     const trackDbId = `${server.id}:${track.id}`;
     await db.execute(
       `INSERT OR REPLACE INTO tracks
-         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         trackDbId,
         server.id,
@@ -40,6 +40,10 @@ export async function syncAlbumTracks(
         track.bitRate ?? null,
         track.suffix ?? null,
         track.size ?? null,
+        track.replayGain?.trackGain ?? null,
+        track.replayGain?.trackPeak ?? null,
+        track.replayGain?.albumGain ?? null,
+        track.replayGain?.albumPeak ?? null,
       ]
     );
     if (track.genre) {
@@ -139,8 +143,8 @@ export async function syncLibrary(
       const trackDbId = `${server.id}:${track.id}`;
       await db.execute(
         `INSERT OR REPLACE INTO tracks
-           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           trackDbId,
           server.id,
@@ -158,6 +162,10 @@ export async function syncLibrary(
           track.bitRate ?? null,
           track.suffix ?? null,
           track.size ?? null,
+          track.replayGain?.trackGain ?? null,
+          track.replayGain?.trackPeak ?? null,
+          track.replayGain?.albumGain ?? null,
+          track.replayGain?.albumPeak ?? null,
         ]
       );
       if (track.genre) {

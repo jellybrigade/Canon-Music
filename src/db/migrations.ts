@@ -515,4 +515,13 @@ export const migrations: Migration[] = [
     version: 36,
     sql: `ALTER TABLE playlists ADD COLUMN custom_cover_data TEXT;`,
   },
+  {
+    version: 37,
+    sql: `
+      ALTER TABLE tracks ADD COLUMN replay_gain_track_gain REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_track_peak REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_album_gain REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_album_peak REAL;
+    `,
+  },
 ];

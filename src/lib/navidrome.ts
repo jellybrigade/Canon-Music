@@ -183,6 +183,12 @@ export interface NavidromeTrack {
   bitRate?: number;
   suffix?: string;
   size?: number;
+  replayGain?: {
+    trackGain?: number;
+    trackPeak?: number;
+    albumGain?: number;
+    albumPeak?: number;
+  };
 }
 
 export function getStreamUrl(
