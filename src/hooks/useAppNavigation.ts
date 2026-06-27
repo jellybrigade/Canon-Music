@@ -3,7 +3,7 @@ import { usePlayerStore } from "../store/player";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import type { PlaylistRow } from "./usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tags" | "unidentified" | "settings";
+export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings";
 
 type NavEntry = {
   view: AppView;

@@ -30,6 +30,7 @@ export const QK = {
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
   tracks: (albumId: string | null) => ["tracks", albumId] as const,
+  allTracks: () => ["all-tracks"] as const,
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,
   trackTagsAll: () => ["track_tags"] as const,
   trackTagsOffTree: () => ["track_tags", "off_tree_albums"] as const,

@@ -17,6 +17,7 @@ const UnidentifiedView   = lazy(() => import("./components/UnidentifiedView").th
 const HomeView       = lazy(() => import("./components/HomeView").then((m) => ({ default: m.HomeView })));
 const GenreView      = lazy(() => import("./components/GenreView").then((m) => ({ default: m.GenreView })));
 const YearsView      = lazy(() => import("./components/YearsView").then((m) => ({ default: m.YearsView })));
+const TrackTableView = lazy(() => import("./components/TrackTableView").then((m) => ({ default: m.TrackTableView })));
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { CanonLockup } from "./components/CanonIcon";
@@ -407,6 +408,7 @@ export default function App() {
     { id: "genres", label: "Genres", icon: <Layers size={24} /> },
     { id: "years", label: "Years", icon: <Calendar size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
+    { id: "tracks", label: "Tracks", icon: <LayoutList size={24} /> },
     { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
     { id: "unidentified", label: "Unidentified", icon: <CircleHelp size={24} />, badge: unidentifiedCount || undefined },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
@@ -779,6 +781,23 @@ export default function App() {
               </>
             )}
           </main>
+        );
+
+      case "tracks":
+        return (
+          <Suspense fallback={null}>
+            {serverWithCred ? (
+              <TrackTableView
+                serverWithCredential={serverWithCred}
+                onSelectAlbum={async (albumId) => {
+                  const db = await getDb();
+                  const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
+                  if (rows[0]) { navigateTo("library"); openAlbum(rows[0]); }
+                }}
+                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+              />
+            ) : <main className="content-main" />}
+          </Suspense>
         );
 
       case "tags":
