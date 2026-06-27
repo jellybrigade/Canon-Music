@@ -73,10 +73,6 @@ export function useAppNavigation() {
     navigate(-1);
   }
 
-  function peekBack(): AppView | null {
-    return null;
-  }
-
   return {
     view,
     navigateTo,
@@ -84,6 +80,5 @@ export function useAppNavigation() {
     openArtist,
     openPlaylist,
     goBack,
-    peekBack,
   };
 }

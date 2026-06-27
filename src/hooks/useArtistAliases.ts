@@ -57,11 +57,12 @@ export function useSetArtistAlias() {
         [aliasName, canonicalName]
       );
     },
-    onSuccess: (_data, { aliasName }) => {
+    onSuccess: (_data, { aliasName, canonicalName }) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
       void qc.invalidateQueries({ queryKey: QK.artists() });
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
       void qc.invalidateQueries({ queryKey: QK.artistAlbums(aliasName) });
+      void qc.invalidateQueries({ queryKey: QK.artistAlbums(canonicalName) });
     },
   });
 }
@@ -69,14 +70,24 @@ export function useSetArtistAlias() {
 export function useRemoveArtistAlias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (aliasName: string) => {
+    mutationFn: async (aliasName: string): Promise<string | null> => {
       const db = await getDb();
+      const rows = await db.select<{ canonical_name: string }[]>(
+        `SELECT canonical_name FROM artist_aliases WHERE alias_name = ?`,
+        [aliasName]
+      );
+      const canonicalName = rows[0]?.canonical_name ?? null;
       await db.execute(`DELETE FROM artist_aliases WHERE alias_name = ?`, [aliasName]);
+      return canonicalName;
     },
-    onSuccess: (_data, aliasName) => {
+    onSuccess: (canonicalName, aliasName) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
       void qc.invalidateQueries({ queryKey: QK.artists() });
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
+      if (canonicalName) {
+        void qc.invalidateQueries({ queryKey: QK.artistAlbums(canonicalName) });
+        void qc.invalidateQueries({ queryKey: [...QK.artistAliases(), "of", canonicalName] });
+      }
     },
   });
 }

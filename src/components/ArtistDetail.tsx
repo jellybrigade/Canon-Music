@@ -276,7 +276,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
 
-  const { data: canonicalOf } = useArtistCanonicalOf(artist.name);
+  const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
   const removeAlias = useRemoveArtistAlias();
 
@@ -467,7 +467,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                 Radio
               </button>
             )}
-            {!canonicalOf && (
+            {!canonicalOfPending && !canonicalOf && (
               <button
                 className="artist-identify-btn"
                 onClick={() => setShowMerge(true)}

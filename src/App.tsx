@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
-import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
 import { FilterSidebar } from "./components/FilterSidebar";
@@ -82,7 +82,21 @@ function AlbumDetailRoute({
   queueClass: string;
 }) {
   const { state } = useLocation();
-  const album = (state as { album?: AlbumRow } | null)?.album ?? null;
+  const { albumId } = useParams<{ albumId: string }>();
+  const stateAlbum = (state as { album?: AlbumRow } | null)?.album ?? null;
+  const { data: fetchedAlbum } = useQuery<AlbumRow | null>({
+    queryKey: ["album-by-id", albumId],
+    enabled: !stateAlbum && !!albumId,
+    queryFn: async () => {
+      const db = await getDb();
+      const rows = await db.select<AlbumRow[]>(
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type FROM albums WHERE id = ?`,
+        [decodeURIComponent(albumId!)]
+      );
+      return rows[0] ?? null;
+    },
+  });
+  const album = stateAlbum ?? fetchedAlbum ?? null;
   if (!album || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>
@@ -111,7 +125,27 @@ function ArtistDetailRoute({
   queueClass: string;
 }) {
   const { state } = useLocation();
-  const artist = (state as { artist?: ArtistRow } | null)?.artist ?? null;
+  const { artistName } = useParams<{ artistName: string }>();
+  const stateArtist = (state as { artist?: ArtistRow } | null)?.artist ?? null;
+  const { data: fetchedArtist } = useQuery<ArtistRow | null>({
+    queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
+    enabled: !stateArtist && !!artistName && !!serverWithCred,
+    queryFn: async () => {
+      const db = await getDb();
+      const name = decodeURIComponent(artistName!);
+      const serverId = serverWithCred!.server.id;
+      const rows = await db.select<ArtistRow[]>(
+        `SELECT a.name, a.album_count,
+           (SELECT al.artwork_url FROM albums al
+            WHERE al.artist = a.name AND al.server_id = a.server_id AND al.artwork_url IS NOT NULL
+            LIMIT 1) AS artwork_url
+         FROM artists a WHERE a.name = ? AND a.server_id = ?`,
+        [name, serverId]
+      );
+      return rows[0] ?? null;
+    },
+  });
+  const artist = stateArtist ?? fetchedArtist ?? null;
   if (!artist || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>

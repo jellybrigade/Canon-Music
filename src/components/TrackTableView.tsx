@@ -15,7 +15,7 @@ const ROW_HEIGHT = 40;
 const SECONDS_PER_MINUTE = 60;
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
-  const s = seconds % SECONDS_PER_MINUTE;
+  const s = Math.floor(seconds % SECONDS_PER_MINUTE);
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
@@ -122,6 +122,8 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
   }, [tracks, sortField, sortDir]);
 
   function handleSortHeader(field: SortField) {
+    setSelectedIds(new Set());
+    lastClickedRef.current = null;
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {

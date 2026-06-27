@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
@@ -253,7 +252,6 @@ export function PlaybackTab({ searchQuery }: Props) {
                 checked={showTrayIcon}
                 onChange={(e) => {
                   void setShowTrayIcon(e.target.checked);
-                  void invoke("tray_set_visible", { visible: e.target.checked }).catch(() => {});
                 }}
               />
               <span className="toggle-track" />
@@ -271,7 +269,6 @@ export function PlaybackTab({ searchQuery }: Props) {
                 style={{ opacity: showTrayIcon ? 1 : 0.4 }}
                 onChange={(e) => {
                   void setCloseToTray(e.target.checked);
-                  void invoke("tray_set_close_to_tray", { enabled: e.target.checked }).catch(() => {});
                 }}
               />
               <span className="toggle-track" />
