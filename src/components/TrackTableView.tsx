@@ -282,7 +282,7 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
             <SlidersHorizontal size={13} />
           </button>
           {showColPicker && (
-            <div className="tracklist-col-picker-popup tracklist-col-picker-popup--left">
+            <div className="tracklist-col-picker-popup">
               {(
                 [
                   ["artist", "Artist"],

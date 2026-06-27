@@ -166,13 +166,14 @@
   font-size: 0.8125rem;
   padding: 0.4em 1.1em;
   box-shadow: none;
-  background-color: color-mix(in oklab, var(--accent) 70%, black);
+  background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 70%, black);
   color: #fff;
   border-color: transparent;
+  transition: background-color 0.3s ease;
 }
 
 .play-album-btn:hover:not(:disabled) {
-  background-color: color-mix(in oklab, var(--accent) 60%, black);
+  background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 60%, black);
   border-color: transparent;
 }
 
@@ -842,8 +843,7 @@
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow: visible;
 }
 
 .track-sort-btn:hover {
