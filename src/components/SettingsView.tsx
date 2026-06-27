@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Server, Tag, Play, Info, Activity } from "lucide-react";
+import { Server, Tag, Play, ChevronRight, Activity } from "lucide-react";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { ServerTab } from "./settings/ServerTab";
 import { TagsTab } from "./settings/TagsTab";
@@ -9,7 +9,7 @@ import { DiagnosticsTab } from "./settings/DiagnosticsTab";
 import "./SettingsView.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
-type TabId = "server" | "tags" | "playback" | "about" | "diagnostics";
+type NavId = "server" | "metadata" | "playback" | "advanced";
 
 interface Props {
   syncStatus: SyncStatus;
@@ -21,69 +21,68 @@ interface Props {
   setHideTagBadge: (v: boolean) => Promise<void>;
 }
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: "server",      label: "Server",      icon: <Server size={15} /> },
-  { id: "tags",        label: "Tags",        icon: <Tag size={15} /> },
-  { id: "playback",    label: "Playback",    icon: <Play size={15} /> },
-  { id: "about",       label: "About",       icon: <Info size={15} /> },
-  { id: "diagnostics", label: "Diagnostics", icon: <Activity size={15} /> },
+const NAV_ITEMS: { id: NavId; label: string; icon: React.ReactNode }[] = [
+  { id: "server",   label: "Server",   icon: <Server size={15} /> },
+  { id: "metadata", label: "Metadata", icon: <Tag size={15} /> },
+  { id: "playback", label: "Playback", icon: <Play size={15} /> },
+  { id: "advanced", label: "Advanced", icon: <Activity size={15} /> },
 ];
 
 export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
-  const [activeTab, setActiveTab] = useState<TabId>("server");
+  const [activeNav, setActiveNav] = useState<NavId>("server");
   const [search, setSearch] = useState("");
-  const isSearching = search.trim().length > 0;
 
-  const tabContent = (tab: TabId, query: string) => {
-    switch (tab) {
+  const panelContent = (nav: NavId, query: string) => {
+    switch (nav) {
       case "server":
         return <ServerTab serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} />;
-      case "tags":
+      case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":
         return <PlaybackTab searchQuery={query} />;
-      case "about":
-        return <AboutTab searchQuery={query} />;
-      case "diagnostics":
-        return <DiagnosticsTab syncStatus={syncStatus} syncError={syncError} lastSyncedAt={lastSyncedAt} searchQuery={query} />;
+      case "advanced":
+        return (
+          <>
+            <AboutTab searchQuery={query} />
+            <div className="settings-advanced-divider" />
+            <DiagnosticsTab syncStatus={syncStatus} syncError={syncError} lastSyncedAt={lastSyncedAt} searchQuery={query} />
+          </>
+        );
     }
   };
 
   return (
     <div className="settings-view">
       <div className="settings-inner">
-        <div className="settings-header">
-          <h2 className="settings-title">Settings</h2>
-          <input
-            className="settings-search-input"
-            type="search"
-            placeholder="Search settings…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
+        <nav className="settings-nav">
+          <div className="settings-nav-title">Settings</div>
+          {NAV_ITEMS.map((item) => (
+            <button
+              key={item.id}
+              className={`settings-nav-item${activeNav === item.id ? " settings-nav-item--active" : ""}`}
+              onClick={() => setActiveNav(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+              {activeNav === item.id && <ChevronRight size={12} className="settings-nav-chevron" />}
+            </button>
+          ))}
+        </nav>
 
-        {!isSearching && (
-          <div className="settings-tab-bar">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                className={`settings-tab${activeTab === tab.id ? " active" : ""}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
+        <div className="settings-panel">
+          <div className="settings-panel-header">
+            <h2 className="settings-panel-title">{NAV_ITEMS.find((n) => n.id === activeNav)?.label}</h2>
+            <input
+              className="settings-search-input"
+              type="search"
+              placeholder="Search settings…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-        )}
-
-        <div className="settings-tab-content">
-          {isSearching
-            ? TABS.map((tab) => (
-                <div key={tab.id}>{tabContent(tab.id, search)}</div>
-              ))
-            : tabContent(activeTab, "")}
+          <div className="settings-panel-content">
+            {panelContent(activeNav, search)}
+          </div>
         </div>
       </div>
     </div>
