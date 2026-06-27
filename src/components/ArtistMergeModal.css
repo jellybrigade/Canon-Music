@@ -1,0 +1,206 @@
+.merge-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.merge-dialog {
+  background: var(--bg-surface, #1e1e1e);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 80px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Header ── */
+.merge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+}
+
+.merge-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.merge-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+
+.merge-close:hover {
+  color: var(--text-primary, #fff);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Body ── */
+.merge-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 24px;
+  gap: 12px;
+}
+
+.merge-description {
+  font-size: 13px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  margin: 0;
+  line-height: 1.5;
+}
+
+.merge-description strong {
+  color: var(--text-primary, #fff);
+}
+
+.merge-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.merge-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.merge-search {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  padding: 8px 10px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.merge-search:focus {
+  border-color: var(--accent, #396cd8);
+}
+
+.merge-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  min-height: 0;
+  max-height: 240px;
+}
+
+.merge-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--motion-fast, 120ms);
+}
+
+.merge-candidate:last-child {
+  border-bottom: none;
+}
+
+.merge-candidate:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.merge-candidate--selected {
+  background: rgba(57, 108, 216, 0.18);
+  color: #fff;
+}
+
+.merge-candidate--selected:hover {
+  background: rgba(57, 108, 216, 0.26);
+}
+
+.merge-candidate-meta {
+  font-size: 12px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.45));
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.merge-empty {
+  padding: 16px 12px;
+  font-size: 13px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.4));
+  margin: 0;
+}
+
+/* ── Footer ── */
+.merge-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  flex-shrink: 0;
+}
+
+.merge-btn {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  padding: 7px 16px;
+  cursor: pointer;
+  transition: background var(--motion-fast, 120ms);
+}
+
+.merge-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.merge-btn--primary {
+  background: var(--accent, #396cd8);
+  border-color: transparent;
+  font-weight: 500;
+}
+
+.merge-btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent, #396cd8) 85%, white);
+}
+
+.merge-btn--primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

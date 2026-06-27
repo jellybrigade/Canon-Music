@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Play, Disc, Radio, ExternalLink } from "lucide-react";
+import { Play, Disc, Radio, ExternalLink, GitMerge } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
+import { ArtistMergeModal } from "./ArtistMergeModal";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import type { ArtistRow, AlbumRow } from "../types/library";
@@ -20,6 +21,7 @@ import { fetchArtistTopTracks, fetchArtistTopAlbums, LASTFM_PLACEHOLDER } from "
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useLoved } from "../hooks/useLoved";
+import { useArtistCanonicalOf, useAliasesOfCanonical, useRemoveArtistAlias } from "../hooks/useArtistAliases";
 import "./ArtistDetail.css";
 
 interface Props {
@@ -50,8 +52,9 @@ function useArtistAlbums(artistName: string) {
         `SELECT id, server_id, name, artist, year, artwork_url, release_type
          FROM albums
          WHERE artist = ?
+            OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
          ORDER BY year IS NULL, year DESC, name`,
-        [artistName]
+        [artistName, artistName]
       );
     },
   });
@@ -68,9 +71,10 @@ function useArtistTopTracks(artistName: string) {
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.artist = ?
+            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
          ORDER BY t.track_number, t.title
          LIMIT 30`,
-        [artistName]
+        [artistName, artistName]
       );
     },
   });
@@ -269,7 +273,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: rawTracks } = useArtistTopTracks(artist.name);
   const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name);
   const [showIdentify, setShowIdentify] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+
+  const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
+  const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
+  const removeAlias = useRemoveArtistAlias();
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
   const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
@@ -421,7 +430,34 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                   <Disc size={9} /> MB
                 </span>
               )}
+              {canonicalOf && (
+                <span className="artist-alias-badge">
+                  alias of {canonicalOf}
+                </span>
+              )}
+              {aliases.length > 0 && (
+                <span className="artist-alias-badge">
+                  {aliases.length} {aliases.length === 1 ? "alias" : "aliases"}
+                </span>
+              )}
             </div>
+            {aliases.length > 0 && (
+              <div className="artist-aliases-row">
+                {aliases.map((a) => (
+                  <span key={a} className="artist-alias-chip">
+                    {a}
+                    <button
+                      className="artist-alias-remove"
+                      onClick={() => void removeAlias.mutateAsync(a)}
+                      title={`Remove alias: ${a}`}
+                      aria-label={`Remove alias ${a}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="artist-banner-actions">
@@ -429,6 +465,17 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               <button className="artist-radio-btn" onClick={handleStartRadio}>
                 <Radio size={13} />
                 Radio
+              </button>
+            )}
+            {!canonicalOfPending && !canonicalOf && (
+              <button
+                className="artist-identify-btn"
+                onClick={() => setShowMerge(true)}
+                aria-label="Merge artist into another"
+                title="Merge into another artist"
+              >
+                <GitMerge size={13} />
+                Merge
               </button>
             )}
             <button
@@ -608,6 +655,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         <ArtistIdentifyDialog
           artistName={artist.name}
           onClose={() => setShowIdentify(false)}
+        />
+      )}
+
+      {showMerge && (
+        <ArtistMergeModal
+          aliasArtistName={artist.name}
+          onClose={() => setShowMerge(false)}
         />
       )}
 

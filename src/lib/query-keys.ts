@@ -30,6 +30,7 @@ export const QK = {
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
   tracks: (albumId: string | null) => ["tracks", albumId] as const,
+  allTracks: () => ["all-tracks"] as const,
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,
   trackTagsAll: () => ["track_tags"] as const,
   trackTagsOffTree: () => ["track_tags", "off_tree_albums"] as const,
@@ -64,6 +65,9 @@ export const QK = {
   lyrics: (trackId: string | null, overrideArtist: string | null, overrideTitle: string | null) =>
     ["lyrics", trackId, overrideArtist, overrideTitle] as const,
   lyricsTrack: (trackId: string) => ["lyrics", trackId] as const,
+
+  artistAliases: () => ["artist-aliases"] as const,
+  artistCanonicalOf: (aliasName: string) => ["artist-aliases", "canonical-of", aliasName] as const,
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,

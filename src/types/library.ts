@@ -32,6 +32,10 @@ export interface TrackRow {
   bit_rate: number | null;
   suffix: string | null;
   file_size: number | null;
+  replay_gain_track_gain: number | null;
+  replay_gain_track_peak: number | null;
+  replay_gain_album_gain: number | null;
+  replay_gain_album_peak: number | null;
 }
 
 export interface PlaylistTrackRow {

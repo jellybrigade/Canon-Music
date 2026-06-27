@@ -19,6 +19,7 @@ export function useArtists() {
             LIMIT 1
           ) AS artwork_url
         FROM artists a
+        WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE
       `);
     },

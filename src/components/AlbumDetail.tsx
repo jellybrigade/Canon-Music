@@ -24,6 +24,7 @@ import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { extractAccent } from "../lib/artColor";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
@@ -233,6 +234,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
     : null;
 
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  useEffect(() => {
+    if (!coverArtUrl) { setAccentColor(null); return; }
+    let cancelled = false;
+    void extractAccent(coverArtUrl).then((color) => { if (!cancelled) setAccentColor(color); });
+    return () => { cancelled = true; };
+  }, [coverArtUrl]);
+
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {
       id: track.id,
@@ -243,6 +252,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       artworkRef: album.artwork_url ?? null,
       album: album.name,
       albumId: album.id,
+      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
+        ? {
+            trackGain: track.replay_gain_track_gain,
+            trackPeak: track.replay_gain_track_peak,
+            albumGain: track.replay_gain_album_gain,
+            albumPeak: track.replay_gain_album_peak,
+          }
+        : null,
     };
   }
 
@@ -369,7 +386,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const hasTags = true;
 
   return (
-    <div className="album-detail">
+    <div
+      className="album-detail"
+      style={(accentColor ? { "--album-accent": accentColor } : {}) as React.CSSProperties}
+    >
       <div className="album-detail-header">
         {coverArtUrl && (
           <div

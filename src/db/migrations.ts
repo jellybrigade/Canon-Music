@@ -515,4 +515,24 @@ export const migrations: Migration[] = [
     version: 36,
     sql: `ALTER TABLE playlists ADD COLUMN custom_cover_data TEXT;`,
   },
+  {
+    version: 37,
+    sql: `
+      ALTER TABLE tracks ADD COLUMN replay_gain_track_gain REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_track_peak REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_album_gain REAL;
+      ALTER TABLE tracks ADD COLUMN replay_gain_album_peak REAL;
+    `,
+  },
+  {
+    version: 38,
+    sql: `
+      CREATE TABLE IF NOT EXISTS artist_aliases (
+        alias_name TEXT NOT NULL PRIMARY KEY,
+        canonical_name TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_artist_aliases_canonical ON artist_aliases(canonical_name);
+    `,
+  },
 ];
