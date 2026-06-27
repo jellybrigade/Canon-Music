@@ -75,6 +75,8 @@ Then immediately proceed to Phase 3I — do not wait for approval.
 
 Exit plan mode and implement the item. Follow all rules in CLAUDE.md and the relevant `.claude/rules/` files for the files you touch.
 
+**If the item is user-visible UI** (modal, sidebar, drawer, panel, buttons, chips, cards, form, or any new visual component): before writing code, spawn a `caveman:cavecrew-investigator` agent to find the closest existing Canon components of the same type in `src/`. Use those as the design template — match spacing, color tokens, font sizes, border radii, interaction patterns, and CSS variable usage exactly. Do not invent a new visual style.
+
 When building any UI with hover-reveal buttons, cards, or interactive chips, read `instructions/ui-patterns.md` first.
 
 After implementation, if you encountered any non-obvious rendering quirk, browser/WebKit edge case, or layout gotcha that isn't already in `instructions/ui-patterns.md`, append it.
