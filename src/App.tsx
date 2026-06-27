@@ -90,7 +90,7 @@ function AlbumDetailRoute({
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type FROM albums WHERE id = ?`,
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums WHERE id = ?`,
         [decodeURIComponent(albumId!)]
       );
       return rows[0] ?? null;

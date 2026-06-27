@@ -6,6 +6,7 @@ export interface AlbumRow {
   year: number | null;
   artwork_url: string | null;
   release_type?: string | null;
+  accent_color?: string | null;
 }
 
 export type AlbumSort = "artist" | "alphabetical" | "year" | "recently_added";

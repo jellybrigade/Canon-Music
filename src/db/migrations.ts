@@ -535,4 +535,8 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_artist_aliases_canonical ON artist_aliases(canonical_name);
     `,
   },
+  {
+    version: 39,
+    sql: `ALTER TABLE albums ADD COLUMN accent_color TEXT;`,
+  },
 ];

@@ -31,7 +31,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
         );
       }
       return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type FROM albums a ORDER BY ${order}`
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums a ORDER BY ${order}`
       );
     },
   });
