@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
 import { AlbumGrid } from "./components/AlbumGrid";
@@ -42,6 +43,8 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
+import type { ServerWithCredential } from "./hooks/useServer";
+import type { PlaylistRow } from "./hooks/usePlaylists";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
 import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
@@ -64,6 +67,101 @@ import "./styles/tokens.css";
 import "./styles/library.css";
 import "./styles/base.css";
 import "./App.css";
+
+function AlbumDetailRoute({
+  serverWithCred,
+  onSelectArtist,
+  onTagFilter,
+  onClose,
+  queueClass,
+}: {
+  serverWithCred: ServerWithCredential | null;
+  onSelectArtist: (name: string) => void;
+  onTagFilter: (canonicalId: string) => void;
+  onClose: () => void;
+  queueClass: string;
+}) {
+  const { state } = useLocation();
+  const album = (state as { album?: AlbumRow } | null)?.album ?? null;
+  if (!album || !serverWithCred) return null;
+  return (
+    <main className={`library${queueClass}`}>
+      <AlbumDetail
+        album={album}
+        serverWithCredential={serverWithCred}
+        onClose={onClose}
+        onSelectArtist={onSelectArtist}
+        onTagFilter={onTagFilter}
+      />
+    </main>
+  );
+}
+
+function ArtistDetailRoute({
+  serverWithCred,
+  onSelectAlbum,
+  onSelectArtist,
+  onClose,
+  queueClass,
+}: {
+  serverWithCred: ServerWithCredential | null;
+  onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist: (name: string) => void;
+  onClose: () => void;
+  queueClass: string;
+}) {
+  const { state } = useLocation();
+  const artist = (state as { artist?: ArtistRow } | null)?.artist ?? null;
+  if (!artist || !serverWithCred) return null;
+  return (
+    <main className={`library${queueClass}`}>
+      <ArtistDetail
+        artist={artist}
+        serverWithCredential={serverWithCred}
+        onClose={onClose}
+        onSelectAlbum={onSelectAlbum}
+        onSelectArtist={onSelectArtist}
+      />
+    </main>
+  );
+}
+
+function PlaylistDetailRoute({
+  serverWithCred,
+  onSelectAlbum,
+  onSelectArtist,
+  onClose,
+  queueClass,
+}: {
+  serverWithCred: ServerWithCredential | null;
+  onSelectAlbum: (albumId: string) => void;
+  onSelectArtist: (name: string) => void;
+  onClose: () => void;
+  queueClass: string;
+}) {
+  const { state } = useLocation();
+  const navigate = useNavigate();
+  const playlist = (state as { playlist?: PlaylistRow } | null)?.playlist ?? null;
+  const { deletePlaylist, renamePlaylist, setCustomCover } = usePlaylists();
+  if (!playlist || !serverWithCred) return null;
+  return (
+    <main className={`library${queueClass}`}>
+      <PlaylistDetail
+        playlist={playlist}
+        serverWithCredential={serverWithCred}
+        onClose={onClose}
+        onDelete={async () => {
+          await deletePlaylist(playlist, serverWithCred);
+          navigate("/playlists");
+        }}
+        onRename={renamePlaylist}
+        onSetCustomCover={setCustomCover}
+        onSelectAlbum={onSelectAlbum}
+        onSelectArtist={onSelectArtist}
+      />
+    </main>
+  );
+}
 
 export default function App() {
   useTrackEndedListener();
@@ -100,14 +198,10 @@ export default function App() {
 
   const {
     view,
-    selectedAlbum,
-    selectedArtist,
-    selectedPlaylist,
-    setSelectedAlbum,
-    setSelectedPlaylist,
     navigateTo,
     openAlbum,
     openArtist,
+    openPlaylist,
     goBack,
   } = useAppNavigation();
 
@@ -144,7 +238,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, deletePlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover } = usePlaylists();
+  const { data: playlists, createPlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -506,42 +600,7 @@ export default function App() {
     );
   }
 
-  function renderAlbumDetail() {
-    if (!selectedAlbum || !serverWithCred) return null;
-    return (
-      <AlbumDetail
-        album={selectedAlbum}
-        serverWithCredential={serverWithCred}
-        onClose={goBack}
-        onSelectArtist={(name) => navigateTo("artists", { artist: { name, album_count: 0, artwork_url: null } })}
-        onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); setSelectedAlbum(null); navigateTo("library"); }}
-      />
-    );
-  }
-
   function renderContent() {
-    if (selectedAlbum && serverWithCred) {
-      return (
-        <main className={`library${queueClass}`}>
-          {renderAlbumDetail()}
-        </main>
-      );
-    }
-
-    if (selectedArtist && serverWithCred) {
-      return (
-        <main className={`library${queueClass}`}>
-          <ArtistDetail
-            artist={selectedArtist}
-            serverWithCredential={serverWithCred}
-            onClose={goBack}
-            onSelectAlbum={openAlbum}
-            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
-          />
-        </main>
-      );
-    }
-
     if (searchOpen || searchQuery) {
       return (
         <main className={`library${queueClass}`}>
@@ -572,9 +631,40 @@ export default function App() {
       );
     }
 
-    switch (view) {
-      case "home":
-        return (
+    return (
+      <Routes>
+        <Route path="/album/:albumId" element={
+          <AlbumDetailRoute
+            serverWithCred={serverWithCred ?? null}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
+            onClose={goBack}
+            queueClass={queueClass}
+          />
+        } />
+        <Route path="/artist/:artistName" element={
+          <ArtistDetailRoute
+            serverWithCred={serverWithCred ?? null}
+            onSelectAlbum={openAlbum}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onClose={goBack}
+            queueClass={queueClass}
+          />
+        } />
+        <Route path="/playlist/:playlistId" element={
+          <PlaylistDetailRoute
+            serverWithCred={serverWithCred ?? null}
+            onSelectAlbum={async (albumId) => {
+              const db = await getDb();
+              const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
+              if (rows[0]) openAlbum(rows[0]);
+            }}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onClose={goBack}
+            queueClass={queueClass}
+          />
+        } />
+        <Route path="/home" element={
           <Suspense fallback={null}>
             {serverWithCred ? (
               <HomeView
@@ -591,25 +681,21 @@ export default function App() {
               />
             ) : <main className="content-main" />}
           </Suspense>
-        );
-
-      case "nowplaying":
-        return (
+        } />
+        <Route path="/nowplaying" element={
           <Suspense fallback={null}>
             {serverWithCred ? (
               <NowPlayingView
                 serverWithCredential={serverWithCred}
-                onSelectAlbum={(album) => navigateTo("library", { album })}
-                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+                onSelectAlbum={(album) => openAlbum(album)}
+                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onBack={goBack}
               />
             ) : <main className="content-main" />}
           </Suspense>
-        );
-
-      case "library":
-        return (
+        } />
+        <Route path="/library" element={
           <main className={`library${queueClass}`}>
             <header className="library-header">
               <CanonLockup height={22} className="library-header-logo" />
@@ -689,10 +775,8 @@ export default function App() {
               </div>
             </div>
           </main>
-        );
-
-      case "artists":
-        return (
+        } />
+        <Route path="/artists" element={
           <main className={`library${queueClass}`}>
             <header className="library-header">
               <h1>Artists</h1>
@@ -710,10 +794,8 @@ export default function App() {
               <p className="empty-state">Loading…</p>
             )}
           </main>
-        );
-
-      case "genres":
-        return (
+        } />
+        <Route path="/genres" element={
           <Suspense fallback={null}>
             <main className={`library${queueClass}`}>
               <GenreView
@@ -725,10 +807,8 @@ export default function App() {
               />
             </main>
           </Suspense>
-        );
-
-      case "years":
-        return (
+        } />
+        <Route path="/years" element={
           <Suspense fallback={null}>
             {serverWithCred ? (
               <YearsView
@@ -739,52 +819,26 @@ export default function App() {
               />
             ) : <main className="content-main" />}
           </Suspense>
-        );
-
-      case "playlists":
-        return (
+        } />
+        <Route path="/playlists" element={
           <main className={`library${queueClass}`}>
-            {selectedPlaylist && serverWithCred ? (
-              <PlaylistDetail
-                playlist={selectedPlaylist}
+            <header className="library-header">
+              <h1>Playlists</h1>
+              <span className="server-name">{server?.display_name}</span>
+            </header>
+            {serverWithCred ? (
+              <PlaylistList
+                playlists={playlists ?? []}
                 serverWithCredential={serverWithCred}
-                onClose={() => setSelectedPlaylist(null)}
-                onDelete={async () => {
-                  await deletePlaylist(selectedPlaylist, serverWithCred);
-                  setSelectedPlaylist(null);
-                }}
-                onRename={renamePlaylist}
-                onSetCustomCover={setCustomCover}
-                onSelectAlbum={async (albumId) => {
-                  const db = await getDb();
-                  const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-                  if (rows[0]) openAlbum(rows[0]);
-                }}
-                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+                onSelect={openPlaylist}
+                onCreatePlaylist={createPlaylist}
               />
             ) : (
-              <>
-                <header className="library-header">
-                  <h1>Playlists</h1>
-                  <span className="server-name">{server?.display_name}</span>
-                </header>
-                {serverWithCred ? (
-                  <PlaylistList
-                    playlists={playlists ?? []}
-                    serverWithCredential={serverWithCred}
-                    onSelect={setSelectedPlaylist}
-                    onCreatePlaylist={createPlaylist}
-                  />
-                ) : (
-                  <p className="empty-state">Loading…</p>
-                )}
-              </>
+              <p className="empty-state">Loading…</p>
             )}
           </main>
-        );
-
-      case "tracks":
-        return (
+        } />
+        <Route path="/tracks" element={
           <Suspense fallback={null}>
             {serverWithCred ? (
               <TrackTableView
@@ -792,23 +846,19 @@ export default function App() {
                 onSelectAlbum={async (albumId) => {
                   const db = await getDb();
                   const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
-                  if (rows[0]) { navigateTo("library"); openAlbum(rows[0]); }
+                  if (rows[0]) openAlbum(rows[0]);
                 }}
-                onSelectArtist={(artistName) => navigateTo("artists", { artist: { name: artistName, album_count: 0, artwork_url: null } })}
+                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null })}
               />
             ) : <main className="content-main" />}
           </Suspense>
-        );
-
-      case "tags":
-        return (
+        } />
+        <Route path="/tags" element={
           <Suspense fallback={null}>
             <TagsView />
           </Suspense>
-        );
-
-      case "unidentified":
-        return (
+        } />
+        <Route path="/unidentified" element={
           <Suspense fallback={null}>
             {serverWithCred ? (
               <UnidentifiedView
@@ -817,10 +867,8 @@ export default function App() {
               />
             ) : <main className="content-main" />}
           </Suspense>
-        );
-
-      case "settings":
-        return (
+        } />
+        <Route path="/settings" element={
           <main className="content-main">
             <SettingsView
               syncStatus={syncStatus}
@@ -834,8 +882,10 @@ export default function App() {
               setHideTagBadge={setHideTagBadge}
             />
           </main>
-        );
-    }
+        } />
+        <Route path="*" element={<Navigate to="/home" replace />} />
+      </Routes>
+    );
   }
 
   return (
