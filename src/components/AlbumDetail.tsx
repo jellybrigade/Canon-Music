@@ -243,6 +243,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       artworkRef: album.artwork_url ?? null,
       album: album.name,
       albumId: album.id,
+      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
+        ? {
+            trackGain: track.replay_gain_track_gain,
+            trackPeak: track.replay_gain_track_peak,
+            albumGain: track.replay_gain_album_gain,
+            albumPeak: track.replay_gain_album_peak,
+          }
+        : null,
     };
   }
 

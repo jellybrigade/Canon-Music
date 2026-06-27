@@ -53,6 +53,8 @@ import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { FeedbackModal } from "./components/FeedbackModal";
 import { getCoverArtUrl, getStreamUrl, setStreamMaxBitrate } from "./lib/navidrome";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { stripServerPrefix } from "./utils/ids";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -72,6 +74,7 @@ export default function App() {
 
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const play = usePlayerStore((s) => s.play);
@@ -220,6 +223,35 @@ export default function App() {
   }, [searchRaw, searchOpen, clearSearch]);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
+
+  // Tray: initialize visibility and close-to-tray from settings, then keep menu in sync
+  const [showTrayIcon] = useBoolSetting("tray.show_icon", false);
+  const [closeToTray] = useBoolSetting("tray.close_to_tray", false);
+  useEffect(() => {
+    void invoke("tray_set_visible", { visible: showTrayIcon }).catch(() => {});
+  }, [showTrayIcon]);
+  useEffect(() => {
+    void invoke("tray_set_close_to_tray", { enabled: closeToTray }).catch(() => {});
+  }, [closeToTray]);
+  useEffect(() => {
+    const title = currentTrack
+      ? `${currentTrack.title}${currentTrack.artist ? ` — ${currentTrack.artist}` : ""}`
+      : "";
+    void invoke("tray_update", { title, isPlaying }).catch(() => {});
+  }, [currentTrack?.id, isPlaying]);
+
+  // Tray actions: play_pause and next forwarded to player store
+  useEffect(() => {
+    const p = listen<string>("tray-action", (e) => {
+      const store = usePlayerStore.getState();
+      if (e.payload === "play_pause") {
+        if (store.isPlaying) store.pause(); else store.resume();
+      } else if (e.payload === "next") {
+        void store.next();
+      }
+    });
+    return () => { void p.then((fn) => fn()); };
+  }, []);
 
   useEffect(() => {
     if (!serverWithCred) return;

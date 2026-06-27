@@ -14,7 +14,15 @@ export interface CurrentTrack {
   artworkRef?: string | null;
   album?: string | null;
   albumId?: string | null;
+  replayGain?: {
+    trackGain?: number | null;
+    trackPeak?: number | null;
+    albumGain?: number | null;
+    albumPeak?: number | null;
+  } | null;
 }
+
+export type ReplayGainMode = "off" | "track" | "album";
 
 type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
@@ -52,6 +60,34 @@ let gaplessActive = false;
 let cancelAudioError: (() => void) | null = null;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
 let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+// Current ReplayGain linear amplitude multiplier. Updated on track change and mode change.
+// Stored outside the store so setVolume can access the latest value without a selector.
+let currentReplayGainLinear = 1.0;
+
+function computeReplayGainLinear(
+  rg: CurrentTrack["replayGain"],
+  mode: ReplayGainMode,
+  preAmpDb: number,
+  fallbackDb: number
+): number {
+  if (mode === "off") return 1.0;
+  let gainDb: number;
+  let peak: number;
+  if (mode === "album" && rg?.albumGain != null) {
+    gainDb = rg.albumGain;
+    peak = rg.albumPeak ?? 1.0;
+  } else if (rg?.trackGain != null) {
+    gainDb = rg.trackGain;
+    peak = rg.trackPeak ?? 1.0;
+  } else {
+    gainDb = fallbackDb;
+    peak = 1.0;
+  }
+  const linear = Math.pow(10, (gainDb + preAmpDb) / 20);
+  // Clipping prevention: cap so that peak sample stays at or below 1.0
+  return Math.min(linear, 1.0 / Math.max(peak, 0.001));
+}
 
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
   if (from === currentIdx) return to;
@@ -132,6 +168,13 @@ interface PlayerState {
   gapless: boolean;
   radioOnQueueEnd: boolean;
   audioFormat: { sampleRate: number; channels: number; codec: string } | null;
+
+  replayGainMode: ReplayGainMode;
+  replayGainPreAmp: number;
+  replayGainFallbackGain: number;
+  setReplayGainMode: (mode: ReplayGainMode) => Promise<void>;
+  setReplayGainPreAmp: (db: number) => Promise<void>;
+  setReplayGainFallbackGain: (db: number) => Promise<void>;
 
   castDevice: DlnaRenderer | null;
   availableRenderers: DlnaRenderer[];
@@ -220,6 +263,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       isLoading: false,
       waveformPeaks: null,
     });
+    // Apply ReplayGain for the gapless-advanced track
+    const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
+    currentReplayGainLinear = castDevice
+      ? 1.0
+      : computeReplayGainLinear(nextTrack.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
+    void activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
     startElapsedTimer();
     void preloadWaveforms();
     void fetchWaveform(nextTrack.id, streamUrlFor(nextTrack));
@@ -526,6 +575,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         await activeTarget.load(url, track, track.coverArtUrl ?? null);
         if (get().currentTrack?.id !== track.id) return;
         set({ isPlaying: true, isLoading: false });
+        // Apply ReplayGain for this track now that the sink exists
+        const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
+        currentReplayGainLinear = castDevice
+          ? 1.0
+          : computeReplayGainLinear(track.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
+        void activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
         startElapsedTimer();
         void fetchWaveform(track.id, url);
         void preloadWaveforms();
@@ -618,6 +673,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     gapless: false,
     radioOnQueueEnd: false,
     audioFormat: null,
+
+    replayGainMode: "off",
+    replayGainPreAmp: 0,
+    replayGainFallbackGain: -6,
 
     castDevice: null,
     availableRenderers: [],
@@ -911,14 +970,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistQueueState();
     },
 
-    setVolume: async (volume: number) => {
-      set({ volume });
-      await activeTarget.setVolume(volume);
+    setVolume: async (rawVolume: number) => {
+      set({ volume: rawVolume });
+      const { replayGainMode, replayGainPreAmp, replayGainFallbackGain, currentTrack, castDevice } = get();
+      currentReplayGainLinear = castDevice
+        ? 1.0
+        : computeReplayGainLinear(currentTrack?.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
+      await activeTarget.setVolume(rawVolume * Math.sqrt(currentReplayGainLinear));
       try {
         const db = await getDb();
         await db.execute(
           "INSERT OR REPLACE INTO settings (key, value) VALUES ('volume', ?)",
-          [String(volume)]
+          [String(rawVolume)]
         );
       } catch (e) {
         console.error("Failed to persist volume:", e);
@@ -956,6 +1019,62 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist pause fade:", e);
+      }
+    },
+
+    setReplayGainMode: async (mode) => {
+      set({ replayGainMode: mode });
+      const { volume, replayGainPreAmp, replayGainFallbackGain, currentTrack, castDevice } = get();
+      currentReplayGainLinear = castDevice
+        ? 1.0
+        : computeReplayGainLinear(currentTrack?.replayGain, mode, replayGainPreAmp, replayGainFallbackGain);
+      await activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_mode', ?)",
+          [mode]
+        );
+      } catch (e) {
+        console.error("Failed to persist replay_gain_mode:", e);
+      }
+    },
+
+    setReplayGainPreAmp: async (db_val) => {
+      const clamped = Math.max(-15, Math.min(15, db_val));
+      set({ replayGainPreAmp: clamped });
+      const { volume, replayGainMode, replayGainFallbackGain, currentTrack, castDevice } = get();
+      currentReplayGainLinear = castDevice
+        ? 1.0
+        : computeReplayGainLinear(currentTrack?.replayGain, replayGainMode, clamped, replayGainFallbackGain);
+      await activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_pre_amp', ?)",
+          [String(clamped)]
+        );
+      } catch (e) {
+        console.error("Failed to persist replay_gain_pre_amp:", e);
+      }
+    },
+
+    setReplayGainFallbackGain: async (db_val) => {
+      const clamped = Math.max(-15, Math.min(15, db_val));
+      set({ replayGainFallbackGain: clamped });
+      const { volume, replayGainMode, replayGainPreAmp, currentTrack, castDevice } = get();
+      currentReplayGainLinear = castDevice
+        ? 1.0
+        : computeReplayGainLinear(currentTrack?.replayGain, replayGainMode, replayGainPreAmp, clamped);
+      await activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_fallback_gain', ?)",
+          [String(clamped)]
+        );
+      } catch (e) {
+        console.error("Failed to persist replay_gain_fallback_gain:", e);
       }
     },
 
@@ -1165,7 +1284,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -1175,6 +1294,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             const volume = parseFloat(row.value);
             if (!isNaN(volume)) {
               set({ volume });
+              // Gain not yet loaded at this point; apply raw volume. Re-applied after all settings loaded.
               await invoke("audio_volume", { volume: volume ** 2 });
             }
           } else if (row.key === "repeat") {
@@ -1235,6 +1355,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             set({ radioOnQueueEnd: row.value === "true" });
           } else if (row.key === "player.show_waveform") {
             showWaveform = row.value === "true";
+          } else if (row.key === "player.replay_gain_mode") {
+            const valid: ReplayGainMode[] = ["off", "track", "album"];
+            if (valid.includes(row.value as ReplayGainMode)) set({ replayGainMode: row.value as ReplayGainMode });
+          } else if (row.key === "player.replay_gain_pre_amp") {
+            const v = parseFloat(row.value);
+            if (!isNaN(v)) set({ replayGainPreAmp: Math.max(-15, Math.min(15, v)) });
+          } else if (row.key === "player.replay_gain_fallback_gain") {
+            const v = parseFloat(row.value);
+            if (!isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
           } else if (row.key === "cast.device" && row.value) {
             try {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;

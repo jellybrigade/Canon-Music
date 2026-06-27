@@ -15,6 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
+use tauri::Manager;
 
 fn http_client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
@@ -96,6 +97,60 @@ struct AudioState {
     fade_gen: Arc<AtomicU64>,
     // Set when a next track has been appended for gapless playback; cleared on transition or explicit play.
     gapless_queued: Arc<AtomicBool>,
+}
+
+struct TrayState {
+    close_to_tray: AtomicBool,
+}
+
+fn build_tray_menu<R: tauri::Runtime>(
+    app: &impl tauri::Manager<R>,
+    track_label: &str,
+    is_playing: bool,
+) -> tauri::Result<tauri::menu::Menu<R>> {
+    use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
+    let label = if track_label.is_empty() { "Canon" } else { track_label };
+    let display = if label.len() > 45 { format!("{}…", &label[..45]) } else { label.to_string() };
+    let track_item = MenuItemBuilder::new(&display).enabled(false).build(app)?;
+    let play_pause = MenuItemBuilder::new(if is_playing { "⏸  Pause" } else { "▶  Play" })
+        .id("play_pause")
+        .build(app)?;
+    let next_item = MenuItemBuilder::new("⏭  Next track").id("next").build(app)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let show_item = MenuItemBuilder::new("Show Canon").id("show").build(app)?;
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let quit_item = MenuItemBuilder::new("Quit Canon").id("quit").build(app)?;
+    MenuBuilder::new(app)
+        .items(&[&track_item, &play_pause, &next_item, &sep1, &show_item, &sep2, &quit_item])
+        .build()
+}
+
+#[tauri::command]
+fn tray_update(app: tauri::AppHandle, title: String, is_playing: bool) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main") {
+        let menu = build_tray_menu(&app, &title, is_playing).map_err(|e| e.to_string())?;
+        tray.set_menu(Some(menu)).map_err(|e| e.to_string())?;
+        let tooltip = if title.is_empty() {
+            "Canon".to_string()
+        } else {
+            format!("Canon — {title}")
+        };
+        let _ = tray.set_tooltip(Some(&tooltip));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn tray_set_visible(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    if let Some(tray) = app.tray_by_id("main") {
+        tray.set_visible(visible).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn tray_set_close_to_tray(state: tauri::State<'_, TrayState>, enabled: bool) {
+    state.close_to_tray.store(enabled, Ordering::Relaxed);
 }
 
 #[tauri::command]
@@ -796,6 +851,58 @@ pub fn run() {
             fade_gen: Arc::new(AtomicU64::new(0)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
         })
+        .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .setup(|app| {
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+            let menu = build_tray_menu(app.handle(), "Not playing", false)?;
+            let _tray = TrayIconBuilder::with_id("main")
+                .icon(app.default_window_icon().unwrap().clone())
+                .tooltip("Canon")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "quit" => app.exit(0),
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
+                        }
+                    }
+                    id => { let _ = app.emit("tray-action", id); }
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        let app = tray.app_handle();
+                        if let Some(w) = app.get_webview_window("main") {
+                            if w.is_visible().unwrap_or(false) {
+                                let _ = w.hide();
+                            } else {
+                                let _ = w.show();
+                                let _ = w.set_focus();
+                            }
+                        }
+                    }
+                })
+                .build(app)?;
+            // Hidden by default; TS calls tray_set_visible when setting is on
+            _tray.set_visible(false)?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if let Some(state) = window.app_handle().try_state::<TrayState>() {
+                    if state.close_to_tray.load(Ordering::Relaxed) {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    }
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             set_credential,
             get_credential,
@@ -813,6 +920,9 @@ pub fn run() {
             audio_extract_waveform,
             discover_upnp_renderers,
             upnp_soap,
+            tray_update,
+            tray_set_visible,
+            tray_set_close_to_tray,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

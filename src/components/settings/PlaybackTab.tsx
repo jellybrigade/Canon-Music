@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
@@ -32,6 +33,16 @@ export function PlaybackTab({ searchQuery }: Props) {
   const [autoSyncIntervalMin, setAutoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const [streamMaxBitrate, setStreamMaxBitrate] = useSetting("stream.max_bitrate", "0");
   const [castMaxBitrate, setCastMaxBitrate] = useSetting("cast.max_bitrate", "320");
+
+  const replayGainMode = usePlayerStore((s) => s.replayGainMode);
+  const setReplayGainMode = usePlayerStore((s) => s.setReplayGainMode);
+  const replayGainPreAmp = usePlayerStore((s) => s.replayGainPreAmp);
+  const setReplayGainPreAmp = usePlayerStore((s) => s.setReplayGainPreAmp);
+  const replayGainFallbackGain = usePlayerStore((s) => s.replayGainFallbackGain);
+  const setReplayGainFallbackGain = usePlayerStore((s) => s.setReplayGainFallbackGain);
+
+  const [showTrayIcon, setShowTrayIcon] = useBoolSetting("tray.show_icon", false);
+  const [closeToTray, setCloseToTray] = useBoolSetting("tray.close_to_tray", false);
 
   const availableRenderers  = usePlayerStore((s) => s.availableRenderers);
   const isScanningRenderers = usePlayerStore((s) => s.isScanningRenderers);
@@ -171,6 +182,100 @@ export function PlaybackTab({ searchQuery }: Props) {
               value={pauseFadeMs}
               onChange={(e) => { void setPauseFadeMs(parseInt(e.target.value, 10)); }}
             />
+          </SettingRow>
+        </section>
+      )}
+
+      {show("replay gain", "normalization", "loudness", "volume", "gain", "peak", "preamp") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Volume normalization</h3>
+          <SettingRow
+            title="ReplayGain mode"
+            description="Adjusts playback volume based on ReplayGain tags so tracks play at a consistent loudness. Requires a library sync to pull gain data from the server."
+          >
+            <select
+              value={replayGainMode}
+              onChange={(e) => void setReplayGainMode(e.target.value as "off" | "track" | "album")}
+              className="settings-select"
+            >
+              <option value="off">Off</option>
+              <option value="track">Track gain</option>
+              <option value="album">Album gain</option>
+            </select>
+          </SettingRow>
+          {replayGainMode !== "off" && (
+            <>
+              <SettingRow
+                title={`Pre-amp — ${replayGainPreAmp >= 0 ? "+" : ""}${replayGainPreAmp} dB`}
+                description="Offset applied on top of the ReplayGain value. Use to raise or lower the normalized level globally."
+                stacked
+              >
+                <input
+                  type="range"
+                  className="settings-range"
+                  min={-15}
+                  max={15}
+                  step={0.5}
+                  value={replayGainPreAmp}
+                  onChange={(e) => void setReplayGainPreAmp(parseFloat(e.target.value))}
+                />
+              </SettingRow>
+              <SettingRow
+                title={`Fallback gain — ${replayGainFallbackGain} dB`}
+                description="Applied to tracks that have no ReplayGain tags. A negative value prevents clipping on unknown tracks."
+                stacked
+              >
+                <input
+                  type="range"
+                  className="settings-range"
+                  min={-15}
+                  max={0}
+                  step={0.5}
+                  value={replayGainFallbackGain}
+                  onChange={(e) => void setReplayGainFallbackGain(parseFloat(e.target.value))}
+                />
+              </SettingRow>
+            </>
+          )}
+        </section>
+      )}
+
+      {show("tray", "system tray", "minimize", "background", "close", "hide") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">System tray</h3>
+          <SettingRow
+            title="Show system tray icon"
+            description="Adds a Canon icon to the system tray. Click to toggle window visibility."
+          >
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={showTrayIcon}
+                onChange={(e) => {
+                  void setShowTrayIcon(e.target.checked);
+                  void invoke("tray_set_visible", { visible: e.target.checked }).catch(() => {});
+                }}
+              />
+              <span className="toggle-track" />
+            </label>
+          </SettingRow>
+          <SettingRow
+            title="Close to tray"
+            description="Clicking the window close button hides Canon to the tray instead of quitting. Requires Show system tray icon."
+          >
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={closeToTray}
+                disabled={!showTrayIcon}
+                style={{ opacity: showTrayIcon ? 1 : 0.4 }}
+                onChange={(e) => {
+                  void setCloseToTray(e.target.checked);
+                  void invoke("tray_set_close_to_tray", { enabled: e.target.checked }).catch(() => {});
+                }}
+              />
+              <span className="toggle-track" />
+            </label>
           </SettingRow>
         </section>
       )}
