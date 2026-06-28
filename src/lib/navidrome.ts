@@ -535,6 +535,30 @@ export function removeTrackFromNavidromePlaylist(
   }, altUrl);
 }
 
+export async function replaceNavidromePlaylistTracks(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativePlaylistId: string,
+  nativeTrackIds: string[],
+  currentTrackCount: number,
+  altUrl?: string
+): Promise<void> {
+  const params = buildAuthParams(username, credential);
+  params.set("playlistId", nativePlaylistId);
+  for (let i = 0; i < currentTrackCount; i++) params.append("songIndexToRemove", String(i));
+  for (const id of nativeTrackIds) params.append("songIdToAdd", id);
+  const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
+  if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { message: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "updatePlaylist failed");
+  }
+}
+
 export function scrobbleTrack(
   baseUrl: string,
   username: string,

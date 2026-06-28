@@ -539,4 +539,11 @@ export const migrations: Migration[] = [
     version: 39,
     sql: `ALTER TABLE albums ADD COLUMN accent_color TEXT;`,
   },
+  {
+    version: 40,
+    sql: `
+      ALTER TABLE playlists ADD COLUMN is_smart INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE playlists ADD COLUMN rules_json TEXT;
+    `,
+  },
 ];
