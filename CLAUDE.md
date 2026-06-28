@@ -53,6 +53,8 @@ Only `#[tauri::command]` for: audio control, OS keychain access, and network dis
 
 **Deliberate exception:** `discover_upnp_renderers` in `src-tauri/src/upnp.rs` does SSDP UDP multicast discovery because WebKit/JS cannot send UDP multicast. It returns raw LOCATION URLs; all SOAP control, renderer state management, and business logic stay in TypeScript (`src/lib/dlna.ts`, `src/store/playbackTarget.ts`).
 
+**Deliberate exception:** `CoverState` in `src-tauri/src/lib.rs` runs a loopback HTTP server (`tiny_http`) on a random port for cover art caching. Binding a TCP listener and serving raw HTTP is not available in the TypeScript/WebKit layer. The server is a pure network primitive — URL construction, credential management, and cache-key decisions all live in TypeScript (`src/lib/navidrome.ts`). The Rust layer only stores a `HashMap<cache_key, (bytes, content_type)>` and forwards upstream responses.
+
 ### Enrichment is local-only — no file writes
 Metadata enrichment (Last.fm tags, artist bio/stats/similar, MusicBrainz identity) writes only to SQLite. Canon never modifies the user's music files. The sidecar file-write subsystem was removed; `pending_edits` / `edit_history` tables and `servers.sidecar_*` columns are inert legacy schema. File-write design is TBD for a future version.
 

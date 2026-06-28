@@ -240,7 +240,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       setAccentColor(album.accent_color);
       return;
     }
-    if (!coverArtUrl) { setAccentColor(null); return; }
+    // Clear immediately so a stale color from a previous album doesn't show during async extraction.
+    setAccentColor(null);
+    if (!coverArtUrl) { return; }
     let cancelled = false;
     void extractAccent(coverArtUrl).then(async (color) => {
       if (cancelled) return;

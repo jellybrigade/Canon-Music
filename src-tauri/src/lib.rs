@@ -112,7 +112,7 @@ struct CoverProxyConfig {
 struct CoverState {
     port: u16,
     #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
-    cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
     proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
 }
 
@@ -862,7 +862,11 @@ pub fn run() {
     let handle = rx.recv().unwrap_or(None);
 
     // Bind cover art proxy server on a random OS-assigned port.
-    let cover_cache: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    // Cache stores (bytes, content_type) so the forwarded Content-Type matches the upstream image format.
+    // Cache is capped at MAX_COVER_CACHE_ENTRIES and cleared on overflow (simple, avoids LRU overhead).
+    // Each request is handled in its own thread so concurrent cover art fetches don't serialize.
+    const MAX_COVER_CACHE_ENTRIES: usize = 500;
+    let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     let cover_port;
     {
@@ -880,77 +884,92 @@ pub fn run() {
                     .build()
                     .expect("cover proxy http client failed");
                 for request in server.incoming_requests() {
-                    let url = request.url().to_string();
-                    let path_query = match url.strip_prefix("/cover/") {
-                        Some(s) => s.to_string(),
-                        None => {
-                            let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(404)));
-                            continue;
-                        }
-                    };
-                    let (id, size) = if let Some(q) = path_query.find('?') {
-                        let id = path_query[..q].to_string();
-                        let size = path_query[q + 1..]
-                            .split('&')
-                            .find_map(|kv| {
-                                let mut parts = kv.splitn(2, '=');
-                                if parts.next() == Some("size") {
-                                    parts.next().and_then(|v| v.parse::<u32>().ok())
-                                } else {
-                                    None
-                                }
-                            })
-                            .unwrap_or(300);
-                        (id, size)
-                    } else {
-                        (path_query, 300u32)
-                    };
-                    let cache_key = format!("{id}:{size}");
-                    let cached = cache_clone.lock().unwrap().get(&cache_key).cloned();
-                    let bytes = if let Some(b) = cached {
-                        b
-                    } else {
-                        let cfg = config_clone.lock().unwrap().clone();
-                        match cfg {
+                    let cache_req = Arc::clone(&cache_clone);
+                    let config_req = Arc::clone(&config_clone);
+                    let client_req = client.clone();
+                    std::thread::spawn(move || {
+                        let url = request.url().to_string();
+                        let path_query = match url.strip_prefix("/cover/") {
+                            Some(s) => s.to_string(),
                             None => {
-                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(503)));
-                                continue;
+                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(404)));
+                                return;
                             }
-                            Some(cfg) => {
-                                let fetch_url = format!(
-                                    "{}/rest/getCoverArt?{}&id={}&size={}",
-                                    cfg.base_url, cfg.auth_params, id, size
-                                );
-                                match client.get(&fetch_url).send() {
-                                    Ok(resp) if resp.status().is_success() => {
-                                        match resp.bytes() {
-                                            Ok(b) => {
-                                                let b = b.to_vec();
-                                                cache_clone.lock().unwrap().insert(cache_key, b.clone());
-                                                b
-                                            }
-                                            Err(_) => {
-                                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
-                                                continue;
+                        };
+                        let (id, size) = if let Some(q) = path_query.find('?') {
+                            let id = path_query[..q].to_string();
+                            let size = path_query[q + 1..]
+                                .split('&')
+                                .find_map(|kv| {
+                                    let mut parts = kv.splitn(2, '=');
+                                    if parts.next() == Some("size") {
+                                        parts.next().and_then(|v| v.parse::<u32>().ok())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(300);
+                            (id, size)
+                        } else {
+                            (path_query, 300u32)
+                        };
+                        let cache_key = format!("{id}:{size}");
+                        let cached = cache_req.lock().unwrap().get(&cache_key).cloned();
+                        let (bytes, content_type) = if let Some(entry) = cached {
+                            entry
+                        } else {
+                            let cfg = config_req.lock().unwrap().clone();
+                            match cfg {
+                                None => {
+                                    let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(503)));
+                                    return;
+                                }
+                                Some(cfg) => {
+                                    let fetch_url = format!(
+                                        "{}/rest/getCoverArt?{}&id={}&size={}",
+                                        cfg.base_url, cfg.auth_params, id, size
+                                    );
+                                    match client_req.get(&fetch_url).send() {
+                                        Ok(resp) if resp.status().is_success() => {
+                                            let ct = resp
+                                                .headers()
+                                                .get(reqwest::header::CONTENT_TYPE)
+                                                .and_then(|v| v.to_str().ok())
+                                                .unwrap_or("image/jpeg")
+                                                .to_string();
+                                            match resp.bytes() {
+                                                Ok(b) => {
+                                                    let b = b.to_vec();
+                                                    let mut cache = cache_req.lock().unwrap();
+                                                    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                                        cache.clear();
+                                                    }
+                                                    cache.insert(cache_key, (b.clone(), ct.clone()));
+                                                    (b, ct)
+                                                }
+                                                Err(_) => {
+                                                    let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                                    return;
+                                                }
                                             }
                                         }
-                                    }
-                                    _ => {
-                                        let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
-                                        continue;
+                                        _ => {
+                                            let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                            return;
+                                        }
                                     }
                                 }
                             }
+                        };
+                        let mut resp = tiny_http::Response::from_data(bytes);
+                        if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
+                            resp = resp.with_header(h);
                         }
-                    };
-                    let mut resp = tiny_http::Response::from_data(bytes);
-                    if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", "image/jpeg") {
-                        resp = resp.with_header(h);
-                    }
-                    if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
-                        resp = resp.with_header(h);
-                    }
-                    let _ = request.respond(resp);
+                        if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
+                            resp = resp.with_header(h);
+                        }
+                        let _ = request.respond(resp);
+                    });
                 }
             })
             .expect("Failed to spawn cover server thread");

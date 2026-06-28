@@ -176,7 +176,7 @@ function PlaylistDetailRoute({
   const { state } = useLocation();
   const navigate = useNavigate();
   const playlist = (state as { playlist?: PlaylistRow } | null)?.playlist ?? null;
-  const { deletePlaylist, renamePlaylist, setCustomCover } = usePlaylists();
+  const { deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
   if (!playlist || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>
@@ -189,6 +189,8 @@ function PlaylistDetailRoute({
           navigate("/playlists");
         }}
         onRename={renamePlaylist}
+        onRefreshSmart={refreshSmartPlaylist}
+        onUpdateSmartRules={updateSmartPlaylistRules}
         onSetCustomCover={setCustomCover}
         onSelectAlbum={onSelectAlbum}
         onSelectArtist={onSelectArtist}
@@ -272,7 +274,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, addAlbumToPlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -353,17 +355,23 @@ export default function App() {
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
-  // Cover art proxy: get the local server port once on mount, then push credentials whenever they change
-  useEffect(() => {
-    void invoke<number>("get_cover_server_port").then(initCoverServer).catch(() => {});
-  }, []);
+  // Cover art proxy: push credentials to Rust first, then enable proxy URLs only after config is confirmed.
+  // Sequenced in one effect to prevent a window where proxy URLs are returned but the Rust config is still None.
   useEffect(() => {
     if (!serverWithCred) return;
-    void updateCoverProxyConfig(
-      serverWithCred.server.url,
-      serverWithCred.server.username,
-      serverWithCred.credential
-    ).catch(() => {});
+    void (async () => {
+      try {
+        const port = await invoke<number>("get_cover_server_port");
+        await updateCoverProxyConfig(
+          serverWithCred.server.url,
+          serverWithCred.server.username,
+          serverWithCred.credential
+        );
+        initCoverServer(port);
+      } catch {
+        // proxy unavailable; getCoverArtUrl falls back to direct Navidrome URL
+      }
+    })();
   }, [serverWithCred]);
 
   // Tray: initialize visibility and close-to-tray from settings, then keep menu in sync
@@ -879,6 +887,7 @@ export default function App() {
                 serverWithCredential={serverWithCred}
                 onSelect={openPlaylist}
                 onCreatePlaylist={createPlaylist}
+                onCreateSmartPlaylist={createSmartPlaylist}
               />
             ) : (
               <p className="empty-state">Loading…</p>

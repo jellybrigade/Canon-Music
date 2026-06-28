@@ -81,7 +81,9 @@ export function SettingsView({ syncStatus, syncError, lastSyncedAt, serverWithCr
             />
           </div>
           <div className="settings-panel-content">
-            {panelContent(activeNav, search)}
+            {search.trim()
+              ? NAV_ITEMS.map((item) => <div key={item.id}>{panelContent(item.id, search)}</div>)
+              : panelContent(activeNav, search)}
           </div>
         </div>
       </div>
