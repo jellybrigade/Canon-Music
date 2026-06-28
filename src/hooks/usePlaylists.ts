@@ -8,8 +8,10 @@ import {
   addTrackToNavidromePlaylist,
   addTracksToNavidromePlaylist,
   updateNavidromePlaylist,
+  replaceNavidromePlaylistTracks,
 } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
+import { buildSmartQuery, type SmartFilters } from "../lib/smartPlaylist";
 
 export interface PlaylistRow {
   id: string;
@@ -19,6 +21,8 @@ export interface PlaylistRow {
   track_count: number;
   cover_art_url: string | null;
   custom_cover_data: string | null;
+  is_smart: number;
+  rules_json: string | null;
 }
 
 export function usePlaylists() {
@@ -29,7 +33,7 @@ export function usePlaylists() {
     queryFn: async () => {
       const db = await getDb();
       return db.select<PlaylistRow[]>(
-        "SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data FROM playlists ORDER BY name ASC",
+        "SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json FROM playlists ORDER BY name ASC",
         []
       );
     },
@@ -141,5 +145,67 @@ export function usePlaylists() {
     await queryClient.invalidateQueries({ queryKey: QK.playlists() });
   }
 
-  return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover };
+  async function createSmartPlaylist(filters: SmartFilters, swc: ServerWithCredential): Promise<void> {
+    const { server, credential } = swc;
+    const db = await getDb();
+    const { sql, params } = buildSmartQuery(filters, server.id);
+    const trackRows = await db.select<{ id: string }[]>(sql, params);
+    const created = await createNavidromePlaylist(server.url, server.username, credential, filters.name, server.alt_url ?? undefined);
+    const plDbId = `${server.id}:${created.id}`;
+    if (trackRows.length > 0) {
+      const nativeTrackIds = trackRows.map((t) => stripServerPrefix(t.id, server.id));
+      await addTracksToNavidromePlaylist(server.url, server.username, credential, created.id, nativeTrackIds, server.alt_url ?? undefined);
+    }
+    await db.execute(
+      "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count, is_smart, rules_json) VALUES (?, ?, ?, ?, ?, 1, ?)",
+      [plDbId, server.id, filters.name, null, trackRows.length, JSON.stringify(filters)]
+    );
+    if (trackRows.length > 0) {
+      for (let i = 0; i < trackRows.length; i++) {
+        await db.execute(
+          "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+          [plDbId, trackRows[i]!.id, i]
+        );
+      }
+    }
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+  }
+
+  async function refreshSmartPlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
+    if (!playlist.is_smart || !playlist.rules_json) return;
+    const filters = JSON.parse(playlist.rules_json) as SmartFilters;
+    const { server, credential } = swc;
+    const db = await getDb();
+    const { sql, params } = buildSmartQuery(filters, server.id);
+    const trackRows = await db.select<{ id: string }[]>(sql, params);
+    const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
+    const nativeTrackIds = trackRows.map((t) => stripServerPrefix(t.id, server.id));
+    await replaceNavidromePlaylistTracks(
+      server.url, server.username, credential,
+      nativePlaylistId, nativeTrackIds, playlist.track_count,
+      server.alt_url ?? undefined
+    );
+    await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
+    for (let i = 0; i < trackRows.length; i++) {
+      await db.execute(
+        "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+        [playlist.id, trackRows[i]!.id, i]
+      );
+    }
+    await db.execute("UPDATE playlists SET track_count = ? WHERE id = ?", [trackRows.length, playlist.id]);
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
+  }
+
+  async function updateSmartPlaylistRules(playlist: PlaylistRow, filters: SmartFilters, swc: ServerWithCredential): Promise<void> {
+    const db = await getDb();
+    await db.execute("UPDATE playlists SET name = ?, rules_json = ? WHERE id = ?", [filters.name, JSON.stringify(filters), playlist.id]);
+    const { server, credential } = swc;
+    const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
+    await updateNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, filters.name, undefined, server.alt_url ?? undefined);
+    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    await refreshSmartPlaylist({ ...playlist, name: filters.name, rules_json: JSON.stringify(filters) }, swc);
+  }
+
+  return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover, createSmartPlaylist, refreshSmartPlaylist, updateSmartPlaylistRules };
 }

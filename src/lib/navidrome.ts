@@ -1,6 +1,24 @@
 import { md5 } from "js-md5";
+import { invoke } from "@tauri-apps/api/core";
 
 let _streamMaxBitrate = 0;
+let _coverServerPort: number | null = null;
+
+export function initCoverServer(port: number): void {
+  _coverServerPort = port;
+}
+
+export async function updateCoverProxyConfig(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<void> {
+  const params = buildAuthParams(username, credential);
+  await invoke("set_cover_proxy_config", {
+    baseUrl: normalizeUrl(baseUrl),
+    authParams: params.toString(),
+  });
+}
 export function setStreamMaxBitrate(kbps: number): void {
   _streamMaxBitrate = kbps;
 }
@@ -86,6 +104,9 @@ export function getCoverArtUrl(
   coverArtId: string,
   size = 300
 ): string {
+  if (_coverServerPort !== null) {
+    return `http://127.0.0.1:${_coverServerPort}/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
+  }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
   params.set("size", String(size));
@@ -512,6 +533,30 @@ export function removeTrackFromNavidromePlaylist(
     playlistId: nativePlaylistId,
     songIndexToRemove: String(songIndex),
   }, altUrl);
+}
+
+export async function replaceNavidromePlaylistTracks(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativePlaylistId: string,
+  nativeTrackIds: string[],
+  currentTrackCount: number,
+  altUrl?: string
+): Promise<void> {
+  const params = buildAuthParams(username, credential);
+  params.set("playlistId", nativePlaylistId);
+  for (let i = 0; i < currentTrackCount; i++) params.append("songIndexToRemove", String(i));
+  for (const id of nativeTrackIds) params.append("songIdToAdd", id);
+  const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
+  if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { message: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "updatePlaylist failed");
+  }
 }
 
 export function scrobbleTrack(

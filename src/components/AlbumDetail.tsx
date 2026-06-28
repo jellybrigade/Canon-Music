@@ -234,13 +234,26 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
     : null;
 
-  const [accentColor, setAccentColor] = useState<string | null>(null);
+  const [accentColor, setAccentColor] = useState<string | null>(album.accent_color ?? null);
   useEffect(() => {
-    if (!coverArtUrl) { setAccentColor(null); return; }
+    if (album.accent_color) {
+      setAccentColor(album.accent_color);
+      return;
+    }
+    // Clear immediately so a stale color from a previous album doesn't show during async extraction.
+    setAccentColor(null);
+    if (!coverArtUrl) { return; }
     let cancelled = false;
-    void extractAccent(coverArtUrl).then((color) => { if (!cancelled) setAccentColor(color); });
+    void extractAccent(coverArtUrl).then(async (color) => {
+      if (cancelled) return;
+      setAccentColor(color);
+      if (color) {
+        const db = await getDb();
+        await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, album.id]);
+      }
+    });
     return () => { cancelled = true; };
-  }, [coverArtUrl]);
+  }, [coverArtUrl, album.accent_color, album.id]);
 
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {

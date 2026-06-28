@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus, Music } from "lucide-react";
+import { Plus, Music, ListMusic } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { SmartPlaylistModal } from "./SmartPlaylistModal";
+import type { SmartFilters } from "../lib/smartPlaylist";
 import "./PlaylistList.css";
 
 interface Props {
@@ -10,11 +12,13 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (playlist: PlaylistRow) => void;
   onCreatePlaylist: (name: string, swc: ServerWithCredential) => Promise<void>;
+  onCreateSmartPlaylist: (filters: SmartFilters, swc: ServerWithCredential) => Promise<void>;
 }
 
-export function PlaylistList({ playlists, serverWithCredential, onSelect, onCreatePlaylist }: Props) {
+export function PlaylistList({ playlists, serverWithCredential, onSelect, onCreatePlaylist, onCreateSmartPlaylist }: Props) {
   const { server, credential } = serverWithCredential;
   const [creating, setCreating] = useState(false);
+  const [showSmartModal, setShowSmartModal] = useState(false);
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,6 +58,14 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
         >
           <Plus size={16} />
           New Playlist
+        </button>
+        <button
+          className="playlist-create-btn"
+          onClick={() => setShowSmartModal(true)}
+          title="New smart playlist"
+        >
+          <ListMusic size={16} />
+          Smart Playlist
         </button>
       </div>
       {creating && (
@@ -95,20 +107,26 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
                   <img src={artUrl} alt={pl.name} draggable={false} />
                 ) : (
                   <div className="playlist-card-art-placeholder">
-                    <Music size={32} />
+                    {pl.is_smart ? <ListMusic size={32} /> : <Music size={32} />}
                   </div>
                 )}
               </div>
               <div className="playlist-card-info">
                 <span className="playlist-card-name">{pl.name}</span>
                 <span className="playlist-card-meta">
-                  {pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
+                  {pl.is_smart ? "Smart · " : ""}{pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
                 </span>
               </div>
             </button>
           );
         })}
       </div>
+      {showSmartModal && (
+        <SmartPlaylistModal
+          onSave={(filters) => onCreateSmartPlaylist(filters, serverWithCredential)}
+          onClose={() => setShowSmartModal(false)}
+        />
+      )}
     </div>
   );
 }

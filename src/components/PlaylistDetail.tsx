@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera } from "lucide-react";
+import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../types/library";
+import { SmartPlaylistModal } from "./SmartPlaylistModal";
+import type { SmartFilters } from "../lib/smartPlaylist";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -38,12 +40,14 @@ interface Props {
   onClose: () => void;
   onDelete: () => Promise<void>;
   onRename: (playlist: PlaylistRow, name: string, comment: string | null, swc: ServerWithCredential) => Promise<void>;
+  onRefreshSmart?: (playlist: PlaylistRow, swc: ServerWithCredential) => Promise<void>;
+  onUpdateSmartRules?: (playlist: PlaylistRow, filters: SmartFilters, swc: ServerWithCredential) => Promise<void>;
   onSetCustomCover?: (playlistId: string, dataUri: string | null) => Promise<void>;
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
 }
 
-export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onSetCustomCover, onSelectAlbum, onSelectArtist }: Props) {
+export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onRefreshSmart, onUpdateSmartRules, onSetCustomCover, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -100,6 +104,8 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     setDescValue(playlist.comment ?? "");
   }, [playlist.id, playlist.name, playlist.comment]);
 
+  const [refreshingSmart, setRefreshingSmart] = useState(false);
+  const [showEditSmartModal, setShowEditSmartModal] = useState(false);
   const [resumeIndex, setResumeIndex] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -229,6 +235,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     } catch (e) {
       console.error("Failed to delete playlist:", e);
       setDeleting(false);
+    }
+  }
+
+  async function handleRefreshSmart() {
+    if (!onRefreshSmart || refreshingSmart) return;
+    setRefreshingSmart(true);
+    try {
+      await onRefreshSmart(playlist, serverWithCredential);
+    } catch (e) {
+      console.error("Failed to refresh smart playlist:", e);
+    } finally {
+      setRefreshingSmart(false);
     }
   }
 
@@ -366,6 +384,27 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
               >
                 <Play size={16} /> Play All
               </button>
+              {playlist.is_smart ? (
+                <>
+                  <button
+                    className="play-album-btn"
+                    onClick={() => void handleRefreshSmart()}
+                    disabled={refreshingSmart}
+                    aria-label="Refresh smart playlist"
+                    title="Re-run rules and update tracks"
+                  >
+                    <RefreshCw size={15} /> {refreshingSmart ? "Refreshing…" : "Refresh"}
+                  </button>
+                  <button
+                    className="play-album-btn"
+                    onClick={() => setShowEditSmartModal(true)}
+                    aria-label="Edit smart playlist rules"
+                    title="Edit rules"
+                  >
+                    <ListMusic size={15} /> Edit Rules
+                  </button>
+                </>
+              ) : null}
               {confirmDelete ? (
                 <>
                   <button
@@ -528,6 +567,14 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
             Remove from Playlist
           </button>
         </div>
+      )}
+      {showEditSmartModal && onUpdateSmartRules && playlist.rules_json && (
+        <SmartPlaylistModal
+          title="Edit Smart Playlist"
+          initialFilters={JSON.parse(playlist.rules_json) as SmartFilters}
+          onSave={(filters) => onUpdateSmartRules(playlist, filters, serverWithCredential)}
+          onClose={() => setShowEditSmartModal(false)}
+        />
       )}
     </div>
   );
