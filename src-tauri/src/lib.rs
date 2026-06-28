@@ -103,6 +103,33 @@ struct TrayState {
     close_to_tray: AtomicBool,
 }
 
+#[derive(Clone)]
+struct CoverProxyConfig {
+    base_url: String,
+    auth_params: String,
+}
+
+struct CoverState {
+    port: u16,
+    #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
+    cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
+}
+
+#[tauri::command]
+fn get_cover_server_port(state: tauri::State<'_, CoverState>) -> u16 {
+    state.port
+}
+
+#[tauri::command]
+fn set_cover_proxy_config(
+    state: tauri::State<'_, CoverState>,
+    base_url: String,
+    auth_params: String,
+) {
+    *state.proxy_config.lock().unwrap() = Some(CoverProxyConfig { base_url, auth_params });
+}
+
 fn build_tray_menu<R: tauri::Runtime>(
     app: &impl tauri::Manager<R>,
     track_label: &str,
@@ -834,6 +861,101 @@ pub fn run() {
         .expect("Failed to spawn audio thread");
     let handle = rx.recv().unwrap_or(None);
 
+    // Bind cover art proxy server on a random OS-assigned port.
+    let cover_cache: Arc<Mutex<HashMap<String, Vec<u8>>>> = Arc::new(Mutex::new(HashMap::new()));
+    let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
+    let cover_port;
+    {
+        use std::net::TcpListener;
+        let listener = TcpListener::bind("127.0.0.1:0").expect("cover server bind failed");
+        cover_port = listener.local_addr().expect("cover server addr").port();
+        let server = tiny_http::Server::from_listener(listener, None).expect("cover server init failed");
+        let cache_clone = Arc::clone(&cover_cache);
+        let config_clone = Arc::clone(&cover_proxy_config);
+        std::thread::Builder::new()
+            .name("cover-server".into())
+            .spawn(move || {
+                let client = reqwest::blocking::Client::builder()
+                    .timeout(Duration::from_secs(30))
+                    .build()
+                    .expect("cover proxy http client failed");
+                for request in server.incoming_requests() {
+                    let url = request.url().to_string();
+                    let path_query = match url.strip_prefix("/cover/") {
+                        Some(s) => s.to_string(),
+                        None => {
+                            let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(404)));
+                            continue;
+                        }
+                    };
+                    let (id, size) = if let Some(q) = path_query.find('?') {
+                        let id = path_query[..q].to_string();
+                        let size = path_query[q + 1..]
+                            .split('&')
+                            .find_map(|kv| {
+                                let mut parts = kv.splitn(2, '=');
+                                if parts.next() == Some("size") {
+                                    parts.next().and_then(|v| v.parse::<u32>().ok())
+                                } else {
+                                    None
+                                }
+                            })
+                            .unwrap_or(300);
+                        (id, size)
+                    } else {
+                        (path_query, 300u32)
+                    };
+                    let cache_key = format!("{id}:{size}");
+                    let cached = cache_clone.lock().unwrap().get(&cache_key).cloned();
+                    let bytes = if let Some(b) = cached {
+                        b
+                    } else {
+                        let cfg = config_clone.lock().unwrap().clone();
+                        match cfg {
+                            None => {
+                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(503)));
+                                continue;
+                            }
+                            Some(cfg) => {
+                                let fetch_url = format!(
+                                    "{}/rest/getCoverArt?{}&id={}&size={}",
+                                    cfg.base_url, cfg.auth_params, id, size
+                                );
+                                match client.get(&fetch_url).send() {
+                                    Ok(resp) if resp.status().is_success() => {
+                                        match resp.bytes() {
+                                            Ok(b) => {
+                                                let b = b.to_vec();
+                                                cache_clone.lock().unwrap().insert(cache_key, b.clone());
+                                                b
+                                            }
+                                            Err(_) => {
+                                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                    _ => {
+                                        let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    let mut resp = tiny_http::Response::from_data(bytes);
+                    if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", "image/jpeg") {
+                        resp = resp.with_header(h);
+                    }
+                    if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
+                        resp = resp.with_header(h);
+                    }
+                    let _ = request.respond(resp);
+                }
+            })
+            .expect("Failed to spawn cover server thread");
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
@@ -852,6 +974,11 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .manage(CoverState {
+            port: cover_port,
+            cache: cover_cache,
+            proxy_config: cover_proxy_config,
+        })
         .setup(|app| {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let menu = build_tray_menu(app.handle(), "Not playing", false)?;
@@ -923,6 +1050,8 @@ pub fn run() {
             tray_update,
             tray_set_visible,
             tray_set_close_to_tray,
+            get_cover_server_port,
+            set_cover_proxy_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

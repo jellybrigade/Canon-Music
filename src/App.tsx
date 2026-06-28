@@ -56,7 +56,7 @@ import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
 import { FeedbackModal } from "./components/FeedbackModal";
-import { getCoverArtUrl, getStreamUrl, setStreamMaxBitrate } from "./lib/navidrome";
+import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./lib/navidrome";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { stripServerPrefix } from "./utils/ids";
@@ -352,6 +352,19 @@ export default function App() {
   }, [searchRaw, searchOpen, clearSearch]);
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
+
+  // Cover art proxy: get the local server port once on mount, then push credentials whenever they change
+  useEffect(() => {
+    void invoke<number>("get_cover_server_port").then(initCoverServer).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (!serverWithCred) return;
+    void updateCoverProxyConfig(
+      serverWithCred.server.url,
+      serverWithCred.server.username,
+      serverWithCred.credential
+    ).catch(() => {});
+  }, [serverWithCred]);
 
   // Tray: initialize visibility and close-to-tray from settings, then keep menu in sync
   const [showTrayIcon] = useBoolSetting("tray.show_icon", false);

@@ -1,6 +1,24 @@
 import { md5 } from "js-md5";
+import { invoke } from "@tauri-apps/api/core";
 
 let _streamMaxBitrate = 0;
+let _coverServerPort: number | null = null;
+
+export function initCoverServer(port: number): void {
+  _coverServerPort = port;
+}
+
+export async function updateCoverProxyConfig(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<void> {
+  const params = buildAuthParams(username, credential);
+  await invoke("set_cover_proxy_config", {
+    baseUrl: normalizeUrl(baseUrl),
+    authParams: params.toString(),
+  });
+}
 export function setStreamMaxBitrate(kbps: number): void {
   _streamMaxBitrate = kbps;
 }
@@ -86,6 +104,9 @@ export function getCoverArtUrl(
   coverArtId: string,
   size = 300
 ): string {
+  if (_coverServerPort !== null) {
+    return `http://127.0.0.1:${_coverServerPort}/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
+  }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
   params.set("size", String(size));
