@@ -120,8 +120,8 @@ export function useRadio() {
               artistCounts.set(k, (artistCounts.get(k) ?? 0) + 1);
             }
           }
-          // Block albums that appear in the last ALBUM_COOLDOWN queued tracks
-          const recentTail = queue.slice(Math.max(0, queue.length - ALBUM_COOLDOWN));
+          // Block albums that appear in the last ALBUM_COOLDOWN upcoming tracks
+          const recentTail = queue.slice(Math.max(queueIndex, queue.length - ALBUM_COOLDOWN));
           const recentAlbumIds = new Set(recentTail.map(t => t.albumId).filter((id): id is string => !!id));
 
           const filtered = candidates.filter(c => {
