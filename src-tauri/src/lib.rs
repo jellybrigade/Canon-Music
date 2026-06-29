@@ -137,7 +137,11 @@ fn build_tray_menu<R: tauri::Runtime>(
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
     let label = if track_label.is_empty() { "Canon" } else { track_label };
-    let display = if label.len() > 45 { format!("{}…", &label[..45]) } else { label.to_string() };
+    let display = if label.chars().count() > 45 {
+        format!("{}…", label.chars().take(45).collect::<String>())
+    } else {
+        label.to_string()
+    };
     let track_item = MenuItemBuilder::new(&display).enabled(false).build(app)?;
     let play_pause = MenuItemBuilder::new(if is_playing { "⏸  Pause" } else { "▶  Play" })
         .id("play_pause")
