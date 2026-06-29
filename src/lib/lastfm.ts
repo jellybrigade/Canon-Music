@@ -312,20 +312,6 @@ export async function fetchSimilarTracks(artist: string, title: string): Promise
   }
 }
 
-export async function fetchTrackTagsForRadio(artist: string, title: string): Promise<LastfmTagResult> {
-  const cacheKey = `track.getTopTags:${artist.toLowerCase()}:${title.toLowerCase()}`;
-  const cached = await getCached<LastfmTagResult>(cacheKey);
-  if (cached) return cached;
-
-  try {
-    const result = await fetchTrackTags(artist, title);
-    await setCached(cacheKey, result);
-    return result;
-  } catch {
-    return { genres: [], moods: [] };
-  }
-}
-
 export async function fetchArtistImage(artist: string): Promise<string | null> {
   const info = await fetchArtistInfo(artist);
   return info.imageUrl;
