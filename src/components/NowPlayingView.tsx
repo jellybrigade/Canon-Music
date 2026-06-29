@@ -156,7 +156,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
     pause, resume, next, prev, seek, setVolume,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
-    addToQueue, playNext, audioFormat,
+    addToQueue, playNext, audioFormat, radioActive,
   } = usePlayerStore();
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
@@ -440,9 +440,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
           </div>
 
-          <div className="now-playing-radio-chip-row">
-            <RadioChip />
-          </div>
+          {radioActive && (
+            <div className="now-playing-radio-chip-row">
+              <RadioChip />
+            </div>
+          )}
 
           {audioFormat && (
             <div className="now-playing-format">

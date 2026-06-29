@@ -214,7 +214,6 @@
 .now-playing-radio-chip-row {
   display: flex;
   justify-content: center;
-  min-height: 1.5rem;
 }
 
 .now-playing-format {
