@@ -15,7 +15,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
 import { fetchArtistInfo } from "../lib/lastfm";
-import { fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
+import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
+import { similarity } from "../lib/fuzzy-match";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../lib/fanart";
 import { fetchTheAudioDbArtist, fetchWikipediaBio } from "../lib/theaudiodb";
 import { useSetting } from "./useSetting";
@@ -42,6 +43,70 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
+/**
+ * When MB returns multiple artist candidates, score each against the user's
+ * local album titles. The candidate whose release groups best overlap with
+ * local albums (score ≥ 0.5, gap ≥ 0.15 to second place) is auto-confirmed
+ * and its MBID is persisted with confirmed_at.
+ */
+async function disambiguateArtistByLocalAlbums(
+  artistName: string,
+  candidates: import("../lib/musicbrainz").MbArtistCandidate[],
+): Promise<string | null> {
+  const db = await getDb();
+  const localRows = await db.select<{ name: string }[]>(
+    `SELECT name FROM albums
+     WHERE artist = ?
+        OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+     LIMIT 50`,
+    [artistName, artistName]
+  );
+  const localAlbums = localRows.map((r) => r.name);
+  if (localAlbums.length === 0) return null;
+
+  // Pre-filter by name similarity; only probe top 3 to limit MB requests
+  const ranked = candidates
+    .map((c) => ({ candidate: c, nameSim: similarity(c.name, artistName) }))
+    .filter((x) => x.nameSim >= 0.5)
+    .sort((a, b) => b.nameSim - a.nameSim)
+    .slice(0, 3);
+  if (ranked.length === 0) return null;
+
+  const scored: Array<{ id: string; score: number }> = [];
+  for (const { candidate } of ranked) {
+    try {
+      const rgTitles = await fetchArtistReleaseGroupTitles(candidate.id);
+      if (rgTitles.length === 0) continue;
+      // Average best-match score for each local album against candidate's release groups
+      let total = 0;
+      for (const localName of localAlbums) {
+        const best = Math.max(...rgTitles.map((t) => similarity(localName, t)));
+        total += best;
+      }
+      scored.push({ id: candidate.id, score: total / localAlbums.length });
+    } catch {
+      // skip candidate if MB call fails
+    }
+  }
+  if (scored.length === 0) return null;
+
+  scored.sort((a, b) => b.score - a.score);
+  const best = scored[0]!;
+  const second = scored[1];
+  if (best.score >= 0.5 && (!second || best.score - second.score >= 0.15)) {
+    await db.execute(
+      `INSERT INTO artist_identity (artist_name, mb_artist_id, confirmed_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(artist_name) DO UPDATE SET
+         mb_artist_id = excluded.mb_artist_id,
+         confirmed_at = excluded.confirmed_at`,
+      [artistName, best.id, Math.floor(Date.now() / 1000)]
+    );
+    return best.id;
+  }
+  return null;
+}
+
 async function enrichArtist(
   artistName: string,
   lastfmName: string,
@@ -49,12 +114,17 @@ async function enrichArtist(
   hasWikidataImage: boolean,
 ): Promise<void> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
-  // Only attempt when no MBID is set and no image is cached. Single match = safe to use.
+  // Only attempt when no MBID is set and no image is cached.
+  // Single match → use directly. Multiple matches → score against local albums to pick best.
   let resolvedMbid = mbArtistId;
   if (!resolvedMbid && !hasWikidataImage) {
     try {
       const candidates = await searchArtists(artistName);
-      if (candidates.length === 1) resolvedMbid = candidates[0]!.id;
+      if (candidates.length === 1) {
+        resolvedMbid = candidates[0]!.id;
+      } else if (candidates.length > 1) {
+        resolvedMbid = await disambiguateArtistByLocalAlbums(artistName, candidates);
+      }
     } catch {
       // silent — portrait stays absent if MB is unreachable
     }
