@@ -1,6 +1,6 @@
 mod streaming;
 mod upnp;
-use streaming::StreamingBuffer;
+use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
 
 /// Combines Read + Seek + Send into a single object-safe trait so we can
 /// box either a Cursor (prefetch cache hit) or a StreamingBuffer (live fetch).
@@ -250,9 +250,11 @@ async fn audio_play(
     // Download and decode on a blocking thread so audio_play returns immediately.
     // Pre-fetched bytes use an in-memory Cursor (instant start). Otherwise a
     // StreamingBuffer lets the decoder start as soon as format-probing data arrives
-    // (~first 64 KB), reducing initial buffering wait. Large files still accumulate
-    // in memory over time; this is not a ring buffer.
+    // (~first 64 KB), reducing initial buffering wait. Tracks >64 MiB spill to a
+    // temp file in stream-spill/ to avoid accumulating large Vec<u8> in RAM.
     std::thread::spawn(move || {
+        let spill_dir = app.path().app_data_dir().ok().map(|d| d.join("stream-spill"));
+
         // Build reader: either from prefetch cache or a streaming HTTP response.
         let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
             (Box::new(Cursor::new(bytes)), String::new())
@@ -278,13 +280,36 @@ async fn audio_play(
                 else if ct.contains("wav") { "WAV" }
                 else { "" }.to_string();
             let content_length = response.content_length();
-            let (buffer, writer) = StreamingBuffer::new(content_length);
+
+            const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
+            let use_spill = content_length.map_or(false, |cl| cl > SPILL_THRESHOLD);
+
+            let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) =
+                if use_spill {
+                    if let Some(ref dir) = spill_dir {
+                        match FileBackedStreamingBuffer::new(dir, this_id, content_length) {
+                            Ok((buf, w)) => (Box::new(buf), AnyWriter::File(w)),
+                            Err(e) => {
+                                eprintln!("stream-spill init failed ({e}); using RAM buffer");
+                                let (buf, w) = StreamingBuffer::new(content_length);
+                                (Box::new(buf), AnyWriter::Ram(w))
+                            }
+                        }
+                    } else {
+                        let (buf, w) = StreamingBuffer::new(content_length);
+                        (Box::new(buf), AnyWriter::Ram(w))
+                    }
+                } else {
+                    let (buf, w) = StreamingBuffer::new(content_length);
+                    (Box::new(buf), AnyWriter::Ram(w))
+                };
 
             // Stream HTTP chunks into the buffer on a dedicated thread.
             let play_id_dl = Arc::clone(&play_id_arc);
             let mut response = response;
             std::thread::spawn(move || {
                 let mut chunk = vec![0u8; 65536];
+                let mut writer = writer;
                 loop {
                     if play_id_dl.load(Ordering::Relaxed) != this_id { break; }
                     match response.read(&mut chunk) {
@@ -296,7 +321,7 @@ async fn audio_play(
                 writer.finish();
             });
 
-            (Box::new(buffer), codec)
+            (reader_box, codec)
         };
 
         // Check before blocking on format probing; common fast-path for rapid skips.
@@ -1020,6 +1045,15 @@ pub fn run() {
             proxy_config: cover_proxy_config,
         })
         .setup(|app| {
+            // Clean up orphaned spill files from prior crashes.
+            if let Ok(spill_dir) = app.path().app_data_dir().map(|d| d.join("stream-spill")) {
+                if let Ok(entries) = std::fs::read_dir(&spill_dir) {
+                    for entry in entries.flatten() {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let menu = build_tray_menu(app.handle(), "Not playing", false)?;
             let _tray = TrayIconBuilder::with_id("main")
