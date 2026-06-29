@@ -546,4 +546,14 @@ export const migrations: Migration[] = [
       ALTER TABLE playlists ADD COLUMN rules_json TEXT;
     `,
   },
+  {
+    version: 41,
+    sql: `
+      CREATE TABLE IF NOT EXISTS radio_signal_cache (
+        cache_key TEXT PRIMARY KEY,
+        value     TEXT NOT NULL,
+        fetched_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];

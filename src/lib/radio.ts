@@ -15,6 +15,9 @@ export interface RadioCandidate {
 
 const MOOD_WEIGHT = 0.4;
 const CANDIDATE_LIMIT = 200;
+const TAG_WEIGHT = 0.40;
+const TRACK_CF_WEIGHT = 0.35;
+const ARTIST_CF_WEIGHT = 0.25;
 
 interface SeedInfo {
   serverId: string;
@@ -27,7 +30,8 @@ interface CandidateParams {
   seedTrackId: string;
   mode: RadioMode;
   excludeIds: Set<string>;
-  similarArtists: string[];
+  artistSimilarity: Map<string, number>;
+  trackSimilarity: Map<string, number>;
 }
 
 // Common SELECT projection reused by simple-query modes
@@ -89,8 +93,8 @@ async function getCuratedCandidates(
   seedTrackId: string,
   seed: SeedInfo,
   excludeIds: Set<string>,
-  similarArtists: string[],
-  lastfmBoost: boolean
+  artistSimilarity: Map<string, number>,
+  trackSimilarity: Map<string, number>
 ): Promise<RadioCandidate[]> {
   const db = await getDb();
   const tree = await getCanonTree();
@@ -152,15 +156,18 @@ async function getCuratedCandidates(
     [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
   );
 
-  const similarSet = new Set(similarArtists.map((n) => n.toLowerCase()));
   const maxTree = rows.length > 0 ? Math.max(...rows.map((r) => r.tree_score)) : 1;
 
   return rows
     .filter((r) => !excludeIds.has(r.id))
     .map((r) => {
       const normalizedTree = maxTree > 0 ? r.tree_score / maxTree : 0;
-      const boost = lastfmBoost && r.artist && similarSet.has(r.artist.toLowerCase()) ? 1 : 0;
-      return rowToCandidate(r, normalizedTree * (1 + 0.25 * boost));
+      const artistKey = (r.artist ?? "").toLowerCase();
+      const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
+      const artistCf = artistSimilarity.get(artistKey) ?? 0;
+      const trackCf = trackSimilarity.get(trackKey) ?? 0;
+      const score = TAG_WEIGHT * normalizedTree + TRACK_CF_WEIGHT * trackCf + ARTIST_CF_WEIGHT * artistCf;
+      return rowToCandidate(r, score);
     })
     .sort((a, b) => b.score - a.score);
 }
@@ -169,7 +176,8 @@ export async function getRadioCandidates({
   seedTrackId,
   mode,
   excludeIds,
-  similarArtists,
+  artistSimilarity,
+  trackSimilarity,
 }: CandidateParams): Promise<RadioCandidate[]> {
   const db = await getDb();
 
@@ -190,21 +198,22 @@ export async function getRadioCandidates({
 
   switch (mode) {
     case "curated":
-      return getCuratedCandidates(seedTrackId, seed, excludeIds, similarArtists, true);
+      return getCuratedCandidates(seedTrackId, seed, excludeIds, artistSimilarity, trackSimilarity);
 
     case "same-genre":
-      return getCuratedCandidates(seedTrackId, seed, excludeIds, [], false);
+      return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map());
 
     case "similar-artists": {
-      if (similarArtists.length === 0) return [];
-      const placeholders = similarArtists.map(() => "?").join(", ");
+      if (artistSimilarity.size === 0) return [];
+      const similarArtistNames = Array.from(artistSimilarity.keys());
+      const placeholders = similarArtistNames.map(() => "?").join(", ");
       const rows = await db.select<TrackRow[]>(
         `SELECT ${TRACK_PROJECTION}
          FROM tracks t JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ? AND t.id != ?
            AND lower(t.artist) IN (${placeholders})
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, ...similarArtists.map((a) => a.toLowerCase()), CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT]
       );
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
@@ -222,7 +231,7 @@ export async function getRadioCandidates({
     }
 
     case "same-album": {
-      if (!seed.albumId) return getCuratedCandidates(seedTrackId, seed, excludeIds, [], false);
+      if (!seed.albumId) return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map());
       const rows = await db.select<TrackRow[]>(
         `SELECT ${TRACK_PROJECTION}
          FROM tracks t JOIN albums a ON t.album_id = a.id
@@ -232,7 +241,7 @@ export async function getRadioCandidates({
       );
       const filtered = rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
       // Fall back to curated when album exhausted
-      if (filtered.length === 0) return getCuratedCandidates(seedTrackId, seed, excludeIds, [], false);
+      if (filtered.length === 0) return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map());
       return filtered;
     }
 
