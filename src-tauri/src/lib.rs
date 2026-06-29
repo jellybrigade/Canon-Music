@@ -424,16 +424,37 @@ fn audio_set_speed(state: tauri::State<'_, AudioState>, speed: f32) {
 
 #[tauri::command]
 fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
+    let fade_gen = Arc::clone(&state.fade_gen);
+    let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+
+    let target_vol = *state.volume.lock().unwrap();
     let sink_opt = state.sink.lock().unwrap().clone();
     if let Some(sink) = sink_opt {
+        sink.set_volume(0.0);
         let duration = std::time::Duration::from_secs_f64(seconds);
         if let Err(e) = sink.try_seek(duration) {
             eprintln!("audio_seek error: {e}");
+            sink.set_volume(target_vol);
             return;
         }
         let mut pos = state.pos.lock().unwrap();
         pos.offset = seconds;
         pos.play_start = Some(Instant::now());
+        drop(pos);
+
+        // Ramp volume back up over 80 ms to mask any DC-offset click at the seek boundary.
+        std::thread::spawn(move || {
+            const STEPS: u64 = 8;
+            for i in 1..=STEPS {
+                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                let t = i as f32 / STEPS as f32;
+                sink.set_volume(target_vol * t);
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            if fade_gen.load(Ordering::Relaxed) == gen {
+                sink.set_volume(target_vol);
+            }
+        });
     }
 }
 
