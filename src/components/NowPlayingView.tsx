@@ -440,6 +440,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
           </div>
 
+          <div className="now-playing-radio-chip-row">
+            <RadioChip />
+          </div>
+
           {audioFormat && (
             <div className="now-playing-format">
               {audioFormat.codec && `${audioFormat.codec} · `}
@@ -494,7 +498,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           </div>
 
           <div className="now-playing-extras">
-            <div className="now-playing-extras-side"><RadioChip /></div>
+            <div className="now-playing-extras-side"></div>
             <div className="now-playing-extras-center">
               <button
                 className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}

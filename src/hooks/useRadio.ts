@@ -8,9 +8,9 @@ import { getDb } from "../db";
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
 const CANDIDATE_SAMPLE = 50;
-const TOP_PICK_WINDOW = 5;
+const TOP_PICK_WINDOW = 20;
 const MAX_PER_ARTIST = 3;
-const MAX_PER_ALBUM = 2;
+const ALBUM_COOLDOWN = 3; // min tracks between two picks from same album
 
 const UNCAPPED_MODES = new Set(["same-artist", "same-album"]);
 
@@ -109,23 +109,25 @@ export function useRadio() {
           return;
         }
 
-        // For all other modes, enforce per-artist and per-album caps over the lookahead window.
+        // For all other modes, enforce per-artist cap and album cooldown over the lookahead window.
         let capped = candidates;
         if (!UNCAPPED_MODES.has(radioMode)) {
           const upcoming = queue.slice(queueIndex);
           const artistCounts = new Map<string, number>();
-          const albumCounts = new Map<string, number>();
           for (const t of upcoming) {
             if (t.artist) {
               const k = t.artist.toLowerCase();
               artistCounts.set(k, (artistCounts.get(k) ?? 0) + 1);
             }
-            if (t.albumId) albumCounts.set(t.albumId, (albumCounts.get(t.albumId) ?? 0) + 1);
           }
+          // Block albums that appear in the last ALBUM_COOLDOWN upcoming tracks
+          const recentTail = queue.slice(Math.max(queueIndex, queue.length - ALBUM_COOLDOWN));
+          const recentAlbumIds = new Set(recentTail.map(t => t.albumId).filter((id): id is string => !!id));
+
           const filtered = candidates.filter(c => {
             const ak = (c.artist ?? "").toLowerCase();
             if (ak && (artistCounts.get(ak) ?? 0) >= MAX_PER_ARTIST) return false;
-            if (c.albumId && (albumCounts.get(c.albumId) ?? 0) >= MAX_PER_ALBUM) return false;
+            if (c.albumId && recentAlbumIds.has(c.albumId)) return false;
             return true;
           });
           capped = filtered.length > 0 ? filtered : candidates;

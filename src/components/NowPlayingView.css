@@ -211,6 +211,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.now-playing-radio-chip-row {
+  display: flex;
+  justify-content: center;
+  min-height: 1.5rem;
+}
+
 .now-playing-format {
   font-size: 0.7rem;
   color: rgba(255, 255, 255, 0.28);
