@@ -129,7 +129,7 @@ function ArtistDetailRoute({
   const stateArtist = (state as { artist?: ArtistRow } | null)?.artist ?? null;
   const { data: fetchedArtist } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
-    enabled: !stateArtist && !!artistName && !!serverWithCred,
+    enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
       const name = decodeURIComponent(artistName!);
@@ -145,7 +145,7 @@ function ArtistDetailRoute({
       return rows[0] ?? null;
     },
   });
-  const artist = stateArtist ?? fetchedArtist ?? null;
+  const artist = fetchedArtist ?? stateArtist ?? null;
   if (!artist || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>

@@ -199,9 +199,117 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
   }
 }
 
+const SIGNAL_CACHE_TTL_S = 7 * 24 * 3600;
+
+async function getCached<T>(key: string): Promise<T | null> {
+  try {
+    const db = await getDb();
+    const cutoff = Math.floor(Date.now() / 1000) - SIGNAL_CACHE_TTL_S;
+    const rows = await db.select<{ value: string }[]>(
+      "SELECT value FROM radio_signal_cache WHERE cache_key = ? AND fetched_at > ?",
+      [key, cutoff]
+    );
+    if (rows[0]) return JSON.parse(rows[0].value) as T;
+  } catch { /* cache miss */ }
+  return null;
+}
+
+async function setCached<T>(key: string, value: T): Promise<void> {
+  try {
+    const db = await getDb();
+    await db.execute(
+      "INSERT OR REPLACE INTO radio_signal_cache (cache_key, value, fetched_at) VALUES (?, ?, ?)",
+      [key, JSON.stringify(value), Math.floor(Date.now() / 1000)]
+    );
+  } catch { /* non-critical */ }
+}
+
+export interface SimilarArtistEntry {
+  name: string;
+  match: number;
+}
+
+export async function fetchSimilarArtistsFull(artist: string): Promise<SimilarArtistEntry[]> {
+  const cacheKey = `artist.getSimilar:${artist.toLowerCase()}`;
+  const cached = await getCached<SimilarArtistEntry[]>(cacheKey);
+  if (cached) return cached;
+
+  const apiKey = await getApiKey();
+  if (!apiKey) return [];
+
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "artist.getSimilar");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("limit", "50");
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      similarartists?: { artist?: Array<{ name: string; match: string }> };
+      error?: number;
+    };
+    if (data.error) return [];
+    const result = (data.similarartists?.artist ?? []).map((a) => ({
+      name: a.name,
+      match: parseFloat(a.match) || 0,
+    }));
+    await setCached(cacheKey, result);
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchSimilarArtists(artist: string): Promise<string[]> {
-  const info = await fetchArtistInfo(artist);
-  return info.similar;
+  const full = await fetchSimilarArtistsFull(artist);
+  return full.map((a) => a.name).slice(0, 10);
+}
+
+export interface SimilarTrackEntry {
+  artist: string;
+  title: string;
+  match: number;
+}
+
+export async function fetchSimilarTracks(artist: string, title: string): Promise<SimilarTrackEntry[]> {
+  const cacheKey = `track.getSimilar:${artist.toLowerCase()}:${title.toLowerCase()}`;
+  const cached = await getCached<SimilarTrackEntry[]>(cacheKey);
+  if (cached) return cached;
+
+  const apiKey = await getApiKey();
+  if (!apiKey) return [];
+
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "track.getSimilar");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("track", title);
+  url.searchParams.set("limit", "100");
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      similartracks?: { track?: Array<{ name: string; artist: { name: string }; match: number }> };
+      error?: number;
+    };
+    if (data.error) return [];
+    const result = (data.similartracks?.track ?? []).map((t) => ({
+      artist: t.artist.name,
+      title: t.name,
+      match: t.match || 0,
+    }));
+    await setCached(cacheKey, result);
+    return result;
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchArtistImage(artist: string): Promise<string | null> {

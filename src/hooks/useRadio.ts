@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/player";
 import { getRadioCandidates } from "../lib/radio";
-import { fetchSimilarArtists } from "../lib/lastfm";
+import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../lib/lastfm";
 import { getDb } from "../db";
 
 const LOOKAHEAD_THRESHOLD = 10;
@@ -53,15 +53,30 @@ export function useRadio() {
         for (const id of recentIds) excludeIds.add(id);
 
         const needsSimilarArtists = radioMode === "curated" || radioMode === "similar-artists";
-        const similarArtists = needsSimilarArtists && currentTrack.artist
-          ? await fetchSimilarArtists(currentTrack.artist).catch(() => [])
-          : [];
+        const [similarArtistsFull, similarTracks] = await Promise.all([
+          needsSimilarArtists && currentTrack.artist
+            ? fetchSimilarArtistsFull(currentTrack.artist).catch(() => [])
+            : Promise.resolve([]),
+          radioMode === "curated" && currentTrack.artist && currentTrack.title
+            ? fetchSimilarTracks(currentTrack.artist, currentTrack.title).catch(() => [])
+            : Promise.resolve([]),
+        ]);
+
+        const artistSimilarity = new Map<string, number>();
+        if (currentTrack.artist) artistSimilarity.set(currentTrack.artist.toLowerCase(), 1.0);
+        for (const a of similarArtistsFull) artistSimilarity.set(a.name.toLowerCase(), a.match);
+
+        const trackSimilarity = new Map<string, number>();
+        for (const t of similarTracks) {
+          trackSimilarity.set(`${t.artist.toLowerCase()}|||${t.title.toLowerCase()}`, t.match);
+        }
 
         const candidates = await getRadioCandidates({
           seedTrackId: currentTrack.id,
           mode: radioMode,
           excludeIds,
-          similarArtists,
+          artistSimilarity,
+          trackSimilarity,
         });
 
         // same-album mode: picks in track order — take first candidate directly
