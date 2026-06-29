@@ -17,7 +17,7 @@ import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useEnrichAlbumTracks } from "../hooks/useEnrichAlbumTracks";
-import { normalizeAlbum } from "../lib/tag-normalize";
+import { normalizeAlbum, isYearLikeGenre } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useBoolSetting, useSetting } from "../hooks/useSetting";
@@ -80,6 +80,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
   useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
+  const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
 
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(album.id),
@@ -101,6 +102,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const trackTagGenresMap = useMemo(() => {
     const map = new Map<string, { display: string; canonicalId: string }[]>();
     for (const row of trackTagRows) {
+      if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
       const display = genreMappings.has(row.raw_value)
         ? (genreMappings.get(row.raw_value) ?? null)
         : row.raw_value;
@@ -112,7 +114,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
       }
     }
     return map;
-  }, [trackTagRows, genreMappings]);
+  }, [trackTagRows, genreMappings, skipYearGenres]);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
