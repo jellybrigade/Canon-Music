@@ -72,22 +72,23 @@ async function disambiguateArtistByLocalAlbums(
     .slice(0, 3);
   if (ranked.length === 0) return null;
 
-  const scored: Array<{ id: string; score: number }> = [];
-  for (const { candidate } of ranked) {
-    try {
-      const rgTitles = await fetchArtistReleaseGroupTitles(candidate.id);
-      if (rgTitles.length === 0) continue;
-      // Average best-match score for each local album against candidate's release groups
-      let total = 0;
-      for (const localName of localAlbums) {
-        const best = Math.max(...rgTitles.map((t) => similarity(localName, t)));
-        total += best;
+  const scored = (await Promise.all(
+    ranked.map(async ({ candidate }) => {
+      try {
+        const rgTitles = await fetchArtistReleaseGroupTitles(candidate.id);
+        if (rgTitles.length === 0) return null;
+        // Average best-match score for each local album against candidate's release groups
+        let total = 0;
+        for (const localName of localAlbums) {
+          const best = Math.max(...rgTitles.map((t) => similarity(localName, t)));
+          total += best;
+        }
+        return { id: candidate.id, score: total / localAlbums.length };
+      } catch {
+        return null;
       }
-      scored.push({ id: candidate.id, score: total / localAlbums.length });
-    } catch {
-      // skip candidate if MB call fails
-    }
-  }
+    })
+  )).filter((s): s is { id: string; score: number } => s !== null);
   if (scored.length === 0) return null;
 
   scored.sort((a, b) => b.score - a.score);

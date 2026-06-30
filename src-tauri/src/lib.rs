@@ -286,7 +286,9 @@ async fn audio_play(
             let content_length = response.content_length();
 
             const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
-            let use_spill = content_length.map_or(false, |cl| cl > SPILL_THRESHOLD);
+            // Unknown Content-Length (chunked transfer) defaults to spill so large
+            // streams don't accumulate unbounded in RAM.
+            let use_spill = content_length.map_or(true, |cl| cl > SPILL_THRESHOLD);
 
             let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) =
                 if use_spill {
@@ -428,6 +430,8 @@ fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
 
 #[tauri::command]
 fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
+    // Cancel any in-flight seek fade so it doesn't overwrite this new volume.
+    state.fade_gen.fetch_add(1, Ordering::Relaxed);
     *state.volume.lock().unwrap() = volume;
     if let Some(sink) = state.sink.lock().unwrap().as_ref() {
         sink.set_volume(volume);
@@ -472,13 +476,15 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
         drop(pos);
 
         // Ramp volume back up over 80 ms to mask any DC-offset click at the seek boundary.
+        // Check gen AFTER each sleep so a concurrent seek that fires mid-sleep is seen
+        // immediately on wake, preventing a partial-volume write over the new seek's mute.
         std::thread::spawn(move || {
             const STEPS: u64 = 8;
             for i in 1..=STEPS {
+                std::thread::sleep(Duration::from_millis(10));
                 if fade_gen.load(Ordering::Relaxed) != gen { return; }
                 let t = i as f32 / STEPS as f32;
                 sink.set_volume(target_vol * t);
-                std::thread::sleep(Duration::from_millis(10));
             }
             if fade_gen.load(Ordering::Relaxed) == gen {
                 sink.set_volume(target_vol);

@@ -209,6 +209,18 @@ impl Drop for FileBackedStreamingBuffer {
     }
 }
 
+impl Drop for FileBackedStreamingWriter {
+    fn drop(&mut self) {
+        // If the download thread exits without calling finish() (e.g. panic), wake
+        // the reader so it returns Err rather than blocking forever in condvar wait.
+        let mut state = self.shared.state.lock().unwrap();
+        if !state.finished && !state.cancelled {
+            state.cancelled = true;
+            self.shared.data_available.notify_all();
+        }
+    }
+}
+
 impl FileBackedStreamingWriter {
     pub fn write_chunk(&mut self, data: &[u8]) -> bool {
         {
@@ -218,6 +230,10 @@ impl FileBackedStreamingWriter {
             }
         }
         if self.file.write_all(data).is_err() {
+            // Mark cancelled so the reader returns Err instead of a premature Ok(0) EOF.
+            let mut state = self.shared.state.lock().unwrap();
+            state.cancelled = true;
+            self.shared.data_available.notify_all();
             return false;
         }
         let mut state = self.shared.state.lock().unwrap();

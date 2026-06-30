@@ -281,7 +281,7 @@ export async function fetchArtistReleaseGroupTitles(artistMbid: string): Promise
     });
     const page = data["release-groups"] ?? [];
     titles.push(...page.map((rg) => rg.title));
-    const total = data["release-group-count"] ?? 0;
+    const total = data["release-group-count"] ?? Infinity;
     offset += page.length;
     if (offset >= total || page.length === 0) break;
     // Limit total pages to avoid excessive requests for artists with huge catalogs
