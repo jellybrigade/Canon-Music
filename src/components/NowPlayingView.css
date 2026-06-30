@@ -508,11 +508,20 @@
 }
 
 .now-playing-up-next-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.now-playing-up-next-meta-text {
   font-size: 0.6875rem;
   color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .now-playing-up-next-duration {
