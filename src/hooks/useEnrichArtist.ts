@@ -18,7 +18,7 @@ import { fetchArtistInfo } from "../lib/lastfm";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../lib/musicbrainz";
 import { similarity } from "../lib/fuzzy-match";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../lib/fanart";
-import { fetchTheAudioDbArtist, fetchWikipediaBio } from "../lib/theaudiodb";
+import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../lib/theaudiodb";
 import { useSetting } from "./useSetting";
 
 export interface ArtistEnrichmentRow {
@@ -146,7 +146,10 @@ async function enrichArtist(
   if (!finalBio) {
     const [adbResult, wikiBio] = await Promise.all([
       fetchTheAudioDbArtist(artistName).catch(() => null),
-      fetchWikipediaBio(artistName).catch(() => null),
+      // Prefer MBID-based Wikipedia lookup to avoid wrong-artist matches on ambiguous names (e.g. "Ye")
+      resolvedMbid
+        ? fetchWikipediaBioByMbid(resolvedMbid).catch(() => fetchWikipediaBio(artistName).catch(() => null))
+        : fetchWikipediaBio(artistName).catch(() => null),
     ]);
     if (adbResult) {
       finalBio = adbResult.bio;
