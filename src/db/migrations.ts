@@ -556,4 +556,12 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 42,
+    sql: `
+      ALTER TABLE album_identity ADD COLUMN album_bio TEXT;
+      ALTER TABLE album_identity ADD COLUMN lastfm_url TEXT;
+      ALTER TABLE album_identity ADD COLUMN album_enriched_at INTEGER;
+    `,
+  },
 ];
