@@ -1,6 +1,6 @@
 mod streaming;
 mod upnp;
-use streaming::StreamingBuffer;
+use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
 
 /// Combines Read + Seek + Send into a single object-safe trait so we can
 /// box either a Cursor (prefetch cache hit) or a StreamingBuffer (live fetch).
@@ -137,7 +137,11 @@ fn build_tray_menu<R: tauri::Runtime>(
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
     let label = if track_label.is_empty() { "Canon" } else { track_label };
-    let display = if label.len() > 45 { format!("{}…", &label[..45]) } else { label.to_string() };
+    let display = if label.chars().count() > 45 {
+        format!("{}…", label.chars().take(45).collect::<String>())
+    } else {
+        label.to_string()
+    };
     let track_item = MenuItemBuilder::new(&display).enabled(false).build(app)?;
     let play_pause = MenuItemBuilder::new(if is_playing { "⏸  Pause" } else { "▶  Play" })
         .id("play_pause")
@@ -250,9 +254,11 @@ async fn audio_play(
     // Download and decode on a blocking thread so audio_play returns immediately.
     // Pre-fetched bytes use an in-memory Cursor (instant start). Otherwise a
     // StreamingBuffer lets the decoder start as soon as format-probing data arrives
-    // (~first 64 KB), reducing initial buffering wait. Large files still accumulate
-    // in memory over time; this is not a ring buffer.
+    // (~first 64 KB), reducing initial buffering wait. Tracks >64 MiB spill to a
+    // temp file in stream-spill/ to avoid accumulating large Vec<u8> in RAM.
     std::thread::spawn(move || {
+        let spill_dir = app.path().app_data_dir().ok().map(|d| d.join("stream-spill"));
+
         // Build reader: either from prefetch cache or a streaming HTTP response.
         let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
             (Box::new(Cursor::new(bytes)), String::new())
@@ -278,13 +284,38 @@ async fn audio_play(
                 else if ct.contains("wav") { "WAV" }
                 else { "" }.to_string();
             let content_length = response.content_length();
-            let (buffer, writer) = StreamingBuffer::new(content_length);
+
+            const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
+            // Unknown Content-Length (chunked transfer) defaults to spill so large
+            // streams don't accumulate unbounded in RAM.
+            let use_spill = content_length.map_or(true, |cl| cl > SPILL_THRESHOLD);
+
+            let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) =
+                if use_spill {
+                    if let Some(ref dir) = spill_dir {
+                        match FileBackedStreamingBuffer::new(dir, this_id, content_length) {
+                            Ok((buf, w)) => (Box::new(buf), AnyWriter::File(w)),
+                            Err(e) => {
+                                eprintln!("stream-spill init failed ({e}); using RAM buffer");
+                                let (buf, w) = StreamingBuffer::new(content_length);
+                                (Box::new(buf), AnyWriter::Ram(w))
+                            }
+                        }
+                    } else {
+                        let (buf, w) = StreamingBuffer::new(content_length);
+                        (Box::new(buf), AnyWriter::Ram(w))
+                    }
+                } else {
+                    let (buf, w) = StreamingBuffer::new(content_length);
+                    (Box::new(buf), AnyWriter::Ram(w))
+                };
 
             // Stream HTTP chunks into the buffer on a dedicated thread.
             let play_id_dl = Arc::clone(&play_id_arc);
             let mut response = response;
             std::thread::spawn(move || {
                 let mut chunk = vec![0u8; 65536];
+                let mut writer = writer;
                 loop {
                     if play_id_dl.load(Ordering::Relaxed) != this_id { break; }
                     match response.read(&mut chunk) {
@@ -296,7 +327,7 @@ async fn audio_play(
                 writer.finish();
             });
 
-            (Box::new(buffer), codec)
+            (reader_box, codec)
         };
 
         // Check before blocking on format probing; common fast-path for rapid skips.
@@ -399,6 +430,8 @@ fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
 
 #[tauri::command]
 fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
+    // Cancel any in-flight seek fade so it doesn't overwrite this new volume.
+    state.fade_gen.fetch_add(1, Ordering::Relaxed);
     *state.volume.lock().unwrap() = volume;
     if let Some(sink) = state.sink.lock().unwrap().as_ref() {
         sink.set_volume(volume);
@@ -424,16 +457,39 @@ fn audio_set_speed(state: tauri::State<'_, AudioState>, speed: f32) {
 
 #[tauri::command]
 fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
+    let fade_gen = Arc::clone(&state.fade_gen);
+    let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+
+    let target_vol = *state.volume.lock().unwrap();
     let sink_opt = state.sink.lock().unwrap().clone();
     if let Some(sink) = sink_opt {
+        sink.set_volume(0.0);
         let duration = std::time::Duration::from_secs_f64(seconds);
         if let Err(e) = sink.try_seek(duration) {
             eprintln!("audio_seek error: {e}");
+            sink.set_volume(target_vol);
             return;
         }
         let mut pos = state.pos.lock().unwrap();
         pos.offset = seconds;
         pos.play_start = Some(Instant::now());
+        drop(pos);
+
+        // Ramp volume back up over 80 ms to mask any DC-offset click at the seek boundary.
+        // Check gen AFTER each sleep so a concurrent seek that fires mid-sleep is seen
+        // immediately on wake, preventing a partial-volume write over the new seek's mute.
+        std::thread::spawn(move || {
+            const STEPS: u64 = 8;
+            for i in 1..=STEPS {
+                std::thread::sleep(Duration::from_millis(10));
+                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                let t = i as f32 / STEPS as f32;
+                sink.set_volume(target_vol * t);
+            }
+            if fade_gen.load(Ordering::Relaxed) == gen {
+                sink.set_volume(target_vol);
+            }
+        });
     }
 }
 
@@ -999,6 +1055,15 @@ pub fn run() {
             proxy_config: cover_proxy_config,
         })
         .setup(|app| {
+            // Clean up orphaned spill files from prior crashes.
+            if let Ok(spill_dir) = app.path().app_data_dir().map(|d| d.join("stream-spill")) {
+                if let Ok(entries) = std::fs::read_dir(&spill_dir) {
+                    for entry in entries.flatten() {
+                        let _ = std::fs::remove_file(entry.path());
+                    }
+                }
+            }
+
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
             let menu = build_tray_menu(app.handle(), "Not playing", false)?;
             let _tray = TrayIconBuilder::with_id("main")

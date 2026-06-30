@@ -260,6 +260,36 @@ export async function searchArtists(name: string): Promise<MbArtistCandidate[]> 
   }));
 }
 
+// ── Artist release groups browse ───────────────────────────────────────────────
+
+interface MbBrowseRGResponse {
+  "release-groups"?: Array<{ id: string; title: string }>;
+  "release-group-count"?: number;
+}
+
+/** Fetch all release group titles for an artist MBID (for disambiguation scoring). */
+export async function fetchArtistReleaseGroupTitles(artistMbid: string): Promise<string[]> {
+  const titles: string[] = [];
+  let offset = 0;
+  const limit = 100;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const data = await mbGet<MbBrowseRGResponse>("release-group", {
+      artist: artistMbid,
+      limit: String(limit),
+      offset: String(offset),
+    });
+    const page = data["release-groups"] ?? [];
+    titles.push(...page.map((rg) => rg.title));
+    const total = data["release-group-count"] ?? Infinity;
+    offset += page.length;
+    if (offset >= total || page.length === 0) break;
+    // Limit total pages to avoid excessive requests for artists with huge catalogs
+    if (offset >= 300) break;
+  }
+  return titles;
+}
+
 // ── Artist lookup ──────────────────────────────────────────────────────────────
 
 interface MbLookupArtistResponse {
