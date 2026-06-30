@@ -1,0 +1,97 @@
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getDb } from "../db";
+import { getCoverArtUrl } from "../lib/navidrome";
+import { QK } from "../lib/query-keys";
+import type { ServerWithCredential } from "./useServer";
+
+const BATCH_SIZE = 5;
+const BATCH_DELAY_MS = 100;
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function fetchAndStoreCover(
+  albumId: string,
+  artworkUrl: string,
+  swc: ServerWithCredential,
+): Promise<void> {
+  try {
+    const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 150);
+    const res = await fetch(url);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    const db = await getDb();
+    await db.execute(
+      `INSERT OR REPLACE INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)`,
+      [albumId, dataUrl, Date.now()],
+    );
+  } catch {
+    // ignore individual failures; retry on next session
+  }
+}
+
+async function populateMissingCovers(
+  swc: ServerWithCredential,
+  onBatchDone: () => void,
+): Promise<void> {
+  const db = await getDb();
+  const rows = await db.select<{ id: string; artwork_url: string }[]>(`
+    SELECT a.id, a.artwork_url
+    FROM albums a
+    LEFT JOIN album_covers ac ON ac.album_id = a.id
+    WHERE a.artwork_url IS NOT NULL AND ac.album_id IS NULL
+  `);
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    await Promise.all(batch.map((r) => fetchAndStoreCover(r.id, r.artwork_url, swc)));
+    onBatchDone();
+    if (i + BATCH_SIZE < rows.length) {
+      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
+}
+
+/** Runs a background pass after sync to cache missing album covers in SQLite. */
+export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (!swc) return;
+    void populateMissingCovers(swc, () => {
+      void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
+    });
+  // Re-run when the server changes (e.g. user switches servers).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swc?.server.id]);
+}
+
+interface CoverRow {
+  album_id: string;
+  data_url: string;
+}
+
+/** Returns a Map<albumId, dataUrl> loaded from the SQLite cover cache. */
+export function useAlbumCoverMap(): Map<string, string> {
+  const { data } = useQuery({
+    queryKey: QK.albumCovers(),
+    queryFn: async () => {
+      const db = await getDb();
+      return db.select<CoverRow[]>(`SELECT album_id, data_url FROM album_covers`);
+    },
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const rows = data ?? [];
+  // Rebuild only when rows reference changes (React Query guarantees stable ref when data is same)
+  return new Map(rows.map((r) => [r.album_id, r.data_url]));
+}

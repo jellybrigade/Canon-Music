@@ -9,6 +9,7 @@ import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
 import { useBoolSetting } from "../hooks/useSetting";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { AlbumArt } from "./AlbumArt";
 import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -98,6 +99,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
 
 export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
+  const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
   const [paginated] = useBoolSetting("albums.pagination", false);
@@ -270,7 +272,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                   <AlbumCard
                     key={album.id}
                     album={album}
-                    artUrl={album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null}
+                    artUrl={coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null)}
                     isLoved={lovedAlbumIds.has(album.id)}
                     showBadge={mbAutoIdentify && failedLookupSet.has(album.id)}
                     onSelect={handleSelect}

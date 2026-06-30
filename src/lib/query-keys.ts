@@ -97,4 +97,6 @@ export const QK = {
   settingsFanartApiKey: () => ["settings", "fanart.api_key"] as const,
   settingsAll: () => ["settings"] as const,
   scrobbleQueueCount: () => ["scrobble_queue", "count"] as const,
+
+  albumCovers: () => ["album-covers"] as const,
 } as const;
