@@ -1,3 +1,4 @@
+mod bandsintown;
 mod streaming;
 mod upnp;
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -1136,6 +1137,7 @@ pub fn run() {
             tray_set_close_to_tray,
             get_cover_server_port,
             set_cover_proxy_config,
+            bandsintown::fetch_bandsintown_events,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
