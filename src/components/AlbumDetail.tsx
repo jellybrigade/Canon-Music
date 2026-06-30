@@ -17,6 +17,7 @@ import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useEnrichAlbumTracks } from "../hooks/useEnrichAlbumTracks";
+import { useEnrichAlbum } from "../hooks/useEnrichAlbum";
 import { normalizeAlbum, isYearLikeGenre } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
@@ -79,8 +80,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { data: playlists, addTrackToPlaylist } = usePlaylists();
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
   useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
+  const { data: albumEnrichment } = useEnrichAlbum(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
-  const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
+  const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
 
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(album.id),
@@ -231,6 +233,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   }, [showColPicker]);
 
   const [showGenreEditor, setShowGenreEditor] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
+  const albumBio = albumEnrichment?.album_bio ?? null;
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -668,6 +672,19 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
           onTagFilter={onTagFilter}
           onClose={() => setShowGenreEditor(false)}
         />
+      )}
+
+      {albumBio && (
+        <div className="album-bio-section">
+          <div className={`album-bio-wrap${bioExpanded ? " album-bio-wrap--expanded" : ""}`}>
+            <p className="album-bio">{albumBio}</p>
+          </div>
+          {albumBio.length > 220 && (
+            <button className="album-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
+              {bioExpanded ? "Show less" : "Show more"}
+            </button>
+          )}
+        </div>
       )}
 
       <div className="album-detail-body">

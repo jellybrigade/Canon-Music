@@ -312,6 +312,43 @@ export async function fetchSimilarTracks(artist: string, title: string): Promise
   }
 }
 
+export interface LastfmAlbumInfo {
+  bio: string | null;
+  url: string | null;
+}
+
+export async function fetchAlbumInfo(artist: string, album: string): Promise<LastfmAlbumInfo> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return { bio: null, url: null };
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "album.getInfo");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("album", album);
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return { bio: null, url: null };
+    const data = (await res.json()) as {
+      album?: {
+        wiki?: { summary?: string };
+        url?: string;
+      };
+      error?: number;
+    };
+    if (data.error || !data.album) return { bio: null, url: null };
+    const raw = data.album.wiki?.summary ?? null;
+    return {
+      bio: raw ? stripBioBoilerplate(raw) || null : null,
+      url: data.album.url ?? null,
+    };
+  } catch {
+    return { bio: null, url: null };
+  }
+}
+
 export async function fetchArtistImage(artist: string): Promise<string | null> {
   const info = await fetchArtistInfo(artist);
   return info.imageUrl;

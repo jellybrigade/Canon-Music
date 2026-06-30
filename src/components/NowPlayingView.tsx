@@ -17,7 +17,9 @@ import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
 import { parseLrc } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
+import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
 import { useBoolSetting } from "../hooks/useSetting";
+import { TourCard } from "./TourCard";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { getDb } from "../db";
@@ -201,6 +203,27 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useBoolSetting("player.show_waveform", false);
   const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
+  const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
+  const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
+  const [tourLoading, setTourLoading] = useState(false);
+  useEffect(() => {
+    if (!bandsintownEnabled || !primaryArtist) {
+      setTourEvents([]);
+      setTourLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTourLoading(true);
+    fetchBandsintownEvents(primaryArtist).then((events) => {
+      if (!cancelled) {
+        setTourEvents(events);
+        setTourLoading(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setTourLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [bandsintownEnabled, primaryArtist]);
 
   // Downsample to 80 bars for the overlay — reduces DOM nodes from 200 and cuts jank.
   // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.
@@ -653,6 +676,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
             {tab === "about" && (
               <>
+                {primaryArtist && (
+                  <TourCard
+                    artistName={primaryArtist}
+                    enabled={bandsintownEnabled}
+                    loading={tourLoading}
+                    events={tourEvents}
+                    onEnable={() => void setBandsintownEnabled(true)}
+                  />
+                )}
+
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">More from {primaryArtist}</h3>

@@ -493,6 +493,47 @@
   color: #22c55e;
 }
 
+.album-bio-section {
+  padding: 0.75rem 1.25rem 0;
+}
+
+.album-bio-wrap {
+  position: relative;
+  max-height: 4.2rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
+}
+
+.album-bio-wrap--expanded {
+  max-height: none;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.album-bio {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.album-bio-toggle {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity var(--motion-fast);
+}
+
+.album-bio-toggle:hover {
+  opacity: 1;
+}
+
 .album-detail-body {
   flex: 1;
   overflow-y: auto;

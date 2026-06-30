@@ -163,7 +163,8 @@ function buildSpotlight(
     if (fromAlbums) return { kicker: `More from ${displayArtist}`, album: fromAlbums };
   }
 
-  if (recentRaw?.[0]) return { kicker: "Jump back in", album: naviToAlbumRow(recentRaw[0], serverId) };
+  const recentNotCurrent = recentRaw?.find(a => `${serverId}:${a.id}` !== currentAlbumId);
+  if (recentNotCurrent) return { kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) };
   if (rediscover[0]) return { kicker: "Rediscover", album: rediscover[0] };
   if (onRepeat[0]) return { kicker: "On repeat", album: onRepeat[0] };
 
