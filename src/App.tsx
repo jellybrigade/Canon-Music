@@ -786,7 +786,7 @@ export default function App() {
               </div>
               <button
                 className="search-trigger-btn"
-                onClick={() => { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); }}
+                onClick={() => { if (searchOpen || searchRaw) { clearSearch(); } else { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); } }}
                 title="Search (Ctrl+F)"
               >
                 <Search size={15} />
