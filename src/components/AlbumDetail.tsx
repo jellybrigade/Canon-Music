@@ -80,7 +80,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { data: normalizedTags } = useNormalizeAlbum(album.id, album.artist ?? "", album.name);
   useEnrichAlbumTracks(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
-  const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
+  const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
 
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(album.id),

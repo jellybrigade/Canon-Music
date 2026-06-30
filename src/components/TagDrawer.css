@@ -298,3 +298,23 @@
   color: var(--text-secondary);
   border-color: var(--border-strong);
 }
+
+.tag-drawer-ignore-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color 0.1s, border-color 0.1s;
+}
+
+.tag-drawer-ignore-btn:hover {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+}

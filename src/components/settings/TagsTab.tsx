@@ -69,7 +69,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
   const [enrichTracks, setEnrichTracks] = useBoolSetting("tags.enrich_tracks", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
-  const [skipYearGenres, setSkipYearGenres] = useBoolSetting("tags.skip_year_genres", false);
+  const [skipYearGenres, setSkipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
 
   const { data: minTagCount } = useQuery({

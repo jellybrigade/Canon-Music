@@ -110,12 +110,14 @@ function TagSection({
   level,
   emptyMessage,
   rawMap,
+  onIgnore,
 }: {
   title: string;
   tags: NormalizedTag[];
   level: "album" | "track";
   emptyMessage?: string;
   rawMap?: Map<string, string[]>;
+  onIgnore?: (rawName: string) => void;
 }) {
   if (tags.length === 0) {
     if (!emptyMessage) return null;
@@ -139,12 +141,23 @@ function TagSection({
         const originals = tag.id ? rawMap?.get(tag.id) : undefined;
         const remapped = originals?.filter((r) => r.toLowerCase() !== tag.name.toLowerCase());
         const tooltip = remapped?.length ? `Original: ${remapped.join(", ")}` : undefined;
+        const isUnmapped = tag.id === null;
         return (
           <div key={tag.id ?? tag.name} className="tag-drawer-row" title={tooltip}>
             <span className="tag-drawer-name">{tag.name}</span>
             {remapped?.length ? <span className="td-remapped-hint">⟵</span> : null}
             <SourceBadge source={tag.source} />
-            <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
+            {isUnmapped && onIgnore ? (
+              <button
+                className="tag-drawer-ignore-btn"
+                title="Ignore — exclude from genre output"
+                onClick={() => onIgnore(tag.name)}
+              >
+                Ignore
+              </button>
+            ) : (
+              <span className="tag-drawer-confidence">{Math.round(tag.confidence * 100)}%</span>
+            )}
           </div>
         );
       })}
@@ -245,6 +258,35 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
   const { data: normalizedTags, isLoading } = useNormalizeAlbum(albumId, albumArtist, albumName);
   const { data: rawTrackTags } = useTrackRawTags(trackId);
   const { data: rawMap } = useAlbumRawGenreMap(albumId);
+  const { data: identity } = useAlbumIdentity(albumId);
+  const { saveMapping } = useTagMappings();
+  const queryClient = useQueryClient();
+
+  async function handleIgnoreUnmappedGenre(rawName: string) {
+    try {
+      await saveMapping.mutateAsync({ rawValue: rawName, kind: "genre", canonicalId: IGNORED, source: "manual" });
+    } catch {
+      return;
+    }
+    let combinedMbGenres: MbGenre[] | null = null;
+    if (identity?.combined_genres_json) {
+      try { combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[]; } catch { /* malformed */ }
+    }
+    let combinedMbTags: MbGenre[] | null = null;
+    if (identity?.combined_tags_json) {
+      try { combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[]; } catch { /* malformed */ }
+    }
+    await normalizeAlbum(albumId, albumArtist, albumName, {
+      lastfmArtistName: identity?.lastfm_artist_name ?? null,
+      lastfmAlbumName: identity?.lastfm_album_name ?? null,
+      combinedMbGenres,
+      combinedMbTags,
+    });
+    void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumGenreRawSources(albumId) });
+    void queryClient.invalidateQueries({ queryKey: QK.albumRawGenreMap(albumId) });
+  }
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -284,6 +326,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
                 level="album"
                 emptyMessage="No genres identified — try syncing in Settings."
                 rawMap={rawMap}
+                onIgnore={handleIgnoreUnmappedGenre}
               />
               <TagSection
                 title="Descriptors"
