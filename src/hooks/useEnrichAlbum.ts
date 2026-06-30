@@ -21,14 +21,14 @@ const inFlight = new Map<string, Promise<void>>();
 async function enrichAlbum(albumId: string, artist: string, album: string): Promise<void> {
   const info = await fetchAlbumInfo(artist, album);
   const db = await getDb();
-  const enrichedAt = info.bio ? Math.floor(Date.now() / 1000) : null;
+  const enrichedAt = Math.floor(Date.now() / 1000);
   await db.execute(
     `INSERT INTO album_identity (album_id, album_bio, lastfm_url, album_enriched_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(album_id) DO UPDATE SET
        album_bio = excluded.album_bio,
        lastfm_url = COALESCE(excluded.lastfm_url, album_identity.lastfm_url),
-       album_enriched_at = COALESCE(excluded.album_enriched_at, album_identity.album_enriched_at)`,
+       album_enriched_at = excluded.album_enriched_at`,
     [albumId, info.bio, info.url, enrichedAt]
   );
 }
@@ -40,6 +40,11 @@ export function useEnrichAlbum(albumId: string, artist: string, albumName: strin
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const ranRef = useRef(false);
+  const prevAlbumIdRef = useRef(albumId);
+  if (prevAlbumIdRef.current !== albumId) {
+    prevAlbumIdRef.current = albumId;
+    ranRef.current = false;
+  }
 
   const query = useQuery({
     queryKey: QK.albumEnrichment(albumId),

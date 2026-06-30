@@ -1,14 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
-
-interface RawBandsintownEvent {
-  datetime: string;
-  venue_name: string;
-  venue_city: string;
-  venue_region: string;
-  venue_country: string;
-  url: string;
-  lineup: string[];
-}
+const APP_ID = "js_app_id";
+const BASE_URL = "https://rest.bandsintown.com";
 
 export interface BandsintownEvent {
   datetime: string;
@@ -37,16 +28,32 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
 
   const promise = (async () => {
     try {
-      const raw = await invoke<RawBandsintownEvent[]>("fetch_bandsintown_events", { artistName });
-      const events: BandsintownEvent[] = (raw ?? []).map((r) => ({
-        datetime: r.datetime,
-        venueName: r.venue_name,
-        venueCity: r.venue_city,
-        venueRegion: r.venue_region,
-        venueCountry: r.venue_country,
-        url: r.url,
-        lineup: r.lineup ?? [],
-      }));
+      const encoded = encodeURIComponent(artistName.trim());
+      const res = await fetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
+      if (!res.ok) {
+        cache.set(key, []);
+        return [];
+      }
+      const raw = (await res.json()) as Array<Record<string, unknown>>;
+      if (!Array.isArray(raw)) {
+        cache.set(key, []);
+        return [];
+      }
+      const events: BandsintownEvent[] = raw.slice(0, 20).map((item) => {
+        const venue = (item.venue ?? {}) as Record<string, unknown>;
+        const lineup = Array.isArray(item.lineup)
+          ? (item.lineup as unknown[]).filter((s): s is string => typeof s === "string")
+          : [];
+        return {
+          datetime: typeof item.datetime === "string" ? item.datetime : "",
+          venueName: typeof venue.name === "string" ? venue.name : "",
+          venueCity: typeof venue.city === "string" ? venue.city : "",
+          venueRegion: typeof venue.region === "string" ? venue.region : "",
+          venueCountry: typeof venue.country === "string" ? venue.country : "",
+          url: typeof item.url === "string" ? item.url : "",
+          lineup,
+        };
+      });
       cache.set(key, events);
       return events;
     } catch {

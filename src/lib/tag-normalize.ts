@@ -51,7 +51,7 @@ export async function getSkipYearGenres(): Promise<boolean> {
   const rows = await db.select<{ value: string }[]>(
     "SELECT value FROM settings WHERE key = 'tags.skip_year_genres'"
   );
-  return rows[0]?.value !== "false";
+  return rows[0] ? rows[0].value === "true" : true;
 }
 
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {

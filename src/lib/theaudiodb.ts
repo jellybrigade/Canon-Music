@@ -69,7 +69,7 @@ export async function fetchWikipediaBioByMbid(mbid: string): Promise<string | nu
       const data = (await res.json()) as { results?: { bindings?: Array<{ article?: { value: string } }> } };
       const articleUrl = data.results?.bindings?.[0]?.article?.value;
       if (!articleUrl) return null;
-      const wikiTitle = decodeURIComponent(articleUrl.split("/wiki/")[1] ?? "");
+      const wikiTitle = decodeURIComponent(articleUrl.split("/wiki/")[1] ?? "").replace(/#.*$/, "").replace(/\?.*$/, "");
       if (!wikiTitle) return null;
       const summaryRes = await tauriFetch(
         `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,

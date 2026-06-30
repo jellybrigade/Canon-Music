@@ -209,6 +209,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   useEffect(() => {
     if (!bandsintownEnabled || !primaryArtist) {
       setTourEvents([]);
+      setTourLoading(false);
       return;
     }
     let cancelled = false;
@@ -218,6 +219,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         setTourEvents(events);
         setTourLoading(false);
       }
+    }).catch(() => {
+      if (!cancelled) setTourLoading(false);
     });
     return () => { cancelled = true; };
   }, [bandsintownEnabled, primaryArtist]);
