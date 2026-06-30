@@ -1003,7 +1003,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onChange={(e) => onHomeSearchRawChange(e.target.value)}
           />
           {homeSearchRaw ? (
-            <button className="search-bar-clear" onClick={() => onHomeSearchRawChange("")} title="Clear">
+            <button className="search-bar-clear" onClick={() => { searchInputRef.current?.blur(); onHomeSearchRawChange(""); }} title="Clear">
               <X size={13} />
             </button>
           ) : (
