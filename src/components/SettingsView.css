@@ -460,3 +460,32 @@
 .settings-diag-value--ok {
   color: #27ae60;
 }
+
+.settings-seg {
+  display: flex;
+  gap: 2px;
+}
+
+.settings-seg-btn {
+  flex: 1;
+  padding: 3px 8px;
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+.settings-seg-btn:hover {
+  background: var(--bg-hover-strong);
+  color: var(--text-primary);
+}
+
+.settings-seg-btn--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}

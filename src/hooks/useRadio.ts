@@ -7,10 +7,16 @@ import { getDb } from "../db";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
-const CANDIDATE_SAMPLE = 50;
-const TOP_PICK_WINDOW = 20;
 const MAX_PER_ARTIST = 3;
 const ALBUM_COOLDOWN = 3; // min tracks between two picks from same album
+
+function scaledPickParams(scale: number): { candidateSample: number; topPickWindow: number } {
+  const s = Math.max(0, Math.min(1, scale));
+  return {
+    candidateSample: Math.round(30 + 50 * s),
+    topPickWindow:   Math.round(10 + 20 * s),
+  };
+}
 
 const UNCAPPED_MODES = new Set(["same-artist", "same-album"]);
 
@@ -25,15 +31,19 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   return new Set(rows.map((r) => r.track_id));
 }
 
-function pickFromTop(candidates: { id: string; score: number }[]): { id: string; score: number } | null {
-  const pool = candidates.slice(0, CANDIDATE_SAMPLE);
+function pickFromTop(
+  candidates: { id: string; score: number }[],
+  candidateSample: number,
+  topPickWindow: number
+): { id: string; score: number } | null {
+  const pool = candidates.slice(0, candidateSample);
   if (pool.length === 0) return null;
-  const top = pool.slice(0, Math.min(TOP_PICK_WINDOW, pool.length));
+  const top = pool.slice(0, Math.min(topPickWindow, pool.length));
   return top[Math.floor(Math.random() * top.length)] ?? null;
 }
 
 export function useRadio() {
-  const { currentTrack, queue, queueIndex, radioActive, radioMode, addToQueue, streamUrlFor, isPlaying, isLoading, playFromQueueIndex } = usePlayerStore();
+  const { currentTrack, queue, queueIndex, radioActive, radioMode, radioSimilarityScale, addToQueue, streamUrlFor, isPlaying, isLoading, playFromQueueIndex } = usePlayerStore();
   const fillingRef = useRef(false);
 
   useEffect(() => {
@@ -77,6 +87,7 @@ export function useRadio() {
           excludeIds,
           artistSimilarity,
           trackSimilarity,
+          similarityScale: radioSimilarityScale,
         });
 
         // same-album mode: picks in track order — take first candidate directly
@@ -133,7 +144,8 @@ export function useRadio() {
           capped = filtered.length > 0 ? filtered : candidates;
         }
 
-        const pick = pickFromTop(capped);
+        const { candidateSample, topPickWindow } = scaledPickParams(radioSimilarityScale);
+        const pick = pickFromTop(capped, candidateSample, topPickWindow);
 
         if (!pick) return;
 
@@ -170,5 +182,5 @@ export function useRadio() {
         fillingRef.current = false;
       }
     })();
-  }, [radioActive, radioMode, currentTrack, queue, queueIndex, addToQueue]);
+  }, [radioActive, radioMode, radioSimilarityScale, currentTrack, queue, queueIndex, addToQueue]);
 }

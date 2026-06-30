@@ -3,6 +3,14 @@ import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
 
+const RADIO_SIMILARITY_STEPS = [
+  { label: "Narrow",   value: 0    },
+  { label: "Tight",    value: 0.25 },
+  { label: "Balanced", value: 0.5  },
+  { label: "Broad",    value: 0.75 },
+  { label: "Wide",     value: 1    },
+];
+
 interface Props {
   searchQuery: string;
 }
@@ -25,6 +33,8 @@ export function PlaybackTab({ searchQuery }: Props) {
   const toggleGapless = usePlayerStore((s) => s.toggleGapless);
   const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
   const toggleRadioOnQueueEnd = usePlayerStore((s) => s.toggleRadioOnQueueEnd);
+  const radioSimilarityScale = usePlayerStore((s) => s.radioSimilarityScale);
+  const setRadioSimilarityScale = usePlayerStore((s) => s.setRadioSimilarityScale);
 
   const [minSeconds, setMinSeconds] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPct, setThresholdPct] = useSetting("scrobble.threshold_percent", "50");
@@ -114,6 +124,22 @@ export function PlaybackTab({ searchQuery }: Props) {
               />
               <span className="toggle-track" />
             </label>
+          </SettingRow>
+          <SettingRow
+            title="Radio similarity"
+            description="How closely radio picks match the seed track. Narrow = strict genre match; Wide = looser, discovery-oriented."
+          >
+            <div className="settings-seg">
+              {RADIO_SIMILARITY_STEPS.map(({ label, value }) => (
+                <button
+                  key={value}
+                  className={`settings-seg-btn${radioSimilarityScale === value ? " settings-seg-btn--active" : ""}`}
+                  onClick={() => setRadioSimilarityScale(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </SettingRow>
         </section>
       )}
