@@ -101,6 +101,12 @@
   font-weight: 500;
 }
 
+.wizard-optional {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
 .wizard-form input {
   width: 100%;
   box-sizing: border-box;

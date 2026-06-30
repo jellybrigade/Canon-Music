@@ -46,6 +46,8 @@ export function Wizard({ onSuccess }: Props) {
   const [testedSnapshot, setTestedSnapshot] = useState<ConnectionFields | null>(null);
   const [testedCredential, setTestedCredential] = useState<NavidromeCredential | null>(null);
 
+  const [altUrl, setAltUrl] = useState("");
+
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
@@ -115,11 +117,13 @@ export function Wizard({ onSuccess }: Props) {
       const id = crypto.randomUUID();
       await keychain.set(`canon.server.${id}`, "credential", JSON.stringify(testedCredential));
       const db = await getDb();
+      const trimmedAltUrl = altUrl.trim().replace(/\/+$/, "") || null;
       await db.execute(
-        `INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)`,
+        `INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)`,
         [
           id,
           url.trim().replace(/\/+$/, ""),
+          trimmedAltUrl,
           displayName.trim(),
           username.trim(),
         ]
@@ -179,6 +183,15 @@ export function Wizard({ onSuccess }: Props) {
                   placeholder="https://music.example.com"
                   value={url}
                   onChange={(e) => handleUrlChange(e.target.value)}
+                />
+              </label>
+              <label>
+                Alternate URL <span className="wizard-optional">(optional)</span>
+                <input
+                  type="url"
+                  placeholder="https://music.local:4533"
+                  value={altUrl}
+                  onChange={(e) => setAltUrl(e.target.value)}
                 />
               </label>
               <label>

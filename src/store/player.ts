@@ -151,6 +151,7 @@ interface PlayerState {
   radioSeed: CurrentTrack | null;
   radioMode: RadioMode;
   radioLabel: string | null;
+  radioSimilarityScale: number;
 
   isQueueOpen: boolean;
   accentColor: string | null;
@@ -198,6 +199,7 @@ interface PlayerState {
   setRadioActive: (active: boolean) => void;
   startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
   setRadioMode: (mode: RadioMode) => void;
+  setRadioSimilarityScale: (scale: number) => void;
   toggleConsumeMode: () => Promise<void>;
   toggleConsumeOnSkip: () => Promise<void>;
   toggleGapless: () => Promise<void>;
@@ -604,7 +606,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   async function persistRadioState() {
     try {
-      const { radioActive, radioSeed, radioMode, radioLabel } = get();
+      const { radioActive, radioSeed, radioMode, radioLabel, radioSimilarityScale } = get();
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
@@ -621,6 +623,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_label', ?)",
         [radioLabel ?? ""]
+      );
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio.similarity_scale', ?)",
+        [String(radioSimilarityScale)]
       );
     } catch (e) {
       console.error("Failed to persist radio state:", e);
@@ -662,6 +668,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     radioSeed: null,
     radioMode: "curated",
     radioLabel: null,
+    radioSimilarityScale: 0.5,
     isQueueOpen: false,
     accentColor: null,
     waveformPeaks: null,
@@ -1133,6 +1140,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       void persistRadioState();
     },
 
+    setRadioSimilarityScale: (scale: number) => {
+      set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
+      void persistRadioState();
+    },
+
     addToQueue: (track, streamUrlFn) => {
       const { queue, isShuffled, shuffleOrder, streamUrlFor } = get();
       const newQueue = [...queue, track];
@@ -1335,6 +1347,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             }
           } else if (row.key === "radio_label") {
             set({ radioLabel: row.value || null });
+          } else if (row.key === "radio.similarity_scale") {
+            const scale = parseFloat(row.value);
+            if (!isNaN(scale)) set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
           } else if (row.key === "player.speed") {
             const speed = parseFloat(row.value);
             if (!isNaN(speed)) {
