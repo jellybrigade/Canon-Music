@@ -486,11 +486,12 @@ export default function App() {
     const db = await getDb();
     type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY track_number ASC, id ASC LIMIT 1",
+      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY COALESCE(play_count, 0) DESC, track_number ASC",
       [album.id]
     );
-    const t = rows[0];
-    if (!t) return;
+    if (rows.length === 0) return;
+    const topHalf = rows.slice(0, Math.max(1, Math.ceil(rows.length / 2)));
+    const t = topHalf[Math.floor(Math.random() * topHalf.length)]!;
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
