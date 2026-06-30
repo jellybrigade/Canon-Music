@@ -166,6 +166,7 @@ async function getCuratedCandidates(
 
   const maxTree = rows.length > 0 ? Math.max(...rows.map((r) => r.tree_score)) : 1;
 
+  const { tagW, trackCfW, artistCfW } = scaleWeights(scale);
   return rows
     .filter((r) => !excludeIds.has(r.id))
     .map((r) => {
@@ -174,7 +175,6 @@ async function getCuratedCandidates(
       const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
       const artistCf = artistSimilarity.get(artistKey) ?? 0;
       const trackCf = trackSimilarity.get(trackKey) ?? 0;
-      const { tagW, trackCfW, artistCfW } = scaleWeights(scale);
       const score = tagW * normalizedTree + trackCfW * trackCf + artistCfW * artistCf;
       return rowToCandidate(r, score);
     })
@@ -225,7 +225,13 @@ export async function getRadioCandidates({
          ORDER BY RANDOM() LIMIT ?`,
         [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT]
       );
-      return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
+      return rows
+        .filter((r) => !excludeIds.has(r.id))
+        .map((r) => {
+          const artistKey = (r.artist ?? "").toLowerCase();
+          return rowToCandidate(r, artistSimilarity.get(artistKey) ?? 0);
+        })
+        .sort((a, b) => b.score - a.score);
     }
 
     case "same-artist": {
@@ -269,15 +275,22 @@ export async function getRadioCandidates({
       }
       const decadeStart = Math.floor(seed.year / 10) * 10;
       const decadeEnd = decadeStart + 9;
-      const rows = await db.select<TrackRow[]>(
-        `SELECT ${TRACK_PROJECTION}
+      type EraRow = TrackRow & { year: number | null };
+      const rows = await db.select<EraRow[]>(
+        `SELECT ${TRACK_PROJECTION}, t.year
          FROM tracks t JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ? AND t.id != ?
            AND t.year BETWEEN ? AND ?
          ORDER BY RANDOM() LIMIT ?`,
         [seed.serverId, seedTrackId, decadeStart, decadeEnd, CANDIDATE_LIMIT]
       );
-      return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
+      return rows
+        .filter((r) => !excludeIds.has(r.id))
+        .map((r) => {
+          const dist = r.year !== null ? Math.abs(r.year - seed.year!) : 5;
+          return rowToCandidate(r, Math.max(0, 1 - dist / 10));
+        })
+        .sort((a, b) => b.score - a.score);
     }
 
     case "loved": {

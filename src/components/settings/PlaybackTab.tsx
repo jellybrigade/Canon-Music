@@ -2,13 +2,14 @@ import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
+import { SegToggle } from "../TagsViewHelpers";
 
 const RADIO_SIMILARITY_STEPS = [
-  { label: "Narrow",   value: 0    },
-  { label: "Tight",    value: 0.25 },
-  { label: "Balanced", value: 0.5  },
-  { label: "Broad",    value: 0.75 },
-  { label: "Wide",     value: 1    },
+  { label: "Narrow",   value: "0"    },
+  { label: "Tight",    value: "0.25" },
+  { label: "Balanced", value: "0.5"  },
+  { label: "Broad",    value: "0.75" },
+  { label: "Wide",     value: "1"    },
 ];
 
 interface Props {
@@ -129,17 +130,11 @@ export function PlaybackTab({ searchQuery }: Props) {
             title="Radio similarity"
             description="How closely radio picks match the seed track. Narrow = strict genre match; Wide = looser, discovery-oriented."
           >
-            <div className="settings-seg">
-              {RADIO_SIMILARITY_STEPS.map(({ label, value }) => (
-                <button
-                  key={value}
-                  className={`settings-seg-btn${radioSimilarityScale === value ? " settings-seg-btn--active" : ""}`}
-                  onClick={() => setRadioSimilarityScale(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegToggle
+              value={String(radioSimilarityScale)}
+              options={RADIO_SIMILARITY_STEPS}
+              onChange={(v) => setRadioSimilarityScale(parseFloat(v))}
+            />
           </SettingRow>
         </section>
       )}
