@@ -1,17 +1,23 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDb } from "../../db";
 import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import type { Server } from "../../types/server";
 import { CanonLockup } from "../CanonIcon";
+import { setApiKey as setLastfmApiKey } from "../../lib/lastfm";
+import { getFanartApiKey, setFanartApiKey } from "../../lib/fanart";
+import { importSettingsFile } from "../../lib/settings-backup";
+import { useBoolSetting, useSetting, refreshAllSettings } from "../../hooks/useSetting";
+import { SettingRow } from "../settings/SettingRow";
+import "../SettingsView.css";
 import "./Wizard.css";
 
 interface Props {
   onSuccess: (server: Server) => void;
 }
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 type TestState = "idle" | "testing" | "ok" | "error";
 type AuthMethod = "password" | "apikey";
 
@@ -47,6 +53,38 @@ export function Wizard({ onSuccess }: Props) {
   const [testedCredential, setTestedCredential] = useState<NavidromeCredential | null>(null);
 
   const [altUrl, setAltUrl] = useState("");
+
+  // Step 3 fields (optional setup)
+  const [lastfmKey, setLastfmKeyState] = useState("");
+  const [fanartKey, setFanartKeyState] = useState("");
+  const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
+  const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
+  const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
+  const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
+  const [importState, setImportState] = useState<"idle" | "done" | "error">("idle");
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    getFanartApiKey().then((k) => { if (k) setFanartKeyState(k); }).catch(() => {});
+  }, []);
+
+  async function handleSetLastfmKey(k: string) {
+    setLastfmKeyState(k);
+    await setLastfmApiKey(k);
+  }
+  async function handleSetFanartKey(k: string) {
+    setFanartKeyState(k);
+    await setFanartApiKey(k);
+  }
+  async function handleImportSettings(file: File) {
+    try {
+      await importSettingsFile(file);
+      await refreshAllSettings();
+      setImportState("done");
+    } catch {
+      setImportState("error");
+    }
+  }
 
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -142,7 +180,7 @@ export function Wizard({ onSuccess }: Props) {
     <div className="wizard-backdrop">
       <div className="wizard">
         <div className="wizard-steps">
-          {([1, 2, 3] as Step[]).map((s) => (
+          {([1, 2, 3, 4] as Step[]).map((s) => (
             <div key={s} className={`wizard-step-dot${step === s ? " wizard-step-dot--active" : step > s ? " wizard-step-dot--done" : ""}`} />
           ))}
         </div>
@@ -272,6 +310,113 @@ export function Wizard({ onSuccess }: Props) {
         )}
 
         {step === 3 && (
+          <div className="wizard-body">
+            <h1 className="wizard-title">Optional setup</h1>
+            <p className="wizard-desc">
+              Everything below is optional and can be changed later in Settings.
+            </p>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Last.fm</h3>
+              <SettingRow title="API key" stacked>
+                <input
+                  type="text"
+                  placeholder="Paste your Last.fm API key"
+                  value={lastfmKey}
+                  onChange={(e) => { void handleSetLastfmKey(e.target.value); }}
+                />
+              </SettingRow>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Fanart.tv</h3>
+              <SettingRow title="API key" stacked>
+                <input
+                  type="text"
+                  placeholder="Paste your Fanart.tv API key"
+                  value={fanartKey}
+                  onChange={(e) => { void handleSetFanartKey(e.target.value); }}
+                />
+              </SettingRow>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Auto-refresh</h3>
+              <SettingRow title="Auto-refresh metadata on launch">
+                <input
+                  type="checkbox"
+                  checked={autoRefresh}
+                  onChange={(e) => { void setAutoRefresh(e.target.checked); }}
+                />
+              </SettingRow>
+              <SettingRow title="Stale after (days)">
+                <input
+                  type="number"
+                  min={1}
+                  max={9999}
+                  value={stalenessDays}
+                  onChange={(e) => { void setStalenessDays(e.target.value); }}
+                  className="settings-staleness-input"
+                />
+              </SettingRow>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Updates</h3>
+              <SettingRow title="Auto check for updates">
+                <input
+                  type="checkbox"
+                  checked={autoCheck}
+                  onChange={(e) => { void setAutoCheck(e.target.checked); }}
+                />
+              </SettingRow>
+              <SettingRow title="Check interval">
+                <select
+                  className="settings-select"
+                  value={intervalMin}
+                  disabled={!autoCheck}
+                  onChange={(e) => { void setIntervalMin(e.target.value); }}
+                >
+                  <option value="10">Every 10 minutes</option>
+                  <option value="30">Every 30 minutes</option>
+                  <option value="60">Every hour</option>
+                  <option value="360">Every 6 hours</option>
+                  <option value="1440">Every day</option>
+                </select>
+              </SettingRow>
+            </section>
+
+            <section className="settings-section">
+              <h3 className="settings-section-title">Import settings</h3>
+              <p className="settings-section-desc">Restore a previously exported settings backup.</p>
+              <div className="settings-field settings-field--row">
+                <button className="settings-btn" onClick={() => importInputRef.current?.click()}>
+                  Import settings
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleImportSettings(file);
+                    e.target.value = "";
+                  }}
+                />
+                {importState === "done" && <span className="settings-hint">Imported.</span>}
+                {importState === "error" && <span className="settings-hint">Import failed.</span>}
+              </div>
+            </section>
+
+            <div className="wizard-actions">
+              <button type="button" onClick={() => setStep(4)}>I&rsquo;ll do it later</button>
+              <button type="button" className="primary" onClick={() => setStep(4)}>Continue</button>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && (
           <div className="wizard-body">
             <h1 className="wizard-title">You&rsquo;re all set</h1>
             <p className="wizard-desc">

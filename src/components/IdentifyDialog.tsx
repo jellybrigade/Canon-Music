@@ -1,12 +1,30 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle, XCircle, AlertCircle, Loader, Search } from "lucide-react";
+import { CheckCircle, XCircle, AlertCircle, Loader, Search, ExternalLink } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQuery } from "@tanstack/react-query";
 import { useAlbumIdentity, useIdentifyAlbum, useSaveAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
 import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
 import "./IdentifyDialog.css";
+
+function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
+  const url = `https://musicbrainz.org/${kind}/${id}`;
+  const open = () => void openUrl(url);
+  return (
+    <span
+      className="identify-candidate-browse"
+      role="button"
+      tabIndex={0}
+      aria-label="Open on MusicBrainz"
+      onClick={(e) => { e.stopPropagation(); open(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } }}
+    >
+      <ExternalLink size={13} />
+    </span>
+  );
+}
 
 // ── Album variant ──────────────────────────────────────────────────────────────
 
@@ -155,6 +173,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                       {c.score != null && (
                         <span className="identify-candidate-score">{c.score}%</span>
                       )}
+                      <MusicBrainzBrowseLink kind="release-group" id={c.id} />
                     </div>
                     <span className="identify-candidate-meta">
                       {c.artistName}
@@ -257,7 +276,10 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                       className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
                       onClick={() => handleSelectCandidate(c)}
                     >
-                      <span className="identify-candidate-title">{c.title}</span>
+                      <div className="identify-candidate-header">
+                        <span className="identify-candidate-title">{c.title}</span>
+                        <MusicBrainzBrowseLink kind="release-group" id={c.id} />
+                      </div>
                       <span className="identify-candidate-meta">
                         {c.artistName} · {c.firstReleaseDate ?? "?"} · {c.primaryType ?? "Album"}
                       </span>
@@ -446,6 +468,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                       {c.score != null && (
                         <span className="identify-candidate-score">{c.score}%</span>
                       )}
+                      <MusicBrainzBrowseLink kind="artist" id={c.id} />
                     </div>
                     {(c.disambiguation ?? c.country) && (
                       <span className="identify-candidate-meta">
@@ -515,7 +538,10 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                       className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
                       onClick={() => handleSelectCandidate(c)}
                     >
-                      <span className="identify-candidate-title">{c.name}</span>
+                      <div className="identify-candidate-header">
+                        <span className="identify-candidate-title">{c.name}</span>
+                        <MusicBrainzBrowseLink kind="artist" id={c.id} />
+                      </div>
                       {c.disambiguation && (
                         <span className="identify-candidate-meta">{c.disambiguation}</span>
                       )}

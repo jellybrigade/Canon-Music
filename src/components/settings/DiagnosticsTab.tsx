@@ -4,6 +4,7 @@ import { getDb } from "../../db";
 import { QK } from "../../lib/query-keys";
 import { getMissingCoverCount, useCacheAllCovers } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { exportSettingsFile, importSettingsFile } from "../../lib/settings-backup";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -51,7 +52,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
   const importInputRef = useRef<HTMLInputElement>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount();
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
-  const { run: cacheAllCovers, progress: coverProgress } = useCacheAllCovers(serverWithCredential);
+  const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
@@ -66,29 +67,9 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
     }
   }
 
-  async function handleExportSettings() {
-    const db = await getDb();
-    const rows = await db.select<{ key: string; value: string }[]>("SELECT key, value FROM settings");
-    const json = JSON.stringify(Object.fromEntries(rows.map((r) => [r.key, r.value])), null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `canon-settings-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   async function handleImportSettings(file: File) {
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text) as Record<string, unknown>;
-      const db = await getDb();
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === "string") {
-          await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
-        }
-      }
+      await importSettingsFile(file);
       await queryClient.invalidateQueries({ queryKey: QK.settingsAll() });
       window.location.reload();
     } catch (e) {
@@ -149,6 +130,11 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
                   : "All covers cached"}
               </span>
             )}
+            {coverProgress === null && !!lastFailedCount && (
+              <span className="settings-hint settings-diag-value--error">
+                {lastFailedCount} failed to cache last run — check server connection (see console for details)
+              </span>
+            )}
           </div>
         </section>
       )}
@@ -158,7 +144,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <h3 className="settings-section-title">Settings backup</h3>
           <p className="settings-section-desc">Server credentials are not included in exports.</p>
           <div className="settings-field settings-field--row">
-            <button className="settings-btn" onClick={() => { void handleExportSettings(); }}>
+            <button className="settings-btn" onClick={() => { void exportSettingsFile(); }}>
               Export settings
             </button>
             <button className="settings-btn" onClick={() => importInputRef.current?.click()}>

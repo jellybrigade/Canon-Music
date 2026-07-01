@@ -694,20 +694,19 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
         />
       )}
 
-      {albumBio && (
-        <div className="album-bio-section">
-          <div className={`album-bio-wrap${bioNeedsClamp && !bioExpanded ? " album-bio-wrap--clamped" : ""}`}>
-            <p className="album-bio" ref={bioTextRef}>{albumBio}</p>
-          </div>
-          {bioNeedsClamp && (
-            <button className="album-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
-              {bioExpanded ? "Show less" : "Show more"}
-            </button>
-          )}
-        </div>
-      )}
-
       <div className="album-detail-body">
+        {albumBio && (
+          <div className="album-bio-section">
+            <div className={`album-bio-wrap${bioNeedsClamp && !bioExpanded ? " album-bio-wrap--clamped" : ""}`}>
+              <p className="album-bio" ref={bioTextRef}>{albumBio}</p>
+            </div>
+            {bioNeedsClamp && (
+              <button className="album-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
+                {bioExpanded ? "Show less" : "Show more"}
+              </button>
+            )}
+          </div>
+        )}
         {isLoading ? (
           <p className="empty-state">Loading tracks…</p>
         ) : !tracks || tracks.length === 0 ? (

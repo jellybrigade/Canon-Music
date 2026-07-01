@@ -250,12 +250,27 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary, #fff);
+  flex: 1;
 }
 
 .identify-candidate-score {
   font-size: 10px;
   color: var(--text-secondary, rgba(255, 255, 255, 0.35));
   flex-shrink: 0;
+}
+
+.identify-candidate-browse {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.45));
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.identify-candidate-browse:hover {
+  color: var(--text-primary, #fff);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .identify-candidate-meta {
