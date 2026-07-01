@@ -75,17 +75,23 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
   useEffect(() => {
     const onClickOutside = () => onCloseRef.current();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
+    // The menu is positioned once at open time (fixed x/y) and never re-anchored,
+    // so if the page underneath scrolls, close instead of leaving it floating
+    // detached from whatever opened it.
+    const onScroll = () => onCloseRef.current();
     // Defer attaching: the click that opened this menu is still bubbling to
     // document when this effect runs (WebKitGTK in particular), which would
     // close the menu on the same click that opened it.
     const timer = setTimeout(() => {
       document.addEventListener("click", onClickOutside);
       document.addEventListener("keydown", onKey);
+      document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     }, 0);
     return () => {
       clearTimeout(timer);
       document.removeEventListener("click", onClickOutside);
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("scroll", onScroll, { capture: true });
     };
   }, []);
 

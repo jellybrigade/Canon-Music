@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { Play, Shuffle, Radio, Disc, ExternalLink, GitMerge, MoreHorizontal, ChevronDown } from "lucide-react";
@@ -18,12 +18,16 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import { shuffleArray } from "../lib/shuffle";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
 import { useSimilarInLibrary } from "../hooks/useSimilarInLibrary";
 import { useLoved } from "../hooks/useLoved";
 import { useArtistCanonicalOf, useAliasesOfCanonical, useRemoveArtistAlias } from "../hooks/useArtistAliases";
+import { useBoolSetting } from "../hooks/useSetting";
+import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
+import { TourCard } from "./TourCard";
 import "./ArtistDetail.css";
 
 interface Props {
@@ -163,6 +167,7 @@ const POPULAR_TRACKS_MIN = 5;
 const POPULAR_TRACKS_MAX = 10;
 const ESSENTIAL_MIN_ALBUMS = 3;
 const ESSENTIAL_RATIO = 0.25;
+const SIMILAR_ARTISTS_MAX = 12;
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "–";
@@ -221,15 +226,6 @@ function resolvePortraitUrl(enrichment: { lastfm_image_url: string | null; wikid
     ? rawLastfmImage
     : null;
   return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
-}
-
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
 }
 
 interface TrackRowProps {
@@ -346,13 +342,35 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const [overflowMenuAnchor, setOverflowMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const [activeReleaseGroup, setActiveReleaseGroup] = useState<ReleaseGroup | null>(null);
 
+  const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
+  const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
+  const [tourLoading, setTourLoading] = useState(false);
+  useEffect(() => {
+    if (!bandsintownEnabled) {
+      setTourEvents([]);
+      setTourLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setTourLoading(true);
+    fetchBandsintownEvents(artist.name).then((events) => {
+      if (!cancelled) {
+        setTourEvents(events);
+        setTourLoading(false);
+      }
+    }).catch(() => {
+      if (!cancelled) setTourLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [bandsintownEnabled, artist.name]);
+
   const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
   const removeAlias = useRemoveArtistAlias();
 
   const lastfmName = enrichment?.lastfm_artist_name ?? artist.name;
   const { data: lastfmTitles } = useLastfmTopTracks(lastfmName);
-  const { data: lastfmAlbums } = useLastfmTopAlbums(lastfmName);
+  const { data: lastfmAlbums, isLoading: lastfmAlbumsLoading } = useLastfmTopAlbums(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -385,6 +403,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const essentialAlbums = useMemo(() => {
     if (ownedAlbumsOnly.length <= ESSENTIAL_MIN_ALBUMS) return [];
+    if (lastfmAlbumsLoading) return [];
     const cap = Math.ceil(ownedAlbumsOnly.length * ESSENTIAL_RATIO);
     if (lastfmAlbums && lastfmAlbums.length > 0) {
       const localByNorm = new Map(ownedAlbumsOnly.map((a) => [normalizeTrackTitle(a.name), a]));
@@ -394,10 +413,16 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         if (local && !matched.includes(local)) matched.push(local);
         if (matched.length >= cap) break;
       }
+      if (matched.length < cap) {
+        for (const album of ownedAlbumsOnly) {
+          if (matched.length >= cap) break;
+          if (!matched.includes(album)) matched.push(album);
+        }
+      }
       if (matched.length > 0) return matched;
     }
     return ownedAlbumsOnly.slice(0, cap);
-  }, [ownedAlbumsOnly, lastfmAlbums]);
+  }, [ownedAlbumsOnly, lastfmAlbums, lastfmAlbumsLoading]);
 
   const portraitUrl = resolvePortraitUrl(enrichment);
 
@@ -407,7 +432,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const blurUrl = localBannerUrl ?? portraitUrl;
 
   const similar: string[] = enrichment?.similar_json
-    ? (JSON.parse(enrichment.similar_json) as string[])
+    ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
     : [];
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
   const bio = enrichment?.bio ?? null;
@@ -728,25 +753,34 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         {bio && (
           <section className="artist-section">
             <h2 className="artist-section-title">About</h2>
-            <div className="artist-about-card">
-              <div className={`artist-bio-wrap${bioExpanded ? " artist-bio-wrap--expanded" : ""}`}>
-                <p className="artist-bio">{bio}</p>
-              </div>
-              {bio.length > 260 && (
-                <button className="artist-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
-                  {bioExpanded ? "Show less" : "Show more"}
-                </button>
-              )}
-              <div className="artist-about-links">
-                {enrichment?.mb_artist_id && (
-                  <button onClick={() => void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`)}>
-                    MusicBrainz ↗
+            <div className="artist-about-split">
+              <div className="artist-about-card">
+                <div className={`artist-bio-wrap${bioExpanded ? " artist-bio-wrap--expanded" : ""}`}>
+                  <p className="artist-bio">{bio}</p>
+                </div>
+                {bio.length > 260 && (
+                  <button className="artist-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
+                    {bioExpanded ? "Show less" : "Show more"}
                   </button>
                 )}
-                <button onClick={() => void openUrl(`https://www.last.fm/music/${encodeURIComponent(lastfmName)}`)}>
-                  Last.fm ↗
-                </button>
+                <div className="artist-about-links">
+                  {enrichment?.mb_artist_id && (
+                    <button onClick={() => void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`)}>
+                      MusicBrainz ↗
+                    </button>
+                  )}
+                  <button onClick={() => void openUrl(`https://www.last.fm/music/${encodeURIComponent(lastfmName)}`)}>
+                    Last.fm ↗
+                  </button>
+                </div>
               </div>
+              <TourCard
+                artistName={artist.name}
+                enabled={bandsintownEnabled}
+                loading={tourLoading}
+                events={tourEvents}
+                onEnable={() => void setBandsintownEnabled(true)}
+              />
             </div>
           </section>
         )}

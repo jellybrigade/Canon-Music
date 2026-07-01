@@ -154,6 +154,7 @@ function ArtistDetailRoute({
   return (
     <main className={`library${queueClass}`}>
       <ArtistDetail
+        key={artist.name}
         artist={artist}
         serverWithCredential={serverWithCred}
         onClose={onClose}

@@ -11,6 +11,7 @@ import { AlbumGenreEditor } from "./AlbumGenreEditor";
 import type { DisplayGenre, GenreGroups } from "./AlbumGenreEditor";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import { AlbumGrid } from "./AlbumGrid";
+import { shuffleArray } from "../lib/shuffle";
 import type { AlbumRow, TrackRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useTracks } from "../hooks/useTracks";
@@ -342,12 +343,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     } else if (playAction === "queue_next") {
       for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
     } else if (playAction === "shuffle") {
-      const shuffled = [...trackObjs];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-      }
-      void playQueue(shuffled, streamUrlFor, 0);
+      void playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
     } else {
       void playQueue(trackObjs, streamUrlFor, 0);
     }

@@ -623,6 +623,19 @@
 }
 
 /* ── About ── */
+.artist-about-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .artist-about-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 .artist-about-card {
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -368,8 +368,8 @@ export function normalizeTrackTitle(s: string): string {
   return s
     .toLowerCase()
     .replace(/\s*[([][^)\]]*[)\]]\s*/g, " ")
-    .replace(/\s*-\s*(feat\.?|ft\.?)\s+.*$/i, "")
-    .replace(/\s*(feat\.?|ft\.?)\s+.*$/i, "")
+    .replace(/\s*-\s*\b(feat\.?|ft\.?)\s+.*$/i, "")
+    .replace(/\s*\b(feat\.?|ft\.?)\s+.*$/i, "")
     .replace(/[^a-z0-9]/g, "");
 }
 
