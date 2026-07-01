@@ -99,4 +99,5 @@ export const QK = {
   scrobbleQueueCount: () => ["scrobble_queue", "count"] as const,
 
   albumCovers: () => ["album-covers"] as const,
+  albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
 } as const;

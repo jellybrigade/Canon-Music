@@ -2,6 +2,8 @@ import { useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../db";
 import { QK } from "../../lib/query-keys";
+import { getMissingCoverCount, useCacheAllCovers } from "../../hooks/useCoverCache";
+import type { ServerWithCredential } from "../../hooks/useServer";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -10,6 +12,25 @@ interface Props {
   syncError: string;
   lastSyncedAt: number | null;
   searchQuery: string;
+  serverWithCredential: ServerWithCredential | undefined;
+}
+
+// Rough per-cover size for a 150px JPEG thumbnail; used only to show a ballpark estimate.
+const MIN_COVER_KB = 8;
+const MAX_COVER_KB = 20;
+
+function formatSizeRange(count: number): string {
+  const minMb = (count * MIN_COVER_KB) / 1024;
+  const maxMb = (count * MAX_COVER_KB) / 1024;
+  if (maxMb < 1) return `${Math.round(count * MIN_COVER_KB)}–${Math.round(count * MAX_COVER_KB)} KB`;
+  return `${minMb.toFixed(1)}–${maxMb.toFixed(1)} MB`;
+}
+
+function useMissingCoverCount() {
+  return useQuery({
+    queryKey: QK.albumCoversMissingCount(),
+    queryFn: getMissingCoverCount,
+  });
 }
 
 function useScrobbleQueueCount() {
@@ -25,10 +46,12 @@ function useScrobbleQueueCount() {
   });
 }
 
-export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery }: Props) {
+export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery, serverWithCredential }: Props) {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount();
+  const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
+  const { run: cacheAllCovers, progress: coverProgress } = useCacheAllCovers(serverWithCredential);
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
@@ -96,6 +119,36 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             <button className="settings-btn" onClick={() => { void refetchScrobbleCount(); }}>
               Refresh
             </button>
+          </div>
+        </section>
+      )}
+
+      {show("cover", "art", "cache", "artwork", "thumbnail") && (
+        <section className="settings-section">
+          <h3 className="settings-section-title">Album cover cache</h3>
+          <p className="settings-section-desc">
+            Canon caches cover art locally the first time each album loads. Use this to pre-cache
+            everything at once, e.g. after a fresh sync.
+          </p>
+          <div className="settings-field settings-field--row">
+            <button
+              className="settings-btn"
+              disabled={!serverWithCredential || coverProgress !== null || !missingCoverCount}
+              onClick={() => {
+                void cacheAllCovers().then(() => { void refetchMissingCoverCount(); });
+              }}
+            >
+              {coverProgress
+                ? `Caching… ${coverProgress.done} / ${coverProgress.total}`
+                : "Cache all covers now"}
+            </button>
+            {coverProgress === null && (
+              <span className="settings-hint">
+                {missingCoverCount
+                  ? `${missingCoverCount} album${missingCoverCount === 1 ? "" : "s"} not yet cached (~${formatSizeRange(missingCoverCount)})`
+                  : "All covers cached"}
+              </span>
+            )}
           </div>
         </section>
       )}
