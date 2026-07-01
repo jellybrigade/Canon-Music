@@ -152,7 +152,7 @@ function pickImage(images: Array<{ "#text": string; size: string }>): string | n
 function stripBioBoilerplate(html: string): string {
   // Strip Last.fm "Read more on Last.fm" link and surrounding whitespace
   return html
-    .replace(/<a[^>]*>Read more on Last\.fm<\/a>/gi, "")
+    .replace(/<a[^>]*>Read more on Last\.fm<\/a>\.?/gi, "")
     .replace(/<[^>]+>/g, "")
     .trim();
 }
