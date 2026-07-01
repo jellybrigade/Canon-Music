@@ -692,34 +692,35 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
 }
 
 // ── Featured Genres ───────────────────────────────────────────────────────────
+// One flowing typographic line, size/weight stepped by relevance, no boxes.
 
 interface FeaturedGenresSectionProps {
   genres: GenreRow[];
   onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
-function FeaturedGenresSection({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
+function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
   if (genres.length === 0) return null;
+  const ranked = genres.slice(0, 10);
   return (
     <section className="home-section">
       <div className="home-section__header">
         <h2 className="home-section__title">Genres from recent plays</h2>
       </div>
-      <div className="genre-card-grid">
-        {genres.slice(0, 18).map(g => (
-          <div
-            key={g.canonical_id}
-            className="genre-card"
-            role="button"
-            tabIndex={0}
-            onClick={() => onPlayGenre(g.canonical_id, g.name)}
-            onKeyDown={e => (e.key === "Enter" || e.key === " ") && onPlayGenre(g.canonical_id, g.name)}
-            aria-label={`Play ${g.name} radio`}
-          >
-            <span className="genre-card__name">{g.name}</span>
-          </div>
+      <p className="genre-line">
+        {ranked.map((g, i) => (
+          <span key={g.canonical_id}>
+            <button
+              type="button"
+              className={`genre-line__item genre-line__item--tier${Math.min(Math.floor(i / 3), 2)}`}
+              onClick={() => onPlayGenre(g.canonical_id, g.name)}
+            >
+              {g.name}
+            </button>
+            {i < ranked.length - 1 && <span className="genre-line__sep" aria-hidden="true">·</span>}
+          </span>
         ))}
-      </div>
+      </p>
     </section>
   );
 }
@@ -1062,7 +1063,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             />
           )}
 
-          <FeaturedGenresSection genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+          <FeaturedGenresLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
 
           <ForYouRail
             key={forYouSeed}
