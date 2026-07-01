@@ -875,6 +875,28 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
             </table>
           </div>
         )}
+
+        {moreFromArtistAlbums.length > 0 && (
+          <section className="album-related-section">
+            <h3 className="album-related-title">More from {album.artist}</h3>
+            <AlbumGrid
+              albums={moreFromArtistAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={(a) => onSelectAlbum?.(a)}
+            />
+          </section>
+        )}
+
+        {fansAlsoLikeAlbums.length > 0 && (
+          <section className="album-related-section">
+            <h3 className="album-related-title">Fans Also Like</h3>
+            <AlbumGrid
+              albums={fansAlsoLikeAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={(a) => onSelectAlbum?.(a)}
+            />
+          </section>
+        )}
       </div>
 
       {contextMenu && (
