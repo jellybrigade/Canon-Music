@@ -88,6 +88,7 @@ Do not flatten to single-parent. Do not merge `canon-tree.json` and `user-tree.j
 | File | Loaded when editing |
 |---|---|
 | `.claude/rules/coding-standards.md` | always |
+| `.claude/rules/known-issues.md` | always |
 | `.claude/rules/state-management.md` | always |
 | `.claude/rules/audio-playback.md` | `src-tauri/**`, `src/store/player.ts` |
 | `.claude/rules/tag-editing.md` | `src/db/**`, `src/components/AlbumDetail.tsx` |
