@@ -359,6 +359,20 @@ export interface LastfmTopTrack {
   playcount: number;
 }
 
+/**
+ * Normalize a track title for owned-vs-Last.fm matching: strips trailing
+ * bracket/parenthetical qualifiers (Remastered, Live, feat. X, year mixes)
+ * before the usual alphanumeric fold, so "Song (Remastered 2011)" matches "Song".
+ */
+export function normalizeTrackTitle(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/\s*[([][^)\]]*[)\]]\s*/g, " ")
+    .replace(/\s*-\s*(feat\.?|ft\.?)\s+.*$/i, "")
+    .replace(/\s*(feat\.?|ft\.?)\s+.*$/i, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
 export interface LastfmTopAlbum {
   name: string;
   playcount: number;

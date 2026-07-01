@@ -75,9 +75,15 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
   useEffect(() => {
     const onClickOutside = () => onCloseRef.current();
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
-    document.addEventListener("click", onClickOutside);
-    document.addEventListener("keydown", onKey);
+    // Defer attaching: the click that opened this menu is still bubbling to
+    // document when this effect runs (WebKitGTK in particular), which would
+    // close the menu on the same click that opened it.
+    const timer = setTimeout(() => {
+      document.addEventListener("click", onClickOutside);
+      document.addEventListener("keydown", onKey);
+    }, 0);
     return () => {
+      clearTimeout(timer);
       document.removeEventListener("click", onClickOutside);
       document.removeEventListener("keydown", onKey);
     };
