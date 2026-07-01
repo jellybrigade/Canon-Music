@@ -1,33 +1,58 @@
-/* ── Genre Cards (used by HomeView Featured Genres) ─────────────────────── */
+/* ── Genre Line (used by HomeView Featured Genres — Variant A) ──────────── */
+/* One flowing typographic line instead of a chip/pill wall. Relevance is carried by
+   size + color tier, not by a box. */
 
-.genre-card-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.genre-line {
+  margin: 0;
+  font-size: 0;
+  line-height: 1.9;
 }
 
-.genre-card {
-  display: flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 100px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+.genre-line__item {
+  background: none;
+  border: none;
+  padding: 2px 1px;
+  margin: 0;
+  font-family: inherit;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
-  flex: 0 0 auto;
+  color: var(--text-secondary, #999);
+  transition: color 0.12s ease-out;
 }
 
-.genre-card:hover {
-  background: rgba(255, 255, 255, 0.11);
-  border-color: rgba(255, 255, 255, 0.18);
+.genre-line__item:hover,
+.genre-line__item:focus-visible {
+  color: var(--text-primary, #f0f0f0);
 }
 
-.genre-card__name {
-  font-size: 0.82rem;
+.genre-line__item:focus-visible {
+  outline: 2px solid var(--accent, #5a8ef8);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 4px);
+}
+
+.genre-line__item--tier0 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary, #f0f0f0);
+}
+
+.genre-line__item--tier1 {
+  font-size: 0.92rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.82);
-  white-space: nowrap;
+  color: var(--text-secondary, #999);
+}
+
+.genre-line__item--tier2 {
+  font-size: 0.82rem;
+  font-weight: 400;
+  color: var(--text-tertiary, #666);
+}
+
+.genre-line__sep {
+  font-size: 0.82rem;
+  color: var(--text-tertiary, #666);
+  margin: 0 10px;
+  opacity: 0.6;
 }
 
 /* ── Genre View Page ──────────────────────────────────────────────────────── */

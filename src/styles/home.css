@@ -547,73 +547,67 @@
   box-shadow: none;
 }
 
-.home-suggestion-grid {
+/* ── For You Rows ─────────────────────────────────────────────────────────── */
+/* Matches the rest of Home's carousel rows: label above, flat art tiles below,
+   name/artist beneath the art. No boxed card, no eyebrow, no overlay text —
+   For You used to be the one section with a different visual vocabulary. */
+
+.home-foryou-rows {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 28px 32px;
+  align-items: start;
 }
 
-/* ── Suggestion Card ──────────────────────────────────────────────────────── */
-
-.suggestion-card {
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-card, #1c1c1c);
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  box-shadow: var(--shadow-1, 0 2px 8px rgba(0,0,0,0.28));
+.foryou-row__label {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 11px;
 }
 
-.suggestion-card__header {
-  padding: 8px 10px 6px;
+.foryou-row__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
-.suggestion-card__kicker {
-  font-size: 0.525rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--kicker-color, #6b7280);
-  line-height: 1;
+.foryou-row__text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary, #bbb);
 }
 
-/* Top row: 1 large tile */
-.suggestion-card__row--top {
+.foryou-row__tiles {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 2px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
 }
 
-/* Bottom row: 3 equal tiles */
-.suggestion-card__row--bottom {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 2px;
-  margin-top: 2px;
-}
-
-.suggestion-card__tile {
+.foryou-tile {
   cursor: pointer;
-  overflow: hidden;
+  min-width: 0;
 }
 
-.suggestion-card__tile:focus-visible {
+.foryou-tile:focus-visible {
   outline: 2px solid var(--accent, #396cd8);
-  outline-offset: -2px;
+  outline-offset: 2px;
+  border-radius: var(--radius-md, 8px);
 }
 
-
-.suggestion-card__art-wrap {
+.foryou-tile__art-wrap {
   position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
-  background: var(--bg-elevated, #141414);
+  border-radius: var(--radius-md, 8px);
   overflow: hidden;
+  background: var(--bg-elevated, #141414);
+  margin-bottom: 8px;
 }
 
 /* Dim overlay via ::after — keeps filter off the <img> to avoid WebKitGTK flicker */
-.suggestion-card__art-wrap::after {
+.foryou-tile__art-wrap::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -622,11 +616,11 @@
   pointer-events: none;
 }
 
-.suggestion-card__tile:hover .suggestion-card__art-wrap::after {
+.foryou-tile:hover .foryou-tile__art-wrap::after {
   background: rgba(0, 0, 0, 0.28);
 }
 
-.suggestion-card__art {
+.foryou-tile__art {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -635,14 +629,13 @@
   backface-visibility: hidden;
 }
 
-/* Play button fades in on tile hover */
-.suggestion-card__play {
+.foryou-tile__play {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%) scale(0.75);
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border-radius: 50%;
   background: var(--accent, #396cd8);
@@ -660,42 +653,56 @@
   box-shadow: 0 2px 8px rgba(0,0,0,0.55);
 }
 
-.suggestion-card__tile:hover .suggestion-card__play {
+.foryou-tile:hover .foryou-tile__play {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
 }
 
-.suggestion-card__play:hover {
+.foryou-tile__play:hover {
   background: var(--accent-hover, #2d5bbf);
 }
 
-.suggestion-card__play--sm {
-  width: 22px;
-  height: 22px;
+.foryou-tile__name {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-primary, #f0f0f0);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
 }
 
-/* Top album bottom corners flush against bottom row */
-.suggestion-card--has-bottom .suggestion-card__row--top .suggestion-card__art-wrap {
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+.foryou-tile__artist {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #999);
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.suggestion-card__row--top .album-overlay {
-  border-radius: 0;
-}
-
-.suggestion-card--skeleton .suggestion-card__art-wrap {
+.foryou-row__dot-skel {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
 }
 
-.suggestion-card__kicker-skel {
+.foryou-row__text-skel {
   display: block;
-  width: 60%;
-  height: 8px;
+  width: 90px;
+  height: 10px;
   border-radius: 4px;
   background: var(--bg-elevated, #141414);
   animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.foryou-tile__art-wrap--skeleton {
+  background: var(--bg-elevated, #141414);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+  margin-bottom: 8px;
 }
 
 /* ── Carousel Sections ────────────────────────────────────────────────────── */
