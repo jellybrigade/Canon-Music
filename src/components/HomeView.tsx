@@ -561,18 +561,18 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         <div className="home-rail__header">
           <p className="home-section-label" style={{ margin: 0 }}>For You</p>
         </div>
-        <div className="home-suggestion-grid">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="suggestion-card suggestion-card--skeleton suggestion-card--has-bottom">
-              <div className="suggestion-card__header">
-                <span className="suggestion-card__kicker-skel" />
+        <div className="home-foryou-rows">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="foryou-row">
+              <div className="foryou-row__label">
+                <span className="foryou-row__dot-skel" />
+                <span className="foryou-row__text-skel" />
               </div>
-              <div className="suggestion-card__row suggestion-card__row--top">
-                <div className="suggestion-card__tile"><div className="suggestion-card__art-wrap" /></div>
-              </div>
-              <div className="suggestion-card__row suggestion-card__row--bottom">
-                {Array.from({ length: 3 }).map((_, j) => (
-                  <div key={j} className="suggestion-card__tile"><div className="suggestion-card__art-wrap" /></div>
+              <div className="foryou-row__tiles">
+                {Array.from({ length: 4 }).map((_, j) => (
+                  <div key={j} className="foryou-tile">
+                    <div className="foryou-tile__art-wrap foryou-tile__art-wrap--skeleton" />
+                  </div>
                 ))}
               </div>
             </div>
@@ -606,83 +606,46 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} popupRef={customizePopupRef} />
         )}
       </div>
-      <div className="home-suggestion-grid">
+      <div className="home-foryou-rows">
         {groups.map(group => {
           const kickerColor = KICKER_COLORS[group.kicker]
             ?? (group.kicker.startsWith("More from") ? KICKER_COLORS["More from"] : undefined)
             ?? KICKER_COLORS._default;
           return (
-            <div
-              key={group.kicker}
-              className={`suggestion-card${group.albums.length > 1 ? " suggestion-card--has-bottom" : ""}`}
-              style={{ "--kicker-color": kickerColor } as React.CSSProperties}
-            >
-              <div className="suggestion-card__header">
-                <span className="suggestion-card__kicker">{group.kicker}</span>
+            <div key={group.kicker} className="foryou-row">
+              <div className="foryou-row__label">
+                <span className="foryou-row__dot" style={{ background: kickerColor }} />
+                <span className="foryou-row__text">{group.kicker}</span>
               </div>
-              {/* Top row — 1 large tile */}
-              <div className="suggestion-card__row suggestion-card__row--top">
-                {group.albums.slice(0, 1).map(album => {
+              <div className="foryou-row__tiles">
+                {group.albums.slice(0, 4).map(album => {
                   const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                   return (
                     <div
                       key={album.id}
-                      className="suggestion-card__tile"
+                      className="foryou-tile"
                       onClick={() => onSelectAlbum(album)}
                       role="button"
                       tabIndex={0}
                       onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
                       onContextMenu={e => onCardContextMenu(e, album)}
                     >
-                      <div className="suggestion-card__art-wrap">
-                        <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
-                        <div className="album-overlay">
-                          <span className="album-name">{albumDisplayName(album.name)}</span>
-                          {album.artist && <span className="album-artist">{album.artist}</span>}
-                        </div>
+                      <div className="foryou-tile__art-wrap">
+                        <img className="foryou-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
                         <button
-                          className="suggestion-card__play"
+                          className="foryou-tile__play"
                           onClick={e => { e.stopPropagation(); playAlbum(album); }}
                           aria-label={`Play ${album.name}`}
                         >
                           <Play size={13} fill="currentColor" />
                         </button>
                       </div>
+                      <p className="foryou-tile__name">{albumDisplayName(album.name)}</p>
+                      {album.artist && <p className="foryou-tile__artist">{album.artist}</p>}
                     </div>
                   );
                 })}
               </div>
-              {/* Bottom row — 3 smaller tiles */}
-              {group.albums.length > 1 && (
-                <div className="suggestion-card__row suggestion-card__row--bottom">
-                  {group.albums.slice(1, 4).map(album => {
-                    const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
-                    return (
-                      <div
-                        key={album.id}
-                        className="suggestion-card__tile"
-                        onClick={() => onSelectAlbum(album)}
-                        role="button"
-                        tabIndex={0}
-                        title={album.artist ? `${album.name} · ${album.artist}` : album.name}
-                        onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
-                        onContextMenu={e => onCardContextMenu(e, album)}
-                      >
-                        <div className="suggestion-card__art-wrap">
-                          <img className="suggestion-card__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
-                          <button
-                            className="suggestion-card__play suggestion-card__play--sm"
-                            onClick={e => { e.stopPropagation(); playAlbum(album); }}
-                            aria-label={`Play ${album.name}`}
-                          >
-                            <Play size={10} fill="currentColor" />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           );
         })}
