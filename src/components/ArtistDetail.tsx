@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Play, Disc, Radio, ExternalLink, GitMerge } from "lucide-react";
+import { Play, Shuffle, Radio, Disc, ExternalLink, GitMerge, MoreHorizontal, ChevronDown } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
@@ -17,7 +17,7 @@ import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { fetchArtistTopTracks, fetchArtistTopAlbums, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import { fetchArtistTopTracks, fetchArtistTopAlbums, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
@@ -62,6 +62,51 @@ function useArtistTopTracks(artistName: string) {
         [artistName, artistName]
       );
     },
+  });
+}
+
+function useArtistGenres(artistName: string) {
+  return useQuery({
+    queryKey: QK.artistGenres(artistName),
+    queryFn: async (): Promise<string[]> => {
+      const db = await getDb();
+      const rows = await db.select<{ name: string }[]>(
+        `SELECT ag.name, COUNT(DISTINCT ag.album_id) AS n
+         FROM album_genres ag
+         JOIN albums a ON a.id = ag.album_id
+         WHERE (a.artist = ? OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
+           AND ag.relation = 'direct'
+           AND ag.canonical_id NOT LIKE 'raw:%'
+         GROUP BY ag.canonical_id
+         ORDER BY n DESC
+         LIMIT 5`,
+        [artistName, artistName]
+      );
+      return rows.map((r) => r.name);
+    },
+    enabled: !!artistName,
+  });
+}
+
+function useAppearsOnAlbums(artistName: string) {
+  return useQuery({
+    queryKey: QK.artistAppearsOn(artistName),
+    queryFn: async (): Promise<AlbumRow[]> => {
+      const db = await getDb();
+      return db.select<AlbumRow[]>(
+        `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type
+         FROM tracks t
+         JOIN albums a ON t.album_id = a.id
+         WHERE (t.artist = ? OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
+           AND a.artist IS NOT NULL
+           AND a.artist != ?
+           AND a.artist NOT IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+         ORDER BY a.year IS NULL, a.year DESC, a.name
+         LIMIT 24`,
+        [artistName, artistName, artistName, artistName]
+      );
+    },
+    enabled: !!artistName,
   });
 }
 
@@ -114,6 +159,10 @@ function groupAlbums(albums: AlbumRow[]): { group: ReleaseGroup; label: string; 
 }
 
 const SECONDS_PER_MINUTE = 60;
+const POPULAR_TRACKS_MIN = 5;
+const POPULAR_TRACKS_MAX = 10;
+const ESSENTIAL_MIN_ALBUMS = 3;
+const ESSENTIAL_RATIO = 0.25;
 
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "–";
@@ -122,23 +171,19 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function normalizeTitle(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
 function rankByLastfm(tracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): TopTrack[] {
   const rankMap = new Map<string, number>();
-  lastfmTracks.forEach(({ name }, i) => rankMap.set(normalizeTitle(name), i));
+  lastfmTracks.forEach(({ name }, i) => rankMap.set(normalizeTrackTitle(name), i));
   return [...tracks].sort((a, b) => {
-    const ra = rankMap.get(normalizeTitle(a.title)) ?? Infinity;
-    const rb = rankMap.get(normalizeTitle(b.title)) ?? Infinity;
+    const ra = rankMap.get(normalizeTrackTitle(a.title)) ?? Infinity;
+    const rb = rankMap.get(normalizeTrackTitle(b.title)) ?? Infinity;
     return ra - rb;
   });
 }
 
 function lastfmOnlyTracks(localTracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): LastfmTopTrack[] {
-  const localNorm = new Set(localTracks.map((t) => normalizeTitle(t.title)));
-  return lastfmTracks.filter((t) => !localNorm.has(normalizeTitle(t.name))).slice(0, 10);
+  const localNorm = new Set(localTracks.map((t) => normalizeTrackTitle(t.title)));
+  return lastfmTracks.filter((t) => !localNorm.has(normalizeTrackTitle(t.name))).slice(0, 10);
 }
 
 function formatCount(n: number): string {
@@ -154,20 +199,42 @@ function timeAgo(unixSecs: number): string {
   return `${diffDays}d ago`;
 }
 
-const PORTRAIT_COLORS = [
-  "#396cd8", "#8b5cf6", "#ec4899",
-  "#f59e0b", "#10b981", "#ef4444", "#06b6d4",
+const PORTRAIT_COLORS: [string, string][] = [
+  ["#396cd8", "57, 108, 216"],
+  ["#8b5cf6", "139, 92, 246"],
+  ["#ec4899", "236, 72, 153"],
+  ["#f59e0b", "245, 158, 11"],
+  ["#10b981", "16, 185, 129"],
+  ["#ef4444", "239, 68, 68"],
+  ["#06b6d4", "6, 182, 212"],
 ];
 
-function artistColor(name: string): string {
+function artistColor(name: string): [string, string] {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = ((h * 31) + name.charCodeAt(i)) >>> 0;
-  return PORTRAIT_COLORS[h % PORTRAIT_COLORS.length] ?? "#396cd8";
+  return PORTRAIT_COLORS[h % PORTRAIT_COLORS.length] ?? PORTRAIT_COLORS[0]!;
+}
+
+function resolvePortraitUrl(enrichment: { lastfm_image_url: string | null; wikidata_image_url: string | null } | null): string | null {
+  const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
+  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
+    ? rawLastfmImage
+    : null;
+  return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
 }
 
 interface TrackRowProps {
   track: TopTrack;
-  topTracks: TopTrack[];
+  rank: number;
   currentTrack: CurrentTrack | null;
   isPlaying: boolean;
   server: Server;
@@ -178,10 +245,9 @@ interface TrackRowProps {
   onContextMenu?: (e: React.MouseEvent, track: TopTrack) => void;
 }
 
-function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick, onContextMenu }: TrackRowProps) {
+function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick, onContextMenu }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
-  const rank = topTracks.indexOf(track);
   const artUrl = track.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
     : null;
@@ -201,8 +267,10 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
       <span className="artist-track-num">
         {isCurrentlyPlaying ? (
           <Play size={11} className="artist-track-playing-indicator" />
+        ) : rank >= 0 ? (
+          rank + 1
         ) : (
-          rank >= 0 ? rank + 1 : "♥"
+          <span className="artist-track-heart">♥</span>
         )}
       </span>
       {artUrl ? (
@@ -224,7 +292,7 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
         ) : null}
       </div>
       {showPlaycount ? (
-        <span className="artist-track-playcount">{formatCount(lastfmPlaycount!)}</span>
+        <span className="artist-track-playcount">{formatCount(lastfmPlaycount!)} plays</span>
       ) : showLibraryCount ? (
         <span className="artist-track-playcount">{track.play_count}×</span>
       ) : (
@@ -234,14 +302,49 @@ function TrackRow({ track, topTracks, currentTrack, isPlaying, server, credentia
   );
 }
 
+interface SimilarArtistCardProps {
+  name: string;
+  owned: boolean;
+  onSelect: () => void;
+}
+
+function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
+  const { data: enrichment } = useEnrichArtist(name);
+  const portraitUrl = resolvePortraitUrl(enrichment);
+  const [simColor] = artistColor(name);
+
+  return (
+    <button
+      className={`artist-similar-card${owned ? " artist-similar-card--owned" : " artist-similar-card--dim"}`}
+      onClick={onSelect}
+    >
+      {portraitUrl ? (
+        <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" />
+      ) : (
+        <span className="artist-similar-avatar" style={{ backgroundColor: simColor }}>
+          {name.charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="artist-similar-name">{name}</span>
+      <span className="artist-similar-tag">{owned ? "in library" : "search →"}</span>
+    </button>
+  );
+}
+
 export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: albums } = useArtistAlbums(artist.name);
+  const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name);
+  const { data: canonGenres = [] } = useArtistGenres(artist.name);
   const { data: rawTracks } = useArtistTopTracks(artist.name);
   const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name);
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [popularExpanded, setPopularExpanded] = useState(false);
+  const [lastfmOnlyExpanded, setLastfmOnlyExpanded] = useState(false);
+  const [overflowMenuAnchor, setOverflowMenuAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [activeReleaseGroup, setActiveReleaseGroup] = useState<ReleaseGroup | null>(null);
 
   const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
@@ -271,28 +374,32 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const lastfmPlaycountMap = useMemo(() => {
     const m = new Map<string, number>();
-    (lastfmTitles ?? []).forEach((t) => m.set(normalizeTitle(t.name), t.playcount));
+    (lastfmTitles ?? []).forEach((t) => m.set(normalizeTrackTitle(t.name), t.playcount));
     return m;
   }, [lastfmTitles]);
 
-  const popularAlbums = useMemo(() => {
-    if (!albums || !lastfmAlbums || lastfmAlbums.length === 0) return [];
-    const localByNorm = new Map(albums.map((a) => [normalizeTitle(a.name), a]));
-    const matched: AlbumRow[] = [];
-    for (const lfmAlbum of lastfmAlbums) {
-      const local = localByNorm.get(normalizeTitle(lfmAlbum.name));
-      if (local) matched.push(local);
-      if (matched.length >= 6) break;
-    }
-    return matched;
-  }, [albums, lastfmAlbums]);
+  const popularTracks = topTracks.slice(0, popularExpanded ? POPULAR_TRACKS_MAX : POPULAR_TRACKS_MIN);
 
-  const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
-  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
-    ? rawLastfmImage
-    : null;
-  const wikidataImage = enrichment?.wikidata_image_url ?? null;
-  const portraitUrl = wikidataImage ?? lastfmPortraitUrl;
+  const albumGroups = useMemo(() => (albums ? groupAlbums(albums) : []), [albums]);
+  const ownedAlbumsOnly = albumGroups.find((g) => g.group === "album")?.items ?? [];
+
+  const essentialAlbums = useMemo(() => {
+    if (ownedAlbumsOnly.length <= ESSENTIAL_MIN_ALBUMS) return [];
+    const cap = Math.ceil(ownedAlbumsOnly.length * ESSENTIAL_RATIO);
+    if (lastfmAlbums && lastfmAlbums.length > 0) {
+      const localByNorm = new Map(ownedAlbumsOnly.map((a) => [normalizeTrackTitle(a.name), a]));
+      const matched: AlbumRow[] = [];
+      for (const lfmAlbum of lastfmAlbums) {
+        const local = localByNorm.get(normalizeTrackTitle(lfmAlbum.name));
+        if (local && !matched.includes(local)) matched.push(local);
+        if (matched.length >= cap) break;
+      }
+      if (matched.length > 0) return matched;
+    }
+    return ownedAlbumsOnly.slice(0, cap);
+  }, [ownedAlbumsOnly, lastfmAlbums]);
+
+  const portraitUrl = resolvePortraitUrl(enrichment);
 
   const localBannerUrl = artist.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 600)
@@ -303,16 +410,15 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     ? (JSON.parse(enrichment.similar_json) as string[])
     : [];
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
-  const similarInLibrary = similar.filter((n) => inLibrarySet?.has(n));
-  const similarNotInLibrary = similar.filter((n) => !inLibrarySet?.has(n));
   const bio = enrichment?.bio ?? null;
-  const hasSideContent = !!(bio || similar.length > 0);
 
   const metaItems: string[] = [
     enrichment?.listeners != null ? `${formatCount(enrichment.listeners)} listeners` : null,
-    enrichment?.playcount != null ? `${formatCount(enrichment.playcount)} plays` : null,
-    `${artist.album_count} ${artist.album_count === 1 ? "album" : "albums"}`,
+    enrichment?.playcount != null ? `${formatCount(enrichment.playcount)} scrobbles` : null,
+    `${artist.album_count} ${artist.album_count === 1 ? "album" : "albums"} in library`,
   ].filter((x): x is string => x !== null);
+
+  const [color, colorRgb] = artistColor(artist.name);
 
   function buildTrackObj(track: TopTrack): CurrentTrack {
     const artworkRef = track.artwork_url ?? null;
@@ -334,7 +440,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
   function handleAlbumClick(albumId: string) {
-    const album = albums?.find((a) => a.id === albumId);
+    const album = albums?.find((a) => a.id === albumId) ?? appearsOnAlbums?.find((a) => a.id === albumId);
     if (album) onSelectAlbum(album);
   }
 
@@ -342,6 +448,17 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     if (!topTracks.length) return;
     const startIndex = topTracks.findIndex((t) => t.id === track.id);
     playQueue(topTracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+  }
+
+  function handlePlayAll() {
+    if (!topTracks.length) return;
+    playQueue(topTracks.map(buildTrackObj), streamUrlFor, 0);
+  }
+
+  function handleShuffleAll() {
+    if (!topTracks.length) return;
+    const shuffled = shuffleArray(topTracks);
+    playQueue(shuffled.map(buildTrackObj), streamUrlFor, 0);
   }
 
   function handleStartRadio() {
@@ -356,20 +473,26 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     setContextMenu({ x: e.clientX, y: e.clientY, track });
   }
 
+  const defaultGroup = albumGroups[0]?.group ?? null;
+  const currentGroup = activeReleaseGroup && albumGroups.some((g) => g.group === activeReleaseGroup)
+    ? activeReleaseGroup
+    : defaultGroup;
+  const currentGroupItems = albumGroups.find((g) => g.group === currentGroup)?.items ?? [];
+
   return (
     <div className="artist-detail">
-      {/* ── Banner ── */}
-      <div className="artist-banner">
+      {/* ── Hero ── */}
+      <div className="artist-hero" style={{ ["--artist-rgb" as string]: colorRgb }}>
         {blurUrl && (
-          <div className="artist-banner-bg" style={{ backgroundImage: `url(${blurUrl})` }} />
+          <div className="artist-hero-bg" style={{ backgroundImage: `url(${blurUrl})` }} />
         )}
-        <div className="artist-banner-overlay" />
+        <div className="artist-hero-wash" />
 
-        <div className="artist-banner-header">
+        <div className="artist-hero-header">
           <button className="artist-back-btn" onClick={onClose}>← Artists</button>
         </div>
 
-        <div className="artist-banner-content">
+        <div className="artist-hero-content">
           {portraitUrl ? (
             <img
               className="artist-portrait"
@@ -378,29 +501,21 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               loading="lazy"
             />
           ) : (
-            <div
-              className="artist-portrait artist-portrait--fallback"
-              style={{ backgroundColor: artistColor(artist.name) }}
-            >
+            <div className="artist-portrait artist-portrait--fallback" style={{ backgroundColor: color }}>
               {artist.name.charAt(0).toUpperCase()}
             </div>
           )}
 
-          <div className="artist-banner-info">
-            <h1 className="artist-banner-name">{artist.name}</h1>
-            <div className="artist-banner-meta-row">
+          <div className="artist-hero-info">
+            <h1 className="artist-hero-name">
+              {artist.name}
+            </h1>
+            <div className="artist-hero-meta-row">
               {metaItems.map((item, i) => (
                 <span key={i}>{i > 0 ? `· ${item}` : item}</span>
               ))}
-              {enrichment?.confirmed_at && (
-                <span className="mb-verified-badge">
-                  <Disc size={9} /> MB
-                </span>
-              )}
               {canonicalOf && (
-                <span className="artist-alias-badge">
-                  alias of {canonicalOf}
-                </span>
+                <span className="artist-alias-badge">alias of {canonicalOf}</span>
               )}
               {aliases.length > 0 && (
                 <span className="artist-alias-badge">
@@ -408,6 +523,15 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                 </span>
               )}
             </div>
+
+            {canonGenres.length > 0 && (
+              <div className="artist-genre-chips">
+                {canonGenres.map((tag) => (
+                  <span key={tag} className="artist-genre-chip">{tag}</span>
+                ))}
+              </div>
+            )}
+
             {aliases.length > 0 && (
               <div className="artist-aliases-row">
                 {aliases.map((a) => (
@@ -425,180 +549,206 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                 ))}
               </div>
             )}
-          </div>
 
-          <div className="artist-banner-actions">
-            {topTracks.length > 0 && (
-              <button className="artist-radio-btn" onClick={handleStartRadio}>
-                <Radio size={13} />
-                Radio
-              </button>
-            )}
-            {!canonicalOfPending && !canonicalOf && (
+            <div className="artist-hero-actions">
+              {topTracks.length > 0 && (
+                <button className="artist-play-btn" onClick={handlePlayAll}>
+                  <Play size={13} fill="currentColor" />
+                  Play
+                </button>
+              )}
+              {topTracks.length > 1 && (
+                <button className="artist-icon-btn" onClick={handleShuffleAll} title="Shuffle" aria-label="Shuffle">
+                  <Shuffle size={13} />
+                </button>
+              )}
+              {topTracks.length > 0 && (
+                <button className="artist-icon-btn" onClick={handleStartRadio} title="Start Radio" aria-label="Start Radio">
+                  <Radio size={13} />
+                </button>
+              )}
               <button
-                className="artist-identify-btn"
-                onClick={() => setShowMerge(true)}
-                aria-label="Merge artist into another"
-                title="Merge into another artist"
+                className="artist-icon-btn"
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setOverflowMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
+                }}
+                title="More"
+                aria-label="More options"
               >
-                <GitMerge size={13} />
-                Merge
+                <MoreHorizontal size={13} />
               </button>
-            )}
-            <button
-              className="artist-identify-btn"
-              onClick={() => setShowIdentify(true)}
-              aria-label="Identify artist on MusicBrainz"
-            >
-              <Disc size={13} />
-              Identify
-            </button>
-            {enrichment?.confirmed_at && enrichment.mb_artist_id && (
-              <button
-                className="artist-identify-btn"
-                onClick={() => void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`)}
-                aria-label="Open on MusicBrainz"
-                title="Open on MusicBrainz"
-              >
-                <ExternalLink size={13} />
-              </button>
-            )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Body ── */}
-      <div className={`artist-detail-body${hasSideContent ? "" : " artist-detail-body--full"}`}>
-        <div className="artist-body-main">
-          {lovedTracks.length > 0 && (
-            <section className="artist-section">
-              <h2 className="artist-section-title">Favorites</h2>
-              <div className="artist-top-tracks artist-top-tracks--grid">
-                {lovedTracks.map((track) => (
-                  <TrackRow
-                    key={track.id}
-                    track={track}
-                    topTracks={topTracks}
-                    currentTrack={currentTrack}
-                    isPlaying={isPlaying}
-                    server={server}
-                    credential={credential}
-                    onPlay={handlePlayTrack}
-                    lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
-                    onAlbumClick={handleAlbumClick}
-                    onContextMenu={handleTrackContextMenu}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {popularAlbums.length > 0 && (
-            <section className="artist-section">
-              <h2 className="artist-section-title">Popular</h2>
-              <AlbumGrid
-                albums={popularAlbums}
-                serverWithCredential={serverWithCredential}
-                onSelect={onSelectAlbum}
-              />
-            </section>
-          )}
-
-          {albums && albums.length > 0 && groupAlbums(albums).map(({ label, items }) => (
-            <section key={label} className="artist-section">
-              <h2 className="artist-section-title">{label}</h2>
-              <AlbumGrid
-                albums={items}
-                serverWithCredential={serverWithCredential}
-                onSelect={onSelectAlbum}
-              />
-            </section>
-          ))}
-
-          {topTracks.length > 0 && (
-            <section className="artist-section">
-              <h2 className="artist-section-title">Tracks</h2>
-              <div className="artist-top-tracks artist-top-tracks--grid">
-                {topTracks.map((track) => (
-                  <TrackRow
-                    key={track.id}
-                    track={track}
-                    topTracks={topTracks}
-                    currentTrack={currentTrack}
-                    isPlaying={isPlaying}
-                    server={server}
-                    credential={credential}
-                    onPlay={handlePlayTrack}
-                    lastfmPlaycount={lastfmPlaycountMap.get(normalizeTitle(track.title))}
-                    onAlbumClick={handleAlbumClick}
-                    onContextMenu={handleTrackContextMenu}
-                  />
-                ))}
-              </div>
-              {lfmOnlyTracks.length > 0 && (
-                <div className="artist-lastfm-only">
-                  <p className="artist-lastfm-only-label">Also on Last.fm</p>
-                  {lfmOnlyTracks.map((t) => (
-                    <div key={t.name} className="artist-lastfm-only-row">
-                      <span className="artist-lastfm-only-title">{t.name}</span>
-                      {t.playcount > 0 && (
-                        <span className="artist-lastfm-only-plays">{formatCount(t.playcount)} plays</span>
-                      )}
-                    </div>
+      <div className="artist-body">
+        {topTracks.length > 0 && (
+          <section className="artist-section">
+            <div className={`artist-popfav-grid${lovedTracks.length > 0 ? "" : " artist-popfav-grid--solo"}`}>
+              <div className="artist-popfav-col">
+                <h2 className="artist-section-title">Popular</h2>
+                <div className="artist-top-tracks">
+                  {popularTracks.map((track, i) => (
+                    <TrackRow
+                      key={track.id}
+                      track={track}
+                      rank={i}
+                      currentTrack={currentTrack}
+                      isPlaying={isPlaying}
+                      server={server}
+                      credential={credential}
+                      onPlay={handlePlayTrack}
+                      lastfmPlaycount={lastfmPlaycountMap.get(normalizeTrackTitle(track.title))}
+                      onAlbumClick={handleAlbumClick}
+                      onContextMenu={handleTrackContextMenu}
+                    />
                   ))}
                 </div>
-              )}
-            </section>
-          )}
-        </div>
-
-        {hasSideContent && (
-          <div className="artist-body-side">
-            {bio && (
-              <section className="artist-section">
-                <h2 className="artist-section-title">About</h2>
-                <div className={`artist-bio-wrap${bioExpanded ? " artist-bio-wrap--expanded" : ""}`}>
-                  <p className="artist-bio">{bio}</p>
-                </div>
-                {bio.length > 200 && (
-                  <button className="artist-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
-                    {bioExpanded ? "Show less" : "Show more"}
+                {topTracks.length > POPULAR_TRACKS_MIN && (
+                  <button className="artist-show-more-btn" onClick={() => setPopularExpanded((v) => !v)}>
+                    {popularExpanded ? "Show less" : `Show ${Math.min(POPULAR_TRACKS_MAX, topTracks.length) - POPULAR_TRACKS_MIN} more`}
+                    <ChevronDown size={13} className={popularExpanded ? "artist-chevron--up" : ""} />
                   </button>
                 )}
-              </section>
-            )}
+              </div>
 
-            {similar.length > 0 && (
-              <section className="artist-section">
-                {similarInLibrary.length > 0 && (
-                  <>
-                    <h2 className="artist-section-title">Similar — In Library</h2>
-                    <div className="artist-similar-list">
-                      {similarInLibrary.map((name) => (
-                        <button key={name} className="artist-similar-card" onClick={() => onSelectArtist?.(name)}>
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </>
+              {lovedTracks.length > 0 && (
+                <div className="artist-popfav-col">
+                  <h2 className="artist-section-title">Favorites</h2>
+                  <div className="artist-top-tracks">
+                    {lovedTracks.map((track) => (
+                      <TrackRow
+                        key={track.id}
+                        track={track}
+                        rank={-1}
+                        currentTrack={currentTrack}
+                        isPlaying={isPlaying}
+                        server={server}
+                        credential={credential}
+                        onPlay={handlePlayTrack}
+                        lastfmPlaycount={lastfmPlaycountMap.get(normalizeTrackTitle(track.title))}
+                        onAlbumClick={handleAlbumClick}
+                        onContextMenu={handleTrackContextMenu}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {lfmOnlyTracks.length > 0 && (
+              <div className="artist-lastfm-only">
+                <button className="artist-lastfm-divider" onClick={() => setLastfmOnlyExpanded((v) => !v)}>
+                  More on Last.fm — not in your library
+                  <ChevronDown size={12} className={lastfmOnlyExpanded ? "artist-chevron--up" : ""} />
+                </button>
+                {lastfmOnlyExpanded && (
+                  <div className="artist-lastfm-only-list">
+                    {lfmOnlyTracks.map((t) => (
+                      <div key={t.name} className="artist-lastfm-only-row">
+                        <span className="artist-lastfm-only-title">{t.name}</span>
+                        {t.playcount > 0 && (
+                          <span className="artist-lastfm-only-plays">{formatCount(t.playcount)} plays</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 )}
-                {similarNotInLibrary.length > 0 && (
-                  <>
-                    <h2 className="artist-section-title" style={{ marginTop: similarInLibrary.length > 0 ? "1rem" : undefined }}>
-                      Similar — Not in Library
-                    </h2>
-                    <div className="artist-similar-list">
-                      {similarNotInLibrary.map((name) => (
-                        <button key={name} className="artist-similar-card artist-similar-card--dim" onClick={() => onSelectArtist?.(name)}>
-                          {name}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </section>
+              </div>
             )}
-          </div>
+          </section>
+        )}
+
+        {essentialAlbums.length > 0 && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">Essential</h2>
+            <AlbumGrid
+              albums={essentialAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={onSelectAlbum}
+            />
+          </section>
+        )}
+
+        {albumGroups.length > 0 && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">Discography</h2>
+            <div className="artist-tabs">
+              {albumGroups.map(({ group, label, items }) => (
+                <button
+                  key={group}
+                  className={`artist-tab-btn${group === currentGroup ? " artist-tab-btn--active" : ""}`}
+                  onClick={() => setActiveReleaseGroup(group)}
+                >
+                  {label} ({items.length})
+                </button>
+              ))}
+            </div>
+            <AlbumGrid
+              albums={currentGroupItems}
+              serverWithCredential={serverWithCredential}
+              onSelect={onSelectAlbum}
+            />
+          </section>
+        )}
+
+        {appearsOnAlbums && appearsOnAlbums.length > 0 && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">Appears On</h2>
+            <AlbumGrid
+              albums={appearsOnAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={onSelectAlbum}
+            />
+          </section>
+        )}
+
+        {similar.length > 0 && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">Fans also like</h2>
+            <div className="artist-similar-strip">
+              {similar.map((name) => {
+                const owned = inLibrarySet?.has(name) ?? false;
+                return (
+                  <SimilarArtistCard
+                    key={name}
+                    name={name}
+                    owned={owned}
+                    onSelect={() => onSelectArtist?.(name)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {bio && (
+          <section className="artist-section">
+            <h2 className="artist-section-title">About</h2>
+            <div className="artist-about-card">
+              <div className={`artist-bio-wrap${bioExpanded ? " artist-bio-wrap--expanded" : ""}`}>
+                <p className="artist-bio">{bio}</p>
+              </div>
+              {bio.length > 260 && (
+                <button className="artist-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
+                  {bioExpanded ? "Show less" : "Show more"}
+                </button>
+              )}
+              <div className="artist-about-links">
+                {enrichment?.mb_artist_id && (
+                  <button onClick={() => void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`)}>
+                    MusicBrainz ↗
+                  </button>
+                )}
+                <button onClick={() => void openUrl(`https://www.last.fm/music/${encodeURIComponent(lastfmName)}`)}>
+                  Last.fm ↗
+                </button>
+              </div>
+            </div>
+          </section>
         )}
 
         <div className="artist-enrichment-footer">
@@ -617,6 +767,37 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           {enrichError && <span className="artist-enrichment-error">{enrichError}</span>}
         </div>
       </div>
+
+      {overflowMenuAnchor && (
+        <ContextMenu
+          x={overflowMenuAnchor.x}
+          y={overflowMenuAnchor.y}
+          onClose={() => setOverflowMenuAnchor(null)}
+        >
+          <button
+            onClick={() => { setShowIdentify(true); setOverflowMenuAnchor(null); }}
+          >
+            <Disc size={13} /> {portraitUrl ? "Identify artist" : "Identify to add artwork"}
+          </button>
+          {!canonicalOfPending && !canonicalOf && (
+            <button
+              onClick={() => { setShowMerge(true); setOverflowMenuAnchor(null); }}
+            >
+              <GitMerge size={13} /> Merge into another artist
+            </button>
+          )}
+          {enrichment?.confirmed_at && enrichment.mb_artist_id && (
+            <button
+              onClick={() => {
+                void openUrl(`https://musicbrainz.org/artist/${enrichment.mb_artist_id}`);
+                setOverflowMenuAnchor(null);
+              }}
+            >
+              <ExternalLink size={13} /> Open on MusicBrainz
+            </button>
+          )}
+        </ContextMenu>
+      )}
 
       {showIdentify && (
         <ArtistIdentifyDialog

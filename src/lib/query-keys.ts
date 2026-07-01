@@ -44,6 +44,8 @@ export const QK = {
 
   artistAlbums: (artistName: string) => ["artist-albums", artistName] as const,
   artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
+  artistAppearsOn: (artistName: string) => ["artist-appears-on", artistName] as const,
+  artistGenres: (artistName: string) => ["artist-genres", artistName] as const,
   lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
   similarInLibrary: (names: string[]) => ["similar-in-library", names] as const,
   similarArtistAlbums: (names: string[]) => ["similar-artist-albums", names] as const,
