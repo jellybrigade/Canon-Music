@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle, XCircle, AlertCircle, Loader, Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useAlbumIdentity, useIdentifyAlbum, useSaveAlbumIdentity } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
+import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
 import "./IdentifyDialog.css";
 
@@ -51,6 +53,13 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
 
   const effectiveMbRgId = selectedCandidate ?? (mbRgId.trim() || null);
 
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ["mb-search-rg", artist, album],
+    queryFn: () => searchReleaseGroups(artist, album),
+    staleTime: 10 * 60 * 1000,
+    enabled: !!(artist.trim() || album.trim()),
+  });
+
   const { data: lookupResult, isFetching } = useIdentifyAlbum({
     albumId,
     artist: lfmArtist.trim() || artist,
@@ -72,6 +81,13 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
     setSelectedCandidate(candidate.id);
     setMbRgId(candidate.id);
     if (!mbArtistId && candidate.artistMbid) setMbArtistId(candidate.artistMbid);
+  }
+
+  function handlePickSearchResult(c: MbReleaseGroupCandidate) {
+    setSelectedCandidate(c.id);
+    setMbRgId(c.id);
+    if (c.artistMbid) setMbArtistId(c.artistMbid);
+    setFetchEnabled(true);
   }
 
   async function handleConfirm() {
@@ -117,6 +133,44 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
         </div>
 
         <div className="identify-body">
+          {/* ── MB Search Results ── */}
+          <section className="identify-section">
+            <h3 className="identify-section-title">MusicBrainz</h3>
+            {searchLoading && (
+              <div className="identify-search-loading">
+                <Loader size={13} className="identify-spinner" />
+                <span>Searching…</span>
+              </div>
+            )}
+            {searchResults && searchResults.length > 0 && (
+              <div className="identify-candidates">
+                {searchResults.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
+                    onClick={() => handlePickSearchResult(c)}
+                  >
+                    <div className="identify-candidate-header">
+                      <span className="identify-candidate-title">{c.title}</span>
+                      {c.score != null && (
+                        <span className="identify-candidate-score">{c.score}%</span>
+                      )}
+                    </div>
+                    <span className="identify-candidate-meta">
+                      {c.artistName}
+                      {c.firstReleaseDate ? ` · ${c.firstReleaseDate.slice(0, 4)}` : ""}
+                      {c.primaryType ? ` · ${c.primaryType}` : ""}
+                    </span>
+                    <span className="identify-candidate-mbid">{c.id}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchResults && searchResults.length === 0 && !searchLoading && (
+              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+            )}
+          </section>
+
           {/* ── Album name / artist override ── */}
           <section className="identify-section">
             <h3 className="identify-section-title">Last.fm strings</h3>
@@ -317,6 +371,13 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
   const effectiveMbArtistId = selectedCandidate ?? (mbArtistId.trim() || null);
 
+  const { data: searchResults, isLoading: searchLoading } = useQuery({
+    queryKey: ["mb-search-artist", artistName],
+    queryFn: () => searchArtists(artistName),
+    staleTime: 10 * 60 * 1000,
+    enabled: !!artistName.trim(),
+  });
+
   const { data: lookupResult, isFetching } = useIdentifyArtist({
     artistName: lfmArtist.trim() || artistName,
     overrideMbArtistId: effectiveMbArtistId,
@@ -332,6 +393,12 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
   function handleSelectCandidate(c: MbArtistCandidate) {
     setSelectedCandidate(c.id);
     setMbArtistId(c.id);
+  }
+
+  function handlePickSearchResult(c: MbArtistCandidate) {
+    setSelectedCandidate(c.id);
+    setMbArtistId(c.id);
+    setFetchEnabled(true);
   }
 
   async function handleConfirm() {
@@ -357,6 +424,44 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
         </div>
 
         <div className="identify-body">
+          {/* ── MB Search Results ── */}
+          <section className="identify-section">
+            <h3 className="identify-section-title">MusicBrainz</h3>
+            {searchLoading && (
+              <div className="identify-search-loading">
+                <Loader size={13} className="identify-spinner" />
+                <span>Searching…</span>
+              </div>
+            )}
+            {searchResults && searchResults.length > 0 && (
+              <div className="identify-candidates">
+                {searchResults.map((c) => (
+                  <button
+                    key={c.id}
+                    className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
+                    onClick={() => handlePickSearchResult(c)}
+                  >
+                    <div className="identify-candidate-header">
+                      <span className="identify-candidate-title">{c.name}</span>
+                      {c.score != null && (
+                        <span className="identify-candidate-score">{c.score}%</span>
+                      )}
+                    </div>
+                    {(c.disambiguation ?? c.country) && (
+                      <span className="identify-candidate-meta">
+                        {[c.disambiguation, c.country].filter(Boolean).join(" · ")}
+                      </span>
+                    )}
+                    <span className="identify-candidate-mbid">{c.id}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchResults && searchResults.length === 0 && !searchLoading && (
+              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+            )}
+          </section>
+
           <section className="identify-section">
             <h3 className="identify-section-title">Last.fm override</h3>
             <label className="identify-field">

@@ -76,6 +76,7 @@ export interface MbArtistCandidate {
   name: string;
   disambiguation: string | null;
   country: string | null;
+  score: number | null;
 }
 
 export interface MbArtistDetail {
@@ -243,6 +244,7 @@ interface MbSearchArtistResponse {
     name: string;
     disambiguation?: string;
     country?: string;
+    score?: number;
   }>;
 }
 
@@ -257,6 +259,7 @@ export async function searchArtists(name: string): Promise<MbArtistCandidate[]> 
     name: a.name,
     disambiguation: a.disambiguation ?? null,
     country: a.country ?? null,
+    score: a.score ?? null,
   }));
 }
 

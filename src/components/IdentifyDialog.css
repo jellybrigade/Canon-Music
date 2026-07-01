@@ -238,14 +238,42 @@
   background: rgba(124, 111, 255, 0.1);
 }
 
+.identify-candidate-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
 .identify-candidate-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary, #fff);
 }
 
+.identify-candidate-score {
+  font-size: 10px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.35));
+  flex-shrink: 0;
+}
+
 .identify-candidate-meta {
   font-size: 11px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.45));
+}
+
+.identify-candidate-mbid {
+  font-size: 10px;
+  font-family: monospace;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.identify-search-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
   color: var(--text-secondary, rgba(255, 255, 255, 0.45));
 }
 

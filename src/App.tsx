@@ -47,6 +47,7 @@ import type { ServerWithCredential } from "./hooks/useServer";
 import type { PlaylistRow } from "./hooks/usePlaylists";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
+import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
 import { usePlayerStore } from "./store/player";
 import { useTagsStore } from "./store/tags";
@@ -258,6 +259,7 @@ export default function App() {
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
 
   const { syncStatus, syncError, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
+  useCoverCachePopulator(serverWithCred ?? undefined);
 
   useGlobalShortcuts(serverWithCred);
   useQueueSync(serverWithCred);

@@ -564,4 +564,14 @@ export const migrations: Migration[] = [
       ALTER TABLE album_identity ADD COLUMN album_enriched_at INTEGER;
     `,
   },
+  {
+    version: 43,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_covers (
+        album_id TEXT PRIMARY KEY,
+        data_url TEXT NOT NULL,
+        cached_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
