@@ -37,6 +37,8 @@ export const TourCard = memo(function TourCard({ artistName, enabled, loading, e
   const visible = showAll ? events : events.slice(0, TOUR_LIMIT);
   const hidden = Math.max(0, events.length - visible.length);
 
+  if (enabled && !loading && events.length === 0) return null;
+
   return (
     <div className="tour-card">
       <div className="tour-card-header">
@@ -63,9 +65,6 @@ export const TourCard = memo(function TourCard({ artistName, enabled, loading, e
         <>
           {loading && events.length === 0 && (
             <p className="tour-card-empty">Loading…</p>
-          )}
-          {!loading && events.length === 0 && (
-            <p className="tour-card-empty">No upcoming shows</p>
           )}
           {visible.length > 0 && (
             <ul className="tour-card-list">
