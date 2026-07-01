@@ -7,6 +7,7 @@ import { usePlayerStore } from "../store/player";
 import { useSetting } from "./useSetting";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
+import { shuffleArray } from "../lib/shuffle";
 
 interface MinTrack {
   id: string;
@@ -83,12 +84,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential) {
     } else if (playAction === "queue_next") {
       for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
     } else if (playAction === "shuffle") {
-      const shuffled = [...trackObjs];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-      }
-      await playQueue(shuffled, streamUrlFor, 0);
+      await playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
     } else {
       await playQueue(trackObjs, streamUrlFor, 0);
     }

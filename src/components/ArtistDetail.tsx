@@ -18,6 +18,7 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import { shuffleArray } from "../lib/shuffle";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
@@ -227,15 +228,6 @@ function resolvePortraitUrl(enrichment: { lastfm_image_url: string | null; wikid
   return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
-}
-
 interface TrackRowProps {
   track: TopTrack;
   rank: number;
@@ -440,7 +432,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const blurUrl = localBannerUrl ?? portraitUrl;
 
   const similar: string[] = enrichment?.similar_json
-    ? (JSON.parse(enrichment.similar_json) as string[])
+    ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
     : [];
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
   const bio = enrichment?.bio ?? null;
