@@ -129,6 +129,7 @@ export function PlaybackTab({ searchQuery }: Props) {
           <SettingRow
             title="Radio similarity"
             description="How closely radio picks match the seed track. Narrow = strict genre match; Wide = looser, discovery-oriented."
+            stacked
           >
             <SegToggle
               value={String(radioSimilarityScale)}

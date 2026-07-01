@@ -12,6 +12,7 @@ import type { NavidromeAlbum } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { useAlbums } from "../hooks/useAlbums";
+import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { useCarouselAlbums } from "../hooks/useCarouselAlbums";
 import { useListeningStats } from "../hooks/useListeningStats";
 import type { AlbumStatRow } from "../hooks/useListeningStats";
@@ -242,6 +243,7 @@ interface SpotlightProps {
 function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
+  const coverMap = useAlbumCoverMap();
   const [accentColor, setAccentColor] = useState<string | null>(null);
   const { data: genres } = useQuery({
     queryKey: QK.spotlightGenres(pick.album.id),
@@ -255,9 +257,10 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
     staleTime: 5 * 60 * 1000,
   });
 
-  const artUrl = pick.album.artwork_url
-    ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 400)
-    : null;
+  const artUrl = coverMap.get(pick.album.id)
+    ?? (pick.album.artwork_url
+      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 400)
+      : null);
 
   useEffect(() => {
     if (!artUrl) { setAccentColor(null); return; }
@@ -521,6 +524,7 @@ const KICKER_COLORS: Record<string, string> = {
 function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
+  const coverMap = useAlbumCoverMap();
   const [showCustomize, setShowCustomize] = useState(false);
   const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const customizeButtonRef = useRef<HTMLButtonElement>(null);
@@ -609,7 +613,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
               {/* Top row — 1 large tile */}
               <div className="suggestion-card__row suggestion-card__row--top">
                 {group.albums.slice(0, 1).map(album => {
-                  const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
+                  const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                   return (
                     <div
                       key={album.id}
@@ -642,7 +646,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
               {group.albums.length > 1 && (
                 <div className="suggestion-card__row suggestion-card__row--bottom">
                   {group.albums.slice(1, 4).map(album => {
-                    const artUrl = getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
+                    const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
                     return (
                       <div
                         key={album.id}
@@ -730,6 +734,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
+  const coverMap = useAlbumCoverMap();
 
   if (!isLoading && (!items || items.length === 0)) return null;
 
@@ -766,9 +771,9 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                 </div>
               ))
             : (items ?? []).map(item => {
-                const artUrl = item.artwork_url
+                const artUrl = coverMap.get(item.id) ?? (item.artwork_url
                   ? getCoverArtUrl(server.url, server.username, credential, item.artwork_url, 300)
-                  : null;
+                  : null);
                 return (
                   <div
                     key={item.id}
