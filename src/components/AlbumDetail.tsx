@@ -234,7 +234,21 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioNeedsClamp, setBioNeedsClamp] = useState(false);
+  const bioTextRef = useRef<HTMLParagraphElement>(null);
   const albumBio = albumEnrichment?.album_bio ?? null;
+
+  useEffect(() => {
+    setBioExpanded(false);
+    const el = bioTextRef.current;
+    if (!el) {
+      setBioNeedsClamp(false);
+      return;
+    }
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+    const lines = lineHeight > 0 ? Math.round(el.scrollHeight / lineHeight) : 0;
+    setBioNeedsClamp(lines >= 4);
+  }, [albumBio]);
 
   const coverArtUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -676,10 +690,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
 
       {albumBio && (
         <div className="album-bio-section">
-          <div className={`album-bio-wrap${bioExpanded ? " album-bio-wrap--expanded" : ""}`}>
-            <p className="album-bio">{albumBio}</p>
+          <div className={`album-bio-wrap${bioNeedsClamp && !bioExpanded ? " album-bio-wrap--clamped" : ""}`}>
+            <p className="album-bio" ref={bioTextRef}>{albumBio}</p>
           </div>
-          {albumBio.length > 220 && (
+          {bioNeedsClamp && (
             <button className="album-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>
               {bioExpanded ? "Show less" : "Show more"}
             </button>

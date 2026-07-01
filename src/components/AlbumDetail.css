@@ -499,16 +499,13 @@
 
 .album-bio-wrap {
   position: relative;
-  max-height: 4.2rem;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 40%, transparent 100%);
 }
 
-.album-bio-wrap--expanded {
-  max-height: none;
-  -webkit-mask-image: none;
-  mask-image: none;
+.album-bio-wrap--clamped {
+  max-height: 1.4rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
 }
 
 .album-bio {
