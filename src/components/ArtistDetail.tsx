@@ -20,6 +20,8 @@ import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, LASTFM_PLACEHOLDER } from "../lib/lastfm";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
+import { useArtistAlbums } from "../hooks/useArtistAlbums";
+import { useSimilarInLibrary } from "../hooks/useSimilarInLibrary";
 import { useLoved } from "../hooks/useLoved";
 import { useArtistCanonicalOf, useAliasesOfCanonical, useRemoveArtistAlias } from "../hooks/useArtistAliases";
 import "./ArtistDetail.css";
@@ -41,23 +43,6 @@ interface TopTrack {
   album_id: string | null;
   artwork_url: string | null;
   play_count: number | null;
-}
-
-function useArtistAlbums(artistName: string) {
-  return useQuery({
-    queryKey: QK.artistAlbums(artistName),
-    queryFn: async (): Promise<AlbumRow[]> => {
-      const db = await getDb();
-      return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type
-         FROM albums
-         WHERE artist = ?
-            OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
-         ORDER BY year IS NULL, year DESC, name`,
-        [artistName, artistName]
-      );
-    },
-  });
 }
 
 function useArtistTopTracks(artistName: string) {
@@ -126,24 +111,6 @@ function groupAlbums(albums: AlbumRow[]): { group: ReleaseGroup; label: string; 
   )
     .map(({ group, label }) => ({ group, label, items: map[group] }))
     .filter(({ items }) => items.length > 0);
-}
-
-function useSimilarInLibrary(names: string[]) {
-  return useQuery({
-    queryKey: QK.similarInLibrary(names),
-    queryFn: async () => {
-      if (names.length === 0) return new Set<string>();
-      const db = await getDb();
-      const placeholders = names.map(() => "?").join(",");
-      const rows = await db.select<{ name: string }[]>(
-        `SELECT name FROM artists WHERE name IN (${placeholders})`,
-        names
-      );
-      return new Set(rows.map((r) => r.name));
-    },
-    enabled: names.length > 0,
-    staleTime: Infinity,
-  });
 }
 
 const SECONDS_PER_MINUTE = 60;
