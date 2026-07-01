@@ -17,6 +17,14 @@ use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tauri::Manager;
 
+// fetch() enforces CORS (unlike <img> tags), so every response from the loopback
+// cover server — success or error — needs this header or the renderer sees an
+// opaque network error instead of the real status.
+fn cors_empty(status: u16) -> tiny_http::Response<std::io::Empty> {
+    tiny_http::Response::empty(tiny_http::StatusCode(status))
+        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+}
+
 fn http_client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -948,7 +956,7 @@ pub fn run() {
                         let path_query = match url.strip_prefix("/cover/") {
                             Some(s) => s.to_string(),
                             None => {
-                                let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(404)));
+                                let _ = request.respond(cors_empty(404));
                                 return;
                             }
                         };
@@ -977,7 +985,7 @@ pub fn run() {
                             let cfg = config_req.lock().unwrap().clone();
                             match cfg {
                                 None => {
-                                    let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(503)));
+                                    let _ = request.respond(cors_empty(503));
                                     return;
                                 }
                                 Some(cfg) => {
@@ -1004,13 +1012,13 @@ pub fn run() {
                                                     (b, ct)
                                                 }
                                                 Err(_) => {
-                                                    let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                                    let _ = request.respond(cors_empty(502));
                                                     return;
                                                 }
                                             }
                                         }
                                         _ => {
-                                            let _ = request.respond(tiny_http::Response::empty(tiny_http::StatusCode(502)));
+                                            let _ = request.respond(cors_empty(502));
                                             return;
                                         }
                                     }
@@ -1022,6 +1030,9 @@ pub fn run() {
                             resp = resp.with_header(h);
                         }
                         if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
+                            resp = resp.with_header(h);
+                        }
+                        if let Ok(h) = tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*") {
                             resp = resp.with_header(h);
                         }
                         let _ = request.respond(resp);

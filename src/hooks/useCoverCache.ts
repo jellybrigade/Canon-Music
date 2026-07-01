@@ -21,11 +21,14 @@ async function fetchAndStoreCover(
   albumId: string,
   artworkUrl: string,
   swc: ServerWithCredential,
-): Promise<void> {
+): Promise<boolean> {
+  const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
   try {
-    const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
     const res = await fetch(url);
-    if (!res.ok) return;
+    if (!res.ok) {
+      console.error(`Cover cache: ${res.status} ${res.statusText} fetching album ${albumId} from ${url}`);
+      return false;
+    }
     const blob = await res.blob();
     const dataUrl = await blobToDataUrl(blob);
     const db = await getDb();
@@ -33,8 +36,11 @@ async function fetchAndStoreCover(
       `INSERT OR REPLACE INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)`,
       [albumId, dataUrl, Date.now()],
     );
-  } catch {
-    // ignore individual failures; retry on next session
+    return true;
+  } catch (err) {
+    // Network/parse/DB failure for this one album; retry on next session.
+    console.error(`Cover cache: failed to cache album ${albumId} from ${url}`, err);
+    return false;
   }
 }
 
@@ -56,22 +62,24 @@ export async function getMissingCoverCount(): Promise<number> {
 async function populateMissingCovers(
   swc: ServerWithCredential,
   signal: AbortSignal,
-  onDone: () => void,
+  onDone: (failed: number) => void,
   onProgress?: (done: number, total: number) => void,
 ): Promise<void> {
   const rows = await getMissingCoverRows();
   onProgress?.(0, rows.length);
+  let failed = 0;
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     if (signal.aborted) return;
     const batch = rows.slice(i, i + BATCH_SIZE);
-    await Promise.all(batch.map((r) => fetchAndStoreCover(r.id, r.artwork_url, swc)));
+    const results = await Promise.all(batch.map((r) => fetchAndStoreCover(r.id, r.artwork_url, swc)));
+    failed += results.filter((ok) => !ok).length;
     onProgress?.(Math.min(i + BATCH_SIZE, rows.length), rows.length);
     if (i + BATCH_SIZE < rows.length) {
       await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
     }
   }
-  onDone();
+  onDone(failed);
 }
 
 /** Runs a background pass after sync to cache missing album covers in SQLite. */
@@ -81,7 +89,8 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
   useEffect(() => {
     if (!swc) return;
     const controller = new AbortController();
-    void populateMissingCovers(swc, controller.signal, () => {
+    void populateMissingCovers(swc, controller.signal, (failed) => {
+      if (failed > 0) console.error(`Cover cache: ${failed} album(s) failed to cache in background pass`);
       void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
       void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
     });
@@ -95,6 +104,7 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
 export function useCacheAllCovers(swc: ServerWithCredential | undefined) {
   const queryClient = useQueryClient();
   const [progress, setProgressState] = useState<{ done: number; total: number } | null>(null);
+  const [lastFailedCount, setLastFailedCount] = useState<number | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
@@ -103,10 +113,12 @@ export function useCacheAllCovers(swc: ServerWithCredential | undefined) {
     if (!swc || controllerRef.current) return;
     const controller = new AbortController();
     controllerRef.current = controller;
+    setLastFailedCount(null);
     await populateMissingCovers(
       swc,
       controller.signal,
-      () => {
+      (failed) => {
+        setLastFailedCount(failed);
         void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
         void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
       },
@@ -116,7 +128,7 @@ export function useCacheAllCovers(swc: ServerWithCredential | undefined) {
     setProgressState(null);
   }, [swc, queryClient]);
 
-  return { run, progress };
+  return { run, progress, lastFailedCount };
 }
 
 interface CoverRow {

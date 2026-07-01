@@ -16,6 +16,7 @@ import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { AlbumArt } from "./AlbumArt";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
+import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
 import "./PlayerBar.css";
@@ -49,6 +50,7 @@ interface Props {
 
 export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
+  const coverMap = useAlbumCoverMap();
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
   const volume        = usePlayerStore((s) => s.volume);
@@ -294,7 +296,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               aria-label="Go to album"
             >
               <AlbumArt
-                src={currentTrack.coverArtUrl ?? null}
+                src={(currentTrack.albumId && coverMap.get(currentTrack.albumId)) ?? currentTrack.coverArtUrl ?? null}
                 artist={currentTrack.artist}
                 album={currentTrack.album ?? null}
                 alt=""

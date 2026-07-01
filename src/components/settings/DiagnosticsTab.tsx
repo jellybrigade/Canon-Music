@@ -52,7 +52,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
   const importInputRef = useRef<HTMLInputElement>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount();
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
-  const { run: cacheAllCovers, progress: coverProgress } = useCacheAllCovers(serverWithCredential);
+  const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
@@ -128,6 +128,11 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
                 {missingCoverCount
                   ? `${missingCoverCount} album${missingCoverCount === 1 ? "" : "s"} not yet cached (~${formatSizeRange(missingCoverCount)})`
                   : "All covers cached"}
+              </span>
+            )}
+            {coverProgress === null && !!lastFailedCount && (
+              <span className="settings-hint settings-diag-value--error">
+                {lastFailedCount} failed to cache last run — check server connection (see console for details)
               </span>
             )}
           </div>
