@@ -8,7 +8,7 @@ import { CanonLockup } from "../CanonIcon";
 import { setApiKey as setLastfmApiKey } from "../../lib/lastfm";
 import { getFanartApiKey, setFanartApiKey } from "../../lib/fanart";
 import { importSettingsFile } from "../../lib/settings-backup";
-import { useBoolSetting, useSetting } from "../../hooks/useSetting";
+import { useBoolSetting, useSetting, refreshAllSettings } from "../../hooks/useSetting";
 import { SettingRow } from "../settings/SettingRow";
 import "../SettingsView.css";
 import "./Wizard.css";
@@ -79,6 +79,7 @@ export function Wizard({ onSuccess }: Props) {
   async function handleImportSettings(file: File) {
     try {
       await importSettingsFile(file);
+      await refreshAllSettings();
       setImportState("done");
     } catch {
       setImportState("error");

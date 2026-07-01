@@ -9,6 +9,23 @@ import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
 import "./IdentifyDialog.css";
 
+function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
+  const url = `https://musicbrainz.org/${kind}/${id}`;
+  const open = () => void openUrl(url);
+  return (
+    <span
+      className="identify-candidate-browse"
+      role="button"
+      tabIndex={0}
+      aria-label="Open on MusicBrainz"
+      onClick={(e) => { e.stopPropagation(); open(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } }}
+    >
+      <ExternalLink size={13} />
+    </span>
+  );
+}
+
 // ── Album variant ──────────────────────────────────────────────────────────────
 
 interface AlbumIdentifyDialogProps {
@@ -156,14 +173,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                       {c.score != null && (
                         <span className="identify-candidate-score">{c.score}%</span>
                       )}
-                      <span
-                        className="identify-candidate-browse"
-                        role="button"
-                        aria-label="Open on MusicBrainz"
-                        onClick={(e) => { e.stopPropagation(); void openUrl(`https://musicbrainz.org/release-group/${c.id}`); }}
-                      >
-                        <ExternalLink size={13} />
-                      </span>
+                      <MusicBrainzBrowseLink kind="release-group" id={c.id} />
                     </div>
                     <span className="identify-candidate-meta">
                       {c.artistName}
@@ -268,14 +278,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                     >
                       <div className="identify-candidate-header">
                         <span className="identify-candidate-title">{c.title}</span>
-                        <span
-                          className="identify-candidate-browse"
-                          role="button"
-                          aria-label="Open on MusicBrainz"
-                          onClick={(e) => { e.stopPropagation(); void openUrl(`https://musicbrainz.org/release-group/${c.id}`); }}
-                        >
-                          <ExternalLink size={13} />
-                        </span>
+                        <MusicBrainzBrowseLink kind="release-group" id={c.id} />
                       </div>
                       <span className="identify-candidate-meta">
                         {c.artistName} · {c.firstReleaseDate ?? "?"} · {c.primaryType ?? "Album"}
@@ -465,14 +468,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                       {c.score != null && (
                         <span className="identify-candidate-score">{c.score}%</span>
                       )}
-                      <span
-                        className="identify-candidate-browse"
-                        role="button"
-                        aria-label="Open on MusicBrainz"
-                        onClick={(e) => { e.stopPropagation(); void openUrl(`https://musicbrainz.org/artist/${c.id}`); }}
-                      >
-                        <ExternalLink size={13} />
-                      </span>
+                      <MusicBrainzBrowseLink kind="artist" id={c.id} />
                     </div>
                     {(c.disambiguation ?? c.country) && (
                       <span className="identify-candidate-meta">
@@ -544,14 +540,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                     >
                       <div className="identify-candidate-header">
                         <span className="identify-candidate-title">{c.name}</span>
-                        <span
-                          className="identify-candidate-browse"
-                          role="button"
-                          aria-label="Open on MusicBrainz"
-                          onClick={(e) => { e.stopPropagation(); void openUrl(`https://musicbrainz.org/artist/${c.id}`); }}
-                        >
-                          <ExternalLink size={13} />
-                        </span>
+                        <MusicBrainzBrowseLink kind="artist" id={c.id} />
                       </div>
                       {c.disambiguation && (
                         <span className="identify-candidate-meta">{c.disambiguation}</span>

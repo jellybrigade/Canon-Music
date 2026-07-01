@@ -22,8 +22,9 @@ async function fetchAndStoreCover(
   artworkUrl: string,
   swc: ServerWithCredential,
 ): Promise<boolean> {
-  const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
+  let url = "";
   try {
+    url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
     const res = await fetch(url);
     if (!res.ok) {
       console.error(`Cover cache: ${res.status} ${res.statusText} fetching album ${albumId} from ${url}`);

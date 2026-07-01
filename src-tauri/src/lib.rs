@@ -20,9 +20,12 @@ use tauri::Manager;
 // fetch() enforces CORS (unlike <img> tags), so every response from the loopback
 // cover server — success or error — needs this header or the renderer sees an
 // opaque network error instead of the real status.
+fn cors_header() -> tiny_http::Header {
+    tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()
+}
+
 fn cors_empty(status: u16) -> tiny_http::Response<std::io::Empty> {
-    tiny_http::Response::empty(tiny_http::StatusCode(status))
-        .with_header(tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap())
+    tiny_http::Response::empty(tiny_http::StatusCode(status)).with_header(cors_header())
 }
 
 fn http_client() -> reqwest::blocking::Client {
@@ -1032,9 +1035,7 @@ pub fn run() {
                         if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
                             resp = resp.with_header(h);
                         }
-                        if let Ok(h) = tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*") {
-                            resp = resp.with_header(h);
-                        }
+                        resp = resp.with_header(cors_header());
                         let _ = request.respond(resp);
                     });
                 }

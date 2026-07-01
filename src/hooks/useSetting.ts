@@ -59,3 +59,17 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
 
   return [value, update];
 }
+
+// Re-reads every setting from the DB and pushes fresh values to subscribed
+// useSetting/useBoolSetting hooks, bypassing their in-memory cache. Needed
+// after a bulk write (e.g. settings import) that doesn't go through `update`.
+export async function refreshAllSettings(): Promise<void> {
+  const db = await getDb();
+  const rows = await db.select<{ key: string; value: string }[]>(
+    "SELECT key, value FROM settings"
+  );
+  for (const { key, value } of rows) {
+    settingCache.set(key, value);
+    settingListeners.get(key)?.forEach((fn) => fn(value));
+  }
+}

@@ -296,7 +296,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               aria-label="Go to album"
             >
               <AlbumArt
-                src={(currentTrack.albumId && coverMap.get(currentTrack.albumId)) ?? currentTrack.coverArtUrl ?? null}
+                src={(currentTrack.albumId ? coverMap.get(currentTrack.albumId) : undefined) ?? currentTrack.coverArtUrl ?? null}
                 artist={currentTrack.artist}
                 album={currentTrack.album ?? null}
                 alt=""
