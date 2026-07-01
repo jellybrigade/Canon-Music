@@ -333,13 +333,13 @@ export async function fetchAlbumInfo(artist: string, album: string): Promise<Las
     if (!res.ok) return { bio: null, url: null };
     const data = (await res.json()) as {
       album?: {
-        wiki?: { summary?: string };
+        wiki?: { summary?: string; content?: string };
         url?: string;
       };
       error?: number;
     };
     if (data.error || !data.album) return { bio: null, url: null };
-    const raw = data.album.wiki?.summary ?? null;
+    const raw = data.album.wiki?.content ?? data.album.wiki?.summary ?? null;
     return {
       bio: raw ? stripBioBoilerplate(raw) || null : null,
       url: data.album.url ?? null,
