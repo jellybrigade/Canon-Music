@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -40,7 +40,8 @@ async function fetchAndStoreCover(
 
 async function populateMissingCovers(
   swc: ServerWithCredential,
-  onBatchDone: () => void,
+  signal: AbortSignal,
+  onDone: () => void,
 ): Promise<void> {
   const db = await getDb();
   const rows = await db.select<{ id: string; artwork_url: string }[]>(`
@@ -51,13 +52,14 @@ async function populateMissingCovers(
   `);
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    if (signal.aborted) return;
     const batch = rows.slice(i, i + BATCH_SIZE);
     await Promise.all(batch.map((r) => fetchAndStoreCover(r.id, r.artwork_url, swc)));
-    onBatchDone();
     if (i + BATCH_SIZE < rows.length) {
       await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
     }
   }
+  onDone();
 }
 
 /** Runs a background pass after sync to cache missing album covers in SQLite. */
@@ -66,9 +68,11 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
 
   useEffect(() => {
     if (!swc) return;
-    void populateMissingCovers(swc, () => {
+    const controller = new AbortController();
+    void populateMissingCovers(swc, controller.signal, () => {
       void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
     });
+    return () => controller.abort();
   // Re-run when the server changes (e.g. user switches servers).
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swc?.server.id]);
@@ -92,6 +96,5 @@ export function useAlbumCoverMap(): Map<string, string> {
   });
 
   const rows = data ?? [];
-  // Rebuild only when rows reference changes (React Query guarantees stable ref when data is same)
-  return new Map(rows.map((r) => [r.album_id, r.data_url]));
+  return useMemo(() => new Map(rows.map((r) => [r.album_id, r.data_url])), [rows]);
 }

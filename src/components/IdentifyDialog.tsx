@@ -57,6 +57,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
     queryKey: ["mb-search-rg", artist, album],
     queryFn: () => searchReleaseGroups(artist, album),
     staleTime: 10 * 60 * 1000,
+    enabled: !!(artist.trim() || album.trim()),
   });
 
   const { data: lookupResult, isFetching } = useIdentifyAlbum({
@@ -143,7 +144,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
             )}
             {searchResults && searchResults.length > 0 && (
               <div className="identify-candidates">
-                {searchResults.slice(0, 10).map((c) => (
+                {searchResults.map((c) => (
                   <button
                     key={c.id}
                     className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
@@ -374,6 +375,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     queryKey: ["mb-search-artist", artistName],
     queryFn: () => searchArtists(artistName),
     staleTime: 10 * 60 * 1000,
+    enabled: !!artistName.trim(),
   });
 
   const { data: lookupResult, isFetching } = useIdentifyArtist({
