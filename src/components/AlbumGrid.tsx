@@ -187,9 +187,20 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const scrubberSections = useMemo(() => {
     if (!sort || sort === "recently_added" || cols === 0) return [];
     if (sort === "year") {
-      return rows.flatMap((row, i) =>
+      const yearHeaders = rows.flatMap((row, i) =>
         row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : []
       );
+      const seen = new Set<string>();
+      const sections: { label: string; rowIndex: number }[] = [];
+      for (const { label, rowIndex } of yearHeaders) {
+        const year = parseInt(label, 10);
+        const bucketLabel = isNaN(year) ? label : `${Math.floor(year / 10) * 10}s`;
+        if (!seen.has(bucketLabel)) {
+          seen.add(bucketLabel);
+          sections.push({ label: bucketLabel, rowIndex });
+        }
+      }
+      return sections;
     }
     const seen = new Set<string>();
     const sections: { label: string; rowIndex: number }[] = [];
