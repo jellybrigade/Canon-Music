@@ -71,12 +71,14 @@ import "./App.css";
 
 function AlbumDetailRoute({
   serverWithCred,
+  onSelectAlbum,
   onSelectArtist,
   onTagFilter,
   onClose,
   queueClass,
 }: {
   serverWithCred: ServerWithCredential | null;
+  onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onTagFilter: (canonicalId: string) => void;
   onClose: () => void;
@@ -105,6 +107,7 @@ function AlbumDetailRoute({
         album={album}
         serverWithCredential={serverWithCred}
         onClose={onClose}
+        onSelectAlbum={onSelectAlbum}
         onSelectArtist={onSelectArtist}
         onTagFilter={onTagFilter}
       />
@@ -694,6 +697,7 @@ export default function App() {
         <Route path="/album/:albumId" element={
           <AlbumDetailRoute
             serverWithCred={serverWithCred ?? null}
+            onSelectAlbum={openAlbum}
             onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
             onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
             onClose={goBack}

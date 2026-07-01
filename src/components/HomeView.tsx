@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useCallback, type RefObject } from "react";
+import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
@@ -361,6 +361,16 @@ function ForYouCustomizePopup({ config, onConfigChange, position, popupRef }: Fo
   const [addFilterType, setAddFilterType] = useState<"decade" | "artist">("decade");
   const [addDecade, setAddDecade] = useState(1990);
   const [addArtist, setAddArtist] = useState("");
+
+  useLayoutEffect(() => {
+    const el = popupRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const overflow = rect.bottom - (window.innerHeight - 8);
+    if (overflow > 0) {
+      el.style.top = `${Math.max(8, rect.top - overflow)}px`;
+    }
+  }, [position, popupRef]);
 
   function handleDragStart(e: React.DragEvent, index: number) {
     setDragFrom(index);

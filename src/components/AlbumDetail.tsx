@@ -10,6 +10,7 @@ import { TagDrawer } from "./TagDrawer";
 import { AlbumGenreEditor } from "./AlbumGenreEditor";
 import type { DisplayGenre, GenreGroups } from "./AlbumGenreEditor";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
+import { AlbumGrid } from "./AlbumGrid";
 import type { AlbumRow, TrackRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useTracks } from "../hooks/useTracks";
@@ -18,6 +19,10 @@ import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
 import { useEnrichAlbumTracks } from "../hooks/useEnrichAlbumTracks";
 import { useEnrichAlbum } from "../hooks/useEnrichAlbum";
+import { useEnrichArtist } from "../hooks/useEnrichArtist";
+import { useArtistAlbums } from "../hooks/useArtistAlbums";
+import { useSimilarInLibrary } from "../hooks/useSimilarInLibrary";
+import { useSimilarArtistAlbums } from "../hooks/useSimilarArtistAlbums";
 import { normalizeAlbum, isYearLikeGenre } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
@@ -45,6 +50,7 @@ interface Props {
   album: AlbumRow;
   serverWithCredential: ServerWithCredential;
   onClose: () => void;
+  onSelectAlbum?: (album: AlbumRow) => void;
   onSelectArtist?: (artistName: string) => void;
   onTagFilter?: (canonicalId: string) => void;
 }
@@ -54,7 +60,7 @@ interface DrawerState {
   trackId?: string;
 }
 
-export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArtist, onTagFilter }: Props) {
+export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
@@ -83,6 +89,24 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const { data: albumEnrichment } = useEnrichAlbum(album.id, album.artist ?? "", album.name);
   const genreMappings = useGenreMappings();
   const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
+
+  const isVariousArtists = (album.artist ?? "").trim().toLowerCase() === "various artists";
+  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "");
+  const moreFromArtistAlbums = useMemo(
+    () => (moreFromArtist ?? []).filter((a) => a.id !== album.id),
+    [moreFromArtist, album.id]
+  );
+  const { data: artistEnrichment } = useEnrichArtist(isVariousArtists ? "" : album.artist ?? "");
+  const similarArtistNames = useMemo<string[]>(
+    () => (artistEnrichment?.similar_json ? (JSON.parse(artistEnrichment.similar_json) as string[]) : []),
+    [artistEnrichment?.similar_json]
+  );
+  const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames);
+  const similarArtistNamesInLibrary = useMemo(
+    () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
+    [similarArtistNames, similarInLibrarySet]
+  );
+  const { data: fansAlsoLikeAlbums = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary);
 
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(album.id),
@@ -826,6 +850,28 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
               </tbody>
             </table>
           </div>
+        )}
+
+        {moreFromArtistAlbums.length > 0 && (
+          <section className="album-related-section">
+            <h3 className="album-related-title">More from {album.artist}</h3>
+            <AlbumGrid
+              albums={moreFromArtistAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={(a) => onSelectAlbum?.(a)}
+            />
+          </section>
+        )}
+
+        {fansAlsoLikeAlbums.length > 0 && (
+          <section className="album-related-section">
+            <h3 className="album-related-title">Fans Also Like</h3>
+            <AlbumGrid
+              albums={fansAlsoLikeAlbums}
+              serverWithCredential={serverWithCredential}
+              onSelect={(a) => onSelectAlbum?.(a)}
+            />
+          </section>
         )}
       </div>
 
