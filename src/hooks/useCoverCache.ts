@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -23,7 +23,7 @@ async function fetchAndStoreCover(
   swc: ServerWithCredential,
 ): Promise<void> {
   try {
-    const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 150);
+    const url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
     const res = await fetch(url);
     if (!res.ok) return;
     const blob = await res.blob();
@@ -83,6 +83,7 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
     const controller = new AbortController();
     void populateMissingCovers(swc, controller.signal, () => {
       void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
+      void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
     });
     return () => controller.abort();
   // Re-run when the server changes (e.g. user switches servers).
@@ -94,19 +95,26 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
 export function useCacheAllCovers(swc: ServerWithCredential | undefined) {
   const queryClient = useQueryClient();
   const [progress, setProgressState] = useState<{ done: number; total: number } | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
-  const run = useMemo(() => async () => {
-    if (!swc || progress !== null) return;
+  useEffect(() => () => controllerRef.current?.abort(), []);
+
+  const run = useCallback(async () => {
+    if (!swc || controllerRef.current) return;
     const controller = new AbortController();
+    controllerRef.current = controller;
     await populateMissingCovers(
       swc,
       controller.signal,
-      () => { void queryClient.invalidateQueries({ queryKey: QK.albumCovers() }); },
+      () => {
+        void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
+        void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
+      },
       (done, total) => setProgressState({ done, total }),
     );
+    controllerRef.current = null;
     setProgressState(null);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [swc?.server.id, progress]);
+  }, [swc, queryClient]);
 
   return { run, progress };
 }

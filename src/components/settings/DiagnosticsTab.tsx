@@ -15,9 +15,9 @@ interface Props {
   serverWithCredential: ServerWithCredential | undefined;
 }
 
-// Rough per-cover size for a 150px JPEG thumbnail; used only to show a ballpark estimate.
-const MIN_COVER_KB = 8;
-const MAX_COVER_KB = 20;
+// Rough per-cover size for a 300px JPEG thumbnail; used only to show a ballpark estimate.
+const MIN_COVER_KB = 25;
+const MAX_COVER_KB = 70;
 
 function formatSizeRange(count: number): string {
   const minMb = (count * MIN_COVER_KB) / 1024;

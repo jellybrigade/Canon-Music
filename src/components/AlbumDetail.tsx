@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } from "react";
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
@@ -238,16 +238,22 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectArti
   const bioTextRef = useRef<HTMLParagraphElement>(null);
   const albumBio = albumEnrichment?.album_bio ?? null;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setBioExpanded(false);
     const el = bioTextRef.current;
     if (!el) {
       setBioNeedsClamp(false);
       return;
     }
-    const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
-    const lines = lineHeight > 0 ? Math.round(el.scrollHeight / lineHeight) : 0;
-    setBioNeedsClamp(lines >= 4);
+    const measure = () => {
+      const lineHeight = parseFloat(getComputedStyle(el).lineHeight);
+      const lines = lineHeight > 0 ? Math.round(el.scrollHeight / lineHeight) : 0;
+      setBioNeedsClamp(lines >= 4);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
   }, [albumBio]);
 
   const coverArtUrl = album.artwork_url
