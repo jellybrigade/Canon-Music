@@ -22,6 +22,7 @@ import { useEnrichAlbum } from "../hooks/useEnrichAlbum";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
 import { useSimilarInLibrary } from "../hooks/useSimilarInLibrary";
+import { useSimilarArtistAlbums } from "../hooks/useSimilarArtistAlbums";
 import { normalizeAlbum, isYearLikeGenre } from "../lib/tag-normalize";
 import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
@@ -59,33 +60,6 @@ interface DrawerState {
   trackId?: string;
 }
 
-// One representative (most recent) album per similar-in-library artist.
-function useSimilarArtistAlbums(artistNames: string[]) {
-  return useQuery({
-    queryKey: QK.similarArtistAlbums(artistNames),
-    queryFn: async (): Promise<AlbumRow[]> => {
-      const db = await getDb();
-      const placeholders = artistNames.map(() => "?").join(",");
-      const rows = await db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type
-         FROM albums
-         WHERE artist IN (${placeholders})
-         ORDER BY artist, year IS NULL, year DESC`,
-        artistNames
-      );
-      const seenArtists = new Set<string>();
-      const picked: AlbumRow[] = [];
-      for (const row of rows) {
-        if (!row.artist || seenArtists.has(row.artist)) continue;
-        seenArtists.add(row.artist);
-        picked.push(row);
-      }
-      return picked;
-    },
-    enabled: artistNames.length > 0,
-  });
-}
-
 export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useTracks(album.id);
@@ -116,15 +90,17 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const genreMappings = useGenreMappings();
   const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
 
-  const { data: moreFromArtist } = useArtistAlbums(album.artist ?? "");
+  const isVariousArtists = (album.artist ?? "").trim().toLowerCase() === "various artists";
+  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "");
   const moreFromArtistAlbums = useMemo(
     () => (moreFromArtist ?? []).filter((a) => a.id !== album.id),
     [moreFromArtist, album.id]
   );
-  const { data: artistEnrichment } = useEnrichArtist(album.artist ?? "");
-  const similarArtistNames: string[] = artistEnrichment?.similar_json
-    ? (JSON.parse(artistEnrichment.similar_json) as string[])
-    : [];
+  const { data: artistEnrichment } = useEnrichArtist(isVariousArtists ? "" : album.artist ?? "");
+  const similarArtistNames = useMemo<string[]>(
+    () => (artistEnrichment?.similar_json ? (JSON.parse(artistEnrichment.similar_json) as string[]) : []),
+    [artistEnrichment?.similar_json]
+  );
   const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames);
   const similarArtistNamesInLibrary = useMemo(
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),

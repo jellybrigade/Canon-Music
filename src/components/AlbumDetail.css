@@ -975,7 +975,7 @@
   padding: 0 1.25rem;
 }
 
-.album-related-section .album-grid {
-  overflow: visible;
+.album-related-section .album-grid-wrapper {
   flex: none;
+  height: 340px;
 }

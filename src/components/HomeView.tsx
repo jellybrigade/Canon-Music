@@ -370,7 +370,7 @@ function ForYouCustomizePopup({ config, onConfigChange, position, popupRef }: Fo
     if (overflow > 0) {
       el.style.top = `${Math.max(8, rect.top - overflow)}px`;
     }
-  });
+  }, [position, popupRef]);
 
   function handleDragStart(e: React.DragEvent, index: number) {
     setDragFrom(index);
