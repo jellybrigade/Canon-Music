@@ -152,46 +152,20 @@
 /* ── Spotlight ────────────────────────────────────────────────────────────── */
 
 .home-spotlight {
-  margin: 0 28px;
-  border-radius: var(--radius-lg, 12px);
-  background: var(--bg-card, #1c1c1c);
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  margin: 24px 28px 0;
   display: flex;
-  overflow: hidden;
-  position: relative;
-  min-height: 220px;
-  box-shadow: var(--shadow-2, 0 4px 16px rgba(0,0,0,0.4));
-}
-
-/* Subtle color wash from extracted cover accent */
-.home-spotlight__wash {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    105deg,
-    var(--spotlight-accent, transparent) 0%,
-    transparent 52%
-  );
-  opacity: 0.1;
-  pointer-events: none;
-  transition: background 0.6s ease;
-}
-
-/* Thin vertical rule between cover and body — the editorial detail */
-.home-spotlight__rule {
-  position: absolute;
-  left: 220px;
-  top: 20px;
-  bottom: 20px;
-  width: 1px;
-  background: var(--border, rgba(255,255,255,0.08));
-  pointer-events: none;
+  align-items: center;
+  gap: 32px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
 }
 
 .home-spotlight__art-wrap {
   flex-shrink: 0;
-  width: 220px;
-  height: 220px;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
 }
 
 .home-spotlight__art {
@@ -205,37 +179,24 @@
   background: var(--bg-elevated, #141414);
 }
 
-.home-spotlight__body {
-  flex: 1;
+.home-spotlight__text {
+  flex: 0 1 auto;
   min-width: 0;
-  padding: 24px 28px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-  z-index: 1;
-}
-
-.home-spotlight__top {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  max-width: 360px;
 }
 
 .home-spotlight__kicker {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--spotlight-accent, var(--accent, #396cd8));
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin: 0 0 2px;
 }
 
 .home-spotlight__title {
-  font-size: 1.45rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--text-primary, #f0f0f0);
-  line-height: 1.2;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  line-height: 1.25;
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -244,88 +205,70 @@
 
 .home-spotlight__meta {
   font-size: 0.78rem;
-  color: var(--text-secondary, #999);
-  margin: 0;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
 }
 
 .home-spotlight__artist-link {
   background: none;
   border: none;
   box-shadow: none;
-  text-decoration: none;
   padding: 0;
   color: inherit;
   font-size: inherit;
   font-family: inherit;
   cursor: pointer;
-  opacity: 0.85;
-  transition: opacity 0.15s;
 }
 
 .home-spotlight__artist-link:hover {
-  opacity: 1;
   text-decoration: underline;
-  border: none;
-}
-
-.home-spotlight__genres {
-  margin: 0 0 14px;
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.5);
-  letter-spacing: 0.01em;
-  pointer-events: none;
 }
 
 .home-spotlight__actions {
   display: flex;
-  gap: 10px;
   align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .home-spotlight__play {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 20px;
-  background: color-mix(in oklab, var(--spotlight-accent, var(--accent, #396cd8)) 70%, black);
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--accent, #396cd8);
   color: #fff;
   border: none;
   border-radius: var(--radius-md, 8px);
   font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background var(--motion-fast, 120ms ease-out), transform var(--motion-fast, 120ms ease-out);
+  transition: background var(--motion-fast, 120ms ease-out);
 }
 
 .home-spotlight__play:hover {
-  background: color-mix(in oklab, var(--spotlight-accent, var(--accent, #396cd8)) 60%, black);
-  transform: translateY(-1px);
-}
-
-.home-spotlight__play:active {
-  transform: translateY(0);
+  background: color-mix(in oklab, var(--accent, #396cd8) 85%, black);
 }
 
 .home-spotlight__open {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 18px;
-  background: transparent;
-  color: var(--text-primary, #f0f0f0);
-  border: 1px solid var(--border-strong, rgba(255,255,255,0.14));
-  border-radius: var(--radius-md, 8px);
-  font-size: 0.78rem;
-  font-weight: 500;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--motion-fast, 120ms ease-out), border-color var(--motion-fast, 120ms ease-out);
+  border-radius: var(--radius-md, 8px);
+  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
 }
 
 .home-spotlight__open:hover {
+  color: var(--text-primary);
   background: var(--bg-hover, rgba(255,255,255,0.05));
-  border-color: var(--text-secondary, #999);
 }
 
 /* ── For You Rail ─────────────────────────────────────────────────────────── */

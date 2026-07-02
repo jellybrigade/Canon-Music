@@ -1,7 +1,5 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { QK } from "../lib/query-keys";
-import { ChevronLeft, ChevronRight, ListEnd, Lock, Play, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
+import { useMemo, useRef, useState, useCallback } from "react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, ListEnd, Lock, Play, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -22,7 +20,6 @@ import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
 import type { RadioMode, CurrentTrack } from "../store/player";
-import { extractAccent } from "../lib/artColor";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../utils/ids";
@@ -242,38 +239,14 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
-  const [accentColor, setAccentColor] = useState<string | null>(null);
-  const { data: genres } = useQuery({
-    queryKey: QK.spotlightGenres(pick.album.id),
-    queryFn: async () => {
-      const db = await getDb();
-      return db.select<{ name: string }[]>(
-        "SELECT name FROM album_genres WHERE album_id = ? AND relation = 'direct' ORDER BY name LIMIT 3",
-        [pick.album.id]
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
 
   const artUrl = coverMap.get(pick.album.id)
     ?? (pick.album.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 400)
+      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 200)
       : null);
 
-  useEffect(() => {
-    if (!artUrl) { setAccentColor(null); return; }
-    let cancelled = false;
-    void extractAccent(artUrl).then(color => { if (!cancelled) setAccentColor(color); });
-    return () => { cancelled = true; };
-  }, [artUrl]);
-
   return (
-    <section
-      className="home-spotlight"
-      style={(accentColor ? { "--spotlight-accent": accentColor } : {}) as React.CSSProperties}
-    >
-      <div className="home-spotlight__wash" />
-      <div className="home-spotlight__rule" />
+    <section className="home-spotlight">
       <div
         className="home-spotlight__art-wrap"
         onContextMenu={(e) => onCardContextMenu(e, pick.album)}
@@ -282,42 +255,44 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
           ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
       </div>
-      <div className="home-spotlight__body">
-        <div className="home-spotlight__top">
-          <span className="home-spotlight__kicker">{pick.kicker}</span>
-          <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
-          {(pick.album.artist || pick.album.year) && (
-            <p className="home-spotlight__meta">
-              {pick.album.artist && onSelectArtist ? (
-                <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
-                  {pick.album.artist}
-                </button>
-              ) : pick.album.artist}
-              {pick.album.artist && pick.album.year && " · "}
-              {pick.album.year}
-            </p>
-          )}
-        </div>
-        {genres && genres.length > 0 && (
-          <p className="home-spotlight__genres">
-            {genres.map(g => g.name).join(" · ")}
+      <div className="home-spotlight__text">
+        <p className="home-spotlight__kicker">{pick.kicker}</p>
+        <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
+        {(pick.album.artist || pick.album.year) && (
+          <p className="home-spotlight__meta">
+            {pick.album.artist && onSelectArtist ? (
+              <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
+                {pick.album.artist}
+              </button>
+            ) : pick.album.artist}
+            {pick.album.artist && pick.album.year && " · "}
+            {pick.album.year}
           </p>
         )}
-        <div className="home-spotlight__actions">
-          <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-            <div><Play size={13} fill="currentColor" /></div>
-            Play
+      </div>
+      <div className="home-spotlight__actions">
+        <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
+          <Play size={13} fill="currentColor" />
+          Play
+        </button>
+        <button
+          className="home-spotlight__open"
+          onClick={() => onSelectAlbum(pick.album)}
+          title="Open"
+          aria-label="Open"
+        >
+          <ArrowUpRight size={13} />
+        </button>
+        {onAddToQueue && (
+          <button
+            className="home-spotlight__open"
+            onClick={() => onAddToQueue(pick.album)}
+            title="Add to Queue"
+            aria-label="Add to Queue"
+          >
+            <ListEnd size={13} />
           </button>
-          {onAddToQueue && (
-            <button className="home-spotlight__play" onClick={() => onAddToQueue(pick.album)}>
-              <div><ListEnd size={13} /></div>
-              Add to Queue
-            </button>
-          )}
-          <button className="home-spotlight__open" onClick={() => onSelectAlbum(pick.album)}>
-            Open
-          </button>
-        </div>
+        )}
       </div>
     </section>
   );
