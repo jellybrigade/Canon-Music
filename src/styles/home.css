@@ -7,7 +7,7 @@
 /* ── Greeting ─────────────────────────────────────────────────────────────── */
 
 .home-greeting {
-  padding: 36px 28px 28px;
+  padding: 36px 28px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -274,7 +274,7 @@
 /* ── Spotlight + Genres fusion: elevated surface, labeled, internal divider ── */
 
 .home-fusion {
-  margin: 24px 28px 0;
+  margin: 8px 28px 0;
   padding: 24px;
 }
 
