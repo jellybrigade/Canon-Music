@@ -1,9 +1,7 @@
-import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback, type RefObject } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { useClickOutside } from "../hooks/useClickOutside";
-import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ListEnd, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ListEnd, Lock, Play, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -340,219 +338,27 @@ interface ForYouRailProps {
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
 }
 
-// ── For You Customize Popup ───────────────────────────────────────────────────
-
-const FOR_YOU_POPUP_WIDTH = 180;
-
-interface ForYouCustomizePopupProps {
-  config: ForYouCategoryConfig[];
-  onConfigChange: (config: ForYouCategoryConfig[]) => void;
-  position: { top: number; left: number };
-  popupRef: RefObject<HTMLDivElement | null>;
-}
-
-const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
-
-function ForYouCustomizePopup({ config, onConfigChange, position, popupRef }: ForYouCustomizePopupProps) {
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dropAt, setDropAt] = useState<number | null>(null);
-  const [addMode, setAddMode] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addFilterType, setAddFilterType] = useState<"decade" | "artist">("decade");
-  const [addDecade, setAddDecade] = useState(1990);
-  const [addArtist, setAddArtist] = useState("");
-
-  useLayoutEffect(() => {
-    const el = popupRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const overflow = rect.bottom - (window.innerHeight - 8);
-    if (overflow > 0) {
-      el.style.top = `${Math.max(8, rect.top - overflow)}px`;
-    }
-  }, [position, popupRef]);
-
-  function handleDragStart(e: React.DragEvent, index: number) {
-    setDragFrom(index);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(index));
-  }
-  function handleDragOver(e: React.DragEvent, rowIndex: number) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDropAt(e.clientY < rect.top + rect.height / 2 ? rowIndex : rowIndex + 1);
-  }
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    if (dragFrom !== null && dropAt !== null) {
-      const effectiveSlot = dropAt > dragFrom ? dropAt - 1 : dropAt;
-      if (effectiveSlot !== dragFrom) {
-        const next = [...config];
-        const [item] = next.splice(dragFrom, 1);
-        next.splice(effectiveSlot, 0, item!);
-        onConfigChange(next);
-      }
-    }
-    setDragFrom(null);
-    setDropAt(null);
-  }
-  function handleDragEnd() {
-    setDragFrom(null);
-    setDropAt(null);
-  }
-  function toggleEnabled(index: number) {
-    onConfigChange(config.map((c, i) => i === index ? { ...c, enabled: !c.enabled } : c));
-  }
-  function removeCustom(key: string) {
-    onConfigChange(config.filter(c => c.key !== key));
-  }
-  function submitAdd() {
-    const name = addName.trim();
-    if (!name) return;
-    if (addFilterType === "artist" && !addArtist.trim()) return;
-    const key = `custom-${Date.now()}`;
-    const customFilter: ForYouCustomFilter =
-      addFilterType === "decade"
-        ? { type: "decade", decade: addDecade }
-        : { type: "artist", artist: addArtist.trim() };
-    const next: ForYouCategoryConfig = { key, kicker: name, enabled: true, customFilter };
-    onConfigChange([...config, next]);
-    setAddMode(false);
-    setAddName("");
-    setAddArtist("");
-  }
-
-  return createPortal(
-    <div
-      ref={popupRef}
-      className="for-you-popup"
-      style={{ top: position.top, left: position.left }}
-      onMouseDown={e => e.stopPropagation()}
-      onDragLeave={e => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
-      }}
-    >
-      {addMode ? (
-        <>
-          <p className="for-you-popup__title">Add category</p>
-          <div className="for-you-popup__add-form">
-            <input
-              className="for-you-popup__add-input"
-              placeholder="Category name…"
-              value={addName}
-              onChange={e => setAddName(e.target.value)}
-              autoFocus
-            />
-            <select className="for-you-popup__add-select" value={addFilterType} onChange={e => setAddFilterType(e.target.value as "decade" | "artist")}>
-              <option value="decade">Decade</option>
-              <option value="artist">Artist</option>
-            </select>
-            {addFilterType === "decade" && (
-              <select className="for-you-popup__add-select" value={addDecade} onChange={e => setAddDecade(Number(e.target.value))}>
-                {DECADES.map(d => <option key={d} value={d}>{d}s</option>)}
-              </select>
-            )}
-            {addFilterType === "artist" && (
-              <input
-                className="for-you-popup__add-input"
-                placeholder="Artist name…"
-                value={addArtist}
-                onChange={e => setAddArtist(e.target.value)}
-              />
-            )}
-            <div className="for-you-popup__add-actions">
-              <button className="for-you-popup__add-confirm" onClick={submitAdd}>Add</button>
-              <button className="for-you-popup__add-cancel" onClick={() => { setAddMode(false); setAddName(""); setAddArtist(""); }}>Cancel</button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="for-you-popup__title">Customize</p>
-          {config.map((cat, i) => (
-            <div key={cat.key}>
-              {dropAt === i && <div className="for-you-popup__drop-line" />}
-              <div
-                className="for-you-popup__row"
-                onDragOver={e => handleDragOver(e, i)}
-                onDrop={handleDrop}
-                onDragEnd={handleDragEnd}
-              >
-                <span
-                  className="for-you-popup__drag-handle"
-                  aria-hidden="true"
-                  draggable={!cat.customFilter}
-                  onDragStart={cat.customFilter ? undefined : e => handleDragStart(e, i)}
-                  style={{ visibility: cat.customFilter ? "hidden" : undefined }}
-                >⠿</span>
-                <input
-                  type="checkbox"
-                  id={`fycat-${cat.key}`}
-                  checked={cat.enabled}
-                  onChange={() => toggleEnabled(i)}
-                  className="for-you-popup__checkbox"
-                />
-                <label htmlFor={`fycat-${cat.key}`} className="for-you-popup__label">
-                  {cat.kicker}
-                  {cat.customFilter ? (
-                    <span className="for-you-popup__label-desc">
-                      {cat.customFilter.type === "decade" ? `${cat.customFilter.decade}s` : `Artist: ${cat.customFilter.artist}`}
-                    </span>
-                  ) : (
-                    <span className="for-you-popup__label-desc">{FOR_YOU_CATEGORY_DESC[cat.key]}</span>
-                  )}
-                </label>
-                {cat.customFilter && (
-                  <button className="for-you-popup__remove" onClick={() => removeCustom(cat.key)} aria-label="Remove category">×</button>
-                )}
-              </div>
-            </div>
-          ))}
-          {dropAt === config.length && <div className="for-you-popup__drop-line" />}
-          <button className="for-you-popup__add-btn" onClick={() => setAddMode(true)}>+ Add category</button>
-        </>
-      )}
-    </div>,
-    document.body,
-  );
-}
-
-const KICKER_COLORS: Record<string, string> = {
-  "Jump back in":     "#3b82f6",
-  "On repeat":        "#6366f1",
-  "Rediscover":       "#f59e0b",
-  "Finish the album": "#14b8a6",
-  "Hidden gem":       "#a855f7",
-  "Loved":            "#ec4899",
-  "Unplayed":                "#64748b",
-  "More from":               "#f43f5e",
-  "Discover something new":  "#10b981",
-  _default:           "#6b7280",
-};
-
 function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
-  const [showCustomize, setShowCustomize] = useState(false);
-  const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const customizeButtonRef = useRef<HTMLButtonElement>(null);
-
-  const customizePopupRef = useRef<HTMLDivElement>(null);
-
-  function handleCustomizeClick() {
-    if (!showCustomize && customizeButtonRef.current) {
-      const rect = customizeButtonRef.current.getBoundingClientRect();
-      setPopupPos({
-        top: rect.bottom + 6,
-        left: rect.right - FOR_YOU_POPUP_WIDTH,
-      });
+  const descByKicker = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const cat of config) {
+      if (cat.customFilter) {
+        map[cat.kicker] = cat.customFilter.type === "decade"
+          ? `Albums from the ${cat.customFilter.decade}s`
+          : `Albums by ${cat.customFilter.artist}`;
+      } else if (FOR_YOU_CATEGORY_DESC[cat.key]) {
+        map[cat.kicker] = FOR_YOU_CATEGORY_DESC[cat.key]!;
+      }
     }
-    setShowCustomize(s => !s);
-  }
-
-  useClickOutside([customizeButtonRef, customizePopupRef], () => setShowCustomize(false), showCustomize);
+    return map;
+  }, [config]);
+  const [activeTabKicker, setActiveTabKicker] = useState<string | null>(null);
+  const [locked, setLocked] = useState(true);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -561,20 +367,15 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         <div className="home-rail__header">
           <p className="home-section-label" style={{ margin: 0 }}>For You</p>
         </div>
-        <div className="home-foryou-rows">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="foryou-row">
-              <div className="foryou-row__label">
-                <span className="foryou-row__dot-skel" />
-                <span className="foryou-row__text-skel" />
-              </div>
-              <div className="foryou-row__tiles">
-                {Array.from({ length: 4 }).map((_, j) => (
-                  <div key={j} className="foryou-tile">
-                    <div className="foryou-tile__art-wrap foryou-tile__art-wrap--skeleton" />
-                  </div>
-                ))}
-              </div>
+        <div className="foryou-v2-tabs">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <span key={i} className="foryou-v2-tab-skel" />
+          ))}
+        </div>
+        <div className="foryou-v2-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="foryou-v2-tile">
+              <div className="foryou-v2-tile__art-wrap foryou-v2-tile__art-wrap--skeleton" />
             </div>
           ))}
         </div>
@@ -582,70 +383,156 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     );
   }
 
+  const activeTabGroup = groups.find(g => g.kicker === activeTabKicker) ?? groups[0]!;
+
+  function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = e.key === "ArrowRight" ? (index + 1) % groups.length : (index - 1 + groups.length) % groups.length;
+    setActiveTabKicker(groups[next]!.kicker);
+  }
+
+  function reorderConfig(fromIndex: number, toIndex: number) {
+    const effectiveSlot = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    if (effectiveSlot === fromIndex) return;
+    const next = [...config];
+    const [item] = next.splice(fromIndex, 1);
+    next.splice(effectiveSlot, 0, item!);
+    onConfigChange(next);
+  }
+
+  function toggleEnabled(kicker: string) {
+    onConfigChange(config.map(c => c.kicker === kicker ? { ...c, enabled: !c.enabled } : c));
+  }
+
+  function handleTabDragStart(e: React.DragEvent, index: number) {
+    if (locked) return;
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  }
+  function handleTabDragOver(e: React.DragEvent, index: number) {
+    if (locked || dragIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDropIndex(e.clientX < rect.left + rect.width / 2 ? index : index + 1);
+  }
+  function handleTabDrop(e: React.DragEvent) {
+    if (locked) return;
+    e.preventDefault();
+    if (dragIndex !== null && dropIndex !== null) {
+      reorderConfig(dragIndex, dropIndex);
+    }
+    setDragIndex(null);
+    setDropIndex(null);
+  }
+  function handleTabDragEnd() {
+    setDragIndex(null);
+    setDropIndex(null);
+  }
+
+  const tabCount = locked ? groups.length : config.length;
+
   return (
     <section className="home-rail">
       <div className="home-rail__header">
         <p className="home-section-label" style={{ margin: 0 }}>For You</p>
-        {onStartRadio && groups[0]?.albums[0] && (
-          <button className="home-section__radio-btn" onClick={() => onStartRadio(groups[0]!.albums[0]!)} aria-label="Start For You radio" title="Start radio">
+        {onStartRadio && activeTabGroup.albums[0] && (
+          <button className="home-section__radio-btn" onClick={() => onStartRadio(activeTabGroup.albums[0]!)} aria-label={`Start ${activeTabGroup.kicker} radio`} title="Start radio">
             <Radio size={13} />
           </button>
         )}
-        <button className="home-rail__refresh" onClick={onRefresh} aria-label="Refresh suggestions">
-          <RefreshCw size={11} />
-        </button>
-        <button
-          ref={customizeButtonRef}
-          className={`home-rail__customize${showCustomize ? " home-rail__customize--active" : ""}`}
-          onClick={handleCustomizeClick}
-          aria-label="Customize For You categories"
-        >
-          <SlidersHorizontal size={11} />
-        </button>
-        {showCustomize && (
-          <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} popupRef={customizePopupRef} />
-        )}
       </div>
-      <div className="home-foryou-rows">
-        {groups.map(group => {
-          const kickerColor = KICKER_COLORS[group.kicker]
-            ?? (group.kicker.startsWith("More from") ? KICKER_COLORS["More from"] : undefined)
-            ?? KICKER_COLORS._default;
+
+      {!locked && (
+        <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
+      )}
+
+      <div className="foryou-v2-tabs" role="tablist" aria-label="For You categories">
+        <div className="foryou-v2-tabs__list">
+          {locked
+            ? groups.map((group, i) => (
+                <div key={group.kicker} className="foryou-v2-tab-slot">
+                  <button
+                    role="tab"
+                    aria-selected={activeTabGroup.kicker === group.kicker}
+                    tabIndex={activeTabGroup.kicker === group.kicker ? 0 : -1}
+                    className={`foryou-v2-tab${activeTabGroup.kicker === group.kicker ? " foryou-v2-tab--active" : ""}`}
+                    onClick={() => setActiveTabKicker(group.kicker)}
+                    onKeyDown={e => handleTabKeyDown(e, i)}
+                  >
+                    {group.kicker}
+                  </button>
+                </div>
+              ))
+            : config.map((cat, i) => (
+                <div key={cat.key} className="foryou-v2-tab-slot">
+                  {dropIndex === i && <div className="foryou-v2-drop-line" />}
+                  <button
+                    role="tab"
+                    aria-selected={activeTabGroup.kicker === cat.kicker}
+                    aria-pressed={cat.enabled}
+                    className={`foryou-v2-tab foryou-v2-tab--draggable${activeTabGroup.kicker === cat.kicker ? " foryou-v2-tab--active" : ""}${!cat.enabled ? " foryou-v2-tab--disabled" : ""}`}
+                    onClick={() => toggleEnabled(cat.kicker)}
+                    draggable
+                    onDragStart={e => handleTabDragStart(e, i)}
+                    onDragOver={e => handleTabDragOver(e, i)}
+                    onDrop={handleTabDrop}
+                    onDragEnd={handleTabDragEnd}
+                    title={cat.enabled ? "Click to disable" : "Click to enable"}
+                  >
+                    {cat.kicker}
+                  </button>
+                </div>
+              ))}
+          {dropIndex === tabCount && <div className="foryou-v2-drop-line" />}
+        </div>
+        <div className="foryou-v2-tabs__actions">
+          <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
+            <RefreshCw size={14} />
+          </button>
+          <button
+            className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
+            onClick={() => setLocked(l => !l)}
+            aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
+            aria-pressed={!locked}
+            title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}
+          >
+            {locked ? <Lock size={14} /> : <Unlock size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {descByKicker[activeTabGroup.kicker] && (
+        <p className="foryou-v2-desc">{descByKicker[activeTabGroup.kicker]}</p>
+      )}
+
+      <div className="foryou-v2-grid" role="tabpanel">
+        {activeTabGroup.albums.map(album => {
+          const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
           return (
-            <div key={group.kicker} className="foryou-row">
-              <div className="foryou-row__label">
-                <span className="foryou-row__dot" style={{ background: kickerColor }} />
-                <span className="foryou-row__text">{group.kicker}</span>
+            <div
+              key={album.id}
+              className="foryou-v2-tile"
+              onClick={() => onSelectAlbum(album)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+              onContextMenu={e => onCardContextMenu(e, album)}
+            >
+              <div className="foryou-v2-tile__art-wrap">
+                <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                <button
+                  className="foryou-v2-tile__play"
+                  onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                  aria-label={`Play ${album.name}`}
+                >
+                  <Play size={13} fill="currentColor" />
+                </button>
               </div>
-              <div className="foryou-row__tiles">
-                {group.albums.slice(0, 4).map(album => {
-                  const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
-                  return (
-                    <div
-                      key={album.id}
-                      className="foryou-tile"
-                      onClick={() => onSelectAlbum(album)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
-                      onContextMenu={e => onCardContextMenu(e, album)}
-                    >
-                      <div className="foryou-tile__art-wrap">
-                        <img className="foryou-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
-                        <button
-                          className="foryou-tile__play"
-                          onClick={e => { e.stopPropagation(); playAlbum(album); }}
-                          aria-label={`Play ${album.name}`}
-                        >
-                          <Play size={13} fill="currentColor" />
-                        </button>
-                      </div>
-                      <p className="foryou-tile__name">{albumDisplayName(album.name)}</p>
-                      {album.artist && <p className="foryou-tile__artist">{album.artist}</p>}
-                    </div>
-                  );
-                })}
-              </div>
+              <p className="foryou-v2-tile__name">{albumDisplayName(album.name)}</p>
+              {album.artist && <p className="foryou-v2-tile__artist">{album.artist}</p>}
             </div>
           );
         })}
@@ -923,7 +810,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayedWithArt, almostDone, customCategorySources]);
 
   const forYouGroups = useMemo(
-    () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 4),
+    () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 6),
     [spotlight, forYouSources, categoryConfig, forYouSeed]
   );
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
