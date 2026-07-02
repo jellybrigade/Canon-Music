@@ -129,7 +129,8 @@ function stripFeaturedArtists(artist: string): string {
   return artist.replace(FEAT_RE, "").trim();
 }
 
-function buildSpotlight(
+// Returns candidate picks in priority order (not deduped) — caller dedupes by album id.
+function buildSpotlightCandidates(
   currentArtist: string | null,
   currentAlbumId: string | null,
   onRepeat: AlbumStatRow[],
@@ -139,38 +140,53 @@ function buildSpotlight(
   allAlbums: AlbumRow[] | undefined,
   serverId: string,
   unplayedWithArt: AlbumRow[],
-): SpotlightPick | null {
+): SpotlightPick[] {
+  const picks: SpotlightPick[] = [];
+
   if (currentArtist) {
     const displayArtist = stripFeaturedArtists(currentArtist);
     const fromStats =
       onRepeat.find(a => a.artist === currentArtist && a.id !== currentAlbumId) ??
       rediscover.find(a => a.artist === currentArtist && a.id !== currentAlbumId);
-    if (fromStats) return { kicker: `More from ${displayArtist}`, album: fromStats };
-
     const fromFrequent = frequentRaw?.find(a => {
       const id = `${serverId}:${a.id}`;
       return a.artist === currentArtist && id !== currentAlbumId && !!a.coverArt;
     });
-    if (fromFrequent) return { kicker: `More from ${displayArtist}`, album: naviToAlbumRow(fromFrequent, serverId) };
-
     const fromAlbums = allAlbums?.find(
       a => a.artist === currentArtist && a.id !== currentAlbumId && a.artwork_url
     );
-    if (fromAlbums) return { kicker: `More from ${displayArtist}`, album: fromAlbums };
+    const fromArtist = fromStats
+      ?? (fromFrequent ? naviToAlbumRow(fromFrequent, serverId) : undefined)
+      ?? fromAlbums;
+    if (fromArtist) picks.push({ kicker: `More from ${displayArtist}`, album: fromArtist });
   }
 
   const recentNotCurrent = recentRaw?.find(a => `${serverId}:${a.id}` !== currentAlbumId);
-  if (recentNotCurrent) return { kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) };
-  if (rediscover[0]) return { kicker: "Rediscover", album: rediscover[0] };
-  if (onRepeat[0]) return { kicker: "On repeat", album: onRepeat[0] };
+  if (recentNotCurrent) picks.push({ kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) });
+  if (rediscover[0]) picks.push({ kicker: "Rediscover", album: rediscover[0] });
+  if (onRepeat[0]) picks.push({ kicker: "On repeat", album: onRepeat[0] });
 
   if (unplayedWithArt.length > 0) {
     const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
-    const pick = unplayedWithArt[dayIndex % unplayedWithArt.length];
-    if (pick) return { kicker: "Discover something new", album: pick };
+    for (let i = 0; i < 3; i++) {
+      const pick = unplayedWithArt[(dayIndex + i) % unplayedWithArt.length];
+      if (pick) picks.push({ kicker: "Discover something new", album: pick });
+    }
   }
 
-  return null;
+  return picks;
+}
+
+function dedupePicks(candidates: SpotlightPick[], max: number): SpotlightPick[] {
+  const seen = new Set<string>();
+  const picks: SpotlightPick[] = [];
+  for (const c of candidates) {
+    if (seen.has(c.album.id)) continue;
+    seen.add(c.album.id);
+    picks.push(c);
+    if (picks.length >= max) break;
+  }
+  return picks;
 }
 
 // Deterministic Fisher-Yates shuffle using a seed. Same seed = same order.
@@ -188,14 +204,14 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 }
 
 function buildForYouGroups(
-  spotlightId: string | null,
+  spotlightIds: string[],
   sources: Record<string, AlbumRow[]>,
   config: ForYouCategoryConfig[],
   seed: number,
   perCategory = 4,
 ): ForYouGroup[] {
   const groups: ForYouGroup[] = [];
-  const used = new Set<string>(spotlightId ? [spotlightId] : []);
+  const used = new Set<string>(spotlightIds);
 
   let catIdx = 0;
   const groupFrom = (kicker: string, source: AlbumRow[]) => {
@@ -247,14 +263,21 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
 
   return (
     <section className="home-spotlight">
-      <div
+      <button
+        type="button"
         className="home-spotlight__art-wrap"
+        onClick={() => playAlbum(pick.album)}
         onContextMenu={(e) => onCardContextMenu(e, pick.album)}
+        title="Play"
+        aria-label={`Play ${pick.album.name}`}
       >
         {artUrl
           ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
-      </div>
+        <span className="home-spotlight__art-play">
+          <Play size={18} fill="currentColor" />
+        </span>
+      </button>
       <div className="home-spotlight__text">
         <p className="home-spotlight__kicker">{pick.kicker}</p>
         <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
@@ -271,17 +294,13 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
         )}
       </div>
       <div className="home-spotlight__actions">
-        <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-          <Play size={13} fill="currentColor" />
-          Play
-        </button>
         <button
           className="home-spotlight__open"
           onClick={() => onSelectAlbum(pick.album)}
           title="Open"
           aria-label="Open"
         >
-          <ArrowUpRight size={13} />
+          <ArrowUpRight size={16} />
         </button>
         {onAddToQueue && (
           <button
@@ -290,7 +309,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
             title="Add to Queue"
             aria-label="Add to Queue"
           >
-            <ListEnd size={13} />
+            <ListEnd size={16} />
           </button>
         )}
       </div>
@@ -524,14 +543,12 @@ interface FeaturedGenresSectionProps {
   onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
-function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
+function GenreChipsLine({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
   if (genres.length === 0) return null;
   const ranked = genres.slice(0, 10);
   return (
-    <section className="home-section">
-      <div className="home-section__header">
-        <h2 className="home-section__title">Genres from recent plays</h2>
-      </div>
+    <>
+      <p className="genre-line__caption">Recent genres · click to start a radio</p>
       <p className="genre-line">
         {ranked.map((g, i) => (
           <span key={g.canonical_id}>
@@ -539,6 +556,7 @@ function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps)
               type="button"
               className={`genre-line__item genre-line__item--tier${Math.min(Math.floor(i / 3), 2)}`}
               onClick={() => onPlayGenre(g.canonical_id, g.name)}
+              title={`Start a radio from ${g.name}`}
             >
               {g.name}
             </button>
@@ -546,7 +564,7 @@ function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps)
           </span>
         ))}
       </p>
-    </section>
+    </>
   );
 }
 
@@ -698,8 +716,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     [allAlbums, playedAlbumIds]
   );
 
-  const spotlight = useMemo(
-    () => buildSpotlight(
+  const spotlightCandidates = useMemo(
+    () => buildSpotlightCandidates(
       currentTrack?.artist ?? null,
       currentTrack?.albumId ?? null,
       onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id,
@@ -729,6 +747,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       : "You might also like";
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
+
+  const spotlightPicks = useMemo(
+    () => dedupePicks(
+      recommendedPick ? [recommendedPick, ...spotlightCandidates] : spotlightCandidates,
+      3
+    ),
+    [recommendedPick, spotlightCandidates]
+  );
 
   const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
 
@@ -785,8 +811,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayedWithArt, almostDone, customCategorySources]);
 
   const forYouGroups = useMemo(
-    () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 6),
-    [spotlight, forYouSources, categoryConfig, forYouSeed]
+    () => buildForYouGroups(spotlightPicks.map(p => p.album.id), forYouSources, categoryConfig, forYouSeed, 6),
+    [spotlightPicks, forYouSources, categoryConfig, forYouSeed]
   );
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
@@ -876,19 +902,28 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {(recommendedPick ?? spotlight) && (
-            <Spotlight
-              pick={(recommendedPick ?? spotlight)!}
-              serverWithCred={serverWithCredential}
-              onSelectAlbum={onSelectAlbum}
-              onSelectArtist={onSelectArtist}
-              playAlbum={play}
-              onAddToQueue={recommendedPick ? handleAddToQueue : undefined}
-              onCardContextMenu={openCardContextMenu}
-            />
+          {spotlightPicks.length > 0 && (
+            <section className="home-fusion">
+              <p className="home-fusion__label">Spotlight</p>
+              <div className="home-fusion__spotlights">
+                {spotlightPicks.map(pick => (
+                  <Spotlight
+                    key={pick.album.id}
+                    pick={pick}
+                    serverWithCred={serverWithCredential}
+                    onSelectAlbum={onSelectAlbum}
+                    onSelectArtist={onSelectArtist}
+                    playAlbum={play}
+                    onAddToQueue={handleAddToQueue}
+                    onCardContextMenu={openCardContextMenu}
+                  />
+                ))}
+              </div>
+              <div className="home-fusion__genres">
+                <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+              </div>
+            </section>
           )}
-
-          <FeaturedGenresLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
 
           <ForYouRail
             key={forYouSeed}

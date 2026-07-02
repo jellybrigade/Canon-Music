@@ -2,6 +2,12 @@
 /* One flowing typographic line instead of a chip/pill wall. Relevance is carried by
    size + color tier, not by a box. */
 
+.genre-line__caption {
+  margin: 0 0 6px;
+  font-size: 0.72rem;
+  color: var(--text-tertiary, #666);
+}
+
 .genre-line {
   margin: 0;
   font-size: 0;

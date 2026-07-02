@@ -152,20 +152,40 @@
 /* ── Spotlight ────────────────────────────────────────────────────────────── */
 
 .home-spotlight {
-  margin: 24px 28px 0;
   display: flex;
   align-items: center;
-  gap: 32px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  gap: 16px;
+  min-width: 0;
 }
 
 .home-spotlight__art-wrap {
+  position: relative;
   flex-shrink: 0;
   width: 64px;
   height: 64px;
   border-radius: var(--radius-md, 8px);
   overflow: hidden;
+  border: none;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.home-spotlight__art-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transition: opacity var(--motion-fast, 120ms ease-out);
+}
+
+.home-spotlight__art-wrap:hover .home-spotlight__art-play,
+.home-spotlight__art-wrap:focus-visible .home-spotlight__art-play {
+  opacity: 1;
 }
 
 .home-spotlight__art {
@@ -180,9 +200,8 @@
 }
 
 .home-spotlight__text {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 360px;
 }
 
 .home-spotlight__kicker {
@@ -231,31 +250,12 @@
   flex-shrink: 0;
 }
 
-.home-spotlight__play {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: var(--accent, #396cd8);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md, 8px);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--motion-fast, 120ms ease-out);
-}
-
-.home-spotlight__play:hover {
-  background: color-mix(in oklab, var(--accent, #396cd8) 85%, black);
-}
-
 .home-spotlight__open {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 38px;
+  height: 38px;
   background: none;
   border: none;
   box-shadow: none;
@@ -269,6 +269,50 @@
 .home-spotlight__open:hover {
   color: var(--text-primary);
   background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+/* ── Spotlight + Genres fusion: elevated surface, labeled, internal divider ── */
+
+.home-fusion {
+  margin: 24px 28px 0;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: var(--radius-md, 8px);
+  padding: 24px;
+}
+
+.home-fusion__label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 16px;
+}
+
+.home-fusion__spotlights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 32px;
+}
+
+.home-spotlight {
+  position: relative;
+}
+
+.home-spotlight:not(:first-child)::before {
+  content: "";
+  position: absolute;
+  left: -24px;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.home-fusion__genres {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.08));
 }
 
 /* ── For You Rail ─────────────────────────────────────────────────────────── */
@@ -292,7 +336,6 @@
   display: flex;
   align-items: flex-end;
   gap: 12px;
-  border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
   margin-bottom: 18px;
 }
 
