@@ -410,16 +410,16 @@
   padding: 9px 18px;
   border-radius: var(--radius-md, 8px);
   border: none;
-  background: var(--spotlight-accent, var(--accent));
+  background: color-mix(in oklab, var(--spotlight-accent, var(--accent)) 70%, black);
   color: var(--accent-contrast, #fff);
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: filter var(--motion-fast, 120ms ease-out);
+  transition: background var(--motion-fast, 120ms ease-out);
 }
 
 .home-spotlight__play-btn:hover {
-  filter: brightness(1.1);
+  background: color-mix(in oklab, var(--spotlight-accent, var(--accent)) 60%, black);
 }
 
 .home-spotlight__queue-btn,
