@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback } from "react";
+import { useMemo, useRef, useState, useCallback, useEffect } from "react";
 import { ArrowUpRight, ChevronLeft, ChevronRight, ListEnd, Lock, Play, Plus, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
@@ -27,6 +27,7 @@ import { SearchResults } from "./SearchResults";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
+import { extractAccent } from "../lib/artColor";
 import "../styles/home.css";
 import "../styles/genres.css";
 
@@ -249,20 +250,44 @@ interface SpotlightProps {
   playAlbum: (album: AlbumRow) => void;
   onAddToQueue?: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
+  primary?: boolean;
 }
 
-function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu }: SpotlightProps) {
+function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu, primary }: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
 
   const artUrl = coverMap.get(pick.album.id)
     ?? (pick.album.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 200)
+      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, primary ? 400 : 200)
       : null);
 
+  const [accentColor, setAccentColor] = useState<string | null>(pick.album.accent_color ?? null);
+  useEffect(() => {
+    if (pick.album.accent_color) {
+      setAccentColor(pick.album.accent_color);
+      return;
+    }
+    setAccentColor(null);
+    if (!artUrl) return;
+    let cancelled = false;
+    void extractAccent(artUrl).then(async (color) => {
+      if (cancelled) return;
+      setAccentColor(color);
+      if (color) {
+        const db = await getDb();
+        await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, pick.album.id]);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [artUrl, pick.album.accent_color, pick.album.id]);
+
   return (
-    <section className="home-spotlight">
+    <section
+      className={primary ? "home-spotlight home-spotlight--primary" : "home-spotlight"}
+      style={accentColor ? ({ "--spotlight-accent": accentColor } as React.CSSProperties) : undefined}
+    >
       <button
         type="button"
         className="home-spotlight__art-wrap"
@@ -275,7 +300,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
           ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
         <span className="home-spotlight__art-play">
-          <Play size={18} fill="currentColor" />
+          <Play size={primary ? 28 : 18} fill="currentColor" />
         </span>
       </button>
       <div className="home-spotlight__text">
@@ -292,27 +317,61 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
             {pick.album.year}
           </p>
         )}
-      </div>
-      <div className="home-spotlight__actions">
-        <button
-          className="home-spotlight__open"
-          onClick={() => onSelectAlbum(pick.album)}
-          title="Open"
-          aria-label="Open"
-        >
-          <ArrowUpRight size={16} />
-        </button>
-        {onAddToQueue && (
-          <button
-            className="home-spotlight__open"
-            onClick={() => onAddToQueue(pick.album)}
-            title="Add to Queue"
-            aria-label="Add to Queue"
-          >
-            <ListEnd size={16} />
-          </button>
+        {primary && (
+          <div className="home-spotlight__cta">
+            <button
+              className="home-spotlight__play-btn"
+              onClick={() => playAlbum(pick.album)}
+            >
+              <Play size={14} fill="currentColor" /> Play
+            </button>
+            {onAddToQueue && (
+              <button
+                className="home-spotlight__queue-btn"
+                onClick={() => onAddToQueue(pick.album)}
+              >
+                <ListEnd size={14} /> Add to Queue
+              </button>
+            )}
+            <button
+              className="home-spotlight__open-btn"
+              onClick={() => onSelectAlbum(pick.album)}
+            >
+              Open
+            </button>
+          </div>
         )}
       </div>
+      {!primary && (
+        <div className="home-spotlight__actions">
+          <button
+            className="home-spotlight__play-icon"
+            onClick={() => playAlbum(pick.album)}
+            title="Play"
+            aria-label={`Play ${pick.album.name}`}
+          >
+            <Play size={16} fill="currentColor" />
+          </button>
+          <button
+            className="home-spotlight__open"
+            onClick={() => onSelectAlbum(pick.album)}
+            title="Open"
+            aria-label="Open"
+          >
+            <ArrowUpRight size={16} />
+          </button>
+          {onAddToQueue && (
+            <button
+              className="home-spotlight__open"
+              onClick={() => onAddToQueue(pick.album)}
+              title="Add to Queue"
+              aria-label="Add to Queue"
+            >
+              <ListEnd size={16} />
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -852,6 +911,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     ),
     [recommendedPick, spotlightCandidates]
   );
+  const primarySpotlight = spotlightPicks[0] ?? null;
+  const secondarySpotlights = spotlightPicks.slice(1);
 
   const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
 
@@ -999,29 +1060,44 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {spotlightPicks.length > 0 && (
+          {primarySpotlight && (
             <section className="home-fusion">
-              <p className="home-fusion__label">Spotlight</p>
               <div className="home-fusion__spotlights">
-                {spotlightPicks.map(pick => (
-                  <Spotlight
-                    key={pick.album.id}
-                    pick={pick}
-                    serverWithCred={serverWithCredential}
-                    onSelectAlbum={onSelectAlbum}
-                    onSelectArtist={onSelectArtist}
-                    playAlbum={play}
-                    onAddToQueue={handleAddToQueue}
-                    onCardContextMenu={openCardContextMenu}
-                  />
-                ))}
-              </div>
-              <div className="home-fusion__genres">
-                <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+                <Spotlight
+                  key={primarySpotlight.album.id}
+                  pick={primarySpotlight}
+                  serverWithCred={serverWithCredential}
+                  onSelectAlbum={onSelectAlbum}
+                  onSelectArtist={onSelectArtist}
+                  playAlbum={play}
+                  onAddToQueue={handleAddToQueue}
+                  onCardContextMenu={openCardContextMenu}
+                  primary
+                />
+                {secondarySpotlights.length > 0 && (
+                  <div className="home-fusion__spotlights-secondary">
+                    {secondarySpotlights.map(pick => (
+                      <Spotlight
+                        key={pick.album.id}
+                        pick={pick}
+                        serverWithCred={serverWithCredential}
+                        onSelectAlbum={onSelectAlbum}
+                        onSelectArtist={onSelectArtist}
+                        playAlbum={play}
+                        onAddToQueue={handleAddToQueue}
+                        onCardContextMenu={openCardContextMenu}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
           )}
-
+          {featuredGenres.length > 0 && (
+            <section className="home-genres-section">
+              <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+            </section>
+          )}
           <ForYouRail
             key={forYouSeed}
             groups={forYouGroups}
