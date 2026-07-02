@@ -62,7 +62,15 @@ async function disambiguateArtistByLocalAlbums(
     [artistName, artistName]
   );
   const localAlbums = localRows.map((r) => r.name);
-  if (localAlbums.length === 0) return null;
+  if (localAlbums.length === 0) {
+    // Not in the library — no album overlap to verify against. Force the closest
+    // name match anyway (not persisted as confirmed) so portrait art still resolves
+    // for "fans also like" style artists instead of silently giving up.
+    const ranked = candidates
+      .map((c) => ({ id: c.id, sim: similarity(c.name, artistName) }))
+      .sort((a, b) => b.sim - a.sim);
+    return ranked[0]?.id ?? null;
+  }
 
   // Pre-filter by name similarity; only probe top 3 to limit MB requests
   const ranked = candidates
