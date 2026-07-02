@@ -61,8 +61,7 @@ function useArtistTopTracks(artistName: string) {
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.artist = ?
             OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
-         ORDER BY t.track_number, t.title
-         LIMIT 30`,
+         ORDER BY t.track_number, t.title`,
         [artistName, artistName]
       );
     },
