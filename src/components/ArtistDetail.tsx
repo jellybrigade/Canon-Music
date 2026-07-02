@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
 import { Play, Shuffle, Radio, Disc, ExternalLink, GitMerge, MoreHorizontal, ChevronDown, Mic2 } from "lucide-react";
@@ -409,6 +410,17 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const portraitUrl = resolvePortraitUrl(enrichment);
 
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  useEffect(() => {
+    setAccentColor(null);
+    if (!portraitUrl) return;
+    let cancelled = false;
+    void extractAccent(portraitUrl).then((color) => {
+      if (!cancelled) setAccentColor(color);
+    });
+    return () => { cancelled = true; };
+  }, [portraitUrl]);
+
   const similar: string[] = enrichment?.similar_json
     ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
     : [];
@@ -493,7 +505,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     <img className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" />
   ) : (
     <div className="artist-hero-art artist-hero-art--fallback">
-      <Mic2 size={36} strokeWidth={1.5} />
+      <Mic2 size={38} strokeWidth={1.5} />
     </div>
   );
 
@@ -502,7 +514,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
       <div className="artist-hero">
         <button className="artist-back-btn" onClick={onClose}>← Artists</button>
 
-        <div className="artist-hero-main">
+        <div
+          className="artist-hero-main"
+          style={accentColor ? ({ "--artist-accent": accentColor } as React.CSSProperties) : undefined}
+        >
           {heroArt}
           <div className="artist-hero-info">
             <h1 className="artist-hero-name">{artist.name}</h1>

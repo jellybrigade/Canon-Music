@@ -13,7 +13,7 @@
 
 .artist-hero-main {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 1.25rem;
   min-width: 0;
   margin-top: 0.75rem;
@@ -48,7 +48,7 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.3rem;
 }
 
 .artist-hero-meta-row span {
@@ -84,8 +84,8 @@
 
 /* ── Hero art ── */
 .artist-hero-art {
-  width: 112px;
-  height: 112px;
+  width: 120px;
+  height: 120px;
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
@@ -175,7 +175,7 @@
 
 /* ── Hero actions ── */
 .artist-play-btn {
-  background: color-mix(in oklab, var(--accent) 70%, black);
+  background: var(--artist-accent, color-mix(in oklab, var(--accent) 70%, black));
   color: #fff;
   border: none;
   box-shadow: none;
@@ -187,11 +187,11 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  transition: background var(--motion-fast);
+  transition: filter var(--motion-fast);
 }
 
 .artist-play-btn:hover {
-  background: color-mix(in oklab, var(--accent) 60%, black);
+  filter: brightness(0.85);
 }
 
 .artist-icon-btn {
