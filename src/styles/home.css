@@ -7,11 +7,13 @@
 /* ── Greeting ─────────────────────────────────────────────────────────────── */
 
 .home-greeting {
-  padding: 36px 28px 16px;
+  padding: 36px 28px 20px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  background: var(--bg-elevated, #141414);
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
 }
 
 .home-search-bar {
