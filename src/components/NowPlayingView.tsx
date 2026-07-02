@@ -678,16 +678,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
             {tab === "about" && (
               <>
-                {primaryArtist && (
-                  <TourCard
-                    artistName={primaryArtist}
-                    enabled={bandsintownEnabled}
-                    loading={tourLoading}
-                    events={tourEvents}
-                    onEnable={() => void setBandsintownEnabled(true)}
-                  />
-                )}
-
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
@@ -816,6 +806,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
                 {otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
                   <p className="now-playing-empty">No artist info available.</p>
+                )}
+
+                {primaryArtist && (
+                  <TourCard
+                    artistName={primaryArtist}
+                    enabled={bandsintownEnabled}
+                    loading={tourLoading}
+                    events={tourEvents}
+                    onEnable={() => void setBandsintownEnabled(true)}
+                  />
                 )}
               </>
             )}
