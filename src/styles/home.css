@@ -279,11 +279,9 @@
 }
 
 .home-fusion__label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
   margin: 0 0 16px;
 }
 
@@ -391,7 +389,97 @@
 .foryou-v2-tab-slot {
   display: flex;
   align-items: center;
+  gap: 2px;
   flex-shrink: 0;
+}
+
+.foryou-v2-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  border-radius: 4px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  margin-bottom: 10px;
+  color: var(--text-tertiary, #666);
+  cursor: pointer;
+  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+}
+
+.foryou-v2-remove-btn:hover {
+  color: var(--text-primary, #f0f0f0);
+  background: var(--bg-hover, rgba(255,255,255,0.05));
+}
+
+.foryou-v2-add-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--bg-elevated, rgba(255,255,255,0.03));
+  border-radius: 8px;
+}
+
+.foryou-v2-add-form__type {
+  display: flex;
+  gap: 2px;
+}
+
+.foryou-v2-add-form__type-btn {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-tertiary, #666);
+  cursor: pointer;
+  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+}
+
+.foryou-v2-add-form__type-btn:hover {
+  color: var(--text-secondary, #999);
+}
+
+.foryou-v2-add-form__type-btn--active {
+  color: var(--text-primary, #f0f0f0);
+  background: var(--bg-hover, rgba(255,255,255,0.06));
+}
+
+.foryou-v2-add-form__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-card, #1a1a1a);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  color: var(--text-primary, #f0f0f0);
+}
+
+.foryou-v2-add-form__input:focus-visible {
+  outline: 2px solid var(--accent, #396cd8);
+  outline-offset: 1px;
+}
+
+.foryou-v2-add-form__submit {
+  background: var(--accent, #396cd8);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.foryou-v2-add-form__submit:hover {
+  filter: brightness(1.08);
 }
 
 .foryou-v2-drop-line {
@@ -408,32 +496,15 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  background: none;
-  border: none;
-  border-radius: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   padding: 0 0 10px;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--text-secondary, #999);
-  cursor: pointer;
-  transition: color var(--motion-fast, 120ms ease-out);
-}
-
-.foryou-v2-tab:hover {
-  color: var(--text-primary, #f0f0f0);
 }
 
 .foryou-v2-tab:focus-visible {
   outline: 2px solid var(--accent, #396cd8);
   outline-offset: 2px;
   border-radius: 4px;
-}
-
-.foryou-v2-tab--active {
-  color: var(--text-primary, #f0f0f0);
-  border-bottom-color: var(--accent, #396cd8);
 }
 
 .foryou-v2-tab--draggable {

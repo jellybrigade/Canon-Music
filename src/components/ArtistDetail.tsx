@@ -366,13 +366,18 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
-  const topTracks = rawTracks && lastfmTitles
-    ? rankByLastfm(rawTracks, lastfmTitles)
-    : rawTracks ?? [];
-  const lovedTracks = topTracks.filter((t) => lovedTrackIds.has(t.id));
-  const lfmOnlyTracks = rawTracks && lastfmTitles
-    ? lastfmOnlyTracks(rawTracks, lastfmTitles)
-    : [];
+  const topTracks = useMemo(
+    () => (rawTracks && lastfmTitles ? rankByLastfm(rawTracks, lastfmTitles) : rawTracks ?? []),
+    [rawTracks, lastfmTitles]
+  );
+  const lovedTracks = useMemo(
+    () => topTracks.filter((t) => lovedTrackIds.has(t.id)),
+    [topTracks, lovedTrackIds]
+  );
+  const lfmOnlyTracks = useMemo(
+    () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
+    [rawTracks, lastfmTitles]
+  );
 
   const lastfmPlaycountMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -575,7 +580,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               )}
               <button
                 className="artist-icon-btn"
-                onClick={(e) => setOverflowMenuAnchor({ x: e.clientX, y: e.clientY })}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setOverflowMenuAnchor({ x: rect.left, y: rect.bottom });
+                }}
                 title="More"
                 aria-label="More"
               >

@@ -580,27 +580,9 @@
 }
 
 .artist-tab-btn {
-  background: none;
-  border: none;
-  border-radius: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.6rem 0.1rem;
-  cursor: pointer;
-  box-shadow: none;
-  transition: color var(--motion-fast);
-}
-
-.artist-tab-btn:hover {
-  color: var(--text-primary);
-}
-
-.artist-tab-btn--active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
 }
 
 .artist-tab-btn:disabled {

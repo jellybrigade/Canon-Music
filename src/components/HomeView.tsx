@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, useCallback } from "react";
-import { ArrowUpRight, ChevronLeft, ChevronRight, ListEnd, Lock, Play, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, ListEnd, Lock, Play, Plus, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -353,6 +353,10 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
   const [locked, setLocked] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [addFormOpen, setAddFormOpen] = useState(false);
+  const [addType, setAddType] = useState<"decade" | "artist">("decade");
+  const [addDecade, setAddDecade] = useState("");
+  const [addArtist, setAddArtist] = useState("");
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -397,6 +401,36 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
 
   function toggleEnabled(kicker: string) {
     onConfigChange(config.map(c => c.kicker === kicker ? { ...c, enabled: !c.enabled } : c));
+  }
+
+  function removeCustom(key: string) {
+    onConfigChange(config.filter(c => c.key !== key));
+  }
+
+  function submitAddCustom(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (addType === "decade") {
+      const decade = Math.floor(Number(addDecade) / 10) * 10;
+      if (!decade || Number.isNaN(decade)) return;
+      onConfigChange([...config, {
+        key: `custom-decade-${decade}-${Date.now()}`,
+        kicker: `${decade}s`,
+        enabled: true,
+        customFilter: { type: "decade", decade },
+      }]);
+      setAddDecade("");
+    } else {
+      const artist = addArtist.trim();
+      if (!artist) return;
+      onConfigChange([...config, {
+        key: `custom-artist-${Date.now()}`,
+        kicker: artist,
+        enabled: true,
+        customFilter: { type: "artist", artist },
+      }]);
+      setAddArtist("");
+    }
+    setAddFormOpen(false);
   }
 
   function handleTabDragStart(e: React.DragEvent, index: number) {
@@ -478,6 +512,16 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                   >
                     {cat.kicker}
                   </button>
+                  {cat.customFilter && (
+                    <button
+                      className="foryou-v2-remove-btn"
+                      onClick={() => removeCustom(cat.key)}
+                      aria-label={`Remove ${cat.kicker} category`}
+                      title="Remove category"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
                 </div>
               ))}
           {dropIndex === tabCount && <div className="foryou-v2-drop-line" />}
@@ -486,6 +530,17 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
             <RefreshCw size={14} />
           </button>
+          {!locked && (
+            <button
+              className={`foryou-v2-action-btn${addFormOpen ? " foryou-v2-action-btn--active" : ""}`}
+              onClick={() => setAddFormOpen(o => !o)}
+              aria-label="Add custom category"
+              aria-pressed={addFormOpen}
+              title="Add a decade or artist category"
+            >
+              <Plus size={14} />
+            </button>
+          )}
           <button
             className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
             onClick={() => setLocked(l => !l)}
@@ -497,6 +552,48 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           </button>
         </div>
       </div>
+
+      {!locked && addFormOpen && (
+        <form className="foryou-v2-add-form" onSubmit={submitAddCustom}>
+          <div className="foryou-v2-add-form__type">
+            <button
+              type="button"
+              className={`foryou-v2-add-form__type-btn${addType === "decade" ? " foryou-v2-add-form__type-btn--active" : ""}`}
+              onClick={() => setAddType("decade")}
+            >
+              Decade
+            </button>
+            <button
+              type="button"
+              className={`foryou-v2-add-form__type-btn${addType === "artist" ? " foryou-v2-add-form__type-btn--active" : ""}`}
+              onClick={() => setAddType("artist")}
+            >
+              Artist
+            </button>
+          </div>
+          {addType === "decade" ? (
+            <input
+              type="number"
+              step={10}
+              placeholder="e.g. 1990"
+              value={addDecade}
+              onChange={e => setAddDecade(e.target.value)}
+              className="foryou-v2-add-form__input"
+              autoFocus
+            />
+          ) : (
+            <input
+              type="text"
+              placeholder="Artist name"
+              value={addArtist}
+              onChange={e => setAddArtist(e.target.value)}
+              className="foryou-v2-add-form__input"
+              autoFocus
+            />
+          )}
+          <button type="submit" className="foryou-v2-add-form__submit">Add</button>
+        </form>
+      )}
 
       {descByKicker[activeTabGroup.kicker] && (
         <p className="foryou-v2-desc">{descByKicker[activeTabGroup.kicker]}</p>
