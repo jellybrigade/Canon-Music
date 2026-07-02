@@ -1,9 +1,5 @@
-import { useMemo, useRef, useState, useEffect, useLayoutEffect, useCallback, type RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { QK } from "../lib/query-keys";
-import { useClickOutside } from "../hooks/useClickOutside";
-import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ListEnd, Play, Radio, RefreshCw, Search, SlidersHorizontal, X } from "lucide-react";
+import { useMemo, useRef, useState, useCallback } from "react";
+import { ArrowUpRight, ChevronLeft, ChevronRight, ListEnd, Lock, Play, Plus, Radio, RefreshCw, Search, Unlock, X } from "lucide-react";
 import { CanonIcon } from "./CanonIcon";
 import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -24,7 +20,6 @@ import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
 import type { RadioMode, CurrentTrack } from "../store/player";
-import { extractAccent } from "../lib/artColor";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../utils/ids";
@@ -134,7 +129,8 @@ function stripFeaturedArtists(artist: string): string {
   return artist.replace(FEAT_RE, "").trim();
 }
 
-function buildSpotlight(
+// Returns candidate picks in priority order (not deduped) — caller dedupes by album id.
+function buildSpotlightCandidates(
   currentArtist: string | null,
   currentAlbumId: string | null,
   onRepeat: AlbumStatRow[],
@@ -144,38 +140,53 @@ function buildSpotlight(
   allAlbums: AlbumRow[] | undefined,
   serverId: string,
   unplayedWithArt: AlbumRow[],
-): SpotlightPick | null {
+): SpotlightPick[] {
+  const picks: SpotlightPick[] = [];
+
   if (currentArtist) {
     const displayArtist = stripFeaturedArtists(currentArtist);
     const fromStats =
       onRepeat.find(a => a.artist === currentArtist && a.id !== currentAlbumId) ??
       rediscover.find(a => a.artist === currentArtist && a.id !== currentAlbumId);
-    if (fromStats) return { kicker: `More from ${displayArtist}`, album: fromStats };
-
     const fromFrequent = frequentRaw?.find(a => {
       const id = `${serverId}:${a.id}`;
       return a.artist === currentArtist && id !== currentAlbumId && !!a.coverArt;
     });
-    if (fromFrequent) return { kicker: `More from ${displayArtist}`, album: naviToAlbumRow(fromFrequent, serverId) };
-
     const fromAlbums = allAlbums?.find(
       a => a.artist === currentArtist && a.id !== currentAlbumId && a.artwork_url
     );
-    if (fromAlbums) return { kicker: `More from ${displayArtist}`, album: fromAlbums };
+    const fromArtist = fromStats
+      ?? (fromFrequent ? naviToAlbumRow(fromFrequent, serverId) : undefined)
+      ?? fromAlbums;
+    if (fromArtist) picks.push({ kicker: `More from ${displayArtist}`, album: fromArtist });
   }
 
   const recentNotCurrent = recentRaw?.find(a => `${serverId}:${a.id}` !== currentAlbumId);
-  if (recentNotCurrent) return { kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) };
-  if (rediscover[0]) return { kicker: "Rediscover", album: rediscover[0] };
-  if (onRepeat[0]) return { kicker: "On repeat", album: onRepeat[0] };
+  if (recentNotCurrent) picks.push({ kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) });
+  if (rediscover[0]) picks.push({ kicker: "Rediscover", album: rediscover[0] });
+  if (onRepeat[0]) picks.push({ kicker: "On repeat", album: onRepeat[0] });
 
   if (unplayedWithArt.length > 0) {
     const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
-    const pick = unplayedWithArt[dayIndex % unplayedWithArt.length];
-    if (pick) return { kicker: "Discover something new", album: pick };
+    for (let i = 0; i < 3; i++) {
+      const pick = unplayedWithArt[(dayIndex + i) % unplayedWithArt.length];
+      if (pick) picks.push({ kicker: "Discover something new", album: pick });
+    }
   }
 
-  return null;
+  return picks;
+}
+
+function dedupePicks(candidates: SpotlightPick[], max: number): SpotlightPick[] {
+  const seen = new Set<string>();
+  const picks: SpotlightPick[] = [];
+  for (const c of candidates) {
+    if (seen.has(c.album.id)) continue;
+    seen.add(c.album.id);
+    picks.push(c);
+    if (picks.length >= max) break;
+  }
+  return picks;
 }
 
 // Deterministic Fisher-Yates shuffle using a seed. Same seed = same order.
@@ -193,14 +204,14 @@ function seededShuffle<T>(arr: T[], seed: number): T[] {
 }
 
 function buildForYouGroups(
-  spotlightId: string | null,
+  spotlightIds: string[],
   sources: Record<string, AlbumRow[]>,
   config: ForYouCategoryConfig[],
   seed: number,
   perCategory = 4,
 ): ForYouGroup[] {
   const groups: ForYouGroup[] = [];
-  const used = new Set<string>(spotlightId ? [spotlightId] : []);
+  const used = new Set<string>(spotlightIds);
 
   let catIdx = 0;
   const groupFrom = (kicker: string, source: AlbumRow[]) => {
@@ -244,82 +255,63 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
-  const [accentColor, setAccentColor] = useState<string | null>(null);
-  const { data: genres } = useQuery({
-    queryKey: QK.spotlightGenres(pick.album.id),
-    queryFn: async () => {
-      const db = await getDb();
-      return db.select<{ name: string }[]>(
-        "SELECT name FROM album_genres WHERE album_id = ? AND relation = 'direct' ORDER BY name LIMIT 3",
-        [pick.album.id]
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
 
   const artUrl = coverMap.get(pick.album.id)
     ?? (pick.album.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 400)
+      ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, 200)
       : null);
 
-  useEffect(() => {
-    if (!artUrl) { setAccentColor(null); return; }
-    let cancelled = false;
-    void extractAccent(artUrl).then(color => { if (!cancelled) setAccentColor(color); });
-    return () => { cancelled = true; };
-  }, [artUrl]);
-
   return (
-    <section
-      className="home-spotlight"
-      style={(accentColor ? { "--spotlight-accent": accentColor } : {}) as React.CSSProperties}
-    >
-      <div className="home-spotlight__wash" />
-      <div className="home-spotlight__rule" />
-      <div
+    <section className="home-spotlight">
+      <button
+        type="button"
         className="home-spotlight__art-wrap"
+        onClick={() => playAlbum(pick.album)}
         onContextMenu={(e) => onCardContextMenu(e, pick.album)}
+        title="Play"
+        aria-label={`Play ${pick.album.name}`}
       >
         {artUrl
           ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
           : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
-      </div>
-      <div className="home-spotlight__body">
-        <div className="home-spotlight__top">
-          <span className="home-spotlight__kicker">{pick.kicker}</span>
-          <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
-          {(pick.album.artist || pick.album.year) && (
-            <p className="home-spotlight__meta">
-              {pick.album.artist && onSelectArtist ? (
-                <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
-                  {pick.album.artist}
-                </button>
-              ) : pick.album.artist}
-              {pick.album.artist && pick.album.year && " · "}
-              {pick.album.year}
-            </p>
-          )}
-        </div>
-        {genres && genres.length > 0 && (
-          <p className="home-spotlight__genres">
-            {genres.map(g => g.name).join(" · ")}
+        <span className="home-spotlight__art-play">
+          <Play size={18} fill="currentColor" />
+        </span>
+      </button>
+      <div className="home-spotlight__text">
+        <p className="home-spotlight__kicker">{pick.kicker}</p>
+        <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
+        {(pick.album.artist || pick.album.year) && (
+          <p className="home-spotlight__meta">
+            {pick.album.artist && onSelectArtist ? (
+              <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
+                {pick.album.artist}
+              </button>
+            ) : pick.album.artist}
+            {pick.album.artist && pick.album.year && " · "}
+            {pick.album.year}
           </p>
         )}
-        <div className="home-spotlight__actions">
-          <button className="home-spotlight__play" onClick={() => playAlbum(pick.album)}>
-            <div><Play size={13} fill="currentColor" /></div>
-            Play
+      </div>
+      <div className="home-spotlight__actions">
+        <button
+          className="home-spotlight__open"
+          onClick={() => onSelectAlbum(pick.album)}
+          title="Open"
+          aria-label="Open"
+        >
+          <ArrowUpRight size={16} />
+        </button>
+        {onAddToQueue && (
+          <button
+            className="home-spotlight__open"
+            onClick={() => onAddToQueue(pick.album)}
+            title="Add to Queue"
+            aria-label="Add to Queue"
+          >
+            <ListEnd size={16} />
           </button>
-          {onAddToQueue && (
-            <button className="home-spotlight__play" onClick={() => onAddToQueue(pick.album)}>
-              <div><ListEnd size={13} /></div>
-              Add to Queue
-            </button>
-          )}
-          <button className="home-spotlight__open" onClick={() => onSelectAlbum(pick.album)}>
-            Open
-          </button>
-        </div>
+        )}
       </div>
     </section>
   );
@@ -340,219 +332,31 @@ interface ForYouRailProps {
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
 }
 
-// ── For You Customize Popup ───────────────────────────────────────────────────
-
-const FOR_YOU_POPUP_WIDTH = 180;
-
-interface ForYouCustomizePopupProps {
-  config: ForYouCategoryConfig[];
-  onConfigChange: (config: ForYouCategoryConfig[]) => void;
-  position: { top: number; left: number };
-  popupRef: RefObject<HTMLDivElement | null>;
-}
-
-const DECADES = [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
-
-function ForYouCustomizePopup({ config, onConfigChange, position, popupRef }: ForYouCustomizePopupProps) {
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dropAt, setDropAt] = useState<number | null>(null);
-  const [addMode, setAddMode] = useState(false);
-  const [addName, setAddName] = useState("");
-  const [addFilterType, setAddFilterType] = useState<"decade" | "artist">("decade");
-  const [addDecade, setAddDecade] = useState(1990);
-  const [addArtist, setAddArtist] = useState("");
-
-  useLayoutEffect(() => {
-    const el = popupRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const overflow = rect.bottom - (window.innerHeight - 8);
-    if (overflow > 0) {
-      el.style.top = `${Math.max(8, rect.top - overflow)}px`;
-    }
-  }, [position, popupRef]);
-
-  function handleDragStart(e: React.DragEvent, index: number) {
-    setDragFrom(index);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(index));
-  }
-  function handleDragOver(e: React.DragEvent, rowIndex: number) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDropAt(e.clientY < rect.top + rect.height / 2 ? rowIndex : rowIndex + 1);
-  }
-  function handleDrop(e: React.DragEvent) {
-    e.preventDefault();
-    if (dragFrom !== null && dropAt !== null) {
-      const effectiveSlot = dropAt > dragFrom ? dropAt - 1 : dropAt;
-      if (effectiveSlot !== dragFrom) {
-        const next = [...config];
-        const [item] = next.splice(dragFrom, 1);
-        next.splice(effectiveSlot, 0, item!);
-        onConfigChange(next);
-      }
-    }
-    setDragFrom(null);
-    setDropAt(null);
-  }
-  function handleDragEnd() {
-    setDragFrom(null);
-    setDropAt(null);
-  }
-  function toggleEnabled(index: number) {
-    onConfigChange(config.map((c, i) => i === index ? { ...c, enabled: !c.enabled } : c));
-  }
-  function removeCustom(key: string) {
-    onConfigChange(config.filter(c => c.key !== key));
-  }
-  function submitAdd() {
-    const name = addName.trim();
-    if (!name) return;
-    if (addFilterType === "artist" && !addArtist.trim()) return;
-    const key = `custom-${Date.now()}`;
-    const customFilter: ForYouCustomFilter =
-      addFilterType === "decade"
-        ? { type: "decade", decade: addDecade }
-        : { type: "artist", artist: addArtist.trim() };
-    const next: ForYouCategoryConfig = { key, kicker: name, enabled: true, customFilter };
-    onConfigChange([...config, next]);
-    setAddMode(false);
-    setAddName("");
-    setAddArtist("");
-  }
-
-  return createPortal(
-    <div
-      ref={popupRef}
-      className="for-you-popup"
-      style={{ top: position.top, left: position.left }}
-      onMouseDown={e => e.stopPropagation()}
-      onDragLeave={e => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropAt(null);
-      }}
-    >
-      {addMode ? (
-        <>
-          <p className="for-you-popup__title">Add category</p>
-          <div className="for-you-popup__add-form">
-            <input
-              className="for-you-popup__add-input"
-              placeholder="Category name…"
-              value={addName}
-              onChange={e => setAddName(e.target.value)}
-              autoFocus
-            />
-            <select className="for-you-popup__add-select" value={addFilterType} onChange={e => setAddFilterType(e.target.value as "decade" | "artist")}>
-              <option value="decade">Decade</option>
-              <option value="artist">Artist</option>
-            </select>
-            {addFilterType === "decade" && (
-              <select className="for-you-popup__add-select" value={addDecade} onChange={e => setAddDecade(Number(e.target.value))}>
-                {DECADES.map(d => <option key={d} value={d}>{d}s</option>)}
-              </select>
-            )}
-            {addFilterType === "artist" && (
-              <input
-                className="for-you-popup__add-input"
-                placeholder="Artist name…"
-                value={addArtist}
-                onChange={e => setAddArtist(e.target.value)}
-              />
-            )}
-            <div className="for-you-popup__add-actions">
-              <button className="for-you-popup__add-confirm" onClick={submitAdd}>Add</button>
-              <button className="for-you-popup__add-cancel" onClick={() => { setAddMode(false); setAddName(""); setAddArtist(""); }}>Cancel</button>
-            </div>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="for-you-popup__title">Customize</p>
-          {config.map((cat, i) => (
-            <div key={cat.key}>
-              {dropAt === i && <div className="for-you-popup__drop-line" />}
-              <div
-                className="for-you-popup__row"
-                onDragOver={e => handleDragOver(e, i)}
-                onDrop={handleDrop}
-                onDragEnd={handleDragEnd}
-              >
-                <span
-                  className="for-you-popup__drag-handle"
-                  aria-hidden="true"
-                  draggable={!cat.customFilter}
-                  onDragStart={cat.customFilter ? undefined : e => handleDragStart(e, i)}
-                  style={{ visibility: cat.customFilter ? "hidden" : undefined }}
-                >⠿</span>
-                <input
-                  type="checkbox"
-                  id={`fycat-${cat.key}`}
-                  checked={cat.enabled}
-                  onChange={() => toggleEnabled(i)}
-                  className="for-you-popup__checkbox"
-                />
-                <label htmlFor={`fycat-${cat.key}`} className="for-you-popup__label">
-                  {cat.kicker}
-                  {cat.customFilter ? (
-                    <span className="for-you-popup__label-desc">
-                      {cat.customFilter.type === "decade" ? `${cat.customFilter.decade}s` : `Artist: ${cat.customFilter.artist}`}
-                    </span>
-                  ) : (
-                    <span className="for-you-popup__label-desc">{FOR_YOU_CATEGORY_DESC[cat.key]}</span>
-                  )}
-                </label>
-                {cat.customFilter && (
-                  <button className="for-you-popup__remove" onClick={() => removeCustom(cat.key)} aria-label="Remove category">×</button>
-                )}
-              </div>
-            </div>
-          ))}
-          {dropAt === config.length && <div className="for-you-popup__drop-line" />}
-          <button className="for-you-popup__add-btn" onClick={() => setAddMode(true)}>+ Add category</button>
-        </>
-      )}
-    </div>,
-    document.body,
-  );
-}
-
-const KICKER_COLORS: Record<string, string> = {
-  "Jump back in":     "#3b82f6",
-  "On repeat":        "#6366f1",
-  "Rediscover":       "#f59e0b",
-  "Finish the album": "#14b8a6",
-  "Hidden gem":       "#a855f7",
-  "Loved":            "#ec4899",
-  "Unplayed":                "#64748b",
-  "More from":               "#f43f5e",
-  "Discover something new":  "#10b981",
-  _default:           "#6b7280",
-};
-
 function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
-  const [showCustomize, setShowCustomize] = useState(false);
-  const [popupPos, setPopupPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
-  const customizeButtonRef = useRef<HTMLButtonElement>(null);
-
-  const customizePopupRef = useRef<HTMLDivElement>(null);
-
-  function handleCustomizeClick() {
-    if (!showCustomize && customizeButtonRef.current) {
-      const rect = customizeButtonRef.current.getBoundingClientRect();
-      setPopupPos({
-        top: rect.bottom + 6,
-        left: rect.right - FOR_YOU_POPUP_WIDTH,
-      });
+  const descByKicker = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const cat of config) {
+      if (cat.customFilter) {
+        map[cat.kicker] = cat.customFilter.type === "decade"
+          ? `Albums from the ${cat.customFilter.decade}s`
+          : `Albums by ${cat.customFilter.artist}`;
+      } else if (FOR_YOU_CATEGORY_DESC[cat.key]) {
+        map[cat.kicker] = FOR_YOU_CATEGORY_DESC[cat.key]!;
+      }
     }
-    setShowCustomize(s => !s);
-  }
-
-  useClickOutside([customizeButtonRef, customizePopupRef], () => setShowCustomize(false), showCustomize);
+    return map;
+  }, [config]);
+  const [activeTabKicker, setActiveTabKicker] = useState<string | null>(null);
+  const [locked, setLocked] = useState(true);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [addFormOpen, setAddFormOpen] = useState(false);
+  const [addType, setAddType] = useState<"decade" | "artist">("decade");
+  const [addDecade, setAddDecade] = useState("");
+  const [addArtist, setAddArtist] = useState("");
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -561,20 +365,15 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         <div className="home-rail__header">
           <p className="home-section-label" style={{ margin: 0 }}>For You</p>
         </div>
-        <div className="home-foryou-rows">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="foryou-row">
-              <div className="foryou-row__label">
-                <span className="foryou-row__dot-skel" />
-                <span className="foryou-row__text-skel" />
-              </div>
-              <div className="foryou-row__tiles">
-                {Array.from({ length: 4 }).map((_, j) => (
-                  <div key={j} className="foryou-tile">
-                    <div className="foryou-tile__art-wrap foryou-tile__art-wrap--skeleton" />
-                  </div>
-                ))}
-              </div>
+        <div className="foryou-v2-tabs">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <span key={i} className="foryou-v2-tab-skel" />
+          ))}
+        </div>
+        <div className="foryou-v2-grid">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="foryou-v2-tile">
+              <div className="foryou-v2-tile__art-wrap foryou-v2-tile__art-wrap--skeleton" />
             </div>
           ))}
         </div>
@@ -582,70 +381,249 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     );
   }
 
+  const activeTabGroup = groups.find(g => g.kicker === activeTabKicker) ?? groups[0]!;
+
+  function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    e.preventDefault();
+    const next = e.key === "ArrowRight" ? (index + 1) % groups.length : (index - 1 + groups.length) % groups.length;
+    setActiveTabKicker(groups[next]!.kicker);
+  }
+
+  function reorderConfig(fromIndex: number, toIndex: number) {
+    const effectiveSlot = toIndex > fromIndex ? toIndex - 1 : toIndex;
+    if (effectiveSlot === fromIndex) return;
+    const next = [...config];
+    const [item] = next.splice(fromIndex, 1);
+    next.splice(effectiveSlot, 0, item!);
+    onConfigChange(next);
+  }
+
+  function toggleEnabled(kicker: string) {
+    onConfigChange(config.map(c => c.kicker === kicker ? { ...c, enabled: !c.enabled } : c));
+  }
+
+  function removeCustom(key: string) {
+    onConfigChange(config.filter(c => c.key !== key));
+  }
+
+  function submitAddCustom(e: React.SyntheticEvent) {
+    e.preventDefault();
+    if (addType === "decade") {
+      const decade = Math.floor(Number(addDecade) / 10) * 10;
+      if (!decade || Number.isNaN(decade)) return;
+      onConfigChange([...config, {
+        key: `custom-decade-${decade}-${Date.now()}`,
+        kicker: `${decade}s`,
+        enabled: true,
+        customFilter: { type: "decade", decade },
+      }]);
+      setAddDecade("");
+    } else {
+      const artist = addArtist.trim();
+      if (!artist) return;
+      onConfigChange([...config, {
+        key: `custom-artist-${Date.now()}`,
+        kicker: artist,
+        enabled: true,
+        customFilter: { type: "artist", artist },
+      }]);
+      setAddArtist("");
+    }
+    setAddFormOpen(false);
+  }
+
+  function handleTabDragStart(e: React.DragEvent, index: number) {
+    if (locked) return;
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(index));
+  }
+  function handleTabDragOver(e: React.DragEvent, index: number) {
+    if (locked || dragIndex === null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDropIndex(e.clientX < rect.left + rect.width / 2 ? index : index + 1);
+  }
+  function handleTabDrop(e: React.DragEvent) {
+    if (locked) return;
+    e.preventDefault();
+    if (dragIndex !== null && dropIndex !== null) {
+      reorderConfig(dragIndex, dropIndex);
+    }
+    setDragIndex(null);
+    setDropIndex(null);
+  }
+  function handleTabDragEnd() {
+    setDragIndex(null);
+    setDropIndex(null);
+  }
+
+  const tabCount = locked ? groups.length : config.length;
+
   return (
     <section className="home-rail">
       <div className="home-rail__header">
         <p className="home-section-label" style={{ margin: 0 }}>For You</p>
-        {onStartRadio && groups[0]?.albums[0] && (
-          <button className="home-section__radio-btn" onClick={() => onStartRadio(groups[0]!.albums[0]!)} aria-label="Start For You radio" title="Start radio">
+        {onStartRadio && activeTabGroup.albums[0] && (
+          <button className="home-section__radio-btn" onClick={() => onStartRadio(activeTabGroup.albums[0]!)} aria-label={`Start ${activeTabGroup.kicker} radio`} title="Start radio">
             <Radio size={13} />
           </button>
         )}
-        <button className="home-rail__refresh" onClick={onRefresh} aria-label="Refresh suggestions">
-          <RefreshCw size={11} />
-        </button>
-        <button
-          ref={customizeButtonRef}
-          className={`home-rail__customize${showCustomize ? " home-rail__customize--active" : ""}`}
-          onClick={handleCustomizeClick}
-          aria-label="Customize For You categories"
-        >
-          <SlidersHorizontal size={11} />
-        </button>
-        {showCustomize && (
-          <ForYouCustomizePopup config={config} onConfigChange={onConfigChange} position={popupPos} popupRef={customizePopupRef} />
-        )}
       </div>
-      <div className="home-foryou-rows">
-        {groups.map(group => {
-          const kickerColor = KICKER_COLORS[group.kicker]
-            ?? (group.kicker.startsWith("More from") ? KICKER_COLORS["More from"] : undefined)
-            ?? KICKER_COLORS._default;
-          return (
-            <div key={group.kicker} className="foryou-row">
-              <div className="foryou-row__label">
-                <span className="foryou-row__dot" style={{ background: kickerColor }} />
-                <span className="foryou-row__text">{group.kicker}</span>
-              </div>
-              <div className="foryou-row__tiles">
-                {group.albums.slice(0, 4).map(album => {
-                  const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
-                  return (
-                    <div
-                      key={album.id}
-                      className="foryou-tile"
-                      onClick={() => onSelectAlbum(album)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
-                      onContextMenu={e => onCardContextMenu(e, album)}
+
+      {!locked && (
+        <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
+      )}
+
+      <div className="foryou-v2-tabs" role="tablist" aria-label="For You categories">
+        <div className="foryou-v2-tabs__list">
+          {locked
+            ? groups.map((group, i) => (
+                <div key={group.kicker} className="foryou-v2-tab-slot">
+                  <button
+                    role="tab"
+                    aria-selected={activeTabGroup.kicker === group.kicker}
+                    tabIndex={activeTabGroup.kicker === group.kicker ? 0 : -1}
+                    className={`foryou-v2-tab${activeTabGroup.kicker === group.kicker ? " foryou-v2-tab--active" : ""}`}
+                    onClick={() => setActiveTabKicker(group.kicker)}
+                    onKeyDown={e => handleTabKeyDown(e, i)}
+                  >
+                    {group.kicker}
+                  </button>
+                </div>
+              ))
+            : config.map((cat, i) => (
+                <div key={cat.key} className="foryou-v2-tab-slot">
+                  {dropIndex === i && <div className="foryou-v2-drop-line" />}
+                  <button
+                    role="tab"
+                    aria-selected={activeTabGroup.kicker === cat.kicker}
+                    aria-pressed={cat.enabled}
+                    className={`foryou-v2-tab foryou-v2-tab--draggable${activeTabGroup.kicker === cat.kicker ? " foryou-v2-tab--active" : ""}${!cat.enabled ? " foryou-v2-tab--disabled" : ""}`}
+                    onClick={() => toggleEnabled(cat.kicker)}
+                    draggable
+                    onDragStart={e => handleTabDragStart(e, i)}
+                    onDragOver={e => handleTabDragOver(e, i)}
+                    onDrop={handleTabDrop}
+                    onDragEnd={handleTabDragEnd}
+                    title={cat.enabled ? "Click to disable" : "Click to enable"}
+                  >
+                    {cat.kicker}
+                  </button>
+                  {cat.customFilter && (
+                    <button
+                      className="foryou-v2-remove-btn"
+                      onClick={() => removeCustom(cat.key)}
+                      aria-label={`Remove ${cat.kicker} category`}
+                      title="Remove category"
                     >
-                      <div className="foryou-tile__art-wrap">
-                        <img className="foryou-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
-                        <button
-                          className="foryou-tile__play"
-                          onClick={e => { e.stopPropagation(); playAlbum(album); }}
-                          aria-label={`Play ${album.name}`}
-                        >
-                          <Play size={13} fill="currentColor" />
-                        </button>
-                      </div>
-                      <p className="foryou-tile__name">{albumDisplayName(album.name)}</p>
-                      {album.artist && <p className="foryou-tile__artist">{album.artist}</p>}
-                    </div>
-                  );
-                })}
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              ))}
+          {dropIndex === tabCount && <div className="foryou-v2-drop-line" />}
+        </div>
+        <div className="foryou-v2-tabs__actions">
+          <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
+            <RefreshCw size={14} />
+          </button>
+          {!locked && (
+            <button
+              className={`foryou-v2-action-btn${addFormOpen ? " foryou-v2-action-btn--active" : ""}`}
+              onClick={() => setAddFormOpen(o => !o)}
+              aria-label="Add custom category"
+              aria-pressed={addFormOpen}
+              title="Add a decade or artist category"
+            >
+              <Plus size={14} />
+            </button>
+          )}
+          <button
+            className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
+            onClick={() => setLocked(l => !l)}
+            aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
+            aria-pressed={!locked}
+            title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}
+          >
+            {locked ? <Lock size={14} /> : <Unlock size={14} />}
+          </button>
+        </div>
+      </div>
+
+      {!locked && addFormOpen && (
+        <form className="foryou-v2-add-form" onSubmit={submitAddCustom}>
+          <div className="foryou-v2-add-form__type">
+            <button
+              type="button"
+              className={`foryou-v2-add-form__type-btn${addType === "decade" ? " foryou-v2-add-form__type-btn--active" : ""}`}
+              onClick={() => setAddType("decade")}
+            >
+              Decade
+            </button>
+            <button
+              type="button"
+              className={`foryou-v2-add-form__type-btn${addType === "artist" ? " foryou-v2-add-form__type-btn--active" : ""}`}
+              onClick={() => setAddType("artist")}
+            >
+              Artist
+            </button>
+          </div>
+          {addType === "decade" ? (
+            <input
+              type="number"
+              step={10}
+              placeholder="e.g. 1990"
+              value={addDecade}
+              onChange={e => setAddDecade(e.target.value)}
+              className="foryou-v2-add-form__input"
+              autoFocus
+            />
+          ) : (
+            <input
+              type="text"
+              placeholder="Artist name"
+              value={addArtist}
+              onChange={e => setAddArtist(e.target.value)}
+              className="foryou-v2-add-form__input"
+              autoFocus
+            />
+          )}
+          <button type="submit" className="foryou-v2-add-form__submit">Add</button>
+        </form>
+      )}
+
+      {descByKicker[activeTabGroup.kicker] && (
+        <p className="foryou-v2-desc">{descByKicker[activeTabGroup.kicker]}</p>
+      )}
+
+      <div className="foryou-v2-grid" role="tabpanel">
+        {activeTabGroup.albums.map(album => {
+          const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
+          return (
+            <div
+              key={album.id}
+              className="foryou-v2-tile"
+              onClick={() => onSelectAlbum(album)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
+              onContextMenu={e => onCardContextMenu(e, album)}
+            >
+              <div className="foryou-v2-tile__art-wrap">
+                <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                <button
+                  className="foryou-v2-tile__play"
+                  onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                  aria-label={`Play ${album.name}`}
+                >
+                  <Play size={13} fill="currentColor" />
+                </button>
               </div>
+              <p className="foryou-v2-tile__name">{albumDisplayName(album.name)}</p>
+              {album.artist && <p className="foryou-v2-tile__artist">{album.artist}</p>}
             </div>
           );
         })}
@@ -662,14 +640,12 @@ interface FeaturedGenresSectionProps {
   onPlayGenre: (canonicalId: string, label?: string) => void;
 }
 
-function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
+function GenreChipsLine({ genres, onPlayGenre }: FeaturedGenresSectionProps) {
   if (genres.length === 0) return null;
   const ranked = genres.slice(0, 10);
   return (
-    <section className="home-section">
-      <div className="home-section__header">
-        <h2 className="home-section__title">Genres from recent plays</h2>
-      </div>
+    <>
+      <p className="genre-line__caption">Recent genres · click to start a radio</p>
       <p className="genre-line">
         {ranked.map((g, i) => (
           <span key={g.canonical_id}>
@@ -677,6 +653,7 @@ function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps)
               type="button"
               className={`genre-line__item genre-line__item--tier${Math.min(Math.floor(i / 3), 2)}`}
               onClick={() => onPlayGenre(g.canonical_id, g.name)}
+              title={`Start a radio from ${g.name}`}
             >
               {g.name}
             </button>
@@ -684,7 +661,7 @@ function FeaturedGenresLine({ genres, onPlayGenre }: FeaturedGenresSectionProps)
           </span>
         ))}
       </p>
-    </section>
+    </>
   );
 }
 
@@ -836,8 +813,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     [allAlbums, playedAlbumIds]
   );
 
-  const spotlight = useMemo(
-    () => buildSpotlight(
+  const spotlightCandidates = useMemo(
+    () => buildSpotlightCandidates(
       currentTrack?.artist ?? null,
       currentTrack?.albumId ?? null,
       onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id,
@@ -867,6 +844,14 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       : "You might also like";
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
+
+  const spotlightPicks = useMemo(
+    () => dedupePicks(
+      recommendedPick ? [recommendedPick, ...spotlightCandidates] : spotlightCandidates,
+      3
+    ),
+    [recommendedPick, spotlightCandidates]
+  );
 
   const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
 
@@ -923,8 +908,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayedWithArt, almostDone, customCategorySources]);
 
   const forYouGroups = useMemo(
-    () => buildForYouGroups(spotlight?.album.id ?? null, forYouSources, categoryConfig, forYouSeed, 4),
-    [spotlight, forYouSources, categoryConfig, forYouSeed]
+    () => buildForYouGroups(spotlightPicks.map(p => p.album.id), forYouSources, categoryConfig, forYouSeed, 6),
+    [spotlightPicks, forYouSources, categoryConfig, forYouSeed]
   );
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
@@ -1014,19 +999,28 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {(recommendedPick ?? spotlight) && (
-            <Spotlight
-              pick={(recommendedPick ?? spotlight)!}
-              serverWithCred={serverWithCredential}
-              onSelectAlbum={onSelectAlbum}
-              onSelectArtist={onSelectArtist}
-              playAlbum={play}
-              onAddToQueue={recommendedPick ? handleAddToQueue : undefined}
-              onCardContextMenu={openCardContextMenu}
-            />
+          {spotlightPicks.length > 0 && (
+            <section className="home-fusion">
+              <p className="home-fusion__label">Spotlight</p>
+              <div className="home-fusion__spotlights">
+                {spotlightPicks.map(pick => (
+                  <Spotlight
+                    key={pick.album.id}
+                    pick={pick}
+                    serverWithCred={serverWithCredential}
+                    onSelectAlbum={onSelectAlbum}
+                    onSelectArtist={onSelectArtist}
+                    playAlbum={play}
+                    onAddToQueue={handleAddToQueue}
+                    onCardContextMenu={openCardContextMenu}
+                  />
+                ))}
+              </div>
+              <div className="home-fusion__genres">
+                <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+              </div>
+            </section>
           )}
-
-          <FeaturedGenresLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
 
           <ForYouRail
             key={forYouSeed}

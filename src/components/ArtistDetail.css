@@ -6,72 +6,41 @@
   overflow-y: auto;
 }
 
-/* ── Hero ── */
+/* ── Hero — slim inline header, matches NowPlaying track-info row ── */
 .artist-hero {
-  position: relative;
-  overflow: hidden;
-  padding: 2.5rem 1.5rem 1.75rem;
-  min-height: 300px;
+  padding: 1.25rem 1.5rem 0.75rem;
+}
+
+.artist-hero-main {
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 0;
-}
-
-.artist-hero-bg {
-  position: absolute;
-  inset: -60px;
-  background-size: cover;
-  background-position: center;
-  filter: blur(80px) saturate(1.6) brightness(0.4);
-  pointer-events: none;
-  z-index: 0;
-}
-
-.artist-hero-wash {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 140% at 15% 0%, rgba(var(--artist-rgb), 0.5), transparent 60%),
-    linear-gradient(180deg, rgba(var(--artist-rgb), 0.26) 0%, var(--bg) 92%);
-}
-
-.artist-hero-header {
-  position: relative;
-  z-index: 2;
-  position: absolute;
-  top: 1rem;
-  left: 1.125rem;
-}
-
-.artist-hero-content {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: flex-end;
-  gap: 1.75rem;
+  align-items: center;
+  gap: 1.25rem;
   min-width: 0;
+  margin-top: 0.75rem;
 }
 
 .artist-hero-info {
   flex: 1;
   min-width: 0;
-  padding-bottom: 0.25rem;
 }
 
 .artist-hero-name {
-  font-size: clamp(1.9rem, 4vw, 2.75rem);
+  font-size: 1.4rem;
   font-weight: 800;
-  letter-spacing: -0.03em;
-  margin: 0 0 0.5rem;
-  line-height: 1.05;
-  color: #fff;
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.35rem;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.artist-hero-genres {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  margin: 0 0 0.6rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .artist-hero-meta-row {
@@ -79,12 +48,12 @@
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.9rem;
+  margin-bottom: 0.3rem;
 }
 
 .artist-hero-meta-row span {
   font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -96,44 +65,40 @@
 
 /* ── Back button ── */
 .artist-back-btn {
-  background: rgba(0, 0, 0, 0.38);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.8);
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-secondary);
   font-size: 0.8125rem;
-  padding: 0.3rem 0.8rem;
-  border-radius: 999px;
+  padding: 0.3rem 0.4rem;
+  margin: -0.3rem -0.4rem 0 -0.4rem;
+  border-radius: 6px;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  transition: background var(--motion-fast), color var(--motion-fast);
+  transition: color var(--motion-fast);
   line-height: 1.4;
 }
 
 .artist-back-btn:hover {
-  background: rgba(0, 0, 0, 0.58);
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary);
 }
 
-/* ── Portrait ── */
-.artist-portrait {
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
+/* ── Hero art ── */
+.artist-hero-art {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+  background-color: var(--bg-card);
 }
 
-.artist-portrait--fallback {
+.artist-hero-art--fallback {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 3rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  color: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
 }
 
 /* ── Badges / aliases ── */
@@ -145,7 +110,7 @@
   color: rgba(255, 255, 255, 0.5);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 0.1em 0.55em;
 }
 
@@ -164,11 +129,12 @@
   color: rgba(255, 255, 255, 0.6);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 0.15em 0.5em 0.15em 0.65em;
 }
 
 .artist-alias-remove {
+  position: relative;
   background: none;
   border: none;
   color: rgba(255, 255, 255, 0.35);
@@ -178,6 +144,12 @@
   line-height: 1;
   display: flex;
   align-items: center;
+}
+
+.artist-alias-remove::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
 }
 
 .artist-alias-remove:hover {
@@ -197,17 +169,17 @@
   color: rgba(255, 255, 255, 0.65);
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
+  border-radius: 10px;
   padding: 0.25rem 0.75rem;
 }
 
 /* ── Hero actions ── */
 .artist-play-btn {
-  background: var(--accent);
+  background: var(--artist-accent, color-mix(in oklab, var(--accent) 70%, black));
   color: #fff;
   border: none;
   box-shadow: none;
-  border-radius: 999px;
+  border-radius: 8px;
   padding: 0.45rem 1.15rem;
   font-weight: 600;
   font-size: 0.825rem;
@@ -215,34 +187,40 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  transition: background var(--motion-fast);
+  transition: filter var(--motion-fast);
 }
 
 .artist-play-btn:hover {
-  background: var(--accent-hover, #4a7ef0);
+  filter: brightness(0.85);
 }
 
 .artist-icon-btn {
+  position: relative;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.38);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.32);
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16) inset, 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   padding: 0;
-  backdrop-filter: blur(8px);
-  transition: background var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast);
+  transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
+}
+
+.artist-icon-btn::before {
+  content: "";
+  position: absolute;
+  inset: -6px;
 }
 
 .artist-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.58);
+  background: rgba(0, 0, 0, 0.5);
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28) inset, 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.22);
 }
 
 /* ── Body ── */
@@ -354,11 +332,14 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto 0.65rem;
-  font-size: 2rem;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.9);
   object-fit: cover;
   background-color: var(--bg-card);
+}
+
+.artist-similar-avatar--fallback {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-tertiary);
 }
 
 .artist-similar-card--owned .artist-similar-avatar {
@@ -599,27 +580,19 @@
 }
 
 .artist-tab-btn {
-  background: none;
-  border: none;
-  border-radius: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  color: var(--text-secondary);
   font-size: 0.9rem;
   font-weight: 600;
   padding: 0.6rem 0.1rem;
-  cursor: pointer;
-  box-shadow: none;
-  transition: color var(--motion-fast);
 }
 
-.artist-tab-btn:hover {
-  color: var(--text-primary);
+.artist-tab-btn:disabled {
+  color: var(--text-tertiary);
+  opacity: 0.5;
+  cursor: default;
 }
 
-.artist-tab-btn--active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
+.artist-tab-btn:disabled:hover {
+  color: var(--text-tertiary);
 }
 
 /* ── About ── */
@@ -655,7 +628,7 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   box-shadow: none;
-  border-radius: 999px;
+  border-radius: 6px;
   padding: 0.3rem 0.75rem;
   cursor: pointer;
   transition: color var(--motion-fast);

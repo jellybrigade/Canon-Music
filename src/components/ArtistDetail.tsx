@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Play, Shuffle, Radio, Disc, ExternalLink, GitMerge, MoreHorizontal, ChevronDown } from "lucide-react";
+import { Play, Shuffle, Radio, Disc, ExternalLink, GitMerge, MoreHorizontal, ChevronDown, Mic2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { getDb } from "../db";
 import { AlbumGrid } from "./AlbumGrid";
@@ -61,8 +62,7 @@ function useArtistTopTracks(artistName: string) {
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.artist = ?
             OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
-         ORDER BY t.track_number, t.title
-         LIMIT 30`,
+         ORDER BY t.track_number, t.title`,
         [artistName, artistName]
       );
     },
@@ -204,22 +204,6 @@ function timeAgo(unixSecs: number): string {
   return `${diffDays}d ago`;
 }
 
-const PORTRAIT_COLORS: [string, string][] = [
-  ["#396cd8", "57, 108, 216"],
-  ["#8b5cf6", "139, 92, 246"],
-  ["#ec4899", "236, 72, 153"],
-  ["#f59e0b", "245, 158, 11"],
-  ["#10b981", "16, 185, 129"],
-  ["#ef4444", "239, 68, 68"],
-  ["#06b6d4", "6, 182, 212"],
-];
-
-function artistColor(name: string): [string, string] {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = ((h * 31) + name.charCodeAt(i)) >>> 0;
-  return PORTRAIT_COLORS[h % PORTRAIT_COLORS.length] ?? PORTRAIT_COLORS[0]!;
-}
-
 function resolvePortraitUrl(enrichment: { lastfm_image_url: string | null; wikidata_image_url: string | null } | null): string | null {
   const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
   const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
@@ -307,7 +291,6 @@ interface SimilarArtistCardProps {
 function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
   const { data: enrichment } = useEnrichArtist(name);
   const portraitUrl = resolvePortraitUrl(enrichment);
-  const [simColor] = artistColor(name);
 
   return (
     <button
@@ -317,8 +300,8 @@ function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
       {portraitUrl ? (
         <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" />
       ) : (
-        <span className="artist-similar-avatar" style={{ backgroundColor: simColor }}>
-          {name.charAt(0).toUpperCase()}
+        <span className="artist-similar-avatar artist-similar-avatar--fallback">
+          <Mic2 size={28} strokeWidth={1.5} />
         </span>
       )}
       <span className="artist-similar-name">{name}</span>
@@ -341,6 +324,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const [lastfmOnlyExpanded, setLastfmOnlyExpanded] = useState(false);
   const [overflowMenuAnchor, setOverflowMenuAnchor] = useState<{ x: number; y: number } | null>(null);
   const [activeReleaseGroup, setActiveReleaseGroup] = useState<ReleaseGroup | null>(null);
+  const [similarTab, setSimilarTab] = useState<"in" | "out">("in");
 
   const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
   const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
@@ -382,13 +366,18 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
-  const topTracks = rawTracks && lastfmTitles
-    ? rankByLastfm(rawTracks, lastfmTitles)
-    : rawTracks ?? [];
-  const lovedTracks = topTracks.filter((t) => lovedTrackIds.has(t.id));
-  const lfmOnlyTracks = rawTracks && lastfmTitles
-    ? lastfmOnlyTracks(rawTracks, lastfmTitles)
-    : [];
+  const topTracks = useMemo(
+    () => (rawTracks && lastfmTitles ? rankByLastfm(rawTracks, lastfmTitles) : rawTracks ?? []),
+    [rawTracks, lastfmTitles]
+  );
+  const lovedTracks = useMemo(
+    () => topTracks.filter((t) => lovedTrackIds.has(t.id)),
+    [topTracks, lovedTrackIds]
+  );
+  const lfmOnlyTracks = useMemo(
+    () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
+    [rawTracks, lastfmTitles]
+  );
 
   const lastfmPlaycountMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -426,15 +415,30 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const portraitUrl = resolvePortraitUrl(enrichment);
 
-  const localBannerUrl = artist.artwork_url
-    ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 600)
-    : null;
-  const blurUrl = localBannerUrl ?? portraitUrl;
+  const [accentColor, setAccentColor] = useState<string | null>(null);
+  useEffect(() => {
+    setAccentColor(null);
+    if (!portraitUrl) return;
+    let cancelled = false;
+    void extractAccent(portraitUrl).then((color) => {
+      if (!cancelled) setAccentColor(color);
+    });
+    return () => { cancelled = true; };
+  }, [portraitUrl]);
 
   const similar: string[] = enrichment?.similar_json
     ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
     : [];
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
+  const similarInLibrary = useMemo(
+    () => similar.filter((name) => inLibrarySet?.has(name)),
+    [similar, inLibrarySet]
+  );
+  const similarNotInLibrary = useMemo(
+    () => similar.filter((name) => !inLibrarySet?.has(name)),
+    [similar, inLibrarySet]
+  );
+  const effectiveSimilarTab = similarInLibrary.length === 0 ? "out" : similarTab;
   const bio = enrichment?.bio ?? null;
 
   const metaItems: string[] = [
@@ -442,8 +446,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     enrichment?.playcount != null ? `${formatCount(enrichment.playcount)} scrobbles` : null,
     `${artist.album_count} ${artist.album_count === 1 ? "album" : "albums"} in library`,
   ].filter((x): x is string => x !== null);
-
-  const [color, colorRgb] = artistColor(artist.name);
 
   function buildTrackObj(track: TopTrack): CurrentTrack {
     const artworkRef = track.artwork_url ?? null;
@@ -504,37 +506,26 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     : defaultGroup;
   const currentGroupItems = albumGroups.find((g) => g.group === currentGroup)?.items ?? [];
 
+  const heroArt = portraitUrl ? (
+    <img className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" />
+  ) : (
+    <div className="artist-hero-art artist-hero-art--fallback">
+      <Mic2 size={38} strokeWidth={1.5} />
+    </div>
+  );
+
   return (
     <div className="artist-detail">
-      {/* ── Hero ── */}
-      <div className="artist-hero" style={{ ["--artist-rgb" as string]: colorRgb }}>
-        {blurUrl && (
-          <div className="artist-hero-bg" style={{ backgroundImage: `url(${blurUrl})` }} />
-        )}
-        <div className="artist-hero-wash" />
+      <div className="artist-hero">
+        <button className="artist-back-btn" onClick={onClose}>← Artists</button>
 
-        <div className="artist-hero-header">
-          <button className="artist-back-btn" onClick={onClose}>← Artists</button>
-        </div>
-
-        <div className="artist-hero-content">
-          {portraitUrl ? (
-            <img
-              className="artist-portrait"
-              src={portraitUrl}
-              alt={artist.name}
-              loading="lazy"
-            />
-          ) : (
-            <div className="artist-portrait artist-portrait--fallback" style={{ backgroundColor: color }}>
-              {artist.name.charAt(0).toUpperCase()}
-            </div>
-          )}
-
+        <div
+          className="artist-hero-main"
+          style={accentColor ? ({ "--artist-accent": accentColor } as React.CSSProperties) : undefined}
+        >
+          {heroArt}
           <div className="artist-hero-info">
-            <h1 className="artist-hero-name">
-              {artist.name}
-            </h1>
+            <h1 className="artist-hero-name">{artist.name}</h1>
             <div className="artist-hero-meta-row">
               {metaItems.map((item, i) => (
                 <span key={i}>{i > 0 ? `· ${item}` : item}</span>
@@ -548,13 +539,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                 </span>
               )}
             </div>
-
             {canonGenres.length > 0 && (
-              <div className="artist-genre-chips">
-                {canonGenres.map((tag) => (
-                  <span key={tag} className="artist-genre-chip">{tag}</span>
-                ))}
-              </div>
+              <p className="artist-hero-genres">{canonGenres.join(" / ")}</p>
             )}
 
             {aliases.length > 0 && (
@@ -596,10 +582,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                 className="artist-icon-btn"
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
-                  setOverflowMenuAnchor({ x: rect.left, y: rect.bottom + 4 });
+                  setOverflowMenuAnchor({ x: rect.left, y: rect.bottom });
                 }}
                 title="More"
-                aria-label="More options"
+                aria-label="More"
               >
                 <MoreHorizontal size={13} />
               </button>
@@ -608,7 +594,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         </div>
       </div>
 
-      {/* ── Body ── */}
       <div className="artist-body">
         {topTracks.length > 0 && (
           <section className="artist-section">
@@ -734,18 +719,31 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         {similar.length > 0 && (
           <section className="artist-section">
             <h2 className="artist-section-title">Fans also like</h2>
+            <div className="artist-tabs">
+              <button
+                className={`artist-tab-btn${effectiveSimilarTab === "in" ? " artist-tab-btn--active" : ""}`}
+                onClick={() => setSimilarTab("in")}
+                disabled={similarInLibrary.length === 0}
+              >
+                In library ({similarInLibrary.length})
+              </button>
+              <button
+                className={`artist-tab-btn${effectiveSimilarTab === "out" ? " artist-tab-btn--active" : ""}`}
+                onClick={() => setSimilarTab("out")}
+                disabled={similarNotInLibrary.length === 0}
+              >
+                Not in library ({similarNotInLibrary.length})
+              </button>
+            </div>
             <div className="artist-similar-strip">
-              {similar.map((name) => {
-                const owned = inLibrarySet?.has(name) ?? false;
-                return (
-                  <SimilarArtistCard
-                    key={name}
-                    name={name}
-                    owned={owned}
-                    onSelect={() => onSelectArtist?.(name)}
-                  />
-                );
-              })}
+              {(effectiveSimilarTab === "in" ? similarInLibrary : similarNotInLibrary).map((name) => (
+                <SimilarArtistCard
+                  key={name}
+                  name={name}
+                  owned={effectiveSimilarTab === "in"}
+                  onSelect={() => onSelectArtist?.(name)}
+                />
+              ))}
             </div>
           </section>
         )}

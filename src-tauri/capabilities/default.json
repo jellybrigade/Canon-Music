@@ -18,6 +18,7 @@
         { "url": "https://musicbrainz.org/**" },
         { "url": "https://*.musicbrainz.org/**" },
         { "url": "https://query.wikidata.org/**" },
+        { "url": "https://**" },
         { "url": "http://**" }
       ]
     }

@@ -56,29 +56,13 @@
 }
 
 .tags-tab-btn {
-  background: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--text-secondary);
   font: inherit;
   font-size: 0.9rem;
   padding: 12px 20px;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: color 0.1s;
   letter-spacing: 0.02em;
-}
-
-.tags-tab-btn:hover { color: var(--text-primary); }
-
-.tags-tab-btn--active {
-  color: var(--text-primary);
-  border-bottom-color: var(--accent);
 }
 
 .tags-tab-badge {

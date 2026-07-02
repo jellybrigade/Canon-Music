@@ -1,6 +1,10 @@
 // Canvas-based vibrant color extraction from cover art.
-// Uses a separate hidden image with crossOrigin="anonymous" — independent from the
-// display <img> so display always renders even if CORS extraction fails.
+// Fetches bytes via Tauri's Rust-backed fetch (bypasses browser CORS) and draws
+// from a same-origin blob: URL — external hosts (Wikidata/Fanart/TheAudioDB
+// portrait CDNs) rarely send Access-Control-Allow-Origin, which would otherwise
+// taint the canvas and silently fail extraction for every non-proxied image.
+
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 const CANVAS_SIZE = 32;
 const accentCache = new Map<string, string | null>();
@@ -75,61 +79,75 @@ function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: n
   return { h, s, l };
 }
 
-export function extractAccent(imageUrl: string): Promise<string | null> {
-  if (accentCache.has(imageUrl)) return Promise.resolve(accentCache.get(imageUrl)!);
+function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
-
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = CANVAS_SIZE;
-        canvas.height = CANVAS_SIZE;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) { accentCache.set(imageUrl, null); resolve(null); return; }
-
-        ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
-        const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-        let bestScore = -1;
-        let bestR = 0;
-        let bestG = 0;
-        let bestB = 0;
-
-        for (let i = 0; i < data.length; i += 4) {
-          const r = (data[i] ?? 0) / 255;
-          const g = (data[i + 1] ?? 0) / 255;
-          const b = (data[i + 2] ?? 0) / 255;
-
-          const { s, l } = rgbToHsl(r, g, b);
-
-          if (s < MIN_SATURATION) continue;
-          if (l < MIN_BRIGHTNESS || l > MAX_BRIGHTNESS) continue;
-
-          const score = s * (1 - Math.abs(l - 0.5) * 1.4);
-          if (score > bestScore) {
-            bestScore = score;
-            bestR = data[i] ?? 0;
-            bestG = data[i + 1] ?? 0;
-            bestB = data[i + 2] ?? 0;
-          }
-        }
-
-        if (bestScore < 0) { accentCache.set(imageUrl, null); resolve(null); return; }
-
-        const [fr, fg, fb] = ensureReadable(bestR, bestG, bestB);
-        const color = `rgb(${fr}, ${fg}, ${fb})`;
-        accentCache.set(imageUrl, color);
-        resolve(color);
-      } catch {
-        accentCache.set(imageUrl, null);
-        resolve(null);
-      }
-    };
-
-    img.onerror = () => { accentCache.set(imageUrl, null); resolve(null); };
-    img.src = imageUrl;
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
   });
+}
+
+function scoreFromImage(img: HTMLImageElement): string | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = CANVAS_SIZE;
+  canvas.height = CANVAS_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(img, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
+  const { data } = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+  let bestScore = -1;
+  let bestR = 0;
+  let bestG = 0;
+  let bestB = 0;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = (data[i] ?? 0) / 255;
+    const g = (data[i + 1] ?? 0) / 255;
+    const b = (data[i + 2] ?? 0) / 255;
+
+    const { s, l } = rgbToHsl(r, g, b);
+
+    if (s < MIN_SATURATION) continue;
+    if (l < MIN_BRIGHTNESS || l > MAX_BRIGHTNESS) continue;
+
+    const score = s * (1 - Math.abs(l - 0.5) * 1.4);
+    if (score > bestScore) {
+      bestScore = score;
+      bestR = data[i] ?? 0;
+      bestG = data[i + 1] ?? 0;
+      bestB = data[i + 2] ?? 0;
+    }
+  }
+
+  if (bestScore < 0) return null;
+  const [fr, fg, fb] = ensureReadable(bestR, bestG, bestB);
+  return `rgb(${fr}, ${fg}, ${fb})`;
+}
+
+export async function extractAccent(imageUrl: string): Promise<string | null> {
+  if (accentCache.has(imageUrl)) return accentCache.get(imageUrl)!;
+
+  let objectUrl: string | null = null;
+  try {
+    const res = await tauriFetch(imageUrl);
+    if (!res.ok) { accentCache.set(imageUrl, null); return null; }
+    const blob = await res.blob();
+    objectUrl = URL.createObjectURL(blob);
+
+    const img = await loadImage(objectUrl);
+    if (!img) { accentCache.set(imageUrl, null); return null; }
+
+    const color = scoreFromImage(img);
+    accentCache.set(imageUrl, color);
+    return color;
+  } catch {
+    accentCache.set(imageUrl, null);
+    return null;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 

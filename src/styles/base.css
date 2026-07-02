@@ -36,3 +36,33 @@ body,
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
+
+/* Shared underline-tab base (ref impl: .tags-tab-btn in TagsView.css, see coding-standards.md).
+   Component-specific tab classes (.tags-tab-btn, .artist-tab-btn, .foryou-v2-tab) layer
+   their own font-size/padding/spacing on top of this. */
+.tags-tab-btn,
+.artist-tab-btn,
+.foryou-v2-tab {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: color var(--motion-fast, 0.1s);
+}
+
+.tags-tab-btn:hover,
+.artist-tab-btn:hover,
+.foryou-v2-tab:hover {
+  color: var(--text-primary);
+}
+
+.tags-tab-btn--active,
+.artist-tab-btn--active,
+.foryou-v2-tab--active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent);
+}

@@ -4,9 +4,9 @@
 
 ### Tab navigation
 
-**Always use the underline style. Never use pills or backgrounds on active tabs.**
+**Always underline style. Never pills/backgrounds on active tabs.**
 
-Reference implementation: `src/components/TagsView.css` (`.tags-tab-btn` / `.tags-tab-btn--active`).
+Ref impl: `src/components/TagsView.css` (`.tags-tab-btn` / `.tags-tab-btn--active`).
 
 ```css
 /* ✓ correct */
@@ -37,5 +37,5 @@ Reference implementation: `src/components/TagsView.css` (`.tags-tab-btn` / `.tag
 }
 ```
 
-The tab bar sits above a `border-bottom: 1px solid var(--border)` rule on the container.
-Active tab's `margin-bottom: -1px` makes its 2px bottom border overlap and visually replace the container border.
+Tab bar sits above container's `border-bottom: 1px solid var(--border)`.
+Active tab `margin-bottom: -1px` → 2px bottom border overlap, replaces container border visually.
