@@ -1,8 +1,9 @@
 // Canvas-based vibrant color extraction from cover art.
-// Fetches bytes via Tauri's Rust-backed fetch (bypasses browser CORS) and draws
-// from a same-origin blob: URL — external hosts (Wikidata/Fanart/TheAudioDB
-// portrait CDNs) rarely send Access-Control-Allow-Origin, which would otherwise
-// taint the canvas and silently fail extraction for every non-proxied image.
+// Tries a direct <img crossOrigin="anonymous"> load first — works for the local
+// cover-art server and any host that sends Access-Control-Allow-Origin. Only
+// falls back to fetching bytes via Tauri's Rust-backed fetch and drawing from a
+// same-origin blob: URL when that taints the canvas — external hosts
+// (Wikidata/Fanart/TheAudioDB portrait CDNs) rarely send CORS headers.
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
@@ -127,27 +128,54 @@ function scoreFromImage(img: HTMLImageElement): string | null {
   return `rgb(${fr}, ${fg}, ${fb})`;
 }
 
-export async function extractAccent(imageUrl: string): Promise<string | null> {
-  if (accentCache.has(imageUrl)) return accentCache.get(imageUrl)!;
+function loadImageAnonymous(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
 
+async function extractViaProxyFetch(imageUrl: string): Promise<string | null> {
   let objectUrl: string | null = null;
   try {
     const res = await tauriFetch(imageUrl);
-    if (!res.ok) { accentCache.set(imageUrl, null); return null; }
+    if (!res.ok) return null;
     const blob = await res.blob();
     objectUrl = URL.createObjectURL(blob);
 
     const img = await loadImage(objectUrl);
-    if (!img) { accentCache.set(imageUrl, null); return null; }
+    if (!img) return null;
 
-    const color = scoreFromImage(img);
-    accentCache.set(imageUrl, color);
-    return color;
+    return scoreFromImage(img);
   } catch {
-    accentCache.set(imageUrl, null);
     return null;
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
+}
+
+export async function extractAccent(imageUrl: string): Promise<string | null> {
+  if (accentCache.has(imageUrl)) return accentCache.get(imageUrl)!;
+
+  let color: string | null = null;
+  const img = await loadImageAnonymous(imageUrl);
+  if (img) {
+    try {
+      color = scoreFromImage(img);
+    } catch {
+      // Canvas tainted by a CORS-less host (e.g. Wikidata/Fanart/TheAudioDB
+      // portraits) — fall back to fetching bytes through Tauri's Rust-backed
+      // fetch and reading from a same-origin blob: URL.
+      color = await extractViaProxyFetch(imageUrl);
+    }
+  } else {
+    color = await extractViaProxyFetch(imageUrl);
+  }
+
+  accentCache.set(imageUrl, color);
+  return color;
 }
 
