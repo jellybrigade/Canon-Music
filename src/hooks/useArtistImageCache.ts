@@ -5,8 +5,13 @@ import { getArtistImageUrl, isCoverServerReady } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { QK } from "../lib/query-keys";
 
-const BATCH_SIZE = 5;
-const BATCH_DELAY_MS = 100;
+// Wikimedia Commons rate-limits anonymous fetches aggressively; a batch of 5 concurrent
+// requests reliably trips 429s. Keep concurrency low and retry 429s with backoff instead
+// of counting a transient rate-limit as a permanent failure.
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 500;
+const MAX_RETRIES_429 = 3;
+const RETRY_BASE_DELAY_MS = 1000;
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -37,12 +42,22 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
   let url = "";
   try {
     url = getArtistImageUrl(portraitUrl);
-    const res = await fetch(url);
-    if (!res.ok) {
-      console.error(`Artist image cache: ${res.status} ${res.statusText} fetching ${artistName} from ${url}`);
+    let res: Response | null = null;
+    for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
+      res = await fetch(url);
+      if (res.status !== 429) break;
+      if (attempt === MAX_RETRIES_429) break;
+      const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
+      console.warn(`Artist image cache: 429 for ${artistName}, retrying in ${delay}ms`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+    if (!res!.ok) {
+      console.error(
+        `Artist image cache: ${res!.status} ${res!.statusText} fetching ${artistName} (source: ${portraitUrl}, proxy: ${url})`,
+      );
       return false;
     }
-    const blob = await res.blob();
+    const blob = await res!.blob();
     const dataUrl = await blobToDataUrl(blob);
     const db = await getDb();
     await db.execute(

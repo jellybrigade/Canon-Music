@@ -998,7 +998,11 @@ pub fn run() {
                 .spawn(move || {
                     let client = reqwest::blocking::Client::builder()
                         .timeout(Duration::from_secs(30))
-                        .user_agent(concat!("Canon/", env!("CARGO_PKG_VERSION")))
+                        .user_agent(concat!(
+                            "Canon/",
+                            env!("CARGO_PKG_VERSION"),
+                            " ( https://github.com/jellybrigade/canon )"
+                        ))
                         .build()
                         .expect("cover proxy http client failed");
                     for request in server.incoming_requests() {
@@ -1036,13 +1040,30 @@ pub fn run() {
                                                     cache.insert(source_url.clone(), (b.clone(), ct.clone()));
                                                     (b, ct)
                                                 }
-                                                Err(_) => {
+                                                Err(e) => {
+                                                    eprintln!(
+                                                        "artist-image proxy: failed reading body from {}: {}",
+                                                        source_url, e
+                                                    );
                                                     let _ = request.respond(cors_empty(502));
                                                     return;
                                                 }
                                             }
                                         }
-                                        _ => {
+                                        Ok(resp) => {
+                                            let status = resp.status();
+                                            eprintln!(
+                                                "artist-image proxy: upstream returned {} for {}",
+                                                status, source_url
+                                            );
+                                            let _ = request.respond(cors_empty(status.as_u16()));
+                                            return;
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "artist-image proxy: request to {} failed: {}",
+                                                source_url, e
+                                            );
                                             let _ = request.respond(cors_empty(502));
                                             return;
                                         }
