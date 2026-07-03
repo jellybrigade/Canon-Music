@@ -46,7 +46,7 @@ function trackAlbumRow(track: SearchTrack, serverId: string): AlbumRow {
 }
 
 function toArtistRow(artist: SearchArtist): ArtistRow {
-  return { name: artist.name, album_count: artist.album_count, artwork_url: null };
+  return { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null };
 }
 
 export function SearchResults({

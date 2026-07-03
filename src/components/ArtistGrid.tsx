@@ -2,7 +2,8 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
+import { resolvePortraitUrl } from "../lib/lastfm";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -91,9 +92,12 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                 }}
               >
                 {rowArtists.map((artist) => {
-                  const imgUrl = artist.artwork_url
-                    ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
-                    : null;
+                  const portraitUrl = resolvePortraitUrl(artist);
+                  const imgUrl = portraitUrl
+                    ? getArtistImageUrl(portraitUrl)
+                    : artist.artwork_url
+                      ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
+                      : null;
                   return (
                     <div
                       key={artist.name}

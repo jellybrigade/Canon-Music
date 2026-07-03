@@ -18,7 +18,7 @@ import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, resolvePortraitUrl } from "../lib/lastfm";
 import { shuffleArray } from "../lib/shuffle";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
@@ -268,14 +268,6 @@ function timeAgo(unixSecs: number): string {
   if (diffDays === 0) return "today";
   if (diffDays === 1) return "yesterday";
   return `${diffDays}d ago`;
-}
-
-function resolvePortraitUrl(enrichment: { lastfm_image_url: string | null; wikidata_image_url: string | null } | null): string | null {
-  const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
-  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
-    ? rawLastfmImage
-    : null;
-  return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
 }
 
 interface TrackRowProps {

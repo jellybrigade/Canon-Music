@@ -139,6 +139,18 @@ export interface LastfmArtistInfo {
 // Hash of Last.fm's "missing artist" placeholder image — reject it everywhere
 export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
+/** Picks the best available artist portrait, preferring Wikidata over Last.fm
+ * and filtering out Last.fm's generic placeholder image. */
+export function resolvePortraitUrl(
+  enrichment: { lastfm_image_url: string | null; wikidata_image_url: string | null } | null
+): string | null {
+  const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
+  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
+    ? rawLastfmImage
+    : null;
+  return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
+}
+
 function pickImage(images: Array<{ "#text": string; size: string }>): string | null {
   const filtered = images.filter(
     (img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER)

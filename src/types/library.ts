@@ -15,6 +15,8 @@ export interface ArtistRow {
   name: string;
   album_count: number;
   artwork_url: string | null;
+  lastfm_image_url: string | null;
+  wikidata_image_url: string | null;
 }
 
 export interface TrackRow {

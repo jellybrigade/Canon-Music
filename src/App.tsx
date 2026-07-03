@@ -142,8 +142,12 @@ function ArtistDetailRoute({
         `SELECT a.name, a.album_count,
            (SELECT al.artwork_url FROM albums al
             WHERE al.artist = a.name AND al.server_id = a.server_id AND al.artwork_url IS NOT NULL
-            LIMIT 1) AS artwork_url
-         FROM artists a WHERE a.name = ? AND a.server_id = ?`,
+            LIMIT 1) AS artwork_url,
+           ai.lastfm_image_url,
+           ai.wikidata_image_url
+         FROM artists a
+         LEFT JOIN artist_identity ai ON ai.artist_name = a.name
+         WHERE a.name = ? AND a.server_id = ?`,
         [name, serverId]
       );
       return rows[0] ?? null;
@@ -626,7 +630,7 @@ export default function App() {
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
           onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null } }); }}
+          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
           onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
           onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -681,7 +685,7 @@ export default function App() {
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
               onSelectAlbum={openAlbum}
-              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null }); }}
+              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -699,7 +703,7 @@ export default function App() {
           <AlbumDetailRoute
             serverWithCred={serverWithCred ?? null}
             onSelectAlbum={openAlbum}
-            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
             onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
             onClose={goBack}
             queueClass={queueClass}
@@ -709,7 +713,7 @@ export default function App() {
           <ArtistDetailRoute
             serverWithCred={serverWithCred ?? null}
             onSelectAlbum={openAlbum}
-            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
             onClose={goBack}
             queueClass={queueClass}
           />
@@ -722,7 +726,7 @@ export default function App() {
               const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
               if (rows[0]) openAlbum(rows[0]);
             }}
-            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+            onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
             onClose={goBack}
             queueClass={queueClass}
           />
@@ -733,7 +737,7 @@ export default function App() {
               <HomeView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={openAlbum}
-                onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null })}
+                onSelectArtist={(name) => openArtist({ name, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
                 onPlayTrack={(id) => { void handlePlayTrack(id); }}
@@ -751,7 +755,7 @@ export default function App() {
               <NowPlayingView
                 serverWithCredential={serverWithCred}
                 onSelectAlbum={(album) => openAlbum(album)}
-                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null })}
+                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
                 onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
                 onBack={goBack}
               />
@@ -912,7 +916,7 @@ export default function App() {
                   const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
                   if (rows[0]) openAlbum(rows[0]);
                 }}
-                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null })}
+                onSelectArtist={(artistName) => openArtist({ name: artistName, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
               />
             ) : <main className="content-main" />}
           </Suspense>
@@ -1010,7 +1014,7 @@ export default function App() {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
-          onSelectArtist={(name: string) => openArtist({ name, album_count: 0, artwork_url: null })}
+          onSelectArtist={(name: string) => openArtist({ name, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null })}
           onSelectAlbumById={async (albumId: string) => {
             const db = await getDb();
             const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
@@ -1024,7 +1028,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null }); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />
