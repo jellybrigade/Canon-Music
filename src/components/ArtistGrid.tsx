@@ -2,7 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
+import { resolvePortraitUrl } from "../lib/lastfm";
+import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -26,6 +28,8 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const { server, credential } = serverWithCredential;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
+  const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
+  const artistImageMap = useArtistImageMap();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -91,9 +95,14 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                 }}
               >
                 {rowArtists.map((artist) => {
-                  const imgUrl = artist.artwork_url
+                  const portraitUrl = resolvePortraitUrl(artist);
+                  const cachedImageUrl = artistImageMap.get(artist.name) ?? null;
+                  const fallbackUrl = artist.artwork_url
                     ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
                     : null;
+                  const imgUrl = portraitUrl && !failedPortraits.has(artist.name)
+                    ? (cachedImageUrl ?? getArtistImageUrl(portraitUrl))
+                    : fallbackUrl;
                   return (
                     <div
                       key={artist.name}
@@ -111,6 +120,11 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                           alt={artist.name}
                           decoding="async"
                           loading="lazy"
+                          onError={() => {
+                            if (portraitUrl) {
+                              setFailedPortraits((prev) => new Set(prev).add(artist.name));
+                            }
+                          }}
                         />
                       ) : (
                         <div className="album-art album-art--placeholder" />

@@ -17,8 +17,11 @@ export function useArtists() {
             SELECT al.artwork_url FROM albums al
             WHERE al.artist = a.name AND al.server_id = a.server_id AND al.artwork_url IS NOT NULL
             LIMIT 1
-          ) AS artwork_url
+          ) AS artwork_url,
+          ai.lastfm_image_url,
+          ai.wikidata_image_url
         FROM artists a
+        LEFT JOIN artist_identity ai ON ai.artist_name = a.name
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE
       `);

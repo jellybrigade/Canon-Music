@@ -139,6 +139,18 @@ export interface LastfmArtistInfo {
 // Hash of Last.fm's "missing artist" placeholder image — reject it everywhere
 export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
+/** Picks the best available artist portrait, preferring Wikidata over Last.fm
+ * and filtering out Last.fm's generic placeholder image. */
+export function resolvePortraitUrl(
+  enrichment: { lastfm_image_url: string | null; wikidata_image_url: string | null } | null
+): string | null {
+  const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
+  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
+    ? rawLastfmImage
+    : null;
+  return enrichment?.wikidata_image_url ?? lastfmPortraitUrl;
+}
+
 function pickImage(images: Array<{ "#text": string; size: string }>): string | null {
   const filtered = images.filter(
     (img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER)
@@ -433,6 +445,35 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
     }));
   } catch {
     return [];
+  }
+}
+
+// Last.fm has no per-album track lookup — same-titled tracks across releases (e.g.
+// clipping.'s many "Intro" tracks) share one canonical Last.fm track page. This returns
+// whichever album Last.fm considers representative for that page, used to guess which
+// local copy the playcount actually belongs to.
+export async function fetchTrackAlbum(artist: string, track: string): Promise<string | null> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "track.getInfo");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("track", track);
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      track?: { album?: { title?: string } };
+      error?: number;
+    };
+    if (data.error) return null;
+    return data.track?.album?.title ?? null;
+  } catch {
+    return null;
   }
 }
 

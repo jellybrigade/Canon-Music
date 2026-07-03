@@ -492,7 +492,6 @@
 .now-playing-up-next-title-row {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
   min-width: 0;
 }
 
@@ -524,10 +523,25 @@
   min-width: 0;
 }
 
+.now-playing-up-next-side {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .now-playing-up-next-duration {
   font-size: 0.6875rem;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.now-playing-up-next-loved-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
   flex-shrink: 0;
 }
 

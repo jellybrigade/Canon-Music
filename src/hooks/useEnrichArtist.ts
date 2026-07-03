@@ -205,7 +205,8 @@ async function enrichArtist(
   );
 }
 
-export function useEnrichArtist(artistName: string) {
+export function useEnrichArtist(artistName: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
   const staleDays = Number(staleDaysStr) || 30;
@@ -230,7 +231,7 @@ export function useEnrichArtist(artistName: string) {
   });
 
   useEffect(() => {
-    if (query.isLoading || !artistName) return;
+    if (!enabled || query.isLoading || !artistName) return;
     if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
     if (ranRef.current) return;
     ranRef.current = true;
@@ -245,7 +246,7 @@ export function useEnrichArtist(artistName: string) {
       .catch(() => { /* silent */ })
       .finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
-  }, [query.isLoading, query.data, artistName, staleDays, queryClient]);
+  }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !artistName) return;

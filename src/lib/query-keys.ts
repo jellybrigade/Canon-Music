@@ -76,6 +76,8 @@ export const QK = {
   confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
+  lastfmTrackMatch: (artistName: string, trackIds: string[]) =>
+    ["lastfm-track-match", artistName, trackIds] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>
     ["identify-artist", artistName, mbArtistId] as const,
 
@@ -105,4 +107,7 @@ export const QK = {
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
+
+  artistCovers: () => ["artist-covers"] as const,
+  artistCoversMissingCount: () => ["artist-covers", "missing-count"] as const,
 } as const;

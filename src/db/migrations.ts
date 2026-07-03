@@ -574,4 +574,14 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 44,
+    sql: `
+      CREATE TABLE IF NOT EXISTS artist_covers (
+        artist_name TEXT PRIMARY KEY,
+        data_url TEXT NOT NULL,
+        cached_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
