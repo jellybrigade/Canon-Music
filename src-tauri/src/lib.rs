@@ -951,112 +951,123 @@ pub fn run() {
     const MAX_COVER_CACHE_ENTRIES: usize = 500;
     let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
-    let cover_port;
-    {
-        use std::net::TcpListener;
-        let listener = TcpListener::bind("127.0.0.1:0").expect("cover server bind failed");
-        cover_port = listener.local_addr().expect("cover server addr").port();
-        let server = tiny_http::Server::from_listener(listener, None).expect("cover server init failed");
-        let cache_clone = Arc::clone(&cover_cache);
-        let config_clone = Arc::clone(&cover_proxy_config);
-        std::thread::Builder::new()
-            .name("cover-server".into())
-            .spawn(move || {
-                let client = reqwest::blocking::Client::builder()
-                    .timeout(Duration::from_secs(30))
-                    .build()
-                    .expect("cover proxy http client failed");
-                for request in server.incoming_requests() {
-                    let cache_req = Arc::clone(&cache_clone);
-                    let config_req = Arc::clone(&config_clone);
-                    let client_req = client.clone();
-                    std::thread::spawn(move || {
-                        let url = request.url().to_string();
-                        let path_query = match url.strip_prefix("/cover/") {
-                            Some(s) => s.to_string(),
-                            None => {
-                                let _ = request.respond(cors_empty(404));
-                                return;
-                            }
-                        };
-                        let (id, size) = if let Some(q) = path_query.find('?') {
-                            let id = path_query[..q].to_string();
-                            let size = path_query[q + 1..]
-                                .split('&')
-                                .find_map(|kv| {
-                                    let mut parts = kv.splitn(2, '=');
-                                    if parts.next() == Some("size") {
-                                        parts.next().and_then(|v| v.parse::<u32>().ok())
-                                    } else {
-                                        None
-                                    }
-                                })
-                                .unwrap_or(300);
-                            (id, size)
-                        } else {
-                            (path_query, 300u32)
-                        };
-                        let cache_key = format!("{id}:{size}");
-                        let cached = cache_req.lock().unwrap().get(&cache_key).cloned();
-                        let (bytes, content_type) = if let Some(entry) = cached {
-                            entry
-                        } else {
-                            let cfg = config_req.lock().unwrap().clone();
-                            match cfg {
+    // Non-fatal: if the loopback port can't be bound (exhaustion, sandboxing,
+    // platform firewall interference) cover art proxying is disabled but the
+    // app still opens, matching the audio-output degradation above.
+    let mut cover_port = 0u16;
+    let bound = std::net::TcpListener::bind("127.0.0.1:0").and_then(|listener| {
+        let port = listener.local_addr()?.port();
+        tiny_http::Server::from_listener(listener, None)
+            .map(|server| (server, port))
+            .map_err(std::io::Error::other)
+    });
+    match bound {
+        Ok((server, port)) => {
+            cover_port = port;
+            let cache_clone = Arc::clone(&cover_cache);
+            let config_clone = Arc::clone(&cover_proxy_config);
+            std::thread::Builder::new()
+                .name("cover-server".into())
+                .spawn(move || {
+                    let client = reqwest::blocking::Client::builder()
+                        .timeout(Duration::from_secs(30))
+                        .build()
+                        .expect("cover proxy http client failed");
+                    for request in server.incoming_requests() {
+                        let cache_req = Arc::clone(&cache_clone);
+                        let config_req = Arc::clone(&config_clone);
+                        let client_req = client.clone();
+                        std::thread::spawn(move || {
+                            let url = request.url().to_string();
+                            let path_query = match url.strip_prefix("/cover/") {
+                                Some(s) => s.to_string(),
                                 None => {
-                                    let _ = request.respond(cors_empty(503));
+                                    let _ = request.respond(cors_empty(404));
                                     return;
                                 }
-                                Some(cfg) => {
-                                    let fetch_url = format!(
-                                        "{}/rest/getCoverArt?{}&id={}&size={}",
-                                        cfg.base_url, cfg.auth_params, id, size
-                                    );
-                                    match client_req.get(&fetch_url).send() {
-                                        Ok(resp) if resp.status().is_success() => {
-                                            let ct = resp
-                                                .headers()
-                                                .get(reqwest::header::CONTENT_TYPE)
-                                                .and_then(|v| v.to_str().ok())
-                                                .unwrap_or("image/jpeg")
-                                                .to_string();
-                                            match resp.bytes() {
-                                                Ok(b) => {
-                                                    let b = b.to_vec();
-                                                    let mut cache = cache_req.lock().unwrap();
-                                                    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
-                                                        cache.clear();
+                            };
+                            let (id, size) = if let Some(q) = path_query.find('?') {
+                                let id = path_query[..q].to_string();
+                                let size = path_query[q + 1..]
+                                    .split('&')
+                                    .find_map(|kv| {
+                                        let mut parts = kv.splitn(2, '=');
+                                        if parts.next() == Some("size") {
+                                            parts.next().and_then(|v| v.parse::<u32>().ok())
+                                        } else {
+                                            None
+                                        }
+                                    })
+                                    .unwrap_or(300);
+                                (id, size)
+                            } else {
+                                (path_query, 300u32)
+                            };
+                            let cache_key = format!("{id}:{size}");
+                            let cached = cache_req.lock().unwrap().get(&cache_key).cloned();
+                            let (bytes, content_type) = if let Some(entry) = cached {
+                                entry
+                            } else {
+                                let cfg = config_req.lock().unwrap().clone();
+                                match cfg {
+                                    None => {
+                                        let _ = request.respond(cors_empty(503));
+                                        return;
+                                    }
+                                    Some(cfg) => {
+                                        let fetch_url = format!(
+                                            "{}/rest/getCoverArt?{}&id={}&size={}",
+                                            cfg.base_url, cfg.auth_params, id, size
+                                        );
+                                        match client_req.get(&fetch_url).send() {
+                                            Ok(resp) if resp.status().is_success() => {
+                                                let ct = resp
+                                                    .headers()
+                                                    .get(reqwest::header::CONTENT_TYPE)
+                                                    .and_then(|v| v.to_str().ok())
+                                                    .unwrap_or("image/jpeg")
+                                                    .to_string();
+                                                match resp.bytes() {
+                                                    Ok(b) => {
+                                                        let b = b.to_vec();
+                                                        let mut cache = cache_req.lock().unwrap();
+                                                        if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                                            cache.clear();
+                                                        }
+                                                        cache.insert(cache_key, (b.clone(), ct.clone()));
+                                                        (b, ct)
                                                     }
-                                                    cache.insert(cache_key, (b.clone(), ct.clone()));
-                                                    (b, ct)
-                                                }
-                                                Err(_) => {
-                                                    let _ = request.respond(cors_empty(502));
-                                                    return;
+                                                    Err(_) => {
+                                                        let _ = request.respond(cors_empty(502));
+                                                        return;
+                                                    }
                                                 }
                                             }
-                                        }
-                                        _ => {
-                                            let _ = request.respond(cors_empty(502));
-                                            return;
+                                            _ => {
+                                                let _ = request.respond(cors_empty(502));
+                                                return;
+                                            }
                                         }
                                     }
                                 }
+                            };
+                            let mut resp = tiny_http::Response::from_data(bytes);
+                            if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
+                                resp = resp.with_header(h);
                             }
-                        };
-                        let mut resp = tiny_http::Response::from_data(bytes);
-                        if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
-                            resp = resp.with_header(h);
-                        }
-                        if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
-                            resp = resp.with_header(h);
-                        }
-                        resp = resp.with_header(cors_header());
-                        let _ = request.respond(resp);
-                    });
-                }
-            })
-            .expect("Failed to spawn cover server thread");
+                            if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
+                                resp = resp.with_header(h);
+                            }
+                            resp = resp.with_header(cors_header());
+                            let _ = request.respond(resp);
+                        });
+                    }
+                })
+                .expect("Failed to spawn cover server thread");
+        }
+        Err(e) => {
+            eprintln!("Cover art proxy server unavailable: {e}");
+        }
     }
 
     tauri::Builder::default()
