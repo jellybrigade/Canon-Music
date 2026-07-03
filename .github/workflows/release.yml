@@ -102,10 +102,12 @@ jobs:
           releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
+          includeUpdaterJson: false
           args: ${{ matrix.args }}
 
   finalize:
     needs: release
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
