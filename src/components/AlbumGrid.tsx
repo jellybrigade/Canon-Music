@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -237,7 +237,10 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   }, [cols, rowHeight, rows.length, virtualizer]);
 
   return (
-    <div className="album-grid-wrapper">
+    <div
+      className="album-grid-wrapper"
+      style={{ "--album-grid-trailing-space": `${PADDING + ROW_GAP}px` } as CSSProperties}
+    >
       <div ref={containerRef} className="album-grid-scroller">
         {albums.length === 0 ? (
           <p className="empty-state">{emptyMessage ?? "No albums"}</p>

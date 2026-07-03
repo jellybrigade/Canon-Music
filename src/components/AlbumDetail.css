@@ -977,5 +977,9 @@
 
 .album-related-section .album-grid-wrapper {
   flex: none;
-  height: 340px;
+  /* No height/max-height cap: album count is bounded (RELATED_SHELF_LIMIT in
+     AlbumDetail.tsx) so this never scrolls/clips. Crops the virtualizer's
+     built-in trailing space (--album-grid-trailing-space, set in
+     AlbumGrid.tsx) after the last row since there's no next row to pad for. */
+  margin-bottom: calc(-1 * var(--album-grid-trailing-space, 44px));
 }
