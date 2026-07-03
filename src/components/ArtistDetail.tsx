@@ -441,7 +441,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, lastfmTitles);
   const topTracks = useMemo(() => {
     const source = matchedTracks ?? rawTracks ?? [];
-    return [...source].sort((a, b) => (a.lastfmRank ?? Infinity) - (b.lastfmRank ?? Infinity));
+    const rank = (t: TopTrack) => t.lastfmPlaycount ?? -1;
+    return [...source].sort((a, b) => {
+      const byPlaycount = rank(b) - rank(a);
+      if (byPlaycount !== 0) return byPlaycount;
+      return (a.lastfmRank ?? Infinity) - (b.lastfmRank ?? Infinity);
+    });
   }, [matchedTracks, rawTracks]);
   const lovedTracks = useMemo(
     () => topTracks.filter((t) => lovedTrackIds.has(t.id)),
