@@ -6,6 +6,8 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import type { RadioMode } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
+import { resolvePortraitUrl } from "../lib/lastfm";
+import { useArtistImageMap, resolveArtistImageUrl } from "../hooks/useArtistImageCache";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./SearchResults.css";
@@ -46,7 +48,13 @@ function trackAlbumRow(track: SearchTrack, serverId: string): AlbumRow {
 }
 
 function toArtistRow(artist: SearchArtist): ArtistRow {
-  return { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null };
+  return {
+    name: artist.name,
+    album_count: artist.album_count,
+    artwork_url: null,
+    lastfm_image_url: artist.lastfm_image_url,
+    wikidata_image_url: artist.wikidata_image_url,
+  };
 }
 
 export function SearchResults({
@@ -62,6 +70,7 @@ export function SearchResults({
 }: Props) {
   const { server, credential } = serverWithCredential;
   const albumDisplayName = useAlbumDisplayName();
+  const artistImageMap = useArtistImageMap();
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllTracks, setShowAllTracks] = useState(false);
@@ -97,7 +106,15 @@ export function SearchResults({
                 onContextMenu={(e) => { e.preventDefault(); setArtistMenu({ x: e.clientX, y: e.clientY, artist }); }}
               >
                 <div className="search-artist-icon">
-                  <User size={16} />
+                  {(() => {
+                    const portraitUrl = resolvePortraitUrl(artist);
+                    const imgUrl = resolveArtistImageUrl(artistImageMap, artist.name, portraitUrl);
+                    return imgUrl ? (
+                      <img src={imgUrl} alt={artist.name} loading="lazy" />
+                    ) : (
+                      <User size={16} />
+                    );
+                  })()}
                 </div>
                 <div className="search-artist-info">
                   <span className="search-item-primary">{artist.name}</span>
