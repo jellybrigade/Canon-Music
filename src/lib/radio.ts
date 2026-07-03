@@ -145,32 +145,38 @@ async function getCuratedCandidates(
 
   if (!cteParts) return [];
 
-  type ScoredRow = TrackRow & { tree_score: number };
+  // sum_score + tag_count kept separate so raw tag-count can't inflate score —
+  // heavily-tagged (usually mainstream) tracks otherwise dominate purely by tag volume.
+  type ScoredRow = TrackRow & { sum_score: number; tag_count: number };
 
   const rows = await db.select<ScoredRow[]>(
     `WITH seed_weights(canonical_id, weight) AS (
        VALUES ${cteParts}
      )
      SELECT ${TRACK_PROJECTION},
-            SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS tree_score
+            SUM(sw.weight * CASE tt.kind WHEN 'mood' THEN ${MOOD_WEIGHT} ELSE 1.0 END) AS sum_score,
+            COUNT(DISTINCT tt.canonical_id) AS tag_count
      FROM tracks t
      JOIN track_tags tt ON tt.track_id = t.id
      JOIN seed_weights sw ON sw.canonical_id = tt.canonical_id
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY tree_score DESC
+     ORDER BY sum_score DESC
      LIMIT ?`,
     [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
   );
 
-  const maxTree = rows.length > 0 ? Math.max(...rows.map((r) => r.tree_score)) : 1;
+  // Dampen by sqrt(tag_count): rewards genuine multi-tag match without letting
+  // tag-count alone (proxy for how thoroughly an artist got tagged) dominate.
+  const dampenedScore = (r: ScoredRow) => r.sum_score / Math.sqrt(r.tag_count);
+  const maxTree = rows.length > 0 ? Math.max(...rows.map(dampenedScore)) : 1;
 
   const { tagW, trackCfW, artistCfW } = scaleWeights(scale);
   return rows
     .filter((r) => !excludeIds.has(r.id))
     .map((r) => {
-      const normalizedTree = maxTree > 0 ? r.tree_score / maxTree : 0;
+      const normalizedTree = maxTree > 0 ? dampenedScore(r) / maxTree : 0;
       const artistKey = (r.artist ?? "").toLowerCase();
       const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
       const artistCf = artistSimilarity.get(artistKey) ?? 0;
