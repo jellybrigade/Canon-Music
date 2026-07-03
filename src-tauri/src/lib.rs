@@ -1141,6 +1141,21 @@ pub fn run() {
                 .build(app)?;
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
+
+            // WebKitGTK only animates kinetic scroll for touch/touchpad input by
+            // default; mouse-wheel scroll is stepped and feels choppy. Opt into
+            // the engine's smooth-scrolling mode for wheel input too.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|webview| {
+                    use webkit2gtk::WebViewExt;
+                    if let Some(settings) = webview.inner().settings() {
+                        use webkit2gtk::SettingsExt;
+                        settings.set_enable_smooth_scrolling(true);
+                    }
+                });
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {

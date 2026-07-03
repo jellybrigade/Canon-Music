@@ -567,6 +567,7 @@ dependencies = [
  "time",
  "tiny_http",
  "tokio",
+ "webkit2gtk",
 ]
 
 [[package]]
