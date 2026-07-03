@@ -6,7 +6,18 @@
 
 /* ── Greeting ─────────────────────────────────────────────────────────────── */
 
+/* Wraps the greeting header + spotlight + recent genres. The header sticks to
+   the top while this region scrolls past, then un-sticks (scrolls away with
+   the rest) once the region's own bottom edge reaches the top of the view —
+   normal `position: sticky` containment, no scroll-listener needed. */
+.home-sticky-region {
+  position: relative;
+}
+
 .home-greeting {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   padding: 36px 28px 20px;
   display: flex;
   align-items: center;

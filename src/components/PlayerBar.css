@@ -294,6 +294,19 @@
   flex-shrink: 0;
 }
 
+.player-volume-mute-btn {
+  padding: 0.2em;
+  opacity: 1;
+}
+
+.player-volume-mute-btn .player-volume-icon {
+  opacity: 0.5;
+}
+
+.player-volume-mute-btn:hover:not(:disabled) .player-volume-icon {
+  opacity: 1;
+}
+
 .player-volume-slider {
   width: 80px;
   accent-color: var(--accent);

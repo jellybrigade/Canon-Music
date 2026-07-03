@@ -3,7 +3,7 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, ChevronLeft, RefreshCw,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw,
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -156,7 +156,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const {
     currentTrack, isPlaying, isLoading, elapsed, volume,
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
-    pause, resume, next, prev, seek, setVolume,
+    pause, resume, next, prev, seek, setVolume, toggleMute,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
     addToQueue, playNext, audioFormat, radioActive,
   } = usePlayerStore();
@@ -544,6 +544,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       step={0.01}
                       value={volume}
                       onChange={(e) => void setVolume(parseFloat(e.target.value))}
+                      onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
                       aria-label="Volume"
                     />
                   </div>
@@ -551,9 +552,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 <button
                   className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
                   onClick={() => setVolumeOpen((o) => !o)}
+                  onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
                   title="Volume"
                 >
-                  <Volume2 size={18} />
+                  {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
                 </button>
               </div>
             </div>

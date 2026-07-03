@@ -7,14 +7,27 @@ import { getDb } from "../db";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
-const MAX_PER_ARTIST = 3;
-const ALBUM_COOLDOWN = 3; // min tracks between two picks from same album
 
-function scaledPickParams(scale: number): { candidateSample: number; topPickWindow: number } {
+// Artist/album repetition is penalized on a decay curve (recently played = near-zero
+// multiplier, fully recovered after N radio picks) rather than a hard cap — avoids
+// walls that starve thin-library genres and avoids the cap "resetting" as the queue scrolls.
+const ARTIST_DECAY_TRACKS = 18;
+const ARTIST_DECAY_TRACKS_NARROW = 8; // similar-artists: pool is naturally few artists
+const ALBUM_DECAY_TRACKS = 8;
+
+// same-genre should stay tight to genre fidelity; curated is explicitly the "expand a bit" mode.
+const MODE_WINDOW_MULTIPLIER: Partial<Record<string, number>> = {
+  "same-genre": 0.6,
+  curated: 1.0,
+  "similar-artists": 0.8,
+};
+
+function scaledPickParams(scale: number, mode: string): { candidateSample: number; topPickWindow: number } {
   const s = Math.max(0, Math.min(1, scale));
+  const mult = MODE_WINDOW_MULTIPLIER[mode] ?? 1.0;
   return {
     candidateSample: Math.round(30 + 50 * s),
-    topPickWindow:   Math.round(10 + 20 * s),
+    topPickWindow: Math.max(1, Math.round((10 + 20 * s) * mult)),
   };
 }
 
@@ -46,6 +59,32 @@ export function useRadio() {
   const { currentTrack, queue, queueIndex, radioActive, radioMode, radioSimilarityScale, addToQueue, streamUrlFor, isPlaying, isLoading, playFromQueueIndex } = usePlayerStore();
   const fillingRef = useRef(false);
 
+  // Session-scoped repetition memory: reset whenever a *new* radio session starts
+  // (false -> true transition), so decay/exclusion carries across the whole session
+  // rather than resetting each lookahead fill.
+  const sessionCounterRef = useRef(0);
+  const artistLastPlayedRef = useRef(new Map<string, number>());
+  const albumLastPlayedRef = useRef(new Map<string, number>());
+  const playedTrackIdsRef = useRef(new Set<string>());
+  const wasRadioActiveRef = useRef(false);
+
+  useEffect(() => {
+    if (radioActive && !wasRadioActiveRef.current) {
+      sessionCounterRef.current = 0;
+      artistLastPlayedRef.current = new Map();
+      albumLastPlayedRef.current = new Map();
+      playedTrackIdsRef.current = new Set();
+    }
+    wasRadioActiveRef.current = radioActive;
+  }, [radioActive]);
+
+  function recordPick(artist: string | null, albumId: string | null | undefined, trackId: string) {
+    sessionCounterRef.current += 1;
+    if (artist) artistLastPlayedRef.current.set(artist.toLowerCase(), sessionCounterRef.current);
+    if (albumId) albumLastPlayedRef.current.set(albumId, sessionCounterRef.current);
+    playedTrackIdsRef.current.add(trackId);
+  }
+
   useEffect(() => {
     if (!radioActive || !currentTrack) return;
 
@@ -61,6 +100,7 @@ export function useRadio() {
         const excludeIds = new Set<string>(queue.map((t: CurrentTrack) => t.id));
         const recentIds = await getRecentlyPlayedIds(serverId);
         for (const id of recentIds) excludeIds.add(id);
+        for (const id of playedTrackIdsRef.current) excludeIds.add(id);
 
         const needsSimilarArtists = radioMode === "curated" || radioMode === "similar-artists";
         const [similarArtistsFull, similarTracks] = await Promise.all([
@@ -117,34 +157,31 @@ export function useRadio() {
           const wasAtEnd2 = !isPlaying && !isLoading && queueIndex === queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
           if (wasAtEnd2) void playFromQueueIndex(queue.length);
+          recordPick(track2.artist, track2.albumId, track2.id);
           return;
         }
 
-        // For all other modes, enforce per-artist cap and album cooldown over the lookahead window.
+        // For all other modes, apply a decaying repetition penalty instead of a hard cap —
+        // recently-played artist/album score near zero, recovering fully after N picks.
+        // Soft penalty (vs. hard filter) avoids dead ends when a genre's pool is thin,
+        // and persists across the whole radio session instead of resetting per fill cycle.
         let capped = candidates;
         if (!UNCAPPED_MODES.has(radioMode)) {
-          const upcoming = queue.slice(queueIndex);
-          const artistCounts = new Map<string, number>();
-          for (const t of upcoming) {
-            if (t.artist) {
-              const k = t.artist.toLowerCase();
-              artistCounts.set(k, (artistCounts.get(k) ?? 0) + 1);
-            }
-          }
-          // Block albums that appear in the last ALBUM_COOLDOWN upcoming tracks
-          const recentTail = queue.slice(Math.max(queueIndex, queue.length - ALBUM_COOLDOWN));
-          const recentAlbumIds = new Set(recentTail.map(t => t.albumId).filter((id): id is string => !!id));
-
-          const filtered = candidates.filter(c => {
-            const ak = (c.artist ?? "").toLowerCase();
-            if (ak && (artistCounts.get(ak) ?? 0) >= MAX_PER_ARTIST) return false;
-            if (c.albumId && recentAlbumIds.has(c.albumId)) return false;
-            return true;
-          });
-          capped = filtered.length > 0 ? filtered : candidates;
+          const artistDecay = radioMode === "similar-artists" ? ARTIST_DECAY_TRACKS_NARROW : ARTIST_DECAY_TRACKS;
+          const counter = sessionCounterRef.current;
+          capped = candidates
+            .map((c) => {
+              const ak = (c.artist ?? "").toLowerCase();
+              const artistGap = ak ? counter - (artistLastPlayedRef.current.get(ak) ?? -Infinity) : Infinity;
+              const albumGap = c.albumId ? counter - (albumLastPlayedRef.current.get(c.albumId) ?? -Infinity) : Infinity;
+              const artistMult = Math.max(0, Math.min(1, artistGap / artistDecay));
+              const albumMult = Math.max(0, Math.min(1, albumGap / ALBUM_DECAY_TRACKS));
+              return { ...c, score: c.score * artistMult * albumMult };
+            })
+            .sort((a, b) => b.score - a.score);
         }
 
-        const { candidateSample, topPickWindow } = scaledPickParams(radioSimilarityScale);
+        const { candidateSample, topPickWindow } = scaledPickParams(radioSimilarityScale, radioMode);
         const pick = pickFromTop(capped, candidateSample, topPickWindow);
 
         if (!pick) return;
@@ -178,6 +215,7 @@ export function useRadio() {
         const wasAtEnd = !isPlaying && !isLoading && queueIndex === queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
         if (wasAtEnd) void playFromQueueIndex(queue.length);
+        recordPick(track.artist, track.albumId, track.id);
       } finally {
         fillingRef.current = false;
       }

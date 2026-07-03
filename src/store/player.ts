@@ -65,6 +65,10 @@ let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 // Stored outside the store so setVolume can access the latest value without a selector.
 let currentReplayGainLinear = 1.0;
 
+// Volume to restore on unmute. Lives outside the store (like currentReplayGainLinear above) so
+// every mute button (PlayerBar, NowPlayingView) shares one source of truth instead of drifting.
+let preMuteVolume = 1.0;
+
 function computeReplayGainLinear(
   rg: CurrentTrack["replayGain"],
   mode: ReplayGainMode,
@@ -180,6 +184,7 @@ interface PlayerState {
   castDevice: DlnaRenderer | null;
   availableRenderers: DlnaRenderer[];
   isScanningRenderers: boolean;
+  rendererScanError: string | null;
   scanRenderers: () => Promise<void>;
   setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
 
@@ -191,6 +196,7 @@ interface PlayerState {
   resume: () => void;
   stop: () => void;
   setVolume: (volume: number) => Promise<void>;
+  toggleMute: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
   setSpeed: (speed: number) => Promise<void>;
   toggleRepeat: () => Promise<void>;
@@ -688,14 +694,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     castDevice: null,
     availableRenderers: [],
     isScanningRenderers: false,
+    rendererScanError: null,
 
     scanRenderers: async () => {
-      set({ isScanningRenderers: true });
+      set({ isScanningRenderers: true, rendererScanError: null });
       try {
         const renderers = await discoverRenderers(4000);
         set({ availableRenderers: renderers });
       } catch (e) {
         console.error("DLNA discovery failed:", e);
+        set({ availableRenderers: [], rendererScanError: String(e) });
       } finally {
         set({ isScanningRenderers: false });
       }
@@ -992,6 +1000,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist volume:", e);
+      }
+    },
+
+    toggleMute: async () => {
+      const { volume, setVolume } = get();
+      if (volume > 0) {
+        preMuteVolume = volume;
+        await setVolume(0);
+      } else {
+        await setVolume(preMuteVolume || 1);
       }
     },
 
