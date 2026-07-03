@@ -18,7 +18,7 @@ import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { fetchArtistTopTracks, fetchArtistTopAlbums, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
+import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
 import { shuffleArray } from "../lib/shuffle";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
@@ -48,6 +48,9 @@ interface TopTrack {
   album_id: string | null;
   artwork_url: string | null;
   play_count: number | null;
+  lastfmRank?: number;
+  lastfmPlaycount?: number;
+  lastfmCombined?: boolean;
 }
 
 function useArtistTopTracks(artistName: string) {
@@ -176,13 +179,76 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function rankByLastfm(tracks: TopTrack[], lastfmTracks: LastfmTopTrack[]): TopTrack[] {
-  const rankMap = new Map<string, number>();
-  lastfmTracks.forEach(({ name }, i) => rankMap.set(normalizeTrackTitle(name), i));
-  return [...tracks].sort((a, b) => {
-    const ra = rankMap.get(normalizeTrackTitle(a.title)) ?? Infinity;
-    const rb = rankMap.get(normalizeTrackTitle(b.title)) ?? Infinity;
-    return ra - rb;
+// Last.fm's per-title playcount can't distinguish which local copy it belongs to when
+// several local tracks share a title (e.g. clipping.'s many "Intro" tracks) — Last.fm's
+// own chart merges those into one page. For an ambiguous title, ask Last.fm which album
+// it considers representative and match that against the local copies; if nothing matches,
+// fall back to whichever local copy has the most local plays. Either way the winner is
+// marked `lastfmCombined` since the number is known to span more than this one track.
+async function matchLastfmTracks(
+  tracks: TopTrack[],
+  lastfmTracks: LastfmTopTrack[],
+  artistName: string
+): Promise<TopTrack[]> {
+  const lastfmByTitle = new Map<string, { rank: number; playcount: number }>();
+  lastfmTracks.forEach((t, i) => {
+    const key = normalizeTrackTitle(t.name);
+    if (!lastfmByTitle.has(key)) lastfmByTitle.set(key, { rank: i, playcount: t.playcount });
+  });
+
+  const groups = new Map<string, TopTrack[]>();
+  for (const t of tracks) {
+    const key = normalizeTrackTitle(t.title);
+    const group = groups.get(key);
+    if (group) group.push(t);
+    else groups.set(key, [t]);
+  }
+
+  const result: TopTrack[] = tracks.map((t) => ({ ...t }));
+  const byId = new Map(result.map((t) => [t.id, t]));
+
+  for (const [key, group] of groups) {
+    const lfm = lastfmByTitle.get(key);
+    if (!lfm) continue;
+
+    const [first, ...rest] = group;
+    if (!first) continue;
+
+    if (rest.length === 0) {
+      const winner = byId.get(first.id)!;
+      winner.lastfmRank = lfm.rank;
+      winner.lastfmPlaycount = lfm.playcount;
+      continue;
+    }
+
+    let winner: TopTrack | undefined;
+    const repAlbum = await fetchTrackAlbum(artistName, first.title);
+    if (repAlbum) {
+      const repNorm = normalizeTrackTitle(repAlbum);
+      winner = group.find((t) => t.album_name && normalizeTrackTitle(t.album_name) === repNorm);
+    }
+    winner ??= [...group].sort((a, b) => (b.play_count ?? 0) - (a.play_count ?? 0))[0];
+    if (!winner) continue;
+
+    const winnerEnriched = byId.get(winner.id)!;
+    winnerEnriched.lastfmRank = lfm.rank;
+    winnerEnriched.lastfmPlaycount = lfm.playcount;
+    winnerEnriched.lastfmCombined = true;
+  }
+
+  return result;
+}
+
+function useMatchedTracks(
+  artistName: string,
+  tracks: TopTrack[] | undefined,
+  lastfmTracks: LastfmTopTrack[] | undefined
+) {
+  return useQuery({
+    queryKey: QK.lastfmTrackMatch(artistName, (tracks ?? []).map((t) => t.id)),
+    queryFn: () => matchLastfmTracks(tracks ?? [], lastfmTracks ?? [], artistName),
+    enabled: !!tracks && !!lastfmTracks,
+    staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -221,11 +287,12 @@ interface TrackRowProps {
   credential: NavidromeCredential;
   onPlay: (track: TopTrack) => void;
   lastfmPlaycount?: number;
+  lastfmCombined?: boolean;
   onAlbumClick?: (albumId: string) => void;
   onContextMenu?: (e: React.MouseEvent, track: TopTrack) => void;
 }
 
-function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, onAlbumClick, onContextMenu }: TrackRowProps) {
+function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, lastfmCombined, onAlbumClick, onContextMenu }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
   const artUrl = track.artwork_url
@@ -272,7 +339,12 @@ function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, on
         ) : null}
       </div>
       {showPlaycount ? (
-        <span className="artist-track-playcount">{formatCount(lastfmPlaycount!)} plays</span>
+        <span
+          className="artist-track-playcount"
+          title={lastfmCombined ? `Combined across multiple tracks named "${track.title}" by ${track.artist ?? "this artist"}` : undefined}
+        >
+          {formatCount(lastfmPlaycount!)} plays{lastfmCombined ? " · combined" : ""}
+        </span>
       ) : showLibraryCount ? (
         <span className="artist-track-playcount">{track.play_count}×</span>
       ) : (
@@ -366,10 +438,11 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TopTrack } | null>(null);
 
-  const topTracks = useMemo(
-    () => (rawTracks && lastfmTitles ? rankByLastfm(rawTracks, lastfmTitles) : rawTracks ?? []),
-    [rawTracks, lastfmTitles]
-  );
+  const { data: matchedTracks } = useMatchedTracks(lastfmName, rawTracks, lastfmTitles);
+  const topTracks = useMemo(() => {
+    const source = matchedTracks ?? rawTracks ?? [];
+    return [...source].sort((a, b) => (a.lastfmRank ?? Infinity) - (b.lastfmRank ?? Infinity));
+  }, [matchedTracks, rawTracks]);
   const lovedTracks = useMemo(
     () => topTracks.filter((t) => lovedTrackIds.has(t.id)),
     [topTracks, lovedTrackIds]
@@ -378,12 +451,6 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
     [rawTracks, lastfmTitles]
   );
-
-  const lastfmPlaycountMap = useMemo(() => {
-    const m = new Map<string, number>();
-    (lastfmTitles ?? []).forEach((t) => m.set(normalizeTrackTitle(t.name), t.playcount));
-    return m;
-  }, [lastfmTitles]);
 
   const popularTracks = topTracks.slice(0, popularExpanded ? POPULAR_TRACKS_MAX : POPULAR_TRACKS_MIN);
 
@@ -611,7 +678,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                       server={server}
                       credential={credential}
                       onPlay={handlePlayTrack}
-                      lastfmPlaycount={lastfmPlaycountMap.get(normalizeTrackTitle(track.title))}
+                      lastfmPlaycount={track.lastfmPlaycount}
+                      lastfmCombined={track.lastfmCombined}
                       onAlbumClick={handleAlbumClick}
                       onContextMenu={handleTrackContextMenu}
                     />
@@ -639,7 +707,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                         server={server}
                         credential={credential}
                         onPlay={handlePlayTrack}
-                        lastfmPlaycount={lastfmPlaycountMap.get(normalizeTrackTitle(track.title))}
+                        lastfmPlaycount={track.lastfmPlaycount}
+                      lastfmCombined={track.lastfmCombined}
                         onAlbumClick={handleAlbumClick}
                         onContextMenu={handleTrackContextMenu}
                       />

@@ -436,6 +436,35 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   }
 }
 
+// Last.fm has no per-album track lookup — same-titled tracks across releases (e.g.
+// clipping.'s many "Intro" tracks) share one canonical Last.fm track page. This returns
+// whichever album Last.fm considers representative for that page, used to guess which
+// local copy the playcount actually belongs to.
+export async function fetchTrackAlbum(artist: string, track: string): Promise<string | null> {
+  const apiKey = await getApiKey();
+  if (!apiKey) return null;
+  await rateLimit();
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set("method", "track.getInfo");
+  url.searchParams.set("artist", artist);
+  url.searchParams.set("track", track);
+  url.searchParams.set("api_key", apiKey);
+  url.searchParams.set("format", "json");
+
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      track?: { album?: { title?: string } };
+      error?: number;
+    };
+    if (data.error) return null;
+    return data.track?.album?.title ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // Classify a raw Last.fm tag as genre or mood based on canon tree lookup
 export async function classifyTag(rawTag: string): Promise<TagKind> {
   const { getCanonTree } = await import("./canonicalize");
