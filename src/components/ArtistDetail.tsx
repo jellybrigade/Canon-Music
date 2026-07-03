@@ -19,6 +19,7 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, resolvePortraitUrl } from "../lib/lastfm";
+import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { shuffleArray } from "../lib/shuffle";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
@@ -371,8 +372,9 @@ function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
   }, [inView]);
 
   const { data: enrichment } = useEnrichArtist(name, { enabled: inView });
+  const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
-  const portraitUrl = rawPortraitUrl ? getArtistImageUrl(rawPortraitUrl) : null;
+  const portraitUrl = rawPortraitUrl ? (artistImageMap.get(name) ?? getArtistImageUrl(rawPortraitUrl)) : null;
 
   return (
     <button
@@ -496,8 +498,9 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     return ownedAlbumsOnly.slice(0, cap);
   }, [ownedAlbumsOnly, lastfmAlbums, lastfmAlbumsLoading]);
 
+  const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
-  const portraitUrl = rawPortraitUrl ? getArtistImageUrl(rawPortraitUrl) : null;
+  const portraitUrl = rawPortraitUrl ? (artistImageMap.get(artist.name) ?? getArtistImageUrl(rawPortraitUrl)) : null;
 
   const [accentColor, setAccentColor] = useState<string | null>(null);
   useEffect(() => {

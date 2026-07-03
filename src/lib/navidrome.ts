@@ -8,6 +8,11 @@ export function initCoverServer(port: number): void {
   _coverServerPort = port;
 }
 
+/** True once the Rust loopback cover/artist-image proxy has a port assigned. */
+export function isCoverServerReady(): boolean {
+  return _coverServerPort !== null;
+}
+
 export async function updateCoverProxyConfig(
   baseUrl: string,
   username: string,

@@ -107,4 +107,7 @@ export const QK = {
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
+
+  artistCovers: () => ["artist-covers"] as const,
+  artistCoversMissingCount: () => ["artist-covers", "missing-count"] as const,
 } as const;

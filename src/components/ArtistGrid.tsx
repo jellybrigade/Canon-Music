@@ -4,6 +4,7 @@ import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
+import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -28,6 +29,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
+  const artistImageMap = useArtistImageMap();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -94,11 +96,12 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
               >
                 {rowArtists.map((artist) => {
                   const portraitUrl = resolvePortraitUrl(artist);
+                  const cachedImageUrl = artistImageMap.get(artist.name) ?? null;
                   const fallbackUrl = artist.artwork_url
                     ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
                     : null;
                   const imgUrl = portraitUrl && !failedPortraits.has(artist.name)
-                    ? getArtistImageUrl(portraitUrl)
+                    ? (cachedImageUrl ?? getArtistImageUrl(portraitUrl))
                     : fallbackUrl;
                   return (
                     <div
