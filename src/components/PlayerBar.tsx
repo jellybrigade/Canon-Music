@@ -4,7 +4,7 @@ import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
+  Shuffle, Repeat, Repeat1, List, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -85,6 +85,16 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const isScanningRenderers  = usePlayerStore((s) => s.isScanningRenderers);
   const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
   const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
+
+  const prevVolumeRef = useRef(1);
+  const toggleMute = () => {
+    if (volume > 0) {
+      prevVolumeRef.current = volume;
+      void setVolume(0);
+    } else {
+      void setVolume(prevVolumeRef.current || 1);
+    }
+  };
 
   const [moreOpen, setMoreOpen] = useState(false);
   const morePanelRef = useRef<HTMLDivElement>(null);
@@ -471,7 +481,17 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             className="player-volume"
             onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
           >
-            <Volume2 size={18} className="player-volume-icon" aria-hidden />
+            <button
+              type="button"
+              className="player-btn player-btn--icon player-volume-mute-btn"
+              onClick={toggleMute}
+              title={volume > 0 ? "Mute" : "Unmute"}
+              aria-label={volume > 0 ? "Mute" : "Unmute"}
+            >
+              {volume > 0
+                ? <Volume2 size={18} className="player-volume-icon" />
+                : <VolumeX size={18} className="player-volume-icon" />}
+            </button>
             <input
               type="range"
               className="player-volume-slider"
@@ -560,7 +580,15 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               className="player-more-volume"
               onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
             >
-              <Volume2 size={16} aria-hidden />
+              <button
+                type="button"
+                className="player-btn player-btn--icon player-volume-mute-btn"
+                onClick={toggleMute}
+                title={volume > 0 ? "Mute" : "Unmute"}
+                aria-label={volume > 0 ? "Mute" : "Unmute"}
+              >
+                {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              </button>
               <input
                 type="range"
                 className="player-volume-slider"
