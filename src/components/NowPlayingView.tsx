@@ -657,20 +657,24 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       <div className="now-playing-up-next-info">
                         <div className="now-playing-up-next-title-row">
                           <span className="now-playing-up-next-title">{track.title}</span>
-                          {lovedTrackIds.has(track.id) && (
-                            <Heart size={10} className="now-playing-up-next-loved" fill="currentColor" strokeWidth={0} />
-                          )}
-                          {track.duration != null && (
-                            <span className="now-playing-up-next-duration">
-                              {formatDuration(track.duration)}
-                            </span>
-                          )}
                         </div>
                         <div className="now-playing-up-next-meta">
                           <span className="now-playing-up-next-meta-text">
                             {[track.artist, track.album ? albumDisplayName(track.album) : null].filter(Boolean).join(" • ")}
                           </span>
                         </div>
+                      </div>
+                      <div className="now-playing-up-next-side">
+                        {track.duration != null && (
+                          <span className="now-playing-up-next-duration">
+                            {formatDuration(track.duration)}
+                          </span>
+                        )}
+                        <span className="now-playing-up-next-loved-slot">
+                          {lovedTrackIds.has(track.id) && (
+                            <Heart size={10} className="now-playing-up-next-loved" fill="currentColor" strokeWidth={0} />
+                          )}
+                        </span>
                       </div>
                     </button>
                   ))
