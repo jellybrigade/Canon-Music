@@ -216,6 +216,8 @@ export function useRadio() {
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
         if (wasAtEnd) void playFromQueueIndex(queue.length);
         recordPick(track.artist, track.albumId, track.id);
+      } catch (err) {
+        console.error("Radio fill failed:", err);
       } finally {
         fillingRef.current = false;
       }

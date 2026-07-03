@@ -162,15 +162,17 @@ async function getCuratedCandidates(
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY sum_score / SQRT(tag_count) DESC
+     ORDER BY sum_score DESC
      LIMIT ?`,
     [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
   );
 
   // Dampen by sqrt(tag_count): rewards genuine multi-tag match without letting
   // tag-count alone (proxy for how thoroughly an artist got tagged) dominate.
-  // Computed once per row and reused below — also matches the SQL ORDER BY above,
-  // so the LIMIT cutoff selects by the same metric used to rank candidates.
+  // Done in JS, not SQL — target SQLite builds (e.g. distro-packaged libsqlite3
+  // without SQLITE_ENABLE_MATH_FUNCTIONS) may not have SQRT(). SQL ORDER BY above
+  // stays on raw sum_score, so the LIMIT cutoff is a coarser pre-filter than the
+  // final dampened ranking below.
   const scored = rows.map((r) => ({ r, d: r.sum_score / Math.sqrt(r.tag_count) }));
   const maxTree = scored.length > 0 ? Math.max(...scored.map((s) => s.d)) : 1;
 
