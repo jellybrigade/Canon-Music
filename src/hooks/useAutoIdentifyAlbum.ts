@@ -44,7 +44,7 @@ export function useAutoIdentifyAlbum({
   identityLoaded: boolean;
 }) {
   return useQuery({
-    queryKey: QK.autoIdentifyAlbum(albumId),
+    queryKey: QK.autoIdentifyAlbum(albumId, confirmedArtistMbid),
     queryFn: (): Promise<AutoIdentifyResult> =>
       autoIdentifyAlbum({ artist, album, trackCount, year, confirmedArtistMbid }),
     enabled:

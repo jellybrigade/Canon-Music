@@ -116,13 +116,17 @@ export function scoreReleaseGroup(
       ? 1.0
       : artistSimilarity(c.artistName, artist);
 
-  let score = 0.6 * titleSimilarity(album, c.title) + 0.4 * artistScore;
+  const titleScore = titleSimilarity(album, c.title);
+  let score = 0.6 * titleScore + 0.4 * artistScore;
 
   const candidateYear = extractYear(c.firstReleaseDate);
   if (knownYear && candidateYear) {
     const diff = Math.abs(candidateYear - knownYear);
     if (diff === 0) score += 0.05;
-    else if (diff > 1) score -= 0.15;
+    // A near-exact title match is very likely the same release under a
+    // reissue/remaster — the local tag year often reflects that reissue
+    // rather than MB's original firstReleaseDate, so don't punish it.
+    else if (diff > 1 && titleScore < 0.9) score -= 0.15;
   }
 
   return Math.max(0, Math.min(1, score));

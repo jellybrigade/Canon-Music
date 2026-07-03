@@ -80,7 +80,8 @@ export function useConfirmedArtistMbid(artistName: string) {
       const fromAlbums = await db.select<{ mb_artist_id: string }[]>(
         `SELECT ai.mb_artist_id FROM album_identity ai
          INNER JOIN albums a ON a.id = ai.album_id
-         WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL
+         WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL AND ai.auto_matched = 0
+         ORDER BY ai.confirmed_at DESC
          LIMIT 1`,
         [artistName]
       );
@@ -133,7 +134,7 @@ export function useIdentifyAlbum({
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount),
+    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount, year, confirmedArtistMbid),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
         // Step 1: resolve RG MBID — prefer explicit override, then search
