@@ -5,6 +5,8 @@ description: Pick items from what-to-do.md prioritizing high user impact, plan a
 
 You are invoked in plan mode. Work through these phases in order.
 
+**Path note:** all `instructions/*.md` paths below are relative to project root (`/home/mschachner/Projects/Canon/instructions/`), NOT `.claude/skills/next/instructions/`. Don't create files under the skill dir.
+
 ## Phase 0 — Check donow.md
 
 Read `instructions/donow.md` (create it if it doesn't exist yet).
