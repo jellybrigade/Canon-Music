@@ -166,6 +166,17 @@ export function SearchResults({
                 onClick={() => onPlayTrack(track.id)}
                 onContextMenu={(e) => { e.preventDefault(); setTrackMenu({ x: e.clientX, y: e.clientY, track }); }}
               >
+                <div className="search-track-thumb">
+                  {track.artwork_url ? (
+                    <img
+                      src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
+                      alt={track.album_name ?? track.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <Music size={16} />
+                  )}
+                </div>
                 <div className="search-track-info">
                   <span className="search-item-primary">{track.title}</span>
                   <span className="search-item-secondary">

@@ -15,6 +15,7 @@ export interface SearchTrack {
   artist: string | null;
   album_id: string;
   album_name: string | null;
+  artwork_url: string | null;
   duration: number | null;
 }
 
@@ -68,8 +69,8 @@ async function runSearch(query: string): Promise<SearchResults> {
     [fts]
   );
 
-  const trackRows = await db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; duration: number | null }[]>(
-    `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, t.duration
+  const trackRows = await db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; artwork_url: string | null; duration: number | null }[]>(
+    `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration
      FROM tracks_fts fts
      JOIN tracks t ON t.id = fts.id
      LEFT JOIN albums a ON a.id = t.album_id
