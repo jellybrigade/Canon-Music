@@ -147,7 +147,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {coverProgress === null && !!lastFailedCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedCount} failed to cache last run — check server connection
+                {lastFailedCount} failed to cache last run — check server connection (see console for details)
               </span>
             )}
           </div>
@@ -164,7 +164,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <div className="settings-field settings-field--row">
             <button
               className="settings-btn"
-              disabled={!serverWithCredential || artistImageProgress !== null || !missingArtistImageCount}
+              disabled={artistImageProgress !== null || !missingArtistImageCount}
               onClick={() => {
                 void cacheAllArtistImages().then(() => { void refetchMissingArtistImageCount(); });
               }}
@@ -182,7 +182,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {artistImageProgress === null && !!lastFailedArtistImageCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedArtistImageCount} failed to cache last run — check server connection
+                {lastFailedArtistImageCount} failed to cache last run — check console for details
               </span>
             )}
           </div>

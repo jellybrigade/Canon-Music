@@ -167,3 +167,15 @@ export function useArtistImageMap(): Map<string, string> {
   const rows = data ?? [];
   return useMemo(() => new Map(rows.map((r) => [r.artist_name, r.data_url])), [rows]);
 }
+
+/** Resolves the URL to render for an artist portrait: prefer the locally
+ * cached data URL, falling back to the loopback-routed source URL. Returns
+ * null when there's no source portrait URL at all. */
+export function resolveArtistImageUrl(
+  imageMap: Map<string, string>,
+  artistName: string,
+  rawPortraitUrl: string | null
+): string | null {
+  if (!rawPortraitUrl) return null;
+  return imageMap.get(artistName) ?? getArtistImageUrl(rawPortraitUrl);
+}

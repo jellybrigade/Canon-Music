@@ -61,8 +61,12 @@ export function useAppNavigation() {
     navigate(albumPath(album.id), { state: { album, fromView: view } });
   }
 
-  function openArtist(artist: ArtistRow) {
-    navigate(artistPath(artist.name), { state: { artist, fromView: view } });
+  function openArtist(artist: ArtistRow | string) {
+    const row: ArtistRow =
+      typeof artist === "string"
+        ? { name: artist, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }
+        : artist;
+    navigate(artistPath(row.name), { state: { artist: row, fromView: view } });
   }
 
   function openPlaylist(playlist: PlaylistRow) {
