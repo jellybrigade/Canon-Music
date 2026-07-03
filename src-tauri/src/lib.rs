@@ -882,7 +882,7 @@ async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::ResolvedRe
     // Run blocking SSDP discovery + HTTP description fetches on a thread.
     tokio::task::spawn_blocking(move || upnp::discover_and_resolve(timeout_ms))
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?
 }
 
 static SOAP_CLIENT: std::sync::OnceLock<reqwest::blocking::Client> = std::sync::OnceLock::new();

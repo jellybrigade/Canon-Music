@@ -38,16 +38,13 @@ const M_SEARCH_RENDERER: &str = "M-SEARCH * HTTP/1.1\r\n\
 /// Discover UPnP MediaRenderers on the LAN via SSDP, then fetch and parse
 /// each device description. Returns one fully-resolved renderer per unique
 /// device (deduped by location URL).
-pub fn discover_and_resolve(timeout_ms: u64) -> Vec<ResolvedRenderer> {
-    let raw = discover(timeout_ms);
+pub fn discover_and_resolve(timeout_ms: u64) -> Result<Vec<ResolvedRenderer>, String> {
+    let raw = discover(timeout_ms)?;
 
-    let client = match reqwest::blocking::Client::builder()
+    let client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(5))
         .build()
-    {
-        Ok(c) => c,
-        Err(_) => return vec![],
-    };
+        .map_err(|e| format!("Couldn't set up network client for device discovery: {e}"))?;
 
     // Dedup by location URL — SSDP returns one entry per service type.
     let mut seen_locations: HashMap<String, ()> = HashMap::new();
@@ -64,10 +61,13 @@ pub fn discover_and_resolve(timeout_ms: u64) -> Vec<ResolvedRenderer> {
         }
     }
 
-    results
+    Ok(results)
 }
 
-fn fetch_device_description(client: &reqwest::blocking::Client, location: &str) -> Option<ResolvedRenderer> {
+fn fetch_device_description(
+    client: &reqwest::blocking::Client,
+    location: &str,
+) -> Option<ResolvedRenderer> {
     let resp = client.get(location).send().ok()?;
     if !resp.status().is_success() {
         return None;
@@ -75,8 +75,7 @@ fn fetch_device_description(client: &reqwest::blocking::Client, location: &str) 
     let xml = resp.text().ok()?;
 
     let base = resolve_base(location, &xml);
-    let friendly_name = xml_text(&xml, "friendlyName")
-        .unwrap_or_else(|| location.to_string());
+    let friendly_name = xml_text(&xml, "friendlyName").unwrap_or_else(|| location.to_string());
 
     let av_transport_control_url = find_control_url(&xml, "AVTransport", &base)?;
     let rendering_control_url = find_control_url(&xml, "RenderingControl", &base);
@@ -141,25 +140,27 @@ fn resolve_base(location: &str, xml: &str) -> String {
 }
 
 /// SSDP M-SEARCH — returns raw responses (one per service type advertisement).
-pub fn discover(timeout_ms: u64) -> Vec<RawRenderer> {
-    let socket = match UdpSocket::bind("0.0.0.0:0") {
-        Ok(s) => s,
-        Err(_) => return vec![],
-    };
-    if socket
+pub fn discover(timeout_ms: u64) -> Result<Vec<RawRenderer>, String> {
+    let socket = UdpSocket::bind("0.0.0.0:0")
+        .map_err(|e| format!("Couldn't open a network socket for device discovery: {e}"))?;
+    socket
         .set_read_timeout(Some(Duration::from_millis(500)))
-        .is_err()
-    {
-        return vec![];
+        .map_err(|e| format!("Couldn't configure device discovery socket: {e}"))?;
+
+    let target: std::net::SocketAddr = SSDP_ADDR
+        .parse()
+        .expect("SSDP_ADDR is a valid hardcoded address");
+
+    // If both search requests fail to send (e.g. blocked by firewall or
+    // missing local-network permission), there's no point listening — every
+    // response would be silently missing and look like "no devices found."
+    let sent_av_transport = socket.send_to(M_SEARCH_AV_TRANSPORT.as_bytes(), target);
+    let sent_renderer = socket.send_to(M_SEARCH_RENDERER.as_bytes(), target);
+    if let (Err(e), Err(_)) = (&sent_av_transport, &sent_renderer) {
+        return Err(format!(
+            "Couldn't send device discovery request — check your firewall or local network permissions: {e}"
+        ));
     }
-
-    let target: std::net::SocketAddr = match SSDP_ADDR.parse() {
-        Ok(a) => a,
-        Err(_) => return vec![],
-    };
-
-    let _ = socket.send_to(M_SEARCH_AV_TRANSPORT.as_bytes(), target);
-    let _ = socket.send_to(M_SEARCH_RENDERER.as_bytes(), target);
 
     let deadline = Instant::now() + Duration::from_millis(timeout_ms);
     let mut seen: HashMap<String, RawRenderer> = HashMap::new();
@@ -187,7 +188,7 @@ pub fn discover(timeout_ms: u64) -> Vec<RawRenderer> {
         }
     }
 
-    seen.into_values().collect()
+    Ok(seen.into_values().collect())
 }
 
 fn parse_response(text: &str) -> Option<RawRenderer> {
@@ -201,7 +202,9 @@ fn parse_response(text: &str) -> Option<RawRenderer> {
     let mut server = String::new();
 
     for line in text.lines() {
-        let Some(colon) = line.find(':') else { continue };
+        let Some(colon) = line.find(':') else {
+            continue;
+        };
         let key = line[..colon].trim().to_lowercase();
         let val = line[colon + 1..].trim();
         match key.as_str() {

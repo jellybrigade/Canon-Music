@@ -83,6 +83,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const castDevice           = usePlayerStore((s) => s.castDevice);
   const availableRenderers   = usePlayerStore((s) => s.availableRenderers);
   const isScanningRenderers  = usePlayerStore((s) => s.isScanningRenderers);
+  const rendererScanError    = usePlayerStore((s) => s.rendererScanError);
   const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
   const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
 
@@ -666,7 +667,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             </button>
           ))}
           {!isScanningRenderers && availableRenderers.length === 0 && (
-            <div className="cast-popover-empty">No devices found</div>
+            <div className="cast-popover-empty">
+              {rendererScanError ?? "No devices found"}
+            </div>
           )}
         </div>
       )}

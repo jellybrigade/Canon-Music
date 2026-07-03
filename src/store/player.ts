@@ -180,6 +180,7 @@ interface PlayerState {
   castDevice: DlnaRenderer | null;
   availableRenderers: DlnaRenderer[];
   isScanningRenderers: boolean;
+  rendererScanError: string | null;
   scanRenderers: () => Promise<void>;
   setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
 
@@ -688,14 +689,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     castDevice: null,
     availableRenderers: [],
     isScanningRenderers: false,
+    rendererScanError: null,
 
     scanRenderers: async () => {
-      set({ isScanningRenderers: true });
+      set({ isScanningRenderers: true, rendererScanError: null });
       try {
         const renderers = await discoverRenderers(4000);
         set({ availableRenderers: renderers });
       } catch (e) {
         console.error("DLNA discovery failed:", e);
+        set({ availableRenderers: [], rendererScanError: String(e) });
       } finally {
         set({ isScanningRenderers: false });
       }
