@@ -40,6 +40,7 @@ import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
 
 const SECONDS_PER_MINUTE = 60;
+const RELATED_SHELF_LIMIT = 6;
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
@@ -94,7 +95,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const isVariousArtists = (album.artist ?? "").trim().toLowerCase() === "various artists";
   const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "");
   const moreFromArtistAlbums = useMemo(
-    () => (moreFromArtist ?? []).filter((a) => a.id !== album.id),
+    () => (moreFromArtist ?? []).filter((a) => a.id !== album.id).slice(0, RELATED_SHELF_LIMIT),
     [moreFromArtist, album.id]
   );
   const { data: artistEnrichment } = useEnrichArtist(isVariousArtists ? "" : album.artist ?? "");
@@ -107,7 +108,11 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
     [similarArtistNames, similarInLibrarySet]
   );
-  const { data: fansAlsoLikeAlbums = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary);
+  const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary);
+  const fansAlsoLikeAlbums = useMemo(
+    () => fansAlsoLikeAlbumsRaw.slice(0, RELATED_SHELF_LIMIT),
+    [fansAlsoLikeAlbumsRaw]
+  );
 
   const { data: trackTagRows = [] } = useQuery({
     queryKey: QK.trackTagsAlbum(album.id),

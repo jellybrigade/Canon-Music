@@ -977,5 +977,11 @@
 
 .album-related-section .album-grid-wrapper {
   flex: none;
-  height: 340px;
+  /* No height/max-height cap: album count is bounded in AlbumDetail.tsx
+     (RELATED_SHELF_LIMIT) so this never scrolls. Capping height here would
+     clip real album rows once content exceeds the cap. */
+  /* AlbumGrid's virtualizer bakes in PADDING(20px)+ROW_GAP(24px) of trailing
+     space after the last row even though there's no next row; crop it. Safe
+     only because this wrapper never scrolls/clips (see above). */
+  margin-bottom: -44px;
 }
