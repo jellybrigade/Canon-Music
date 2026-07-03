@@ -1012,35 +1012,76 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
 
   return (
     <div className="home-view">
-      <header className="home-greeting">
-        <div className="home-greeting__left">
-          <CanonIcon size={38} className="home-greeting__logo" />
-          <h1 className="home-greeting__text">{getGreeting()}</h1>
-        </div>
-        <div className="home-search-bar">
-          <Search size={13} className="search-bar-icon" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            className="search-bar-input"
-            placeholder="Search…"
-            value={homeSearchRaw}
-            onChange={(e) => onHomeSearchRawChange(e.target.value)}
-          />
-          {homeSearchRaw ? (
-            <button className="search-bar-clear" onClick={() => { searchInputRef.current?.blur(); onHomeSearchRawChange(""); }} title="Clear">
-              <X size={13} />
-            </button>
-          ) : (
-            <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette — search tracks, artists, albums, and navigate anywhere">
-              <kbd>⌘K</kbd>
-            </button>
+      <div className={isSearching ? "home-sticky-region home-sticky-region--searching" : "home-sticky-region"}>
+        <header className="home-greeting">
+          <div className="home-greeting__left">
+            <CanonIcon size={38} className="home-greeting__logo" />
+            <h1 className="home-greeting__text">{getGreeting()}</h1>
+          </div>
+          <div className="home-search-bar">
+            <Search size={13} className="search-bar-icon" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              className="search-bar-input"
+              placeholder="Search…"
+              value={homeSearchRaw}
+              onChange={(e) => onHomeSearchRawChange(e.target.value)}
+            />
+            {homeSearchRaw ? (
+              <button className="search-bar-clear" onClick={() => { searchInputRef.current?.blur(); onHomeSearchRawChange(""); }} title="Clear">
+                <X size={13} />
+              </button>
+            ) : (
+              <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette — search tracks, artists, albums, and navigate anywhere">
+                <kbd>⌘K</kbd>
+              </button>
+            )}
+          </div>
+          {allAlbums != null && !isSearching && (
+            <span className="home-greeting__sub">{allAlbums.length.toLocaleString()} albums</span>
           )}
-        </div>
-        {allAlbums != null && !isSearching && (
-          <span className="home-greeting__sub">{allAlbums.length.toLocaleString()} albums</span>
+        </header>
+
+        {!isSearching && primarySpotlight && (
+          <section className="home-fusion">
+            <div className="home-fusion__spotlights">
+              <Spotlight
+                key={primarySpotlight.album.id}
+                pick={primarySpotlight}
+                serverWithCred={serverWithCredential}
+                onSelectAlbum={onSelectAlbum}
+                onSelectArtist={onSelectArtist}
+                playAlbum={play}
+                onAddToQueue={handleAddToQueue}
+                onCardContextMenu={openCardContextMenu}
+                primary
+              />
+              {secondarySpotlights.length > 0 && (
+                <div className="home-fusion__spotlights-secondary">
+                  {secondarySpotlights.map(pick => (
+                    <Spotlight
+                      key={pick.album.id}
+                      pick={pick}
+                      serverWithCred={serverWithCredential}
+                      onSelectAlbum={onSelectAlbum}
+                      onSelectArtist={onSelectArtist}
+                      playAlbum={play}
+                      onAddToQueue={handleAddToQueue}
+                      onCardContextMenu={openCardContextMenu}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
         )}
-      </header>
+        {!isSearching && featuredGenres.length > 0 && (
+          <section className="home-genres-section">
+            <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
+          </section>
+        )}
+      </div>
 
       {isSearching ? (
         searchResults && homeSearchQuery ? (
@@ -1060,44 +1101,6 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
-          {primarySpotlight && (
-            <section className="home-fusion">
-              <div className="home-fusion__spotlights">
-                <Spotlight
-                  key={primarySpotlight.album.id}
-                  pick={primarySpotlight}
-                  serverWithCred={serverWithCredential}
-                  onSelectAlbum={onSelectAlbum}
-                  onSelectArtist={onSelectArtist}
-                  playAlbum={play}
-                  onAddToQueue={handleAddToQueue}
-                  onCardContextMenu={openCardContextMenu}
-                  primary
-                />
-                {secondarySpotlights.length > 0 && (
-                  <div className="home-fusion__spotlights-secondary">
-                    {secondarySpotlights.map(pick => (
-                      <Spotlight
-                        key={pick.album.id}
-                        pick={pick}
-                        serverWithCred={serverWithCredential}
-                        onSelectAlbum={onSelectAlbum}
-                        onSelectArtist={onSelectArtist}
-                        playAlbum={play}
-                        onAddToQueue={handleAddToQueue}
-                        onCardContextMenu={openCardContextMenu}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </section>
-          )}
-          {featuredGenres.length > 0 && (
-            <section className="home-genres-section">
-              <GenreChipsLine genres={featuredGenres} onPlayGenre={handlePlayGenre} />
-            </section>
-          )}
           <ForYouRail
             key={forYouSeed}
             groups={forYouGroups}
