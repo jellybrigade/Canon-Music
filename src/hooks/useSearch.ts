@@ -15,12 +15,15 @@ export interface SearchTrack {
   artist: string | null;
   album_id: string;
   album_name: string | null;
+  artwork_url: string | null;
   duration: number | null;
 }
 
 export interface SearchArtist {
   name: string;
   album_count: number;
+  lastfm_image_url: string | null;
+  wikidata_image_url: string | null;
 }
 
 export interface SearchResults {
@@ -68,8 +71,8 @@ async function runSearch(query: string): Promise<SearchResults> {
     [fts]
   );
 
-  const trackRows = await db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; duration: number | null }[]>(
-    `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, t.duration
+  const trackRows = await db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; artwork_url: string | null; duration: number | null }[]>(
+    `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration
      FROM tracks_fts fts
      JOIN tracks t ON t.id = fts.id
      LEFT JOIN albums a ON a.id = t.album_id
@@ -78,10 +81,12 @@ async function runSearch(query: string): Promise<SearchResults> {
     [fts]
   );
 
-  const artistRows = await db.select<{ name: string; album_count: number }[]>(
-    `SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count
+  const artistRows = await db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null }[]>(
+    `SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count,
+            ai.lastfm_image_url, ai.wikidata_image_url
      FROM tracks_fts fts
      JOIN tracks t ON t.id = fts.id
+     LEFT JOIN artist_identity ai ON ai.artist_name = t.artist
      WHERE tracks_fts MATCH ? AND t.artist IS NOT NULL
      GROUP BY t.artist
      LIMIT 200`,
