@@ -87,10 +87,10 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
 
   const handleRefreshAll = useCallback(async () => {
     const db = await getDb();
-    type Row = { id: string; artist: string | null; name: string };
+    type Row = { id: string; artist: string | null; name: string; year: number | null };
 
     const unmatched = await db.select<Row[]>(
-      `SELECT a.id, a.artist, a.name FROM albums a
+      `SELECT a.id, a.artist, a.name, a.year FROM albums a
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
@@ -102,7 +102,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       for (let i = 0; i < unmatched.length; i++) {
         const album = unmatched[i]!;
         try {
-          const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name });
+          const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, year: album.year });
           if (result.decision === "auto_confirmed" && result.detail) {
             const now = Math.floor(Date.now() / 1000);
             await persistAlbumIdentity({

@@ -60,6 +60,37 @@ export function useAlbumIdentity(albumId: string) {
   });
 }
 
+/**
+ * Looks for an MB artist MBID already confirmed for this artist name — either
+ * via the artist-identify dialog (`artist_identity`) or a previously matched
+ * album by the same artist (`album_identity`). Used to disambiguate release
+ * groups that share a title across different artists.
+ */
+export function useConfirmedArtistMbid(artistName: string) {
+  return useQuery({
+    queryKey: QK.confirmedArtistMbid(artistName),
+    queryFn: async (): Promise<string | null> => {
+      const db = await getDb();
+      const fromArtistIdentity = await db.select<{ mb_artist_id: string }[]>(
+        "SELECT mb_artist_id FROM artist_identity WHERE artist_name = ? AND mb_artist_id IS NOT NULL",
+        [artistName]
+      );
+      if (fromArtistIdentity[0]) return fromArtistIdentity[0].mb_artist_id;
+
+      const fromAlbums = await db.select<{ mb_artist_id: string }[]>(
+        `SELECT ai.mb_artist_id FROM album_identity ai
+         INNER JOIN albums a ON a.id = ai.album_id
+         WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL
+         LIMIT 1`,
+        [artistName]
+      );
+      return fromAlbums[0]?.mb_artist_id ?? null;
+    },
+    enabled: !!artistName,
+    staleTime: 60 * 1000,
+  });
+}
+
 // ── Live lookup result ─────────────────────────────────────────────────────────
 
 export type MatchStatus = "found" | "ambiguous" | "not_found" | "error";
@@ -85,6 +116,8 @@ export function useIdentifyAlbum({
   overrideMbRgId,
   overrideMbReleaseId,
   trackCount,
+  year,
+  confirmedArtistMbid,
   enabled,
 }: {
   albumId: string;
@@ -93,6 +126,10 @@ export function useIdentifyAlbum({
   overrideMbRgId?: string | null;
   overrideMbReleaseId?: string | null;
   trackCount?: number;
+  /** Known local release year — disambiguates same-titled releases from different years. */
+  year?: number | null;
+  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  confirmedArtistMbid?: string | null;
   enabled: boolean;
 }) {
   return useQuery({
@@ -130,7 +167,7 @@ export function useIdentifyAlbum({
 
           // Filter by track count, then rank by fuzzy score
           const filtered = filterByTrackCount(candidates, trackCount ?? 0);
-          const ranked = rankCandidates(filtered, artist, searchTitle);
+          const ranked = rankCandidates(filtered, artist, searchTitle, year, confirmedArtistMbid);
           const top = ranked[0]!;
           const second = ranked[1];
           const gap = second ? top.score - second.score : Infinity;

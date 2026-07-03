@@ -83,16 +83,49 @@ function titleSimilarity(query: string, candidate: string): number {
   return base;
 }
 
+/** Extract a 4-digit year from an MB date string ("2023-05-12" → 2023). */
+function extractYear(date: string | null): number | null {
+  if (!date) return null;
+  const m = /^\d{4}/.exec(date);
+  return m ? Number(m[0]) : null;
+}
+
 /**
  * Score a release group candidate against query artist + album strings.
  * Title weighted 60%, artist weighted 40% (title match matters more).
+ *
+ * Two optional disambiguators layer on top of the base text score:
+ * - `knownYear`: local release year. Exact/near match nudges the score up;
+ *   a real mismatch (same title, different year — two distinct releases
+ *   both titled e.g. "Sisterhood") pulls it down so it can't tie a wrong
+ *   candidate with the right one.
+ * - `confirmedArtistMbid`: an MBID already confirmed for this artist via
+ *   another album or the artist-identify dialog. A candidate whose artist
+ *   credit matches it is almost certainly correct regardless of text
+ *   similarity noise, so it overrides the artist-name component entirely.
  */
 export function scoreReleaseGroup(
   c: MbReleaseGroupCandidate,
   artist: string,
-  album: string
+  album: string,
+  knownYear?: number | null,
+  confirmedArtistMbid?: string | null
 ): number {
-  return 0.6 * titleSimilarity(album, c.title) + 0.4 * artistSimilarity(c.artistName, artist);
+  const artistScore =
+    confirmedArtistMbid && c.artistMbid === confirmedArtistMbid
+      ? 1.0
+      : artistSimilarity(c.artistName, artist);
+
+  let score = 0.6 * titleSimilarity(album, c.title) + 0.4 * artistScore;
+
+  const candidateYear = extractYear(c.firstReleaseDate);
+  if (knownYear && candidateYear) {
+    const diff = Math.abs(candidateYear - knownYear);
+    if (diff === 0) score += 0.05;
+    else if (diff > 1) score -= 0.15;
+  }
+
+  return Math.max(0, Math.min(1, score));
 }
 
 /**
@@ -135,10 +168,15 @@ const TYPE_RANK: Record<string, number> = { Album: 3, Other: 2, Broadcast: 2, EP
 export function rankCandidates(
   cands: MbReleaseGroupCandidate[],
   artist: string,
-  album: string
+  album: string,
+  knownYear?: number | null,
+  confirmedArtistMbid?: string | null
 ): RankedCandidate[] {
   return cands
-    .map((c) => ({ candidate: c, score: scoreReleaseGroup(c, artist, album) }))
+    .map((c) => ({
+      candidate: c,
+      score: scoreReleaseGroup(c, artist, album, knownYear, confirmedArtistMbid),
+    }))
     .sort((a, b) => {
       if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score;
       // Same fuzzy score — prefer Album over Single, then MB's own relevance score

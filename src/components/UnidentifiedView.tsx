@@ -32,7 +32,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i] as FailedAlbumRow;
       try {
-        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, trackCount: album.track_count });
+        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, trackCount: album.track_count, year: album.year });
         if (result.decision === "auto_confirmed" && result.detail) {
           await persistAlbumIdentity({
             albumId: album.id,

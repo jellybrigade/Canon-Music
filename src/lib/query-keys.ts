@@ -73,6 +73,7 @@ export const QK = {
   artistCanonicalOf: (aliasName: string) => ["artist-aliases", "canonical-of", aliasName] as const,
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
+  confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>
