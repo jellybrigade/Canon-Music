@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
@@ -361,11 +361,29 @@ interface SimilarArtistCardProps {
 }
 
 function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
-  const { data: enrichment } = useEnrichArtist(name);
+  const cardRef = useRef<HTMLButtonElement>(null);
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    if (inView) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setInView(true);
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [inView]);
+
+  const { data: enrichment } = useEnrichArtist(name, { enabled: inView });
   const portraitUrl = resolvePortraitUrl(enrichment);
 
   return (
     <button
+      ref={cardRef}
       className={`artist-similar-card${owned ? " artist-similar-card--owned" : " artist-similar-card--dim"}`}
       onClick={onSelect}
     >
