@@ -25,7 +25,7 @@ import { useArtistAlbums } from "../hooks/useArtistAlbums";
 import { useSimilarInLibrary } from "../hooks/useSimilarInLibrary";
 import { useSimilarArtistAlbums } from "../hooks/useSimilarArtistAlbums";
 import { normalizeAlbum, isYearLikeGenre } from "../lib/tag-normalize";
-import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup } from "../hooks/useAlbumIdentity";
+import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup, useConfirmedArtistMbid } from "../hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../hooks/useAutoIdentifyAlbum";
 import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
@@ -194,11 +194,15 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const saveIdentity = useSaveAlbumIdentity();
   const recordFailed = useRecordFailedLookup();
 
+  const { data: confirmedArtistMbid } = useConfirmedArtistMbid(album.artist ?? "");
+
   const { data: autoResult, isFetching: autoIdentifyFetching } = useAutoIdentifyAlbum({
     albumId: album.id,
     artist: album.artist ?? "",
     album: album.name,
     trackCount: tracks?.length ?? 0,
+    year: album.year,
+    confirmedArtistMbid,
     mbAutoIdentify,
     existingIdentity: albumIdentity,
     identityLoaded,
@@ -992,6 +996,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
           artist={album.artist ?? ""}
           album={album.name}
           trackCount={tracks?.length ?? 0}
+          year={album.year}
+          confirmedArtistMbid={confirmedArtistMbid}
           onClose={() => setShowIdentify(false)}
         />
       )}

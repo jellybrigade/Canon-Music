@@ -73,6 +73,7 @@ export const QK = {
   artistCanonicalOf: (aliasName: string) => ["artist-aliases", "canonical-of", aliasName] as const,
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
+  confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
   identifyArtist: (artistName: string, mbArtistId?: string | null) =>
@@ -80,9 +81,10 @@ export const QK = {
 
   albumIdentity: (albumId: string) => ["album-identity", albumId] as const,
   albumEnrichment: (albumId: string) => ["album-enrichment", albumId] as const,
-  identifyAlbum: (albumId: string, mbRgId?: string | null, mbReleaseId?: string | null, artist?: string, album?: string, trackCount?: number) =>
-    ["identify-album", albumId, mbRgId, mbReleaseId, artist, album, trackCount],
-  autoIdentifyAlbum: (albumId: string) => ["auto-identify-album", albumId] as const,
+  identifyAlbum: (albumId: string, mbRgId?: string | null, mbReleaseId?: string | null, artist?: string, album?: string, trackCount?: number, year?: number | null, confirmedArtistMbid?: string | null) =>
+    ["identify-album", albumId, mbRgId, mbReleaseId, artist, album, trackCount, year, confirmedArtistMbid],
+  autoIdentifyAlbum: (albumId: string, confirmedArtistMbid?: string | null) =>
+    ["auto-identify-album", albumId, confirmedArtistMbid] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,
 

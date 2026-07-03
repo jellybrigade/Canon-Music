@@ -89,7 +89,7 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
       <input
         ref={inputRef}
         className="tags-combobox-input"
-        placeholder="Search canon tree…"
+        placeholder="Map to genre…"
         value={query}
         onChange={(e) => { setQuery(e.target.value); openDropdown(); }}
         onFocus={openDropdown}

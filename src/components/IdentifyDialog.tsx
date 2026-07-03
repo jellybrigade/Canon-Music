@@ -3,10 +3,11 @@ import { createPortal } from "react-dom";
 import { CheckCircle, XCircle, AlertCircle, Loader, Search, ExternalLink } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQuery } from "@tanstack/react-query";
-import { useAlbumIdentity, useIdentifyAlbum, useSaveAlbumIdentity } from "../hooks/useAlbumIdentity";
+import { useAlbumIdentity, useIdentifyAlbum, useSaveAlbumIdentity, useConfirmedArtistMbid } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
 import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
+import { rankCandidates } from "../lib/fuzzy-match";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -33,10 +34,14 @@ interface AlbumIdentifyDialogProps {
   artist: string;
   album: string;
   trackCount?: number;
+  /** Known local release year — disambiguates same-titled releases from different years. */
+  year?: number | null;
+  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  confirmedArtistMbid?: string | null;
   onClose: () => void;
 }
 
-export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClose }: AlbumIdentifyDialogProps) {
+export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, confirmedArtistMbid, onClose }: AlbumIdentifyDialogProps) {
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
 
@@ -71,12 +76,21 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
 
   const effectiveMbRgId = selectedCandidate ?? (mbRgId.trim() || null);
 
-  const { data: searchResults, isLoading: searchLoading } = useQuery({
+  const { data: rawSearchResults, isLoading: searchLoading } = useQuery({
     queryKey: ["mb-search-rg", artist, album],
     queryFn: () => searchReleaseGroups(artist, album),
     staleTime: 10 * 60 * 1000,
     enabled: !!(artist.trim() || album.trim()),
   });
+
+  // Re-rank raw MB results by our fuzzy score (title + artist + year + known-artist
+  // bonus) so the best match sorts first, and show that score instead of MB's own
+  // relevance score — MB's score can tie same-titled releases by different
+  // artists/years at 100%, which is exactly the ambiguity this needs to break.
+  const rankedSearchResults = rawSearchResults
+    ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
+    : undefined;
+  const searchResults = rankedSearchResults?.map((r) => r.candidate);
 
   const { data: lookupResult, isFetching } = useIdentifyAlbum({
     albumId,
@@ -85,6 +99,8 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
     trackCount,
+    year,
+    confirmedArtistMbid,
     enabled: fetchEnabled,
   });
 
@@ -160,9 +176,9 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                 <span>Searching…</span>
               </div>
             )}
-            {searchResults && searchResults.length > 0 && (
+            {rankedSearchResults && rankedSearchResults.length > 0 && (
               <div className="identify-candidates">
-                {searchResults.map((c) => (
+                {rankedSearchResults.map(({ candidate: c, score }) => (
                   <button
                     key={c.id}
                     className={`identify-candidate${selectedCandidate === c.id ? " identify-candidate--selected" : ""}`}
@@ -170,9 +186,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, onClos
                   >
                     <div className="identify-candidate-header">
                       <span className="identify-candidate-title">{c.title}</span>
-                      {c.score != null && (
-                        <span className="identify-candidate-score">{c.score}%</span>
-                      )}
+                      <span className="identify-candidate-score">{Math.round(score * 100)}%</span>
                       <MusicBrainzBrowseLink kind="release-group" id={c.id} />
                     </div>
                     <span className="identify-candidate-meta">
@@ -400,6 +414,21 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     enabled: !!artistName.trim(),
   });
 
+  // An MBID already confirmed for this artist via a previously matched album
+  // (album_identity) or a prior artist-identify confirmation. If it's among
+  // the search results, pre-select it — no need to make the user pick between
+  // candidates when we already know the answer.
+  const { data: confirmedArtistMbid } = useConfirmedArtistMbid(artistName);
+  useEffect(() => {
+    if (savedIdentity || selectedCandidate || !confirmedArtistMbid || !searchResults) return;
+    const match = searchResults.find((c) => c.id === confirmedArtistMbid);
+    if (match) {
+      setSelectedCandidate(match.id);
+      setMbArtistId(match.id);
+      setFetchEnabled(true);
+    }
+  }, [savedIdentity, selectedCandidate, confirmedArtistMbid, searchResults]);
+
   const { data: lookupResult, isFetching } = useIdentifyArtist({
     artistName: lfmArtist.trim() || artistName,
     overrideMbArtistId: effectiveMbArtistId,
@@ -465,7 +494,10 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                   >
                     <div className="identify-candidate-header">
                       <span className="identify-candidate-title">{c.name}</span>
-                      {c.score != null && (
+                      {c.id === confirmedArtistMbid && (
+                        <span className="identify-candidate-score">Matches identified album</span>
+                      )}
+                      {c.id !== confirmedArtistMbid && c.score != null && (
                         <span className="identify-candidate-score">{c.score}%</span>
                       )}
                       <MusicBrainzBrowseLink kind="artist" id={c.id} />

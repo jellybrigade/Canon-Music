@@ -40,7 +40,21 @@ export function stripTrailingBrackets(title: string): string | null {
   return stripped !== title && stripped.length > 0 ? stripped : null;
 }
 
-export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { artist: string; album: string; trackCount?: number }): Promise<AutoIdentifyResult> {
+export async function autoIdentifyAlbum({
+  artist,
+  album,
+  trackCount = 0,
+  year = null,
+  confirmedArtistMbid = null,
+}: {
+  artist: string;
+  album: string;
+  trackCount?: number;
+  /** Known local release year — disambiguates same-titled releases from different years. */
+  year?: number | null;
+  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  confirmedArtistMbid?: string | null;
+}): Promise<AutoIdentifyResult> {
   try {
     let candidates = await searchReleaseGroups(artist, album);
     let searchTitle = album;
@@ -59,7 +73,7 @@ export async function autoIdentifyAlbum({ artist, album, trackCount = 0 }: { art
 
     candidates = filterByTrackCount(candidates, trackCount);
 
-    const ranked = rankCandidates(candidates, artist, searchTitle);
+    const ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
     const top = ranked[0]!;
     const second = ranked[1];
     const gap = second ? top.score - second.score : Infinity;

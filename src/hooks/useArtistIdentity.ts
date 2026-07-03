@@ -142,6 +142,9 @@ export function useSaveArtistIdentity() {
         queryKey: QK.artistIdentity(input.artistName),
       });
       void queryClient.invalidateQueries({
+        queryKey: QK.confirmedArtistMbid(input.artistName),
+      });
+      void queryClient.invalidateQueries({
         queryKey: QK.artistEnrichment(input.artistName),
       });
       void queryClient.invalidateQueries({

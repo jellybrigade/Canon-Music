@@ -23,6 +23,8 @@ export function useAutoIdentifyAlbum({
   artist,
   album,
   trackCount,
+  year,
+  confirmedArtistMbid,
   mbAutoIdentify,
   existingIdentity,
   identityLoaded,
@@ -31,6 +33,10 @@ export function useAutoIdentifyAlbum({
   artist: string;
   album: string;
   trackCount: number;
+  /** Known local release year — disambiguates same-titled releases from different years. */
+  year?: number | null;
+  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  confirmedArtistMbid?: string | null;
   mbAutoIdentify: boolean;
   /** The row from useAlbumIdentity — undefined while loading, null when no row. */
   existingIdentity: AlbumIdentityRow | null | undefined;
@@ -38,8 +44,9 @@ export function useAutoIdentifyAlbum({
   identityLoaded: boolean;
 }) {
   return useQuery({
-    queryKey: QK.autoIdentifyAlbum(albumId),
-    queryFn: (): Promise<AutoIdentifyResult> => autoIdentifyAlbum({ artist, album, trackCount }),
+    queryKey: QK.autoIdentifyAlbum(albumId, confirmedArtistMbid),
+    queryFn: (): Promise<AutoIdentifyResult> =>
+      autoIdentifyAlbum({ artist, album, trackCount, year, confirmedArtistMbid }),
     enabled:
       mbAutoIdentify &&
       !!albumId &&

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import {
   BUILTIN_PATTERNS,
   useAlbumSuffixAllowlist,
@@ -90,10 +91,11 @@ function BuiltinRow({
   onUnexclude: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const zero = affectedAlbums.length === 0;
   return (
-    <li className={`title-cleanup-item${disabled ? " title-cleanup-item--disabled" : ""}`}>
+    <li className={`title-cleanup-item${disabled || zero ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
-        <span className="title-cleanup-builtin-label">{label}</span>
+        <span className="title-cleanup-builtin-label" title={label}>{label}</span>
         <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
         <button
           className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
@@ -164,10 +166,11 @@ function CustomRow({
     );
   }
 
+  const zero = affectedAlbums.length === 0;
   return (
-    <li className="title-cleanup-item">
+    <li className={`title-cleanup-item${zero ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
-        <span className="title-cleanup-suffix">({suffix})</span>
+        <span className="title-cleanup-suffix" title={`(${suffix})`}>({suffix})</span>
         <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
         <button className="title-cleanup-action title-cleanup-action--muted" onClick={() => { setDraft(suffix); setEditing(true); }}>
           Edit
@@ -194,6 +197,8 @@ export function TitleCleanupTab() {
   const [excludedAlbumIds, excludeAlbum, unexcludeAlbum] = useAlbumSuffixExclusions();
   const [inputValue, setInputValue] = useState("");
   const [inputError, setInputError] = useState<string | null>(null);
+  const [filter, setFilter] = useState("");
+  const [builtinsOpen, setBuiltinsOpen] = useState(false);
   const { data: allAlbums = [] } = useAlbums();
 
   const suffixAlbumMap = useMemo(() => {
@@ -224,6 +229,28 @@ export function TitleCleanupTab() {
     return result;
   }, [suffixAlbumMap]);
 
+  const q = filter.trim().toLowerCase();
+
+  const sortedAllowlist = useMemo(
+    () =>
+      [...allowlist]
+        .filter((s) => !q || s.toLowerCase().includes(q))
+        .sort((a, b) => customMatches(b).length - customMatches(a).length),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allowlist, suffixAlbumMap, q],
+  );
+
+  const sortedBuiltins = useMemo(
+    () =>
+      [...BUILTIN_PATTERNS]
+        .filter((p) => !q || p.label.toLowerCase().includes(q))
+        .sort((a, b) => (builtinMatchesMap.get(b.id)?.length ?? 0) - (builtinMatchesMap.get(a.id)?.length ?? 0)),
+    [builtinMatchesMap, q],
+  );
+
+  const builtinsMatchQuery = q.length > 0 && sortedBuiltins.length > 0;
+  const showBuiltins = builtinsOpen || builtinsMatchQuery;
+
   function handleAdd() {
     const trimmed = inputValue.trim();
     if (!trimmed) return;
@@ -244,6 +271,16 @@ export function TitleCleanupTab() {
           <em>(Deluxe Edition)</em> from album titles. Turn off any built-in rule or add
           your own.
         </p>
+
+        <div className="title-cleanup-filter-row">
+          <input
+            className="title-cleanup-input"
+            type="text"
+            placeholder="Filter rules…"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+        </div>
 
         <section>
           <div className="title-cleanup-section-label">Your rules</div>
@@ -266,9 +303,11 @@ export function TitleCleanupTab() {
               No custom rules yet. Albums with unrecognized parentheticals show a
               "Strip…" button in their detail view.
             </p>
+          ) : sortedAllowlist.length === 0 ? (
+            <p className="title-cleanup-empty">No rules match "{filter}".</p>
           ) : (
             <ul className="title-cleanup-list">
-              {allowlist.map((suffix) => (
+              {sortedAllowlist.map((suffix) => (
                 <CustomRow
                   key={suffix}
                   suffix={suffix}
@@ -285,21 +324,35 @@ export function TitleCleanupTab() {
         </section>
 
         <section>
-          <div className="title-cleanup-section-label">Built-in rules</div>
-          <ul className="title-cleanup-list">
-            {BUILTIN_PATTERNS.map((p) => (
-              <BuiltinRow
-                key={p.id}
-                label={p.label}
-                disabled={disabledIds.includes(p.id)}
-                affectedAlbums={builtinMatchesMap.get(p.id) ?? []}
-                excludedIds={excludedAlbumIds}
-                onToggle={() => void (disabledIds.includes(p.id) ? enableBuiltin(p.id) : disableBuiltin(p.id))}
-                onExclude={(id) => void excludeAlbum(id)}
-                onUnexclude={(id) => void unexcludeAlbum(id)}
-              />
-            ))}
-          </ul>
+          <button
+            className="title-cleanup-disclosure"
+            onClick={() => setBuiltinsOpen((v) => !v)}
+            aria-expanded={showBuiltins}
+          >
+            <ChevronRight size={13} className={`title-cleanup-disclosure-icon${showBuiltins ? " title-cleanup-disclosure-icon--open" : ""}`} />
+            Built-in rules
+            <span className="title-cleanup-disclosure-count">{BUILTIN_PATTERNS.length}</span>
+          </button>
+          {showBuiltins && (
+            sortedBuiltins.length === 0 ? (
+              <p className="title-cleanup-empty">No rules match "{filter}".</p>
+            ) : (
+              <ul className="title-cleanup-list">
+                {sortedBuiltins.map((p) => (
+                  <BuiltinRow
+                    key={p.id}
+                    label={p.label}
+                    disabled={disabledIds.includes(p.id)}
+                    affectedAlbums={builtinMatchesMap.get(p.id) ?? []}
+                    excludedIds={excludedAlbumIds}
+                    onToggle={() => void (disabledIds.includes(p.id) ? enableBuiltin(p.id) : disableBuiltin(p.id))}
+                    onExclude={(id) => void excludeAlbum(id)}
+                    onUnexclude={(id) => void unexcludeAlbum(id)}
+                  />
+                ))}
+              </ul>
+            )
+          )}
         </section>
       </div>
     </div>
