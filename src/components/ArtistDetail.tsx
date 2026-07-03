@@ -16,7 +16,7 @@ import type { Server } from "../types/server";
 import type { NavidromeCredential } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, LASTFM_PLACEHOLDER } from "../lib/lastfm";
 import { shuffleArray } from "../lib/shuffle";
@@ -379,7 +379,8 @@ function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
   }, [inView]);
 
   const { data: enrichment } = useEnrichArtist(name, { enabled: inView });
-  const portraitUrl = resolvePortraitUrl(enrichment);
+  const rawPortraitUrl = resolvePortraitUrl(enrichment);
+  const portraitUrl = rawPortraitUrl ? getArtistImageUrl(rawPortraitUrl) : null;
 
   return (
     <button
@@ -503,7 +504,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     return ownedAlbumsOnly.slice(0, cap);
   }, [ownedAlbumsOnly, lastfmAlbums, lastfmAlbumsLoading]);
 
-  const portraitUrl = resolvePortraitUrl(enrichment);
+  const rawPortraitUrl = resolvePortraitUrl(enrichment);
+  const portraitUrl = rawPortraitUrl ? getArtistImageUrl(rawPortraitUrl) : null;
 
   const [accentColor, setAccentColor] = useState<string | null>(null);
   useEffect(() => {

@@ -124,7 +124,32 @@ struct CoverState {
     port: u16,
     #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
     cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
+    #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
+    artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
     proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
+}
+
+/// Minimal percent-decoder for the artist-image loopback route — the full source
+/// URL (with its own query string) is percent-encoded into a single path segment
+/// on the JS side via encodeURIComponent, so it must be decoded before re-fetching.
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3]) {
+                if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                    out.push(byte);
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[tauri::command]
@@ -950,6 +975,7 @@ pub fn run() {
     // Each request is handled in its own thread so concurrent cover art fetches don't serialize.
     const MAX_COVER_CACHE_ENTRIES: usize = 500;
     let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
+    let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     // Non-fatal: if the loopback port can't be bound (exhaustion, sandboxing,
     // platform firewall interference) cover art proxying is disabled but the
@@ -965,6 +991,7 @@ pub fn run() {
         Ok((server, port)) => {
             cover_port = port;
             let cache_clone = Arc::clone(&cover_cache);
+            let artist_image_cache_clone = Arc::clone(&artist_image_cache);
             let config_clone = Arc::clone(&cover_proxy_config);
             std::thread::Builder::new()
                 .name("cover-server".into())
@@ -975,10 +1002,62 @@ pub fn run() {
                         .expect("cover proxy http client failed");
                     for request in server.incoming_requests() {
                         let cache_req = Arc::clone(&cache_clone);
+                        let artist_image_cache_req = Arc::clone(&artist_image_cache_clone);
                         let config_req = Arc::clone(&config_clone);
                         let client_req = client.clone();
                         std::thread::spawn(move || {
                             let url = request.url().to_string();
+                            if let Some(encoded) = url.strip_prefix("/artist-image/") {
+                                let source_url = percent_decode(encoded);
+                                if source_url.is_empty() {
+                                    let _ = request.respond(cors_empty(400));
+                                    return;
+                                }
+                                let cached = artist_image_cache_req.lock().unwrap().get(&source_url).cloned();
+                                let (bytes, content_type) = if let Some(entry) = cached {
+                                    entry
+                                } else {
+                                    match client_req.get(&source_url).send() {
+                                        Ok(resp) if resp.status().is_success() => {
+                                            let ct = resp
+                                                .headers()
+                                                .get(reqwest::header::CONTENT_TYPE)
+                                                .and_then(|v| v.to_str().ok())
+                                                .unwrap_or("image/jpeg")
+                                                .to_string();
+                                            match resp.bytes() {
+                                                Ok(b) => {
+                                                    let b = b.to_vec();
+                                                    let mut cache = artist_image_cache_req.lock().unwrap();
+                                                    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                                        cache.clear();
+                                                    }
+                                                    cache.insert(source_url.clone(), (b.clone(), ct.clone()));
+                                                    (b, ct)
+                                                }
+                                                Err(_) => {
+                                                    let _ = request.respond(cors_empty(502));
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            let _ = request.respond(cors_empty(502));
+                                            return;
+                                        }
+                                    }
+                                };
+                                let mut resp = tiny_http::Response::from_data(bytes);
+                                if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
+                                    resp = resp.with_header(h);
+                                }
+                                if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
+                                    resp = resp.with_header(h);
+                                }
+                                resp = resp.with_header(cors_header());
+                                let _ = request.respond(resp);
+                                return;
+                            }
                             let path_query = match url.strip_prefix("/cover/") {
                                 Some(s) => s.to_string(),
                                 None => {
@@ -1091,6 +1170,7 @@ pub fn run() {
         .manage(CoverState {
             port: cover_port,
             cache: cover_cache,
+            artist_image_cache,
             proxy_config: cover_proxy_config,
         })
         .setup(|app| {

@@ -113,6 +113,16 @@ export function getCoverArtUrl(
   return `${normalizeUrl(baseUrl)}/rest/getCoverArt?${params.toString()}`;
 }
 
+/** Routes an external artist portrait URL (Last.fm/Wikidata) through the loopback
+ * cover server so it's fetched once and cached, instead of hitting the external
+ * host on every render. Falls back to the raw URL if the server isn't up yet. */
+export function getArtistImageUrl(sourceUrl: string): string {
+  if (_coverServerPort !== null) {
+    return `http://127.0.0.1:${_coverServerPort}/artist-image/${encodeURIComponent(sourceUrl)}`;
+  }
+  return sourceUrl;
+}
+
 export async function fetchAllAlbums(
   baseUrl: string,
   username: string,
