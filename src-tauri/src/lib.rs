@@ -195,28 +195,44 @@ fn tray_set_close_to_tray(state: tauri::State<'_, TrayState>, enabled: bool) {
     state.close_to_tray.store(enabled, Ordering::Relaxed);
 }
 
+// keyring's Display already includes the platform error detail; this only adds
+// actionable guidance for the two variants that mean "the OS secret store itself
+// is unreachable" (as opposed to NoEntry/BadEncoding/etc., which are per-entry).
+// Surfaced verbatim in the UI (see App.tsx credError banner), so it's worth being
+// specific here rather than showing a bare platform error code to the user.
+fn friendly_keyring_error(e: keyring::Error) -> String {
+    match e {
+        keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_) => format!(
+            "{e}. On Linux, make sure a Secret Service provider (e.g. gnome-keyring or KWallet) \
+             is running; on macOS/Windows, check that Keychain Access / Credential Manager isn't \
+             locked or blocked by a permission prompt."
+        ),
+        other => other.to_string(),
+    }
+}
+
 #[tauri::command]
 fn set_credential(service: &str, account: &str, secret: &str) -> Result<(), String> {
     Entry::new(service, account)
-        .map_err(|e| e.to_string())?
+        .map_err(friendly_keyring_error)?
         .set_password(secret)
-        .map_err(|e| e.to_string())
+        .map_err(friendly_keyring_error)
 }
 
 #[tauri::command]
 fn get_credential(service: &str, account: &str) -> Result<String, String> {
     Entry::new(service, account)
-        .map_err(|e| e.to_string())?
+        .map_err(friendly_keyring_error)?
         .get_password()
-        .map_err(|e| e.to_string())
+        .map_err(friendly_keyring_error)
 }
 
 #[tauri::command]
 fn delete_credential(service: &str, account: &str) -> Result<(), String> {
     Entry::new(service, account)
-        .map_err(|e| e.to_string())?
+        .map_err(friendly_keyring_error)?
         .delete_credential()
-        .map_err(|e| e.to_string())
+        .map_err(friendly_keyring_error)
 }
 
 #[tauri::command]
