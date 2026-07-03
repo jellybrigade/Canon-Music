@@ -156,7 +156,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const {
     currentTrack, isPlaying, isLoading, elapsed, volume,
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
-    pause, resume, next, prev, seek, setVolume,
+    pause, resume, next, prev, seek, setVolume, toggleMute,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
     addToQueue, playNext, audioFormat, radioActive,
   } = usePlayerStore();
@@ -166,15 +166,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
   const [volumeOpen, setVolumeOpen] = useState(false);
-  const prevVolumeRef = useRef(1);
-  const toggleMute = () => {
-    if (volume > 0) {
-      prevVolumeRef.current = volume;
-      void setVolume(0);
-    } else {
-      void setVolume(prevVolumeRef.current || 1);
-    }
-  };
   const [lyricsSearchOpen, setLyricsSearchOpen] = useState(false);
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");

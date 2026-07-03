@@ -1012,7 +1012,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
 
   return (
     <div className="home-view">
-      <div className={isSearching ? "home-sticky-region home-sticky-region--searching" : "home-sticky-region"}>
+      <div className="home-sticky-region">
         <header className="home-greeting">
           <div className="home-greeting__left">
             <CanonIcon size={38} className="home-greeting__logo" />

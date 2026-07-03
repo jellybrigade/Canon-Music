@@ -162,21 +162,23 @@ async function getCuratedCandidates(
      JOIN albums a ON t.album_id = a.id
      WHERE t.server_id = ? AND t.id != ?
      GROUP BY t.id
-     ORDER BY sum_score DESC
+     ORDER BY sum_score / SQRT(tag_count) DESC
      LIMIT ?`,
     [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
   );
 
   // Dampen by sqrt(tag_count): rewards genuine multi-tag match without letting
   // tag-count alone (proxy for how thoroughly an artist got tagged) dominate.
-  const dampenedScore = (r: ScoredRow) => r.sum_score / Math.sqrt(r.tag_count);
-  const maxTree = rows.length > 0 ? Math.max(...rows.map(dampenedScore)) : 1;
+  // Computed once per row and reused below — also matches the SQL ORDER BY above,
+  // so the LIMIT cutoff selects by the same metric used to rank candidates.
+  const scored = rows.map((r) => ({ r, d: r.sum_score / Math.sqrt(r.tag_count) }));
+  const maxTree = scored.length > 0 ? Math.max(...scored.map((s) => s.d)) : 1;
 
   const { tagW, trackCfW, artistCfW } = scaleWeights(scale);
-  return rows
-    .filter((r) => !excludeIds.has(r.id))
-    .map((r) => {
-      const normalizedTree = maxTree > 0 ? dampenedScore(r) / maxTree : 0;
+  return scored
+    .filter(({ r }) => !excludeIds.has(r.id))
+    .map(({ r, d }) => {
+      const normalizedTree = maxTree > 0 ? d / maxTree : 0;
       const artistKey = (r.artist ?? "").toLowerCase();
       const trackKey = `${artistKey}|||${r.title.toLowerCase()}`;
       const artistCf = artistSimilarity.get(artistKey) ?? 0;

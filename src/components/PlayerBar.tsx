@@ -66,6 +66,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const prev          = usePlayerStore((s) => s.prev);
   const seek          = usePlayerStore((s) => s.seek);
   const setVolume     = usePlayerStore((s) => s.setVolume);
+  const toggleMute    = usePlayerStore((s) => s.toggleMute);
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
@@ -86,16 +87,6 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const rendererScanError    = usePlayerStore((s) => s.rendererScanError);
   const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
   const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
-
-  const prevVolumeRef = useRef(1);
-  const toggleMute = () => {
-    if (volume > 0) {
-      prevVolumeRef.current = volume;
-      void setVolume(0);
-    } else {
-      void setVolume(prevVolumeRef.current || 1);
-    }
-  };
 
   const [moreOpen, setMoreOpen] = useState(false);
   const morePanelRef = useRef<HTMLDivElement>(null);
