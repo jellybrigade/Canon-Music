@@ -27,6 +27,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const { server, credential } = serverWithCredential;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
+  const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -93,11 +94,12 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
               >
                 {rowArtists.map((artist) => {
                   const portraitUrl = resolvePortraitUrl(artist);
-                  const imgUrl = portraitUrl
+                  const fallbackUrl = artist.artwork_url
+                    ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
+                    : null;
+                  const imgUrl = portraitUrl && !failedPortraits.has(artist.name)
                     ? getArtistImageUrl(portraitUrl)
-                    : artist.artwork_url
-                      ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
-                      : null;
+                    : fallbackUrl;
                   return (
                     <div
                       key={artist.name}
@@ -115,6 +117,11 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                           alt={artist.name}
                           decoding="async"
                           loading="lazy"
+                          onError={() => {
+                            if (portraitUrl) {
+                              setFailedPortraits((prev) => new Set(prev).add(artist.name));
+                            }
+                          }}
                         />
                       ) : (
                         <div className="album-art album-art--placeholder" />

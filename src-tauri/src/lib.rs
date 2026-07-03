@@ -998,6 +998,7 @@ pub fn run() {
                 .spawn(move || {
                     let client = reqwest::blocking::Client::builder()
                         .timeout(Duration::from_secs(30))
+                        .user_agent(concat!("Canon/", env!("CARGO_PKG_VERSION")))
                         .build()
                         .expect("cover proxy http client failed");
                     for request in server.incoming_requests() {
