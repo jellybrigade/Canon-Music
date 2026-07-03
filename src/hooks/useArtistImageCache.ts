@@ -10,7 +10,7 @@ import { QK } from "../lib/query-keys";
 // of counting a transient rate-limit as a permanent failure.
 const BATCH_SIZE = 2;
 const BATCH_DELAY_MS = 500;
-const MAX_RETRIES_429 = 3;
+const MAX_RETRIES_429 = 4;
 const RETRY_BASE_DELAY_MS = 1000;
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -47,14 +47,10 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
       res = await fetch(url);
       if (res.status !== 429) break;
       if (attempt === MAX_RETRIES_429) break;
-      const delay = RETRY_BASE_DELAY_MS * 2 ** attempt;
-      console.warn(`Artist image cache: 429 for ${artistName}, retrying in ${delay}ms`);
-      await new Promise((r) => setTimeout(r, delay));
+      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * 2 ** attempt));
     }
     if (!res!.ok) {
-      console.error(
-        `Artist image cache: ${res!.status} ${res!.statusText} fetching ${artistName} (source: ${portraitUrl}, proxy: ${url})`,
-      );
+      console.error(`Artist image cache: ${res!.status} ${res!.statusText} fetching ${artistName} from ${url}`);
       return false;
     }
     const blob = await res!.blob();

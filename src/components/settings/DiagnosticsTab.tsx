@@ -147,7 +147,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {coverProgress === null && !!lastFailedCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedCount} failed to cache last run — check server connection (see console for details)
+                {lastFailedCount} failed to cache last run — check server connection
               </span>
             )}
           </div>
@@ -182,7 +182,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {artistImageProgress === null && !!lastFailedArtistImageCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedArtistImageCount} failed to cache last run — check server connection (see console for details)
+                {lastFailedArtistImageCount} failed to cache last run — check server connection
               </span>
             )}
           </div>

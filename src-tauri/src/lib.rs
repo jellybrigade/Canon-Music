@@ -1040,30 +1040,17 @@ pub fn run() {
                                                     cache.insert(source_url.clone(), (b.clone(), ct.clone()));
                                                     (b, ct)
                                                 }
-                                                Err(e) => {
-                                                    eprintln!(
-                                                        "artist-image proxy: failed reading body from {}: {}",
-                                                        source_url, e
-                                                    );
+                                                Err(_) => {
                                                     let _ = request.respond(cors_empty(502));
                                                     return;
                                                 }
                                             }
                                         }
                                         Ok(resp) => {
-                                            let status = resp.status();
-                                            eprintln!(
-                                                "artist-image proxy: upstream returned {} for {}",
-                                                status, source_url
-                                            );
-                                            let _ = request.respond(cors_empty(status.as_u16()));
+                                            let _ = request.respond(cors_empty(resp.status().as_u16()));
                                             return;
                                         }
-                                        Err(e) => {
-                                            eprintln!(
-                                                "artist-image proxy: request to {} failed: {}",
-                                                source_url, e
-                                            );
+                                        Err(_) => {
                                             let _ = request.respond(cors_empty(502));
                                             return;
                                         }
