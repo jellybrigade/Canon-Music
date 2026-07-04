@@ -215,12 +215,12 @@ button:hover:not(:disabled) {
 }
 
 button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
   cursor: default;
 }
 
 input:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
   cursor: not-allowed;
 }
 
@@ -356,7 +356,7 @@ button.primary:hover:not(:disabled) {
   font-size: var(--text-base);
   font-weight: 500;
   color: inherit;
-  opacity: 0.9;
+  opacity: var(--opacity-90);
   line-height: 1.2;
   pointer-events: none;
   white-space: nowrap;
@@ -385,7 +385,7 @@ button.primary:hover:not(:disabled) {
   color: var(--accent, var(--overlay-70));
   transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .sidebar-feedback-btn:hover {
