@@ -12,7 +12,7 @@
   background: var(--surface-1, #1c1c1e);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px var(--scrim-3);
+  box-shadow: var(--shadow-xl) var(--scrim-3);
   width: 420px;
   max-width: calc(100vw - 2rem);
   display: flex;

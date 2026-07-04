@@ -41,6 +41,15 @@
   --scrim-3: rgba(0, 0, 0, 0.6);
   --scrim-4: rgba(0, 0, 0, 0.8);
 
+  /* Shadow scale — shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
+  --shadow-xs:  0 2px 2px;
+  --shadow-sm:  0 2px 8px;
+  --shadow-md:  0 4px 16px;
+  --shadow-lg:  0 8px 24px;
+  --shadow-xl:  0 16px 48px;
+  --shadow-2xl: 0 24px 64px;
+  --shadow-3xl: 0 24px 80px;
+
   --player-bar-height: 92px;
 
   --z-panel:     50;
@@ -136,7 +145,7 @@ button {
   color: var(--text-primary);
   background-color: var(--bg-input);
   transition: border-color var(--duration-moderate), opacity var(--duration-moderate), background-color var(--duration-moderate);
-  box-shadow: 0 2px 2px var(--scrim-1);
+  box-shadow: var(--shadow-xs) var(--scrim-1);
   outline: none;
 }
 

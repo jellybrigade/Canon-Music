@@ -152,7 +152,7 @@
   height: 140px;
   object-fit: cover;
   border-radius: var(--radius-base);
-  box-shadow: 0 4px 20px var(--scrim-3);
+  box-shadow: var(--shadow-md) var(--scrim-3);
   display: block;
   flex-shrink: 0;
 }

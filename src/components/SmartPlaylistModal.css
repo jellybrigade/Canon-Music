@@ -17,7 +17,7 @@
   max-height: calc(100vh - 80px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 24px 64px var(--scrim-3);
+  box-shadow: var(--shadow-2xl) var(--scrim-3);
 }
 
 .spm-header {

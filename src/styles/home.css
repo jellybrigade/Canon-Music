@@ -762,7 +762,7 @@
     opacity var(--motion-med, 200ms ease-out),
     transform var(--motion-med, 200ms ease-out),
     background var(--motion-fast, 120ms ease-out);
-  box-shadow: 0 2px 8px var(--scrim-2);
+  box-shadow: var(--shadow-sm) var(--scrim-2);
 }
 
 .foryou-v2-tile:hover .foryou-v2-tile__play {
@@ -974,7 +974,7 @@
   opacity: 0;
   transition: opacity var(--motion-med, 200ms ease-out), transform var(--motion-med, 200ms ease-out), background var(--motion-fast, 120ms ease-out);
   z-index: 1;
-  box-shadow: 0 2px 12px var(--scrim-2);
+  box-shadow: var(--shadow-sm) var(--scrim-2);
 }
 
 .carousel-card:hover .carousel-card__play {

@@ -327,7 +327,7 @@
   display: flex;
   align-items: center;
   width: 140px;
-  box-shadow: 0 8px 24px var(--scrim-3);
+  box-shadow: var(--shadow-lg) var(--scrim-3);
 }
 
 .now-playing-volume-slider {
@@ -607,7 +607,7 @@
   object-fit: cover;
   border-radius: var(--radius-base-md);
   display: block;
-  box-shadow: 0 4px 16px var(--scrim-3);
+  box-shadow: var(--shadow-md) var(--scrim-3);
 }
 
 .now-playing-album-chip-art--placeholder {

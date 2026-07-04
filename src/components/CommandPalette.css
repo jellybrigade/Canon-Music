@@ -26,7 +26,7 @@
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-lg-xl);
   overflow: hidden;
-  box-shadow: 0 24px 80px var(--scrim-4);
+  box-shadow: var(--shadow-3xl) var(--scrim-4);
   animation: cp-slide-in 0.14s var(--ease-out-expo);
 }
 

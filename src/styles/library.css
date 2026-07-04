@@ -121,7 +121,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
-  box-shadow: 0 4px 16px var(--scrim-2);
+  box-shadow: var(--shadow-md) var(--scrim-2);
   min-width: 160px;
   max-height: 280px;
   overflow-y: auto;

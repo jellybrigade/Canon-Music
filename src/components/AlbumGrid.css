@@ -72,7 +72,7 @@
 
 .album-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px var(--scrim-3);
+  box-shadow: var(--shadow-lg) var(--scrim-3);
 }
 
 @supports not (aspect-ratio: 1 / 1) {
