@@ -115,16 +115,16 @@
 }
 
 .feedback-required {
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .feedback-textarea--error {
-  border-color: #e74c3c !important;
+  border-color: var(--danger) !important;
 }
 
 .feedback-steps-error {
   font-size: var(--text-sm);
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .feedback-textarea {
@@ -198,7 +198,7 @@
 }
 
 .feedback-status--error {
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .feedback-status--sent {

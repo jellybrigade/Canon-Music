@@ -182,7 +182,7 @@
 .tag-source-badge--lastfm {
   background: rgba(213, 0, 0, 0.08);
   border-color: rgba(213, 0, 0, 0.25);
-  color: #e74c3c;
+  color: var(--danger);
 }
 
 .td-remapped-hint {
