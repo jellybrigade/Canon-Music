@@ -38,7 +38,7 @@
   opacity: var(--opacity-75);
   z-index: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--duration-long) ease;
 }
 
 .album-detail-back {
@@ -169,7 +169,7 @@
   background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 70%, black);
   color: #fff;
   border-color: transparent;
-  transition: background-color 0.3s ease;
+  transition: background-color var(--duration-slowest) ease;
 }
 
 .play-album-btn:hover:not(:disabled) {
@@ -224,7 +224,7 @@
   border: 1px solid var(--tint-4);
   color: var(--text-secondary, rgba(255, 255, 255, 0.5));
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
   box-shadow: none;
 }
 
@@ -293,7 +293,7 @@
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
 }
 
 .album-tag-chip--excludable {
@@ -370,7 +370,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   opacity: var(--opacity-50);
-  transition: opacity 0.1s;
+  transition: opacity var(--duration-fast);
 }
 
 .album-tag-chip-remove:hover {
@@ -398,7 +398,7 @@
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: border-color 0.12s, color 0.12s;
+  transition: border-color var(--duration-base), color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -478,7 +478,7 @@
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-moderate), color var(--duration-moderate);
 }
 
 .album-tag-action-btn:hover:not(:disabled) {
@@ -689,7 +689,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-xs);
-  transition: color 0.1s, background 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .tracklist-col-picker-btn:hover {
@@ -723,7 +723,7 @@
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .tracklist-col-picker-popup label:hover {
@@ -906,7 +906,7 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color var(--duration-moderate), background var(--duration-moderate), border-color var(--duration-moderate);
   box-shadow: none;
 }
 
@@ -954,7 +954,7 @@
   font-size: var(--text-sm);
   padding: 2px var(--space-2xs);
   cursor: pointer;
-  transition: color 0.1s;
+  transition: color var(--duration-fast);
   white-space: nowrap;
   align-self: flex-start;
 }

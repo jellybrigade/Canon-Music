@@ -79,7 +79,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   letter-spacing: 0.01em;
-  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .sort-btn:hover {
@@ -162,7 +162,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .genre-dropdown-item:hover {
@@ -287,7 +287,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   margin-left: auto;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--duration-moderate), color var(--duration-moderate);
 }
 
 .search-trigger-btn:hover {
@@ -305,7 +305,7 @@
   padding: 0.25em 0.5em;
   flex: 1;
   max-width: 320px;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-moderate);
 }
 
 .search-bar:focus-within {
@@ -347,7 +347,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  transition: color 0.15s;
+  transition: color var(--duration-moderate);
 }
 
 .search-bar-clear:hover {

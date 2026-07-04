@@ -39,7 +39,7 @@
   cursor: pointer;
   line-height: 1;
   border-radius: var(--radius-xs);
-  transition: color 0.1s, background 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast);
   text-align: center;
   min-width: 1.5rem;
 }
@@ -129,7 +129,7 @@
   flex-direction: column;
   gap: 0.05rem;
   opacity: var(--opacity-90);
-  transition: opacity 0.15s ease;
+  transition: opacity var(--duration-moderate) ease;
 }
 
 .album-name {
@@ -182,7 +182,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity var(--duration-moderate), color var(--duration-moderate);
 }
 
 .tracklist-row:hover .track-heart {
@@ -216,7 +216,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity var(--duration-moderate), color var(--duration-moderate);
   z-index: 2;
 }
 
@@ -323,7 +323,7 @@
   padding: 0 var(--space-xs);
   cursor: pointer;
   box-shadow: none;
-  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
   display: flex;
   align-items: center;
   justify-content: center;

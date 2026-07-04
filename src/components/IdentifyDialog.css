@@ -226,7 +226,7 @@
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: background 0.1s, border-color 0.1s;
+  transition: background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .identify-candidate:hover {
@@ -315,7 +315,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
 }
 
 .identify-btn:hover:not(:disabled) {

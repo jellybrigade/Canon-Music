@@ -285,7 +285,7 @@
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color 0.1s, border-color 0.1s, background 0.1s;
+  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
 }
 
 .td-unmatched-row .btn-flat.accept:hover {
@@ -311,7 +311,7 @@
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color 0.1s, border-color 0.1s;
+  transition: color var(--duration-fast), border-color var(--duration-fast);
 }
 
 .tag-drawer-ignore-btn:hover {

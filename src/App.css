@@ -135,7 +135,7 @@ button {
   font-family: inherit;
   color: var(--text-primary);
   background-color: var(--bg-input);
-  transition: border-color 0.15s, opacity 0.15s, background-color 0.15s;
+  transition: border-color var(--duration-moderate), opacity var(--duration-moderate), background-color var(--duration-moderate);
   box-shadow: 0 2px 2px var(--scrim-1);
   outline: none;
 }
@@ -224,7 +224,7 @@ button.primary:hover:not(:disabled) {
   gap: 0.125rem;
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);
-  transition: width 0.18s ease;
+  transition: width var(--duration-slow) ease;
   position: relative;
 }
 
@@ -268,7 +268,7 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: color 0.12s, background-color 0.12s;
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -334,7 +334,7 @@ button.primary:hover:not(:disabled) {
   gap: 10px;
   cursor: pointer;
   color: var(--accent, rgba(255, 255, 255, 0.65));
-  transition: color 0.12s, background-color 0.12s;
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
   opacity: 0.75;
 }
@@ -367,7 +367,7 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: color 0.12s, background-color 0.12s;
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
 }
 

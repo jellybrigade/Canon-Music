@@ -22,7 +22,7 @@
   font-family: inherit;
   cursor: pointer;
   color: var(--text-secondary, #999);
-  transition: color 0.12s ease-out;
+  transition: color var(--duration-base) ease-out;
 }
 
 .genre-line__item:hover,
@@ -95,7 +95,7 @@
   font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
 }
 
 .genre-tab:hover {
@@ -250,7 +250,7 @@
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
   min-height: 44px;
   position: relative;
 }
@@ -329,7 +329,7 @@
   right: 0;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.1s;
+  transition: opacity var(--duration-fast);
 }
 
 .genre-col-row:hover .genre-col-actions {
@@ -340,7 +340,7 @@
 .genre-col-row:hover .genre-col-count,
 .genre-col-row:hover .genre-col-chevron {
   opacity: 0;
-  transition: opacity 0.1s;
+  transition: opacity var(--duration-fast);
 }
 
 .genre-col-action-btn {
@@ -355,7 +355,7 @@
   background: var(--tint-4);
   color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
   flex-shrink: 0;
 }
 

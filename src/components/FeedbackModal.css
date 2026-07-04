@@ -47,7 +47,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.12s, background 0.12s;
+  transition: color var(--duration-base), background var(--duration-base);
 }
 
 .feedback-close:hover {
@@ -73,7 +73,7 @@
   box-shadow: none;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color 0.12s, background 0.12s, border-color 0.12s;
+  transition: color var(--duration-base), background var(--duration-base), border-color var(--duration-base);
 }
 
 .feedback-cat-btn:hover {
@@ -138,7 +138,7 @@
   padding: 0.625rem var(--space-sm);
   resize: none;
   outline: none;
-  transition: border-color 0.12s;
+  transition: border-color var(--duration-base);
   line-height: 1.5;
 }
 
@@ -215,7 +215,7 @@
   background: var(--accent, rgba(255, 255, 255, 0.9));
   color: var(--bg, #000);
   cursor: pointer;
-  transition: opacity 0.12s;
+  transition: opacity var(--duration-base);
 }
 
 .feedback-submit:hover:not(:disabled) {

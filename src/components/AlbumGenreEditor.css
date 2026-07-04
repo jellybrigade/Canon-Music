@@ -30,7 +30,7 @@
   display: flex;
   align-items: center;
   border-radius: var(--radius-xs);
-  transition: color 0.1s;
+  transition: color var(--duration-fast);
 }
 .age-close:hover { color: var(--text-primary); }
 
@@ -117,7 +117,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   opacity: var(--opacity-50);
-  transition: opacity 0.1s;
+  transition: opacity var(--duration-fast);
 }
 .age-chip-remove:hover:not(:disabled) { opacity: 1; }
 .age-chip-remove:disabled { opacity: var(--opacity-20); cursor: default; }

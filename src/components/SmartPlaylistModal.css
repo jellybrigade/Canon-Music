@@ -171,7 +171,7 @@
   font-weight: 500;
   padding: 3px var(--space-xs);
   cursor: pointer;
-  transition: background 100ms, color 100ms, border-color 100ms;
+  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
 }
 
 .spm-mode-btn--active {
@@ -206,7 +206,7 @@
   font-size: var(--text-xs);
   padding: 3px var(--space-xs);
   cursor: pointer;
-  transition: background 100ms, color 100ms;
+  transition: background var(--duration-fast), color var(--duration-fast);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);
@@ -259,7 +259,7 @@
   font-size: var(--text-sm);
   padding: 7px var(--space-md);
   cursor: pointer;
-  transition: background 100ms;
+  transition: background var(--duration-fast);
   font-family: inherit;
 }
 

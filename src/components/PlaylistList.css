@@ -81,7 +81,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-moderate);
 }
 
 .playlist-card-art-placeholder {
@@ -91,7 +91,7 @@
   align-items: center;
   justify-content: center;
   color: var(--text-tertiary);
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-moderate);
 }
 
 .playlist-card-info {
@@ -178,7 +178,7 @@
   justify-content: center;
   gap: 6px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-moderate);
   border-radius: inherit;
 }
 
@@ -198,7 +198,7 @@
   color: #fff;
   cursor: pointer;
   box-shadow: none;
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
 }
 
 .playlist-cover-pick-btn {
@@ -253,7 +253,7 @@
 
 .playlist-edit-icon {
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity var(--duration-moderate);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }

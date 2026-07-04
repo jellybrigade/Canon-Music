@@ -72,7 +72,7 @@
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.12s;
+  transition: opacity var(--duration-base);
   z-index: 1;
 }
 
@@ -95,7 +95,7 @@
   padding: 0;
   box-shadow: 0 2px 8px var(--scrim-2);
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform var(--duration-moderate) ease, box-shadow var(--duration-moderate) ease;
 }
 
 .player-thumb:hover {
@@ -177,7 +177,7 @@
   color: var(--text-primary);
   opacity: var(--opacity-70);
   border-radius: var(--radius-base);
-  transition: opacity 0.15s, background-color 0.15s;
+  transition: opacity var(--duration-moderate), background-color var(--duration-moderate);
 }
 
 .player-btn:hover:not(:disabled) {
@@ -202,7 +202,7 @@
   color: var(--bg) !important;
   opacity: 1;
   font-size: var(--text-md);
-  transition: background-color 0.15s, transform 0.1s;
+  transition: background-color var(--duration-moderate), transform var(--duration-fast);
 }
 
 .player-btn--play:hover:not(:disabled) {
@@ -250,7 +250,7 @@
   border-radius: var(--radius-2xs);
   overflow: hidden;
   outline: none;
-  transition: height 0.15s ease;
+  transition: height var(--duration-moderate) ease;
 }
 
 .player-progress-bar:hover {
@@ -261,7 +261,7 @@
   height: 100%;
   background-color: var(--accent);
   border-radius: var(--radius-2xs);
-  transition: width 0.5s linear;
+  transition: width var(--duration-longest) linear;
 }
 
 .player-progress-bar--waveform {
@@ -398,7 +398,7 @@
   cursor: pointer;
   line-height: 1;
   opacity: var(--opacity-45);
-  transition: opacity 0.1s, color 0.1s;
+  transition: opacity var(--duration-fast), color var(--duration-fast);
 }
 
 .player-star-btn:hover,
@@ -444,7 +444,7 @@
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
   border-radius: 0;
 }
 
@@ -585,7 +585,7 @@
   color: var(--text-primary);
   text-align: left;
   cursor: pointer;
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
   border-radius: 0;
   display: flex;
   align-items: center;

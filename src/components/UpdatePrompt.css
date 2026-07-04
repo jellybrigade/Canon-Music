@@ -166,7 +166,7 @@
   height: 100%;
   background: var(--accent, #5b9bd5);
   border-radius: var(--radius-2xs);
-  transition: width 0.15s ease;
+  transition: width var(--duration-moderate) ease;
 }
 
 .update-prompt-progress-fill[data-indeterminate="true"] {

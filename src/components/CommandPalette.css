@@ -119,7 +119,7 @@
   cursor: pointer;
   font-size: var(--text-md);
   font-weight: 500;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
   text-align: left;
 }
 
@@ -152,7 +152,7 @@
   color: var(--text-primary);
   cursor: pointer;
   text-align: left;
-  transition: background 0.08s;
+  transition: background var(--duration-instant);
 }
 
 .cp-result-row:hover,

@@ -23,6 +23,16 @@
   --radius-2xl: 20px;
   --radius-full: 999px;
 
+  --duration-instant: 80ms;
+  --duration-fast: 100ms;
+  --duration-base: 120ms;
+  --duration-moderate: 150ms;
+  --duration-slow: 180ms;
+  --duration-slower: 250ms;
+  --duration-slowest: 300ms;
+  --duration-long: 400ms;
+  --duration-longest: 500ms;
+
   --motion-fast: 120ms ease-out;
   --motion-med:  200ms ease-out;
   --motion-slow: 240ms cubic-bezier(0.4, 0, 0.2, 1);

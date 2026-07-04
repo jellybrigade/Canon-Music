@@ -24,7 +24,7 @@
   opacity: var(--opacity-60);
   z-index: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--duration-long) ease;
 }
 
 /* Dominant color radial glow at top, derived from album art accent */
@@ -95,7 +95,7 @@
     0 0 0 1px var(--tint-3);
   flex-shrink: 1;
   display: block;
-  transition: box-shadow 0.5s ease;
+  transition: box-shadow var(--duration-longest) ease;
 }
 
 .now-playing-art--placeholder {
@@ -156,7 +156,7 @@
   font-size: var(--text-md);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.6);
-  transition: color 0.15s;
+  transition: color var(--duration-moderate);
   text-align: center;
   width: 100%;
 }
@@ -186,7 +186,7 @@
   margin: var(--space-2xs) 0 0;
   font-weight: 400;
   letter-spacing: 0.01em;
-  transition: color 0.15s;
+  transition: color var(--duration-moderate);
   text-align: center;
   width: 100%;
 }
@@ -230,7 +230,7 @@
   background: var(--tint-5);
   border-radius: var(--radius-2xs);
   cursor: pointer;
-  transition: height 0.12s;
+  transition: height var(--duration-base);
   position: relative;
 }
 
@@ -243,7 +243,7 @@
   background: var(--accent);
   border-radius: var(--radius-2xs);
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
-  transition: background 0.5s ease, box-shadow 0.5s ease;
+  transition: background var(--duration-longest) ease, box-shadow var(--duration-longest) ease;
 }
 
 .now-playing-progress-bar--waveform {
@@ -270,7 +270,7 @@
 .now-playing-waveform-bar--filled {
   background-color: var(--accent);
   box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 50%, transparent);
-  transition: background-color 0.5s ease, box-shadow 0.5s ease;
+  transition: background-color var(--duration-longest) ease, box-shadow var(--duration-longest) ease;
 }
 
 /* ── Playback controls ── */
@@ -286,7 +286,7 @@
   height: 62px;
   border-radius: 50%;
   box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
-  transition: box-shadow 0.5s ease;
+  transition: box-shadow var(--duration-longest) ease;
 }
 
 /* ── Extras row (love, volume, radio chip) ── */
@@ -370,7 +370,7 @@
   padding: var(--space-xs) var(--space-md) 0.625rem;
   cursor: pointer;
   margin-bottom: -1px;
-  transition: color 0.15s, border-bottom-color 0.15s;
+  transition: color var(--duration-moderate), border-bottom-color var(--duration-moderate);
 }
 
 .now-playing-tab-btn:hover,
@@ -438,7 +438,7 @@
   box-shadow: none;
   width: 100%;
   text-align: left;
-  transition: background 0.12s;
+  transition: background var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -464,7 +464,7 @@
   flex-shrink: 0;
   font-size: var(--text-xs);
   color: var(--accent);
-  transition: color 0.5s ease;
+  transition: color var(--duration-longest) ease;
 }
 
 .now-playing-up-next-thumb {
@@ -592,7 +592,7 @@
   flex-shrink: 0;
   width: 96px;
   text-align: center;
-  transition: opacity 0.15s, transform 0.15s;
+  transition: opacity var(--duration-moderate), transform var(--duration-moderate);
 }
 
 .now-playing-album-chip:hover {
@@ -644,7 +644,7 @@
   gap: 0.625rem;
   padding: var(--space-xs) var(--space-xs);
   border-radius: var(--radius-base);
-  transition: background 0.1s;
+  transition: background var(--duration-fast);
 }
 
 .now-playing-track-row:hover {
@@ -726,7 +726,7 @@
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  transition: opacity 0.1s, background 0.1s;
+  transition: opacity var(--duration-fast), background var(--duration-fast);
 }
 
 .now-playing-track-action-btn:hover {
@@ -784,14 +784,14 @@
   color: rgba(255, 255, 255, 0.35);
   line-height: 1.6;
   border-radius: var(--radius-sm-md);
-  transition: color 0.25s, background 0.25s;
+  transition: color var(--duration-slower), background var(--duration-slower);
 }
 
 .lyrics-line--active {
   color: var(--accent);
   font-weight: 600;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-  transition: color 0.25s, background 0.25s;
+  transition: color var(--duration-slower), background var(--duration-slower);
 }
 
 .lyrics-plain {
@@ -871,7 +871,7 @@
   font-size: var(--text-base);
   padding: 0.3rem var(--space-sm);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background var(--duration-base);
 }
 
 .lyrics-search-btn:hover:not(:disabled) {

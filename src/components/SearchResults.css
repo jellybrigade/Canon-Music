@@ -61,7 +61,7 @@
   cursor: pointer;
   text-align: left;
   color: var(--text-primary);
-  transition: background-color 0.1s;
+  transition: background-color var(--duration-fast);
   width: 100%;
 }
 
