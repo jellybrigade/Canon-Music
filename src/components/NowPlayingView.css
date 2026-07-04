@@ -20,7 +20,7 @@
   background-image: var(--art-bg);
   background-size: cover;
   background-position: center;
-  filter: blur(90px) saturate(1.8) brightness(0.45);
+  filter: blur(var(--blur-xl)) saturate(1.8) brightness(0.45);
   opacity: var(--opacity-60);
   z-index: 0;
   pointer-events: none;
@@ -320,7 +320,7 @@
   left: 50%;
   transform: translateX(-50%);
   background: rgba(20, 20, 20, 0.95);
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(var(--blur-sm));
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-2xl);
   padding: var(--space-xs) var(--space-md);
@@ -343,7 +343,7 @@
   overflow: hidden;
   padding: 1.75rem var(--space-xl);
   background: rgba(5, 5, 5, 0.75);
-  backdrop-filter: blur(24px) saturate(0.8);
+  backdrop-filter: blur(var(--blur-md)) saturate(0.8);
   border-left: 1px solid var(--tint-2);
 }
 
@@ -771,7 +771,7 @@
   cursor: pointer;
   z-index: 3;
   white-space: nowrap;
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--blur-xs));
 }
 
 .lyrics-resync-pill:hover {

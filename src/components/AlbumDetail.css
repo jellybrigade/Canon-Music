@@ -34,7 +34,7 @@
   inset: -40px;
   background-size: cover;
   background-position: center top;
-  filter: blur(55px) saturate(1.7) brightness(0.35);
+  filter: blur(var(--blur-lg)) saturate(1.7) brightness(0.35);
   opacity: var(--opacity-75);
   z-index: 0;
   pointer-events: none;

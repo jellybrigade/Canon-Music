@@ -50,6 +50,12 @@
   --shadow-2xl: 0 24px 64px;
   --shadow-3xl: 0 24px 80px;
 
+  --blur-xs: 6px;
+  --blur-sm: 16px;
+  --blur-md: 24px;
+  --blur-lg: 55px;
+  --blur-xl: 90px;
+
   --player-bar-height: 92px;
 
   --z-panel:     50;
