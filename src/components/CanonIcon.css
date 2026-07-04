@@ -1,0 +1,12 @@
+.canon-logo-mark,
+.canon-logo-lockup {
+  display: inline-block;
+  line-height: 0;
+}
+
+.canon-logo-mark svg,
+.canon-logo-lockup svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

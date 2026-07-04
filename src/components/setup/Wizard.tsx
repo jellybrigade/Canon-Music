@@ -4,7 +4,7 @@ import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import type { Server } from "../../types/server";
-import { CanonLockup } from "../CanonIcon";
+import { CanonIcon } from "../CanonIcon";
 import { setApiKey as setLastfmApiKey } from "../../lib/lastfm";
 import { getFanartApiKey, setFanartApiKey } from "../../lib/fanart";
 import { importSettingsFile } from "../../lib/settings-backup";
@@ -187,8 +187,10 @@ export function Wizard({ onSuccess }: Props) {
 
         {step === 1 && (
           <div className="wizard-body">
-            <CanonLockup height={32} className="wizard-lockup" />
-            <h1 className="wizard-title">Welcome to Canon</h1>
+            <div className="wizard-title-row">
+              <CanonIcon size={28} className="wizard-mark" />
+              <h1 className="wizard-title">Welcome to Canon</h1>
+            </div>
             <p className="wizard-desc">
               Canon is a music player for Navidrome that normalizes your tags automatically — genres,
               descriptors, and scenes pulled from Last.fm and your library, organized in the background.

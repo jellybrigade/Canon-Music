@@ -43,8 +43,15 @@
   gap: 1rem;
 }
 
-.wizard-lockup {
+.wizard-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wizard-mark {
   color: var(--text-primary);
+  flex-shrink: 0;
 }
 
 .wizard-title {
