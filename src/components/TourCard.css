@@ -16,7 +16,7 @@
 }
 
 .tour-card-title {
-  font-size: 0.6875rem;
+  font-size: var(--text-sm);
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -39,7 +39,7 @@
 }
 
 .tour-card-prompt-text {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary, rgba(255, 255, 255, 0.9));
 }
@@ -52,14 +52,14 @@
 }
 
 .tour-card-prompt-desc {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-secondary, rgba(255, 255, 255, 0.55));
   margin: 0 0 0.75rem;
   line-height: 1.45;
 }
 
 .tour-card-enable-btn {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--accent, #1db954);
   background: none;
@@ -77,7 +77,7 @@
 
 /* Empty states */
 .tour-card-empty {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
   margin: 0;
 }
@@ -122,7 +122,7 @@
 }
 
 .tour-card-date-month {
-  font-size: 0.5625rem;
+  font-size: var(--text-xs);
   font-weight: 700;
   letter-spacing: 0.05em;
   color: var(--accent, #1db954);
@@ -130,7 +130,7 @@
 }
 
 .tour-card-date-day {
-  font-size: 1rem;
+  font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary, rgba(255, 255, 255, 0.9));
   line-height: 1.1;
@@ -142,7 +142,7 @@
 }
 
 .tour-card-venue {
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-primary, rgba(255, 255, 255, 0.9));
   white-space: nowrap;
@@ -152,7 +152,7 @@
 }
 
 .tour-card-place {
-  font-size: 0.6875rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary, rgba(255, 255, 255, 0.55));
   margin-top: 0.125rem;
   white-space: nowrap;
@@ -170,7 +170,7 @@
 
 /* Show more/less toggle */
 .tour-card-more {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--accent, #1db954);
   background: none;
   border: none;
@@ -185,7 +185,7 @@
 
 /* Attribution */
 .tour-card-credit {
-  font-size: 0.625rem;
+  font-size: var(--text-xs);
   color: rgba(255, 255, 255, 0.2);
   margin: 0.5rem 0 0;
 }

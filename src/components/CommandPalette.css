@@ -49,7 +49,7 @@
   background: transparent;
   border: none;
   outline: none;
-  font-size: 1rem;
+  font-size: var(--text-lg);
   color: var(--text-primary);
   caret-color: var(--accent, #f59e0b);
 }
@@ -59,7 +59,7 @@
 }
 
 .cp-esc-hint {
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -90,7 +90,7 @@
 }
 
 .cp-section-label {
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -117,7 +117,7 @@
   background: rgba(255, 255, 255, 0.04);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
   transition: background 0.1s, color 0.1s;
   text-align: left;
@@ -137,7 +137,7 @@
 }
 
 .cp-nav-label {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
 }
 
 /* ── Search result rows ── */
@@ -182,7 +182,7 @@
 }
 
 .cp-result-primary {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
   flex: 1;
   min-width: 0;
@@ -192,7 +192,7 @@
 }
 
 .cp-result-secondary {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   flex-shrink: 0;
   max-width: 200px;
@@ -206,7 +206,7 @@
   padding: 24px 16px;
   margin: 0;
   text-align: center;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
 }
 
@@ -216,7 +216,7 @@
   gap: 16px;
   padding: 10px 16px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
 }
 
@@ -226,7 +226,7 @@
   border-radius: 3px;
   padding: 1px 4px;
   font-family: inherit;
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   margin-right: 3px;
 }

@@ -4,7 +4,7 @@
 
 .genre-line__caption {
   margin: 0 0 6px;
-  font-size: 0.72rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary, #666);
 }
 
@@ -37,25 +37,25 @@
 }
 
 .genre-line__item--tier0 {
-  font-size: 1.05rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary, #f0f0f0);
 }
 
 .genre-line__item--tier1 {
-  font-size: 0.92rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-secondary, #999);
 }
 
 .genre-line__item--tier2 {
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   font-weight: 400;
   color: var(--text-tertiary, #666);
 }
 
 .genre-line__sep {
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary, #666);
   margin: 0 10px;
   opacity: 0.6;
@@ -73,7 +73,7 @@
 
 .genre-view__loading {
   color: rgba(255, 255, 255, 0.4);
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   padding: 32px 0;
 }
 
@@ -92,7 +92,7 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: transparent;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
@@ -133,7 +133,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
   color: #fff;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   outline: none;
 }
 
@@ -182,7 +182,7 @@
 
 .genre-breadcrumb__sep {
   color: rgba(255, 255, 255, 0.25);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   margin: 0 2px;
 }
 
@@ -190,7 +190,7 @@
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.5);
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   cursor: pointer;
   padding: 0;
 }
@@ -269,7 +269,7 @@
 
 .genre-col-name {
   flex: 1;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   color: rgba(255, 255, 255, 0.85);
   white-space: nowrap;
   overflow: hidden;
@@ -283,14 +283,14 @@
 }
 
 .genre-col-count {
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   color: rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
 }
 
 /* Fixed-width chevron slot so count stays aligned on all rows */
 .genre-col-chevron {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   color: rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
   width: 14px;
@@ -378,7 +378,7 @@
 
 .genre-search-results__empty {
   color: rgba(255, 255, 255, 0.35);
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   padding: 20px 0;
 }
 
@@ -390,7 +390,7 @@
   display: flex;
   align-items: center;
   gap: 3px;
-  font-size: 0.73rem;
+  font-size: var(--text-sm);
   color: rgba(255, 255, 255, 0.28);
   min-width: 0;
   max-width: 240px;

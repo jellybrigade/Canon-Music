@@ -11,7 +11,7 @@
   color: var(--accent, #e06c75);
   border-radius: 10px;
   padding: 1px 8px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -40,7 +40,7 @@
   padding: 0.4em 1em;
   border: none;
   background: transparent;
-  font-size: 0.82rem;
+  font-size: var(--text-base);
   cursor: pointer;
   color: var(--text-primary);
   border-radius: 0;

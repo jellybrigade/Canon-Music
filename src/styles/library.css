@@ -34,14 +34,14 @@
 }
 
 .content-placeholder h2 {
-  font-size: 1rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   margin: 0;
   color: inherit;
 }
 
 .content-placeholder p {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   margin: 0;
 }
 
@@ -70,7 +70,7 @@
 }
 
 .sort-btn {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   font-weight: 500;
   padding: 0.2em 0.6em;
   background: none;
@@ -99,7 +99,7 @@
 }
 
 .genre-filter-btn {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   padding: 0.25em 0.65em;
   box-shadow: none;
   display: inline-flex;
@@ -131,7 +131,7 @@
 }
 
 .genre-dropdown-clear {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   background: none;
   border: none;
@@ -153,7 +153,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  font-size: 0.78rem;
+  font-size: var(--text-base);
   padding: 0.3em 0.5em;
   background: none;
   border: none;
@@ -176,7 +176,7 @@
 }
 
 .genre-dropdown-count {
-  font-size: 0.68rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
@@ -187,7 +187,7 @@
 }
 
 .server-name {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   font-weight: 400;
   color: var(--text-tertiary);
   letter-spacing: 0.01em;
@@ -196,7 +196,7 @@
 
 
 .sync-status {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   margin-left: auto;
 }
@@ -206,7 +206,7 @@
 }
 
 .rescan-btn {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   padding: 0.25em 0.75em;
   box-shadow: none;
 }
@@ -220,7 +220,7 @@
 
 .year-range-input {
   width: 62px;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   padding: 0.22em 0.4em;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -250,7 +250,7 @@
 }
 
 .year-range-sep {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   pointer-events: none;
 }
@@ -260,7 +260,7 @@
   border: none;
   box-shadow: none;
   padding: 0 2px;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   line-height: 1;
   color: var(--text-tertiary);
   cursor: pointer;
@@ -283,7 +283,7 @@
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 0.25em 0.5em;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   cursor: pointer;
   margin-left: auto;
@@ -322,7 +322,7 @@
   border: none;
   box-shadow: none;
   padding: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
   flex: 1;
   min-width: 0;

@@ -59,13 +59,13 @@
 }
 
 .wizard-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 700;
   margin: 0;
 }
 
 .wizard-desc {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   color: var(--text-secondary);
   line-height: 1.55;
   margin: 0;
@@ -81,12 +81,12 @@
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
 }
 
 .wizard-optional {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   font-weight: 400;
   color: var(--text-secondary);
 }
@@ -103,32 +103,32 @@
 }
 
 .wizard-path-remap {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .wizard-path-remap summary {
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 
 .wizard-path-remap label {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
   margin-top: 0.625rem;
 }
 
 .wizard-docker-hint {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .wizard-docker-hint summary {
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 
 .wizard-docker-cmd {
@@ -136,7 +136,7 @@
   padding: 0.75rem;
   background: var(--surface-2);
   border-radius: 6px;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   line-height: 1.6;
   white-space: pre-wrap;
   color: var(--text-secondary);
@@ -156,7 +156,7 @@
 
 .wizard-auth-tab {
   padding: 0.3rem 0.75rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 500;
   border-radius: 0;
   border: none;
@@ -185,12 +185,12 @@
 
 .wizard-error {
   color: var(--danger);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   margin: 0;
 }
 
 .wizard-success {
   color: #27ae60;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   margin: 0;
 }
