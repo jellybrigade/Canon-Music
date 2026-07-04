@@ -11,7 +11,7 @@
 .feedback-modal {
   background: var(--surface-1, #1c1c1e);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 16px 48px var(--scrim-3);
   width: 420px;
   max-width: calc(100vw - 2rem);
@@ -43,7 +43,7 @@
   padding: var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -67,7 +67,7 @@
   padding: 0.35rem 0;
   font-size: var(--text-base);
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   border: 1px solid var(--border);
   background: transparent;
   box-shadow: none;
@@ -131,7 +131,7 @@
   margin: var(--space-sm) var(--space-md) 0;
   background: var(--bg-input, var(--tint-2));
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: var(--text-base);
   font-family: inherit;
@@ -209,7 +209,7 @@
   padding: 0.35rem var(--space-md);
   font-size: var(--text-base);
   font-weight: 600;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   border: none;
   box-shadow: none;
   background: var(--accent, rgba(255, 255, 255, 0.9));

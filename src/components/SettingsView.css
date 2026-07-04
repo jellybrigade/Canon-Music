@@ -50,7 +50,7 @@
   font-family: inherit;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
@@ -185,7 +185,7 @@
 .toggle-track {
   position: absolute;
   inset: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--border-strong, var(--border));
   transition: background 0.18s;
   cursor: pointer;
@@ -239,7 +239,7 @@
   font-family: inherit;
   background: var(--bg-input, var(--surface-1));
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
@@ -259,7 +259,7 @@
   font-family: inherit;
   background: var(--bg-input, var(--surface-1));
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-radius: var(--radius-base-md);
   color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
@@ -307,7 +307,7 @@
   appearance: none;
   background-color: var(--bg-input);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   font-size: var(--text-base);
   font-family: inherit;
@@ -345,7 +345,7 @@
   font-weight: 500;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   cursor: pointer;
   white-space: nowrap;
@@ -371,7 +371,7 @@
   padding: 0.625rem var(--space-sm);
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   margin-bottom: 0.875rem;
 }
 

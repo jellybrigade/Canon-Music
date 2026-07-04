@@ -38,7 +38,7 @@
   color: var(--text-tertiary);
   cursor: pointer;
   line-height: 1;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: color 0.1s, background 0.1s;
   text-align: center;
   min-width: 1.5rem;
@@ -64,7 +64,7 @@
 .album-card {
   position: relative;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   overflow: hidden;
   aspect-ratio: 1 / 1;
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
@@ -95,7 +95,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   background-color: var(--bg-card);
   /* Stable GPU layer: prevents WebKitGTK from re-rasterizing on sibling/hover repaints */
   transform: translateZ(0);
@@ -110,7 +110,7 @@
   height: 100%;
   background-color: var(--bg-card);
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
 }
 
 .album-detail-art.album-art--placeholder {
@@ -124,7 +124,7 @@
   right: 0;
   padding: 2.5rem 0.625rem 0.625rem;
   background: linear-gradient(transparent, var(--scrim-4) 40%, var(--scrim-4));
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--radius-base) var(--radius-base);
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
@@ -178,7 +178,7 @@
   opacity: 0;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -274,7 +274,7 @@
   left: 6px;
   background: rgba(234, 179, 8, 0.9);
   color: #000;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 2px var(--space-2xs);
   display: flex;
   align-items: center;
@@ -288,7 +288,7 @@
   right: 6px;
   background: rgba(99, 102, 241, 0.9);
   color: #fff;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 2px var(--space-2xs);
   display: flex;
   align-items: center;
@@ -314,7 +314,7 @@
 .album-grid-pagination .pg-btn {
   background: none;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font: inherit;
   font-size: var(--text-base);

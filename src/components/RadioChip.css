@@ -9,7 +9,7 @@
   background: none;
   border: 1px solid var(--accent, #e06c75);
   color: var(--accent, #e06c75);
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   padding: 1px var(--space-xs);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -26,7 +26,7 @@
   left: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   box-shadow: 0 4px 16px var(--scrim-2);
   padding: var(--space-2xs) 0;
   min-width: 148px;

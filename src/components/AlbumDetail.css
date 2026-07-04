@@ -67,7 +67,7 @@
   width: 140px;
   height: 140px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   background-color: var(--bg-card);
   flex-shrink: 0;
   box-shadow: 0 4px 20px var(--scrim-3);
@@ -219,7 +219,7 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   background: var(--tint-2);
   border: 1px solid var(--tint-4);
   color: var(--text-secondary, rgba(255, 255, 255, 0.5));
@@ -287,7 +287,7 @@
   align-items: center;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   padding: 1px 7px;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -341,7 +341,7 @@
   align-items: center;
   gap: 3px;
   border: 1px solid var(--accent, #7c6af0);
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   padding: 1px var(--space-2xs) 1px 7px;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -417,7 +417,7 @@
 .album-genre-input {
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: 2px 7px;
   font-size: var(--text-sm);
   color: var(--text-primary);
@@ -436,7 +436,7 @@
   right: 0;
   background: var(--bg-elevated, #1a1a1a);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   list-style: none;
   margin: 0;
   padding: 2px 0;
@@ -473,7 +473,7 @@
   padding: 0.3rem 0.625rem;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm-md);
   font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-secondary);
@@ -498,7 +498,7 @@
   padding: 0.875rem var(--space-md);
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .album-bio-wrap {
@@ -688,7 +688,7 @@
   padding: 2px var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: color 0.1s, background 0.1s;
 }
 
@@ -703,7 +703,7 @@
   top: calc(100% + 4px);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: 0.35rem 0;
   z-index: 200;
   min-width: 130px;
@@ -901,7 +901,7 @@
   color: var(--text-secondary, rgba(255, 255, 255, 0.45));
   background: var(--tint-2);
   border: 1px solid var(--tint-4);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 7px;
   font-weight: 500;
   letter-spacing: 0.02em;
@@ -924,7 +924,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   background: var(--tint-3);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 0.1em 0.35em;
   color: var(--text-tertiary);
   vertical-align: middle;

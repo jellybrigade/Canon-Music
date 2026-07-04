@@ -9,9 +9,19 @@
   --space-3xl: 64px;
   --space-4xl: 96px;
 
+  --radius-2xs: 2px;
+  --radius-xs: 3px;
   --radius-sm: 4px;
+  --radius-sm-md: 5px;
+  --radius-base: 6px;
+  --radius-base-md: 7px;
   --radius-md: 8px;
+  --radius-md-lg: 10px;
   --radius-lg: 12px;
+  --radius-lg-xl: 14px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 999px;
 
   --motion-fast: 120ms ease-out;
   --motion-med:  200ms ease-out;

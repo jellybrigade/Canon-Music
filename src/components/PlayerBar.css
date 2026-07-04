@@ -61,7 +61,7 @@
   right: 3px;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   border: none;
   box-shadow: none;
   padding: 0;
@@ -88,7 +88,7 @@
 .player-thumb {
   width: 54px;
   height: 54px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm-md);
   background-color: var(--bg-card);
   overflow: hidden;
   border: none;
@@ -176,7 +176,7 @@
   line-height: 1;
   color: var(--text-primary);
   opacity: var(--opacity-70);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   transition: opacity 0.15s, background-color 0.15s;
 }
 
@@ -247,7 +247,7 @@
   flex: 1;
   height: 3px;
   background-color: var(--progress-track);
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   overflow: hidden;
   outline: none;
   transition: height 0.15s ease;
@@ -260,7 +260,7 @@
 .player-progress-fill {
   height: 100%;
   background-color: var(--accent);
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   transition: width 0.5s linear;
 }
 
@@ -345,7 +345,7 @@
 .normalizing-bar__dismiss {
   margin-left: 10px;
   padding: 1px var(--space-xs);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: var(--text-sm);
   cursor: pointer;
   border: 1px solid var(--border);
@@ -369,7 +369,7 @@
 .normalizing-bar__more {
   margin-left: 6px;
   padding: 1px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: var(--text-base);
   line-height: 1;
   cursor: pointer;
@@ -425,7 +425,7 @@
   width: 130px;
   background: var(--surface-1, #1c1c1c);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 24px var(--scrim-3);
   z-index: var(--z-overlay);
   display: flex;
@@ -468,7 +468,7 @@
   bottom: 92px;
   left: 1.25rem;
   width: 260px;
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   overflow: hidden;
   box-shadow: 0 8px 32px var(--scrim-3);
   z-index: var(--z-overlay);
@@ -566,7 +566,7 @@
   width: 220px;
   background: var(--surface-1, #1c1c1c);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   box-shadow: 0 8px 24px var(--scrim-3);
   z-index: var(--z-overlay);
   display: flex;

@@ -135,7 +135,7 @@
   margin: var(--space-xs) 0 0;
   padding: var(--space-sm);
   background: var(--surface-2);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   font-size: var(--text-base);
   line-height: 1.6;
   white-space: pre-wrap;

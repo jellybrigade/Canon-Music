@@ -24,7 +24,7 @@
   max-width: calc(100vw - 32px);
   background: #1a1a1a;
   border: 1px solid var(--tint-4);
-  border-radius: 14px;
+  border-radius: var(--radius-lg-xl);
   overflow: hidden;
   box-shadow: 0 24px 80px var(--scrim-4);
   animation: cp-slide-in 0.14s cubic-bezier(0.16, 1, 0.3, 1);
@@ -63,7 +63,7 @@
   color: var(--text-tertiary);
   background: var(--tint-2);
   border: 1px solid var(--tint-4);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 5px;
   font-family: inherit;
   cursor: default;
@@ -77,7 +77,7 @@
 }
 
 .cp-results::-webkit-scrollbar { width: 4px; }
-.cp-results::-webkit-scrollbar-thumb { background: var(--tint-4); border-radius: 2px; }
+.cp-results::-webkit-scrollbar-thumb { background: var(--tint-4); border-radius: var(--radius-2xs); }
 
 .cp-section {
   padding: var(--space-2xs) 0;
@@ -113,7 +113,7 @@
   gap: var(--space-xs);
   padding: 10px var(--space-sm);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--tint-1);
   color: var(--text-secondary);
   cursor: pointer;
@@ -163,7 +163,7 @@
 .cp-art {
   width: 32px;
   height: 32px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -223,7 +223,7 @@
 .cp-footer kbd {
   background: var(--tint-3);
   border: 1px solid var(--tint-4);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 1px var(--space-2xs);
   font-family: inherit;
   font-size: var(--text-sm);

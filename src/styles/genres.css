@@ -33,7 +33,7 @@
 .genre-line__item:focus-visible {
   outline: 2px solid var(--accent, #5a8ef8);
   outline-offset: 2px;
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
 }
 
 .genre-line__item--tier0 {
@@ -88,7 +88,7 @@
 
 .genre-tab {
   padding: 6px 18px;
-  border-radius: 20px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--tint-4);
   background: transparent;
   color: rgba(255, 255, 255, 0.5);
@@ -129,7 +129,7 @@
 .genre-search__input {
   width: 280px;
   padding: 7px var(--space-xl) 7px var(--space-xl);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--tint-4);
   background: var(--tint-2);
   color: #fff;
@@ -207,7 +207,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--tint-3);
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
 }
 
 .genre-column {
@@ -232,7 +232,7 @@
 }
 .genre-column::-webkit-scrollbar-thumb {
   background: transparent;
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
 }
 .genre-column:hover::-webkit-scrollbar-thumb {
   background: var(--tint-5);

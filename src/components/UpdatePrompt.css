@@ -60,7 +60,7 @@
   color: var(--text-primary);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: var(--space-sm);
   margin: 0;
   max-height: 320px;
@@ -110,7 +110,7 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.125rem var(--space-xs);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   align-self: flex-start;
 }
 
@@ -158,14 +158,14 @@
 .update-prompt-progress-track {
   height: 4px;
   background: var(--surface-3, var(--border));
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   overflow: hidden;
 }
 
 .update-prompt-progress-fill {
   height: 100%;
   background: var(--accent, #5b9bd5);
-  border-radius: 2px;
+  border-radius: var(--radius-2xs);
   transition: width 0.15s ease;
 }
 
@@ -202,7 +202,7 @@
   font-weight: 500;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   cursor: pointer;
   white-space: nowrap;

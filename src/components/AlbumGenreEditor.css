@@ -29,7 +29,7 @@
   cursor: pointer;
   display: flex;
   align-items: center;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   transition: color 0.1s;
 }
 .age-close:hover { color: var(--text-primary); }
@@ -70,7 +70,7 @@
   gap: 2px;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   padding: 1px var(--space-2xs) 1px 7px;
   font-size: var(--text-sm);
   font-weight: 500;
@@ -144,7 +144,7 @@
 .age-input {
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: 3px var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-primary);
@@ -162,7 +162,7 @@
   right: 0;
   background: var(--bg-elevated, #1a1a1a);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   list-style: none;
   margin: 0;
   padding: 2px 0;

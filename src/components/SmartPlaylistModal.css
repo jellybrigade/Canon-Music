@@ -11,7 +11,7 @@
 .spm-dialog {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   width: 480px;
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 80px);
@@ -46,7 +46,7 @@
   cursor: pointer;
   padding: var(--space-2xs);
   line-height: 1;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
 }
@@ -117,7 +117,7 @@
 .spm-input {
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   font-size: var(--text-sm);
   padding: 7px 10px;
@@ -139,7 +139,7 @@
   background-repeat: no-repeat;
   background-position: right 0.6em center;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   font-size: var(--text-sm);
   padding: 7px 2em 7px 10px;
@@ -165,7 +165,7 @@
 .spm-mode-btn {
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 500;
@@ -201,7 +201,7 @@
 .spm-genre-chip {
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   padding: 3px var(--space-xs);
@@ -254,7 +254,7 @@
 .spm-btn {
   background: var(--bg-hover-strong);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   color: var(--text-primary);
   font-size: var(--text-sm);
   padding: 7px var(--space-md);
