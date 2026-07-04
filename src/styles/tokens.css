@@ -33,9 +33,12 @@
   --duration-long: 400ms;
   --duration-longest: 500ms;
 
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+
   --motion-fast: 120ms ease-out;
   --motion-med:  200ms ease-out;
-  --motion-slow: 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-slow: 240ms var(--ease-standard);
 
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.4);
