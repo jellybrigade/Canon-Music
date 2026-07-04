@@ -292,38 +292,17 @@
 }
 
 /* ── Buttons ── */
+/* Shared shape in styles/base.css (.identify-btn, .merge-btn, .spm-btn). */
 .identify-btn {
-  background: var(--tint-3);
-  border: 1px solid var(--tint-4);
-  border-radius: var(--radius-base);
-  color: var(--text-primary, #fff);
-  font-size: var(--text-sm);
-  font-family: inherit;
   padding: var(--space-xs) var(--space-sm);
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
-  transition: background var(--duration-fast);
-}
-
-.identify-btn:hover:not(:disabled) {
-  background: var(--tint-4);
 }
 
 .identify-btn:disabled {
   opacity: var(--opacity-50);
   cursor: default;
-}
-
-.identify-btn--primary {
-  background: var(--accent, #7c6fff);
-  border-color: transparent;
-  font-weight: 600;
-}
-
-.identify-btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover, #9183ff);
 }
 
 .identify-btn--fetch {

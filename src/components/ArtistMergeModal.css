@@ -164,30 +164,7 @@
   flex-shrink: 0;
 }
 
-.merge-btn {
-  background: var(--tint-3);
-  border: 1px solid var(--tint-4);
-  border-radius: var(--radius-base);
-  color: var(--text-primary, #fff);
-  font-size: var(--text-sm);
-  padding: var(--space-xs) var(--space-md);
-  cursor: pointer;
-  transition: background var(--motion-fast, 120ms);
-}
-
-.merge-btn:hover {
-  background: var(--tint-4);
-}
-
-.merge-btn--primary {
-  background: var(--accent, #396cd8);
-  border-color: transparent;
-  font-weight: 500;
-}
-
-.merge-btn--primary:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent, #396cd8) 85%, white);
-}
+/* Shared shape in styles/base.css (.identify-btn, .merge-btn, .spm-btn). */
 
 .merge-btn--primary:disabled {
   opacity: var(--opacity-40);
