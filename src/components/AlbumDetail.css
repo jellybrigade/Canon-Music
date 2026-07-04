@@ -912,8 +912,8 @@
 
 .album-unidentified-badge:hover {
   color: var(--text-primary, rgba(255, 255, 255, 0.85));
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--overlay-tint-strong);
+  border-color: var(--border-strong);
 }
 
 /* ── Tag level badge ── */
@@ -923,7 +923,7 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: rgba(255,255,255,0.08);
+  background: var(--overlay-tint-weak);
   border-radius: 3px;
   padding: 0.1em 0.35em;
   color: var(--text-tertiary);

@@ -762,7 +762,7 @@
     opacity var(--motion-med, 200ms ease-out),
     transform var(--motion-med, 200ms ease-out),
     background var(--motion-fast, 120ms ease-out);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.55);
+  box-shadow: 0 2px 8px var(--scrim-2);
 }
 
 .foryou-v2-tile:hover .foryou-v2-tile__play {

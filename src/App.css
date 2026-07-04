@@ -29,6 +29,11 @@
 
   --progress-track: rgba(255, 255, 255, 0.12);
 
+  --overlay-tint-weak:   rgba(255, 255, 255, 0.08);
+  --overlay-tint-strong: rgba(255, 255, 255, 0.1);
+  --scrim-1: rgba(0, 0, 0, 0.4);
+  --scrim-2: rgba(0, 0, 0, 0.55);
+
   --player-bar-height: 92px;
 
   --z-panel:     50;
@@ -83,6 +88,11 @@
   --text-tertiary:  #888;
 
   --progress-track: rgba(0, 0, 0, 0.12);
+
+  --overlay-tint-weak:   rgba(0, 0, 0, 0.05);
+  --overlay-tint-strong: rgba(0, 0, 0, 0.08);
+  --scrim-1: rgba(0, 0, 0, 0.2);
+  --scrim-2: rgba(0, 0, 0, 0.3);
 
   --surface-0:     #f5f5f5;
   --surface-1:     #ffffff;
