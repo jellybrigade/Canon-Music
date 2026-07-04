@@ -152,7 +152,7 @@
   height: 140px;
   object-fit: cover;
   border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 20px var(--scrim-3);
   display: block;
   flex-shrink: 0;
 }
@@ -172,7 +172,7 @@
 .playlist-cover-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: var(--scrim-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -192,8 +192,8 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: var(--tint-5);
+  border: 1px solid var(--tint-6);
   border-radius: 50%;
   color: #fff;
   cursor: pointer;
@@ -213,8 +213,8 @@
 
 .playlist-cover-pick-btn:hover,
 .playlist-cover-remove-btn:hover {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.45);
+  background: var(--tint-6);
+  border-color: var(--tint-6);
 }
 
 /* ── Inline edit ── */

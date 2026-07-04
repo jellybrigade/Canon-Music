@@ -29,10 +29,17 @@
 
   --progress-track: rgba(255, 255, 255, 0.12);
 
-  --overlay-tint-weak:   rgba(255, 255, 255, 0.08);
-  --overlay-tint-strong: rgba(255, 255, 255, 0.1);
-  --scrim-1: rgba(0, 0, 0, 0.4);
-  --scrim-2: rgba(0, 0, 0, 0.55);
+  --tint-1: rgba(255, 255, 255, 0.04);
+  --tint-2: rgba(255, 255, 255, 0.06);
+  --tint-3: rgba(255, 255, 255, 0.08);
+  --tint-4: rgba(255, 255, 255, 0.12);
+  --tint-5: rgba(255, 255, 255, 0.15);
+  --tint-6: rgba(255, 255, 255, 0.25);
+
+  --scrim-1: rgba(0, 0, 0, 0.25);
+  --scrim-2: rgba(0, 0, 0, 0.45);
+  --scrim-3: rgba(0, 0, 0, 0.6);
+  --scrim-4: rgba(0, 0, 0, 0.8);
 
   --player-bar-height: 92px;
 
@@ -89,10 +96,17 @@
 
   --progress-track: rgba(0, 0, 0, 0.12);
 
-  --overlay-tint-weak:   rgba(0, 0, 0, 0.05);
-  --overlay-tint-strong: rgba(0, 0, 0, 0.08);
-  --scrim-1: rgba(0, 0, 0, 0.2);
-  --scrim-2: rgba(0, 0, 0, 0.3);
+  --tint-1: rgba(0, 0, 0, 0.03);
+  --tint-2: rgba(0, 0, 0, 0.045);
+  --tint-3: rgba(0, 0, 0, 0.06);
+  --tint-4: rgba(0, 0, 0, 0.09);
+  --tint-5: rgba(0, 0, 0, 0.12);
+  --tint-6: rgba(0, 0, 0, 0.18);
+
+  --scrim-1: rgba(0, 0, 0, 0.18);
+  --scrim-2: rgba(0, 0, 0, 0.32);
+  --scrim-3: rgba(0, 0, 0, 0.45);
+  --scrim-4: rgba(0, 0, 0, 0.65);
 
   --surface-0:     #f5f5f5;
   --surface-1:     #ffffff;
@@ -102,7 +116,7 @@
 
 .light-theme .sidebar-btn--active,
 .light-theme .sidebar-btn--active:hover:not(:disabled) {
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: var(--tint-4);
 }
 
 
@@ -122,7 +136,7 @@ button {
   color: var(--text-primary);
   background-color: var(--bg-input);
   transition: border-color 0.15s, opacity 0.15s, background-color 0.15s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 2px var(--scrim-1);
   outline: none;
 }
 
@@ -229,7 +243,7 @@ button.primary:hover:not(:disabled) {
 }
 
 .sidebar-resize-handle:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tint-4);
   border-radius: 3px;
 }
 
@@ -274,12 +288,12 @@ button.primary:hover:not(:disabled) {
 
 .sidebar-btn--active {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--tint-4);
 }
 
 .sidebar-btn--active:hover:not(:disabled) {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--tint-4);
 }
 
 .sidebar-btn-icon {

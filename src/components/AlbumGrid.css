@@ -46,7 +46,7 @@
 
 .album-grid-scrubber-item:hover {
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tint-2);
   border: none;
 }
 
@@ -72,7 +72,7 @@
 
 .album-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 24px var(--scrim-3);
 }
 
 @supports not (aspect-ratio: 1 / 1) {
@@ -123,7 +123,7 @@
   left: 0;
   right: 0;
   padding: 2.5rem 0.625rem 0.625rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.88));
+  background: linear-gradient(transparent, var(--scrim-4) 40%, var(--scrim-4));
   border-radius: 0 0 6px 6px;
   display: flex;
   flex-direction: column;
@@ -142,7 +142,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: #f0f0f0;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 4px var(--scrim-4);
 }
 
 .album-artist {
@@ -154,7 +154,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 4px var(--scrim-4);
 }
 
 .empty-state {
@@ -205,7 +205,7 @@
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim-3);
   border: none;
   box-shadow: none;
   padding: 0.3em;

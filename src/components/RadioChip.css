@@ -27,7 +27,7 @@
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px var(--scrim-2);
   padding: var(--space-2xs) 0;
   min-width: 148px;
   z-index: var(--z-overlay);

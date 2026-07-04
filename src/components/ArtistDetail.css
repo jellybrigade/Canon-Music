@@ -108,8 +108,8 @@
   font-size: var(--text-sm);
   font-weight: 500;
   color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--tint-3);
+  border: 1px solid var(--tint-5);
   border-radius: 8px;
   padding: 0.1em 0.55em;
 }
@@ -127,8 +127,8 @@
   gap: var(--space-2xs);
   font-size: var(--text-base);
   color: rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--tint-3);
+  border: 1px solid var(--tint-4);
   border-radius: 8px;
   padding: 0.15em 0.5em 0.15em 0.65em;
 }
@@ -167,8 +167,8 @@
 .artist-genre-chip {
   font-size: var(--text-base);
   color: rgba(255, 255, 255, 0.65);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--tint-3);
+  border: 1px solid var(--tint-5);
   border-radius: 10px;
   padding: var(--space-2xs) var(--space-sm);
 }
@@ -199,8 +199,8 @@
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid var(--tint-4);
+  background: var(--scrim-1);
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
   display: flex;
@@ -218,9 +218,9 @@
 }
 
 .artist-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--scrim-3);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: var(--tint-6);
 }
 
 /* ── Body ── */

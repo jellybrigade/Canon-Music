@@ -23,7 +23,7 @@
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--tint-3);
   border-radius: 10px;
   padding: 1px var(--space-xs);
 }
@@ -40,8 +40,8 @@
   gap: 6px;
   padding: var(--space-2xs) 10px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
   color: var(--text-secondary);
   font-size: var(--text-xs);
   cursor: pointer;
@@ -50,7 +50,7 @@
 }
 
 .unidentified-rescan-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tint-4);
   color: var(--text-primary);
 }
 
@@ -83,7 +83,7 @@
 }
 
 .unidentified-row:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--tint-1);
 }
 
 .unidentified-art-wrap {
@@ -135,8 +135,8 @@
   gap: 6px;
   padding: 5px var(--space-sm);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
   color: var(--text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -144,6 +144,6 @@
 }
 
 .unidentified-identify-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tint-4);
   color: var(--text-primary);
 }
