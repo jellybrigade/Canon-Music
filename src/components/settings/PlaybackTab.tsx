@@ -3,6 +3,7 @@ import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
 import { SegToggle } from "../TagsViewHelpers";
+import "../TagsView.css";
 
 const RADIO_SIMILARITY_STEPS = [
   { label: "Narrow",   value: "0"    },
