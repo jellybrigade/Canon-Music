@@ -132,7 +132,7 @@
 .cp-nav-icon {
   display: flex;
   align-items: center;
-  opacity: 0.7;
+  opacity: var(--opacity-70);
   flex-shrink: 0;
 }
 

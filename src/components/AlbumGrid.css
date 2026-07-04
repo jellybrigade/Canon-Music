@@ -128,7 +128,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
-  opacity: 0.95;
+  opacity: var(--opacity-90);
   transition: opacity 0.15s ease;
 }
 
@@ -186,7 +186,7 @@
 }
 
 .tracklist-row:hover .track-heart {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
 }
 
 .track-heart:hover:not(:disabled) {
@@ -221,7 +221,7 @@
 }
 
 .album-card:hover .album-heart {
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .album-heart:hover:not(:disabled) {
@@ -330,7 +330,7 @@
 }
 
 .album-grid-pagination .pg-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); border-color: transparent; }
-.album-grid-pagination .pg-btn:disabled { opacity: 0.3; cursor: default; }
+.album-grid-pagination .pg-btn:disabled { opacity: var(--opacity-30); cursor: default; }
 .album-grid-pagination .pg-btn--active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
 
 .album-grid-pagination .pg-ellipsis {

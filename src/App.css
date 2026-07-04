@@ -409,3 +409,17 @@ button.primary:hover:not(:disabled) {
   }
 }
 
+/* ── Opacity scale (element-level states: disabled, muted, hover-fade) ── */
+:root {
+  --opacity-20: 0.2;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-45: 0.45;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-75: 0.75;
+  --opacity-85: 0.85;
+  --opacity-90: 0.9;
+}
+

@@ -29,7 +29,7 @@
 .queue-panel-resize-handle:hover,
 .queue-panel-resize-handle:active {
   background: var(--accent);
-  opacity: 0.4;
+  opacity: var(--opacity-40);
 }
 
 .queue-panel-header {
@@ -51,7 +51,7 @@
   padding: 0.2em 0.5em;
   box-shadow: none;
   line-height: 1;
-  opacity: 0.6;
+  opacity: var(--opacity-60);
 }
 
 .queue-panel-close:hover {

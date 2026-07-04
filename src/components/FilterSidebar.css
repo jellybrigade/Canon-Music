@@ -259,5 +259,5 @@
 
 .filter-sidebar-genre-item--active .filter-sidebar-genre-count {
   color: var(--accent);
-  opacity: 0.7;
+  opacity: var(--opacity-70);
 }

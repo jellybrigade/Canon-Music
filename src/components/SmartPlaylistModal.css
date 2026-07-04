@@ -281,6 +281,6 @@
 }
 
 .spm-btn:disabled {
-  opacity: 0.4;
+  opacity: var(--opacity-40);
   cursor: not-allowed;
 }

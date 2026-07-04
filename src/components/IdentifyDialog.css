@@ -323,7 +323,7 @@
 }
 
 .identify-btn:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-50);
   cursor: default;
 }
 

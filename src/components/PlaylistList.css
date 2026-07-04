@@ -63,7 +63,7 @@
 
 .playlist-card:hover .playlist-card-art img,
 .playlist-card:hover .playlist-card-art-placeholder {
-  opacity: 0.85;
+  opacity: var(--opacity-85);
 }
 
 .playlist-card-art {

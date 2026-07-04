@@ -58,7 +58,7 @@
   font-size: var(--text-base);
   color: var(--text-tertiary, #666);
   margin: 0 10px;
-  opacity: 0.6;
+  opacity: var(--opacity-60);
 }
 
 /* ── Genre View Page ──────────────────────────────────────────────────────── */
@@ -406,5 +406,5 @@
 
 .genre-col-breadcrumb__sep {
   flex-shrink: 0;
-  opacity: 0.5;
+  opacity: var(--opacity-50);
 }

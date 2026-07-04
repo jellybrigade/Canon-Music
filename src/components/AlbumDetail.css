@@ -35,7 +35,7 @@
   background-size: cover;
   background-position: center top;
   filter: blur(55px) saturate(1.7) brightness(0.35);
-  opacity: 0.75;
+  opacity: var(--opacity-75);
   z-index: 0;
   pointer-events: none;
   transition: opacity 0.4s ease;
@@ -46,7 +46,7 @@
   font-size: var(--text-base);
   padding: 0.2em 0.65em;
   box-shadow: none;
-  opacity: 0.7;
+  opacity: var(--opacity-70);
   position: relative;
   z-index: 2;
 }
@@ -253,7 +253,7 @@
 .mb-verified-facts span + span::before {
   content: "·";
   margin-right: 0.4em;
-  opacity: 0.5;
+  opacity: var(--opacity-50);
 }
 
 .album-tag-band {
@@ -310,7 +310,7 @@
 /* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
 .album-tag-chip--lastfm {
   border-style: dashed;
-  opacity: 0.85;
+  opacity: var(--opacity-85);
 }
 
 .album-tag-chip--lastfm:hover {
@@ -319,7 +319,7 @@
 
 .album-tag-chip--musicbrainz {
   border-style: dotted;
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .album-tag-chip--musicbrainz:hover {
@@ -328,7 +328,7 @@
 
 .album-tag-chip--musicbrainz-folksonomy {
   border-style: dotted;
-  opacity: 0.6;
+  opacity: var(--opacity-60);
 }
 
 .album-tag-chip--musicbrainz-folksonomy:hover {
@@ -369,7 +369,7 @@
   align-items: center;
   color: var(--text-tertiary);
   cursor: pointer;
-  opacity: 0.5;
+  opacity: var(--opacity-50);
   transition: opacity 0.1s;
 }
 
@@ -486,7 +486,7 @@
   color: var(--text-primary);
 }
 
-.album-tag-action-btn:disabled { opacity: 0.4; cursor: default; }
+.album-tag-action-btn:disabled { opacity: var(--opacity-40); cursor: default; }
 
 .album-tag-action-msg {
   font-size: var(--text-base);
@@ -527,7 +527,7 @@
   font-size: var(--text-base);
   color: var(--accent);
   cursor: pointer;
-  opacity: 0.85;
+  opacity: var(--opacity-85);
   transition: opacity var(--motion-fast);
 }
 
@@ -617,7 +617,7 @@
 .track-genre-chip:not(:last-child)::after {
   content: "·";
   margin: 0 0.3rem;
-  opacity: 0.4;
+  opacity: var(--opacity-40);
 }
 
 .track-duration {

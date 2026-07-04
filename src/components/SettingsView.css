@@ -71,7 +71,7 @@
 
 .settings-nav-chevron {
   margin-left: auto;
-  opacity: 0.5;
+  opacity: var(--opacity-50);
 }
 
 /* ── Panel area ──────────────────────────────────────────────── */
@@ -213,7 +213,7 @@
 }
 
 .toggle-switch input:disabled + .toggle-track {
-  opacity: 0.4;
+  opacity: var(--opacity-40);
   cursor: not-allowed;
 }
 
@@ -352,7 +352,7 @@
 }
 
 .settings-btn:disabled {
-  opacity: 0.6;
+  opacity: var(--opacity-60);
   cursor: not-allowed;
 }
 

@@ -72,12 +72,12 @@
 
 .search-bar-input::placeholder {
   color: var(--text-tertiary);
-  opacity: 0.6;
+  opacity: var(--opacity-60);
 }
 
 .search-bar-icon {
   color: var(--text-tertiary);
-  opacity: 0.5;
+  opacity: var(--opacity-50);
   flex-shrink: 0;
 }
 
@@ -89,7 +89,7 @@
   padding: 0;
   cursor: pointer;
   color: var(--text-tertiary);
-  opacity: 0.5;
+  opacity: var(--opacity-50);
   flex-shrink: 0;
 }
 
@@ -105,12 +105,12 @@
   padding: 0;
   cursor: pointer;
   flex-shrink: 0;
-  opacity: 0.4;
+  opacity: var(--opacity-40);
   transition: opacity 0.15s;
 }
 
 .home-search-palette-hint:hover {
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .home-search-palette-hint kbd {
@@ -671,11 +671,11 @@
 
 .foryou-v2-tab--disabled {
   color: var(--text-tertiary, #555);
-  opacity: 0.5;
+  opacity: var(--opacity-50);
 }
 
 .foryou-v2-tab--disabled:hover {
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .foryou-v2-edit-hint {
@@ -834,7 +834,7 @@
   color: var(--text-tertiary, #666);
   font-weight: 400;
   margin: 0;
-  opacity: 0.65;
+  opacity: var(--opacity-60);
 }
 
 .home-section__subtitle::before {
