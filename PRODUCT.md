@@ -6,7 +6,7 @@ product
 
 ## Users
 
-Self-hosters running their own Navidrome (soon Jellyfin/Plex) server. Playback is the primary daily use — Canon behaves like a real desktop music player, used continuously in the background. Tag and metadata management (genre normalization, artist enrichment, tag-issue cleanup) is a secondary but load-bearing workflow the same user dips into periodically to keep their library clean. Both modes matter; playback chrome must stay unobtrusive while tag/metadata screens must stay dense and precise.
+Self-hosters running their own Navidrome server. Playback is the primary daily use — Canon behaves like a real desktop music player, used continuously in the background. Tag and metadata management (genre normalization, artist enrichment, tag-issue cleanup) is a secondary but load-bearing workflow the same user dips into periodically to keep their library clean. Both modes matter; playback chrome must stay unobtrusive while tag/metadata screens must stay dense and precise.
 
 ## Product Purpose
 

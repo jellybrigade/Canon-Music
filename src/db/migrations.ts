@@ -10,7 +10,7 @@ export const migrations: Migration[] = [
       CREATE TABLE IF NOT EXISTS tracks (
         id TEXT PRIMARY KEY,
         server_id TEXT NOT NULL,
-        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome', 'jellyfin', 'plex')),
+        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome')),
         title TEXT NOT NULL,
         artist TEXT,
         album_artist TEXT,
@@ -27,7 +27,7 @@ export const migrations: Migration[] = [
       CREATE TABLE IF NOT EXISTS albums (
         id TEXT PRIMARY KEY,
         server_id TEXT NOT NULL,
-        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome', 'jellyfin', 'plex')),
+        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome')),
         name TEXT NOT NULL,
         artist TEXT,
         album_artist TEXT,
@@ -39,7 +39,7 @@ export const migrations: Migration[] = [
       CREATE TABLE IF NOT EXISTS artists (
         id TEXT PRIMARY KEY,
         server_id TEXT NOT NULL,
-        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome', 'jellyfin', 'plex')),
+        server_type TEXT NOT NULL CHECK (server_type IN ('navidrome')),
         name TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -89,7 +89,7 @@ export const migrations: Migration[] = [
     sql: `
       CREATE TABLE IF NOT EXISTS servers (
         id TEXT PRIMARY KEY,
-        type TEXT NOT NULL CHECK (type IN ('navidrome', 'jellyfin', 'plex')),
+        type TEXT NOT NULL CHECK (type IN ('navidrome')),
         url TEXT NOT NULL,
         display_name TEXT NOT NULL,
         username TEXT NOT NULL,

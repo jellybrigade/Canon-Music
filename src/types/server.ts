@@ -1,4 +1,4 @@
-export type ServerType = "navidrome" | "jellyfin" | "plex";
+export type ServerType = "navidrome";
 
 export interface Server {
   id: string;

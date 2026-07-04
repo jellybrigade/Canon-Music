@@ -4,7 +4,7 @@ A desktop music player and tag management tool for self-hosted music servers. Cu
 
 ## Features
 
-- Stream your library from Navidrome, Jellyfin, or Plex
+- Stream your library from Navidrome
 - Full playback controls: shuffle, repeat, queue, drag-to-reorder
 - Radio Auto-DJ: genre-aware track generation using a canonical genre tree and Last.fm
 - Tag management: review and write tags back to files via a sidecar process

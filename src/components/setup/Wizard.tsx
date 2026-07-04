@@ -207,13 +207,7 @@ export function Wizard({ onSuccess }: Props) {
 
         {step === 2 && (
           <div className="wizard-body">
-            <h1 className="wizard-title">Connect your server</h1>
-
-            <div className="wizard-server-types">
-              <button className="wizard-server-type wizard-server-type--active">Navidrome</button>
-              <button className="wizard-server-type" disabled title="Coming soon">Jellyfin</button>
-              <button className="wizard-server-type" disabled title="Coming soon">Plex</button>
-            </div>
+            <h1 className="wizard-title">Connect your Navidrome server</h1>
 
             <div className="wizard-form">
               <label>
