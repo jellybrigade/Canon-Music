@@ -304,7 +304,7 @@
 .btn-flat:hover { color: var(--text-primary); }
 
 .btn-flat.accept:hover {
-  color: #4caf7d;
+  color: var(--success-a);
   border-color: rgba(76, 175, 125, 0.35);
 }
 
@@ -840,7 +840,7 @@
   min-width: 60px;
 }
 
-.tree-changelog-action--create { color: #4caf7d; }
+.tree-changelog-action--create { color: var(--success-a); }
 .tree-changelog-action--update { color: var(--accent); }
 .tree-changelog-action--delete { color: var(--danger); }
 

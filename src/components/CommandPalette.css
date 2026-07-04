@@ -22,7 +22,7 @@
 .cp-modal {
   width: 580px;
   max-width: calc(100vw - 32px);
-  background: #1a1a1a;
+  background: var(--color-bg-deep);
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-lg-xl);
   overflow: hidden;

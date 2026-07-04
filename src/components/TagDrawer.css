@@ -289,7 +289,7 @@
 }
 
 .td-unmatched-row .btn-flat.accept:hover {
-  color: #4caf7d;
+  color: var(--success-a);
   border-color: rgba(76, 175, 125, 0.45);
   background: rgba(76, 175, 125, 0.07);
 }

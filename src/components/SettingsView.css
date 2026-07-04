@@ -426,7 +426,7 @@
 }
 
 .settings-success {
-  color: #27ae60;
+  color: var(--success-b);
   font-size: var(--text-md);
   margin: 0;
 }
@@ -458,5 +458,5 @@
 }
 
 .settings-diag-value--ok {
-  color: #27ae60;
+  color: var(--success-b);
 }

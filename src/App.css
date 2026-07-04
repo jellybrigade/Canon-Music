@@ -21,6 +21,16 @@
   --accent-subtle: rgba(90, 142, 248, 0.15);
 
   --danger:        #e74c3c;
+  --success-a:     #4caf7d;
+  --success-b:     #27ae60;
+
+  /* Legacy-page colors — not part of the core bg/accent scale, but each value
+     recurs verbatim across multiple files (home.css, ArtistMergeModal.css,
+     UpdatePrompt.css / AlbumGenreEditor.css, AlbumDetail.css / CommandPalette.css,
+     AlbumDetail.css, home.css) — tokenized here to kill the duplication. */
+  --color-link-blue:    #396cd8;
+  --color-accent-purple: #7c6af0;
+  --color-bg-deep:      #1a1a1a;
 
   --surface-0:     #111111;
   --surface-1:     #1c1c1c;
