@@ -36,7 +36,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.75rem 1rem;
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -62,7 +62,7 @@
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.4rem 0.75rem;
+  padding: 0.4rem var(--space-sm);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -105,11 +105,11 @@
 .queue-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.25rem 0;
+  padding: var(--space-2xs) 0;
 }
 
 .queue-empty {
-  padding: 2rem 1rem;
+  padding: var(--space-xl) var(--space-md);
   text-align: center;
   color: var(--text-tertiary);
   font-size: var(--text-md);
@@ -118,8 +118,8 @@
 .queue-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  gap: var(--space-xs);
+  padding: 0.4rem var(--space-sm);
   cursor: default;
   user-select: none;
 }
@@ -196,7 +196,7 @@
 .queue-row-drag-handle {
   color: var(--text-tertiary);
   font-size: var(--text-base);
-  padding-right: 4px;
+  padding-right: var(--space-2xs);
   cursor: grab;
   user-select: none;
 }

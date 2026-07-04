@@ -68,13 +68,13 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding: 24px 28px;
+  padding: var(--space-lg) 28px;
 }
 
 .genre-view__loading {
   color: rgba(255, 255, 255, 0.4);
   font-size: var(--text-md);
-  padding: 32px 0;
+  padding: var(--space-xl) 0;
 }
 
 /* ── Section tabs ── */
@@ -128,7 +128,7 @@
 
 .genre-search__input {
   width: 280px;
-  padding: 7px 32px 7px 32px;
+  padding: 7px var(--space-xl) 7px var(--space-xl);
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.06);
@@ -169,7 +169,7 @@
   display: flex;
   align-items: center;
   gap: 2px;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-sm);
   flex-shrink: 0;
   min-height: 22px;
 }
@@ -246,7 +246,7 @@
 .genre-col-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-xs);
   padding: 10px 14px;
   cursor: pointer;
   user-select: none;
@@ -316,7 +316,7 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
   width: 64px;
 }
@@ -324,7 +324,7 @@
 .genre-col-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   position: absolute;
   right: 0;
   opacity: 0;

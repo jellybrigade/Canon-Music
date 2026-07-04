@@ -8,7 +8,7 @@
 
 /* ── Hero — slim inline header, matches NowPlaying track-info row ── */
 .artist-hero {
-  padding: 1.25rem 1.5rem 0.75rem;
+  padding: 1.25rem var(--space-lg) var(--space-sm);
 }
 
 .artist-hero-main {
@@ -16,7 +16,7 @@
   align-items: center;
   gap: 1.25rem;
   min-width: 0;
-  margin-top: 0.75rem;
+  margin-top: var(--space-sm);
 }
 
 .artist-hero-info {
@@ -46,7 +46,7 @@
 .artist-hero-meta-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   flex-wrap: wrap;
   margin-bottom: 0.3rem;
 }
@@ -124,7 +124,7 @@
 .artist-alias-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   font-size: var(--text-base);
   color: rgba(255, 255, 255, 0.6);
   background: rgba(255, 255, 255, 0.07);
@@ -159,9 +159,9 @@
 /* ── Genre chips ── */
 .artist-genre-chips {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-md);
 }
 
 .artist-genre-chip {
@@ -170,7 +170,7 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
-  padding: 0.25rem 0.75rem;
+  padding: var(--space-2xs) var(--space-sm);
 }
 
 /* ── Hero actions ── */
@@ -230,7 +230,7 @@
 }
 
 .artist-section {
-  padding: 1.5rem 1.5rem 0;
+  padding: var(--space-lg) var(--space-lg) 0;
 }
 
 .artist-section-title {
@@ -307,7 +307,7 @@
 /* ── Similar artists ── */
 .artist-similar-strip {
   display: flex;
-  gap: 1.5rem;
+  gap: var(--space-lg);
   overflow-x: auto;
   padding-bottom: 0.4rem;
 }
@@ -381,8 +381,8 @@
 .artist-track-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.4rem 0.5rem;
+  gap: var(--space-sm);
+  padding: 0.4rem var(--space-xs);
   border-radius: 6px;
   transition: background-color var(--motion-fast);
   cursor: pointer;
@@ -493,7 +493,7 @@
   color: var(--text-secondary);
   font-size: var(--text-md);
   cursor: pointer;
-  padding: 0.5rem 0.5rem;
+  padding: var(--space-xs) var(--space-xs);
   display: flex;
   align-items: center;
   gap: 0.3rem;
@@ -510,7 +510,7 @@
 
 /* ── Last.fm-only tracks ── */
 .artist-lastfm-only {
-  margin-top: 0.5rem;
+  margin-top: var(--space-xs);
 }
 
 .artist-lastfm-divider {
@@ -518,7 +518,7 @@
   align-items: center;
   gap: 0.6rem;
   width: 100%;
-  margin: 0.5rem 0 0.4rem;
+  margin: var(--space-xs) 0 0.4rem;
   padding: 0;
   background: none;
   border: none;
@@ -553,7 +553,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem var(--space-xs);
   opacity: 0.55;
 }
 
@@ -568,7 +568,7 @@
   font-size: var(--text-base);
   color: var(--text-tertiary);
   flex-shrink: 0;
-  margin-left: 0.5rem;
+  margin-left: var(--space-xs);
 }
 
 /* ── Discography tabs (underline style — coding-standards.md) ── */
@@ -599,7 +599,7 @@
 .artist-about-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
+  gap: var(--space-lg);
   align-items: start;
 }
 
@@ -613,7 +613,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg, 12px);
-  padding: 1.5rem;
+  padding: var(--space-lg);
 }
 
 .artist-about-links {
@@ -629,7 +629,7 @@
   border: 1px solid var(--border-strong);
   box-shadow: none;
   border-radius: 6px;
-  padding: 0.3rem 0.75rem;
+  padding: 0.3rem var(--space-sm);
   cursor: pointer;
   transition: color var(--motion-fast);
 }
@@ -640,14 +640,14 @@
 
 /* ── Enrichment footer ── */
 .artist-enrichment-footer {
-  padding: 1rem 1.5rem 1.5rem;
+  padding: var(--space-md) var(--space-lg) var(--space-lg);
   font-size: var(--text-base);
   color: var(--text-tertiary);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   flex-wrap: wrap;
-  margin-top: 0.5rem;
+  margin-top: var(--space-xs);
   border-top: 1px solid var(--border);
 }
 

@@ -11,7 +11,7 @@
   padding: 1.25rem 1.25rem 2.25rem;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-md);
   position: relative;
   overflow: hidden;
 }
@@ -76,15 +76,15 @@
 .album-detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
   min-width: 0;
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--space-2xs);
 }
 
 .album-detail-title-row {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   min-width: 0;
 }
 
@@ -180,7 +180,7 @@
 .album-meta-refresh-line {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   margin-top: 0.1rem;
 }
 
@@ -208,8 +208,8 @@
 .album-detail-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
 }
 
 .album-identify-btn {
@@ -269,7 +269,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
 }
 
 .album-tag-column-title {
@@ -297,7 +297,7 @@
 }
 
 .album-tag-chip--excludable {
-  padding: 1px 4px 1px 7px;
+  padding: 1px var(--space-2xs) 1px 7px;
   gap: 2px;
 }
 
@@ -342,7 +342,7 @@
   gap: 3px;
   border: 1px solid var(--accent, #7c6af0);
   border-radius: 10px;
-  padding: 1px 4px 1px 7px;
+  padding: 1px var(--space-2xs) 1px 7px;
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -446,7 +446,7 @@
 }
 
 .album-genre-autocomplete-item {
-  padding: 4px 10px;
+  padding: var(--space-2xs) 10px;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -461,8 +461,8 @@
 .album-tag-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -494,8 +494,8 @@
 }
 
 .album-bio-section {
-  margin: 0.75rem 1.25rem 0;
-  padding: 0.875rem 1rem;
+  margin: var(--space-sm) 1.25rem 0;
+  padding: 0.875rem var(--space-md);
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -569,7 +569,7 @@
 }
 
 .tracklist td {
-  padding: 0.5rem 0.5rem;
+  padding: var(--space-xs) var(--space-xs);
   vertical-align: middle;
 }
 
@@ -577,7 +577,7 @@
   color: var(--text-tertiary);
   text-align: right;
   width: 2.5rem;
-  padding-right: 0.75rem;
+  padding-right: var(--space-sm);
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -669,7 +669,7 @@
 
 .tracklist-wrapper > .tracklist-col-picker-anchor {
   align-self: flex-end;
-  padding: 0.25rem;
+  padding: var(--space-2xs);
 }
 
 /* ── Column picker ── */
@@ -685,7 +685,7 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px 4px;
+  padding: 2px var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: 3px;
@@ -718,8 +718,8 @@
 .tracklist-col-picker-popup label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.75rem;
+  gap: var(--space-xs);
+  padding: 0.3rem var(--space-sm);
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
@@ -748,7 +748,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 0.25rem;
+  padding: 0 var(--space-2xs);
 }
 
 /* ── Playlist column header ── */
@@ -765,7 +765,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem var(--space-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -824,7 +824,7 @@
 }
 
 .playlist-vrow > * {
-  padding: 0.5rem;
+  padding: var(--space-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -833,7 +833,7 @@
 .playlist-vrow-num {
   color: var(--text-tertiary);
   text-align: right;
-  padding-right: 0.75rem !important;
+  padding-right: var(--space-sm) !important;
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -864,7 +864,7 @@
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
-  padding-right: 0.75rem !important;
+  padding-right: var(--space-sm) !important;
 }
 
 /* ── Track table: selected row + sortable header buttons ── */
@@ -878,7 +878,7 @@
   box-shadow: none;
   cursor: pointer;
   text-align: left;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   text-transform: uppercase;
@@ -896,7 +896,7 @@
 .album-unidentified-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   font-size: var(--text-xs);
   color: var(--text-secondary, rgba(255, 255, 255, 0.45));
   background: rgba(255, 255, 255, 0.06);
@@ -939,7 +939,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   font-style: italic;
-  padding-right: 0.5rem;
+  padding-right: var(--space-xs);
   min-width: 2.5rem;
 }
 
@@ -952,7 +952,7 @@
   color: var(--text-tertiary);
   font: inherit;
   font-size: var(--text-sm);
-  padding: 2px 4px;
+  padding: 2px var(--space-2xs);
   cursor: pointer;
   transition: color 0.1s;
   white-space: nowrap;
@@ -971,7 +971,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-sm);
   padding: 0 1.25rem;
 }
 

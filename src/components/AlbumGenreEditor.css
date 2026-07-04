@@ -35,10 +35,10 @@
 .age-close:hover { color: var(--text-primary); }
 
 .age-body {
-  padding: 0.5rem 1.25rem 0.625rem;
+  padding: var(--space-xs) 1.25rem 0.625rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   max-height: 280px;
   overflow-y: auto;
 }
@@ -61,7 +61,7 @@
 .age-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
 }
 
 .age-chip {
@@ -71,7 +71,7 @@
   background: none;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 1px 4px 1px 7px;
+  padding: 1px var(--space-2xs) 1px 7px;
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -145,7 +145,7 @@
   background: var(--bg-hover);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 3px 8px;
+  padding: 3px var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-primary);
   width: 100%;
@@ -172,7 +172,7 @@
 }
 
 .age-autocomplete-item {
-  padding: 4px 10px;
+  padding: var(--space-2xs) 10px;
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;

@@ -24,7 +24,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px 16px;
+  padding: 20px var(--space-lg) var(--space-md);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -36,7 +36,7 @@
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-xs);
 }
 
 .spm-close {
@@ -44,7 +44,7 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px;
+  padding: var(--space-2xs);
   line-height: 1;
   border-radius: 4px;
   display: flex;
@@ -62,7 +62,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding: 16px 24px;
+  padding: var(--space-md) var(--space-lg);
   min-height: 0;
 }
 
@@ -70,8 +70,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 16px;
-  margin-bottom: 16px;
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-md);
   border-bottom: 1px solid var(--border);
 }
 
@@ -90,13 +90,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--space-xs);
 }
 
 .spm-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .spm-field--half {
@@ -105,7 +105,7 @@
 
 .spm-row {
   display: flex;
-  gap: 12px;
+  gap: var(--space-sm);
 }
 
 .spm-label {
@@ -159,7 +159,7 @@
 
 .spm-genre-mode-toggle {
   display: flex;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .spm-mode-btn {
@@ -169,7 +169,7 @@
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-weight: 500;
-  padding: 3px 8px;
+  padding: 3px var(--space-xs);
   cursor: pointer;
   transition: background 100ms, color 100ms, border-color 100ms;
 }
@@ -204,12 +204,12 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font-size: var(--text-xs);
-  padding: 3px 8px;
+  padding: 3px var(--space-xs);
   cursor: pointer;
   transition: background 100ms, color 100ms;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .spm-genre-chip:hover {
@@ -236,7 +236,7 @@
 .spm-genre-empty {
   font-size: var(--text-xs);
   color: var(--text-secondary);
-  padding: 4px 0;
+  padding: var(--space-2xs) 0;
 }
 
 /* Footer */
@@ -245,8 +245,8 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-  padding: 14px 24px;
+  gap: var(--space-xs);
+  padding: 14px var(--space-lg);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -257,7 +257,7 @@
   border-radius: 6px;
   color: var(--text-primary);
   font-size: var(--text-sm);
-  padding: 7px 16px;
+  padding: 7px var(--space-md);
   cursor: pointer;
   transition: background 100ms;
   font-family: inherit;

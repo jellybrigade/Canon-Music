@@ -45,10 +45,10 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 8px 16px;
+  padding: var(--space-xs) var(--space-xs) var(--space-md);
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .filter-sidebar-body::-webkit-scrollbar {
@@ -63,13 +63,13 @@
 .filter-sidebar-clear-all {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px 4px;
+  padding: 2px var(--space-2xs);
   cursor: pointer;
   border-radius: 3px;
   margin-bottom: 2px;
@@ -90,7 +90,7 @@
   background: none;
   border: 1px solid transparent;
   border-radius: 5px;
-  padding: 5px 8px;
+  padding: 5px var(--space-xs);
   cursor: pointer;
   transition: background 0.1s, color 0.1s, border-color 0.1s;
   white-space: nowrap;
@@ -111,15 +111,15 @@
 .filter-sidebar-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 8px;
+  gap: var(--space-2xs);
+  margin-top: var(--space-xs);
 }
 
 .filter-sidebar-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px;
+  padding: 0 var(--space-2xs);
   font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -146,7 +146,7 @@
 .filter-sidebar-year-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   padding: 0 2px;
 }
 
@@ -219,9 +219,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
+  gap: var(--space-2xs);
   font-size: var(--text-base);
-  padding: 4px 8px;
+  padding: var(--space-2xs) var(--space-xs);
   background: none;
   border: none;
   box-shadow: none;

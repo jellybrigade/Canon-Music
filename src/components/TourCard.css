@@ -28,14 +28,14 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 0.875rem 1rem;
+  padding: 0.875rem var(--space-md);
 }
 
 .tour-card-prompt-row {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--space-2xs);
 }
 
 .tour-card-prompt-text {
@@ -54,7 +54,7 @@
 .tour-card-prompt-desc {
   font-size: var(--text-base);
   color: var(--text-secondary, rgba(255, 255, 255, 0.55));
-  margin: 0 0 0.75rem;
+  margin: 0 0 var(--space-sm);
   line-height: 1.45;
 }
 
@@ -65,7 +65,7 @@
   background: none;
   border: 1px solid var(--accent, #1db954);
   border-radius: 4px;
-  padding: 0.25rem 0.75rem;
+  padding: var(--space-2xs) var(--space-sm);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
@@ -118,7 +118,7 @@
   text-align: center;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 5px;
-  padding: 0.25rem 0.25rem 0.2rem;
+  padding: var(--space-2xs) var(--space-2xs) 0.2rem;
 }
 
 .tour-card-date-month {
@@ -174,7 +174,7 @@
   color: var(--accent, #1db954);
   background: none;
   border: none;
-  padding: 0.5rem 0 0;
+  padding: var(--space-xs) 0 0;
   cursor: pointer;
   display: block;
 }
@@ -187,5 +187,5 @@
 .tour-card-credit {
   font-size: var(--text-xs);
   color: rgba(255, 255, 255, 0.2);
-  margin: 0.5rem 0 0;
+  margin: var(--space-xs) 0 0;
 }

@@ -2,11 +2,11 @@
 .playlist-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0.5rem 0 2rem;
+  padding: var(--space-xs) 0 var(--space-xl);
 }
 
 .playlist-list-toolbar {
-  padding: 0.5rem 1.25rem 0.75rem;
+  padding: var(--space-xs) 1.25rem var(--space-sm);
 }
 
 .playlist-create-btn {
@@ -29,7 +29,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0.5rem 1.25rem 1rem;
+  padding: var(--space-xs) 1.25rem var(--space-md);
 }
 
 .playlist-create-input {
@@ -73,7 +73,7 @@
   overflow: hidden;
   background: var(--bg-card);
   border: 1px solid var(--border);
-  margin-bottom: 8px;
+  margin-bottom: var(--space-xs);
 }
 
 .playlist-card-art img {
@@ -119,8 +119,8 @@
 .playlist-detail-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
 }
 
 .playlist-delete-btn {
@@ -239,7 +239,7 @@
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .playlist-editable-desc--empty {
@@ -261,7 +261,7 @@
 .playlist-inline-edit {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   min-width: 0;
   width: 100%;
 }

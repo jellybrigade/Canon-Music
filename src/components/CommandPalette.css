@@ -39,8 +39,8 @@
 .cp-input-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
+  gap: var(--space-xs);
+  padding: 14px var(--space-md);
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -73,20 +73,20 @@
 .cp-results {
   max-height: 420px;
   overflow-y: auto;
-  padding: 8px 0;
+  padding: var(--space-xs) 0;
 }
 
 .cp-results::-webkit-scrollbar { width: 4px; }
 .cp-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
 
 .cp-section {
-  padding: 4px 0;
+  padding: var(--space-2xs) 0;
 }
 
 .cp-section + .cp-section {
   border-top: 1px solid rgba(255, 255, 255, 0.05);
-  margin-top: 4px;
-  padding-top: 8px;
+  margin-top: var(--space-2xs);
+  padding-top: var(--space-xs);
 }
 
 .cp-section-label {
@@ -95,7 +95,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  padding: 0 16px 6px;
+  padding: 0 var(--space-md) 6px;
   margin: 0;
 }
 
@@ -103,15 +103,15 @@
 .cp-nav-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
-  padding: 0 12px 8px;
+  gap: var(--space-2xs);
+  padding: 0 var(--space-sm) var(--space-xs);
 }
 
 .cp-nav-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: var(--space-xs);
+  padding: 10px var(--space-sm);
   border: none;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.04);
@@ -146,7 +146,7 @@
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 7px 16px;
+  padding: 7px var(--space-md);
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -203,7 +203,7 @@
 
 /* ── Empty / loading ── */
 .cp-empty {
-  padding: 24px 16px;
+  padding: var(--space-lg) var(--space-md);
   margin: 0;
   text-align: center;
   font-size: var(--text-md);
@@ -213,8 +213,8 @@
 /* ── Footer ── */
 .cp-footer {
   display: flex;
-  gap: 16px;
-  padding: 10px 16px;
+  gap: var(--space-md);
+  padding: 10px var(--space-md);
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   font-size: var(--text-sm);
   color: var(--text-tertiary);
@@ -224,7 +224,7 @@
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 3px;
-  padding: 1px 4px;
+  padding: 1px var(--space-2xs);
   font-family: inherit;
   font-size: var(--text-sm);
   color: var(--text-secondary);

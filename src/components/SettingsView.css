@@ -29,7 +29,7 @@
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  padding: 1.5rem 0.5rem 1.5rem;
+  padding: var(--space-lg) var(--space-xs) var(--space-lg);
   gap: 2px;
   overflow-y: auto;
 }
@@ -38,13 +38,13 @@
   font-size: var(--text-lg);
   font-weight: 700;
   color: var(--text-primary);
-  padding: 0 0.5rem 1rem;
+  padding: 0 var(--space-xs) var(--space-md);
 }
 
 .settings-nav-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   padding: 0.45rem 0.625rem;
   font-size: var(--text-base);
   font-family: inherit;
@@ -88,7 +88,7 @@
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  padding: 1.5rem 2rem 1.25rem;
+  padding: var(--space-lg) var(--space-xl) 1.25rem;
   flex-shrink: 0;
 }
 
@@ -113,7 +113,7 @@
 .settings-advanced-divider {
   height: 1px;
   background: var(--border);
-  margin: 2rem 0;
+  margin: var(--space-xl) 0;
 }
 
 /* ── Setting row (label+desc left, control right) ───────────── */
@@ -219,7 +219,7 @@
 
 .setting-row--stacked {
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--space-xs);
 }
 
 .setting-row--stacked .setting-row-control {
@@ -270,7 +270,7 @@
 }
 
 .settings-section {
-  margin-bottom: 2rem;
+  margin-bottom: var(--space-xl);
 }
 
 .settings-section-title {
@@ -323,19 +323,19 @@
   width: 100%;
   accent-color: var(--accent);
   cursor: pointer;
-  margin-top: 0.25rem;
+  margin-top: var(--space-2xs);
 }
 
 .settings-field--inline {
   flex-direction: row;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
 }
 
 .settings-field--row {
   flex-direction: row;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-sm);
   flex-wrap: wrap;
 }
 
@@ -367,8 +367,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.625rem 0.75rem;
+  gap: var(--space-md);
+  padding: 0.625rem var(--space-sm);
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -399,18 +399,18 @@
 .settings-server-edit {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-sm);
   margin-bottom: 0.875rem;
 }
 
 .settings-remove-server {
-  margin-top: 0.5rem;
+  margin-top: var(--space-xs);
 }
 
 .settings-remove-confirm {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -436,7 +436,7 @@
 .settings-diag-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-sm);
   font-size: var(--text-md);
   margin-bottom: 0.625rem;
   flex-wrap: wrap;

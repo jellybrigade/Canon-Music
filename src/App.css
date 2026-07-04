@@ -195,7 +195,7 @@ button.primary:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.75rem 0;
+  padding: var(--space-sm) 0;
   padding-bottom: var(--player-bar-height);
   gap: 0.125rem;
   border-right: 1px solid var(--border);
@@ -251,7 +251,7 @@ button.primary:hover:not(:disabled) {
 .sidebar--expanded .sidebar-btn {
   width: auto;
   height: 40px;
-  margin: 0 8px;
+  margin: 0 var(--space-xs);
   padding: 0 10px;
   justify-content: flex-start;
   gap: 10px;

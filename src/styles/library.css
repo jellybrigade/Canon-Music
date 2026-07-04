@@ -29,7 +29,7 @@
   justify-content: center;
   padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
   color: var(--text-tertiary);
-  gap: 0.5rem;
+  gap: var(--space-xs);
   animation: fadeIn var(--motion-med);
 }
 
@@ -57,8 +57,8 @@
 .library-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 1.25rem;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -127,7 +127,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: var(--space-2xs);
 }
 
 .genre-dropdown-clear {
@@ -152,7 +152,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   font-size: var(--text-base);
   padding: 0.3em 0.5em;
   background: none;
@@ -214,7 +214,7 @@
 .year-range-filter {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 

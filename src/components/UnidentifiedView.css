@@ -1,7 +1,7 @@
 .unidentified-view {
   display: flex;
   flex-direction: column;
-  padding: 24px 28px;
+  padding: var(--space-lg) 28px;
   overflow-y: auto;
 }
 
@@ -25,7 +25,7 @@
   color: var(--text-secondary);
   background: rgba(255, 255, 255, 0.08);
   border-radius: 10px;
-  padding: 1px 8px;
+  padding: 1px var(--space-xs);
 }
 
 .unidentified-empty {
@@ -38,7 +38,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  padding: var(--space-2xs) 10px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -70,14 +70,14 @@
 .unidentified-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .unidentified-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px;
+  gap: var(--space-sm);
+  padding: var(--space-xs) 10px;
   border-radius: 8px;
   transition: background 0.1s;
 }
@@ -133,7 +133,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 5px var(--space-sm);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
