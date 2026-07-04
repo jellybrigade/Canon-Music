@@ -1,6 +1,6 @@
 # Canon
 
-Desktop music player + tag management tool for self-hosted music servers. Supports Navidrome now; Jellyfin/Plex planned. Built Tauri + React. Full spec: `plan.md`. File/data flow map: `ARCHITECTURE.md`.
+Desktop music player + tag management tool for self-hosted music servers. Supports Navidrome. Built Tauri + React. Full spec: `plan.md`. File/data flow map: `ARCHITECTURE.md`.
 
 ---
 
@@ -79,7 +79,7 @@ Don't flatten single-parent. Don't merge `canon-tree.json` + `user-tree.json`. S
 - Lyrics: LRClib fetch + SQLite cache + synced auto-scroll NowPlayingOverlay
 - Settings: centered layout, unified "Metadata & Tags" section
 
-**Not scope / TBD:** Writing tags back music files (removed, re-design pending), AcoustID fingerprinting, true sample-accurate gapless, streaming HTTP seek, Jellyfin webhooks, package manager distribution, MusicBrainz submission, light theme.
+**Not scope / TBD:** Writing tags back music files (removed, re-design pending), AcoustID fingerprinting, true sample-accurate gapless, streaming HTTP seek, package manager distribution, MusicBrainz submission, light theme.
 
 ---
 

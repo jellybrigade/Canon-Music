@@ -22,6 +22,7 @@ const TrackTableView = lazy(() => import("./components/TrackTableView").then((m)
 import { PlayerBar } from "./components/PlayerBar";
 import { QueuePanel } from "./components/QueuePanel";
 import { CanonLockup } from "./components/CanonIcon";
+import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
 const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m) => ({ default: m.NowPlayingView })));
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
@@ -454,7 +455,7 @@ export default function App() {
     if (currentTrack?.coverArtUrl) {
       link.href = currentTrack.coverArtUrl;
     } else {
-      link.href = "/icon.svg";
+      link.href = canonFaviconUrl;
     }
   }, [currentTrack?.coverArtUrl]);
 
