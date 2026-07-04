@@ -22,7 +22,7 @@
 }
 
 .tags-view-title {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -36,7 +36,7 @@
   box-shadow: none;
   color: var(--text-tertiary);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--text-lg);
   line-height: 1;
   padding: 3px 7px;
   cursor: pointer;
@@ -57,7 +57,7 @@
 
 .tags-tab-btn {
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   padding: 12px 20px;
   display: flex;
   align-items: center;
@@ -66,7 +66,7 @@
 }
 
 .tags-tab-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   letter-spacing: 0;
 }
@@ -116,7 +116,7 @@
   padding: 8px 24px;
   background: var(--accent-subtle);
   border-bottom: 1px solid var(--border);
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   flex-shrink: 0;
   gap: 14px;
@@ -127,7 +127,7 @@
   border: none;
   color: var(--text-tertiary);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -151,7 +151,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   padding: 8px 12px;
   outline: none;
   width: 220px;
@@ -173,7 +173,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -187,7 +187,7 @@
   background: none;
   border: none;
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   padding: 5px 12px;
   cursor: pointer;
@@ -237,7 +237,7 @@
 .rr-info { display: contents; }
 
 .rr-name {
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-primary);
   line-height: 1.35;
@@ -250,7 +250,7 @@
 }
 
 .rr-albums {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -292,7 +292,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   padding: 7px 14px;
   cursor: pointer;
   transition: color 0.1s, border-color 0.1s;
@@ -337,7 +337,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   min-width: 34px;
   height: 34px;
   padding: 0 8px;
@@ -354,7 +354,7 @@
 
 .pg-ellipsis {
   color: var(--text-tertiary);
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   padding: 0 6px;
   user-select: none;
 }
@@ -363,7 +363,7 @@
   padding: 60px 24px;
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-base);
 }
 
 .review-empty strong {
@@ -371,7 +371,7 @@
   color: var(--text-secondary);
   margin-bottom: 6px;
   font-weight: 500;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 /* ── Decided tab ─────────────────────────────────────────────────────────────── */
@@ -391,7 +391,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   padding: 6px 10px;
   outline: none;
   width: 180px;
@@ -412,7 +412,7 @@
   border-radius: 0;
   box-shadow: none;
   font: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   color: var(--text-tertiary);
   padding: 5px 13px;
   cursor: pointer;
@@ -434,7 +434,7 @@
 
 .dtab-count {
   color: var(--text-tertiary);
-  font-size: 0.75rem;
+  font-size: var(--text-base);
 }
 
 .dtab--active .dtab-count {
@@ -453,7 +453,7 @@
 }
 
 .decided-section-label {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -479,7 +479,7 @@
 }
 
 .decided-group-name {
-  font-size: 0.95rem;
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   flex: 1;
@@ -489,7 +489,7 @@
 }
 
 .decided-group-albums {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -513,7 +513,7 @@
 }
 
 .decided-alias-name {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -525,7 +525,7 @@
   border: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   line-height: 1;
   padding: 0 1px;
   flex-shrink: 0;
@@ -559,7 +559,7 @@
 }
 
 .d-name {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -569,7 +569,7 @@
 }
 
 .d-stale {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   border: 1px solid var(--border-strong);
   border-radius: 2px;
@@ -579,7 +579,7 @@
 }
 
 .d-albums {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   text-align: right;
   white-space: nowrap;
@@ -593,7 +593,7 @@
   color: var(--text-tertiary);
   opacity: 0.45;
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
   width: 26px;
   height: 26px;
   display: flex;
@@ -639,7 +639,7 @@
   padding: 44px 24px;
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
 }
 
 .decided-empty strong {
@@ -647,7 +647,7 @@
   color: var(--text-secondary);
   margin-bottom: 6px;
   font-weight: 500;
-  font-size: 0.9rem;
+  font-size: var(--text-md);
 }
 
 /* ── Tree tab ─────────────────────────────────────────────────────────────────── */
@@ -663,7 +663,7 @@
 }
 
 .tags-tab-desc {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   line-height: 1.5;
 }
@@ -674,7 +674,7 @@
   border-radius: 3px;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   padding: 7px 14px;
   cursor: pointer;
   transition: color 0.1s, border-color 0.1s;
@@ -695,7 +695,7 @@
   padding: 10px 24px;
   background: rgba(231, 76, 60, 0.08);
   border-bottom: 1px solid rgba(231, 76, 60, 0.2);
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--danger);
   flex-shrink: 0;
 }
@@ -712,7 +712,7 @@
   gap: 18px;
   padding: 0.8rem 0 0.5rem;
   border-bottom: 1px solid var(--border);
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -747,7 +747,7 @@
 }
 
 .tree-node-name {
-  font-size: 1rem;
+  font-size: var(--text-lg);
   font-weight: 500;
   color: var(--text-primary);
   overflow: hidden;
@@ -756,7 +756,7 @@
 }
 
 .tree-node-parent {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -773,7 +773,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   color: var(--danger);
 }
 
@@ -810,7 +810,7 @@
 }
 
 .tree-changelog-title {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -828,12 +828,12 @@
   align-items: center;
   gap: 12px;
   padding: 7px 0;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
 .tree-changelog-action {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   font-weight: 500;
@@ -852,7 +852,7 @@
 }
 
 .tree-changelog-date {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   white-space: nowrap;
 }
@@ -860,7 +860,7 @@
 /* ── Shared: kind badge ────────────────────────────────────────────────────────── */
 
 .tags-kind-badge {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 500;
@@ -878,7 +878,7 @@
   padding: 60px 24px;
   text-align: center;
   color: var(--text-tertiary);
-  font-size: 0.8rem;
+  font-size: var(--text-base);
 }
 
 /* ── Shared: seg toggle ───────────────────────────────────────────────────────── */
@@ -895,7 +895,7 @@
   background: none;
   border: none;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   padding: 4px 10px;
   border-radius: 3px;
@@ -927,7 +927,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   padding: 8px 30px 8px 12px;
   outline: none;
   transition: border-color 0.1s;
@@ -942,7 +942,7 @@
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-tertiary);
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   pointer-events: none;
 }
 
@@ -957,7 +957,7 @@
 
 .tags-combobox-option {
   padding: 10px 14px;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   cursor: pointer;
   display: flex;
   justify-content: space-between;
@@ -977,7 +977,7 @@
 .tags-option-name { flex: 1; overflow-wrap: break-word; min-width: 0; }
 
 .tags-option-section {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   white-space: nowrap;
   flex: 0 1 auto;
@@ -998,7 +998,7 @@
 }
 
 .tags-mapped-name {
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
   flex: 1;
   overflow: hidden;
@@ -1011,7 +1011,7 @@
   border: none;
   color: var(--text-tertiary);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   cursor: pointer;
   padding: 0;
   line-height: 1;
@@ -1045,7 +1045,7 @@
 }
 
 .node-modal-title {
-  font-size: 16px;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1054,7 +1054,7 @@
   display: flex;
   flex-direction: column;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 
@@ -1064,7 +1064,7 @@
   border-radius: 3px;
   color: var(--text-primary);
   font: inherit;
-  font-size: 14px;
+  font-size: var(--text-sm);
   padding: 8px 11px;
   outline: none;
   transition: border-color 0.1s;
@@ -1073,14 +1073,14 @@
 .node-modal-input:focus { border-color: var(--accent); }
 
 .node-modal-key-preview {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-tertiary);
   font-family: monospace;
 }
 
 .node-modal-optional {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--text-xs);
 }
 
 .node-modal-seg {
@@ -1088,13 +1088,13 @@
 }
 
 .node-modal-warn {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   line-height: 1.5;
 }
 
 .node-modal-error {
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--danger);
 }
 
@@ -1111,7 +1111,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-sm);
   padding: 8px 16px;
   cursor: pointer;
   transition: color 0.1s, border-color 0.1s, background 0.1s;
@@ -1176,7 +1176,7 @@
 
 .title-cleanup-intro {
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   line-height: 1.55;
 }
@@ -1187,7 +1187,7 @@
 }
 
 .title-cleanup-section-label {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -1210,7 +1210,7 @@
   border-radius: 4px;
   color: var(--text-primary);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   padding: 6px 10px;
   outline: none;
   transition: border-color 0.1s;
@@ -1227,7 +1227,7 @@
   border-radius: 4px;
   color: #fff;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   font-weight: 600;
   padding: 6px 14px;
   cursor: pointer;
@@ -1238,7 +1238,7 @@
 .title-cleanup-add-btn:disabled { opacity: 0.4; cursor: default; }
 
 .title-cleanup-error {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--danger, #e74c3c);
   margin-top: -2px;
   margin-bottom: 4px;
@@ -1247,7 +1247,7 @@
 .title-cleanup-empty {
   margin: 0;
   padding: 16px 0 4px;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   line-height: 1.5;
 }
@@ -1265,7 +1265,7 @@
 .title-cleanup-suffix {
   flex: 1;
   min-width: 0;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1292,7 +1292,7 @@
   border-bottom: 1px solid var(--border);
   margin-bottom: 4px;
   font: inherit;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -1322,7 +1322,7 @@
   border-radius: 3px;
   padding: 2px 8px;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -1331,7 +1331,7 @@
 .title-cleanup-action:hover { color: var(--text-primary); border-color: var(--text-secondary); }
 .title-cleanup-action--muted { color: var(--text-tertiary); border-color: transparent; }
 .title-cleanup-action--muted:hover { color: var(--text-secondary); border-color: var(--border-strong); }
-.title-cleanup-action--remove { color: var(--text-tertiary); border-color: transparent; font-size: 1rem; padding: 0 5px; }
+.title-cleanup-action--remove { color: var(--text-tertiary); border-color: transparent; font-size: var(--text-lg); padding: 0 5px; }
 .title-cleanup-action--remove:hover { color: var(--danger, #e74c3c); border-color: transparent; }
 
 .title-cleanup-toggle {
@@ -1340,7 +1340,7 @@
   border-radius: 3px;
   padding: 2px 8px;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
@@ -1371,7 +1371,7 @@
   border: none;
   padding: 0;
   font: inherit;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   white-space: nowrap;
   cursor: pointer;
@@ -1399,7 +1399,7 @@
 
 .title-cleanup-album-name {
   flex: 1;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   color: var(--text-secondary);
   line-height: 1.4;
 }
@@ -1416,7 +1416,7 @@
   border: none;
   cursor: pointer;
   color: var(--text-tertiary);
-  font-size: 0.85rem;
+  font-size: var(--text-md);
   padding: 0 2px;
   line-height: 1;
   opacity: 0;
@@ -1446,7 +1446,7 @@
 }
 
 .title-cleanup-kept-label {
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);

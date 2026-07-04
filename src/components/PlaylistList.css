@@ -13,7 +13,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
   padding: 0.35em 0.8em;
   background: var(--bg-hover);
   border: 1px solid var(--border);
@@ -34,7 +34,7 @@
 
 .playlist-create-input {
   flex: 1;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   padding: 0.4em 0.75em;
   box-shadow: none;
 }
@@ -102,7 +102,7 @@
 }
 
 .playlist-card-name {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--text-primary);
   white-space: nowrap;
@@ -111,7 +111,7 @@
 }
 
 .playlist-card-meta {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
 }
 
@@ -143,7 +143,7 @@
   border-color: var(--danger);
   color: var(--danger);
   padding: 0.45em 0.9em;
-  font-size: 0.8125rem;
+  font-size: var(--text-base);
 }
 
 /* ── Detail cover art ── */
@@ -277,14 +277,14 @@
 }
 
 .playlist-inline-input--name {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-2xl);
   font-weight: 800;
   letter-spacing: -0.035em;
 }
 
 .playlist-inline-input--desc {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .playlist-inline-btn {

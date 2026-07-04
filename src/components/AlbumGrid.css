@@ -33,7 +33,7 @@
   border: none;
   box-shadow: none;
   padding: 2px 5px;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-tertiary);
   cursor: pointer;
@@ -133,8 +133,8 @@
 }
 
 .album-name {
-  font-family: var(--font-display);
-  font-size: 0.8125rem;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -146,7 +146,7 @@
 }
 
 .album-artist {
-  font-size: 0.6875rem;
+  font-size: var(--text-sm);
   font-weight: 400;
   line-height: 1.2;
   letter-spacing: 0.01em;
@@ -236,7 +236,7 @@
 }
 
 .loved-filter-btn {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   padding: 0.25em 0.65em;
   box-shadow: none;
   display: inline-flex;
@@ -256,7 +256,7 @@
 .year-group-header {
   display: flex;
   align-items: center;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 700;
   color: var(--text-tertiary);
   letter-spacing: -0.01em;
@@ -317,7 +317,7 @@
   border-radius: 4px;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   min-width: 34px;
   height: 34px;
   padding: 0 8px;
@@ -335,6 +335,6 @@
 
 .album-grid-pagination .pg-ellipsis {
   color: var(--text-tertiary);
-  font-size: 0.8rem;
+  font-size: var(--text-base);
   padding: 0 4px;
 }

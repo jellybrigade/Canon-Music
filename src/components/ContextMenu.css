@@ -19,7 +19,7 @@
   border-radius: 0;
   box-shadow: none;
   background: transparent;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   cursor: pointer;
   color: var(--text-primary);
 }
@@ -47,7 +47,7 @@
   border-radius: 0;
   box-shadow: none;
   background: transparent;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   cursor: pointer;
   color: var(--text-primary);
 }

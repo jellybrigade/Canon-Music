@@ -64,7 +64,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.68rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   background: none;
   border: none;
@@ -84,7 +84,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-secondary);
   background: none;
@@ -120,7 +120,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 4px;
-  font-size: 0.65rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -153,7 +153,7 @@
 .filter-sidebar-year-input {
   flex: 1;
   min-width: 0;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   padding: 0.22em 0.35em;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -182,14 +182,14 @@
 }
 
 .filter-sidebar-year-sep {
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .filter-sidebar-genre-search {
   width: 100%;
-  font-size: 0.7rem;
+  font-size: var(--text-sm);
   padding: 0.22em 0.45em;
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -220,7 +220,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 4px;
-  font-size: 0.75rem;
+  font-size: var(--text-base);
   padding: 4px 8px;
   background: none;
   border: none;
@@ -252,7 +252,7 @@
 }
 
 .filter-sidebar-genre-count {
-  font-size: 0.67rem;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   flex-shrink: 0;
 }
