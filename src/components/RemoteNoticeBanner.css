@@ -1,0 +1,66 @@
+.remote-notice-banner {
+  position: fixed;
+  top: var(--space-sm);
+  right: var(--space-sm);
+  z-index: var(--z-overlay);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  padding: var(--space-xs) var(--space-sm);
+  max-width: min(560px, calc(100vw - var(--space-lg) * 2));
+}
+
+.remote-notice-banner-icon {
+  color: var(--accent, var(--text-secondary));
+  flex-shrink: 0;
+}
+
+.remote-notice-banner-message {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+}
+
+.remote-notice-banner-link {
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--accent);
+  white-space: nowrap;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  cursor: pointer;
+}
+
+.remote-notice-banner-link:hover {
+  border-color: transparent !important;
+  text-decoration: underline;
+}
+
+.remote-notice-banner-dismiss {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  background: none !important;
+  border: none !important;
+  border-radius: var(--radius-sm) !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.remote-notice-banner-dismiss:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}

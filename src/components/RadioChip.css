@@ -9,8 +9,8 @@
   background: none;
   border: 1px solid var(--accent, #e06c75);
   color: var(--accent, #e06c75);
-  border-radius: 10px;
-  padding: 1px 8px;
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-xs);
   font-size: var(--text-sm);
   cursor: pointer;
   white-space: nowrap;
@@ -26,9 +26,9 @@
   left: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  padding: 4px 0;
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-md) var(--scrim-2);
+  padding: var(--space-2xs) 0;
   min-width: 148px;
   z-index: var(--z-overlay);
 }
@@ -57,7 +57,7 @@
 .radio-chip-menu-divider {
   height: 1px;
   background: var(--border-subtle);
-  margin: 4px 0;
+  margin: var(--space-2xs) 0;
 }
 
 .radio-chip-menu-item--stop {

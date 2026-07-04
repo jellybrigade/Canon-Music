@@ -21,8 +21,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 4px 0;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) 0;
   pointer-events: none;
   z-index: 10;
 }
@@ -32,21 +32,21 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px 5px;
+  padding: var(--space-2xs) var(--space-2xs);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-tertiary);
   cursor: pointer;
   line-height: 1;
-  border-radius: 3px;
-  transition: color 0.1s, background 0.1s;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast), background var(--duration-fast);
   text-align: center;
   min-width: 1.5rem;
 }
 
 .album-grid-scrubber-item:hover {
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--tint-2);
   border: none;
 }
 
@@ -55,16 +55,16 @@
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   align-content: start;
   align-items: start;
-  column-gap: 1rem;
-  row-gap: 1.5rem;
-  padding: 1.25rem;
+  column-gap: var(--space-md);
+  row-gap: var(--space-lg);
+  padding: var(--space-md);
   flex: 1;
 }
 
 .album-card {
   position: relative;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   overflow: hidden;
   aspect-ratio: 1 / 1;
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
@@ -72,7 +72,7 @@
 
 .album-card:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg) var(--scrim-3);
 }
 
 @supports not (aspect-ratio: 1 / 1) {
@@ -95,7 +95,7 @@
   height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   background-color: var(--bg-card);
   /* Stable GPU layer: prevents WebKitGTK from re-rasterizing on sibling/hover repaints */
   transform: translateZ(0);
@@ -110,7 +110,7 @@
   height: 100%;
   background-color: var(--bg-card);
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
 }
 
 .album-detail-art.album-art--placeholder {
@@ -122,14 +122,14 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 2.5rem 0.625rem 0.625rem;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72) 40%, rgba(0, 0, 0, 0.88));
-  border-radius: 0 0 6px 6px;
+  padding: var(--space-xl) var(--space-xs) var(--space-xs);
+  background: linear-gradient(transparent, var(--scrim-4) 40%, var(--scrim-4));
+  border-radius: 0 0 var(--radius-base) var(--radius-base);
   display: flex;
   flex-direction: column;
   gap: 0.05rem;
-  opacity: 0.95;
-  transition: opacity 0.15s ease;
+  opacity: var(--opacity-90);
+  transition: opacity var(--duration-moderate) ease;
 }
 
 .album-name {
@@ -141,8 +141,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #f0f0f0;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  color: var(--text-primary);
+  text-shadow: 0 1px 4px var(--scrim-4);
 }
 
 .album-artist {
@@ -154,11 +154,11 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
+  text-shadow: 0 1px 4px var(--scrim-4);
 }
 
 .empty-state {
-  padding: 3rem;
+  padding: var(--space-2xl);
   text-align: center;
   color: var(--text-tertiary);
 }
@@ -167,7 +167,7 @@
 .track-heart-cell {
   width: 2rem;
   text-align: right;
-  padding-right: 0.5rem;
+  padding-right: var(--space-xs);
 }
 
 .track-heart {
@@ -178,15 +178,15 @@
   opacity: 0;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity var(--duration-moderate), color var(--duration-moderate);
 }
 
 .tracklist-row:hover .track-heart {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
 }
 
 .track-heart:hover:not(:disabled) {
@@ -205,23 +205,23 @@
   position: absolute;
   top: 0.4rem;
   right: 0.4rem;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim-3);
   border: none;
   box-shadow: none;
   padding: 0.3em;
   opacity: 0;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--overlay-90);
   cursor: pointer;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.15s, color 0.15s;
+  transition: opacity var(--duration-moderate), color var(--duration-moderate);
   z-index: 2;
 }
 
 .album-card:hover .album-heart {
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .album-heart:hover:not(:disabled) {
@@ -260,7 +260,7 @@
   font-weight: 700;
   color: var(--text-tertiary);
   letter-spacing: -0.01em;
-  padding-bottom: 4px;
+  padding-bottom: var(--space-2xs);
   border-bottom: 1px solid var(--border);
   pointer-events: none;
   user-select: none;
@@ -274,8 +274,8 @@
   left: 6px;
   background: rgba(234, 179, 8, 0.9);
   color: #000;
-  border-radius: 3px;
-  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2xs) var(--space-2xs);
   display: flex;
   align-items: center;
   z-index: 2;
@@ -288,8 +288,8 @@
   right: 6px;
   background: rgba(99, 102, 241, 0.9);
   color: #fff;
-  border-radius: 3px;
-  padding: 2px 4px;
+  border-radius: var(--radius-xs);
+  padding: var(--space-2xs) var(--space-2xs);
   display: flex;
   align-items: center;
   z-index: 2;
@@ -298,7 +298,7 @@
 
 
 .album-grid-pagination {
-  padding: 12px 20px;
+  padding: var(--space-sm) var(--space-md);
   display: flex;
   justify-content: center;
   border-top: 1px solid var(--border);
@@ -308,33 +308,33 @@
 .album-grid-pagination .pagination {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
 }
 
 .album-grid-pagination .pg-btn {
   background: none;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   font: inherit;
   font-size: var(--text-base);
   min-width: 34px;
   height: 34px;
-  padding: 0 8px;
+  padding: 0 var(--space-xs);
   cursor: pointer;
   box-shadow: none;
-  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .album-grid-pagination .pg-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); border-color: transparent; }
-.album-grid-pagination .pg-btn:disabled { opacity: 0.3; cursor: default; }
+.album-grid-pagination .pg-btn:disabled { opacity: var(--opacity-30); cursor: default; }
 .album-grid-pagination .pg-btn--active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
 
 .album-grid-pagination .pg-ellipsis {
   color: var(--text-tertiary);
   font-size: var(--text-base);
-  padding: 0 4px;
+  padding: 0 var(--space-2xs);
 }

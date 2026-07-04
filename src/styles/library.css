@@ -29,7 +29,7 @@
   justify-content: center;
   padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
   color: var(--text-tertiary);
-  gap: 0.5rem;
+  gap: var(--space-xs);
   animation: fadeIn var(--motion-med);
 }
 
@@ -57,15 +57,15 @@
 .library-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .sort-bar {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 
@@ -75,11 +75,11 @@
   padding: 0.2em 0.6em;
   background: none;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
   letter-spacing: 0.01em;
-  transition: color 0.1s, background 0.1s, border-color 0.1s;
+  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
 }
 
 .sort-btn:hover {
@@ -120,14 +120,14 @@
   z-index: var(--z-dropdown);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-md) var(--scrim-2);
   min-width: 160px;
   max-height: 280px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 4px;
+  padding: var(--space-2xs);
 }
 
 .genre-dropdown-clear {
@@ -139,8 +139,8 @@
   padding: 0.3em 0.5em;
   text-align: left;
   cursor: pointer;
-  border-radius: 4px;
-  margin-bottom: 2px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-2xs);
 }
 
 .genre-dropdown-clear:hover {
@@ -152,17 +152,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   font-size: var(--text-base);
   padding: 0.3em 0.5em;
   background: none;
   border: none;
   box-shadow: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .genre-dropdown-item:hover {
@@ -214,7 +214,7 @@
 .year-range-filter {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 
@@ -224,7 +224,7 @@
   padding: 0.22em 0.4em;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--text-secondary);
   box-shadow: none;
   text-align: center;
@@ -259,12 +259,12 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
   font-size: var(--text-md);
   line-height: 1;
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   display: flex;
   align-items: center;
 }
@@ -278,16 +278,16 @@
 .search-trigger-btn {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: 0.25em 0.5em;
   font-size: var(--text-base);
   color: var(--text-tertiary);
   cursor: pointer;
   margin-left: auto;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--duration-moderate), color var(--duration-moderate);
 }
 
 .search-trigger-btn:hover {
@@ -298,14 +298,14 @@
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   padding: 0.25em 0.5em;
   flex: 1;
   max-width: 320px;
-  transition: border-color 0.15s;
+  transition: border-color var(--duration-moderate);
 }
 
 .search-bar:focus-within {
@@ -347,7 +347,7 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  transition: color 0.15s;
+  transition: color var(--duration-moderate);
 }
 
 .search-bar-clear:hover {

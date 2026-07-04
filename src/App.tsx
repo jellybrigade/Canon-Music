@@ -57,6 +57,8 @@ import type { RadioMode, CurrentTrack } from "./store/player";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { UpdatePrompt } from "./components/UpdatePrompt";
+import { fetchRemoteNotice, type RemoteNotice } from "./lib/notice";
+import { RemoteNoticeBanner } from "./components/RemoteNoticeBanner";
 import { FeedbackModal } from "./components/FeedbackModal";
 import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./lib/navidrome";
 import { invoke } from "@tauri-apps/api/core";
@@ -312,6 +314,13 @@ export default function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
+  const [remoteNotice, setRemoteNotice] = useState<RemoteNotice | null>(null);
+  const [lastSeenNoticeId, setLastSeenNoticeId] = useSetting("notice.last_seen_id", "");
+  useEffect(() => {
+    void fetchRemoteNotice().then((n) => {
+      if (n && n.id !== lastSeenNoticeId) setRemoteNotice(n);
+    });
+  }, [lastSeenNoticeId]);
   const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
   const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
   const [streamMaxBitrate] = useSetting("stream.max_bitrate", "0");
@@ -1037,6 +1046,15 @@ export default function App() {
         <UpdatePrompt
           update={pendingUpdate}
           onDismiss={() => setPendingUpdate(null)}
+        />
+      )}
+      {remoteNotice && (
+        <RemoteNoticeBanner
+          notice={remoteNotice}
+          onDismiss={() => {
+            void setLastSeenNoticeId(remoteNotice.id);
+            setRemoteNotice(null);
+          }}
         />
       )}
       {feedbackOpen && (

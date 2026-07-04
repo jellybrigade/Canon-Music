@@ -21,6 +21,16 @@
   --accent-subtle: rgba(90, 142, 248, 0.15);
 
   --danger:        #e74c3c;
+  --success-a:     #4caf7d;
+  --success-b:     #27ae60;
+
+  /* Legacy-page colors — not part of the core bg/accent scale, but each value
+     recurs verbatim across multiple files (home.css, ArtistMergeModal.css,
+     UpdatePrompt.css / AlbumGenreEditor.css, AlbumDetail.css / CommandPalette.css,
+     AlbumDetail.css, home.css) — tokenized here to kill the duplication. */
+  --color-link-blue:    #396cd8;
+  --color-accent-purple: #7c6af0;
+  --color-bg-deep:      #1a1a1a;
 
   --surface-0:     #111111;
   --surface-1:     #1c1c1c;
@@ -28,6 +38,57 @@
   --surface-3:     #2e2e2e;
 
   --progress-track: rgba(255, 255, 255, 0.12);
+
+  --tint-1: rgba(255, 255, 255, 0.04);
+  --tint-2: rgba(255, 255, 255, 0.06);
+  --tint-3: rgba(255, 255, 255, 0.08);
+  --tint-4: rgba(255, 255, 255, 0.12);
+  --tint-5: rgba(255, 255, 255, 0.15);
+  --tint-6: rgba(255, 255, 255, 0.25);
+
+  /* Spacing scale — 4pt base, used for padding/margin/gap */
+  --space-2xs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
+  --scrim-1: rgba(0, 0, 0, 0.25);
+  --scrim-2: rgba(0, 0, 0, 0.45);
+  --scrim-3: rgba(0, 0, 0, 0.6);
+  --scrim-4: rgba(0, 0, 0, 0.8);
+
+  /* White-on-photo text/overlay ladder — legibility over album art & video, ascending opacity */
+  --overlay-05: rgba(255, 255, 255, 0.05);
+  --overlay-10: rgba(255, 255, 255, 0.1);
+  --overlay-15: rgba(255, 255, 255, 0.15);
+  --overlay-20: rgba(255, 255, 255, 0.2);
+  --overlay-30: rgba(255, 255, 255, 0.3);
+  --overlay-40: rgba(255, 255, 255, 0.4);
+  --overlay-50: rgba(255, 255, 255, 0.5);
+  --overlay-60: rgba(255, 255, 255, 0.6);
+  --overlay-70: rgba(255, 255, 255, 0.7);
+  --overlay-80: rgba(255, 255, 255, 0.8);
+  --overlay-90: rgba(255, 255, 255, 0.9);
+
+  /* Shadow scale — shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
+  --shadow-xs:  0 2px 2px;
+  --shadow-sm:  0 2px 8px;
+  --shadow-md:  0 4px 16px;
+  --shadow-lg:  0 8px 24px;
+  --shadow-xl:  0 16px 48px;
+  --shadow-2xl: 0 24px 64px;
+  --shadow-3xl: 0 24px 80px;
+
+  --blur-xs: 6px;
+  --blur-sm: 16px;
+  --blur-md: 24px;
+  --blur-lg: 55px;
+  --blur-xl: 90px;
 
   --player-bar-height: 92px;
 
@@ -84,6 +145,18 @@
 
   --progress-track: rgba(0, 0, 0, 0.12);
 
+  --tint-1: rgba(0, 0, 0, 0.03);
+  --tint-2: rgba(0, 0, 0, 0.045);
+  --tint-3: rgba(0, 0, 0, 0.06);
+  --tint-4: rgba(0, 0, 0, 0.09);
+  --tint-5: rgba(0, 0, 0, 0.12);
+  --tint-6: rgba(0, 0, 0, 0.18);
+
+  --scrim-1: rgba(0, 0, 0, 0.18);
+  --scrim-2: rgba(0, 0, 0, 0.32);
+  --scrim-3: rgba(0, 0, 0, 0.45);
+  --scrim-4: rgba(0, 0, 0, 0.65);
+
   --surface-0:     #f5f5f5;
   --surface-1:     #ffffff;
   --surface-2:     #f0f0f0;
@@ -92,7 +165,7 @@
 
 .light-theme .sidebar-btn--active,
 .light-theme .sidebar-btn--active:hover:not(:disabled) {
-  background-color: rgba(0, 0, 0, 0.08);
+  background-color: var(--tint-4);
 }
 
 
@@ -103,7 +176,7 @@ h1, h2, h3 {
 
 input,
 button {
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   padding: 0.6em 1.2em;
   font-size: var(--text-lg);
@@ -111,8 +184,8 @@ button {
   font-family: inherit;
   color: var(--text-primary);
   background-color: var(--bg-input);
-  transition: border-color 0.15s, opacity 0.15s, background-color 0.15s;
-  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+  transition: border-color var(--duration-moderate), opacity var(--duration-moderate), background-color var(--duration-moderate);
+  box-shadow: var(--shadow-xs) var(--scrim-1);
   outline: none;
 }
 
@@ -142,12 +215,12 @@ button:hover:not(:disabled) {
 }
 
 button:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
   cursor: default;
 }
 
 input:disabled {
-  opacity: 0.45;
+  opacity: var(--opacity-45);
   cursor: not-allowed;
 }
 
@@ -195,12 +268,12 @@ button.primary:hover:not(:disabled) {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0.75rem 0;
+  padding: var(--space-sm) 0;
   padding-bottom: var(--player-bar-height);
-  gap: 0.125rem;
+  gap: var(--space-2xs);
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);
-  transition: width 0.18s ease;
+  transition: width var(--duration-slow) ease;
   position: relative;
 }
 
@@ -219,8 +292,8 @@ button.primary:hover:not(:disabled) {
 }
 
 .sidebar-resize-handle:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
+  background: var(--tint-4);
+  border-radius: var(--radius-xs);
 }
 
 .sidebar--expanded {
@@ -231,7 +304,7 @@ button.primary:hover:not(:disabled) {
 .sidebar-btn {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
+  border-radius: var(--radius-md-lg);
   border: none;
   background: transparent;
   box-shadow: none;
@@ -244,17 +317,17 @@ button.primary:hover:not(:disabled) {
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: color 0.12s, background-color 0.12s;
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
 }
 
 .sidebar--expanded .sidebar-btn {
   width: auto;
   height: 40px;
-  margin: 0 8px;
-  padding: 0 10px;
+  margin: 0 var(--space-xs);
+  padding: 0 var(--space-xs);
   justify-content: flex-start;
-  gap: 10px;
+  gap: var(--space-xs);
 }
 
 .sidebar-btn:hover:not(:disabled) {
@@ -264,12 +337,12 @@ button.primary:hover:not(:disabled) {
 
 .sidebar-btn--active {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--tint-4);
 }
 
 .sidebar-btn--active:hover:not(:disabled) {
   color: var(--text-primary);
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--tint-4);
 }
 
 .sidebar-btn-icon {
@@ -283,7 +356,7 @@ button.primary:hover:not(:disabled) {
   font-size: var(--text-base);
   font-weight: 500;
   color: inherit;
-  opacity: 0.9;
+  opacity: var(--opacity-90);
   line-height: 1.2;
   pointer-events: none;
   white-space: nowrap;
@@ -300,19 +373,19 @@ button.primary:hover:not(:disabled) {
   width: 32px;
   height: 32px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: none;
   background: transparent;
   box-shadow: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-xs);
   cursor: pointer;
-  color: var(--accent, rgba(255, 255, 255, 0.65));
-  transition: color 0.12s, background-color 0.12s;
+  color: var(--accent, var(--overlay-70));
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .sidebar-feedback-btn:hover {
@@ -324,8 +397,8 @@ button.primary:hover:not(:disabled) {
 .sidebar--expanded .sidebar-feedback-btn {
   width: auto;
   align-self: stretch;
-  margin: auto 8px 0;
-  padding: 0 10px;
+  margin: auto var(--space-xs) 0;
+  padding: 0 var(--space-xs);
   justify-content: flex-start;
 }
 
@@ -334,7 +407,7 @@ button.primary:hover:not(:disabled) {
   width: 32px;
   height: 32px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   border: none;
   background: transparent;
   box-shadow: none;
@@ -343,7 +416,7 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: color 0.12s, background-color 0.12s;
+  transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -355,7 +428,7 @@ button.primary:hover:not(:disabled) {
 .sidebar--expanded .sidebar-expand-btn {
   width: auto;
   align-self: flex-end;
-  padding: 0 6px;
+  padding: 0 var(--space-2xs);
 }
 
 .sidebar-badge {
@@ -364,8 +437,8 @@ button.primary:hover:not(:disabled) {
   right: -8px;
   min-width: 14px;
   height: 14px;
-  padding: 0 3px;
-  border-radius: 999px;
+  padding: 0 var(--space-2xs);
+  border-radius: var(--radius-full);
   background: var(--accent, #f59e0b);
   color: #000;
   font-size: var(--text-xs);
@@ -374,5 +447,28 @@ button.primary:hover:not(:disabled) {
   align-items: center;
   justify-content: center;
   line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Opacity scale (element-level states: disabled, muted, hover-fade) ── */
+:root {
+  --opacity-20: 0.2;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-45: 0.45;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-75: 0.75;
+  --opacity-85: 0.85;
+  --opacity-90: 0.9;
 }
 

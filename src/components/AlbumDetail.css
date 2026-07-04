@@ -8,10 +8,10 @@
 
 .album-detail-header {
   flex-shrink: 0;
-  padding: 1.25rem 1.25rem 2.25rem;
+  padding: var(--space-md) var(--space-md) var(--space-xl);
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-md);
   position: relative;
   overflow: hidden;
 }
@@ -34,11 +34,11 @@
   inset: -40px;
   background-size: cover;
   background-position: center top;
-  filter: blur(55px) saturate(1.7) brightness(0.35);
-  opacity: 0.75;
+  filter: blur(var(--blur-lg)) saturate(1.7) brightness(0.35);
+  opacity: var(--opacity-75);
   z-index: 0;
   pointer-events: none;
-  transition: opacity 0.4s ease;
+  transition: opacity var(--duration-long) ease;
 }
 
 .album-detail-back {
@@ -46,7 +46,7 @@
   font-size: var(--text-base);
   padding: 0.2em 0.65em;
   box-shadow: none;
-  opacity: 0.7;
+  opacity: var(--opacity-70);
   position: relative;
   z-index: 2;
 }
@@ -57,7 +57,7 @@
 
 .album-detail-hero {
   display: flex;
-  gap: 1.25rem;
+  gap: var(--space-md);
   align-items: flex-end;
   position: relative;
   z-index: 2;
@@ -67,24 +67,24 @@
   width: 140px;
   height: 140px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   background-color: var(--bg-card);
   flex-shrink: 0;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md) var(--scrim-3);
 }
 
 .album-detail-meta {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
   min-width: 0;
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--space-2xs);
 }
 
 .album-detail-title-row {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   min-width: 0;
 }
 
@@ -102,7 +102,7 @@
   background: none;
   border: none;
   border-radius: 0;
-  padding: 0 0.125rem;
+  padding: 0 var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   font-size: var(--text-base);
@@ -169,7 +169,7 @@
   background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 70%, black);
   color: #fff;
   border-color: transparent;
-  transition: background-color 0.3s ease;
+  transition: background-color var(--duration-slowest) ease;
 }
 
 .play-album-btn:hover:not(:disabled) {
@@ -180,7 +180,7 @@
 .album-meta-refresh-line {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-xs);
   margin-top: 0.1rem;
 }
 
@@ -208,8 +208,8 @@
 .album-detail-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
 }
 
 .album-identify-btn {
@@ -219,17 +219,17 @@
   width: 30px;
   height: 30px;
   padding: 0;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.5));
+  border-radius: var(--radius-base);
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
+  color: var(--text-secondary, var(--overlay-50));
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
   box-shadow: none;
 }
 
 .album-identify-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--tint-4);
   color: var(--text-primary, #fff);
 }
 
@@ -253,14 +253,14 @@
 .mb-verified-facts span + span::before {
   content: "·";
   margin-right: 0.4em;
-  opacity: 0.5;
+  opacity: var(--opacity-50);
 }
 
 .album-tag-band {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  padding: 0.625rem 1.25rem 0.625rem;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-md) var(--space-xs);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -269,7 +269,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--space-2xs);
 }
 
 .album-tag-column-title {
@@ -278,7 +278,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 0 0.2rem 0 0;
+  margin: 0 var(--space-2xs) 0 0;
   white-space: nowrap;
 }
 
@@ -287,18 +287,18 @@
   align-items: center;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1px 7px;
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
+  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
 }
 
 .album-tag-chip--excludable {
-  padding: 1px 4px 1px 7px;
-  gap: 2px;
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  gap: var(--space-2xs);
 }
 
 .album-tag-chip:hover {
@@ -310,7 +310,7 @@
 /* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
 .album-tag-chip--lastfm {
   border-style: dashed;
-  opacity: 0.85;
+  opacity: var(--opacity-85);
 }
 
 .album-tag-chip--lastfm:hover {
@@ -319,7 +319,7 @@
 
 .album-tag-chip--musicbrainz {
   border-style: dotted;
-  opacity: 0.75;
+  opacity: var(--opacity-75);
 }
 
 .album-tag-chip--musicbrainz:hover {
@@ -328,7 +328,7 @@
 
 .album-tag-chip--musicbrainz-folksonomy {
   border-style: dotted;
-  opacity: 0.6;
+  opacity: var(--opacity-60);
 }
 
 .album-tag-chip--musicbrainz-folksonomy:hover {
@@ -339,10 +339,10 @@
 .album-tag-chip--manual {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-2xs);
   border: 1px solid var(--accent, #7c6af0);
-  border-radius: 10px;
-  padding: 1px 4px 1px 7px;
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -369,8 +369,8 @@
   align-items: center;
   color: var(--text-tertiary);
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.1s;
+  opacity: var(--opacity-50);
+  transition: opacity var(--duration-fast);
 }
 
 .album-tag-chip-remove:hover {
@@ -382,7 +382,7 @@
 .album-tag-column-header {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-2xs);
   width: 100%;
 }
 
@@ -398,7 +398,7 @@
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: border-color 0.12s, color 0.12s;
+  transition: border-color var(--duration-base), color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -417,8 +417,8 @@
 .album-genre-input {
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px 7px;
+  border-radius: var(--radius-base);
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-primary);
   width: 100%;
@@ -436,17 +436,17 @@
   right: 0;
   background: var(--bg-elevated, #1a1a1a);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-base);
   list-style: none;
   margin: 0;
-  padding: 2px 0;
-  z-index: 100;
+  padding: var(--space-2xs) 0;
+  z-index: var(--z-dropdown);
   max-height: 160px;
   overflow-y: auto;
 }
 
 .album-genre-autocomplete-item {
-  padding: 4px 10px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -461,24 +461,24 @@
 .album-tag-actions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
   flex-wrap: wrap;
 }
 
 .album-tag-action-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.625rem;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
   background: none;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm-md);
   font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition: background var(--duration-moderate), color var(--duration-moderate);
 }
 
 .album-tag-action-btn:hover:not(:disabled) {
@@ -486,7 +486,7 @@
   color: var(--text-primary);
 }
 
-.album-tag-action-btn:disabled { opacity: 0.4; cursor: default; }
+.album-tag-action-btn:disabled { opacity: var(--opacity-40); cursor: default; }
 
 .album-tag-action-msg {
   font-size: var(--text-base);
@@ -494,11 +494,11 @@
 }
 
 .album-bio-section {
-  margin: 0.75rem 1.25rem 0;
-  padding: 0.875rem 1rem;
+  margin: var(--space-sm) var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
   background: var(--surface-1);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
 }
 
 .album-bio-wrap {
@@ -523,11 +523,11 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 0.35rem 0 0;
+  padding: var(--space-2xs) 0 0;
   font-size: var(--text-base);
   color: var(--accent);
   cursor: pointer;
-  opacity: 0.85;
+  opacity: var(--opacity-85);
   transition: opacity var(--motion-fast);
 }
 
@@ -569,7 +569,7 @@
 }
 
 .tracklist td {
-  padding: 0.5rem 0.5rem;
+  padding: var(--space-xs) var(--space-xs);
   vertical-align: middle;
 }
 
@@ -577,7 +577,7 @@
   color: var(--text-tertiary);
   text-align: right;
   width: 2.5rem;
-  padding-right: 0.75rem;
+  padding-right: var(--space-sm);
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -616,8 +616,8 @@
 
 .track-genre-chip:not(:last-child)::after {
   content: "·";
-  margin: 0 0.3rem;
-  opacity: 0.4;
+  margin: 0 var(--space-2xs);
+  opacity: var(--opacity-40);
 }
 
 .track-duration {
@@ -669,7 +669,7 @@
 
 .tracklist-wrapper > .tracklist-col-picker-anchor {
   align-self: flex-end;
-  padding: 0.25rem;
+  padding: var(--space-2xs);
 }
 
 /* ── Column picker ── */
@@ -685,11 +685,11 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px 4px;
+  padding: var(--space-2xs) var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
-  border-radius: 3px;
-  transition: color 0.1s, background 0.1s;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast), background var(--duration-fast);
 }
 
 .tracklist-col-picker-btn:hover {
@@ -703,11 +703,11 @@
   top: calc(100% + 4px);
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.35rem 0;
-  z-index: 200;
+  border-radius: var(--radius-base);
+  padding: var(--space-2xs) 0;
+  z-index: var(--z-overlay);
   min-width: 130px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md) var(--scrim-2);
 }
 
 .tracklist-col-picker-popup--left {
@@ -718,12 +718,12 @@
 .tracklist-col-picker-popup label {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.3rem 0.75rem;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background 0.1s, color 0.1s;
+  transition: background var(--duration-fast), color var(--duration-fast);
 }
 
 .tracklist-col-picker-popup label:hover {
@@ -748,7 +748,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  padding: 0 0.25rem;
+  padding: 0 var(--space-2xs);
 }
 
 /* ── Playlist column header ── */
@@ -765,7 +765,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-2xs) var(--space-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -824,7 +824,7 @@
 }
 
 .playlist-vrow > * {
-  padding: 0.5rem;
+  padding: var(--space-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -833,7 +833,7 @@
 .playlist-vrow-num {
   color: var(--text-tertiary);
   text-align: right;
-  padding-right: 0.75rem !important;
+  padding-right: var(--space-sm) !important;
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
@@ -864,12 +864,12 @@
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
-  padding-right: 0.75rem !important;
+  padding-right: var(--space-sm) !important;
 }
 
 /* ── Track table: selected row + sortable header buttons ── */
 .track-table-row--selected {
-  background-color: var(--bg-selected, rgba(255, 255, 255, 0.08));
+  background-color: var(--bg-selected, var(--tint-3));
 }
 
 .track-sort-btn {
@@ -878,7 +878,7 @@
   box-shadow: none;
   cursor: pointer;
   text-align: left;
-  padding: 0.35rem 0.5rem;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   text-transform: uppercase;
@@ -896,24 +896,24 @@
 .album-unidentified-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-2xs);
   font-size: var(--text-xs);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.45));
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  padding: 2px 7px;
+  color: var(--text-secondary, var(--overlay-50));
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  transition: color var(--duration-moderate), background var(--duration-moderate), border-color var(--duration-moderate);
   box-shadow: none;
 }
 
 .album-unidentified-badge:hover {
-  color: var(--text-primary, rgba(255, 255, 255, 0.85));
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-primary, var(--overlay-90));
+  background: var(--tint-4);
+  border-color: var(--border-strong);
 }
 
 /* ── Tag level badge ── */
@@ -923,8 +923,8 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: rgba(255,255,255,0.08);
-  border-radius: 3px;
+  background: var(--tint-3);
+  border-radius: var(--radius-xs);
   padding: 0.1em 0.35em;
   color: var(--text-tertiary);
   vertical-align: middle;
@@ -939,7 +939,7 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   font-style: italic;
-  padding-right: 0.5rem;
+  padding-right: var(--space-xs);
   min-width: 2.5rem;
 }
 
@@ -952,9 +952,9 @@
   color: var(--text-tertiary);
   font: inherit;
   font-size: var(--text-sm);
-  padding: 2px 4px;
+  padding: var(--space-2xs) var(--space-2xs);
   cursor: pointer;
-  transition: color 0.1s;
+  transition: color var(--duration-fast);
   white-space: nowrap;
   align-self: flex-start;
 }
@@ -962,7 +962,7 @@
 .album-unmatched-hint:hover { color: var(--text-secondary); }
 
 .album-related-section {
-  padding: 1.25rem 0 0;
+  padding: var(--space-md) 0 0;
 }
 
 .album-related-title {
@@ -971,8 +971,8 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 0 0 0.75rem;
-  padding: 0 1.25rem;
+  margin: 0 0 var(--space-sm);
+  padding: 0 var(--space-md);
 }
 
 .album-related-section .album-grid-wrapper {
@@ -981,5 +981,5 @@
      AlbumDetail.tsx) so this never scrolls/clips. Crops the virtualizer's
      built-in trailing space (--album-grid-trailing-space, set in
      AlbumGrid.tsx) after the last row since there's no next row to pad for. */
-  margin-bottom: calc(-1 * var(--album-grid-trailing-space, 44px));
+  margin-bottom: calc(-1 * var(--album-grid-trailing-space, var(--space-2xl)));
 }
