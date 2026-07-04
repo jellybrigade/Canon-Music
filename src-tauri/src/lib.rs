@@ -1234,21 +1234,13 @@ pub fn run() {
             // WebKitGTK only animates kinetic scroll for touch/touchpad input by
             // default; mouse-wheel scroll is stepped and feels choppy. Opt into
             // the engine's smooth-scrolling mode for wheel input too.
-            // Also disables GPU compositing: works around a WebKitGTK/GTK3 bug
-            // where rapid unmap/map (e.g. fast i3 workspace switching) desyncs
-            // the freeze/thaw toplevel-update counter and crashes the process
-            // with `Gdk-CRITICAL: gdk_window_thaw_toplevel_updates: assertion
-            // 'window->update_and_descendants_freeze_count > 0' failed`.
             #[cfg(target_os = "linux")]
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.with_webview(|webview| {
                     use webkit2gtk::WebViewExt;
                     if let Some(settings) = webview.inner().settings() {
-                        use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt};
+                        use webkit2gtk::SettingsExt;
                         settings.set_enable_smooth_scrolling(true);
-                        settings.set_hardware_acceleration_policy(
-                            HardwareAccelerationPolicy::Never,
-                        );
                     }
                 });
             }
