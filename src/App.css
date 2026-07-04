@@ -39,8 +39,7 @@
   /* Typography */
   --font-sans: 'Inter', system-ui, sans-serif;
 
-  /* Type scale — root is 20px (not 16px); tokens below are rem values
-     tuned against that base, not against a browser-default assumption. */
+  /* Type scale — root is 20px; tokens below are rem values against that base. */
   --text-2xs: 0.5rem;    /* 10px */
   --text-xs:  0.6rem;    /* 12px */
   --text-sm:  0.7rem;    /* 14px */
@@ -53,7 +52,7 @@
   --text-4xl: 2rem;      /* 40px */
 
   font-family: var(--font-sans);
-  font-size: var(--text-lg);
+  font-size: 20px;
   line-height: 1.5;
   font-weight: 400;
   color: var(--text-primary);
