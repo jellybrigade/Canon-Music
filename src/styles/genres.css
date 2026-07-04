@@ -72,7 +72,7 @@
 }
 
 .genre-view__loading {
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--overlay-40);
   font-size: var(--text-md);
   padding: var(--space-xl) 0;
 }
@@ -91,7 +91,7 @@
   border-radius: var(--radius-2xl);
   border: 1px solid var(--tint-4);
   background: transparent;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--overlay-50);
   font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
@@ -100,7 +100,7 @@
 
 .genre-tab:hover {
   background: var(--tint-3);
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--overlay-80);
 }
 
 .genre-tab--active {
@@ -122,7 +122,7 @@
 .genre-search__icon {
   position: absolute;
   left: 11px;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--overlay-40);
   pointer-events: none;
 }
 
@@ -143,7 +143,7 @@
 }
 
 .genre-search__input::placeholder {
-  color: rgba(255, 255, 255, 0.28);
+  color: var(--overlay-30);
 }
 
 .genre-search__clear {
@@ -154,13 +154,13 @@
   justify-content: center;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--overlay-40);
   cursor: pointer;
   padding: var(--space-2xs);
 }
 
 .genre-search__clear:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--overlay-80);
 }
 
 /* ── Breadcrumb ── */
@@ -181,7 +181,7 @@
 }
 
 .genre-breadcrumb__sep {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--overlay-30);
   font-size: var(--text-md);
   margin: 0 var(--space-2xs);
 }
@@ -189,14 +189,14 @@
 .genre-breadcrumb__node {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--overlay-50);
   font-size: var(--text-base);
   cursor: pointer;
   padding: 0;
 }
 
 .genre-breadcrumb__node:hover {
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--overlay-90);
 }
 
 /* ── Miller Columns ── */
@@ -270,7 +270,7 @@
 .genre-col-name {
   flex: 1;
   font-size: var(--text-md);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--overlay-90);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -284,14 +284,14 @@
 
 .genre-col-count {
   font-size: var(--text-base);
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--overlay-30);
   flex-shrink: 0;
 }
 
 /* Fixed-width chevron slot so count stays aligned on all rows */
 .genre-col-chevron {
   font-size: var(--text-md);
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--overlay-30);
   flex-shrink: 0;
   width: 14px;
   text-align: center;
@@ -303,7 +303,7 @@
 }
 
 .genre-col-row--selected .genre-col-chevron {
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--overlay-60);
 }
 
 /* ── Hover-only action buttons ── */
@@ -353,7 +353,7 @@
   border-radius: 50%;
   border: none;
   background: var(--tint-4);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--overlay-90);
   cursor: pointer;
   transition: background var(--duration-fast), color var(--duration-fast);
   flex-shrink: 0;
@@ -377,7 +377,7 @@
 }
 
 .genre-search-results__empty {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--overlay-40);
   font-size: var(--text-md);
   padding: var(--space-md) 0;
 }
@@ -391,7 +391,7 @@
   align-items: center;
   gap: var(--space-2xs);
   font-size: var(--text-sm);
-  color: rgba(255, 255, 255, 0.28);
+  color: var(--overlay-30);
   min-width: 0;
   max-width: 240px;
   overflow: hidden;

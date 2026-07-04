@@ -66,7 +66,7 @@
   box-shadow: none;
   padding: 0;
   background: var(--scrim-3);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--overlay-90);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -332,7 +332,7 @@
   background-color: var(--bg-player);
   border-top: 1px solid var(--border);
   font-size: var(--text-sm);
-  color: var(--text-muted, rgba(255,255,255,0.45));
+  color: var(--text-muted, var(--overlay-50));
   letter-spacing: 0.01em;
   z-index: var(--z-dropdown);
 }
@@ -350,7 +350,7 @@
   cursor: pointer;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text-muted, rgba(255,255,255,0.45));
+  color: var(--text-muted, var(--overlay-50));
 }
 
 .normalizing-bar__action {
@@ -375,7 +375,7 @@
   cursor: pointer;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text-muted, rgba(255,255,255,0.45));
+  color: var(--text-muted, var(--overlay-50));
 }
 
 .normalizing-bar__more:hover {

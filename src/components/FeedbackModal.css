@@ -90,7 +90,7 @@
 }
 
 .feedback-cat-btn--active:hover {
-  background: var(--accent-hover, var(--accent, rgba(255, 255, 255, 0.16)));
+  background: var(--accent-hover, var(--accent, var(--overlay-15)));
   color: var(--bg, #000);
 }
 
@@ -147,7 +147,7 @@
 }
 
 .feedback-textarea:focus {
-  border-color: var(--accent, rgba(255, 255, 255, 0.35));
+  border-color: var(--accent, var(--overlay-40));
 }
 
 .feedback-footer {
@@ -212,7 +212,7 @@
   border-radius: var(--radius-base);
   border: none;
   box-shadow: none;
-  background: var(--accent, rgba(255, 255, 255, 0.9));
+  background: var(--accent, var(--overlay-90));
   color: var(--bg, #000);
   cursor: pointer;
   transition: opacity var(--duration-base);

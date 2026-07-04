@@ -12,7 +12,7 @@
 }
 
 .tour-card-icon {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--overlay-30);
 }
 
 .tour-card-title {
@@ -20,7 +20,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--overlay-30);
 }
 
 /* Opt-in prompt */
@@ -41,11 +41,11 @@
 .tour-card-prompt-text {
   font-size: var(--text-base);
   font-weight: 600;
-  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+  color: var(--text-primary, var(--overlay-90));
 }
 
 .tour-card-prompt-info {
-  color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
+  color: var(--text-tertiary, var(--overlay-40));
   cursor: help;
   display: flex;
   align-items: center;
@@ -53,7 +53,7 @@
 
 .tour-card-prompt-desc {
   font-size: var(--text-base);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  color: var(--text-secondary, var(--overlay-60));
   margin: 0 0 var(--space-sm);
   line-height: 1.45;
 }
@@ -78,7 +78,7 @@
 /* Empty states */
 .tour-card-empty {
   font-size: var(--text-base);
-  color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
+  color: var(--text-tertiary, var(--overlay-40));
   margin: 0;
 }
 
@@ -132,7 +132,7 @@
 .tour-card-date-day {
   font-size: var(--text-lg);
   font-weight: 700;
-  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+  color: var(--text-primary, var(--overlay-90));
   line-height: 1.1;
 }
 
@@ -144,7 +144,7 @@
 .tour-card-venue {
   font-size: var(--text-base);
   font-weight: 500;
-  color: var(--text-primary, rgba(255, 255, 255, 0.9));
+  color: var(--text-primary, var(--overlay-90));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -153,7 +153,7 @@
 
 .tour-card-place {
   font-size: var(--text-sm);
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  color: var(--text-secondary, var(--overlay-60));
   margin-top: var(--space-2xs);
   white-space: nowrap;
   overflow: hidden;
@@ -161,11 +161,11 @@
 }
 
 .tour-card-when {
-  color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
+  color: var(--text-tertiary, var(--overlay-40));
 }
 
 .tour-card-sep {
-  color: var(--text-tertiary, rgba(255, 255, 255, 0.35));
+  color: var(--text-tertiary, var(--overlay-40));
 }
 
 /* Show more/less toggle */
@@ -186,6 +186,6 @@
 /* Attribution */
 .tour-card-credit {
   font-size: var(--text-xs);
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--overlay-20);
   margin: var(--space-xs) 0 0;
 }

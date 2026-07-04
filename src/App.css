@@ -52,6 +52,19 @@
   --scrim-3: rgba(0, 0, 0, 0.6);
   --scrim-4: rgba(0, 0, 0, 0.8);
 
+  /* White-on-photo text/overlay ladder — legibility over album art & video, ascending opacity */
+  --overlay-05: rgba(255, 255, 255, 0.05);
+  --overlay-10: rgba(255, 255, 255, 0.1);
+  --overlay-15: rgba(255, 255, 255, 0.15);
+  --overlay-20: rgba(255, 255, 255, 0.2);
+  --overlay-30: rgba(255, 255, 255, 0.3);
+  --overlay-40: rgba(255, 255, 255, 0.4);
+  --overlay-50: rgba(255, 255, 255, 0.5);
+  --overlay-60: rgba(255, 255, 255, 0.6);
+  --overlay-70: rgba(255, 255, 255, 0.7);
+  --overlay-80: rgba(255, 255, 255, 0.8);
+  --overlay-90: rgba(255, 255, 255, 0.9);
+
   /* Shadow scale — shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
   --shadow-xs:  0 2px 2px;
   --shadow-sm:  0 2px 8px;
@@ -359,7 +372,7 @@ button.primary:hover:not(:disabled) {
   justify-content: center;
   gap: var(--space-xs);
   cursor: pointer;
-  color: var(--accent, rgba(255, 255, 255, 0.65));
+  color: var(--accent, var(--overlay-70));
   transition: color var(--duration-base), background-color var(--duration-base);
   flex-shrink: 0;
   opacity: 0.75;
