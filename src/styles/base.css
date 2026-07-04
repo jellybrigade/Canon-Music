@@ -66,3 +66,32 @@ body,
   color: var(--text-primary);
   border-bottom-color: var(--accent);
 }
+
+/* Shared modal overlay (ref: SmartPlaylistModal, IdentifyDialog, FeedbackModal,
+   ArtistMergeModal, TagsView node modal). Component-specific overlay classes
+   layer nothing extra on top — this is the whole shape. */
+.spm-overlay,
+.identify-overlay,
+.feedback-overlay,
+.merge-overlay,
+.node-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal);
+}
+
+/* Shared modal dialog shell. Component-specific dialog classes layer
+   width/max-width/max-height/box-shadow/overflow on top of this. */
+.spm-dialog,
+.identify-dialog,
+.feedback-modal,
+.merge-dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+}

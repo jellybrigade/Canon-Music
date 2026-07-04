@@ -1,22 +1,11 @@
-.feedback-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim-3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-modal, 500);
-}
+/* .feedback-overlay: shared shape in styles/base.css */
 
 .feedback-modal {
+  /* border/radius/display/flex-direction: shared shell in styles/base.css */
   background: var(--surface-1, #1c1c1e);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-xl) var(--scrim-3);
   width: 420px;
   max-width: calc(100vw - 2rem);
-  display: flex;
-  flex-direction: column;
   gap: 0;
   overflow: hidden;
 }
