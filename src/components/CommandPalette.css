@@ -5,7 +5,7 @@
 .cp-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 9000;
+  z-index: var(--z-modal);
   background: var(--scrim-3);
   display: flex;
   align-items: flex-start;

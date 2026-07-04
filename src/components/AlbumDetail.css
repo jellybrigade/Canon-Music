@@ -440,7 +440,7 @@
   list-style: none;
   margin: 0;
   padding: 2px 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   max-height: 160px;
   overflow-y: auto;
 }
@@ -705,7 +705,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
   padding: 0.35rem 0;
-  z-index: 200;
+  z-index: var(--z-overlay);
   min-width: 130px;
   box-shadow: var(--shadow-md) var(--scrim-2);
 }
