@@ -115,6 +115,8 @@
   background: none;
   border: none;
   border-bottom: 1px solid var(--border, var(--tint-2));
+  border-radius: 0;
+  box-shadow: none;
   color: var(--text-primary, #fff);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -128,6 +130,8 @@
 
 .merge-candidate:hover {
   background: var(--tint-2);
+  border-color: transparent;
+  border-bottom-color: var(--border, var(--tint-2));
 }
 
 .merge-candidate--selected {
