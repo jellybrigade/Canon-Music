@@ -3,7 +3,7 @@
   min-width: 0;
   overflow-y: auto;
   height: 100%;
-  padding-bottom: 140px;
+  padding-bottom: var(--space-4xl);
 }
 
 /* ── Greeting ─────────────────────────────────────────────────────────────── */
@@ -20,7 +20,7 @@
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 36px 28px 20px;
+  padding: var(--space-xl) var(--space-lg) var(--space-md);
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
@@ -36,7 +36,7 @@
 .home-search-bar {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
   background: var(--scrim-1);
   border: 1px solid var(--tint-2);
   border-radius: var(--radius-base);
@@ -120,7 +120,7 @@
   background: var(--tint-2);
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-xs);
-  padding: 1px 5px;
+  padding: 1px var(--space-2xs);
 }
 
 .home-search-bar:focus-within .home-search-palette-hint {
@@ -226,7 +226,7 @@
 .home-spotlight__kicker {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
-  margin: 0 0 2px;
+  margin: 0 0 var(--space-2xs);
 }
 
 .home-spotlight__title {
@@ -244,7 +244,7 @@
 .home-spotlight__meta {
   font-size: var(--text-base);
   color: var(--text-secondary);
-  margin: 2px 0 0;
+  margin: var(--space-2xs) 0 0;
 }
 
 .home-spotlight__artist-link {
@@ -316,13 +316,13 @@
 .home-fusion {
   container-type: inline-size;
   margin: var(--space-xs) 0 0;
-  padding: var(--space-lg) 28px;
+  padding: var(--space-lg) var(--space-lg);
 }
 
 .home-fusion__spotlights {
   display: flex;
   align-items: stretch;
-  gap: 28px;
+  gap: var(--space-lg);
 }
 
 .home-fusion__spotlights-secondary {
@@ -330,8 +330,8 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-left: 28px;
+  gap: var(--space-md);
+  padding-left: var(--space-lg);
   border-left: 1px solid var(--border, var(--tint-3));
 }
 
@@ -340,7 +340,7 @@
 }
 
 .home-fusion__spotlights-secondary .home-spotlight:not(:first-child) {
-  padding-top: 20px;
+  padding-top: var(--space-md);
   border-top: 1px solid var(--border, var(--tint-3));
 }
 
@@ -352,14 +352,14 @@
   .home-fusion__spotlights-secondary {
     flex-direction: row;
     padding-left: 0;
-    padding-top: 20px;
+    padding-top: var(--space-md);
     border-left: none;
     border-top: 1px solid var(--border, var(--tint-3));
   }
 
   .home-fusion__spotlights-secondary .home-spotlight:not(:first-child) {
     padding-top: 0;
-    padding-left: 20px;
+    padding-left: var(--space-md);
     border-top: none;
     border-left: 1px solid var(--border, var(--tint-3));
   }
@@ -377,7 +377,7 @@
   flex: 2 1 420px;
   min-width: 0;
   align-items: center;
-  gap: 28px;
+  gap: var(--space-lg);
 }
 
 .home-spotlight--primary .home-spotlight__art-wrap {
@@ -406,7 +406,7 @@
   font-weight: 700;
   white-space: normal;
   line-height: 1.15;
-  margin-bottom: 2px;
+  margin-bottom: var(--space-2xs);
 }
 
 .home-spotlight--primary .home-spotlight__meta {
@@ -416,7 +416,7 @@
 .home-spotlight__cta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-xs);
   margin-top: var(--space-md);
 }
 
@@ -424,7 +424,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 9px 18px;
+  padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-md);
   border: none;
   background: color-mix(in oklab, var(--spotlight-accent, var(--accent)) 70%, black);
@@ -444,7 +444,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 9px var(--space-md);
+  padding: var(--space-xs) var(--space-md);
   border-radius: var(--radius-md);
   border: 1px solid var(--border, var(--tint-5));
   background: none;
@@ -461,13 +461,13 @@
 }
 
 .home-genres-section {
-  padding: 20px 28px 0;
+  padding: var(--space-md) var(--space-lg) 0;
 }
 
 /* ── For You Rail ─────────────────────────────────────────────────────────── */
 
 .home-rail {
-  padding: var(--space-xl) 28px var(--space-xl);
+  padding: var(--space-xl) var(--space-lg) var(--space-xl);
   border-bottom: 1px solid var(--border, var(--tint-3));
 }
 
@@ -486,13 +486,13 @@
   display: flex;
   align-items: flex-end;
   gap: var(--space-sm);
-  margin-bottom: 18px;
+  margin-bottom: var(--space-md);
 }
 
 .foryou-v2-tabs__list {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: var(--space-md);
   overflow-x: auto;
   scrollbar-width: none;
   flex: 1;
@@ -508,7 +508,7 @@
   align-items: center;
   gap: var(--space-2xs);
   flex-shrink: 0;
-  padding-bottom: 6px;
+  padding-bottom: var(--space-2xs);
 }
 
 .foryou-v2-action-btn {
@@ -543,7 +543,7 @@
 .foryou-v2-tab-slot {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
 }
 
@@ -557,7 +557,7 @@
   width: 18px;
   height: 18px;
   padding: 0;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-xs);
   color: var(--text-tertiary, #666);
   cursor: pointer;
   transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
@@ -571,23 +571,23 @@
 .foryou-v2-add-form {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-xs);
   margin: 0 0 var(--space-sm);
-  padding: 10px var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   background: var(--bg-elevated, var(--tint-1));
   border-radius: var(--radius-md);
 }
 
 .foryou-v2-add-form__type {
   display: flex;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .foryou-v2-add-form__type-btn {
   background: none;
   border: none;
   border-radius: var(--radius-base);
-  padding: 6px 10px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-tertiary, #666);
@@ -610,7 +610,7 @@
   background: var(--bg-card, #1a1a1a);
   border: 1px solid var(--border, var(--tint-3));
   border-radius: var(--radius-base);
-  padding: 6px 10px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-md);
   color: var(--text-primary, #f0f0f0);
 }
@@ -624,7 +624,7 @@
   background: var(--accent, #396cd8);
   border: none;
   border-radius: var(--radius-base);
-  padding: 6px 14px;
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-base);
   font-weight: 600;
   color: #fff;
@@ -648,9 +648,9 @@
 .foryou-v2-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2xs);
   flex-shrink: 0;
-  padding: 0 0 10px;
+  padding: 0 0 var(--space-xs);
   font-size: var(--text-base);
   font-weight: 600;
 }
@@ -688,14 +688,14 @@
   font-size: var(--text-base);
   color: var(--text-tertiary, #666);
   text-align: left;
-  margin: calc(var(--space-xs) * -1) 0 18px;
+  margin: calc(var(--space-xs) * -1) 0 var(--space-md);
 }
 
 .foryou-v2-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 200px));
   justify-content: start;
-  gap: 20px var(--space-md);
+  gap: var(--space-md) var(--space-md);
 }
 
 .foryou-v2-tile {
@@ -787,7 +787,7 @@
 .foryou-v2-tile__artist {
   font-size: var(--text-base);
   color: var(--text-secondary, #999);
-  margin: 2px 0 0;
+  margin: var(--space-2xs) 0 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -811,7 +811,7 @@
 /* ── Carousel Sections ────────────────────────────────────────────────────── */
 
 .home-section {
-  padding: var(--space-xl) 28px 0;
+  padding: var(--space-xl) var(--space-lg) 0;
 }
 
 .home-section__header {
@@ -839,7 +839,7 @@
 
 .home-section__subtitle::before {
   content: " · ";
-  margin: 0 3px;
+  margin: 0 var(--space-2xs);
 }
 
 .home-section__radio-btn {
@@ -847,7 +847,7 @@
   align-self: center;
   background: none;
   border: none;
-  padding: var(--space-2xs) 6px;
+  padding: var(--space-2xs) var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-sm);
@@ -871,11 +871,11 @@
 
 .album-carousel__track {
   display: flex;
-  gap: 14px;
+  gap: var(--space-sm);
   overflow-x: auto;
   scroll-behavior: smooth;
   scrollbar-width: none;
-  padding-bottom: 2px;
+  padding-bottom: var(--space-2xs);
 }
 
 .album-carousel__track::-webkit-scrollbar {
@@ -928,7 +928,7 @@
   border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--bg-elevated, #141414);
-  margin-bottom: 9px;
+  margin-bottom: var(--space-xs);
 }
 
 .carousel-card__art {
@@ -1001,7 +1001,7 @@
 .carousel-card__artist {
   font-size: var(--text-sm);
   color: var(--text-secondary, #999);
-  margin: 2px 0 0;
+  margin: var(--space-2xs) 0 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

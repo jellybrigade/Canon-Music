@@ -1,6 +1,6 @@
 /* ── Queue panel ── */
 .library--queue-open {
-  margin-right: var(--queue-panel-width, 280px);
+  margin-right: var(--queue-panel-width, var(--space-4xl));
 }
 
 .queue-panel {
@@ -61,8 +61,8 @@
 .queue-filter {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.4rem var(--space-sm);
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-sm);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -119,7 +119,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 0.4rem var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   cursor: default;
   user-select: none;
 }

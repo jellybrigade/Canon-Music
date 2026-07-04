@@ -13,7 +13,7 @@
   width: 420px;
   max-width: 100%;
   margin: auto 0;
-  padding: var(--space-xl) var(--space-xl) 1.75rem;
+  padding: var(--space-xl) var(--space-xl) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
@@ -50,7 +50,7 @@
 .wizard-title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-xs);
 }
 
 .wizard-mark {
@@ -74,13 +74,13 @@
 .wizard-form {
   display: flex;
   flex-direction: column;
-  gap: 0.875rem;
+  gap: var(--space-sm);
 }
 
 .wizard-form label {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-2xs);
   font-size: var(--text-md);
   font-weight: 500;
 }
@@ -99,7 +99,7 @@
 .wizard-sidecar-options {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: var(--space-xs);
 }
 
 .wizard-path-remap {
@@ -115,10 +115,10 @@
 .wizard-path-remap label {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: var(--space-2xs);
   font-size: var(--text-md);
   font-weight: 500;
-  margin-top: 0.625rem;
+  margin-top: var(--space-xs);
 }
 
 .wizard-docker-hint {
@@ -155,7 +155,7 @@
 }
 
 .wizard-auth-tab {
-  padding: 0.3rem var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-base);
   font-weight: 500;
   border-radius: 0;
@@ -178,7 +178,7 @@
 
 .wizard-actions {
   display: flex;
-  gap: 0.625rem;
+  gap: var(--space-xs);
   justify-content: flex-end;
   margin-top: var(--space-2xs);
 }

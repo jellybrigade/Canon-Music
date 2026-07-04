@@ -3,7 +3,7 @@
    size + color tier, not by a box. */
 
 .genre-line__caption {
-  margin: 0 0 6px;
+  margin: 0 0 var(--space-2xs);
   font-size: var(--text-sm);
   color: var(--text-tertiary, #666);
 }
@@ -17,7 +17,7 @@
 .genre-line__item {
   background: none;
   border: none;
-  padding: 2px 1px;
+  padding: var(--space-2xs) 1px;
   margin: 0;
   font-family: inherit;
   cursor: pointer;
@@ -57,7 +57,7 @@
 .genre-line__sep {
   font-size: var(--text-base);
   color: var(--text-tertiary, #666);
-  margin: 0 10px;
+  margin: 0 var(--space-xs);
   opacity: var(--opacity-60);
 }
 
@@ -68,7 +68,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding: var(--space-lg) 28px;
+  padding: var(--space-lg) var(--space-lg);
 }
 
 .genre-view__loading {
@@ -81,13 +81,13 @@
 
 .genre-tabs {
   display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-md);
   flex-shrink: 0;
 }
 
 .genre-tab {
-  padding: 6px 18px;
+  padding: var(--space-2xs) var(--space-md);
   border-radius: var(--radius-2xl);
   border: 1px solid var(--tint-4);
   background: transparent;
@@ -115,7 +115,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  margin-bottom: 14px;
+  margin-bottom: var(--space-sm);
   flex-shrink: 0;
 }
 
@@ -128,7 +128,7 @@
 
 .genre-search__input {
   width: 280px;
-  padding: 7px var(--space-xl) 7px var(--space-xl);
+  padding: var(--space-xs) var(--space-xl) var(--space-xs) var(--space-xl);
   border-radius: var(--radius-md);
   border: 1px solid var(--tint-4);
   background: var(--tint-2);
@@ -156,7 +156,7 @@
   border: none;
   color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  padding: 2px;
+  padding: var(--space-2xs);
 }
 
 .genre-search__clear:hover {
@@ -168,7 +168,7 @@
 .genre-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2xs);
   margin-bottom: var(--space-sm);
   flex-shrink: 0;
   min-height: 22px;
@@ -177,13 +177,13 @@
 .genre-breadcrumb__item {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2xs);
 }
 
 .genre-breadcrumb__sep {
   color: rgba(255, 255, 255, 0.25);
   font-size: var(--text-md);
-  margin: 0 2px;
+  margin: 0 var(--space-2xs);
 }
 
 .genre-breadcrumb__node {
@@ -247,7 +247,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 10px 14px;
+  padding: var(--space-xs) var(--space-sm);
   cursor: pointer;
   user-select: none;
   transition: background var(--duration-fast);
@@ -379,7 +379,7 @@
 .genre-search-results__empty {
   color: rgba(255, 255, 255, 0.35);
   font-size: var(--text-md);
-  padding: 20px 0;
+  padding: var(--space-md) 0;
 }
 
 .genre-search-result-row {
@@ -389,7 +389,7 @@
 .genre-col-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-2xs);
   font-size: var(--text-sm);
   color: rgba(255, 255, 255, 0.28);
   min-width: 0;

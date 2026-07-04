@@ -8,7 +8,7 @@
 
 .album-detail-header {
   flex-shrink: 0;
-  padding: 1.25rem 1.25rem 2.25rem;
+  padding: var(--space-md) var(--space-md) var(--space-xl);
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
@@ -57,7 +57,7 @@
 
 .album-detail-hero {
   display: flex;
-  gap: 1.25rem;
+  gap: var(--space-md);
   align-items: flex-end;
   position: relative;
   z-index: 2;
@@ -102,7 +102,7 @@
   background: none;
   border: none;
   border-radius: 0;
-  padding: 0 0.125rem;
+  padding: 0 var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   font-size: var(--text-base);
@@ -259,8 +259,8 @@
 .album-tag-band {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem 1.25rem;
-  padding: 0.625rem 1.25rem 0.625rem;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-md) var(--space-xs);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -278,7 +278,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 0 0.2rem 0 0;
+  margin: 0 var(--space-2xs) 0 0;
   white-space: nowrap;
 }
 
@@ -288,7 +288,7 @@
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-md-lg);
-  padding: 1px 7px;
+  padding: 1px var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -297,8 +297,8 @@
 }
 
 .album-tag-chip--excludable {
-  padding: 1px var(--space-2xs) 1px 7px;
-  gap: 2px;
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  gap: var(--space-2xs);
 }
 
 .album-tag-chip:hover {
@@ -339,10 +339,10 @@
 .album-tag-chip--manual {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: var(--space-2xs);
   border: 1px solid var(--accent, #7c6af0);
   border-radius: var(--radius-md-lg);
-  padding: 1px var(--space-2xs) 1px 7px;
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
 }
@@ -382,7 +382,7 @@
 .album-tag-column-header {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--space-2xs);
   width: 100%;
 }
 
@@ -418,7 +418,7 @@
   background: var(--bg-hover);
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
-  padding: 2px 7px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-primary);
   width: 100%;
@@ -439,14 +439,14 @@
   border-radius: var(--radius-base);
   list-style: none;
   margin: 0;
-  padding: 2px 0;
+  padding: var(--space-2xs) 0;
   z-index: var(--z-dropdown);
   max-height: 160px;
   overflow-y: auto;
 }
 
 .album-genre-autocomplete-item {
-  padding: var(--space-2xs) 10px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
@@ -469,8 +469,8 @@
 .album-tag-action-btn {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.625rem;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm-md);
@@ -494,8 +494,8 @@
 }
 
 .album-bio-section {
-  margin: var(--space-sm) 1.25rem 0;
-  padding: 0.875rem var(--space-md);
+  margin: var(--space-sm) var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -523,7 +523,7 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 0.35rem 0 0;
+  padding: var(--space-2xs) 0 0;
   font-size: var(--text-base);
   color: var(--accent);
   cursor: pointer;
@@ -616,7 +616,7 @@
 
 .track-genre-chip:not(:last-child)::after {
   content: "·";
-  margin: 0 0.3rem;
+  margin: 0 var(--space-2xs);
   opacity: var(--opacity-40);
 }
 
@@ -685,7 +685,7 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-xs);
@@ -704,7 +704,7 @@
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
-  padding: 0.35rem 0;
+  padding: var(--space-2xs) 0;
   z-index: var(--z-overlay);
   min-width: 130px;
   box-shadow: var(--shadow-md) var(--scrim-2);
@@ -719,7 +719,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 0.3rem var(--space-sm);
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
@@ -765,7 +765,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-tertiary);
-  padding: 0.35rem var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -878,7 +878,7 @@
   box-shadow: none;
   cursor: pointer;
   text-align: left;
-  padding: 0.35rem var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   text-transform: uppercase;
@@ -902,7 +902,7 @@
   background: var(--tint-2);
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-sm);
-  padding: 2px 7px;
+  padding: var(--space-2xs) var(--space-xs);
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
@@ -952,7 +952,7 @@
   color: var(--text-tertiary);
   font: inherit;
   font-size: var(--text-sm);
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   cursor: pointer;
   transition: color var(--duration-fast);
   white-space: nowrap;
@@ -962,7 +962,7 @@
 .album-unmatched-hint:hover { color: var(--text-secondary); }
 
 .album-related-section {
-  padding: 1.25rem 0 0;
+  padding: var(--space-md) 0 0;
 }
 
 .album-related-title {
@@ -972,7 +972,7 @@
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin: 0 0 var(--space-sm);
-  padding: 0 1.25rem;
+  padding: 0 var(--space-md);
 }
 
 .album-related-section .album-grid-wrapper {
@@ -981,5 +981,5 @@
      AlbumDetail.tsx) so this never scrolls/clips. Crops the virtualizer's
      built-in trailing space (--album-grid-trailing-space, set in
      AlbumGrid.tsx) after the last row since there's no next row to pad for. */
-  margin-bottom: calc(-1 * var(--album-grid-trailing-space, 44px));
+  margin-bottom: calc(-1 * var(--album-grid-trailing-space, var(--space-2xl)));
 }

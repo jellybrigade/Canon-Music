@@ -21,7 +21,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: var(--space-2xs);
   padding: var(--space-2xs) 0;
   pointer-events: none;
   z-index: 10;
@@ -32,7 +32,7 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px 5px;
+  padding: var(--space-2xs) var(--space-2xs);
   font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-tertiary);
@@ -57,7 +57,7 @@
   align-items: start;
   column-gap: var(--space-md);
   row-gap: var(--space-lg);
-  padding: 1.25rem;
+  padding: var(--space-md);
   flex: 1;
 }
 
@@ -122,7 +122,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 2.5rem 0.625rem 0.625rem;
+  padding: var(--space-xl) var(--space-xs) var(--space-xs);
   background: linear-gradient(transparent, var(--scrim-4) 40%, var(--scrim-4));
   border-radius: 0 0 var(--radius-base) var(--radius-base);
   display: flex;
@@ -275,7 +275,7 @@
   background: rgba(234, 179, 8, 0.9);
   color: #000;
   border-radius: var(--radius-xs);
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   display: flex;
   align-items: center;
   z-index: 2;
@@ -289,7 +289,7 @@
   background: rgba(99, 102, 241, 0.9);
   color: #fff;
   border-radius: var(--radius-xs);
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   display: flex;
   align-items: center;
   z-index: 2;
@@ -298,7 +298,7 @@
 
 
 .album-grid-pagination {
-  padding: var(--space-sm) 20px;
+  padding: var(--space-sm) var(--space-md);
   display: flex;
   justify-content: center;
   border-top: 1px solid var(--border);

@@ -69,10 +69,10 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px var(--space-2xs);
+  padding: var(--space-2xs) var(--space-2xs);
   cursor: pointer;
   border-radius: var(--radius-xs);
-  margin-bottom: 2px;
+  margin-bottom: var(--space-2xs);
   white-space: nowrap;
 }
 
@@ -83,14 +83,14 @@
 .filter-sidebar-loved {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-2xs);
   font-size: var(--text-base);
   font-weight: 500;
   color: var(--text-secondary);
   background: none;
   border: 1px solid transparent;
   border-radius: var(--radius-sm-md);
-  padding: 5px var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
   transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
   white-space: nowrap;
@@ -147,7 +147,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
 }
 
 .filter-sidebar-year-input {

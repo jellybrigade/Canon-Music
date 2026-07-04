@@ -13,7 +13,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
-  padding: var(--space-lg) 1.75rem;
+  padding: var(--space-lg) var(--space-lg);
   min-width: 360px;
   max-width: 580px;
   width: 100%;
@@ -42,7 +42,7 @@
 .update-prompt-changelog {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
 }
 
 .update-prompt-changelog-label {
@@ -73,7 +73,7 @@
 .update-prompt-changelog-sections {
   display: flex;
   flex-direction: column;
-  gap: 0.625rem;
+  gap: var(--space-xs);
   max-height: 320px;
   overflow-y: auto;
 }
@@ -81,7 +81,7 @@
 .changelog-release {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
 }
 
 .changelog-release + .changelog-release {
@@ -109,7 +109,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 0.125rem var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   border-radius: var(--radius-sm);
   align-self: flex-start;
 }
@@ -140,7 +140,7 @@
   list-style: disc;
   display: flex;
   flex-direction: column;
-  gap: 0.125rem;
+  gap: var(--space-2xs);
 }
 
 .changelog-items li {
@@ -152,7 +152,7 @@
 .update-prompt-progress {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
 }
 
 .update-prompt-progress-track {
@@ -197,7 +197,7 @@
 }
 
 .update-prompt-btn {
-  padding: 0.375rem 0.875rem;
+  padding: var(--space-2xs) var(--space-sm);
   font-size: var(--text-base);
   font-weight: 500;
   background: var(--surface-2);

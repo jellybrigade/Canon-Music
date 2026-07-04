@@ -64,7 +64,7 @@
 
 .feedback-cat-btn {
   flex: 1;
-  padding: 0.35rem 0;
+  padding: var(--space-2xs) 0;
   font-size: var(--text-base);
   font-weight: 500;
   border-radius: var(--radius-base);
@@ -97,7 +97,7 @@
 .feedback-bug-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
   margin: var(--space-sm) var(--space-md) 0;
 }
 
@@ -135,7 +135,7 @@
   color: var(--text-primary);
   font-size: var(--text-base);
   font-family: inherit;
-  padding: 0.625rem var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
   resize: none;
   outline: none;
   transition: border-color var(--duration-base);
@@ -167,7 +167,7 @@
 .feedback-sysinfo {
   display: flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: var(--space-2xs);
   cursor: pointer;
   user-select: none;
   font-size: var(--text-sm);
@@ -206,7 +206,7 @@
 }
 
 .feedback-submit {
-  padding: 0.35rem var(--space-md);
+  padding: var(--space-2xs) var(--space-md);
   font-size: var(--text-base);
   font-weight: 600;
   border-radius: var(--radius-base);

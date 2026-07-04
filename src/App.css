@@ -36,6 +36,17 @@
   --tint-5: rgba(255, 255, 255, 0.15);
   --tint-6: rgba(255, 255, 255, 0.25);
 
+  /* Spacing scale — 4pt base, used for padding/margin/gap */
+  --space-2xs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+
   --scrim-1: rgba(0, 0, 0, 0.25);
   --scrim-2: rgba(0, 0, 0, 0.45);
   --scrim-3: rgba(0, 0, 0, 0.6);
@@ -236,7 +247,7 @@ button.primary:hover:not(:disabled) {
   align-items: center;
   padding: var(--space-sm) 0;
   padding-bottom: var(--player-bar-height);
-  gap: 0.125rem;
+  gap: var(--space-2xs);
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);
   transition: width var(--duration-slow) ease;
@@ -291,9 +302,9 @@ button.primary:hover:not(:disabled) {
   width: auto;
   height: 40px;
   margin: 0 var(--space-xs);
-  padding: 0 10px;
+  padding: 0 var(--space-xs);
   justify-content: flex-start;
-  gap: 10px;
+  gap: var(--space-xs);
 }
 
 .sidebar-btn:hover:not(:disabled) {
@@ -346,7 +357,7 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: var(--space-xs);
   cursor: pointer;
   color: var(--accent, rgba(255, 255, 255, 0.65));
   transition: color var(--duration-base), background-color var(--duration-base);
@@ -363,8 +374,8 @@ button.primary:hover:not(:disabled) {
 .sidebar--expanded .sidebar-feedback-btn {
   width: auto;
   align-self: stretch;
-  margin: auto 8px 0;
-  padding: 0 10px;
+  margin: auto var(--space-xs) 0;
+  padding: 0 var(--space-xs);
   justify-content: flex-start;
 }
 
@@ -394,7 +405,7 @@ button.primary:hover:not(:disabled) {
 .sidebar--expanded .sidebar-expand-btn {
   width: auto;
   align-self: flex-end;
-  padding: 0 6px;
+  padding: 0 var(--space-2xs);
 }
 
 .sidebar-badge {
@@ -403,7 +414,7 @@ button.primary:hover:not(:disabled) {
   right: -8px;
   min-width: 14px;
   height: 14px;
-  padding: 0 3px;
+  padding: 0 var(--space-2xs);
   border-radius: var(--radius-full);
   background: var(--accent, #f59e0b);
   color: #000;

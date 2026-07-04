@@ -27,7 +27,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem var(--space-lg) var(--space-md);
+  padding: var(--space-md) var(--space-lg) var(--space-md);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
@@ -87,7 +87,7 @@
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 .tag-level-badge {
@@ -117,7 +117,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-  padding: 0.3rem 0;
+  padding: var(--space-2xs) 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -198,8 +198,8 @@
 .td-unmatched-row {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  padding: 0.45rem 0;
+  gap: var(--space-2xs);
+  padding: var(--space-xs) 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -210,7 +210,7 @@
 .td-unmatched-top {
   display: flex;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--space-xs);
   flex-wrap: wrap;
 }
 
@@ -223,7 +223,7 @@
 
 .td-unmatched-actions {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--space-xs);
 }
 
 /* Combobox below the genre name — full width */
@@ -237,7 +237,7 @@
   color: var(--text-primary);
   font: inherit;
   font-size: var(--text-base);
-  padding: var(--space-2xs) 10px;
+  padding: var(--space-2xs) var(--space-xs);
   outline: none;
   box-sizing: border-box;
 }
@@ -266,7 +266,7 @@
   box-shadow: none;
   color: var(--text-tertiary);
   cursor: pointer;
-  padding: 0 2px;
+  padding: 0 var(--space-2xs);
   font-size: var(--text-md);
   line-height: 1;
   flex-shrink: 0;
@@ -280,7 +280,7 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 500;
-  padding: 2px var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
   color: var(--text-tertiary);
   white-space: nowrap;
@@ -306,7 +306,7 @@
   font: inherit;
   font-size: var(--text-sm);
   font-weight: 500;
-  padding: 2px var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
   color: var(--text-tertiary);
   white-space: nowrap;

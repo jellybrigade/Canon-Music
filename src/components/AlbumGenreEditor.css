@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.375rem 1.25rem;
+  padding: var(--space-2xs) var(--space-md);
   border-bottom: 1px solid var(--border);
 }
 
@@ -24,7 +24,7 @@
   background: none;
   border: none;
   box-shadow: none;
-  padding: 2px;
+  padding: var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   display: flex;
@@ -35,7 +35,7 @@
 .age-close:hover { color: var(--text-primary); }
 
 .age-body {
-  padding: var(--space-xs) 1.25rem 0.625rem;
+  padding: var(--space-xs) var(--space-md) var(--space-xs);
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
@@ -46,7 +46,7 @@
 .age-group {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--space-2xs);
 }
 
 .age-group-label {
@@ -67,11 +67,11 @@
 .age-chip {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: var(--space-2xs);
   background: none;
   border: 1px solid var(--border);
   border-radius: var(--radius-md-lg);
-  padding: 1px var(--space-2xs) 1px 7px;
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--text-secondary);
@@ -127,7 +127,7 @@
 .age-add-row {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: var(--space-2xs);
 }
 
 .age-add-icon {
@@ -145,7 +145,7 @@
   background: var(--bg-hover);
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
-  padding: 3px var(--space-xs);
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-primary);
   width: 100%;
@@ -165,14 +165,14 @@
   border-radius: var(--radius-base);
   list-style: none;
   margin: 0;
-  padding: 2px 0;
+  padding: var(--space-2xs) 0;
   z-index: var(--z-dropdown);
   max-height: 160px;
   overflow-y: auto;
 }
 
 .age-autocomplete-item {
-  padding: var(--space-2xs) 10px;
+  padding: var(--space-2xs) var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-secondary);
   cursor: pointer;
