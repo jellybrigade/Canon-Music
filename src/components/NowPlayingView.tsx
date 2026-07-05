@@ -928,6 +928,48 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         <button onClick={() => { handlePlayTrack(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play now</button>
         <button onClick={() => { handlePlayNext(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play next</button>
         <button onClick={() => { handleAddToQueue(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Add to queue</button>
+        {aboutTrackMenu.track.album_id && (
+          <button
+            onClick={() => {
+              onSelectAlbum({
+                id: aboutTrackMenu.track.album_id!,
+                server_id: server.id,
+                name: aboutTrackMenu.track.album_name ?? "",
+                artist: aboutTrackMenu.track.artist,
+                year: null,
+                artwork_url: aboutTrackMenu.track.artwork_url,
+              });
+              setAboutTrackMenu(null);
+            }}
+          >
+            Go to Album
+          </button>
+        )}
+        {onSelectArtist && aboutTrackMenu.track.artist && (
+          <button
+            onClick={() => { onSelectArtist(aboutTrackMenu.track.artist!); setAboutTrackMenu(null); }}
+          >
+            Go to Artist
+          </button>
+        )}
+        {aboutTrackMenu.track.album_id && (
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              onStartRadio(
+                {
+                  id: aboutTrackMenu.track.album_id!,
+                  server_id: server.id,
+                  name: aboutTrackMenu.track.album_name ?? "",
+                  artist: aboutTrackMenu.track.artist,
+                  year: null,
+                  artwork_url: aboutTrackMenu.track.artwork_url,
+                },
+                mode
+              );
+              setAboutTrackMenu(null);
+            }}
+          />
+        )}
       </ContextMenu>
     )}
     </>
