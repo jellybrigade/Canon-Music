@@ -639,11 +639,13 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
+          playlists={playlists}
           onSelectAlbum={openAlbum}
           onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
           onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
           onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+          onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         />
       );
     }
@@ -694,11 +696,13 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
+              playlists={playlists}
               onSelectAlbum={openAlbum}
               onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+              onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
             />
           ) : (
             <p className="empty-state">{searchQuery ? "Searching…" : "Start typing to search"}</p>
