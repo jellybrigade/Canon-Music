@@ -925,6 +925,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
               />
               <button
                 onClick={() => {
+                  void toggleTrackLove(contextMenu.track.id, serverWithCredential);
+                  setContextMenu(null);
+                }}
+              >
+                {lovedTrackIds.has(contextMenu.track.id) ? "Unlove track" : "Love track"}
+              </button>
+              <button
+                onClick={() => {
                   setDrawerState({ albumId: album.id, trackId: contextMenu.track.id });
                   setContextMenu(null);
                 }}

@@ -185,7 +185,8 @@
   transition: opacity var(--duration-moderate), color var(--duration-moderate);
 }
 
-.tracklist-row:hover .track-heart {
+.tracklist-row:hover .track-heart,
+.playlist-vrow:hover .track-heart {
   opacity: var(--opacity-45);
 }
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw } from "lucide-react";
+import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw, Heart } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../types/library";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
@@ -12,8 +12,12 @@ import { makeStreamUrlBuilder } from "../lib/track";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
+import { useLoved } from "../hooks/useLoved";
 import { getDb } from "../db";
+import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
+import "./AlbumGrid.css";
 import "./PlaylistList.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -53,8 +57,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const genreMappings = useGenreMappings();
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: PlaylistTrackRow } | null>(null);
@@ -143,21 +149,8 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     playlistCols.format ? "3.5rem" : null,
     playlistCols.bitrate ? "4.5rem" : null,
     playlistCols.duration ? "auto" : null,
+    "2rem",
   ].filter(Boolean).join(" ");
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [contextMenu]);
-
-  useEffect(() => {
-    if (!contextMenu) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setContextMenu(null); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [contextMenu]);
 
   async function commitName() {
     const trimmed = nameValue.trim();
@@ -449,6 +442,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           {playlistCols.format && <span className="playlist-col-header-cell">Format</span>}
           {playlistCols.bitrate && <span className="playlist-col-header-cell">Bitrate</span>}
           {playlistCols.duration && <span className="playlist-col-header-cell playlist-col-header-cell--right">Duration</span>}
+          <span className="playlist-col-header-cell" />
         </div>
         <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
           <button
@@ -531,6 +525,16 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   {playlistCols.duration && <span className="playlist-vrow-duration">
                     {track.duration ? formatDuration(track.duration) : ""}
                   </span>}
+                  <button
+                    className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
+                    aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleTrackLove(track.id, serverWithCredential);
+                    }}
+                  >
+                    <Heart size={15} fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"} strokeWidth={2} />
+                  </button>
                 </div>
               );
             })}
@@ -539,10 +543,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
       </div>
 
       {contextMenu && (
-        <div
-          className="context-menu"
-          style={{ top: contextMenu.y, left: contextMenu.x }}
-          onClick={(e) => e.stopPropagation()}
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
         >
           <button onClick={() => { handlePlayTrack(contextMenu.track); setContextMenu(null); }}>
             Play Now
@@ -553,6 +557,14 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           <button onClick={() => { addToQueue(buildTrackObj(contextMenu.track), streamUrlFor); setContextMenu(null); }}>
             Add to Queue
           </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              const track = buildTrackObj(contextMenu.track);
+              void playQueue([track], streamUrlFor, 0);
+              startRadio(track, mode);
+              setContextMenu(null);
+            }}
+          />
           {onSelectAlbum && contextMenu.track.album_id && (
             <button onClick={() => { onSelectAlbum(contextMenu.track.album_id!); setContextMenu(null); }}>
               Go to Album
@@ -566,7 +578,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           <button className="context-menu-danger" onClick={() => void handleRemoveTrack(contextMenu.track)}>
             Remove from Playlist
           </button>
-        </div>
+        </ContextMenu>
       )}
       {showEditSmartModal && onUpdateSmartRules && playlist.rules_json && (
         <SmartPlaylistModal

@@ -227,6 +227,7 @@ export default function App() {
   const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
 
@@ -287,7 +288,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, updateSmartPlaylistRules } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -521,6 +522,25 @@ export default function App() {
     startRadio(track, mode);
   }
 
+  async function handleAddAlbumToQueue(album: AlbumRow) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
+    const rows = await db.select<TrackRow[]>(
+      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY disc_number ASC, track_number ASC",
+      [album.id]
+    );
+    const coverArtUrl = album.artwork_url
+      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
+      : null;
+    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    for (const t of rows) {
+      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+      addToQueue(track, streamUrlFn);
+    }
+  }
+
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
@@ -639,11 +659,13 @@ export default function App() {
           tracks={searchResults.tracks}
           artists={searchResults.artists}
           serverWithCredential={serverWithCred}
+          playlists={playlists}
           onSelectAlbum={openAlbum}
           onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
           onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
           onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+          onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         />
       );
     }
@@ -667,6 +689,7 @@ export default function App() {
         serverWithCredential={serverWithCred}
         onSelect={openAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+        onAddAlbumToQueue={(album) => { void handleAddAlbumToQueue(album); }}
         onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         playlists={playlists}
         emptyMessage={emptyMessage}
@@ -694,11 +717,13 @@ export default function App() {
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
+              playlists={playlists}
               onSelectAlbum={openAlbum}
               onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+              onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
             />
           ) : (
             <p className="empty-state">{searchQuery ? "Searching…" : "Start typing to search"}</p>
@@ -910,6 +935,10 @@ export default function App() {
                 onSelect={openPlaylist}
                 onCreatePlaylist={createPlaylist}
                 onCreateSmartPlaylist={createSmartPlaylist}
+                onDelete={(pl) => deletePlaylist(pl, serverWithCred)}
+                onRename={renamePlaylist}
+                onUpdateSmartRules={updateSmartPlaylistRules}
+                onSetCustomCover={setCustomCover}
               />
             ) : (
               <p className="empty-state">Loading…</p>

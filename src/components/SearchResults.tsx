@@ -5,11 +5,15 @@ import type { SearchAlbum, SearchTrack, SearchArtist } from "../hooks/useSearch"
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import type { RadioMode } from "../store/player";
+import { usePlayerStore } from "../store/player";
+import { makeStreamUrlBuilder } from "../lib/track";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap, resolveArtistImageUrl } from "../hooks/useArtistImageCache";
-import { ContextMenu } from "./ContextMenu";
+import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "./IdentifyDialog";
+import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./SearchResults.css";
 
 interface Props {
@@ -17,11 +21,13 @@ interface Props {
   tracks: SearchTrack[];
   artists: SearchArtist[];
   serverWithCredential: ServerWithCredential;
+  playlists?: PlaylistRow[];
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (artist: SearchArtist) => void;
   onPlayTrack: (trackId: string) => void;
   onStartRadioFromAlbum: (album: AlbumRow, mode: RadioMode) => void;
   onStartRadioFromArtist: (artist: ArtistRow, mode: RadioMode) => void;
+  onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
 }
 
 type AlbumMenu = { x: number; y: number; album: SearchAlbum };
@@ -62,21 +68,42 @@ export function SearchResults({
   tracks,
   artists,
   serverWithCredential,
+  playlists,
   onSelectAlbum,
   onSelectArtist,
   onPlayTrack,
   onStartRadioFromAlbum,
   onStartRadioFromArtist,
+  onAddAlbumToPlaylist,
 }: Props) {
   const { server, credential } = serverWithCredential;
   const albumDisplayName = useAlbumDisplayName();
   const artistImageMap = useArtistImageMap();
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
   const [showAllArtists, setShowAllArtists] = useState(false);
   const [showAllAlbums, setShowAllAlbums] = useState(false);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [albumMenu, setAlbumMenu] = useState<AlbumMenu | null>(null);
   const [trackMenu, setTrackMenu] = useState<TrackMenu | null>(null);
   const [artistMenu, setArtistMenu] = useState<ArtistMenu | null>(null);
+  const [identifyAlbum, setIdentifyAlbum] = useState<SearchAlbum | null>(null);
+  const [identifyArtistName, setIdentifyArtistName] = useState<string | null>(null);
+
+  function buildTrackObj(track: SearchTrack) {
+    return {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      coverArtUrl: track.artwork_url ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512) : null,
+      artworkRef: track.artwork_url,
+      album: track.album_name,
+      albumId: track.album_id,
+      replayGain: null,
+    };
+  }
 
   const visibleArtists = showAllArtists ? artists : artists.slice(0, ARTIST_LIMIT);
   const visibleAlbums = showAllAlbums ? albums : albums.slice(0, ALBUM_LIMIT);
@@ -216,27 +243,86 @@ export function SearchResults({
 
       {albumMenu && (
         <ContextMenu x={albumMenu.x} y={albumMenu.y} onClose={() => setAlbumMenu(null)}>
+          <button onClick={() => { onSelectAlbum(toAlbumRow(albumMenu.album, server.id)); setAlbumMenu(null); }}>
+            Open album
+          </button>
           <StartRadioSubmenu
             onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album, server.id), mode); setAlbumMenu(null); }}
           />
+          {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
+            <ContextMenuSubmenu label="Add to Playlist">
+              {playlists.map((pl) => (
+                <button
+                  key={pl.id}
+                  onClick={() => { onAddAlbumToPlaylist(toAlbumRow(albumMenu.album, server.id), pl); setAlbumMenu(null); }}
+                >
+                  {pl.name}
+                </button>
+              ))}
+            </ContextMenuSubmenu>
+          )}
+          <button onClick={() => { setIdentifyAlbum(albumMenu.album); setAlbumMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
         </ContextMenu>
       )}
 
       {trackMenu && (
         <ContextMenu x={trackMenu.x} y={trackMenu.y} onClose={() => setTrackMenu(null)}>
-          <button onClick={() => { onPlayTrack(trackMenu.track.id); setTrackMenu(null); }}>Play</button>
+          <button onClick={() => { onPlayTrack(trackMenu.track.id); setTrackMenu(null); }}>Play Now</button>
+          <button onClick={() => { playNext(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+            Play Next
+          </button>
+          <button onClick={() => { addToQueue(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+            Add to Queue
+          </button>
           <StartRadioSubmenu
             onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track, server.id), mode); setTrackMenu(null); }}
           />
+          <button onClick={() => { onSelectAlbum(trackAlbumRow(trackMenu.track, server.id)); setTrackMenu(null); }}>
+            Go to Album
+          </button>
+          {trackMenu.track.artist && (
+            <button
+              onClick={() => {
+                onSelectArtist({ name: trackMenu.track.artist!, album_count: 0, lastfm_image_url: null, wikidata_image_url: null });
+                setTrackMenu(null);
+              }}
+            >
+              Go to Artist
+            </button>
+          )}
         </ContextMenu>
       )}
 
       {artistMenu && (
         <ContextMenu x={artistMenu.x} y={artistMenu.y} onClose={() => setArtistMenu(null)}>
+          <button onClick={() => { onSelectArtist(artistMenu.artist); setArtistMenu(null); }}>
+            Open artist
+          </button>
           <StartRadioSubmenu
             onSelect={(mode) => { onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode); setArtistMenu(null); }}
           />
+          <button onClick={() => { setIdentifyArtistName(artistMenu.artist.name); setArtistMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
         </ContextMenu>
+      )}
+
+      {identifyAlbum && (
+        <AlbumIdentifyDialog
+          albumId={identifyAlbum.id}
+          artist={identifyAlbum.artist ?? ""}
+          album={identifyAlbum.name}
+          onClose={() => setIdentifyAlbum(null)}
+        />
+      )}
+
+      {identifyArtistName && (
+        <ArtistIdentifyDialog
+          artistName={identifyArtistName}
+          onClose={() => setIdentifyArtistName(null)}
+        />
       )}
     </div>
   );

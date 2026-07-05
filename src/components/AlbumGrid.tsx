@@ -36,6 +36,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (album: AlbumRow) => void;
   onStartRadio?: (album: AlbumRow, mode: RadioMode) => void;
+  onAddAlbumToQueue?: (album: AlbumRow) => void;
   onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
   playlists?: PlaylistRow[];
   emptyMessage?: string;
@@ -97,7 +98,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
   );
 });
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
   const { server, credential } = serverWithCredential;
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
@@ -323,11 +324,19 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
             Open album
           </button>
+          {onAddAlbumToQueue && (
+            <button onClick={() => { onAddAlbumToQueue(contextMenu.album); setContextMenu(null); }}>
+              Add to Queue
+            </button>
+          )}
           {onStartRadio && (
             <StartRadioSubmenu
               onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
             />
           )}
+          <button onClick={() => { handleToggleLove(contextMenu.album.id); setContextMenu(null); }}>
+            {lovedAlbumIds.has(contextMenu.album.id) ? "Unlove album" : "Love album"}
+          </button>
           {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
             <ContextMenuSubmenu label="Add to Playlist">
               {playlists.map((pl) => (

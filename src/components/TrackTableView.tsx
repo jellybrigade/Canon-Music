@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
+import { Play, Heart, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
 import { useAllTracks, type AllTrackRow } from "../hooks/useAllTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { getCoverArtUrl } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
+import { useLoved } from "../hooks/useLoved";
 import { ContextMenu } from "./ContextMenu";
+import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
+import "./AlbumGrid.css";
 
 const ROW_HEIGHT = 40;
 
@@ -57,8 +60,10 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
@@ -218,6 +223,7 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
     cols.bitrate ? "4.5rem" : null,
     cols.plays ? "3.5rem" : null,
     cols.duration ? "4.5rem" : null,
+    "2rem",
   ].filter(Boolean).join(" ");
 
   return (
@@ -274,6 +280,7 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
               Duration<SortIndicator field="duration" />
             </button>
           )}
+          <span className="playlist-col-header-cell" />
         </div>
         <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
           <button
@@ -372,6 +379,16 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
                   {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
                   {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
                   {cols.duration && <span className="playlist-vrow-duration">{track.duration ? formatDuration(track.duration) : ""}</span>}
+                  <button
+                    className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
+                    aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggleTrackLove(track.id, serverWithCredential);
+                    }}
+                  >
+                    <Heart size={15} fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"} strokeWidth={2} />
+                  </button>
                 </div>
               );
             })}
@@ -404,6 +421,14 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
           }}>
             Add to Queue
           </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              const track = buildTrackObj(contextMenu.track);
+              void playQueue([track], streamUrlFor, 0);
+              startRadio(track, mode);
+              setContextMenu(null);
+            }}
+          />
           {onSelectAlbum && (
             <button onClick={() => {
               onSelectAlbum(contextMenu.track.album_id);

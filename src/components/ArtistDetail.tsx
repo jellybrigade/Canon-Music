@@ -351,9 +351,11 @@ interface SimilarArtistCardProps {
   name: string;
   owned: boolean;
   onSelect: () => void;
+  server: Server;
+  credential: NavidromeCredential;
 }
 
-function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
+function SimilarArtistCard({ name, owned, onSelect, server, credential }: SimilarArtistCardProps) {
   const cardRef = useRef<HTMLButtonElement>(null);
   const [inView, setInView] = useState(false);
 
@@ -376,22 +378,78 @@ function SimilarArtistCard({ name, owned, onSelect }: SimilarArtistCardProps) {
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
 
+  const { data: rawTracks } = useArtistTopTracks(name);
+  const playQueue = usePlayerStore((s) => s.playQueue);
+  const startRadio = usePlayerStore((s) => s.startRadio);
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+
+  function buildTrackObj(track: TopTrack): CurrentTrack {
+    const artworkRef = track.artwork_url ?? null;
+    const coverArtUrl = artworkRef
+      ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500)
+      : null;
+    return {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      coverArtUrl,
+      artworkRef,
+      album: track.album_name ?? null,
+      albumId: track.album_id ?? null,
+    };
+  }
+
+  function handleContextMenu(e: React.MouseEvent) {
+    if (!owned || !rawTracks?.length) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  }
+
   return (
-    <button
-      ref={cardRef}
-      className={`artist-similar-card${owned ? " artist-similar-card--owned" : " artist-similar-card--dim"}`}
-      onClick={onSelect}
-    >
-      {portraitUrl ? (
-        <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" />
-      ) : (
-        <span className="artist-similar-avatar artist-similar-avatar--fallback">
-          <Mic2 size={28} strokeWidth={1.5} />
-        </span>
-      )}
-      <span className="artist-similar-name">{name}</span>
-      <span className="artist-similar-tag">{owned ? "in library" : "search →"}</span>
-    </button>
+    <>
+      <button
+        ref={cardRef}
+        className={`artist-similar-card${owned ? " artist-similar-card--owned" : " artist-similar-card--dim"}`}
+        onClick={onSelect}
+        onContextMenu={handleContextMenu}
+      >
+        {portraitUrl ? (
+          <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" />
+        ) : (
+          <span className="artist-similar-avatar artist-similar-avatar--fallback">
+            <Mic2 size={28} strokeWidth={1.5} />
+          </span>
+        )}
+        <span className="artist-similar-name">{name}</span>
+        <span className="artist-similar-tag">{owned ? "in library" : "search →"}</span>
+      </button>
+
+      {menu && rawTracks && rawTracks.length > 0 && (() => {
+        const seed = rawTracks[0]!;
+        return (
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+          <button
+            onClick={() => {
+              onSelect();
+              setMenu(null);
+            }}
+          >
+            Go to artist
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => {
+              const track = buildTrackObj(seed);
+              void playQueue([track], streamUrlFor, 0);
+              startRadio(track, mode);
+              setMenu(null);
+            }}
+          />
+        </ContextMenu>
+        );
+      })()}
+    </>
   );
 }
 
@@ -609,6 +667,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         <div
           className="artist-hero-main"
           style={accentColor ? ({ "--artist-accent": accentColor } as React.CSSProperties) : undefined}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setOverflowMenuAnchor({ x: e.clientX, y: e.clientY });
+          }}
         >
           {heroArt}
           <div className="artist-hero-info">
@@ -831,6 +893,8 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                   name={name}
                   owned={effectiveSimilarTab === "in"}
                   onSelect={() => onSelectArtist?.(name)}
+                  server={server}
+                  credential={credential}
                 />
               ))}
             </div>

@@ -81,20 +81,9 @@
   letter-spacing: 0.05em;
 }
 
+/* Base shape shared with .spm-input and .identify-field > input — see styles/base.css. */
 .merge-search {
-  background: var(--tint-2);
-  border: 1px solid var(--border, var(--tint-4));
-  border-radius: var(--radius-base);
-  color: var(--text-primary, #fff);
-  font-size: var(--text-sm);
-  padding: var(--space-xs) var(--space-xs);
-  outline: none;
-  width: 100%;
   box-sizing: border-box;
-}
-
-.merge-search:focus {
-  border-color: var(--accent, #396cd8);
 }
 
 .merge-list {
