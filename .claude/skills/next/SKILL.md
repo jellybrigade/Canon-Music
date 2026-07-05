@@ -85,6 +85,10 @@ After implementation, if you encountered any non-obvious rendering quirk, browse
 
 **Do not start Canon in dev mode and do not take screenshots to verify.** Typecheck (`pnpm tsc --noEmit`) is sufficient for frontend changes. Rust changes: `cargo check`. The app is long-running and a dev instance is usually already open.
 
+### Phase 3.5I — Docs for big user-visible changes
+
+If item added/changed something user-visible and non-trivial (new view, new button, new feature — not small tweak/bugfix): add a line for it to `instructions/docs.md` tree (unmarked `[ ]`), then invoke `/docs` skill to write draft doc for it.
+
 ### Phase 4I — Remove item from donow.md
 
 Delete the completed item's section from `instructions/donow.md`. If donow.md is now empty, truncate it to an empty file (do not delete the file).
