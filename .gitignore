@@ -28,5 +28,6 @@ lerna-debug.log*
 
 # Local-only
 .claude/settings.local.json
-instructions/
+instructions/*
+!instructions/docs-tech/
 reference-projects/
