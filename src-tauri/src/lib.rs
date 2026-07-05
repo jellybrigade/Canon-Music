@@ -163,7 +163,7 @@ fn set_cover_proxy_config(
     base_url: String,
     auth_params: String,
 ) {
-    *state.proxy_config.lock().unwrap() = Some(CoverProxyConfig { base_url, auth_params });
+    *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig { base_url, auth_params });
 }
 
 fn build_tray_menu<R: tauri::Runtime>(
@@ -273,14 +273,14 @@ async fn audio_play(
     let this_id = state.play_id.fetch_add(1, Ordering::Relaxed) + 1;
 
     {
-        let old_sink = state.sink.lock().unwrap().take();
+        let old_sink = state.sink.lock().unwrap_or_else(|e| e.into_inner()).take();
         if let Some(old) = old_sink {
             old.stop();
         }
     }
 
     {
-        let mut pos = state.pos.lock().unwrap();
+        let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
         pos.play_start = None;
         pos.offset = 0.0;
     }
@@ -297,7 +297,7 @@ async fn audio_play(
 
     // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
-        let mut cache = state.prefetch_cache.lock().unwrap();
+        let mut cache = state.prefetch_cache.lock().unwrap_or_else(|e| e.into_inner());
         let hit = cache.remove(&url);
         cache.clear();
         hit
@@ -409,15 +409,15 @@ async fn audio_play(
             Ok(s) => Arc::new(s),
             Err(e) => { eprintln!("audio_play sink error: {e}"); return; }
         };
-        let current_volume = *volume_arc.lock().unwrap();
-        let current_speed = *speed_arc.lock().unwrap();
+        let current_volume = *volume_arc.lock().unwrap_or_else(|e| e.into_inner());
+        let current_speed = *speed_arc.lock().unwrap_or_else(|e| e.into_inner());
         sink.set_volume(current_volume);
         sink.set_speed(current_speed);
 
         sink.append(source);
 
         {
-            let mut pos = pos_arc.lock().unwrap();
+            let mut pos = pos_arc.lock().unwrap_or_else(|e| e.into_inner());
             pos.offset = 0.0;
             pos.speed = current_speed;
             pos.play_start = Some(Instant::now());
@@ -451,7 +451,7 @@ async fn audio_play(
                 {
                     gapless_queued_watcher.store(false, Ordering::Relaxed);
                     {
-                        let mut pos = pos_watcher.lock().unwrap();
+                        let mut pos = pos_watcher.lock().unwrap_or_else(|e| e.into_inner());
                         pos.offset = 0.0;
                         pos.play_start = Some(Instant::now());
                     }
@@ -469,7 +469,7 @@ async fn audio_play(
             }
         });
 
-        *sink_arc.lock().unwrap() = Some(sink);
+        *sink_arc.lock().unwrap_or_else(|e| e.into_inner()) = Some(sink);
     });
 
     Ok(())
@@ -477,15 +477,15 @@ async fn audio_play(
 
 #[tauri::command]
 fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
-    state.pos.lock().unwrap().current()
+    state.pos.lock().unwrap_or_else(|e| e.into_inner()).current()
 }
 
 #[tauri::command]
 fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
     // Cancel any in-flight seek fade so it doesn't overwrite this new volume.
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
-    *state.volume.lock().unwrap() = volume;
-    if let Some(sink) = state.sink.lock().unwrap().as_ref() {
+    *state.volume.lock().unwrap_or_else(|e| e.into_inner()) = volume;
+    if let Some(sink) = state.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
         sink.set_volume(volume);
     }
 }
@@ -493,12 +493,12 @@ fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
 #[tauri::command]
 fn audio_set_speed(state: tauri::State<'_, AudioState>, speed: f32) {
     let clamped = speed.clamp(0.5, 2.0);
-    *state.speed.lock().unwrap() = clamped;
-    let sink_opt = state.sink.lock().unwrap().clone();
+    *state.speed.lock().unwrap_or_else(|e| e.into_inner()) = clamped;
+    let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
         sink.set_speed(clamped);
     }
-    let mut pos = state.pos.lock().unwrap();
+    let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     // Freeze offset at current real-time position, then start fresh with new speed.
     if let Some(t) = pos.play_start.take() {
         pos.offset += t.elapsed().as_secs_f64() * pos.speed as f64;
@@ -512,8 +512,8 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
     let fade_gen = Arc::clone(&state.fade_gen);
     let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
 
-    let target_vol = *state.volume.lock().unwrap();
-    let sink_opt = state.sink.lock().unwrap().clone();
+    let target_vol = *state.volume.lock().unwrap_or_else(|e| e.into_inner());
+    let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
         sink.set_volume(0.0);
         let duration = std::time::Duration::from_secs_f64(seconds);
@@ -522,7 +522,7 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
             sink.set_volume(target_vol);
             return;
         }
-        let mut pos = state.pos.lock().unwrap();
+        let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
         pos.offset = seconds;
         pos.play_start = Some(Instant::now());
         drop(pos);
@@ -566,7 +566,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
 
     std::thread::spawn(move || {
         // Use prefetch cache if a concurrent audio_prefetch already downloaded this URL.
-        let cached = { cache_arc.lock().unwrap().remove(&url) };
+        let cached = { cache_arc.lock().unwrap_or_else(|e| e.into_inner()).remove(&url) };
         let bytes = if let Some(b) = cached {
             b
         } else {
@@ -603,7 +603,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
             return;
         }
 
-        let sink_opt = sink_arc.lock().unwrap().clone();
+        let sink_opt = sink_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(sink) = sink_opt {
             sink.append(source);
             // Flag stays true — set in compare_exchange above; watcher clears it on transition.
@@ -620,7 +620,7 @@ async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Res
     let cache_arc = Arc::clone(&state.prefetch_cache);
     std::thread::spawn(move || {
         match http_client().get(&url).send().and_then(|r| r.bytes()) {
-            Ok(b) => { cache_arc.lock().unwrap().insert(url, b.to_vec()); }
+            Ok(b) => { cache_arc.lock().unwrap_or_else(|e| e.into_inner()).insert(url, b.to_vec()); }
             Err(e) => { eprintln!("audio_prefetch fetch error: {e}"); }
         }
     });
@@ -632,21 +632,21 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     let fade_gen = Arc::clone(&state.fade_gen);
     let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
 
-    let mut pos = state.pos.lock().unwrap();
+    let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(t) = pos.play_start.take() {
         pos.offset += t.elapsed().as_secs_f64() * pos.speed as f64;
     }
     drop(pos);
 
     if fade_ms == 0 {
-        if let Some(sink) = state.sink.lock().unwrap().as_ref() {
+        if let Some(sink) = state.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
             sink.pause();
         }
         return;
     }
 
-    let target_vol = *state.volume.lock().unwrap();
-    let sink_opt = state.sink.lock().unwrap().clone();
+    let target_vol = *state.volume.lock().unwrap_or_else(|e| e.into_inner());
+    let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
         std::thread::spawn(move || {
             let steps = (fade_ms / 10).max(1);
@@ -668,14 +668,14 @@ fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     let fade_gen = Arc::clone(&state.fade_gen);
     let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
 
-    let mut pos = state.pos.lock().unwrap();
+    let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     if pos.play_start.is_none() {
         pos.play_start = Some(Instant::now());
     }
     drop(pos);
 
-    let target_vol = *state.volume.lock().unwrap();
-    let sink_opt = state.sink.lock().unwrap().clone();
+    let target_vol = *state.volume.lock().unwrap_or_else(|e| e.into_inner());
+    let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
         if fade_ms == 0 {
             sink.set_volume(target_vol);
@@ -705,12 +705,12 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
     state.play_id.fetch_add(1, Ordering::Relaxed);
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
     state.gapless_queued.store(false, Ordering::Relaxed);
-    let old_sink = state.sink.lock().unwrap().take();
+    let old_sink = state.sink.lock().unwrap_or_else(|e| e.into_inner()).take();
     if let Some(sink) = old_sink {
         sink.stop();
     }
-    state.prefetch_cache.lock().unwrap().clear();
-    let mut pos = state.pos.lock().unwrap();
+    state.prefetch_cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     pos.play_start = None;
     pos.offset = 0.0;
 }
@@ -750,7 +750,7 @@ async fn audio_extract_waveform(
                 Ok(())
             })();
             if let Err(e) = result {
-                *download_err_dl.lock().unwrap() = Some(e);
+                *download_err_dl.lock().unwrap_or_else(|e| e.into_inner()) = Some(e);
             }
             download_done_dl.store(true, Ordering::Release);
         });
@@ -768,7 +768,7 @@ async fn audio_extract_waveform(
             std::thread::sleep(Duration::from_millis(10));
         }
 
-        if let Some(e) = download_err.lock().unwrap().take() {
+        if let Some(e) = download_err.lock().unwrap_or_else(|e| e.into_inner()).take() {
             let _ = std::fs::remove_file(&temp_path);
             return Err(e);
         }
@@ -943,6 +943,14 @@ async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<Str
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Background threads (audio watcher, download, fade, cover server) panic silently
+    // by default — the thread just dies and whatever it was doing (a lock, a sink)
+    // is left in a bad state with no trace. Log every panic so failures are diagnosable
+    // instead of surfacing later as an unrelated-looking crash elsewhere.
+    std::panic::set_hook(Box::new(|info| {
+        eprintln!("[panic] {info}");
+    }));
+
     // WebKitGTK renders a native GTK overlay scrollbar (thick on hover) on top of
     // the CSS ::-webkit-scrollbar. Disable it so only the styled thin bar shows.
     #[cfg(target_os = "linux")]
@@ -1018,7 +1026,7 @@ pub fn run() {
                                     let _ = request.respond(cors_empty(400));
                                     return;
                                 }
-                                let cached = artist_image_cache_req.lock().unwrap().get(&source_url).cloned();
+                                let cached = artist_image_cache_req.lock().unwrap_or_else(|e| e.into_inner()).get(&source_url).cloned();
                                 let (bytes, content_type) = if let Some(entry) = cached {
                                     entry
                                 } else {
@@ -1033,7 +1041,7 @@ pub fn run() {
                                             match resp.bytes() {
                                                 Ok(b) => {
                                                     let b = b.to_vec();
-                                                    let mut cache = artist_image_cache_req.lock().unwrap();
+                                                    let mut cache = artist_image_cache_req.lock().unwrap_or_else(|e| e.into_inner());
                                                     if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                                                         cache.clear();
                                                     }
@@ -1092,11 +1100,11 @@ pub fn run() {
                                 (path_query, 300u32)
                             };
                             let cache_key = format!("{id}:{size}");
-                            let cached = cache_req.lock().unwrap().get(&cache_key).cloned();
+                            let cached = cache_req.lock().unwrap_or_else(|e| e.into_inner()).get(&cache_key).cloned();
                             let (bytes, content_type) = if let Some(entry) = cached {
                                 entry
                             } else {
-                                let cfg = config_req.lock().unwrap().clone();
+                                let cfg = config_req.lock().unwrap_or_else(|e| e.into_inner()).clone();
                                 match cfg {
                                     None => {
                                         let _ = request.respond(cors_empty(503));
@@ -1118,7 +1126,7 @@ pub fn run() {
                                                 match resp.bytes() {
                                                     Ok(b) => {
                                                         let b = b.to_vec();
-                                                        let mut cache = cache_req.lock().unwrap();
+                                                        let mut cache = cache_req.lock().unwrap_or_else(|e| e.into_inner());
                                                         if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                                                             cache.clear();
                                                         }
