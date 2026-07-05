@@ -1,32 +1,13 @@
 /* ── Context menu ── */
+/* Panel shell (bg/border/radius/shadow/padding) + item row shared in base.css. */
 .context-menu {
   position: fixed;
   z-index: var(--z-overlay);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-base);
-  box-shadow: var(--shadow-md) var(--scrim-2);
-  padding: var(--space-2xs) 0;
   min-width: 160px;
 }
 
 .context-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.45em 1em;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
   font-size: var(--text-md);
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.context-menu button:hover {
-  background: var(--bg-hover-strong);
-  border-color: transparent;
 }
 
 .context-menu-danger {
@@ -39,21 +20,7 @@
 }
 
 .context-submenu-trigger {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 0.45em 1em;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
   font-size: var(--text-md);
-  cursor: pointer;
-  color: var(--text-primary);
-}
-
-.context-submenu-trigger:hover {
-  background: var(--bg-hover-strong);
 }
 
 .context-submenu-content {
@@ -61,11 +28,6 @@
   top: -4px;
   left: 100%;
   right: auto;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-base);
-  box-shadow: var(--shadow-md) var(--scrim-2);
-  padding: var(--space-2xs) 0;
   min-width: 160px;
   z-index: var(--z-overlay);
 }

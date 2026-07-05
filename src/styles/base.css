@@ -104,6 +104,44 @@ body,
   background: var(--accent-hover);
 }
 
+/* Shared dropdown/popover panel shell (ref: ContextMenu, context submenu, RadioChip
+   menu). Component-specific classes layer position (fixed/absolute), z-index tier,
+   and min-width on top. */
+.context-menu,
+.context-submenu-content,
+.radio-chip-menu {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-base);
+  box-shadow: var(--shadow-md) var(--scrim-2);
+  padding: var(--space-2xs) 0;
+}
+
+/* Shared dropdown item row for the panel shell above. Component-specific classes
+   layer font-size on top (differs: context menu uses --text-md, radio-chip
+   --text-base). */
+.context-menu button,
+.context-submenu-trigger,
+.radio-chip-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.45em 1em;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.context-menu button:hover,
+.context-submenu-trigger:hover,
+.radio-chip-menu-item:hover {
+  background: var(--bg-hover-strong);
+  border-color: transparent;
+}
+
 /* Shared modal overlay (ref: SmartPlaylistModal, IdentifyDialog, FeedbackModal,
    ArtistMergeModal, TagsView node modal). Component-specific overlay classes
    layer nothing extra on top — this is the whole shape. */

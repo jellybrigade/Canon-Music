@@ -418,11 +418,10 @@
 }
 
 /* ── Sleep timer popover ── */
-.timer-popover {
+/* Panel shell + item row shared with .cast-popover / .cast-popover-item below. */
+.timer-popover,
+.cast-popover {
   position: fixed;
-  bottom: calc(var(--player-bar-height) + 8px);
-  right: 1.25rem; /* fallback; overridden by inline style from getBoundingClientRect */
-  width: 130px;
   background: var(--surface-1, #1c1c1c);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -434,7 +433,14 @@
   padding: var(--space-2xs) 0;
 }
 
-.timer-popover-item {
+.timer-popover {
+  bottom: calc(var(--player-bar-height) + 8px);
+  right: 1.25rem; /* fallback; overridden by inline style from getBoundingClientRect */
+  width: 130px;
+}
+
+.timer-popover-item,
+.cast-popover-item {
   background: none;
   border: none;
   box-shadow: none;
@@ -448,7 +454,8 @@
   border-radius: 0;
 }
 
-.timer-popover-item:hover {
+.timer-popover-item:hover,
+.cast-popover-item:hover {
   background: var(--bg-hover);
   border-color: transparent;
 }
@@ -561,40 +568,15 @@
 }
 
 /* ── Cast device popover ── */
+/* Panel shell + item row shared with .timer-popover / .timer-popover-item above. */
 .cast-popover {
-  position: fixed;
   width: 220px;
-  background: var(--surface-1, #1c1c1c);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-lg) var(--scrim-3);
-  z-index: var(--z-overlay);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: var(--space-2xs) 0;
 }
 
 .cast-popover-item {
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: var(--space-xs) var(--space-sm);
-  font-size: var(--text-base);
-  font-weight: 500;
-  color: var(--text-primary);
-  text-align: left;
-  cursor: pointer;
-  transition: background var(--duration-fast);
-  border-radius: 0;
   display: flex;
   align-items: center;
   gap: var(--space-xs);
-}
-
-.cast-popover-item:hover {
-  background: var(--bg-hover);
-  border-color: transparent;
 }
 
 .cast-popover-item--active {
