@@ -24,8 +24,9 @@ import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
 import { stripServerPrefix } from "../utils/ids";
 import { SearchResults } from "./SearchResults";
-import { ContextMenu } from "./ContextMenu";
+import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
+import { usePlaylists } from "../hooks/usePlaylists";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import { extractAccent } from "../lib/artColor";
 import "../styles/home.css";
@@ -915,6 +916,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const secondarySpotlights = spotlightPicks.slice(1);
 
   const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
+  const { data: playlists, addAlbumToPlaylist } = usePlaylists();
 
   const lovedItems = useMemo(
     () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
@@ -1128,9 +1130,24 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <button onClick={() => { onSelectAlbum(contextMenu.album); setContextMenu(null); }}>
             Open album
           </button>
+          <button onClick={() => { handleAddToQueue(contextMenu.album); setContextMenu(null); }}>
+            Add to Queue
+          </button>
           <StartRadioSubmenu
             onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
           />
+          {playlists && playlists.length > 0 && (
+            <ContextMenuSubmenu label="Add to Playlist">
+              {playlists.map((pl) => (
+                <button
+                  key={pl.id}
+                  onClick={() => { void addAlbumToPlaylist(pl, contextMenu.album.id, serverWithCredential); setContextMenu(null); }}
+                >
+                  {pl.name}
+                </button>
+              ))}
+            </ContextMenuSubmenu>
+          )}
           <button onClick={() => { setIdentifyAlbum(contextMenu.album); setContextMenu(null); }}>
             Identify on MusicBrainz…
           </button>

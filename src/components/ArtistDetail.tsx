@@ -667,6 +667,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
         <div
           className="artist-hero-main"
           style={accentColor ? ({ "--artist-accent": accentColor } as React.CSSProperties) : undefined}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setOverflowMenuAnchor({ x: e.clientX, y: e.clientY });
+          }}
         >
           {heroArt}
           <div className="artist-hero-info">
