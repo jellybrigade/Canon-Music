@@ -212,7 +212,7 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
         />
       )}
       {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => { setContextMenu(null); setConfirmDeleteId(null); }}>
           <button onClick={() => { onSelect(contextMenu.playlist); setContextMenu(null); }}>
             Open
           </button>
