@@ -287,7 +287,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist } = usePlaylists();
+  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, updateSmartPlaylistRules } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -910,6 +910,10 @@ export default function App() {
                 onSelect={openPlaylist}
                 onCreatePlaylist={createPlaylist}
                 onCreateSmartPlaylist={createSmartPlaylist}
+                onDelete={(pl) => deletePlaylist(pl, serverWithCred)}
+                onRename={renamePlaylist}
+                onUpdateSmartRules={updateSmartPlaylistRules}
+                onSetCustomCover={setCustomCover}
               />
             ) : (
               <p className="empty-state">Loading…</p>
