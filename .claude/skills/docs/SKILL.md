@@ -42,6 +42,8 @@ Precision still matters — don't soften facts or guess — but weight the doc t
 
 In `instructions/docs.md`, check off the item: `[ ]` → `[x]`, and append a link to the written file, e.g. ` — see docs-tech/09-tags-review-tab.md`.
 
-## Phase 5 — Done
+## Phase 5 — Commit
 
-Report the file written and one-sentence summary of what got documented. Do not commit — `instructions/` is gitignored and out of scope for `/commit`.
+`instructions/docs-tech/` tracked (unignored exception in `.gitignore`), rest of `instructions/` (incl. `docs.md`) stays gitignored. Commit the new/updated `docs-tech/<slug>.md` file to `development`.
+
+Report the file written and one-sentence summary of what got documented.
