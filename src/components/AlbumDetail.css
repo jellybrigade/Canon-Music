@@ -962,7 +962,7 @@
 .album-unmatched-hint:hover { color: var(--text-secondary); }
 
 .album-related-section {
-  padding: var(--space-md) 0 0;
+  padding: var(--space-xl) 0 0;
 }
 
 .album-related-title {
@@ -971,7 +971,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
-  margin: 0 0 var(--space-sm);
+  margin: 0 0 calc(-1 * var(--space-xs));
   padding: 0 var(--space-md);
 }
 
