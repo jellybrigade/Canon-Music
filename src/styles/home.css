@@ -607,7 +607,7 @@
 .foryou-v2-add-form__input {
   flex: 1;
   min-width: 0;
-  background: var(--bg-card, #1a1a1a);
+  background: var(--bg-card, #1c1c1c);
   border: 1px solid var(--border, var(--tint-3));
   border-radius: var(--radius-base);
   padding: var(--space-2xs) var(--space-xs);
