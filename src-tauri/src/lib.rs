@@ -1231,19 +1231,28 @@ pub fn run() {
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
 
+            // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
+            // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
+            // active WebKit compositor/animation timer running, which may race the
+            // freeze/thaw counter when the window unmaps on focus loss. No other
+            // reference Tauri app touches webkit2gtk settings this early (during
+            // setup()). If disabling this stops the crash, re-enable only via a
+            // safer path (e.g. deferred until after first Focused event, or dropped
+            // entirely in favor of a different kinetic-scroll approach).
+            //
             // WebKitGTK only animates kinetic scroll for touch/touchpad input by
             // default; mouse-wheel scroll is stepped and feels choppy. Opt into
             // the engine's smooth-scrolling mode for wheel input too.
-            #[cfg(target_os = "linux")]
-            if let Some(w) = app.get_webview_window("main") {
-                let _ = w.with_webview(|webview| {
-                    use webkit2gtk::WebViewExt;
-                    if let Some(settings) = webview.inner().settings() {
-                        use webkit2gtk::SettingsExt;
-                        settings.set_enable_smooth_scrolling(true);
-                    }
-                });
-            }
+            // #[cfg(target_os = "linux")]
+            // if let Some(w) = app.get_webview_window("main") {
+            //     let _ = w.with_webview(|webview| {
+            //         use webkit2gtk::WebViewExt;
+            //         if let Some(settings) = webview.inner().settings() {
+            //             use webkit2gtk::SettingsExt;
+            //             settings.set_enable_smooth_scrolling(true);
+            //         }
+            //     });
+            // }
 
             Ok(())
         })
