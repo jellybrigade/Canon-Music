@@ -227,6 +227,7 @@ export default function App() {
   const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
 
@@ -521,6 +522,25 @@ export default function App() {
     startRadio(track, mode);
   }
 
+  async function handleAddAlbumToQueue(album: AlbumRow) {
+    if (!serverWithCred) return;
+    const { server: srv, credential } = serverWithCred;
+    const db = await getDb();
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
+    const rows = await db.select<TrackRow[]>(
+      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY disc_number ASC, track_number ASC",
+      [album.id]
+    );
+    const coverArtUrl = album.artwork_url
+      ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
+      : null;
+    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    for (const t of rows) {
+      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+      addToQueue(track, streamUrlFn);
+    }
+  }
+
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
@@ -669,6 +689,7 @@ export default function App() {
         serverWithCredential={serverWithCred}
         onSelect={openAlbum}
         onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+        onAddAlbumToQueue={(album) => { void handleAddAlbumToQueue(album); }}
         onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         playlists={playlists}
         emptyMessage={emptyMessage}
