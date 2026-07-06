@@ -200,7 +200,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
               </div>
             )}
             {searchResults && searchResults.length === 0 && !searchLoading && (
-              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+              <p className="identify-hint identify-hint--warn">No results found. Enter MBID manually below.</p>
             )}
           </section>
 
@@ -283,7 +283,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
@@ -315,7 +315,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                   <div className="identify-fact-row">
                     <span className="identify-fact-label">Year</span>
                     <span className="identify-fact-value">
-                      {rgDetail.firstReleaseDate?.slice(0, 4) ?? "—"}
+                      {rgDetail.firstReleaseDate?.slice(0, 4) ?? "-"}
                     </span>
                   </div>
                   {releaseDetail?.label && (
@@ -513,7 +513,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
               </div>
             )}
             {searchResults && searchResults.length === 0 && !searchLoading && (
-              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+              <p className="identify-hint identify-hint--warn">No results found. Enter MBID manually below.</p>
             )}
           </section>
 
@@ -563,7 +563,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}

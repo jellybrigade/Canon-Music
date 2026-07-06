@@ -71,7 +71,7 @@ export async function syncLibrary(
       credential = parsed as NavidromeCredential;
     }
   } catch {
-    throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
+    throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
   }
 
   const altUrl = server.alt_url ?? undefined;

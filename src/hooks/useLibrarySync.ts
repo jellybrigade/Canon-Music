@@ -40,7 +40,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           const parts = [];
           if (failedAlbums > 0) parts.push(`${failedAlbums} album${failedAlbums > 1 ? "s" : ""}`);
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
-          setSyncError(`Sync partial — failed to fetch tracks for ${parts.join(" and ")}.`);
+          setSyncError(`Sync partial: failed to fetch tracks for ${parts.join(" and ")}.`);
         }
         void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
         invalidateGenreTreeCache();

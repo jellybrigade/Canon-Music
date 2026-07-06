@@ -36,7 +36,7 @@ export interface MbReleaseGroupCandidate {
   primaryType: string | null;
   artistName: string;
   artistMbid: string | null;
-  /** MB's own Lucene relevance score (0–100). Tiebreaker only — use our fuzzy score as primary. */
+  /** MB's own Lucene relevance score (0-100). Tiebreaker only — use our fuzzy score as primary. */
   score: number | null;
 }
 

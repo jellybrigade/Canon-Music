@@ -714,7 +714,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
                 {topTracks && topTracks.length > 0 && (
                   <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">Top tracks — {primaryArtist}</h3>
+                    <h3 className="now-playing-section-title">Top tracks by {primaryArtist}</h3>
                     <div className="now-playing-top-tracks-grid">
                       {topTracks.slice(0, 10).map((track, i) => (
                         <div key={track.id} className="now-playing-track-row" onContextMenu={(e) => { e.preventDefault(); setAboutTrackMenu({ x: e.clientX, y: e.clientY, track }); }}>
@@ -773,7 +773,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                           <div className="now-playing-track-info">
                             <span className="now-playing-track-title">{track.title}</span>
                             <span className="now-playing-track-album">
-                              {[track.artist, track.album_name ? albumDisplayName(track.album_name, track.album_id ?? undefined) : null].filter(Boolean).join(" — ")}
+                              {[track.artist, track.album_name ? albumDisplayName(track.album_name, track.album_id ?? undefined) : null].filter(Boolean).join(" - ")}
                             </span>
                           </div>
                           {track.duration && (

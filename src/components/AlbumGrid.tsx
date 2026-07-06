@@ -86,7 +86,7 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
         <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={2} />
       </button>
       {showBadge && (
-        <div className="album-unidentified-badge" title="Couldn't match on MusicBrainz — click to identify manually">
+        <div className="album-unidentified-badge" title="Couldn't match on MusicBrainz, click to identify manually">
           <CircleHelp size={13} />
         </div>
       )}

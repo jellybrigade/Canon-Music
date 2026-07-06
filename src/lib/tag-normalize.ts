@@ -136,7 +136,7 @@ async function _doNormalizeAlbum(
       }
     }
   } catch (e) {
-    console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} — ${lfmAlbum}":`, e);
+    console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} - ${lfmAlbum}":`, e);
   }
 
   const mbRaw: string[] = [];

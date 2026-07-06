@@ -140,7 +140,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
         {changelogs && changelogs.length > 0 && (
           <div className="update-prompt-changelog">
             <p className="update-prompt-changelog-label">
-              {multiVersion ? `What's new — ${changelogs.length} versions` : "What's new"}
+              {multiVersion ? `What's new (${changelogs.length} versions)` : "What's new"}
             </p>
             <div className="update-prompt-changelog-sections">
               {changelogs.map((cl) => (

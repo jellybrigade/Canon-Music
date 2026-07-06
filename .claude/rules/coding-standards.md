@@ -39,3 +39,15 @@ Ref impl: `src/components/TagsView.css` (`.tags-tab-btn` / `.tags-tab-btn--activ
 
 Tab bar sits above container's `border-bottom: 1px solid var(--border)`.
 Active tab `margin-bottom: -1px` → 2px bottom border overlap, replaces container border visually.
+
+## No em dashes or en dashes
+
+Never write `—` (em dash, U+2014) or `–` (en dash, U+2013) anywhere in `src/` — UI strings, JSX text, code comments, all of it. Plain hyphen `-` only for actual hyphenation/ranges.
+
+Don't blind-regex-replace with one character everywhere — rephrase per context:
+
+- Sentence-joining pause (`"X — meaning Y"`) → comma, colon, or split into two sentences.
+- Numeric/date range (`"10–20"`, `"Mon–Fri"`) → `"10 to 20"`, or a plain hyphen if it's a compact version/port range.
+- List-bullet prefix in a comment → plain hyphen `-`, or restructure.
+- Code comment explaining a bug/workaround → rephrase naturally, keep technical content intact.
+- User-facing UI string (JSX text, template literal shown to user) → rephrase naturally; these are highest priority, users see them directly.

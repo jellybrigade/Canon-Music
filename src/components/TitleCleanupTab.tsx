@@ -28,7 +28,7 @@ function AlbumList({
     <div className="title-cleanup-album-list">
       {active.map((a) => (
         <div key={a.id} className="title-cleanup-album-row">
-          <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</span>
+          <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} - ${a.name}` : a.name}</span>
           <button
             className="title-cleanup-album-exclude"
             title="Keep suffix visible for this album"
@@ -43,7 +43,7 @@ function AlbumList({
           <span className="title-cleanup-kept-label">Kept</span>
           {kept.map((a) => (
             <div key={a.id} className="title-cleanup-album-row title-cleanup-album-row--kept">
-              <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} — ${a.name}` : a.name}</span>
+              <span className="title-cleanup-album-name">{a.artist != null ? `${a.artist} - ${a.name}` : a.name}</span>
               <button
                 className="title-cleanup-album-unexclude"
                 title="Re-apply suffix stripping"

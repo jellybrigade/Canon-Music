@@ -103,7 +103,7 @@ export function useListeningStats() {
       .sort((a, b) => a.last_played.localeCompare(b.last_played));
   }, [stats, onRepeat]);
 
-  // Albums with 1–3 total plays — oldest last_played first
+  // Albums with 1-3 total plays — oldest last_played first
   const hiddenGem = useMemo(() => {
     return stats
       .filter(s => s.plays >= 1 && s.plays <= 3)

@@ -29,7 +29,7 @@ export function AboutTab({ searchQuery }: Props) {
       <h3 className="settings-section-title">About</h3>
       <p className="settings-alpha-notice">
         <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash.
-        Thanks for trying it out this early — it means a lot.
+        Thanks for trying it out this early, it means a lot.
       </p>
       <div className="settings-diag-row">
         <span className="settings-diag-label">Version</span>

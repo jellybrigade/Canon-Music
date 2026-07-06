@@ -176,7 +176,7 @@ export function PlaybackTab({ searchQuery }: Props) {
             </select>
           </SettingRow>
           <SettingRow
-            title={`Playback speed — ${speed.toFixed(2)}×`}
+            title={`Playback speed: ${speed.toFixed(2)}x`}
             description="Speed up or slow down playback. Affects pitch (no time-stretch)."
             stacked
           >
@@ -191,7 +191,7 @@ export function PlaybackTab({ searchQuery }: Props) {
             />
           </SettingRow>
           <SettingRow
-            title={`Pause/resume fade — ${pauseFadeMs === 0 ? "off" : `${pauseFadeMs} ms`}`}
+            title={`Pause/resume fade: ${pauseFadeMs === 0 ? "off" : `${pauseFadeMs} ms`}`}
             description="Smooth volume fade when pausing and resuming. 0 = instant."
             stacked
           >
@@ -228,7 +228,7 @@ export function PlaybackTab({ searchQuery }: Props) {
           {replayGainMode !== "off" && (
             <>
               <SettingRow
-                title={`Pre-amp — ${replayGainPreAmp >= 0 ? "+" : ""}${replayGainPreAmp} dB`}
+                title={`Pre-amp: ${replayGainPreAmp >= 0 ? "+" : ""}${replayGainPreAmp} dB`}
                 description="Offset applied on top of the ReplayGain value. Use to raise or lower the normalized level globally."
                 stacked
               >
@@ -243,7 +243,7 @@ export function PlaybackTab({ searchQuery }: Props) {
                 />
               </SettingRow>
               <SettingRow
-                title={`Fallback gain — ${replayGainFallbackGain} dB`}
+                title={`Fallback gain: ${replayGainFallbackGain} dB`}
                 description="Applied to tracks that have no ReplayGain tags. A negative value prevents clipping on unknown tracks."
                 stacked
               >
@@ -332,7 +332,7 @@ export function PlaybackTab({ searchQuery }: Props) {
         <section className="settings-section">
           <h3 className="settings-section-title">Scrobbling</h3>
           <SettingRow
-            title={`Min time before scrobble — ${minSeconds}s`}
+            title={`Min time before scrobble: ${minSeconds}s`}
             description="Track must have played this many seconds before it can be scrobbled."
             stacked
           >
@@ -347,7 +347,7 @@ export function PlaybackTab({ searchQuery }: Props) {
             />
           </SettingRow>
           <SettingRow
-            title={`Completion threshold — ${thresholdPct}%`}
+            title={`Completion threshold: ${thresholdPct}%`}
             description="Scrobble after this percentage of the track has played (whichever condition is met first)."
             stacked
           >
@@ -369,7 +369,7 @@ export function PlaybackTab({ searchQuery }: Props) {
           <h3 className="settings-section-title">Casting</h3>
           <SettingRow
             title="Cast quality"
-            description="Max bitrate when streaming to a DLNA renderer. Many renderers cannot play high-bitrate FLAC — transcoding to a lower bitrate improves compatibility."
+            description="Max bitrate when streaming to a DLNA renderer. Many renderers cannot play high-bitrate FLAC; transcoding to a lower bitrate improves compatibility."
           >
             <select
               value={castMaxBitrate}
@@ -431,7 +431,7 @@ export function PlaybackTab({ searchQuery }: Props) {
           </SettingRow>
           <SettingRow
             title="Show album edition suffixes"
-            description='Show trailing parenthetical info in album names — e.g. "(clean)", "(24-bit / 44.1kHz)", "(Deluxe Edition)".'
+            description='Show trailing parenthetical info in album names, e.g. "(clean)", "(24-bit / 44.1kHz)", "(Deluxe Edition)".'
           >
             <input
               type="checkbox"

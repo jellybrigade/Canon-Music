@@ -42,7 +42,7 @@ function MappedGroup({ group, onUndo, onLock }: MappedGroupProps) {
         </button>
         <button
           className={`d-lock${isLocked ? " d-lock--active" : ""}`}
-          title={isLocked ? "Locked — click to unlock" : "Lock (prevents auto-remap)"}
+          title={isLocked ? "Locked, click to unlock" : "Lock (prevents auto-remap)"}
           onClick={() => { for (const v of group.variants) onLock(v.raw_value, v.kind, !isLocked); }}
         >
           <div>{isLocked ? <Lock size={14} /> : <Unlock size={14} />}</div>

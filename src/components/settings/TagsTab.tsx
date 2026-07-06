@@ -213,7 +213,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
           </SettingRow>
           <SettingRow
             title="Min tag popularity"
-            description="0–100. Lower = more tags included. Raise to cut noise."
+            description="0-100. Lower = more tags included. Raise to cut noise."
           >
             <input
               type="number"
@@ -254,7 +254,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
           </SettingRow>
           <SettingRow
             title="Min folksonomy tag votes"
-            description="0–100. Minimum vote count for MusicBrainz folksonomy tags."
+            description="0-100. Minimum vote count for MusicBrainz folksonomy tags."
           >
             <input
               type="number"

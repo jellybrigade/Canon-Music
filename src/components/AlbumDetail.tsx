@@ -551,7 +551,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
               <button
                 className="album-unidentified-badge"
                 onClick={() => setShowIdentify(true)}
-                title="Album not identified on MusicBrainz — click to identify"
+                title="Album not identified on MusicBrainz, click to identify"
               >
                 <HelpCircle size={12} /> Unidentified
               </button>
@@ -806,7 +806,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
                             <Play size={12} />
                           </span>
                         ) : (
-                          track.track_number ?? "—"
+                          track.track_number ?? "-"
                         )}
                       </td>
                       <td className="track-title">{track.title}</td>
