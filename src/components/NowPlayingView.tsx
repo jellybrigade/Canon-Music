@@ -162,11 +162,23 @@ function NowPlayingProgress({
   onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }) {
   const elapsed = usePlayerStore((s) => s.elapsed);
+  const seek = usePlayerStore((s) => s.seek);
   const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
     [progress, overlayPeaks]
   );
+
+  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (duration <= 0) return;
+    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+      e.preventDefault();
+      void seek(Math.min(duration, elapsed + duration * 0.05));
+    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+      e.preventDefault();
+      void seek(Math.max(0, elapsed - duration * 0.05));
+    }
+  }
 
   return (
     <div className="now-playing-progress-row">
@@ -174,7 +186,14 @@ function NowPlayingProgress({
       <div
         ref={progressBarRef}
         className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
+        role="slider"
+        aria-label="Seek"
+        aria-valuenow={Math.round(progress * 100)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        tabIndex={duration > 0 ? 0 : -1}
         onClick={onProgressClick}
+        onKeyDown={handleProgressKeyDown}
         style={{ cursor: duration > 0 ? "pointer" : "default" }}
       >
         {useWaveform ? (
@@ -237,16 +256,20 @@ function LyricsTabPanel({
     setTimeout(() => { autoScrollingRef.current = false; }, 500);
   }
 
-  useEffect(() => {
-    if (!lyricsLines) return;
-    const activeIndex = lyricsLines.findIndex((line, i) =>
+  const activeLyricIndex = useMemo(() => {
+    if (!lyricsLines) return -1;
+    return lyricsLines.findIndex((line, i) =>
       lyricsAdjElapsed >= line.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec)
     );
-    if (activeIndex === activeLyricIndexRef.current) return;
-    activeLyricIndexRef.current = activeIndex;
+  }, [lyricsAdjElapsed, lyricsLines]);
+
+  useEffect(() => {
+    if (!lyricsLines) return;
+    if (activeLyricIndex === activeLyricIndexRef.current) return;
+    activeLyricIndexRef.current = activeLyricIndex;
     if (userScrollingRef.current) return;
     scrollToActiveLine();
-  }, [lyricsAdjElapsed, lyricsLines]);
+  }, [activeLyricIndex, lyricsLines]);
 
   function handleLyricsScroll() {
     if (autoScrollingRef.current) return;
@@ -328,8 +351,7 @@ function LyricsTabPanel({
             <p className="now-playing-empty">Loading lyrics…</p>
           ) : lyricsLines && lyricsLines.length > 0 ? (
             lyricsLines.map((line, i) => {
-              const isActive = lyricsAdjElapsed >= line.timeSec &&
-                (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
+              const isActive = i === activeLyricIndex;
               return (
                 <div
                   key={i}
@@ -975,6 +997,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
             {tab === "lyrics" && (
               <LyricsTabPanel
+                key={currentTrack?.id}
                 lyricsLines={lyricsLines}
                 lyricsPlain={lyricsPlain}
                 lyricsLoading={lyricsLoading}

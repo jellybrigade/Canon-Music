@@ -77,7 +77,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const [suffixAllowlist, addToSuffixAllowlist] = useAlbumSuffixAllowlist();
   const [suffixExcludedIds, excludeFromSuffix, unexcludeFromSuffix] = useAlbumSuffixExclusions();
   const [showFullTitle, setShowFullTitle] = useState(false);
-  const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", true);
+  const [showAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const strippingEnabled = !showAlbumSuffixes;
   const detectedSuffix = extractSuffix(album.name);
   const suffixIsExcluded = suffixExcludedIds.includes(album.id);
