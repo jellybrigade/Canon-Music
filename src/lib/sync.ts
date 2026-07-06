@@ -1,35 +1,39 @@
+import Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
 import { keychain } from "../keychain";
 import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
-import type { NavidromeCredential } from "./navidrome";
+import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 import { rebuildTagVocabCache } from "./tag-normalize";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
-export async function syncAlbumTracks(
-  server: Server,
-  credential: NavidromeCredential,
-  dbAlbumId: string,
+// tauri-plugin-sql's SQLite pool has more than one connection, so a raw
+// BEGIN/COMMIT split across two separate execute() calls can land on
+// different connections and silently fail to wrap anything. Batch writes
+// into fewer, larger multi-row statements instead of relying on transactions.
+const INSERT_CHUNK_SIZE = 200;
+
+async function insertTracksBatch(
+  db: Database,
+  serverId: string,
+  serverType: string,
+  albumDbId: string,
+  tracks: NavidromeTrack[],
 ): Promise<void> {
-  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
-  const altUrl = server.alt_url ?? undefined;
-  const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
-  const db = await getDb();
-  for (const track of tracks) {
-    const trackDbId = `${server.id}:${track.id}`;
-    await db.execute(
-      `INSERT OR REPLACE INTO tracks
-         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        trackDbId,
-        server.id,
-        server.type,
+  for (let start = 0; start < tracks.length; start += INSERT_CHUNK_SIZE) {
+    const chunk = tracks.slice(start, start + INSERT_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
+    const params: unknown[] = [];
+    for (const track of chunk) {
+      params.push(
+        `${serverId}:${track.id}`,
+        serverId,
+        serverType,
         track.title,
         track.artist ?? null,
-        dbAlbumId,
+        albumDbId,
         track.genre ?? null,
         track.track ?? null,
         track.discNumber ?? null,
@@ -44,15 +48,47 @@ export async function syncAlbumTracks(
         track.replayGain?.trackPeak ?? null,
         track.replayGain?.albumGain ?? null,
         track.replayGain?.albumPeak ?? null,
-      ]
-    );
-    if (track.genre) {
-      await db.execute(
-        `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, 'server')`,
-        [trackDbId, track.genre]
       );
     }
+    await db.execute(
+      `INSERT OR REPLACE INTO tracks
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
+       VALUES ${placeholders}`,
+      params
+    );
   }
+
+  const genreRows = tracks.filter((t) => t.genre);
+  for (let start = 0; start < genreRows.length; start += INSERT_CHUNK_SIZE) {
+    const chunk = genreRows.slice(start, start + INSERT_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "(?, 'genre', ?, 'server')").join(", ");
+    const params: unknown[] = [];
+    for (const track of chunk) params.push(`${serverId}:${track.id}`, track.genre);
+    await db.execute(
+      `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
+      params
+    );
+  }
+}
+
+async function insertIdColumnBatch(db: Database, table: string, column: string, ids: string[]): Promise<void> {
+  for (let start = 0; start < ids.length; start += INSERT_CHUNK_SIZE) {
+    const chunk = ids.slice(start, start + INSERT_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "(?)").join(", ");
+    await db.execute(`INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`, chunk);
+  }
+}
+
+export async function syncAlbumTracks(
+  server: Server,
+  credential: NavidromeCredential,
+  dbAlbumId: string,
+): Promise<void> {
+  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
+  const altUrl = server.alt_url ?? undefined;
+  const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
+  const db = await getDb();
+  await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
 }
 
 export async function syncLibrary(
@@ -84,30 +120,56 @@ export async function syncLibrary(
   let skippedAlbums = 0;
   let processedCount = 0;
 
+  // Incremental sync: bulk-prefetch existing album state once instead of a
+  // per-album SELECT round trip, so the skip-tracks decision is pure JS.
+  type ExistingAlbumRow = { id: string; navidrome_created: string | null };
+  const existingAlbumRows = await db.select<ExistingAlbumRow[]>(
+    "SELECT id, navidrome_created FROM albums WHERE server_id = ?",
+    [server.id]
+  );
+  const existingCreatedById = new Map(existingAlbumRows.map((r) => [r.id, r.navidrome_created]));
+
+  type TrackCountRow = { album_id: string; c: number };
+  const trackCountRows = await db.select<TrackCountRow[]>(
+    "SELECT album_id, COUNT(*) AS c FROM tracks WHERE server_id = ? GROUP BY album_id",
+    [server.id]
+  );
+  const trackCountByAlbumId = new Map(trackCountRows.map((r) => [r.album_id, r.c]));
+
+  const albumUpsertParams: unknown[][] = [];
+  const albumsNeedingTracks: { album: typeof albums[number]; albumDbId: string }[] = [];
+
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
-
-    // Incremental sync: skip track fetch when album is unchanged
-    type ExistingAlbumInfo = { navidrome_created: string | null; track_count: number };
-    const existingRows = await db.select<ExistingAlbumInfo[]>(
-      `SELECT navidrome_created,
-              (SELECT COUNT(*) FROM tracks WHERE album_id = ?) AS track_count
-       FROM albums WHERE id = ?`,
-      [albumDbId, albumDbId]
-    );
-    const existing = existingRows[0] ?? null;
+    const existingCreated = existingCreatedById.get(albumDbId) ?? null;
+    const existingTrackCount = trackCountByAlbumId.get(albumDbId) ?? 0;
     const skipTracks =
-      existing !== null &&
-      existing.navidrome_created !== null &&
-      existing.navidrome_created === (album.created ?? null) &&
-      (album.songCount === undefined || existing.track_count === album.songCount);
+      existingCreatedById.has(albumDbId) &&
+      existingCreated !== null &&
+      existingCreated === (album.created ?? null) &&
+      (album.songCount === undefined || existingTrackCount === album.songCount);
 
-    // Upsert album row, preserve computed_at/normalized_tags_json so background normalizer
-    // doesn't re-run on every sync.
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
+    albumUpsertParams.push([
+      albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null,
+      album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, releaseType,
+    ]);
+
+    if (skipTracks) {
+      skippedAlbums++;
+    } else {
+      albumsNeedingTracks.push({ album, albumDbId });
+    }
+  }
+
+  // Upsert album rows in batches, preserving computed_at/normalized_tags_json
+  // so the background normalizer doesn't re-run on every sync.
+  for (let start = 0; start < albumUpsertParams.length; start += INSERT_CHUNK_SIZE) {
+    const chunk = albumUpsertParams.slice(start, start + INSERT_CHUNK_SIZE);
+    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
     await db.execute(
       `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
          server_type = excluded.server_type,
@@ -118,19 +180,15 @@ export async function syncLibrary(
          navidrome_created = excluded.navidrome_created,
          play_count = excluded.play_count,
          release_type = excluded.release_type`,
-      [albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null, album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, releaseType]
+      chunk.flat()
     );
+  }
 
-    processedCount++;
-    if (onAlbumBatch && (processedCount === 1 || processedCount % BATCH_NOTIFY_INTERVAL === 0)) {
-      onAlbumBatch();
-    }
+  processedCount = albumUpsertParams.length;
+  if (onAlbumBatch && processedCount > 0) onAlbumBatch();
 
-    if (skipTracks) {
-      skippedAlbums++;
-      continue;
-    }
-
+  let fetchedCount = 0;
+  for (const { album, albumDbId } of albumsNeedingTracks) {
     let tracks;
     try {
       tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
@@ -139,43 +197,9 @@ export async function syncLibrary(
       failedAlbums++;
       continue;
     }
-    for (const track of tracks) {
-      const trackDbId = `${server.id}:${track.id}`;
-      await db.execute(
-        `INSERT OR REPLACE INTO tracks
-           (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          trackDbId,
-          server.id,
-          server.type,
-          track.title,
-          track.artist ?? null,
-          albumDbId,
-          track.genre ?? null,
-          track.track ?? null,
-          track.discNumber ?? null,
-          track.year ?? null,
-          track.duration ?? null,
-          track.path ?? null,
-          track.playCount ?? 0,
-          track.bitRate ?? null,
-          track.suffix ?? null,
-          track.size ?? null,
-          track.replayGain?.trackGain ?? null,
-          track.replayGain?.trackPeak ?? null,
-          track.replayGain?.albumGain ?? null,
-          track.replayGain?.albumPeak ?? null,
-        ]
-      );
-      if (track.genre) {
-        await db.execute(
-          `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source)
-           VALUES (?, 'genre', ?, 'server')`,
-          [trackDbId, track.genre]
-        );
-      }
-    }
+    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
+    fetchedCount++;
+    if (onAlbumBatch && (fetchedCount === 1 || fetchedCount % BATCH_NOTIFY_INTERVAL === 0)) onAlbumBatch();
   }
 
   // Rebuild artists table from albums
@@ -208,23 +232,13 @@ export async function syncLibrary(
     "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
     [server.id]
   );
-  for (const album of starred.album ?? []) {
-    await db.execute(
-      "INSERT OR IGNORE INTO loved_albums (album_id) VALUES (?)",
-      [`${server.id}:${album.id}`]
-    );
-  }
+  await insertIdColumnBatch(db, "loved_albums", "album_id", (starred.album ?? []).map((a) => `${server.id}:${a.id}`));
 
   await db.execute(
     "DELETE FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
     [server.id]
   );
-  for (const song of starred.song ?? []) {
-    await db.execute(
-      "INSERT OR IGNORE INTO loved_tracks (track_id) VALUES (?)",
-      [`${server.id}:${song.id}`]
-    );
-  }
+  await insertIdColumnBatch(db, "loved_tracks", "track_id", (starred.song ?? []).map((s) => `${server.id}:${s.id}`));
 
   // Sync playlists, collect all track lists before deleting to avoid wipe on partial failure
   const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl);
