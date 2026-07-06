@@ -1283,6 +1283,23 @@ pub fn run() {
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
 
+            // WebKitGTK runs the page in a separate WebProcess by design so a crash
+            // there (e.g. the GTK freeze/thaw compositor race) doesn't have to take
+            // the whole app down. wry doesn't wire up this signal itself, so without
+            // this hook a WebProcess death currently kills the entire Tauri process.
+            // Reload instead of letting it die - doesn't fix the underlying WebKitGTK
+            // bug, just stops it from closing the app on the user.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|webview| {
+                    use webkit2gtk::WebViewExt;
+                    webview.inner().connect_web_process_terminated(|view, reason| {
+                        eprintln!("[webprocess-terminated] reason={reason:?} - reloading instead of exiting");
+                        view.reload();
+                    });
+                });
+            }
+
             // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
             // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
             // active WebKit compositor/animation timer running, which may race the
