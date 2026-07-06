@@ -252,11 +252,17 @@ export async function syncLibrary(
       "INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url) VALUES (?, ?, ?, ?, ?, ?)",
       [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
     );
-    for (let i = 0; i < tracks.length; i++) {
-      const t = tracks[i]!;
+    const CHUNK_SIZE = 500;
+    for (let start = 0; start < tracks.length; start += CHUNK_SIZE) {
+      const chunk = tracks.slice(start, start + CHUNK_SIZE);
+      const placeholders = chunk.map(() => "(?, ?, ?)").join(", ");
+      const params: (string | number)[] = [];
+      chunk.forEach((t, offset) => {
+        params.push(plDbId, `${server.id}:${t.id}`, start + offset);
+      });
       await db.execute(
-        "INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
-        [plDbId, `${server.id}:${t.id}`, i]
+        `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`,
+        params
       );
     }
   }
