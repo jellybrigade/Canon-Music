@@ -912,6 +912,18 @@ async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<upnp::ResolvedRe
 
 static SOAP_CLIENT: std::sync::OnceLock<reqwest::blocking::Client> = std::sync::OnceLock::new();
 
+// Set once app data dir is known (in `.setup()`); read by the panic hook, which runs
+// before any AppHandle exists and can't resolve the path itself.
+static CRASH_FILE_PATH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+#[tauri::command]
+fn take_crash_report() -> Option<String> {
+    let path = CRASH_FILE_PATH.get()?;
+    let contents = std::fs::read_to_string(path).ok()?;
+    let _ = std::fs::remove_file(path);
+    Some(contents)
+}
+
 fn soap_client() -> &'static reqwest::blocking::Client {
     SOAP_CLIENT.get_or_init(|| {
         reqwest::blocking::Client::builder()
@@ -949,6 +961,15 @@ pub fn run() {
     // instead of surfacing later as an unrelated-looking crash elsewhere.
     std::panic::set_hook(Box::new(|info| {
         eprintln!("[panic] {info}");
+        // Single write on a rare event, no perf cost on the normal path. Lets the
+        // frontend surface a crash report + logs in Feedback on next launch.
+        if let Some(path) = CRASH_FILE_PATH.get() {
+            let ts = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let _ = std::fs::write(path, format!("[unix:{ts}] {info}"));
+        }
     }));
 
     // WebKitGTK renders a native GTK overlay scrollbar (thick on hover) on top of
@@ -1191,6 +1212,11 @@ pub fn run() {
             proxy_config: cover_proxy_config,
         })
         .setup(|app| {
+            if let Ok(data_dir) = app.path().app_data_dir() {
+                let _ = std::fs::create_dir_all(&data_dir);
+                let _ = CRASH_FILE_PATH.set(data_dir.join("crash.txt"));
+            }
+
             // Clean up orphaned spill files from prior crashes.
             if let Ok(spill_dir) = app.path().app_data_dir().map(|d| d.join("stream-spill")) {
                 if let Ok(entries) = std::fs::read_dir(&spill_dir) {
@@ -1296,6 +1322,7 @@ pub fn run() {
             tray_set_close_to_tray,
             get_cover_server_port,
             set_cover_proxy_config,
+            take_crash_report,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

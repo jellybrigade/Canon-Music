@@ -153,6 +153,12 @@
   gap: var(--space-xs);
 }
 
+.feedback-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
 .feedback-sysinfo {
   display: flex;
   align-items: center;

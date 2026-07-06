@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { logger } from "../lib/logger";
 
 interface Props {
   children: ReactNode;
@@ -20,6 +21,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("Uncaught render error:", error, info.componentStack);
+    // Torn-down tree must not lose this line waiting for the periodic debounced flush.
+    logger.error(`React crash: ${error.stack ?? error.message}\n${info.componentStack ?? ""}`);
+    void logger.flush();
   }
 
   private reset = () => this.setState({ error: null });

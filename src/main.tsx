@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initLogger } from "./lib/logger";
+
+initLogger();
 
 // Suppress WebKit's default context menu on non-input elements — custom menus are attached per-component.
 document.addEventListener("contextmenu", (e) => {
