@@ -987,6 +987,14 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
 
+    // WebKitGTK's compositor can crash the whole process (silent, no Rust panic,
+    // no crash.txt) under bursts of concurrent image decodes/paints - e.g. opening
+    // an AlbumDetail that loads cover art + a related-albums grid + similar-artist
+    // portraits at once. Disabling accelerated compositing trades some GPU-assisted
+    // smoothness for stability; worth it until upstream fixes the compositor bug.
+    #[cfg(target_os = "linux")]
+    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+
     // Spawn a thread to own OutputStream so it stays alive for the process lifetime.
     // Non-fatal: if no audio device is available the app still opens, play commands
     // return an error instead of crashing.
