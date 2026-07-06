@@ -9,11 +9,11 @@ import { useSetting } from "./useSetting";
 
 export function useScrobble(
   track: CurrentTrack | null,
-  elapsed: number,
   serverWithCred: ServerWithCredential | undefined
 ) {
   const scrobbedRef = useRef(false);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
+  const elapsed = usePlayerStore((s) => s.elapsed);
   const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPctRaw] = useSetting("scrobble.threshold_percent", "50");
   const minElapsedS = Math.max(0, parseInt(minSecondsRaw, 10) || 0);
@@ -55,4 +55,19 @@ export function useScrobble(
       )
       .catch((e) => console.error("Failed to write scrobble_queue:", e));
   }, [track, elapsed]);
+}
+
+/**
+ * Isolates the 200ms `elapsed` store subscription in its own leaf component
+ * so the 5x/second tick doesn't re-render the caller (App owns a large tree).
+ */
+export function ScrobbleTracker({
+  track,
+  serverWithCred,
+}: {
+  track: CurrentTrack | null;
+  serverWithCred: ServerWithCredential | undefined;
+}) {
+  useScrobble(track, serverWithCred);
+  return null;
 }
