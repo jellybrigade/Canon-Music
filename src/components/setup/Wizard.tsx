@@ -199,6 +199,10 @@ export function Wizard({ onSuccess }: Props) {
             <p className="wizard-desc">
               To get started, connect Canon to your Navidrome server.
             </p>
+            <p className="settings-alpha-notice">
+              <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash.
+              Thanks for trying it out this early — it means a lot.
+            </p>
             <div className="wizard-actions">
               <button className="primary" onClick={() => setStep(2)}>Continue</button>
             </div>

@@ -361,6 +361,21 @@
   color: var(--text-tertiary);
 }
 
+.settings-alpha-notice {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-md);
+}
+
+.settings-alpha-notice strong {
+  color: var(--text-primary);
+}
+
 /* ── Server panel ────────────────────────────────────────────── */
 
 .settings-server-card {
