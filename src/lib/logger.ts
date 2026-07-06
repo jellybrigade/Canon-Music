@@ -46,6 +46,7 @@ async function flush(): Promise<void> {
         [entry.ts, entry.level, entry.message]
       );
     }
+    buffer.splice(0, toWrite.length);
     await db.execute(
       "DELETE FROM app_logs WHERE id NOT IN (SELECT id FROM app_logs ORDER BY id DESC LIMIT ?)",
       [MAX_LINES]
