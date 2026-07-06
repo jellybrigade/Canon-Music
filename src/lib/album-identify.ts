@@ -1,5 +1,5 @@
 /**
- * Core MB auto-identify logic as a plain async function — no React hooks.
+ * Core MB auto-identify logic as a plain async function, no React hooks.
  * Used by useAutoIdentifyAlbum (per-album, on mount) and bulk sync (SettingsView).
  */
 import {
@@ -50,9 +50,9 @@ export async function autoIdentifyAlbum({
   artist: string;
   album: string;
   trackCount?: number;
-  /** Known local release year — disambiguates same-titled releases from different years. */
+  /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
-  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
 }): Promise<AutoIdentifyResult> {
   try {

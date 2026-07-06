@@ -14,7 +14,7 @@ export function useGenres() {
     queryKey: QK.genres(),
     queryFn: async (): Promise<GenreRow[]> => {
       const db = await getDb();
-      // Only show direct (leaf) canon-tree genres in the dropdown — raw: ids excluded.
+      // Only show direct (leaf) canon-tree genres in the dropdown, raw: ids excluded.
       return db.select<GenreRow[]>(`
         SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
         FROM album_genres

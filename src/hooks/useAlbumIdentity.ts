@@ -61,7 +61,7 @@ export function useAlbumIdentity(albumId: string) {
 }
 
 /**
- * Looks for an MB artist MBID already confirmed for this artist name — either
+ * Looks for an MB artist MBID already confirmed for this artist name, either
  * via the artist-identify dialog (`artist_identity`) or a previously matched
  * album by the same artist (`album_identity`). Used to disambiguate release
  * groups that share a title across different artists.
@@ -127,9 +127,9 @@ export function useIdentifyAlbum({
   overrideMbRgId?: string | null;
   overrideMbReleaseId?: string | null;
   trackCount?: number;
-  /** Known local release year — disambiguates same-titled releases from different years. */
+  /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
-  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
   enabled: boolean;
 }) {
@@ -137,7 +137,7 @@ export function useIdentifyAlbum({
     queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount, year, confirmedArtistMbid),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
-        // Step 1: resolve RG MBID — prefer explicit override, then search
+        // Step 1: resolve RG MBID, prefer explicit override, then search
         let rgId = overrideMbRgId ?? null;
         let candidates: MbReleaseGroupCandidate[] = [];
 
@@ -145,7 +145,7 @@ export function useIdentifyAlbum({
           let searchTitle = album;
           candidates = await searchReleaseGroups(artist, album);
 
-          // Retry without edition noise — "The Suburbs (Deluxe Edition)" → "The Suburbs"
+          // Retry without edition noise, "The Suburbs (Deluxe Edition)" → "The Suburbs"
           if (candidates.length === 0) {
             const stripped = stripTrailingBrackets(album);
             if (stripped) {
@@ -178,7 +178,7 @@ export function useIdentifyAlbum({
             top.candidate.primaryType !== "Single" &&
             second?.candidate.primaryType === "Single";
 
-          // Auto-pick if one clear winner — user still confirms in dialog
+          // Auto-pick if one clear winner, user still confirms in dialog
           if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
             rgId = top.candidate.id;
             candidates = ranked.map((r) => r.candidate);
@@ -247,7 +247,7 @@ export function useIdentifyAlbum({
       }
     },
     enabled: enabled && !!albumId,
-    staleTime: 60 * 60 * 1000, // 1 hour — re-fetch on explicit user action
+    staleTime: 60 * 60 * 1000, // 1 hour, re-fetch on explicit user action
     retry: false,
   });
 }

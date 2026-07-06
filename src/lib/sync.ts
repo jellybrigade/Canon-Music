@@ -71,7 +71,7 @@ export async function syncLibrary(
       credential = parsed as NavidromeCredential;
     }
   } catch {
-    throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
+    throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
   }
 
   const altUrl = server.alt_url ?? undefined;
@@ -102,7 +102,7 @@ export async function syncLibrary(
       existing.navidrome_created === (album.created ?? null) &&
       (album.songCount === undefined || existing.track_count === album.songCount);
 
-    // Upsert album row — preserve computed_at/normalized_tags_json so background normalizer
+    // Upsert album row, preserve computed_at/normalized_tags_json so background normalizer
     // doesn't re-run on every sync.
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     await db.execute(
@@ -201,7 +201,7 @@ export async function syncLibrary(
     [server.id]
   );
 
-  // Sync loved state via getStarred2 — independent of incremental skip logic
+  // Sync loved state via getStarred2, independent of incremental skip logic
   const starred = await fetchStarred2(server.url, server.username, credential, altUrl);
 
   await db.execute(
@@ -226,7 +226,7 @@ export async function syncLibrary(
     );
   }
 
-  // Sync playlists — collect all track lists before deleting to avoid wipe on partial failure
+  // Sync playlists, collect all track lists before deleting to avoid wipe on partial failure
   const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl);
   let failedPlaylists = 0;
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };

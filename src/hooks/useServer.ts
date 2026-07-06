@@ -37,7 +37,7 @@ export function useServerWithCredential(serverId: string | undefined) {
         "credential"
       );
       if (!credJson) {
-        throw new Error(`No credentials found for server ${server.id} — re-enter in Settings`);
+        throw new Error(`No credentials found for server ${server.id}. Re-enter in Settings.`);
       }
       let credential: NavidromeCredential;
       try {
@@ -49,7 +49,7 @@ export function useServerWithCredential(serverId: string | undefined) {
           credential = parsed as NavidromeCredential;
         }
       } catch {
-        throw new Error(`Corrupt credentials for server ${server.id} — re-enter in Settings`);
+        throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
       }
       return { server, credential };
     },

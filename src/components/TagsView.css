@@ -204,7 +204,7 @@
   justify-content: center;
 }
 
-/* Fit container — CSS grid parent; all rows share column tracks via subgrid.
+/* Fit container, CSS grid parent; all rows share column tracks via subgrid.
    The name column is max-content so no row ever truncates. */
 .review-fit {
   flex: 1;
@@ -221,7 +221,7 @@
   margin: 0 auto;
 }
 
-/* Dense row — min-height must match ROW_HEIGHT in TagReviewTab.tsx */
+/* Dense row, min-height must match ROW_HEIGHT in TagReviewTab.tsx */
 .review-row {
   display: grid;
   grid-column: 1 / -1;

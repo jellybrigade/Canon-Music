@@ -6,7 +6,7 @@
  * bio, listeners, playcount, similar artists, top tags, image URL, enriched_at.
  *
  * MB columns (mb_artist_id, lastfm_artist_name, confirmed_at) are preserved.
- * Failures are silent — the hook never throws to the UI.
+ * Failures are silent, the hook never throws to the UI.
  *
  * Returns { data, isLoading, isRefreshing, error, refresh }.
  */
@@ -63,9 +63,9 @@ async function disambiguateArtistByLocalAlbums(
   );
   const localAlbums = localRows.map((r) => r.name);
   if (localAlbums.length === 0) {
-    // Not in the library — no album overlap to verify against. Use the closest
+    // Not in the library, no album overlap to verify against. Use the closest
     // name match anyway (not persisted as confirmed) so portrait art still resolves
-    // for "fans also like" style artists instead of silently giving up — but still
+    // for "fans also like" style artists instead of silently giving up, but still
     // require a reasonable name match to avoid attaching an unrelated artist's identity.
     const ranked = candidates
       .map((c) => ({ id: c.id, sim: similarity(c.name, artistName) }))
@@ -137,7 +137,7 @@ async function enrichArtist(
         resolvedMbid = await disambiguateArtistByLocalAlbums(artistName, candidates);
       }
     } catch {
-      // silent — portrait stays absent if MB is unreachable
+      // silent, portrait stays absent if MB is unreachable
     }
   }
 
@@ -171,7 +171,7 @@ async function enrichArtist(
   }
 
   const db = await getDb();
-  // Only stamp enriched_at when Last.fm returned primary data — keeps the row retryable
+  // Only stamp enriched_at when Last.fm returned primary data, keeps the row retryable
   // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
   const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
   const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;

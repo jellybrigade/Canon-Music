@@ -38,7 +38,7 @@ async function runMigrations(database: Database): Promise<void> {
         try {
           await database.execute(statement);
         } catch (e) {
-          // Ignore "duplicate column name" — ALTER TABLE ADD COLUMN on an already-existing column.
+          // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
           // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
           if (!(e instanceof Error) || !e.message.includes("duplicate column name")) throw e;
         }

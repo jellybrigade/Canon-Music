@@ -73,7 +73,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
       await playQueue(trackObjs, streamUrlFn, startIndex >= 0 ? startIndex : 0);
 
-      // Pause immediately after loading — don't autoplay on restore
+      // Pause immediately after loading, don't autoplay on restore
       usePlayerStore.getState().pause?.();
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps

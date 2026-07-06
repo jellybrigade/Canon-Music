@@ -2,13 +2,13 @@
  * MusicBrainz metadata client.
  *
  * Uses @tauri-apps/plugin-http (not browser fetch) so that a proper
- * User-Agent header can be set — required by MB's usage policy.
+ * User-Agent header can be set, required by MB's usage policy.
  *
  * Rate limit: ≥ 1 req/sec (MB enforces this server-side; we use 1100 ms).
  *
  * Genre note: MB stores community-voted genres at both Release Group and
  * Release level. Combined genres = union(RG genres, matched-release genres).
- * We do NOT fetch every pressing's genres — MB's 1 req/sec makes a
+ * We do NOT fetch every pressing's genres, MB's 1 req/sec makes a
  * full-catalog union prohibitively slow.
  */
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
@@ -36,7 +36,7 @@ export interface MbReleaseGroupCandidate {
   primaryType: string | null;
   artistName: string;
   artistMbid: string | null;
-  /** MB's own Lucene relevance score (0–100). Tiebreaker only — use our fuzzy score as primary. */
+  /** MB's own Lucene relevance score (0-100). Tiebreaker only, use our fuzzy score as primary. */
   score: number | null;
 }
 

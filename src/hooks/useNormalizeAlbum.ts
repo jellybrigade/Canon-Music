@@ -45,7 +45,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       try {
         combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
       } catch {
-        // Malformed JSON — ignore, proceed without MB genres
+        // Malformed JSON, ignore, proceed without MB genres
       }
     }
 
@@ -54,7 +54,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       try {
         combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
       } catch {
-        // Malformed JSON — ignore, proceed without MB tags
+        // Malformed JSON, ignore, proceed without MB tags
       }
     }
 

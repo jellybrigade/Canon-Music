@@ -95,7 +95,7 @@ export function useListeningStats() {
     return stats.filter(s => s.last_played >= cutoff);
   }, [stats, cutoff]);
 
-  // Albums with any play history, not heard in last 30 days — oldest first
+  // Albums with any play history, not heard in last 30 days, oldest first
   const rediscover = useMemo(() => {
     const recentIds = new Set(onRepeat.map(s => s.id));
     return stats
@@ -103,7 +103,7 @@ export function useListeningStats() {
       .sort((a, b) => a.last_played.localeCompare(b.last_played));
   }, [stats, onRepeat]);
 
-  // Albums with 1–3 total plays — oldest last_played first
+  // Albums with 1-3 total plays, oldest last_played first
   const hiddenGem = useMemo(() => {
     return stats
       .filter(s => s.plays >= 1 && s.plays <= 3)
@@ -115,7 +115,7 @@ export function useListeningStats() {
     return [...stats].sort((a, b) => a.last_played.localeCompare(b.last_played));
   }, [stats]);
 
-  // Set of album ids that have any play history — built from stats (not returned
+  // Set of album ids that have any play history, built from stats (not returned
   // from queryFn directly to avoid React Query structuralSharing Set-ref bug)
   const playedAlbumIds = useMemo(() => new Set(stats.map(s => s.id)), [stats]);
 

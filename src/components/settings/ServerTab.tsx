@@ -170,7 +170,7 @@ export function ServerTab({ serverWithCredential, onRemoveServer, searchQuery }:
                 />
               </label>
               <label className="settings-field">
-                <span>Alternate URL <span style={{ fontWeight: "normal", opacity: 0.6 }}>(optional — used as fallback if primary is unreachable)</span></span>
+                <span>Alternate URL <span style={{ fontWeight: "normal", opacity: 0.6 }}>(optional, used as fallback if primary is unreachable)</span></span>
                 <input
                   type="url"
                   value={editAltUrl}

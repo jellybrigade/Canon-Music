@@ -178,7 +178,7 @@ export class DlnaTarget implements PlaybackTarget {
       r.supportsSetNext = true;
       this.renderer = r;
     } catch {
-      // Renderer doesn't support SetNextAVTransportURI — fall back to load() on track change.
+      // Renderer doesn't support SetNextAVTransportURI, fall back to load() on track change.
       this.failedToSetNext = true;
       const r = { ...this.renderer };
       r.supportsSetNext = false;
@@ -216,7 +216,7 @@ export class DlnaTarget implements PlaybackTarget {
           this.positionUpdatedAt = Date.now();
         }
       } catch {
-        // transient SOAP failure — keep interpolating
+        // transient SOAP failure, keep interpolating
       }
       if (this.playing) this.scheduleReconcile(5000);
     }, delayMs);
@@ -234,7 +234,7 @@ export class DlnaTarget implements PlaybackTarget {
         if (state === "STOPPED" || state === "NO_MEDIA_PRESENT") {
           this.onTrackEnd?.();
         } else {
-          // Not done yet — check again in 2s.
+          // Not done yet, check again in 2s.
           this.trackEndTimer = setTimeout(async () => {
             const s2 = await getTransportInfo(this.renderer.avTransportControlUrl).catch(() => "STOPPED");
             if (s2 === "STOPPED" || s2 === "NO_MEDIA_PRESENT") {

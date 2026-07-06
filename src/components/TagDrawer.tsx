@@ -77,7 +77,7 @@ function useAlbumUnmatchedGenres(albumId: string) {
     queryFn: async () => {
       const db = await getDb();
       // album_unresolved_genres captures all unmapped tags (file, lastfm, musicbrainz)
-      // written by normalizeAlbum — filter out any that already have a mapping decision
+      // written by normalizeAlbum, filter out any that already have a mapping decision
       return db.select<{ raw_value: string; source: string }[]>(
         `SELECT DISTINCT ug.raw_value, ug.source
          FROM album_unresolved_genres ug
@@ -150,7 +150,7 @@ function TagSection({
             {isUnmapped && onIgnore ? (
               <button
                 className="tag-drawer-ignore-btn"
-                title="Ignore — exclude from genre output"
+                title="Ignore, exclude from genre output"
                 onClick={() => onIgnore(tag.name)}
               >
                 Ignore
@@ -227,14 +227,14 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
           <div className="td-unmatched-actions">
             <button
               className="btn-flat accept"
-              title="Accept as-is — keep in genre output without remapping"
+              title="Accept as-is, keep in genre output without remapping"
               onClick={() => void handleDecision(raw_value, ACCEPTED)}
             >
               Accept
             </button>
             <button
               className="btn-flat ignore"
-              title="Ignore — exclude from genre output"
+              title="Ignore, exclude from genre output"
               onClick={() => void handleDecision(raw_value, IGNORED)}
             >
               Ignore
@@ -324,7 +324,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
                 title="Genres"
                 tags={normalizedTags.genres}
                 level="album"
-                emptyMessage="No genres identified — try syncing in Settings."
+                emptyMessage="No genres identified, try syncing in Settings."
                 rawMap={rawMap}
                 onIgnore={handleIgnoreUnmappedGenre}
               />

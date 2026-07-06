@@ -11,7 +11,7 @@
  *   - Genres shared by ≥50% of tracks are promoted into album_genres chips.
  *
  * Gated by settings key 'tags.enrich_tracks' (default true).
- * Failures are silent — never throws to the UI.
+ * Failures are silent, never throws to the UI.
  */
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -75,7 +75,7 @@ async function enrichAlbumTracks(
     try {
       result = await fetchTrackTags(trackArtist, trackTitle);
     } catch {
-      // API failure (no key, rate limit, network) — leave tags_enriched_at null so it retries.
+      // API failure (no key, rate limit, network), leave tags_enriched_at null so it retries.
       continue;
     }
 
@@ -105,7 +105,7 @@ async function enrichAlbumTracks(
       );
     }
 
-    // Stamp only on successful fetch — leaves null for retry on failure.
+    // Stamp only on successful fetch, leaves null for retry on failure.
     await db.execute(
       "UPDATE tracks SET tags_enriched_at = ? WHERE id = ?",
       [Math.floor(Date.now() / 1000), track.id]

@@ -226,7 +226,7 @@
   gap: var(--space-xs);
 }
 
-/* Combobox below the genre name — full width */
+/* Combobox below the genre name, full width */
 .td-unmatched-row .tags-combobox { width: 100%; }
 
 .td-unmatched-row .tags-combobox-input {
@@ -272,7 +272,7 @@
   flex-shrink: 0;
 }
 
-/* Accept / Ignore buttons — scoped variant matching TagsView.css btn-flat */
+/* Accept / Ignore buttons, scoped variant matching TagsView.css btn-flat */
 .td-unmatched-row .btn-flat {
   background: none;
   border: 1px solid var(--border);

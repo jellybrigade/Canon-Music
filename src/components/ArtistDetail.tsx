@@ -174,14 +174,14 @@ const ESSENTIAL_RATIO = 0.25;
 const SIMILAR_ARTISTS_MAX = 12;
 
 function formatDuration(seconds: number | null): string {
-  if (!seconds) return "–";
+  if (!seconds) return "-";
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
   const s = seconds % SECONDS_PER_MINUTE;
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
 // Last.fm's per-title playcount can't distinguish which local copy it belongs to when
-// several local tracks share a title (e.g. clipping.'s many "Intro" tracks) — Last.fm's
+// several local tracks share a title (e.g. clipping.'s many "Intro" tracks), Last.fm's
 // own chart merges those into one page. For an ambiguous title, ask Last.fm which album
 // it considers representative and match that against the local copies; if nothing matches,
 // fall back to whichever local copy has the most local plays. Either way the winner is
@@ -803,7 +803,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
             {lfmOnlyTracks.length > 0 && (
               <div className="artist-lastfm-only">
                 <button className="artist-lastfm-divider" onClick={() => setLastfmOnlyExpanded((v) => !v)}>
-                  More on Last.fm — not in your library
+                  More on Last.fm (not in your library)
                   <ChevronDown size={12} className={lastfmOnlyExpanded ? "artist-chevron--up" : ""} />
                 </button>
                 {lastfmOnlyExpanded && (

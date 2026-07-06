@@ -16,7 +16,7 @@
   overflow: hidden;
 }
 
-/* Gradient fade at bottom — tall enough to blend blurred art into page background */
+/* Gradient fade at bottom, tall enough to blend blurred art into page background */
 .album-detail-header::after {
   content: '';
   position: absolute;

@@ -103,7 +103,7 @@
   font-weight: 500;
 }
 
-/* Base shape shared with .identify-field > input and .merge-search — see styles/base.css. */
+/* Base shape shared with .identify-field > input and .merge-search, see styles/base.css. */
 .spm-input {
   box-sizing: border-box;
   font-family: inherit;

@@ -98,7 +98,7 @@ export function FilterSidebar({
                 min={1900}
                 max={2100}
               />
-              <span className="filter-sidebar-year-sep">–</span>
+              <span className="filter-sidebar-year-sep">-</span>
               <input
                 className="filter-sidebar-year-input"
                 type="number"

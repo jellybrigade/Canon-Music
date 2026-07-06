@@ -144,7 +144,7 @@ body,
 
 /* Shared modal overlay (ref: SmartPlaylistModal, IdentifyDialog, FeedbackModal,
    ArtistMergeModal, TagsView node modal). Component-specific overlay classes
-   layer nothing extra on top — this is the whole shape. */
+   layer nothing extra on top, this is the whole shape. */
 .spm-overlay,
 .identify-overlay,
 .feedback-overlay,
@@ -172,7 +172,7 @@ body,
 }
 
 /* Shared text-input shell (ref: SmartPlaylistModal, IdentifyDialog,
-   ArtistMergeModal). Component-specific classes are unstyled hooks here —
+   ArtistMergeModal). Component-specific classes are unstyled hooks here;
    this is the whole shape. */
 .spm-input,
 .identify-field > input,

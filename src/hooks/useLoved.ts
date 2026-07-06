@@ -13,7 +13,7 @@ interface IdRow {
 export function useLoved() {
   const queryClient = useQueryClient();
 
-  // Return string[] not Set — React Query's structuralSharing uses Object.keys
+  // Return string[] not Set, React Query's structuralSharing uses Object.keys
   // on Sets, returns [], and incorrectly treats all Sets as identical, so
   // updates after the first render never propagate.
   const { data: lovedTrackArray = [] } = useQuery({

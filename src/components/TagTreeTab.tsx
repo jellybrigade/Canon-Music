@@ -196,7 +196,7 @@ function UserNodeRow({ node, treeNodes, onEdit, onDelete }: TreeNodeRowProps) {
       <span className="tree-node-name">{node.name}</span>
       <span className={`tags-kind-badge tags-kind-badge--${node.type}`}>{node.type}</span>
       <div className="tree-node-parent">
-        {parentName ? <><span className="tree-node-parent-arrow">↳</span>{parentName}</> : <span style={{ color: "var(--text-tertiary)" }}>—</span>}
+        {parentName ? <><span className="tree-node-parent-arrow">↳</span>{parentName}</> : <span style={{ color: "var(--text-tertiary)" }}>-</span>}
         {superseded && (
           <span className="tree-node-conflict" title="A node with this key now exists in the bundled tree">
             <AlertTriangle size={12} /> bundled
@@ -248,7 +248,7 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
         <div className="tree-conflict-banner">
           <AlertTriangle size={13} />
           {supersededCount} of your node{supersededCount === 1 ? "" : "s"} now{" "}
-          {supersededCount === 1 ? "exists" : "exist"} in the bundled tree — review and delete if no longer needed.
+          {supersededCount === 1 ? "exists" : "exist"} in the bundled tree. Review and delete if no longer needed.
         </div>
       )}
 

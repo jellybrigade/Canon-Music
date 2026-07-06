@@ -31,7 +31,7 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
             );
             await db.execute("DELETE FROM scrobble_queue WHERE id = ?", [row.id]);
           } catch {
-            break; // Server unreachable — stop batch
+            break; // Server unreachable, stop batch
           }
         }
       } catch (e) {

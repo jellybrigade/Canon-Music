@@ -44,14 +44,14 @@ function ReviewRow({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: 
         <button
           className="btn-flat accept"
           onClick={() => onAccept(row.raw_value, row.kind)}
-          title="Accept this tag as-is — keep in genre output without remapping"
+          title="Accept this tag as-is, keep in genre output without remapping"
         >
           Accept
         </button>
         <button
           className="btn-flat ignore"
           onClick={() => onIgnore(row.raw_value, row.kind)}
-          title="Ignore — exclude from genre output"
+          title="Ignore, exclude from genre output"
         >
           Ignore
         </button>
@@ -167,7 +167,7 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
         <div className="review-empty">
           <strong>{unresolvedRows.length === 0 ? "All tags resolved" : "No tags match"}</strong>
           {unresolvedRows.length === 0
-            ? `${vocab.length} tag${vocab.length === 1 ? "" : "s"} total — all mapped, accepted, or ignored.`
+            ? `${vocab.length} tag${vocab.length === 1 ? "" : "s"} total, all mapped, accepted, or ignored.`
             : "Clear the search filter to see all pending tags."}
         </div>
       ) : (

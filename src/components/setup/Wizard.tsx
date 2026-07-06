@@ -192,12 +192,16 @@ export function Wizard({ onSuccess }: Props) {
               <h1 className="wizard-title">Welcome to Canon</h1>
             </div>
             <p className="wizard-desc">
-              Canon is a music player for Navidrome that normalizes your tags automatically — genres,
+              Canon is a music player for Navidrome that normalizes your tags automatically: genres,
               descriptors, and scenes pulled from Last.fm and your library, organized in the background.
               Your files are never modified.
             </p>
             <p className="wizard-desc">
               To get started, connect Canon to your Navidrome server.
+            </p>
+            <p className="settings-alpha-notice">
+              <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash.
+              Thanks for trying it out this early, it means a lot.
             </p>
             <div className="wizard-actions">
               <button className="primary" onClick={() => setStep(2)}>Continue</button>
@@ -416,7 +420,7 @@ export function Wizard({ onSuccess }: Props) {
           <div className="wizard-body">
             <h1 className="wizard-title">You&rsquo;re all set</h1>
             <p className="wizard-desc">
-              Library syncing in background — start listening.
+              Library syncing in background, start listening.
             </p>
             {saveError && <p className="wizard-error">{saveError}</p>}
             <div className="wizard-actions">

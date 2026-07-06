@@ -4,15 +4,18 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HashRouter } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { initLogger } from "./lib/logger";
 
-// Suppress WebKit's default context menu on non-input elements — custom menus are attached per-component.
+initLogger();
+
+// Suppress WebKit's default context menu on non-input elements, custom menus are attached per-component.
 document.addEventListener("contextmenu", (e) => {
   const t = e.target as Element;
   if (!t.closest("input, textarea, [contenteditable]")) e.preventDefault();
 });
 
 // Without these, uncaught async errors (rejected promises, errors outside React's
-// render cycle) vanish silently — no log, no visible sign anything happened, which
+// render cycle) vanish silently, no log, no visible sign anything happened, which
 // is indistinguishable from "the app just froze/crashed" from the user's side.
 window.addEventListener("unhandledrejection", (e) => {
   console.error("Unhandled promise rejection:", e.reason);

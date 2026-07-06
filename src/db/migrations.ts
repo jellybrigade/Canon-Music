@@ -584,4 +584,15 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 45,
+    sql: `
+      CREATE TABLE IF NOT EXISTS app_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        level TEXT NOT NULL,
+        message TEXT NOT NULL
+      );
+    `,
+  },
 ];

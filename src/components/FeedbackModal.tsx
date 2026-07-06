@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
+import { logger } from "../lib/logger";
 import "./FeedbackModal.css";
 
 const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
@@ -44,14 +45,17 @@ const STEPS_PLACEHOLDER = "1. Open the app\n2. …\n3. …";
 interface Props {
   serverUrl?: string;
   onClose: () => void;
+  initialCategory?: Category;
+  initialText?: string;
 }
 
-export function FeedbackModal({ serverUrl, onClose }: Props) {
-  const [category, setCategory] = useState<Category>("general");
-  const [text, setText] = useState("");
+export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText }: Props) {
+  const [category, setCategory] = useState<Category>(initialCategory ?? "general");
+  const [text, setText] = useState(initialText ?? "");
   const [steps, setSteps] = useState("");
   const [stepsError, setStepsError] = useState(false);
   const [includeSysInfo, setIncludeSysInfo] = useState(true);
+  const [includeLogs, setIncludeLogs] = useState(true);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [appVersion, setAppVersion] = useState("…");
 
@@ -101,11 +105,21 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
     };
 
     try {
-      const res = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ embeds: [embed] }),
-      });
+      const payload = { embeds: [embed] };
+      let res: Response;
+      if (includeLogs) {
+        const logText = await logger.getRecent(500);
+        const form = new FormData();
+        form.append("payload_json", JSON.stringify(payload));
+        form.append("files[0]", new Blob([logText], { type: "text/plain" }), "canon-logs.txt");
+        res = await fetch(WEBHOOK_URL, { method: "POST", body: form });
+      } else {
+        res = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus("sent");
       setTimeout(onClose, 1400);
@@ -173,20 +187,30 @@ export function FeedbackModal({ serverUrl, onClose }: Props) {
         )}
 
         <div className="feedback-footer">
-          <label className="feedback-sysinfo">
-            <input
-              type="checkbox"
-              checked={includeSysInfo}
-              onChange={(e) => setIncludeSysInfo(e.target.checked)}
-            />
-            <span>Include system info</span>
-            {includeSysInfo && (
-              <span className="feedback-sysinfo-detail">v{appVersion} · {detectOS()}</span>
-            )}
-          </label>
+          <div className="feedback-checks">
+            <label className="feedback-sysinfo">
+              <input
+                type="checkbox"
+                checked={includeSysInfo}
+                onChange={(e) => setIncludeSysInfo(e.target.checked)}
+              />
+              <span>Include system info</span>
+              {includeSysInfo && (
+                <span className="feedback-sysinfo-detail">v{appVersion} · {detectOS()}</span>
+              )}
+            </label>
+            <label className="feedback-sysinfo">
+              <input
+                type="checkbox"
+                checked={includeLogs}
+                onChange={(e) => setIncludeLogs(e.target.checked)}
+              />
+              <span>Include recent logs</span>
+            </label>
+          </div>
           <div className="feedback-footer-right">
             {status === "error" && (
-              <span className="feedback-status feedback-status--error">Send failed — try again</span>
+              <span className="feedback-status feedback-status--error">Send failed, try again</span>
             )}
             {status === "sent" ? (
               <span className="feedback-status feedback-status--sent">Sent! Thanks.</span>

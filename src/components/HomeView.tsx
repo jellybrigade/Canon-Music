@@ -73,7 +73,7 @@ const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
   { key: "on-repeat",        kicker: "On repeat",        desc: "Played most in the last 30 days" },
   { key: "rediscover",       kicker: "Rediscover",       desc: "Favorites you haven't played recently" },
   { key: "finish-the-album", kicker: "Finish the album", desc: "Albums you've only partially heard" },
-  { key: "hidden-gem",       kicker: "Hidden gem",       desc: "Albums with just 1–3 plays" },
+  { key: "hidden-gem",       kicker: "Hidden gem",       desc: "Albums with just 1-3 plays" },
   { key: "loved",            kicker: "Loved",            desc: "Albums and tracks you've starred" },
   { key: "unplayed",         kicker: "Unplayed",         desc: "Never played in your library" },
   { key: "almost-done",      kicker: "Almost done",      desc: "Albums where you've heard most but not all tracks" },
@@ -131,7 +131,7 @@ function stripFeaturedArtists(artist: string): string {
   return artist.replace(FEAT_RE, "").trim();
 }
 
-// Returns candidate picks in priority order (not deduped) — caller dedupes by album id.
+// Returns candidate picks in priority order (not deduped), caller dedupes by album id.
 function buildSpotlightCandidates(
   currentArtist: string | null,
   currentAlbumId: string | null,
@@ -1035,7 +1035,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
                 <X size={13} />
               </button>
             ) : (
-              <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette — search tracks, artists, albums, and navigate anywhere">
+              <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette: search tracks, artists, albums, and navigate anywhere">
                 <kbd>⌘K</kbd>
               </button>
             )}

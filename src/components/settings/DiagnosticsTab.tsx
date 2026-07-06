@@ -24,8 +24,8 @@ const MAX_COVER_KB = 70;
 function formatSizeRange(count: number, minKb: number, maxKb: number): string {
   const minMb = (count * minKb) / 1024;
   const maxMb = (count * maxKb) / 1024;
-  if (maxMb < 1) return `${Math.round(count * minKb)}–${Math.round(count * maxKb)} KB`;
-  return `${minMb.toFixed(1)}–${maxMb.toFixed(1)} MB`;
+  if (maxMb < 1) return `${Math.round(count * minKb)} to ${Math.round(count * maxKb)} KB`;
+  return `${minMb.toFixed(1)} to ${maxMb.toFixed(1)} MB`;
 }
 
 // Artist portraits come from Last.fm/Wikidata at whatever resolution they were uploaded at,
@@ -75,9 +75,9 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
   function syncStatusLabel() {
     switch (syncStatus) {
       case "syncing": return "Syncing…";
-      case "done": return lastSyncedAt ? `Done — ${new Date(lastSyncedAt).toLocaleTimeString()}` : "Done";
-      case "partial": return `Partial — ${syncError}`;
-      case "error": return `Error — ${syncError}`;
+      case "done": return lastSyncedAt ? `Done (${new Date(lastSyncedAt).toLocaleTimeString()})` : "Done";
+      case "partial": return `Partial: ${syncError}`;
+      case "error": return `Error: ${syncError}`;
       default: return "Idle";
     }
   }
@@ -111,7 +111,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <h3 className="settings-section-title">Scrobble queue</h3>
           <div className="settings-diag-row">
             <span className="settings-diag-label">Pending</span>
-            <span className="settings-diag-value">{scrobbleCount ?? "—"}</span>
+            <span className="settings-diag-value">{scrobbleCount ?? "-"}</span>
             <button className="settings-btn" onClick={() => { void refetchScrobbleCount(); }}>
               Refresh
             </button>
@@ -147,7 +147,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {coverProgress === null && !!lastFailedCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedCount} failed to cache last run — check server connection (see console for details)
+                {lastFailedCount} failed to cache last run. Check server connection (see console for details)
               </span>
             )}
           </div>
@@ -182,7 +182,7 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
             )}
             {artistImageProgress === null && !!lastFailedArtistImageCount && (
               <span className="settings-hint settings-diag-value--error">
-                {lastFailedArtistImageCount} failed to cache last run — check console for details
+                {lastFailedArtistImageCount} failed to cache last run. Check console for details
               </span>
             )}
           </div>

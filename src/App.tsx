@@ -313,6 +313,17 @@ export default function App() {
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [crashReport, setCrashReport] = useState<string | null>(null);
+  useEffect(() => {
+    void invoke<string | null>("take_crash_report")
+      .then((report) => {
+        if (report) {
+          setCrashReport(report);
+          setFeedbackOpen(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [remoteNotice, setRemoteNotice] = useState<RemoteNotice | null>(null);
@@ -406,7 +417,7 @@ export default function App() {
   }, [closeToTray]);
   useEffect(() => {
     const title = currentTrack
-      ? `${currentTrack.title}${currentTrack.artist ? ` — ${currentTrack.artist}` : ""}`
+      ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ""}`
       : "";
     void invoke("tray_update", { title, isPlaying }).catch(() => {});
   }, [currentTrack?.id, isPlaying]);
@@ -472,7 +483,7 @@ export default function App() {
   useEffect(() => {
     if (!currentTrack) { document.title = "Canon"; return; }
     const parts = [currentTrack.artist, currentTrack.title].filter(Boolean);
-    document.title = parts.length > 0 ? `${parts.join(" – ")} · Canon` : "Canon";
+    document.title = parts.length > 0 ? `${parts.join(" - ")} · Canon` : "Canon";
   }, [currentTrack?.title, currentTrack?.artist]);
 
   async function handlePlayTrack(trackId: string) {
@@ -623,7 +634,7 @@ export default function App() {
   const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
     { value: "recently_added", label: "Recent" },
     { value: "artist", label: "Artist" },
-    { value: "alphabetical", label: "A–Z" },
+    { value: "alphabetical", label: "A-Z" },
     { value: "year", label: "Year" },
   ];
 
@@ -1089,7 +1100,9 @@ export default function App() {
       {feedbackOpen && (
         <FeedbackModal
           serverUrl={server?.url}
-          onClose={() => setFeedbackOpen(false)}
+          onClose={() => { setFeedbackOpen(false); setCrashReport(null); }}
+          initialCategory={crashReport ? "bug" : undefined}
+          initialText={crashReport ? `Canon crashed last session:\n\n${crashReport}` : undefined}
         />
       )}
     </Suspense>

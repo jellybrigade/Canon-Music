@@ -718,7 +718,7 @@ export async function authenticate(
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
     const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status} — check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
   }
 
   const data = (await res.json()) as {
@@ -804,7 +804,7 @@ export async function authenticateWithApiKey(
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
     const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status} — check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
   }
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { code: number; message: string } };

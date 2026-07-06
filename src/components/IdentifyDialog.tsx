@@ -34,9 +34,9 @@ interface AlbumIdentifyDialogProps {
   artist: string;
   album: string;
   trackCount?: number;
-  /** Known local release year — disambiguates same-titled releases from different years. */
+  /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
-  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
   onClose: () => void;
 }
@@ -54,7 +54,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   // Track original saved values and whether lfm fields were used as search queries.
   // If user edits lfm fields, clicks "Look up", then confirms without further edits,
-  // those values were search queries — not intended overrides — so we restore originals.
+  // those values were search queries, not intended overrides, so we restore originals.
   const [initialLfmArtist, setInitialLfmArtist] = useState("");
   const [initialLfmAlbum, setInitialLfmAlbum] = useState("");
   const [lfmArtistUsedForSearch, setLfmArtistUsedForSearch] = useState(false);
@@ -85,7 +85,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
   // Re-rank raw MB results by our fuzzy score (title + artist + year + known-artist
   // bonus) so the best match sorts first, and show that score instead of MB's own
-  // relevance score — MB's score can tie same-titled releases by different
+  // relevance score, MB's score can tie same-titled releases by different
   // artists/years at 100%, which is exactly the ambiguity this needs to break.
   const rankedSearchResults = rawSearchResults
     ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
@@ -200,7 +200,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
               </div>
             )}
             {searchResults && searchResults.length === 0 && !searchLoading && (
-              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+              <p className="identify-hint identify-hint--warn">No results found. Enter MBID manually below.</p>
             )}
           </section>
 
@@ -283,7 +283,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
@@ -315,7 +315,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                   <div className="identify-fact-row">
                     <span className="identify-fact-label">Year</span>
                     <span className="identify-fact-value">
-                      {rgDetail.firstReleaseDate?.slice(0, 4) ?? "—"}
+                      {rgDetail.firstReleaseDate?.slice(0, 4) ?? "-"}
                     </span>
                   </div>
                   {releaseDetail?.label && (
@@ -416,7 +416,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
   // An MBID already confirmed for this artist via a previously matched album
   // (album_identity) or a prior artist-identify confirmation. If it's among
-  // the search results, pre-select it — no need to make the user pick between
+  // the search results, pre-select it, no need to make the user pick between
   // candidates when we already know the answer.
   const { data: confirmedArtistMbid } = useConfirmedArtistMbid(artistName);
   useEffect(() => {
@@ -513,7 +513,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
               </div>
             )}
             {searchResults && searchResults.length === 0 && !searchLoading && (
-              <p className="identify-hint identify-hint--warn">No results found — enter MBID manually below.</p>
+              <p className="identify-hint identify-hint--warn">No results found. Enter MBID manually below.</p>
             )}
           </section>
 
@@ -563,7 +563,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches — select one:"}</p>
+                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
