@@ -31,10 +31,10 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
         )
       )
       .then((rows) => {
-        if (!cancelled && rows[0]) {
-          settingCache.set(key, rows[0].value);
-          setValue(rows[0].value);
-        }
+        if (cancelled) return;
+        const resolved = rows[0]?.value ?? defaultValue;
+        settingCache.set(key, resolved);
+        setValue(resolved);
       })
       .catch((e) => console.error("Failed to load setting:", key, e));
 
