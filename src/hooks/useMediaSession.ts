@@ -26,7 +26,7 @@ export function useMediaSession() {
     navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
   }, [isPlaying]);
 
-  // Wire action handlers once — reads live state inside handlers to avoid stale closures
+  // Wire action handlers once, reads live state inside handlers to avoid stale closures
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 

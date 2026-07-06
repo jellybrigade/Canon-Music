@@ -1,4 +1,4 @@
-/* ── Genre Line (used by HomeView Featured Genres — Variant A) ──────────── */
+/* ── Genre Line (used by HomeView Featured Genres, Variant A) ──────────── */
 /* One flowing typographic line instead of a chip/pill wall. Relevance is carried by
    size + color tier, not by a box. */
 
@@ -307,10 +307,10 @@
 }
 
 /* ── Hover-only action buttons ── */
-/* Use div not span — avoids WebKit opacity compositing quirks with SVG children */
+/* Use div not span, avoids WebKit opacity compositing quirks with SVG children */
 /* Position absolute so actions never affect column width measurement or row layout */
 
-/* Fixed-width slot — always reserves space for whichever state is visible */
+/* Fixed-width slot, always reserves space for whichever state is visible */
 .genre-col-right {
   position: relative;
   display: flex;

@@ -181,7 +181,7 @@ function formatDuration(seconds: number | null): string {
 }
 
 // Last.fm's per-title playcount can't distinguish which local copy it belongs to when
-// several local tracks share a title (e.g. clipping.'s many "Intro" tracks) — Last.fm's
+// several local tracks share a title (e.g. clipping.'s many "Intro" tracks), Last.fm's
 // own chart merges those into one page. For an ambiguous title, ask Last.fm which album
 // it considers representative and match that against the local copies; if nothing matches,
 // fall back to whichever local copy has the most local plays. Either way the winner is

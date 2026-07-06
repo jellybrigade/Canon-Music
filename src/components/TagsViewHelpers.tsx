@@ -76,7 +76,7 @@ function srcCls(s: string) {
   return SOURCE_META[s]?.cls ?? (s.startsWith("musicbrainz") ? "src-mb" : "src-file");
 }
 
-/** Colored dot per source — use SOURCE_META for a legend. */
+/** Colored dot per source, use SOURCE_META for a legend. */
 export function TagSourceDots({ sources }: { sources: string | null }) {
   if (!sources) return null;
   const parts = sources.split(",").map((s) => s.trim()).filter(Boolean);

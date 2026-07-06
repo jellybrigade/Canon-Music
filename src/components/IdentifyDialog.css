@@ -95,7 +95,7 @@
   color: var(--text-secondary, var(--overlay-50));
 }
 
-/* Base shape shared with .spm-input and .merge-search — see styles/base.css. */
+/* Base shape shared with .spm-input and .merge-search, see styles/base.css. */
 .identify-field > input {
   font-family: inherit;
 }

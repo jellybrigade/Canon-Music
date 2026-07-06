@@ -136,7 +136,7 @@ export interface LastfmArtistInfo {
   imageUrl: string | null;
 }
 
-// Hash of Last.fm's "missing artist" placeholder image — reject it everywhere
+// Hash of Last.fm's "missing artist" placeholder image, reject it everywhere
 export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
 /** Picks the best available artist portrait, preferring Wikidata over Last.fm
@@ -448,7 +448,7 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   }
 }
 
-// Last.fm has no per-album track lookup — same-titled tracks across releases (e.g.
+// Last.fm has no per-album track lookup, same-titled tracks across releases (e.g.
 // clipping.'s many "Intro" tracks) share one canonical Last.fm track page. This returns
 // whichever album Last.fm considers representative for that page, used to guess which
 // local copy the playcount actually belongs to.

@@ -15,7 +15,7 @@ interface MappingRow {
 
 /**
  * Returns a Map of raw genre value → display name (or null if ignored).
- * Unmapped raw values are absent from the map — show as-is.
+ * Unmapped raw values are absent from the map, show as-is.
  * Built outside React Query to avoid structuralSharing issues with Map.
  */
 export function useGenreMappings(): Map<string, string | null> {

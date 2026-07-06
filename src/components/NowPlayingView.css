@@ -12,7 +12,7 @@
   background: #0c0c0c;
 }
 
-/* Blurred art atmosphere — overextends inset to hide blur edge */
+/* Blurred art atmosphere, overextends inset to hide blur edge */
 .now-playing-view::before {
   content: '';
   position: absolute;
@@ -629,7 +629,7 @@
   color: var(--text-tertiary);
 }
 
-/* ── Top tracks grid — auto-fill so columns always stretch to panel width ── */
+/* ── Top tracks grid, auto-fill so columns always stretch to panel width ── */
 .now-playing-top-tracks-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -892,7 +892,7 @@
    Responsive breakpoints
    ═══════════════════════════════════ */
 
-/* Wide: ≥1500px — larger art */
+/* Wide: ≥1500px, larger art */
 @media (min-width: 1500px) {
   .now-playing-art,
   .now-playing-art--placeholder {
@@ -908,7 +908,7 @@
   }
 }
 
-/* Mid: ≤1100px — force single-column track grids, smaller art */
+/* Mid: ≤1100px, force single-column track grids, smaller art */
 @media (max-width: 1100px) {
   .now-playing-top-tracks-grid {
     grid-template-columns: 1fr;
@@ -929,7 +929,7 @@
   }
 }
 
-/* Short: ≤680px window height — compress art + padding so controls stay visible */
+/* Short: ≤680px window height, compress art + padding so controls stay visible */
 @media (max-height: 680px) {
   .now-playing-left {
     padding: var(--space-md) var(--space-xl);
@@ -944,7 +944,7 @@
   }
 }
 
-/* Very short: ≤520px window height — minimal art, tight gaps */
+/* Very short: ≤520px window height, minimal art, tight gaps */
 @media (max-height: 520px) {
   .now-playing-left {
     padding: var(--space-xs) var(--space-xl);
@@ -958,7 +958,7 @@
   }
 }
 
-/* Narrow: ≤900px — stack to single column (hero on top, tabs below) */
+/* Narrow: ≤900px, stack to single column (hero on top, tabs below) */
 @media (max-width: 900px) {
   .now-playing-main {
     grid-template-columns: 1fr;

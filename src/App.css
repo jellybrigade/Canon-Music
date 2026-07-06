@@ -24,10 +24,10 @@
   --success-a:     #4caf7d;
   --success-b:     #27ae60;
 
-  /* Legacy-page colors — not part of the core bg/accent scale, but each value
+  /* Legacy-page colors, not part of the core bg/accent scale, but each value
      recurs verbatim across multiple files (home.css, ArtistMergeModal.css,
      UpdatePrompt.css / AlbumGenreEditor.css, AlbumDetail.css / CommandPalette.css,
-     AlbumDetail.css, home.css) — tokenized here to kill the duplication. */
+     AlbumDetail.css, home.css), tokenized here to kill the duplication. */
   --color-link-blue:    #396cd8;
   --color-accent-purple: #7c6af0;
   --color-bg-deep:      #1a1a1a;
@@ -46,7 +46,7 @@
   --tint-5: rgba(255, 255, 255, 0.15);
   --tint-6: rgba(255, 255, 255, 0.25);
 
-  /* Spacing scale — 4pt base, used for padding/margin/gap */
+  /* Spacing scale, 4pt base, used for padding/margin/gap */
   --space-2xs: 4px;
   --space-xs:  8px;
   --space-sm:  12px;
@@ -62,7 +62,7 @@
   --scrim-3: rgba(0, 0, 0, 0.6);
   --scrim-4: rgba(0, 0, 0, 0.8);
 
-  /* White-on-photo text/overlay ladder — legibility over album art & video, ascending opacity */
+  /* White-on-photo text/overlay ladder, legibility over album art & video, ascending opacity */
   --overlay-05: rgba(255, 255, 255, 0.05);
   --overlay-10: rgba(255, 255, 255, 0.1);
   --overlay-15: rgba(255, 255, 255, 0.15);
@@ -75,7 +75,7 @@
   --overlay-80: rgba(255, 255, 255, 0.8);
   --overlay-90: rgba(255, 255, 255, 0.9);
 
-  /* Shadow scale — shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
+  /* Shadow scale, shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
   --shadow-xs:  0 2px 2px;
   --shadow-sm:  0 2px 8px;
   --shadow-md:  0 4px 16px;
@@ -100,7 +100,7 @@
   /* Typography */
   --font-sans: 'Inter', system-ui, sans-serif;
 
-  /* Type scale — root is 20px; tokens below are rem values against that base. */
+  /* Type scale, root is 20px; tokens below are rem values against that base. */
   --text-2xs: 0.5rem;    /* 10px */
   --text-xs:  0.6rem;    /* 12px */
   --text-sm:  0.7rem;    /* 14px */

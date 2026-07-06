@@ -114,7 +114,7 @@ async function getCuratedCandidates(
   );
 
   if (seedTags.length === 0) {
-    // No canonical tags — random from same server
+    // No canonical tags, random from same server
     const fallback = await db.select<TrackRow[]>(
       `SELECT ${TRACK_PROJECTION}
        FROM tracks t JOIN albums a ON t.album_id = a.id
@@ -145,7 +145,7 @@ async function getCuratedCandidates(
 
   if (!cteParts) return [];
 
-  // sum_score + tag_count kept separate so raw tag-count can't inflate score —
+  // sum_score + tag_count kept separate so raw tag-count can't inflate score:
   // heavily-tagged (usually mainstream) tracks otherwise dominate purely by tag volume.
   type ScoredRow = TrackRow & { sum_score: number; tag_count: number };
 
@@ -169,7 +169,7 @@ async function getCuratedCandidates(
 
   // Dampen by sqrt(tag_count): rewards genuine multi-tag match without letting
   // tag-count alone (proxy for how thoroughly an artist got tagged) dominate.
-  // Done in JS, not SQL — target SQLite builds (e.g. distro-packaged libsqlite3
+  // Done in JS, not SQL, target SQLite builds (e.g. distro-packaged libsqlite3
   // without SQLITE_ENABLE_MATH_FUNCTIONS) may not have SQRT(). SQL ORDER BY above
   // stays on raw sum_score, so the LIMIT cutoff is a coarser pre-filter than the
   // final dampened ranking below.
@@ -273,7 +273,7 @@ export async function getRadioCandidates({
 
     case "era": {
       if (seed.year === null) {
-        // No year — fall back to random
+        // No year, fall back to random
         const rows = await db.select<TrackRow[]>(
           `SELECT ${TRACK_PROJECTION}
            FROM tracks t JOIN albums a ON t.album_id = a.id

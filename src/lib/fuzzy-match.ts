@@ -96,7 +96,7 @@ function extractYear(date: string | null): number | null {
  *
  * Two optional disambiguators layer on top of the base text score:
  * - `knownYear`: local release year. Exact/near match nudges the score up;
- *   a real mismatch (same title, different year — two distinct releases
+ *   a real mismatch (same title, different year, two distinct releases
  *   both titled e.g. "Sisterhood") pulls it down so it can't tie a wrong
  *   candidate with the right one.
  * - `confirmedArtistMbid`: an MBID already confirmed for this artist via
@@ -124,7 +124,7 @@ export function scoreReleaseGroup(
     const diff = Math.abs(candidateYear - knownYear);
     if (diff === 0) score += 0.05;
     // A near-exact title match is very likely the same release under a
-    // reissue/remaster — the local tag year often reflects that reissue
+    // reissue/remaster, the local tag year often reflects that reissue
     // rather than MB's original firstReleaseDate, so don't punish it.
     else if (diff > 1 && titleScore < 0.9) score -= 0.15;
   }
@@ -183,7 +183,7 @@ export function rankCandidates(
     }))
     .sort((a, b) => {
       if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score;
-      // Same fuzzy score — prefer Album over Single, then MB's own relevance score
+      // Same fuzzy score, prefer Album over Single, then MB's own relevance score
       const typeA = TYPE_RANK[a.candidate.primaryType ?? ""] ?? 1;
       const typeB = TYPE_RANK[b.candidate.primaryType ?? ""] ?? 1;
       if (typeB !== typeA) return typeB - typeA;

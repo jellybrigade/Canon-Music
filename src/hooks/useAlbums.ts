@@ -19,7 +19,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
       const order = ORDER_BY[sort];
       if (canonicalIds.length > 0) {
         const placeholders = canonicalIds.map(() => "?").join(", ");
-        // Join through album_genres — covers both leaf and ancestor canon ids,
+        // Join through album_genres, covers both leaf and ancestor canon ids,
         // as well as raw: synthetic ids for unmatched tags.
         return db.select<AlbumRow[]>(
           `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type

@@ -223,7 +223,7 @@ interface PlayerState {
   setPauseFadeMs: (ms: number) => Promise<void>;
 }
 
-// Active playback target — swapped when casting to a DLNA renderer.
+// Active playback target, swapped when casting to a DLNA renderer.
 // Lives outside the store to avoid serialization; all state mutations go through store actions.
 let activeTarget: PlaybackTarget = new LocalTarget();
 
@@ -240,7 +240,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   });
 
   // Gapless transition: Rust reports that the current source finished and the queued next one started.
-  // Advance queue state without calling audio_play — the audio is already playing.
+  // Advance queue state without calling audio_play, the audio is already playing.
   void listen("track-advanced", () => {
     gaplessActive = false;
     naturalEndFiredForIndex = null;
@@ -343,7 +343,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             }
           }
           // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
-          // Suppressed while gaplessActive — the Rust engine is handling the transition.
+          // Suppressed while gaplessActive, the Rust engine is handling the transition.
           // For DLNA targets the DlnaTarget fires onTrackEnd directly, so skip fallback there.
           if (!castDevice && !gaplessActive && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
             naturalEndFiredForIndex = queueIndex;
@@ -445,7 +445,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (rows[0]) {
         const peaks = JSON.parse(rows[0].peaks_json) as number[];
         // Preloaded waveforms from partial streams are padded with trailing zeros.
-        // If less than 50% of bars have meaningful data, the cache entry is corrupt — delete and re-generate.
+        // If less than 50% of bars have meaningful data, the cache entry is corrupt, delete and re-generate.
         const lastMeaningful = peaks.reduce((last, v, i) => (v > 0.01 ? i : last), -1);
         const coverage = peaks.length > 0 ? (lastMeaningful + 1) / peaks.length : 0;
         if (coverage >= 0.5) {
@@ -506,7 +506,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         unlistenComplete();
       };
 
-      // Request low-bitrate audio for analysis — Navidrome transcodes to ~64kbps mono,
+      // Request low-bitrate audio for analysis, Navidrome transcodes to ~64kbps mono,
       // 4-8x less data to download and decode vs full-quality stream.
       const waveformUrl = (() => {
         try {
@@ -895,7 +895,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       // Consume mode: remove the just-played track from the queue on natural end or manual skip.
-      // Shuffle not supported — queue indices would need a full remap.
+      // Shuffle not supported, queue indices would need a full remap.
       if (consumeMode && !isShuffled && (fromNaturalEnd || consumeOnSkip)) {
         const newQueue = queue.filter((_, i) => i !== queueIndex);
         if (newQueue.length === 0) {
@@ -980,7 +980,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: false,
         isLoading: false,
         elapsed: 0,
-        // queue, queueIndex, streamUrlFor preserved — accidental stop doesn't destroy queue
+        // queue, queueIndex, streamUrlFor preserved, accidental stop doesn't destroy queue
       });
       void persistQueueState();
     },
@@ -1223,7 +1223,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       }
 
       if (position === queueIndex) {
-        // Removing currently playing track — play what's now at that position or stop
+        // Removing currently playing track, play what's now at that position or stop
         set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
         if (newQueueIndex < newQueue.length && streamUrlFor) {
           const nextTrack = resolveTrack(newQueue, newShuffleOrder, isShuffled, newQueueIndex);
@@ -1243,7 +1243,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (positions.length === 0) return;
       const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
 
-      // Sort descending so we remove high indices first — avoids index drift
+      // Sort descending so we remove high indices first, avoids index drift
       const sorted = [...new Set(positions)].sort((a, b) => b - a);
 
       let newQueue = [...queue];
@@ -1407,7 +1407,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             } catch { /* malformed, ignore */ }
           }
         }
-        // Load waveform from cache for the restored track — fetchWaveform is only
+        // Load waveform from cache for the restored track, fetchWaveform is only
         // called from playTrack, so a session-restored track would show nothing until
         // the user navigated away and back.
         if (showWaveform) {

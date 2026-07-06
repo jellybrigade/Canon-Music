@@ -131,7 +131,7 @@ function stripFeaturedArtists(artist: string): string {
   return artist.replace(FEAT_RE, "").trim();
 }
 
-// Returns candidate picks in priority order (not deduped) — caller dedupes by album id.
+// Returns candidate picks in priority order (not deduped), caller dedupes by album id.
 function buildSpotlightCandidates(
   currentArtist: string | null,
   currentAlbumId: string | null,

@@ -158,7 +158,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     await queryClient.invalidateQueries({ queryKey: QK.tracks(album.id) });
   }, [album.id, serverWithCredential, queryClient]);
 
-  // Auto-sync when all tracks are missing bit_rate — leftover from v32 migration
+  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration
   useEffect(() => {
     if (!tracks || tracks.length === 0) return;
     if (tracks.every((t) => t.bit_rate === null)) {
@@ -403,7 +403,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     return raw.filter((g) => {
       if (g.id !== null) return true;
       const mapped = genreMappings.get(g.name);
-      if (mapped === undefined) return false; // no decision yet — hide from band
+      if (mapped === undefined) return false; // no decision yet, hide from band
       if (mapped === null) return false;      // ignored
       if (shownNames.has(mapped)) return false; // already shown as canonical
       return true;
@@ -450,7 +450,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   });
   const unmatchedCount = unmatchedGenres.length;
 
-  // Always true — every synced album can have user genres added
+  // Always true, every synced album can have user genres added
   const hasTags = true;
 
   return (

@@ -225,7 +225,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     return () => { cancelled = true; };
   }, [bandsintownEnabled, primaryArtist]);
 
-  // Downsample to 80 bars for the overlay — reduces DOM nodes from 200 and cuts jank.
+  // Downsample to 80 bars for the overlay, reduces DOM nodes from 200 and cuts jank.
   // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.
   const overlayPeaks = useMemo(() => {
     if (!waveformPeaks) return null;

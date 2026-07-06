@@ -11,7 +11,7 @@ interface State {
 
 // Last-resort net for uncaught render errors. Without this, an error thrown during
 // a view change (routing, artist identify, etc.) unmounts the whole React tree and
-// leaves a blank window with no diagnostic trail — indistinguishable from a crash.
+// leaves a blank window with no diagnostic trail, indistinguishable from a crash.
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
 

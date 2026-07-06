@@ -6,7 +6,7 @@
   overflow-y: auto;
 }
 
-/* ── Hero — slim inline header, matches NowPlaying track-info row ── */
+/* ── Hero, slim inline header, matches NowPlaying track-info row ── */
 .artist-hero {
   padding: var(--space-md) var(--space-lg) var(--space-sm);
 }
@@ -571,7 +571,7 @@
   margin-left: var(--space-xs);
 }
 
-/* ── Discography tabs (underline style — coding-standards.md) ── */
+/* ── Discography tabs (underline style, coding-standards.md) ── */
 .artist-tabs {
   display: flex;
   gap: var(--space-lg);

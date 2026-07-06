@@ -81,7 +81,7 @@
   letter-spacing: 0.05em;
 }
 
-/* Base shape shared with .spm-input and .identify-field > input — see styles/base.css. */
+/* Base shape shared with .spm-input and .identify-field > input, see styles/base.css. */
 .merge-search {
   box-sizing: border-box;
 }

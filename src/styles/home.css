@@ -10,7 +10,7 @@
 
 /* Wraps the greeting header + spotlight + recent genres. The header sticks to
    the top while this region scrolls past, then un-sticks (scrolls away with
-   the rest) once the region's own bottom edge reaches the top of the view —
+   the rest) once the region's own bottom edge reaches the top of the view;
    normal `position: sticky` containment, no scroll-listener needed. */
 .home-sticky-region {
   position: relative;
@@ -479,7 +479,7 @@
 }
 
 /* ── For You: underline tabs + grid ──────────────────────────────────────── */
-/* One category visible at a time — avoids the old side-by-side grid-of-blocks
+/* One category visible at a time, avoids the old side-by-side grid-of-blocks
    layout that made every category read as identical mosaic tiles. */
 
 .foryou-v2-tabs {
@@ -940,7 +940,7 @@
   backface-visibility: hidden;
 }
 
-/* Dim overlay via ::after — keeps filter off the <img> to avoid WebKitGTK flicker */
+/* Dim overlay via ::after, keeps filter off the <img> to avoid WebKitGTK flicker */
 .carousel-card__art-wrap::after {
   content: '';
   position: absolute;

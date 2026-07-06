@@ -63,7 +63,7 @@ export async function readNormalizedTags(albumId: string): Promise<NormalizedTag
   );
   const json = rows[0]?.normalized_tags_json;
   if (!json) return null;
-  // If album_genres is empty, the filter pipeline is broken — force re-normalization.
+  // If album_genres is empty, the filter pipeline is broken, force re-normalization.
   type CountRow = { n: number };
   const countRows = await db.select<CountRow[]>(
     "SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?",
@@ -265,7 +265,7 @@ async function _doNormalizeAlbum(
   const mapped: NormalizedTag[] = [];
   const unmapped: NormalizedTag[] = [];
 
-  // User-entered genres take highest priority — injected first so seenIds blocks duplicates
+  // User-entered genres take highest priority, injected first so seenIds blocks duplicates
   type UserGenreRow = { canonical_id: string; name: string };
   const userGenreRows = await db.select<UserGenreRow[]>(
     "SELECT canonical_id, name FROM album_user_genres WHERE album_id = ?",

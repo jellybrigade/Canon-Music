@@ -6,7 +6,7 @@
  *   2. Artist + album strings are non-empty
  *   3. The identity query has settled AND no row exists yet (never looked up)
  *
- * Returns a result describing the outcome without side effects — AlbumDetail
+ * Returns a result describing the outcome without side effects, AlbumDetail
  * is responsible for calling useSaveAlbumIdentity / useRecordFailedLookup
  * based on the `decision` field.
  */
@@ -33,12 +33,12 @@ export function useAutoIdentifyAlbum({
   artist: string;
   album: string;
   trackCount: number;
-  /** Known local release year — disambiguates same-titled releases from different years. */
+  /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
-  /** MBID already confirmed for this artist elsewhere — disambiguates same-titled releases by different artists. */
+  /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
   mbAutoIdentify: boolean;
-  /** The row from useAlbumIdentity — undefined while loading, null when no row. */
+  /** The row from useAlbumIdentity, undefined while loading, null when no row. */
   existingIdentity: AlbumIdentityRow | null | undefined;
   /** True once useAlbumIdentity has resolved (isSuccess). */
   identityLoaded: boolean;

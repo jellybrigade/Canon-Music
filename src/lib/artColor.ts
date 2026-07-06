@@ -1,8 +1,8 @@
 // Canvas-based vibrant color extraction from cover art.
-// Tries a direct <img crossOrigin="anonymous"> load first — works for the local
+// Tries a direct <img crossOrigin="anonymous"> load first, works for the local
 // cover-art server and any host that sends Access-Control-Allow-Origin. Only
 // falls back to fetching bytes via Tauri's Rust-backed fetch and drawing from a
-// same-origin blob: URL when that taints the canvas — external hosts
+// same-origin blob: URL when that taints the canvas, external hosts
 // (Wikidata/Fanart/TheAudioDB portrait CDNs) rarely send CORS headers.
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
@@ -14,7 +14,7 @@ const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
 const OKLAB_MIN_L = 0.55;
 
-// OKLab color math — perceptually uniform, so the L floor is consistent across
+// OKLab color math, perceptually uniform, so the L floor is consistent across
 // all hues (blues/greens don't need as much lifting as HSL-based floor did).
 // Ported from ratune/src/color.rs.
 
@@ -167,7 +167,7 @@ export async function extractAccent(imageUrl: string): Promise<string | null> {
       color = scoreFromImage(img);
     } catch {
       // Canvas tainted by a CORS-less host (e.g. Wikidata/Fanart/TheAudioDB
-      // portraits) — fall back to fetching bytes through Tauri's Rust-backed
+      // portraits), fall back to fetching bytes through Tauri's Rust-backed
       // fetch and reading from a same-origin blob: URL.
       color = await extractViaProxyFetch(imageUrl);
     }

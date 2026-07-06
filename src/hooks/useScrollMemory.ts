@@ -11,7 +11,7 @@ export function useScrollMemory(
   containerRef: React.RefObject<HTMLElement | null>,
 ): void {
   // Keep a ref so the cleanup closure always sees the key that was active when
-  // this effect ran — not whatever key is current at unmount time.
+  // this effect ran, not whatever key is current at unmount time.
   const keyRef = useRef(key);
 
   useEffect(() => {

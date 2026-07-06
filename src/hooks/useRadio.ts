@@ -9,7 +9,7 @@ const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
 
 // Artist/album repetition is penalized on a decay curve (recently played = near-zero
-// multiplier, fully recovered after N radio picks) rather than a hard cap — avoids
+// multiplier, fully recovered after N radio picks) rather than a hard cap, avoids
 // walls that starve thin-library genres and avoids the cap "resetting" as the queue scrolls.
 const ARTIST_DECAY_TRACKS = 18;
 const ARTIST_DECAY_TRACKS_NARROW = 8; // similar-artists: pool is naturally few artists
@@ -130,7 +130,7 @@ export function useRadio() {
           similarityScale: radioSimilarityScale,
         });
 
-        // same-album mode: picks in track order — take first candidate directly
+        // same-album mode: picks in track order, take first candidate directly
         if (radioMode === "same-album") {
           const pick = candidates[0] ?? null;
           if (!pick) return;
@@ -161,7 +161,7 @@ export function useRadio() {
           return;
         }
 
-        // For all other modes, apply a decaying repetition penalty instead of a hard cap —
+        // For all other modes, apply a decaying repetition penalty instead of a hard cap:
         // recently-played artist/album score near zero, recovering fully after N picks.
         // Soft penalty (vs. hard filter) avoids dead ends when a genre's pool is thin,
         // and persists across the whole radio session instead of resetting per fill cycle.

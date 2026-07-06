@@ -44,14 +44,14 @@ function ReviewRow({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: 
         <button
           className="btn-flat accept"
           onClick={() => onAccept(row.raw_value, row.kind)}
-          title="Accept this tag as-is — keep in genre output without remapping"
+          title="Accept this tag as-is, keep in genre output without remapping"
         >
           Accept
         </button>
         <button
           className="btn-flat ignore"
           onClick={() => onIgnore(row.raw_value, row.kind)}
-          title="Ignore — exclude from genre output"
+          title="Ignore, exclude from genre output"
         >
           Ignore
         </button>

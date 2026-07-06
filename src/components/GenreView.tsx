@@ -27,7 +27,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Stable references — empty fallbacks so hooks run unconditionally before data loads.
+  // Stable references, empty fallbacks so hooks run unconditionally before data loads.
   const nodeById = data?.nodeById ?? EMPTY_MAP;
   const childrenById = data?.childrenById ?? EMPTY_MAP;
   const countById = data?.countById ?? EMPTY_MAP;

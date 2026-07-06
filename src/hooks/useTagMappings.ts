@@ -56,7 +56,7 @@ export function useTagMappings() {
          VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
         [rawValue, kind, canonicalId, source, matchType, sqlNorm(rawValue)],
       );
-      // Sentinels must NOT land in track_tags.canonical_id — only real canon ids go there
+      // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
       if (canonicalId === ACCEPTED || canonicalId === IGNORED) {
         await db.execute(
           "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?",
@@ -187,7 +187,7 @@ export function useTagVocab() {
 
 // ── useTagAlbums ──────────────────────────────────────────────────────────────
 
-/** Album art for a tag — works for both resolved and unresolved tags. */
+/** Album art for a tag, works for both resolved and unresolved tags. */
 export function useTagAlbums(rawValue: string, kind: TagKind) {
   return useQuery({
     queryKey: QK.tagAlbums(rawValue, kind),
@@ -239,7 +239,7 @@ export function useAutoMapExact() {
         }
       }
 
-      // Batch insert — 5 params/row, so CHUNK = floor(999/5) = 199
+      // Batch insert, 5 params/row, so CHUNK = floor(999/5) = 199
       const CHUNK = 199;
       let mapped = 0;
       for (let i = 0; i < matches.length; i += CHUNK) {

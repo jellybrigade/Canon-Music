@@ -77,7 +77,7 @@ function useAlbumUnmatchedGenres(albumId: string) {
     queryFn: async () => {
       const db = await getDb();
       // album_unresolved_genres captures all unmapped tags (file, lastfm, musicbrainz)
-      // written by normalizeAlbum — filter out any that already have a mapping decision
+      // written by normalizeAlbum, filter out any that already have a mapping decision
       return db.select<{ raw_value: string; source: string }[]>(
         `SELECT DISTINCT ug.raw_value, ug.source
          FROM album_unresolved_genres ug

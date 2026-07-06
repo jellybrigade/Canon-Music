@@ -23,7 +23,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     setSyncError("");
     void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
     // Progress fires every BATCH_NOTIFY_INTERVAL albums, which on a large library
-    // can be several times a second — debounce so mid-sync UI (e.g. HomeView's
+    // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
     let lastInvalidate = 0;
     syncLibrary(s, () => {
