@@ -15,7 +15,7 @@ import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
-import { parseLrc } from "../lib/lrclib";
+import { parseLrc, type LrcLine } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
 import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
 import { useBoolSetting } from "../hooks/useSetting";
@@ -152,9 +152,216 @@ interface Props {
   onBack?: () => void;
 }
 
+function NowPlayingProgress({
+  duration, useWaveform, overlayPeaks, progressBarRef, onProgressClick,
+}: {
+  duration: number;
+  useWaveform: boolean;
+  overlayPeaks: number[] | null;
+  progressBarRef: React.RefObject<HTMLDivElement | null>;
+  onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
+}) {
+  const elapsed = usePlayerStore((s) => s.elapsed);
+  const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
+  const overlayFilledCount = useMemo(
+    () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
+    [progress, overlayPeaks]
+  );
+
+  return (
+    <div className="now-playing-progress-row">
+      <span className="player-elapsed">{formatDuration(elapsed)}</span>
+      <div
+        ref={progressBarRef}
+        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
+        onClick={onProgressClick}
+        style={{ cursor: duration > 0 ? "pointer" : "default" }}
+      >
+        {useWaveform ? (
+          <WaveformBars
+            peaks={overlayPeaks!}
+            filledCount={overlayFilledCount}
+            barClass="now-playing-waveform-bar"
+            filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
+          />
+        ) : (
+          <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
+        )}
+      </div>
+      <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
+    </div>
+  );
+}
+
+interface LyricsTabPanelProps {
+  lyricsLines: LrcLine[] | null;
+  lyricsPlain: string | null;
+  lyricsLoading: boolean;
+  lyricsOffsetMs: number;
+  lyricsSearchOpen: boolean;
+  lyricsSearchArtist: string;
+  lyricsSearchTitle: string;
+  setLyricsSearchArtist: (v: string) => void;
+  setLyricsSearchTitle: (v: string) => void;
+  lyricsOverride: LyricsOverride | null;
+  setLyricsOverride: (v: LyricsOverride | null) => void;
+  currentTrackArtist: string | null;
+  currentTrackTitle: string | null;
+  onSeek: (timeSec: number) => void;
+}
+
+function LyricsTabPanel({
+  lyricsLines, lyricsPlain, lyricsLoading, lyricsOffsetMs,
+  lyricsSearchOpen, lyricsSearchArtist, lyricsSearchTitle,
+  setLyricsSearchArtist, setLyricsSearchTitle,
+  lyricsOverride, setLyricsOverride,
+  currentTrackArtist, currentTrackTitle, onSeek,
+}: LyricsTabPanelProps) {
+  const elapsed = usePlayerStore((s) => s.elapsed);
+  const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
+  const activeLyricRef = useRef<HTMLDivElement>(null);
+  const activeLyricIndexRef = useRef<number>(-1);
+  const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const userScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollingRef = useRef(false);
+  const [showResyncPill, setShowResyncPill] = useState(false);
+
+  function scrollToActiveLine() {
+    if (!activeLyricRef.current || !lyricsContainerRef.current) return;
+    const container = lyricsContainerRef.current;
+    const line = activeLyricRef.current;
+    const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
+    autoScrollingRef.current = true;
+    container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
+    setTimeout(() => { autoScrollingRef.current = false; }, 500);
+  }
+
+  useEffect(() => {
+    if (!lyricsLines) return;
+    const activeIndex = lyricsLines.findIndex((line, i) =>
+      lyricsAdjElapsed >= line.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec)
+    );
+    if (activeIndex === activeLyricIndexRef.current) return;
+    activeLyricIndexRef.current = activeIndex;
+    if (userScrollingRef.current) return;
+    scrollToActiveLine();
+  }, [lyricsAdjElapsed, lyricsLines]);
+
+  function handleLyricsScroll() {
+    if (autoScrollingRef.current) return;
+    userScrollingRef.current = true;
+    setShowResyncPill(true);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    scrollTimeoutRef.current = setTimeout(() => {
+      userScrollingRef.current = false;
+      setShowResyncPill(false);
+      scrollToActiveLine();
+    }, 5000);
+  }
+
+  function handleResyncPress() {
+    if (scrollTimeoutRef.current) { clearTimeout(scrollTimeoutRef.current); scrollTimeoutRef.current = null; }
+    userScrollingRef.current = false;
+    setShowResyncPill(false);
+    scrollToActiveLine();
+  }
+
+  function handleLyricSeek(timeSec: number) {
+    userScrollingRef.current = false;
+    setShowResyncPill(false);
+    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    onSeek(timeSec);
+  }
+
+  return (
+    <>
+      {lyricsSearchOpen && (
+        <form
+          className="lyrics-search-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (lyricsSearchArtist.trim() && lyricsSearchTitle.trim()) {
+              setLyricsOverride({ artist: lyricsSearchArtist.trim(), title: lyricsSearchTitle.trim() });
+            }
+          }}
+        >
+          <input
+            className="lyrics-search-input"
+            placeholder="Artist"
+            value={lyricsSearchArtist}
+            onChange={(e) => setLyricsSearchArtist(e.target.value)}
+          />
+          <input
+            className="lyrics-search-input"
+            placeholder="Track title"
+            value={lyricsSearchTitle}
+            onChange={(e) => setLyricsSearchTitle(e.target.value)}
+          />
+          <div className="lyrics-search-actions">
+            <button
+              type="submit"
+              className="lyrics-search-btn"
+              disabled={!lyricsSearchArtist.trim() || !lyricsSearchTitle.trim()}
+            >
+              Search
+            </button>
+            {lyricsOverride && (
+              <button
+                type="button"
+                className="lyrics-search-btn lyrics-search-btn--reset"
+                onClick={() => {
+                  setLyricsOverride(null);
+                  setLyricsSearchArtist(currentTrackArtist ?? "");
+                  setLyricsSearchTitle(currentTrackTitle ?? "");
+                }}
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+      <div className="now-playing-lyrics-wrap">
+        <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
+          {lyricsLoading ? (
+            <p className="now-playing-empty">Loading lyrics…</p>
+          ) : lyricsLines && lyricsLines.length > 0 ? (
+            lyricsLines.map((line, i) => {
+              const isActive = lyricsAdjElapsed >= line.timeSec &&
+                (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
+              return (
+                <div
+                  key={i}
+                  ref={isActive ? activeLyricRef : undefined}
+                  className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+                  onClick={() => handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000)}
+                  style={{ cursor: "pointer" }}
+                >
+                  {line.text || " "}
+                </div>
+              );
+            })
+          ) : lyricsPlain ? (
+            <pre className="lyrics-plain">{lyricsPlain}</pre>
+          ) : (
+            <p className="now-playing-empty">No lyrics found.</p>
+          )}
+        </div>
+        {showResyncPill && (
+          <button className="lyrics-resync-pill" onClick={handleResyncPress}>
+            <RefreshCw size={12} />
+            Re-sync
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onBack }: Props) {
   const {
-    currentTrack, isPlaying, isLoading, elapsed, volume,
+    currentTrack, isPlaying, isLoading, volume,
     queue, queueIndex, repeat, isShuffled, shuffleOrder,
     pause, resume, next, prev, seek, setVolume, toggleMute,
     toggleRepeat, toggleShuffle, playFromQueueIndex,
@@ -175,7 +382,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
-  const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
   const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
   const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
@@ -191,14 +397,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   );
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
-  const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
-  const activeLyricRef = useRef<HTMLDivElement>(null);
-  const activeLyricIndexRef = useRef<number>(-1);
-  const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const userScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoScrollingRef = useRef(false);
-  const [showResyncPill, setShowResyncPill] = useState(false);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useBoolSetting("player.show_waveform", false);
@@ -241,11 +439,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     });
   }, [waveformPeaks]);
 
-  const overlayFilledCount = useMemo(
-    () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
-    [progress, overlayPeaks]
-  );
-
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
     : currentTrack?.coverArtUrl ?? null;
@@ -265,7 +458,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     setLyricsSearchOpen(false);
     setLyricsSearchArtist(currentTrack?.artist ?? "");
     setLyricsSearchTitle(currentTrack?.title ?? "");
-    setShowResyncPill(false);
   }, [currentTrack?.id]);
 
   useEffect(() => {
@@ -273,53 +465,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     const active = upNextRef.current.querySelector(".now-playing-up-next-row--active");
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab]);
-
-  function scrollToActiveLine() {
-    if (!activeLyricRef.current || !lyricsContainerRef.current) return;
-    const container = lyricsContainerRef.current;
-    const line = activeLyricRef.current;
-    const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
-    autoScrollingRef.current = true;
-    container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
-    setTimeout(() => { autoScrollingRef.current = false; }, 500);
-  }
-
-  useEffect(() => {
-    if (tab !== "lyrics" || !lyricsLines) return;
-    const activeIndex = lyricsLines.findIndex((line, i) =>
-      lyricsAdjElapsed >= line.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec)
-    );
-    if (activeIndex === activeLyricIndexRef.current) return;
-    activeLyricIndexRef.current = activeIndex;
-    if (userScrollingRef.current) return;
-    scrollToActiveLine();
-  }, [tab, lyricsAdjElapsed, lyricsLines]);
-
-  function handleLyricsScroll() {
-    if (autoScrollingRef.current) return;
-    userScrollingRef.current = true;
-    setShowResyncPill(true);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
-      userScrollingRef.current = false;
-      setShowResyncPill(false);
-      scrollToActiveLine();
-    }, 5000);
-  }
-
-  function handleResyncPress() {
-    if (scrollTimeoutRef.current) { clearTimeout(scrollTimeoutRef.current); scrollTimeoutRef.current = null; }
-    userScrollingRef.current = false;
-    setShowResyncPill(false);
-    scrollToActiveLine();
-  }
-
-  function handleLyricSeek(timeSec: number) {
-    userScrollingRef.current = false;
-    setShowResyncPill(false);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    void seek(timeSec);
-  }
 
   function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
     if (!progressBarRef.current || duration <= 0) return;
@@ -441,27 +586,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             )}
           </div>
 
-          <div className="now-playing-progress-row">
-            <span className="player-elapsed">{formatDuration(elapsed)}</span>
-            <div
-              ref={progressBarRef}
-              className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
-              onClick={handleProgressClick}
-              style={{ cursor: duration > 0 ? "pointer" : "default" }}
-            >
-              {useWaveform ? (
-                <WaveformBars
-                  peaks={overlayPeaks!}
-                  filledCount={overlayFilledCount}
-                  barClass="now-playing-waveform-bar"
-                  filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
-                />
-              ) : (
-                <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
-              )}
-            </div>
-            <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
-          </div>
+          <NowPlayingProgress
+            duration={duration}
+            useWaveform={!!useWaveform}
+            overlayPeaks={overlayPeaks}
+            progressBarRef={progressBarRef}
+            onProgressClick={handleProgressClick}
+          />
 
           {radioActive && (
             <div className="now-playing-radio-chip-row">
@@ -827,87 +958,22 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             )}
 
             {tab === "lyrics" && (
-              <>
-                {lyricsSearchOpen && (
-                  <form
-                    className="lyrics-search-form"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      if (lyricsSearchArtist.trim() && lyricsSearchTitle.trim()) {
-                        setLyricsOverride({ artist: lyricsSearchArtist.trim(), title: lyricsSearchTitle.trim() });
-                      }
-                    }}
-                  >
-                    <input
-                      className="lyrics-search-input"
-                      placeholder="Artist"
-                      value={lyricsSearchArtist}
-                      onChange={(e) => setLyricsSearchArtist(e.target.value)}
-                    />
-                    <input
-                      className="lyrics-search-input"
-                      placeholder="Track title"
-                      value={lyricsSearchTitle}
-                      onChange={(e) => setLyricsSearchTitle(e.target.value)}
-                    />
-                    <div className="lyrics-search-actions">
-                      <button
-                        type="submit"
-                        className="lyrics-search-btn"
-                        disabled={!lyricsSearchArtist.trim() || !lyricsSearchTitle.trim()}
-                      >
-                        Search
-                      </button>
-                      {lyricsOverride && (
-                        <button
-                          type="button"
-                          className="lyrics-search-btn lyrics-search-btn--reset"
-                          onClick={() => {
-                            setLyricsOverride(null);
-                            setLyricsSearchArtist(currentTrack?.artist ?? "");
-                            setLyricsSearchTitle(currentTrack?.title ?? "");
-                          }}
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                  </form>
-                )}
-                <div className="now-playing-lyrics-wrap">
-                  <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
-                    {lyricsLoading ? (
-                      <p className="now-playing-empty">Loading lyrics…</p>
-                    ) : lyricsLines && lyricsLines.length > 0 ? (
-                      lyricsLines.map((line, i) => {
-                        const isActive = lyricsAdjElapsed >= line.timeSec &&
-                          (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
-                        return (
-                          <div
-                            key={i}
-                            ref={isActive ? activeLyricRef : undefined}
-                            className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                            onClick={() => handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000)}
-                            style={{ cursor: "pointer" }}
-                          >
-                            {line.text || " "}
-                          </div>
-                        );
-                      })
-                    ) : lyricsPlain ? (
-                      <pre className="lyrics-plain">{lyricsPlain}</pre>
-                    ) : (
-                      <p className="now-playing-empty">No lyrics found.</p>
-                    )}
-                  </div>
-                  {showResyncPill && (
-                    <button className="lyrics-resync-pill" onClick={handleResyncPress}>
-                      <RefreshCw size={12} />
-                      Re-sync
-                    </button>
-                  )}
-                </div>
-              </>
+              <LyricsTabPanel
+                lyricsLines={lyricsLines}
+                lyricsPlain={lyricsPlain}
+                lyricsLoading={lyricsLoading}
+                lyricsOffsetMs={lyricsOffsetMs}
+                lyricsSearchOpen={lyricsSearchOpen}
+                lyricsSearchArtist={lyricsSearchArtist}
+                lyricsSearchTitle={lyricsSearchTitle}
+                setLyricsSearchArtist={setLyricsSearchArtist}
+                setLyricsSearchTitle={setLyricsSearchTitle}
+                lyricsOverride={lyricsOverride}
+                setLyricsOverride={setLyricsOverride}
+                currentTrackArtist={currentTrack?.artist ?? null}
+                currentTrackTitle={currentTrack?.title ?? null}
+                onSeek={(t) => void seek(t)}
+              />
             )}
           </div>
         </div>
