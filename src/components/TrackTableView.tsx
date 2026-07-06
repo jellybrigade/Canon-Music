@@ -8,6 +8,7 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
+import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
@@ -56,6 +57,7 @@ interface Props {
 export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useAllTracks();
+  const genreMappings = useGenreMappings();
 
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -374,7 +376,7 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
                   {cols.artist && <span className="playlist-vrow-artist">{track.artist ?? ""}</span>}
                   {cols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
                   {cols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
-                  {cols.genre && <span className="playlist-vrow-genre">{track.genre ?? ""}</span>}
+                  {cols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
                   {cols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
                   {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
                   {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
