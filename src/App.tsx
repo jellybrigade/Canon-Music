@@ -39,7 +39,7 @@ import { useRadio } from "./hooks/useRadio";
 import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
-import { useScrobble } from "./hooks/useScrobble";
+import { ScrobbleTracker } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
@@ -222,7 +222,6 @@ export default function App() {
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const elapsed = usePlayerStore((s) => s.elapsed);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -276,7 +275,6 @@ export default function App() {
   useGlobalShortcuts(serverWithCred);
   useQueueSync(serverWithCred);
   useScrobbleFlush(serverWithCred);
-  useScrobble(currentTrack, elapsed, serverWithCred);
 
   const [rawSort, setSort] = useSetting("library_sort", "artist");
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
@@ -1060,6 +1058,7 @@ export default function App() {
         </nav>
         {renderContent()}
       </div>
+      <ScrobbleTracker track={currentTrack} serverWithCred={serverWithCred} />
       <QueuePanel serverWithCred={serverWithCred ?? undefined} />
       {view !== "nowplaying" && (
         <PlayerBar

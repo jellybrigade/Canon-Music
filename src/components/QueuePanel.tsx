@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { X, GripVertical, Play, Search } from "lucide-react";
 import { usePlayerStore } from "../store/player";
@@ -23,7 +23,7 @@ const MIN_QUEUE_WIDTH = 200;
 const MAX_QUEUE_WIDTH = 500;
 const DEFAULT_QUEUE_WIDTH = 280;
 
-export function QueuePanel({ serverWithCred }: QueuePanelProps) {
+export const QueuePanel = memo(function QueuePanel({ serverWithCred }: QueuePanelProps) {
   const queue              = usePlayerStore((s) => s.queue);
   const queueIndex         = usePlayerStore((s) => s.queueIndex);
   const isShuffled         = usePlayerStore((s) => s.isShuffled);
@@ -354,4 +354,4 @@ export function QueuePanel({ serverWithCred }: QueuePanelProps) {
       )}
     </div>
   );
-}
+});
