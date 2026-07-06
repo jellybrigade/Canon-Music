@@ -8,6 +8,10 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 
 const CANVAS_SIZE = 32;
+// Small values (a color string or null) but keyed per distinct album/artist artwork
+// URL browsed, so cap it to bound RSS growth over a long session, same as the
+// Rust-side cover/prefetch caches.
+const MAX_ACCENT_CACHE_ENTRIES = 500;
 const accentCache = new Map<string, string | null>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
@@ -175,6 +179,7 @@ export async function extractAccent(imageUrl: string): Promise<string | null> {
     color = await extractViaProxyFetch(imageUrl);
   }
 
+  if (accentCache.size >= MAX_ACCENT_CACHE_ENTRIES) accentCache.clear();
   accentCache.set(imageUrl, color);
   return color;
 }
