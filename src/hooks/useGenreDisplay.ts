@@ -54,7 +54,9 @@ export function useGenreMappings(): Map<string, string | null> {
 }
 
 /**
- * Splits a raw genre string, applies mappings, de-dupes, drops ignored tags.
+ * Splits a raw genre string, applies mappings, de-dupes.
+ * Raw values with no mapping decision yet (unaccepted/unmapped) are dropped,
+ * not shown as-is - only genres that went through accept/map/ignore surface here.
  * Returns ordered array of display genre names.
  */
 export function applyGenreMappings(
@@ -65,13 +67,10 @@ export function applyGenreMappings(
   const seen = new Set<string>();
   const result: string[] = [];
   for (const raw of rawGenreString.split(/[,;]/).map((g) => g.trim()).filter(Boolean)) {
-    if (!mappings.has(raw)) {
-      if (!seen.has(raw)) { seen.add(raw); result.push(raw); }
-    } else {
-      const mapped = mappings.get(raw) ?? null;
-      if (mapped === null) continue;
-      if (!seen.has(mapped)) { seen.add(mapped); result.push(mapped); }
-    }
+    if (!mappings.has(raw)) continue;
+    const mapped = mappings.get(raw) ?? null;
+    if (mapped === null) continue;
+    if (!seen.has(mapped)) { seen.add(mapped); result.push(mapped); }
   }
   return result;
 }

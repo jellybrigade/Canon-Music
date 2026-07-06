@@ -135,9 +135,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     const map = new Map<string, { display: string; canonicalId: string }[]>();
     for (const row of trackTagRows) {
       if (skipYearGenres && isYearLikeGenre(row.raw_value)) continue;
-      const display = genreMappings.has(row.raw_value)
-        ? (genreMappings.get(row.raw_value) ?? null)
-        : row.raw_value;
+      if (!genreMappings.has(row.raw_value)) continue;
+      const display = genreMappings.get(row.raw_value) ?? null;
       if (display === null) continue;
       if (!map.has(row.track_id)) map.set(row.track_id, []);
       const genres = map.get(row.track_id)!;
