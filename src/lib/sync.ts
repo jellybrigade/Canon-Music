@@ -13,7 +13,31 @@ const BATCH_NOTIFY_INTERVAL = 25;
 // BEGIN/COMMIT split across two separate execute() calls can land on
 // different connections and silently fail to wrap anything. Batch writes
 // into fewer, larger multi-row statements instead of relying on transactions.
-const INSERT_CHUNK_SIZE = 200;
+// Chunk size is derived per call site from SQLite's bound-parameter ceiling
+// (32766 as of the bundled libsqlite3-sys, kept below that with headroom)
+// divided by the number of "?" placeholders each row needs.
+const SQLITE_MAX_VARIABLES = 32000;
+
+// Batches `rows` into fewer multi-row INSERT statements. `placeholderRow` is
+// the literal "(?, ...)" (or "(?, 'literal', ?, ...)") group for one row;
+// `paramsPerRow` is how many "?" it actually contains, used to size chunks
+// under SQLite's bound-parameter limit. `buildSql` receives the joined
+// per-chunk placeholder groups and returns the full statement.
+async function executeBatched(
+  db: Database,
+  rows: unknown[][],
+  placeholderRow: string,
+  paramsPerRow: number,
+  buildSql: (placeholders: string) => string,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const chunkSize = Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / paramsPerRow));
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    const placeholders = chunk.map(() => placeholderRow).join(", ");
+    await db.execute(buildSql(placeholders), chunk.flat());
+  }
+}
 
 async function insertTracksBatch(
   db: Database,
@@ -22,61 +46,56 @@ async function insertTracksBatch(
   albumDbId: string,
   tracks: NavidromeTrack[],
 ): Promise<void> {
-  for (let start = 0; start < tracks.length; start += INSERT_CHUNK_SIZE) {
-    const chunk = tracks.slice(start, start + INSERT_CHUNK_SIZE);
-    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
-    const params: unknown[] = [];
-    for (const track of chunk) {
-      params.push(
-        `${serverId}:${track.id}`,
-        serverId,
-        serverType,
-        track.title,
-        track.artist ?? null,
-        albumDbId,
-        track.genre ?? null,
-        track.track ?? null,
-        track.discNumber ?? null,
-        track.year ?? null,
-        track.duration ?? null,
-        track.path ?? null,
-        track.playCount ?? 0,
-        track.bitRate ?? null,
-        track.suffix ?? null,
-        track.size ?? null,
-        track.replayGain?.trackGain ?? null,
-        track.replayGain?.trackPeak ?? null,
-        track.replayGain?.albumGain ?? null,
-        track.replayGain?.albumPeak ?? null,
-      );
-    }
-    await db.execute(
-      `INSERT OR REPLACE INTO tracks
+  const trackRows = tracks.map((track) => [
+    `${serverId}:${track.id}`,
+    serverId,
+    serverType,
+    track.title,
+    track.artist ?? null,
+    albumDbId,
+    track.genre ?? null,
+    track.track ?? null,
+    track.discNumber ?? null,
+    track.year ?? null,
+    track.duration ?? null,
+    track.path ?? null,
+    track.playCount ?? 0,
+    track.bitRate ?? null,
+    track.suffix ?? null,
+    track.size ?? null,
+    track.replayGain?.trackGain ?? null,
+    track.replayGain?.trackPeak ?? null,
+    track.replayGain?.albumGain ?? null,
+    track.replayGain?.albumPeak ?? null,
+  ]);
+  await executeBatched(
+    db,
+    trackRows,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    20,
+    (placeholders) => `INSERT OR REPLACE INTO tracks
          (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
-       VALUES ${placeholders}`,
-      params
-    );
-  }
+       VALUES ${placeholders}`
+  );
 
-  const genreRows = tracks.filter((t) => t.genre);
-  for (let start = 0; start < genreRows.length; start += INSERT_CHUNK_SIZE) {
-    const chunk = genreRows.slice(start, start + INSERT_CHUNK_SIZE);
-    const placeholders = chunk.map(() => "(?, 'genre', ?, 'server')").join(", ");
-    const params: unknown[] = [];
-    for (const track of chunk) params.push(`${serverId}:${track.id}`, track.genre);
-    await db.execute(
-      `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
-      params
-    );
-  }
+  const genreRows = tracks.filter((t) => t.genre).map((t) => [`${serverId}:${t.id}`, t.genre]);
+  await executeBatched(
+    db,
+    genreRows,
+    "(?, 'genre', ?, 'server')",
+    2,
+    (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`
+  );
 }
 
 async function insertIdColumnBatch(db: Database, table: string, column: string, ids: string[]): Promise<void> {
-  for (let start = 0; start < ids.length; start += INSERT_CHUNK_SIZE) {
-    const chunk = ids.slice(start, start + INSERT_CHUNK_SIZE);
-    const placeholders = chunk.map(() => "(?)").join(", ");
-    await db.execute(`INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`, chunk);
-  }
+  await executeBatched(
+    db,
+    ids.map((id) => [id]),
+    "(?)",
+    1,
+    (placeholders) => `INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`
+  );
 }
 
 export async function syncAlbumTracks(
@@ -123,17 +142,15 @@ export async function syncLibrary(
   // Incremental sync: bulk-prefetch existing album state once instead of a
   // per-album SELECT round trip, so the skip-tracks decision is pure JS.
   type ExistingAlbumRow = { id: string; navidrome_created: string | null };
-  const existingAlbumRows = await db.select<ExistingAlbumRow[]>(
-    "SELECT id, navidrome_created FROM albums WHERE server_id = ?",
-    [server.id]
-  );
-  const existingCreatedById = new Map(existingAlbumRows.map((r) => [r.id, r.navidrome_created]));
-
   type TrackCountRow = { album_id: string; c: number };
-  const trackCountRows = await db.select<TrackCountRow[]>(
-    "SELECT album_id, COUNT(*) AS c FROM tracks WHERE server_id = ? GROUP BY album_id",
-    [server.id]
-  );
+  const [existingAlbumRows, trackCountRows] = await Promise.all([
+    db.select<ExistingAlbumRow[]>("SELECT id, navidrome_created FROM albums WHERE server_id = ?", [server.id]),
+    db.select<TrackCountRow[]>(
+      "SELECT album_id, COUNT(*) AS c FROM tracks WHERE server_id = ? GROUP BY album_id",
+      [server.id]
+    ),
+  ]);
+  const existingCreatedById = new Map(existingAlbumRows.map((r) => [r.id, r.navidrome_created]));
   const trackCountByAlbumId = new Map(trackCountRows.map((r) => [r.album_id, r.c]));
 
   const albumUpsertParams: unknown[][] = [];
@@ -144,7 +161,6 @@ export async function syncLibrary(
     const existingCreated = existingCreatedById.get(albumDbId) ?? null;
     const existingTrackCount = trackCountByAlbumId.get(albumDbId) ?? 0;
     const skipTracks =
-      existingCreatedById.has(albumDbId) &&
       existingCreated !== null &&
       existingCreated === (album.created ?? null) &&
       (album.songCount === undefined || existingTrackCount === album.songCount);
@@ -164,11 +180,12 @@ export async function syncLibrary(
 
   // Upsert album rows in batches, preserving computed_at/normalized_tags_json
   // so the background normalizer doesn't re-run on every sync.
-  for (let start = 0; start < albumUpsertParams.length; start += INSERT_CHUNK_SIZE) {
-    const chunk = albumUpsertParams.slice(start, start + INSERT_CHUNK_SIZE);
-    const placeholders = chunk.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
-    await db.execute(
-      `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type)
+  await executeBatched(
+    db,
+    albumUpsertParams,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    10,
+    (placeholders) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -179,10 +196,8 @@ export async function syncLibrary(
          artwork_url = excluded.artwork_url,
          navidrome_created = excluded.navidrome_created,
          play_count = excluded.play_count,
-         release_type = excluded.release_type`,
-      chunk.flat()
-    );
-  }
+         release_type = excluded.release_type`
+  );
 
   processedCount = albumUpsertParams.length;
   if (onAlbumBatch && processedCount > 0) onAlbumBatch();
@@ -266,19 +281,14 @@ export async function syncLibrary(
       "INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url) VALUES (?, ?, ?, ?, ?, ?)",
       [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
     );
-    const CHUNK_SIZE = 500;
-    for (let start = 0; start < tracks.length; start += CHUNK_SIZE) {
-      const chunk = tracks.slice(start, start + CHUNK_SIZE);
-      const placeholders = chunk.map(() => "(?, ?, ?)").join(", ");
-      const params: (string | number)[] = [];
-      chunk.forEach((t, offset) => {
-        params.push(plDbId, `${server.id}:${t.id}`, start + offset);
-      });
-      await db.execute(
-        `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`,
-        params
-      );
-    }
+    const trackRows = tracks.map((t, position) => [plDbId, `${server.id}:${t.id}`, position]);
+    await executeBatched(
+      db,
+      trackRows,
+      "(?, ?, ?)",
+      3,
+      (placeholders) => `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`
+    );
   }
 
   // Scan for tag issues after all data is updated
