@@ -360,13 +360,29 @@ function LyricsTabPanel({
 }
 
 export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onBack }: Props) {
-  const {
-    currentTrack, isPlaying, isLoading, volume,
-    queue, queueIndex, repeat, isShuffled, shuffleOrder,
-    pause, resume, next, prev, seek, setVolume, toggleMute,
-    toggleRepeat, toggleShuffle, playFromQueueIndex,
-    addToQueue, playNext, audioFormat, radioActive,
-  } = usePlayerStore();
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const volume = usePlayerStore((s) => s.volume);
+  const queue = usePlayerStore((s) => s.queue);
+  const queueIndex = usePlayerStore((s) => s.queueIndex);
+  const repeat = usePlayerStore((s) => s.repeat);
+  const isShuffled = usePlayerStore((s) => s.isShuffled);
+  const shuffleOrder = usePlayerStore((s) => s.shuffleOrder);
+  const pause = usePlayerStore((s) => s.pause);
+  const resume = usePlayerStore((s) => s.resume);
+  const next = usePlayerStore((s) => s.next);
+  const prev = usePlayerStore((s) => s.prev);
+  const seek = usePlayerStore((s) => s.seek);
+  const setVolume = usePlayerStore((s) => s.setVolume);
+  const toggleMute = usePlayerStore((s) => s.toggleMute);
+  const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
+  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
+  const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const audioFormat = usePlayerStore((s) => s.audioFormat);
+  const radioActive = usePlayerStore((s) => s.radioActive);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
   const progressBarRef = useRef<HTMLDivElement>(null);

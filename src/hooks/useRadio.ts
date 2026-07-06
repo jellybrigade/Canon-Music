@@ -56,7 +56,17 @@ function pickFromTop(
 }
 
 export function useRadio() {
-  const { currentTrack, queue, queueIndex, radioActive, radioMode, radioSimilarityScale, addToQueue, streamUrlFor, isPlaying, isLoading, playFromQueueIndex } = usePlayerStore();
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const queue = usePlayerStore((s) => s.queue);
+  const queueIndex = usePlayerStore((s) => s.queueIndex);
+  const radioActive = usePlayerStore((s) => s.radioActive);
+  const radioMode = usePlayerStore((s) => s.radioMode);
+  const radioSimilarityScale = usePlayerStore((s) => s.radioSimilarityScale);
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const streamUrlFor = usePlayerStore((s) => s.streamUrlFor);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const fillingRef = useRef(false);
 
   // Session-scoped repetition memory: reset whenever a *new* radio session starts
