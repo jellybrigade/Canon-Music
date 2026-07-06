@@ -615,12 +615,22 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
     Ok(())
 }
 
+// Full track buffers, not thumbnails — cap far below MAX_COVER_CACHE_ENTRIES to bound RSS growth
+// from Radio Auto-DJ's 10-track lookahead prefetching tracks that get skipped before playback.
+const MAX_PREFETCH_CACHE_ENTRIES: usize = 12;
+
 #[tauri::command]
 async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
     let cache_arc = Arc::clone(&state.prefetch_cache);
     std::thread::spawn(move || {
         match http_client().get(&url).send().and_then(|r| r.bytes()) {
-            Ok(b) => { cache_arc.lock().unwrap_or_else(|e| e.into_inner()).insert(url, b.to_vec()); }
+            Ok(b) => {
+                let mut cache = cache_arc.lock().unwrap_or_else(|e| e.into_inner());
+                if cache.len() >= MAX_PREFETCH_CACHE_ENTRIES {
+                    cache.clear();
+                }
+                cache.insert(url, b.to_vec());
+            }
             Err(e) => { eprintln!("audio_prefetch fetch error: {e}"); }
         }
     });
