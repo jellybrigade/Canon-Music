@@ -7,19 +7,7 @@ You are invoked in plan mode. Work through these phases in order.
 
 **Path note:** `instructions/` lives at repo root (`/home/mschachner/Projects/Canon/instructions/`), not inside this skill's own directory (`.claude/skills/performance/`). Don't `find`/`ls` under the skill dir looking for it.
 
-## Peek mode ("what's next" / "/performance next")
-
-If the user only wants to know the next item — phrases like "what's next", "next perf item", "peek", or `/performance next` — do **not** read the whole file (it's large: trailing audit notes on each line make it tens of KB even though it's only ~50 lines). Instead `grep` for just the one line that matters and stop; don't enter plan mode, don't run any phase below.
-
-```bash
-# next un-audited item (missing first checkbox):
-grep -m1 -n '^- \[ \] \[' instructions/performance-audit.md
-# if that returns nothing, next un-fixed item (audited, missing second checkbox):
-grep -m1 -n '^- \[x\] \[ \]' instructions/performance-audit.md
-# if that also returns nothing, everything's done
-```
-
-Report just that one line (item name + severity + note if present) and which stage it belongs to (audit vs fix). Nothing else — no investigation, no fix, no file edits.
+**Never `Read` the whole `instructions/performance-audit.md` file** — it's huge (trailing audit notes make lines tens to hundreds of chars, tens of KB total for ~50 lines) and every phase only ever needs one item's line. Whenever a phase needs something from it (the item's findings note, its current checkbox state, confirming a line before editing), `grep -n` for the item name or checkbox pattern to get the line number and content, then work from that single line — never a full-file `Read`.
 
 Each item in the doc has **two checkboxes**: `[audited] [fixed]`. This skill runs in two separate stages — never interleave them across items:
 
@@ -28,14 +16,19 @@ Each item in the doc has **two checkboxes**: `[audited] [fixed]`. This skill run
 
 ## Phase 1 — Pick a stage
 
-Read `instructions/performance-audit.md`. If the user named a specific item, use that one (find its line; add it under the right section first if missing) and infer stage from its checkbox state — handle it per Phase 2-4 below, then stop (don't sweep the rest of the doc).
+Don't `Read` the whole file — it's large (trailing audit notes make each line tens to hundreds of chars, tens of KB total for ~50 lines) and you only need the one next item. `grep` for it instead:
 
-Otherwise, decide the overall stage:
+```bash
+# next un-audited item (missing first checkbox) — top-to-bottom means first match:
+grep -m1 -n '^- \[ \] \[' instructions/performance-audit.md
+# none found → next un-fixed item (audited, missing second checkbox):
+grep -m1 -n '^- \[x\] \[ \]' instructions/performance-audit.md
+# none found → everything's done, say so and stop
+```
 
-- Any item missing its **first** checkbox → **audit stage**. Go to Phase 2 for the single first such item (top to bottom), then stop — do not continue to any other item in this invocation.
-- Else (every item audited) but some CRITICAL item still missing its **second** checkbox → fix that CRITICAL item (Phase 4-7), then stop.
-- Else, if every item is audited and all CRITICAL items are fixed, but other items still miss their **second** checkbox → **fix stage**. Go to Phase 4 for the single first remaining un-fixed item (top to bottom), then stop.
-- If every item has both boxes checked, say so and stop.
+If the user named a specific item instead, `grep` for that item's line by name (add it under the right section first if missing) and infer stage from its checkbox state.
+
+Whichever line you land on, that's the single item for this invocation — handle it per Phase 2-4 below, then stop (don't sweep the rest of the doc, don't Read the full file even to double check others).
 
 State clearly at the start which stage you're running and which single item it covers.
 
@@ -45,7 +38,7 @@ Run Phase 2-3 on the item, write its findings note, and check its first box. If 
 
 ### Fix stage (one item)
 
-Run Phase 4-7 using the findings note already written on the item's line as the profiling result. Don't re-investigate from scratch — re-read the referenced files to confirm the note still matches current code before trusting it; if the code moved on since the audit, say so and re-profile that part only. Commit (Phase 8) after this one item's fix.
+`grep -n` the item's line for its findings note and use it as the profiling result. Don't re-investigate from scratch — re-read the referenced source files to confirm the note still matches current code before trusting it; if the code moved on since the audit, say so and re-profile that part only. Commit (Phase 8) after this one item's fix.
 
 ## Phase 2 — Locate + understand (the one item)
 
