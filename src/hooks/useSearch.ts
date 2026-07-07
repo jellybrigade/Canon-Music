@@ -61,37 +61,37 @@ async function runSearch(query: string): Promise<SearchResults> {
   const fts = toFtsQuery(query);
   const db = await getDb();
 
-  const albumRows = await db.select<{ id: string; name: string; artist: string | null; artwork_url: string | null }[]>(
-    `SELECT DISTINCT a.id, a.name, a.artist, a.artwork_url
-     FROM tracks_fts fts
-     JOIN tracks t ON t.id = fts.id
-     JOIN albums a ON a.id = t.album_id
-     WHERE tracks_fts MATCH ?
-     LIMIT 200`,
-    [fts]
-  );
-
-  const trackRows = await db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; artwork_url: string | null; duration: number | null }[]>(
-    `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration
-     FROM tracks_fts fts
-     JOIN tracks t ON t.id = fts.id
-     LEFT JOIN albums a ON a.id = t.album_id
-     WHERE tracks_fts MATCH ?
-     LIMIT 200`,
-    [fts]
-  );
-
-  const artistRows = await db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null }[]>(
-    `SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count,
-            ai.lastfm_image_url, ai.wikidata_image_url
-     FROM tracks_fts fts
-     JOIN tracks t ON t.id = fts.id
-     LEFT JOIN artist_identity ai ON ai.artist_name = t.artist
-     WHERE tracks_fts MATCH ? AND t.artist IS NOT NULL
-     GROUP BY t.artist
-     LIMIT 200`,
-    [fts]
-  );
+  const [albumRows, trackRows, artistRows] = await Promise.all([
+    db.select<{ id: string; name: string; artist: string | null; artwork_url: string | null }[]>(
+      `SELECT DISTINCT a.id, a.name, a.artist, a.artwork_url
+       FROM tracks_fts fts
+       JOIN tracks t ON t.id = fts.id
+       JOIN albums a ON a.id = t.album_id
+       WHERE tracks_fts MATCH ?
+       LIMIT 200`,
+      [fts]
+    ),
+    db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; artwork_url: string | null; duration: number | null }[]>(
+      `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration
+       FROM tracks_fts fts
+       JOIN tracks t ON t.id = fts.id
+       LEFT JOIN albums a ON a.id = t.album_id
+       WHERE tracks_fts MATCH ?
+       LIMIT 200`,
+      [fts]
+    ),
+    db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null }[]>(
+      `SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count,
+              ai.lastfm_image_url, ai.wikidata_image_url
+       FROM tracks_fts fts
+       JOIN tracks t ON t.id = fts.id
+       LEFT JOIN artist_identity ai ON ai.artist_name = t.artist
+       WHERE tracks_fts MATCH ? AND t.artist IS NOT NULL
+       GROUP BY t.artist
+       LIMIT 200`,
+      [fts]
+    ),
+  ]);
 
   // Re-rank results in JS. FTS5 gives recall; scoring gives relevance.
   // Albums: primary field = title, secondary = artist (weighted 0.6×).
