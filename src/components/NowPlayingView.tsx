@@ -509,6 +509,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
     : currentTrack?.coverArtUrl ?? null;
+  // Blur destroys detail anyway, so the full-viewport blurred backdrop only needs a
+  // tiny source image (avoids WebKit running its expensive blur filter over 600px
+  // of pixels it's about to throw away).
+  const blurArtUrl = currentTrack?.artworkRef
+    ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
+    : currentTrack?.coverArtUrl ?? null;
 
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, pos) => {
@@ -592,7 +598,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     <div
       className="now-playing-view"
       style={{
-        ...(largeArtUrl ? { '--art-bg': `url("${largeArtUrl.replace(/"/g, '%22')}")` } : {}),
+        ...(blurArtUrl ? { '--art-bg': `url("${blurArtUrl.replace(/"/g, '%22')}")` } : {}),
         ...(accent ? { '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
