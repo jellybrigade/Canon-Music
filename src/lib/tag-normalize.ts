@@ -4,31 +4,9 @@ import { bucketize } from "./tag-buckets";
 import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import { getMinFolksonomyCount } from "./musicbrainz";
 import type { MbGenre } from "./musicbrainz";
+import { executeBatched } from "./db-batch";
 
 export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
-
-// tauri-plugin-sql's SQLite pool has more than one connection, so per-row
-// awaited db.execute() calls in a loop each pay a separate Tauri IPC round
-// trip. Batch rows into fewer, larger multi-row INSERT statements instead.
-// Chunk size derived from SQLite's bound-parameter ceiling (32766 as of the
-// bundled libsqlite3-sys, kept below that with headroom).
-const SQLITE_MAX_VARIABLES = 32000;
-
-async function executeBatched(
-  db: Awaited<ReturnType<typeof getDb>>,
-  rows: unknown[][],
-  placeholderRow: string,
-  paramsPerRow: number,
-  buildSql: (placeholders: string) => string,
-): Promise<void> {
-  if (rows.length === 0) return;
-  const chunkSize = Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / paramsPerRow));
-  for (let start = 0; start < rows.length; start += chunkSize) {
-    const chunk = rows.slice(start, start + chunkSize);
-    const placeholders = chunk.map(() => placeholderRow).join(", ");
-    await db.execute(buildSql(placeholders), chunk.flat());
-  }
-}
 
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();

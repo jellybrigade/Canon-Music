@@ -13,14 +13,7 @@ import {
 } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
 import { buildSmartQuery, type SmartFilters } from "../lib/smartPlaylist";
-
-// tauri-plugin-sql's SQLite pool has more than one connection, so a raw
-// BEGIN/COMMIT split across two separate execute() calls can land on
-// different connections and silently fail to wrap anything. Batch writes
-// into fewer, larger multi-row statements instead. Chunk size is derived
-// from SQLite's bound-parameter ceiling divided by params-per-row (same
-// pattern as lib/sync.ts / lib/tag-normalize.ts).
-const SQLITE_MAX_VARIABLES = 32000;
+import { executeBatched } from "../lib/db-batch";
 
 async function insertPlaylistTracksBatch(
   db: Database,
@@ -29,17 +22,14 @@ async function insertPlaylistTracksBatch(
   startPos: number
 ): Promise<void> {
   if (trackIds.length === 0) return;
-  const paramsPerRow = 3;
-  const chunkSize = Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / paramsPerRow));
-  for (let start = 0; start < trackIds.length; start += chunkSize) {
-    const chunk = trackIds.slice(start, start + chunkSize);
-    const placeholders = chunk.map(() => "(?, ?, ?)").join(", ");
-    const params = chunk.flatMap((trackId, i) => [playlistId, trackId, startPos + start + i]);
-    await db.execute(
-      `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`,
-      params
-    );
-  }
+  const rows = trackIds.map((trackId, i) => [playlistId, trackId, startPos + i]);
+  await executeBatched(
+    db,
+    rows,
+    "(?, ?, ?)",
+    3,
+    (placeholders) => `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`
+  );
 }
 
 export interface PlaylistRow {

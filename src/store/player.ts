@@ -667,6 +667,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }, 500);
   }
 
+  // Flush the debounced write on quit so a skip/shuffle right before close isn't lost.
+  window.addEventListener("beforeunload", () => {
+    if (queuePersistTimer) {
+      clearTimeout(queuePersistTimer);
+      queuePersistTimer = null;
+      void persistQueueStateNow();
+    }
+  });
+
   return {
     currentTrack: null,
     streamUrl: null,
@@ -852,7 +861,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       let workingTracks = tracks;
       let workingStart = startIndex;
 
-      // Cap the queue instead of storing the whole (possibly library-sized) list —
+      // Cap the queue instead of storing the whole (possibly library-sized) list:
       // keeps playback-state re-renders, persistence writes, and Up Next rendering
       // bounded regardless of source size. Window is centered on the clicked track
       // so skipping in either direction still has room to move.

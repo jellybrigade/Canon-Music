@@ -67,7 +67,7 @@ export async function getCanonTree(): Promise<CanonTree> {
   const nodesByKind = new Map<string, TreeNode[]>();
   const byKindAndKey = new Map<string, Map<string, TreeNode>>();
   for (const n of nodes) {
-    byKey.set(n.canonical_key, n);
+    if (!byKey.has(n.canonical_key)) byKey.set(n.canonical_key, n);
     byId.set(n.id, n);
     let kindList = nodesByKind.get(n.type);
     if (!kindList) {
