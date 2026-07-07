@@ -60,6 +60,10 @@ let gaplessActive = false;
 let cancelAudioError: (() => void) | null = null;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
 let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+// Debounces local queue-state persistence so a burst of skips/shuffles against a
+// large (e.g. library-sized) queue coalesces into one JSON.stringify + SQLite write
+// instead of one per action.
+let queuePersistTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Current ReplayGain linear amplitude multiplier. Updated on track change and mode change.
 // Stored outside the store so setVolume can access the latest value without a selector.
@@ -639,7 +643,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }
   }
 
-  async function persistQueueState() {
+  async function persistQueueStateNow() {
     try {
       const { queue, queueIndex, shuffleOrder, isShuffled, currentTrack } = get();
       const snapshot: QueueSnapshot = { queue, queueIndex, shuffleOrder, isShuffled, currentTrack };
@@ -651,6 +655,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     } catch (e) {
       console.error("Failed to persist queue state:", e);
     }
+  }
+
+  function persistQueueState() {
+    if (queuePersistTimer) clearTimeout(queuePersistTimer);
+    queuePersistTimer = setTimeout(() => {
+      queuePersistTimer = null;
+      void persistQueueStateNow();
+    }, 500);
   }
 
   return {

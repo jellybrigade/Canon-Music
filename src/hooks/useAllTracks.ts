@@ -27,6 +27,7 @@ export interface AllTrackRow {
 export function useAllTracks() {
   return useQuery({
     queryKey: QK.allTracks(),
+    staleTime: Infinity,
     queryFn: async () => {
       const db = await getDb();
       return db.select<AllTrackRow[]>(

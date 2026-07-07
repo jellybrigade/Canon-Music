@@ -81,6 +81,8 @@ Don't just claim faster — show why: re-render count before/after (e.g. count o
 
 In `instructions/performance-audit.md`, update the item's trailing note if the fix diverged from the original finding, and check the item's **second** `[x]` box.
 
+If the fix deliberately deferred a further, more invasive optimization (e.g. a bigger architectural change ruled out of scope for this pass), invoke the `/whattodo` skill to add it to the backlog rather than letting it evaporate — note enough context (file, what was deferred, why) that a future session can pick it up standalone.
+
 ## Phase 8 — Commit
 
 Invoke the `/commit` skill. In the audit stage, only do this after a CRITICAL item's own fix (Phase 4-7) — not after plain audit notes. In the fix stage, commit once after this one item's fix.
