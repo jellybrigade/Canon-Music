@@ -214,8 +214,10 @@ export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectAr
     overscan: 10,
   });
 
+  const numColWidth = `${Math.max(2, String(sorted.length).length) + 1.5}ch`;
+
   const gridTemplate = [
-    "2.5rem",
+    numColWidth,
     "minmax(0, 2fr)",
     cols.artist ? "minmax(0, 1.25fr)" : null,
     cols.album ? "minmax(0, 1.25fr)" : null,
