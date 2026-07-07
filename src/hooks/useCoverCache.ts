@@ -173,8 +173,22 @@ function dataUrlToObjectUrl(dataUrl: string): string {
   return url;
 }
 
-/** Returns a Map<albumId, objectUrl> loaded from the SQLite cover cache. */
-export function useAlbumCoverMap(): Map<string, string> {
+// Decodes lazily, one album at a time, on .get() rather than eagerly over every row.
+// Libraries with 1000+ artists can have tens of thousands of cached covers; decoding
+// them all up front (base64 -> bytes -> Blob) in one synchronous pass blocked the main
+// thread hard enough to look like a freeze/crash when a view first mounted. Callers only
+// ever .get(id) for the handful of albums actually on screen, so only those get decoded.
+class LazyCoverMap {
+  constructor(private readonly dataUrlByAlbum: Map<string, string>) {}
+
+  get(albumId: string): string | undefined {
+    const dataUrl = this.dataUrlByAlbum.get(albumId);
+    return dataUrl ? dataUrlToObjectUrl(dataUrl) : undefined;
+  }
+}
+
+/** Returns a lazily-decoding albumId -> objectUrl lookup backed by the SQLite cover cache. */
+export function useAlbumCoverMap(): Pick<Map<string, string>, "get"> {
   const { data } = useQuery({
     queryKey: QK.albumCovers(),
     queryFn: async () => {
@@ -186,5 +200,5 @@ export function useAlbumCoverMap(): Map<string, string> {
   });
 
   const rows = data ?? [];
-  return useMemo(() => new Map(rows.map((r) => [r.album_id, dataUrlToObjectUrl(r.data_url)])), [rows]);
+  return useMemo(() => new LazyCoverMap(new Map(rows.map((r) => [r.album_id, r.data_url]))), [rows]);
 }
