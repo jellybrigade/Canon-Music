@@ -7,6 +7,29 @@ import type { MbGenre } from "./musicbrainz";
 
 export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
+// tauri-plugin-sql's SQLite pool has more than one connection, so per-row
+// awaited db.execute() calls in a loop each pay a separate Tauri IPC round
+// trip. Batch rows into fewer, larger multi-row INSERT statements instead.
+// Chunk size derived from SQLite's bound-parameter ceiling (32766 as of the
+// bundled libsqlite3-sys, kept below that with headroom).
+const SQLITE_MAX_VARIABLES = 32000;
+
+async function executeBatched(
+  db: Awaited<ReturnType<typeof getDb>>,
+  rows: unknown[][],
+  placeholderRow: string,
+  paramsPerRow: number,
+  buildSql: (placeholders: string) => string,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const chunkSize = Math.max(1, Math.floor(SQLITE_MAX_VARIABLES / paramsPerRow));
+  for (let start = 0; start < rows.length; start += chunkSize) {
+    const chunk = rows.slice(start, start + chunkSize);
+    const placeholders = chunk.map(() => placeholderRow).join(", ");
+    await db.execute(buildSql(placeholders), chunk.flat());
+  }
+}
+
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();
   await db.execute("DELETE FROM tag_vocab_cache");
@@ -227,15 +250,20 @@ async function _doNormalizeAlbum(
   // File tags get written during sync; lastfm tags must be written here or they
   // appear as orphaned in Cleanup even though normalization applies them.
   if (albumTracks.length > 0) {
+    const trackTagRows: unknown[][] = [];
     for (const entry of byKey.values()) {
       if (entry.source === "file") continue;
       for (const track of albumTracks) {
-        await db.execute(
-          `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES (?, 'genre', ?, ?)`,
-          [track.id, entry.name, entry.source]
-        );
+        trackTagRows.push([track.id, entry.name, entry.source]);
       }
     }
+    await executeBatched(
+      db,
+      trackTagRows,
+      "(?, 'genre', ?, ?)",
+      3,
+      (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`
+    );
     // Apply any pre-existing tag_mappings to the newly inserted lastfm/musicbrainz rows
     await db.execute(
       `UPDATE track_tags
@@ -378,20 +406,26 @@ async function _doNormalizeAlbum(
 
   // Atomically replace album_genres and album_unresolved_genres for this album
   await db.execute("DELETE FROM album_genres WHERE album_id = ?", [albumId]);
-  for (const row of genreRows.filter((r) => !excludedIds.has(r.canonical_id))) {
-    await db.execute(
-      "INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES (?, ?, ?, ?, ?)",
-      [albumId, row.canonical_id, row.relation, row.section, row.name]
-    );
-  }
+  const genreInsertRows = genreRows
+    .filter((r) => !excludedIds.has(r.canonical_id))
+    .map((row) => [albumId, row.canonical_id, row.relation, row.section, row.name]);
+  await executeBatched(
+    db,
+    genreInsertRows,
+    "(?, ?, ?, ?, ?)",
+    5,
+    (placeholders) => `INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES ${placeholders}`
+  );
 
   await db.execute("DELETE FROM album_unresolved_genres WHERE album_id = ?", [albumId]);
-  for (const tag of unmapped) {
-    await db.execute(
-      "INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES (?, ?, 'genre', ?)",
-      [albumId, tag.name, tag.source]
-    );
-  }
+  const unresolvedInsertRows = unmapped.map((tag) => [albumId, tag.name, tag.source]);
+  await executeBatched(
+    db,
+    unresolvedInsertRows,
+    "(?, ?, 'genre', ?)",
+    3,
+    (placeholders) => `INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES ${placeholders}`
+  );
 
   // --- End album_genres write ---
 
