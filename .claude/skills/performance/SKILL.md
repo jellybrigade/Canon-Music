@@ -7,6 +7,20 @@ You are invoked in plan mode. Work through these phases in order.
 
 **Path note:** `instructions/` lives at repo root (`/home/mschachner/Projects/Canon/instructions/`), not inside this skill's own directory (`.claude/skills/performance/`). Don't `find`/`ls` under the skill dir looking for it.
 
+## Peek mode ("what's next" / "/performance next")
+
+If the user only wants to know the next item — phrases like "what's next", "next perf item", "peek", or `/performance next` — do **not** read the whole file (it's large: trailing audit notes on each line make it tens of KB even though it's only ~50 lines). Instead `grep` for just the one line that matters and stop; don't enter plan mode, don't run any phase below.
+
+```bash
+# next un-audited item (missing first checkbox):
+grep -m1 -n '^- \[ \] \[' instructions/performance-audit.md
+# if that returns nothing, next un-fixed item (audited, missing second checkbox):
+grep -m1 -n '^- \[x\] \[ \]' instructions/performance-audit.md
+# if that also returns nothing, everything's done
+```
+
+Report just that one line (item name + severity + note if present) and which stage it belongs to (audit vs fix). Nothing else — no investigation, no fix, no file edits.
+
 Each item in the doc has **two checkboxes**: `[audited] [fixed]`. This skill runs in two separate stages — never interleave them across items:
 
 - **Audit stage**: investigate + profile exactly **one** item missing its first checkbox — the first one, top to bottom — then stop. No code changes — except if that item turns out **CRITICAL**, which gets fixed immediately, in place, before stopping. Never audit more than one item per invocation, and never spawn more than one investigation agent at a time (no parallel/batch fan-out across items) — run `/performance` again for the next item.
