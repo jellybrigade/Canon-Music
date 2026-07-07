@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import type Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { QK } from "../lib/query-keys";
@@ -12,6 +13,24 @@ import {
 } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
 import { buildSmartQuery, type SmartFilters } from "../lib/smartPlaylist";
+import { executeBatched } from "../lib/db-batch";
+
+async function insertPlaylistTracksBatch(
+  db: Database,
+  playlistId: string,
+  trackIds: string[],
+  startPos: number
+): Promise<void> {
+  if (trackIds.length === 0) return;
+  const rows = trackIds.map((trackId, i) => [playlistId, trackId, startPos + i]);
+  await executeBatched(
+    db,
+    rows,
+    "(?, ?, ?)",
+    3,
+    (placeholders) => `INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`
+  );
+}
 
 export interface PlaylistRow {
   id: string;
@@ -124,13 +143,8 @@ export function usePlaylists() {
       "SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?",
       [playlist.id]
     );
-    let nextPos = (rows[0]?.max_pos ?? -1) + 1;
-    for (const t of tracks) {
-      await db.execute(
-        "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
-        [playlist.id, t.id, nextPos++]
-      );
-    }
+    const nextPos = (rows[0]?.max_pos ?? -1) + 1;
+    await insertPlaylistTracksBatch(db, playlist.id, tracks.map((t) => t.id), nextPos);
     await db.execute(
       "UPDATE playlists SET track_count = track_count + ? WHERE id = ?",
       [tracks.length, playlist.id]
@@ -160,14 +174,7 @@ export function usePlaylists() {
       "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count, is_smart, rules_json) VALUES (?, ?, ?, ?, ?, 1, ?)",
       [plDbId, server.id, filters.name, null, trackRows.length, JSON.stringify(filters)]
     );
-    if (trackRows.length > 0) {
-      for (let i = 0; i < trackRows.length; i++) {
-        await db.execute(
-          "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
-          [plDbId, trackRows[i]!.id, i]
-        );
-      }
-    }
+    await insertPlaylistTracksBatch(db, plDbId, trackRows.map((t) => t.id), 0);
     await queryClient.invalidateQueries({ queryKey: QK.playlists() });
   }
 
@@ -186,12 +193,7 @@ export function usePlaylists() {
       server.alt_url ?? undefined
     );
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
-    for (let i = 0; i < trackRows.length; i++) {
-      await db.execute(
-        "INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
-        [playlist.id, trackRows[i]!.id, i]
-      );
-    }
+    await insertPlaylistTracksBatch(db, playlist.id, trackRows.map((t) => t.id), 0);
     await db.execute("UPDATE playlists SET track_count = ? WHERE id = ?", [trackRows.length, playlist.id]);
     await queryClient.invalidateQueries({ queryKey: QK.playlists() });
     await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });

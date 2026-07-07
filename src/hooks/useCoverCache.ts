@@ -137,7 +137,43 @@ interface CoverRow {
   data_url: string;
 }
 
-/** Returns a Map<albumId, dataUrl> loaded from the SQLite cover cache. */
+// Browsers don't share a decoded-image cache across data: URIs the way they do for
+// blob:/http: URLs, so every <img> that points at the same data: URI (e.g. the same
+// album card re-mounting via the AlbumGrid virtualizer on each route switch) pays a
+// full image decode again. Converting once to a blob: URL and reusing that same URL
+// string lets the browser's normal image cache skip the redundant decode on remount.
+// Bounded so a long-running session (repeated re-syncs replacing data_url content)
+// can't accumulate blob URLs forever; oldest entries are revoked on eviction.
+const OBJECT_URL_CACHE_LIMIT = 2000;
+const objectUrlCache = new Map<string, string>();
+
+function dataUrlToObjectUrl(dataUrl: string): string {
+  const cached = objectUrlCache.get(dataUrl);
+  if (cached) {
+    // Refresh recency: delete + re-set moves the entry to the end of Map's iteration order.
+    objectUrlCache.delete(dataUrl);
+    objectUrlCache.set(dataUrl, cached);
+    return cached;
+  }
+  const commaIdx = dataUrl.indexOf(",");
+  const mime = /data:([^;]+);base64/.exec(dataUrl.slice(0, commaIdx))?.[1] ?? "image/jpeg";
+  const binary = atob(dataUrl.slice(commaIdx + 1));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+  objectUrlCache.set(dataUrl, url);
+  if (objectUrlCache.size > OBJECT_URL_CACHE_LIMIT) {
+    const oldestKey = objectUrlCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      const oldestUrl = objectUrlCache.get(oldestKey)!;
+      URL.revokeObjectURL(oldestUrl);
+      objectUrlCache.delete(oldestKey);
+    }
+  }
+  return url;
+}
+
+/** Returns a Map<albumId, objectUrl> loaded from the SQLite cover cache. */
 export function useAlbumCoverMap(): Map<string, string> {
   const { data } = useQuery({
     queryKey: QK.albumCovers(),
@@ -150,5 +186,5 @@ export function useAlbumCoverMap(): Map<string, string> {
   });
 
   const rows = data ?? [];
-  return useMemo(() => new Map(rows.map((r) => [r.album_id, r.data_url])), [rows]);
+  return useMemo(() => new Map(rows.map((r) => [r.album_id, dataUrlToObjectUrl(r.data_url)])), [rows]);
 }

@@ -47,6 +47,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: QK.artists() });
           void queryClient.invalidateQueries({ queryKey: QK.genres() });
+          void queryClient.invalidateQueries({ queryKey: QK.allTracks() });
         }, 300);
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });

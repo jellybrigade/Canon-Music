@@ -7,6 +7,8 @@ You are invoked in plan mode. Work through these phases in order.
 
 **Path note:** `instructions/` lives at repo root (`/home/mschachner/Projects/Canon/instructions/`), not inside this skill's own directory (`.claude/skills/performance/`). Don't `find`/`ls` under the skill dir looking for it.
 
+**Never `Read` the whole `instructions/performance-audit.md` file** — it's huge (trailing audit notes make lines tens to hundreds of chars, tens of KB total for ~50 lines) and every phase only ever needs one item's line. Whenever a phase needs something from it (the item's findings note, its current checkbox state, confirming a line before editing), `grep -n` for the item name or checkbox pattern to get the line number and content, then work from that single line — never a full-file `Read`.
+
 Each item in the doc has **two checkboxes**: `[audited] [fixed]`. This skill runs in two separate stages — never interleave them across items:
 
 - **Audit stage**: investigate + profile exactly **one** item missing its first checkbox — the first one, top to bottom — then stop. No code changes — except if that item turns out **CRITICAL**, which gets fixed immediately, in place, before stopping. Never audit more than one item per invocation, and never spawn more than one investigation agent at a time (no parallel/batch fan-out across items) — run `/performance` again for the next item.
@@ -14,14 +16,19 @@ Each item in the doc has **two checkboxes**: `[audited] [fixed]`. This skill run
 
 ## Phase 1 — Pick a stage
 
-Read `instructions/performance-audit.md`. If the user named a specific item, use that one (find its line; add it under the right section first if missing) and infer stage from its checkbox state — handle it per Phase 2-4 below, then stop (don't sweep the rest of the doc).
+Don't `Read` the whole file — it's large (trailing audit notes make each line tens to hundreds of chars, tens of KB total for ~50 lines) and you only need the one next item. `grep` for it instead:
 
-Otherwise, decide the overall stage:
+```bash
+# next un-audited item (missing first checkbox) — top-to-bottom means first match:
+grep -m1 -n '^- \[ \] \[' instructions/performance-audit.md
+# none found → next un-fixed item (audited, missing second checkbox):
+grep -m1 -n '^- \[x\] \[ \]' instructions/performance-audit.md
+# none found → everything's done, say so and stop
+```
 
-- Any item missing its **first** checkbox → **audit stage**. Go to Phase 2 for the single first such item (top to bottom), then stop — do not continue to any other item in this invocation.
-- Else (every item audited) but some CRITICAL item still missing its **second** checkbox → fix that CRITICAL item (Phase 4-7), then stop.
-- Else, if every item is audited and all CRITICAL items are fixed, but other items still miss their **second** checkbox → **fix stage**. Go to Phase 4 for the single first remaining un-fixed item (top to bottom), then stop.
-- If every item has both boxes checked, say so and stop.
+If the user named a specific item instead, `grep` for that item's line by name (add it under the right section first if missing) and infer stage from its checkbox state.
+
+Whichever line you land on, that's the single item for this invocation — handle it per Phase 2-4 below, then stop (don't sweep the rest of the doc, don't Read the full file even to double check others).
 
 State clearly at the start which stage you're running and which single item it covers.
 
@@ -31,7 +38,7 @@ Run Phase 2-3 on the item, write its findings note, and check its first box. If 
 
 ### Fix stage (one item)
 
-Run Phase 4-7 using the findings note already written on the item's line as the profiling result. Don't re-investigate from scratch — re-read the referenced files to confirm the note still matches current code before trusting it; if the code moved on since the audit, say so and re-profile that part only. Commit (Phase 8) after this one item's fix.
+`grep -n` the item's line for its findings note and use it as the profiling result. Don't re-investigate from scratch — re-read the referenced source files to confirm the note still matches current code before trusting it; if the code moved on since the audit, say so and re-profile that part only. Commit (Phase 8) after this one item's fix.
 
 ## Phase 2 — Locate + understand (the one item)
 
@@ -75,11 +82,15 @@ Exit plan mode. Apply the fix. Typecheck (`pnpm tsc --noEmit`) and, if Rust touc
 
 ## Phase 6 — Verify the improvement
 
-Don't just claim faster — show why: re-render count before/after (e.g. count of component mounts, query count, computed complexity), or reasoning for memory leak closure (what was unbounded, what now bounds it). If UI-visible, note that live verification wasn't run per `feedback-no-auto-browser-verify` memory — ask the user first if they want a live check.
+Don't just claim faster — show why: re-render count before/after (e.g. count of component mounts, query count, computed complexity), or reasoning for memory leak closure (what was unbounded, what now bounds it).
+
+If the fix is UI-visible, always write out a concrete, numbered manual verification checklist for the user — actions to take in the running app and what to look for, tied to exactly what this fix changed (not generic "click around and check it feels fast"). Each step should name: what to do, and what the before/after difference should look like given this specific fix. Present this checklist even though live verification wasn't run per `feedback-no-auto-browser-verify` memory — the user needs to know what to check, not just that checking is possible. Then ask if they want you to do a live check now.
 
 ## Phase 7 — Update the tracking doc
 
 In `instructions/performance-audit.md`, update the item's trailing note if the fix diverged from the original finding, and check the item's **second** `[x]` box.
+
+If the fix deliberately deferred a further, more invasive optimization (e.g. a bigger architectural change ruled out of scope for this pass), invoke the `/whattodo` skill to add it to the backlog rather than letting it evaporate — note enough context (file, what was deferred, why) that a future session can pick it up standalone.
 
 ## Phase 8 — Commit
 
