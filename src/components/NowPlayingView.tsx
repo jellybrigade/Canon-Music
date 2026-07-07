@@ -229,6 +229,26 @@ interface LyricsTabPanelProps {
   onSeek: (timeSec: number) => void;
 }
 
+interface LyricLineProps {
+  index: number;
+  text: string;
+  isActive: boolean;
+}
+
+const LyricLine = React.memo(function LyricLine({ index, text, isActive }: LyricLineProps) {
+  const activeLyricRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      ref={isActive ? activeLyricRef : undefined}
+      data-lyric-index={index}
+      className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
+      style={{ cursor: "pointer" }}
+    >
+      {text || " "}
+    </div>
+  );
+});
+
 function LyricsTabPanel({
   lyricsLines, lyricsPlain, lyricsLoading, lyricsOffsetMs,
   lyricsSearchOpen, lyricsSearchArtist, lyricsSearchTitle,
@@ -238,23 +258,32 @@ function LyricsTabPanel({
 }: LyricsTabPanelProps) {
   const elapsed = usePlayerStore((s) => s.elapsed);
   const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
-  const activeLyricRef = useRef<HTMLDivElement>(null);
   const activeLyricIndexRef = useRef<number>(-1);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
   const userScrollingRef = useRef(false);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollingRef = useRef(false);
   const [showResyncPill, setShowResyncPill] = useState(false);
 
   function scrollToActiveLine() {
-    if (!activeLyricRef.current || !lyricsContainerRef.current) return;
     const container = lyricsContainerRef.current;
-    const line = activeLyricRef.current;
+    if (!container) return;
+    const line = container.querySelector<HTMLDivElement>(`[data-lyric-index="${activeLyricIndexRef.current}"]`);
+    if (!line) return;
     const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
     autoScrollingRef.current = true;
     container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
-    setTimeout(() => { autoScrollingRef.current = false; }, 500);
+    if (resyncTimeoutRef.current) clearTimeout(resyncTimeoutRef.current);
+    resyncTimeoutRef.current = setTimeout(() => { autoScrollingRef.current = false; }, 500);
   }
+
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      if (resyncTimeoutRef.current) clearTimeout(resyncTimeoutRef.current);
+    };
+  }, []);
 
   const activeLyricIndex = useMemo(() => {
     if (!lyricsLines) return -1;
@@ -346,24 +375,24 @@ function LyricsTabPanel({
         </form>
       )}
       <div className="now-playing-lyrics-wrap">
-        <div className="now-playing-lyrics" ref={lyricsContainerRef} onScroll={handleLyricsScroll}>
+        <div
+          className="now-playing-lyrics"
+          ref={lyricsContainerRef}
+          onScroll={handleLyricsScroll}
+          onClick={(e) => {
+            const target = (e.target as HTMLElement).closest<HTMLElement>("[data-lyric-index]");
+            if (!target || !lyricsLines) return;
+            const idx = Number(target.dataset.lyricIndex);
+            const line = lyricsLines[idx];
+            if (line) handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000);
+          }}
+        >
           {lyricsLoading ? (
             <p className="now-playing-empty">Loading lyrics…</p>
           ) : lyricsLines && lyricsLines.length > 0 ? (
-            lyricsLines.map((line, i) => {
-              const isActive = i === activeLyricIndex;
-              return (
-                <div
-                  key={i}
-                  ref={isActive ? activeLyricRef : undefined}
-                  className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-                  onClick={() => handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000)}
-                  style={{ cursor: "pointer" }}
-                >
-                  {line.text || " "}
-                </div>
-              );
-            })
+            lyricsLines.map((line, i) => (
+              <LyricLine key={i} index={i} text={line.text} isActive={i === activeLyricIndex} />
+            ))
           ) : lyricsPlain ? (
             <pre className="lyrics-plain">{lyricsPlain}</pre>
           ) : (
