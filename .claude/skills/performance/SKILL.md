@@ -75,7 +75,9 @@ Exit plan mode. Apply the fix. Typecheck (`pnpm tsc --noEmit`) and, if Rust touc
 
 ## Phase 6 — Verify the improvement
 
-Don't just claim faster — show why: re-render count before/after (e.g. count of component mounts, query count, computed complexity), or reasoning for memory leak closure (what was unbounded, what now bounds it). If UI-visible, note that live verification wasn't run per `feedback-no-auto-browser-verify` memory — ask the user first if they want a live check.
+Don't just claim faster — show why: re-render count before/after (e.g. count of component mounts, query count, computed complexity), or reasoning for memory leak closure (what was unbounded, what now bounds it).
+
+If the fix is UI-visible, always write out a concrete, numbered manual verification checklist for the user — actions to take in the running app and what to look for, tied to exactly what this fix changed (not generic "click around and check it feels fast"). Each step should name: what to do, and what the before/after difference should look like given this specific fix. Present this checklist even though live verification wasn't run per `feedback-no-auto-browser-verify` memory — the user needs to know what to check, not just that checking is possible. Then ask if they want you to do a live check now.
 
 ## Phase 7 — Update the tracking doc
 

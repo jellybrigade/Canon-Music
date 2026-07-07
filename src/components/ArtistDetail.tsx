@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { extractAccent } from "../lib/artColor";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
@@ -54,9 +54,10 @@ interface TopTrack {
   lastfmCombined?: boolean;
 }
 
-function useArtistTopTracks(artistName: string) {
+function useArtistTopTracks(artistName: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: QK.artistTopTracks(artistName),
+    enabled: options?.enabled,
     queryFn: async (): Promise<TopTrack[]> => {
       const db = await getDb();
       return db.select<TopTrack[]>(
@@ -285,7 +286,7 @@ interface TrackRowProps {
   onContextMenu?: (e: React.MouseEvent, track: TopTrack) => void;
 }
 
-function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, lastfmCombined, onAlbumClick, onContextMenu }: TrackRowProps) {
+const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, lastfmCombined, onAlbumClick, onContextMenu }: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
   const artUrl = track.artwork_url
@@ -345,7 +346,7 @@ function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, on
       )}
     </div>
   );
-}
+});
 
 interface SimilarArtistCardProps {
   name: string;
@@ -355,7 +356,7 @@ interface SimilarArtistCardProps {
   credential: NavidromeCredential;
 }
 
-function SimilarArtistCard({ name, owned, onSelect, server, credential }: SimilarArtistCardProps) {
+const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelect, server, credential }: SimilarArtistCardProps) {
   const cardRef = useRef<HTMLButtonElement>(null);
   const [inView, setInView] = useState(false);
 
@@ -378,7 +379,7 @@ function SimilarArtistCard({ name, owned, onSelect, server, credential }: Simila
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
 
-  const { data: rawTracks } = useArtistTopTracks(name);
+  const { data: rawTracks } = useArtistTopTracks(name, { enabled: inView });
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const streamUrlFor = makeStreamUrlBuilder(server, credential);
@@ -451,7 +452,7 @@ function SimilarArtistCard({ name, owned, onSelect, server, credential }: Simila
       })()}
     </>
   );
-}
+});
 
 export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
@@ -571,9 +572,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     return () => { cancelled = true; };
   }, [portraitUrl]);
 
-  const similar: string[] = enrichment?.similar_json
-    ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
-    : [];
+  const similar: string[] = useMemo(
+    () =>
+      enrichment?.similar_json
+        ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
+        : [],
+    [enrichment?.similar_json]
+  );
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
   const similarInLibrary = useMemo(
     () => similar.filter((name) => inLibrarySet?.has(name)),
@@ -611,16 +616,22 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
 
   const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
-  function handleAlbumClick(albumId: string) {
-    const album = albums?.find((a) => a.id === albumId) ?? appearsOnAlbums?.find((a) => a.id === albumId);
-    if (album) onSelectAlbum(album);
-  }
+  const handleAlbumClick = useCallback(
+    (albumId: string) => {
+      const album = albums?.find((a) => a.id === albumId) ?? appearsOnAlbums?.find((a) => a.id === albumId);
+      if (album) onSelectAlbum(album);
+    },
+    [albums, appearsOnAlbums, onSelectAlbum]
+  );
 
-  function handlePlayTrack(track: TopTrack) {
-    if (!topTracks.length) return;
-    const startIndex = topTracks.findIndex((t) => t.id === track.id);
-    playQueue(topTracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
-  }
+  const handlePlayTrack = useCallback(
+    (track: TopTrack) => {
+      if (!topTracks.length) return;
+      const startIndex = topTracks.findIndex((t) => t.id === track.id);
+      playQueue(topTracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+    },
+    [topTracks, playQueue, streamUrlFor]
+  );
 
   function handlePlayAll() {
     if (!topTracks.length) return;
@@ -641,9 +652,9 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     startRadio(track);
   }
 
-  function handleTrackContextMenu(e: React.MouseEvent, track: TopTrack) {
+  const handleTrackContextMenu = useCallback((e: React.MouseEvent, track: TopTrack) => {
     setContextMenu({ x: e.clientX, y: e.clientY, track });
-  }
+  }, []);
 
   const defaultGroup = albumGroups[0]?.group ?? null;
   const currentGroup = activeReleaseGroup && albumGroups.some((g) => g.group === activeReleaseGroup)
