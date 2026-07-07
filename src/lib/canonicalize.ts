@@ -19,6 +19,8 @@ export interface CanonTree {
   nodes: TreeNode[];
   byKey: Map<string, TreeNode>;
   byId: Map<string, TreeNode>;
+  nodesByKind: Map<string, TreeNode[]>;
+  byKindAndKey: Map<string, Map<string, TreeNode>>;
 }
 
 export interface FindResult {
@@ -62,12 +64,26 @@ export async function getCanonTree(): Promise<CanonTree> {
   for (const n of nodes) n.canonical_key = canonicalKey(n.name);
   const byKey = new Map<string, TreeNode>();
   const byId = new Map<string, TreeNode>();
+  const nodesByKind = new Map<string, TreeNode[]>();
+  const byKindAndKey = new Map<string, Map<string, TreeNode>>();
   for (const n of nodes) {
     byKey.set(n.canonical_key, n);
     byId.set(n.id, n);
+    let kindList = nodesByKind.get(n.type);
+    if (!kindList) {
+      kindList = [];
+      nodesByKind.set(n.type, kindList);
+    }
+    kindList.push(n);
+    let kindKeyMap = byKindAndKey.get(n.type);
+    if (!kindKeyMap) {
+      kindKeyMap = new Map();
+      byKindAndKey.set(n.type, kindKeyMap);
+    }
+    if (!kindKeyMap.has(n.canonical_key)) kindKeyMap.set(n.canonical_key, n);
   }
 
-  cachedTree = { nodes, byKey, byId };
+  cachedTree = { nodes, byKey, byId, nodesByKind, byKindAndKey };
   return cachedTree;
 }
 
@@ -211,14 +227,15 @@ export async function findCanonical(
     }
   }
 
-  const kindNodes = tree.nodes.filter((n) => n.type === kind);
+  const kindKeyMap = tree.byKindAndKey.get(kind);
+  const kindNodes = tree.nodesByKind.get(kind) ?? [];
 
   // Exact canonical_key match
-  const exact = kindNodes.find((n) => n.canonical_key === key);
+  const exact = kindKeyMap?.get(key);
   if (exact) return { node: exact, matchType: "exact" };
 
   // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
-  const crossType = tree.nodes.find((n) => n.canonical_key === key);
+  const crossType = tree.byKey.get(key);
   if (crossType) return { node: crossType, matchType: "cross-type" };
 
   // Fallback aliases (e.g. "rap" → "hip hop"): only tried when primary key fails,
@@ -227,9 +244,9 @@ export async function findCanonical(
   if (fallbackRaw !== rawValue) {
     const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
     if (fallbackKey !== key) {
-      const fallbackExact = kindNodes.find((n) => n.canonical_key === fallbackKey);
+      const fallbackExact = kindKeyMap?.get(fallbackKey);
       if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
-      const fallbackCross = tree.nodes.find((n) => n.canonical_key === fallbackKey);
+      const fallbackCross = tree.byKey.get(fallbackKey);
       if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
     }
   }
@@ -269,22 +286,23 @@ export function findCanonicalSync(
     }
   }
 
-  const kindNodes = tree.nodes.filter((n) => n.type === kind);
+  const kindKeyMap = tree.byKindAndKey.get(kind);
+  const kindNodes = tree.nodesByKind.get(kind) ?? [];
 
-  const exact = kindNodes.find((n) => n.canonical_key === key);
+  const exact = kindKeyMap?.get(key);
   if (exact) return { node: exact, matchType: "exact" };
 
   // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
-  const crossType = tree.nodes.find((n) => n.canonical_key === key);
+  const crossType = tree.byKey.get(key);
   if (crossType) return { node: crossType, matchType: "cross-type" };
 
   const fallbackRaw = applyFallbackAliases(rawValue);
   if (fallbackRaw !== rawValue) {
     const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
     if (fallbackKey !== key) {
-      const fallbackExact = kindNodes.find((n) => n.canonical_key === fallbackKey);
+      const fallbackExact = kindKeyMap?.get(fallbackKey);
       if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
-      const fallbackCross = tree.nodes.find((n) => n.canonical_key === fallbackKey);
+      const fallbackCross = tree.byKey.get(fallbackKey);
       if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
     }
   }
