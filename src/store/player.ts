@@ -225,6 +225,8 @@ interface PlayerState {
   playFromQueueIndex: (position: number) => Promise<void>;
   setWaveformPeaks: (peaks: number[] | null) => void;
   setPauseFadeMs: (ms: number) => Promise<void>;
+  maxQueueSize: number;
+  setMaxQueueSize: (n: number) => Promise<void>;
 }
 
 // Active playback target, swapped when casting to a DLNA renderer.
@@ -675,6 +677,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     volume: 1,
     speed: 1,
     pauseFadeMs: 150,
+    maxQueueSize: 100,
     repeat: "off",
     isShuffled: false,
     shuffleOrder: [],
@@ -845,17 +848,36 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     playQueue: async (tracks, streamUrlFor, startIndex = 0) => {
-      const { isShuffled } = get();
-      let shuffleOrder: number[] = [];
-      let position = startIndex;
+      const { isShuffled, maxQueueSize } = get();
+      let workingTracks = tracks;
+      let workingStart = startIndex;
 
-      if (isShuffled && tracks.length > 1) {
-        shuffleOrder = buildShuffleOrder(tracks.length, startIndex);
+      // Cap the queue instead of storing the whole (possibly library-sized) list —
+      // keeps playback-state re-renders, persistence writes, and Up Next rendering
+      // bounded regardless of source size. Window is centered on the clicked track
+      // so skipping in either direction still has room to move.
+      if (maxQueueSize > 0 && tracks.length > maxQueueSize) {
+        const half = Math.floor(maxQueueSize / 2);
+        let begin = Math.max(0, startIndex - half);
+        let end = begin + maxQueueSize;
+        if (end > tracks.length) {
+          end = tracks.length;
+          begin = Math.max(0, end - maxQueueSize);
+        }
+        workingTracks = tracks.slice(begin, end);
+        workingStart = startIndex - begin;
+      }
+
+      let shuffleOrder: number[] = [];
+      let position = workingStart;
+
+      if (isShuffled && workingTracks.length > 1) {
+        shuffleOrder = buildShuffleOrder(workingTracks.length, workingStart);
         position = 0;
       }
 
-      set({ queue: tracks, queueIndex: position, streamUrlFor, shuffleOrder, radioActive: false, radioSeed: null });
-      const track = resolveTrack(tracks, shuffleOrder, isShuffled, position);
+      set({ queue: workingTracks, queueIndex: position, streamUrlFor, shuffleOrder, radioActive: false, radioSeed: null });
+      const track = resolveTrack(workingTracks, shuffleOrder, isShuffled, position);
       if (track) await playTrack(track, streamUrlFor(track));
       void persistQueueState();
       void persistRadioState();
@@ -1042,6 +1064,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
       } catch (e) {
         console.error("Failed to persist speed:", e);
+      }
+    },
+
+    setMaxQueueSize: async (n: number) => {
+      const clamped = Math.max(1, Math.min(1000, Math.round(n)));
+      set({ maxQueueSize: clamped });
+      try {
+        const db = await getDb();
+        await db.execute(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.max_queue_size', ?)",
+          [String(clamped)]
+        );
+      } catch (e) {
+        console.error("Failed to persist max queue size:", e);
       }
     },
 
@@ -1326,7 +1362,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -1390,6 +1426,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           } else if (row.key === "player.pause_fade_ms") {
             const ms = parseInt(row.value, 10);
             if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
+          } else if (row.key === "player.max_queue_size") {
+            const n = parseInt(row.value, 10);
+            if (!isNaN(n)) set({ maxQueueSize: Math.max(1, Math.min(1000, n)) });
           } else if (row.key === "player.consume_mode") {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {

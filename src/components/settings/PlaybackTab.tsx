@@ -27,6 +27,8 @@ export function PlaybackTab({ searchQuery }: Props) {
   const setSpeed = usePlayerStore((s) => s.setSpeed);
   const pauseFadeMs = usePlayerStore((s) => s.pauseFadeMs);
   const setPauseFadeMs = usePlayerStore((s) => s.setPauseFadeMs);
+  const maxQueueSize = usePlayerStore((s) => s.maxQueueSize);
+  const setMaxQueueSize = usePlayerStore((s) => s.setMaxQueueSize);
   const consumeMode = usePlayerStore((s) => s.consumeMode);
   const toggleConsumeMode = usePlayerStore((s) => s.toggleConsumeMode);
   const consumeOnSkip = usePlayerStore((s) => s.consumeOnSkip);
@@ -101,6 +103,21 @@ export function PlaybackTab({ searchQuery }: Props) {
               checked={restoreQueue}
               onChange={(e) => void setRestoreQueue(e.target.checked)}
             />
+          </SettingRow>
+          <SettingRow
+            title="Max queue size"
+            description="Caps how many tracks a single 'Play' action can load into the queue (e.g. playing an entire Tracks view). Larger queues take longer to build and render in Now Playing."
+          >
+            <select
+              value={maxQueueSize}
+              onChange={(e) => void setMaxQueueSize(parseInt(e.target.value, 10))}
+              className="settings-select"
+            >
+              <option value={10}>10 tracks</option>
+              <option value={50}>50 tracks</option>
+              <option value={100}>100 tracks</option>
+              <option value={200}>200 tracks</option>
+            </select>
           </SettingRow>
           <SettingRow title="Play album action" description="What clicking ▶ Play Album does to the current queue.">
             <select
