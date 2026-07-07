@@ -43,6 +43,35 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
+// Enrichment fans out per rendered artist card (e.g. up to 12 similar-artist cards
+// per artist page), and each chain makes several sequential network calls. Without a
+// cap, quickly browsing artist -> similar artist -> similar artist stacks unbounded
+// concurrent chains with no cancellation, degrading the app until it crashes.
+const MAX_CONCURRENT_ENRICH = 3;
+const MAX_QUEUED_ENRICH = 24;
+let activeEnrichCount = 0;
+const enrichQueue: Array<() => void> = [];
+
+function acquireEnrichSlot(): Promise<void> | null {
+  if (activeEnrichCount < MAX_CONCURRENT_ENRICH) {
+    activeEnrichCount++;
+    return Promise.resolve();
+  }
+  if (enrichQueue.length >= MAX_QUEUED_ENRICH) return null;
+  return new Promise((resolve) => {
+    enrichQueue.push(() => {
+      activeEnrichCount++;
+      resolve();
+    });
+  });
+}
+
+function releaseEnrichSlot(): void {
+  activeEnrichCount--;
+  const next = enrichQueue.shift();
+  if (next) next();
+}
+
 /**
  * When MB returns multiple artist candidates, score each against the user's
  * local album titles. The candidate whose release groups best overlap with
@@ -241,10 +270,23 @@ export function useEnrichArtist(artistName: string, options?: { enabled?: boolea
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
     if (inFlight.has(artistName)) return;
-    const promise = enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage)
-      .then(() => queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) }))
-      .catch(() => { /* silent */ })
-      .finally(() => inFlight.delete(artistName));
+    const promise = (async () => {
+      const slot = acquireEnrichSlot();
+      if (!slot) {
+        // Queue already saturated: skip for now, isEnrichmentStale will retry next visit.
+        ranRef.current = false;
+        return;
+      }
+      await slot;
+      try {
+        await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
+        await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
+      } catch {
+        // silent
+      } finally {
+        releaseEnrichSlot();
+      }
+    })().finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
   }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient]);
 

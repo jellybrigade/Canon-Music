@@ -11,7 +11,7 @@ use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
@@ -118,6 +118,45 @@ struct TrayState {
 struct CoverProxyConfig {
     base_url: String,
     auth_params: String,
+}
+
+// Bounds concurrent cover-art request threads. Without this, a burst of grid
+// requests (e.g. rapid sidebar view-switching) spawns one OS thread per
+// request with no upper bound, which can thread-storm the process into an
+// unrecoverable SIGKILL. Permits are acquired in the accept loop *before*
+// spawning, so the accept loop itself backpressures instead of piling up
+// blocked threads.
+struct ThreadSemaphore {
+    state: Mutex<usize>,
+    cond: Condvar,
+    max: usize,
+}
+
+impl ThreadSemaphore {
+    fn new(max: usize) -> Self {
+        Self { state: Mutex::new(0), cond: Condvar::new(), max }
+    }
+
+    fn acquire(self: &Arc<Self>) -> SemaphoreGuard {
+        let mut count = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        while *count >= self.max {
+            count = self.cond.wait(count).unwrap_or_else(|e| e.into_inner());
+        }
+        *count += 1;
+        SemaphoreGuard { sem: Arc::clone(self) }
+    }
+}
+
+struct SemaphoreGuard {
+    sem: Arc<ThreadSemaphore>,
+}
+
+impl Drop for SemaphoreGuard {
+    fn drop(&mut self) {
+        let mut count = self.sem.state.lock().unwrap_or_else(|e| e.into_inner());
+        *count -= 1;
+        self.sem.cond.notify_one();
+    }
 }
 
 struct CoverState {
@@ -1021,6 +1060,7 @@ pub fn run() {
     // Cache is capped at MAX_COVER_CACHE_ENTRIES and cleared on overflow (simple, avoids LRU overhead).
     // Each request is handled in its own thread so concurrent cover art fetches don't serialize.
     const MAX_COVER_CACHE_ENTRIES: usize = 500;
+    const MAX_COVER_REQUEST_THREADS: usize = 16;
     let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
@@ -1040,6 +1080,7 @@ pub fn run() {
             let cache_clone = Arc::clone(&cover_cache);
             let artist_image_cache_clone = Arc::clone(&artist_image_cache);
             let config_clone = Arc::clone(&cover_proxy_config);
+            let request_sem = Arc::new(ThreadSemaphore::new(MAX_COVER_REQUEST_THREADS));
             std::thread::Builder::new()
                 .name("cover-server".into())
                 .spawn(move || {
@@ -1057,7 +1098,9 @@ pub fn run() {
                         let artist_image_cache_req = Arc::clone(&artist_image_cache_clone);
                         let config_req = Arc::clone(&config_clone);
                         let client_req = client.clone();
+                        let permit = request_sem.acquire();
                         std::thread::spawn(move || {
+                            let _permit = permit;
                             let url = request.url().to_string();
                             if let Some(encoded) = url.strip_prefix("/artist-image/") {
                                 let source_url = percent_decode(encoded);
@@ -1282,6 +1325,23 @@ pub fn run() {
                 .build(app)?;
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
+
+            // WebKitGTK runs the page in a separate WebProcess by design so a crash
+            // there (e.g. the GTK freeze/thaw compositor race) doesn't have to take
+            // the whole app down. wry doesn't wire up this signal itself, so without
+            // this hook a WebProcess death currently kills the entire Tauri process.
+            // Reload instead of letting it die - doesn't fix the underlying WebKitGTK
+            // bug, just stops it from closing the app on the user.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|webview| {
+                    use webkit2gtk::WebViewExt;
+                    webview.inner().connect_web_process_terminated(|view, reason| {
+                        eprintln!("[webprocess-terminated] reason={reason:?} - reloading instead of exiting");
+                        view.reload();
+                    });
+                });
+            }
 
             // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
             // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
