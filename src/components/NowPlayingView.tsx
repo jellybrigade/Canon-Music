@@ -438,6 +438,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
+  const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const startRadio = usePlayerStore((s) => s.startRadio);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const radioActive = usePlayerStore((s) => s.radioActive);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
@@ -452,6 +455,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
   const [albumChipMenu, setAlbumChipMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [aboutTrackMenu, setAboutTrackMenu] = useState<{ x: number; y: number; track: TopTrack | SuggestedTrack } | null>(null);
+  const [upNextMenu, setUpNextMenu] = useState<{ x: number; y: number; position: number } | null>(null);
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
@@ -863,6 +867,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                         position < queueIndex ? "now-playing-up-next-row--past" : "",
                       ].filter(Boolean).join(" ")}
                       onClick={() => void playFromQueueIndex(position)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        setUpNextMenu({ x: e.clientX, y: e.clientY, position });
+                      }}
                     >
                       <span className="now-playing-up-next-indicator">
                         {position === queueIndex ? <Play size={12} /> : null}
@@ -1132,6 +1140,61 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             }}
           />
         )}
+      </ContextMenu>
+    )}
+
+    {upNextMenu && (
+      <ContextMenu x={upNextMenu.x} y={upNextMenu.y} onClose={() => setUpNextMenu(null)}>
+        {upNextMenu.position !== 0 && (
+          <button
+            onClick={() => {
+              moveQueueItem(upNextMenu.position, 0);
+              setUpNextMenu(null);
+            }}
+          >
+            Move to Top
+          </button>
+        )}
+        {queueIndex + 1 < queue.length && upNextMenu.position !== queueIndex + 1 && upNextMenu.position !== queueIndex && (
+          <button
+            onClick={() => {
+              moveQueueItem(upNextMenu.position, queueIndex + 1);
+              setUpNextMenu(null);
+            }}
+          >
+            Play Next
+          </button>
+        )}
+        {upNextMenu.position !== queue.length - 1 && (
+          <button
+            onClick={() => {
+              moveQueueItem(upNextMenu.position, queue.length - 1);
+              setUpNextMenu(null);
+            }}
+          >
+            Move to Bottom
+          </button>
+        )}
+        <StartRadioSubmenu
+          onSelect={(mode) => {
+            const entry = orderedTracks.find((t) => t.position === upNextMenu.position);
+            if (entry) {
+              void playFromQueueIndex(upNextMenu.position).then(() => {
+                startRadio(entry.track, mode);
+              });
+            }
+            setUpNextMenu(null);
+          }}
+        />
+        <button
+          className="context-menu-danger"
+          onClick={() => {
+            void removeFromQueue(upNextMenu.position);
+            setUpNextMenu(null);
+          }}
+        >
+          Remove
+        </button>
       </ContextMenu>
     )}
     </>

@@ -24,7 +24,7 @@
   background-image: var(--art-bg);
   background-size: cover;
   background-position: center;
-  opacity: var(--opacity-60);
+  opacity: var(--opacity-40);
   z-index: 0;
   pointer-events: none;
   transition: opacity var(--duration-long) ease;
