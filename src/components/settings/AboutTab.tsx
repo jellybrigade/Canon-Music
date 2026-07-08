@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { checkForUpdate, installAndRestart } from "../../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
@@ -22,7 +23,7 @@ export function AboutTab({ searchQuery }: Props) {
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
 
-  if (!show("about", "version", "update")) return null;
+  if (!show("about", "version", "update", "community", "discord", "ko-fi", "kofi")) return null;
 
   return (
     <section className="settings-section">
@@ -35,6 +36,22 @@ export function AboutTab({ searchQuery }: Props) {
         <span className="settings-diag-label">Version</span>
         <span className="settings-diag-value">{appVersion ?? "…"}</span>
       </div>
+      <SettingRow title="Community" description="Get help, share feedback, or support development.">
+        <div className="settings-field settings-field--row" style={{ marginBottom: 0 }}>
+          <button
+            className="settings-btn"
+            onClick={() => void openUrl("https://discord.gg/sYYaJp7xNg")}
+          >
+            Discord
+          </button>
+          <button
+            className="settings-btn"
+            onClick={() => void openUrl("https://ko-fi.com/canonmusic")}
+          >
+            Ko-fi
+          </button>
+        </div>
+      </SettingRow>
       <SettingRow title="Auto check for updates">
         <label className="toggle-switch">
           <input
