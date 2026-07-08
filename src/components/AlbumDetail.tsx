@@ -66,7 +66,7 @@ interface DrawerState {
 export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading } = useTracks(album.id);
-  const { lovedTrackIds, toggleTrackLove } = useLoved();
+  const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -591,6 +591,14 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
                 aria-label="Play album"
               >
                 <Play size={16} /> Play Album
+              </button>
+              <button
+                className={`album-identify-btn${lovedAlbumIds.has(album.id) ? " album-identify-btn--loved" : ""}`}
+                onClick={() => toggleAlbumLove(album.id, serverWithCredential)}
+                aria-label={lovedAlbumIds.has(album.id) ? "Unlove album" : "Love album"}
+                title={lovedAlbumIds.has(album.id) ? "Unlove album" : "Love album"}
+              >
+                <Heart size={14} fill={lovedAlbumIds.has(album.id) ? "currentColor" : "none"} strokeWidth={lovedAlbumIds.has(album.id) ? 0 : 2} />
               </button>
               <button
                 className="album-identify-btn"

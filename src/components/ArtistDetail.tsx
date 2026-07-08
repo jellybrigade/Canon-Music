@@ -315,7 +315,7 @@ const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPlaying, 
         )}
       </span>
       {artUrl ? (
-        <img className="artist-track-art" src={artUrl} alt="" loading="lazy" />
+        <img className="artist-track-art" src={artUrl} alt="" loading="lazy" decoding="async" />
       ) : (
         <div className="artist-track-art artist-track-art--placeholder" />
       )}
@@ -417,7 +417,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
         onContextMenu={handleContextMenu}
       >
         {portraitUrl ? (
-          <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" />
+          <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" decoding="async" />
         ) : (
           <span className="artist-similar-avatar artist-similar-avatar--fallback">
             <Mic2 size={28} strokeWidth={1.5} />
@@ -663,7 +663,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const currentGroupItems = albumGroups.find((g) => g.group === currentGroup)?.items ?? [];
 
   const heroArt = portraitUrl ? (
-    <img className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" />
+    <img className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" decoding="async" />
   ) : (
     <div className="artist-hero-art artist-hero-art--fallback">
       <Mic2 size={38} strokeWidth={1.5} />
