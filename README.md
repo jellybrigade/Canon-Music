@@ -1,20 +1,37 @@
 # Canon
 
-A desktop music player and tag management tool for self-hosted music servers. Currently supports Navidrome.
+Your music player for Navidrome.
+
+A desktop player for Navidrome libraries. Keeps tags and album titles tidy, and makes genre browsing as easy as it should be.
+
+## Genre graph
+
+~8,000 genres in one tree. Genres link to parents and children instead of sitting in a flat list. Auto-DJ stations follow the tree: a station seeded from one genre stays close to it, however wide you set it.
+
+## Tag normalization
+
+Canon reads file tags, Last.fm, and MusicBrainz, then resolves them against the genre tree. Local only, SQLite side; Canon never writes to your music files.
+
+## Title cleanup
+
+Strips display-level junk like `(Deluxe Edition)` and `(Remastered 2011)` from how albums are shown, without touching the files on disk.
 
 ## Features
 
 - Stream your library from Navidrome
 - Full playback controls: shuffle, repeat, queue, drag-to-reorder
-- Radio Auto-DJ: genre-aware track generation using a canonical genre tree and Last.fm
-- Tag management: review and write tags back to files via a sidecar process
+- Radio Auto-DJ: genre-aware track generation using the canon tree and Last.fm similar artists
 - Genre normalization pipeline with a curated genre taxonomy
+- Artist enrichment: bio, stats, similar artists
+- Tag issue detection with a dedicated review view
 - MusicBrainz album identification
 - Synced lyrics via LRClib
-- Scrobbling to Last.fm and ListenBrainz
+- Scrobbling to Navidrome
 - OS media key integration (MPRIS on Linux)
 
 ## Installation
+
+This is an alpha. Expect bugs and crashes.
 
 **Linux / macOS**
 
