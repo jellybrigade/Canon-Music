@@ -7,7 +7,11 @@ Release Canon to main. Run these steps in order — do not skip any.
 
 **Commit messages**: no `Co-Authored-By: Claude` trailer on any commit in this skill — not the code-review fixes, not the merge commit. Exception: the version bump commit (step 3) keeps the trailer as normal.
 
-1. **Code review** — run `/code-review` on development. Then fix **every finding** returned (blockers and non-blockers alike) without asking for confirmation. Commit all fixes on development before continuing.
+1. **Code review** — first check scope: run `git diff main..development --stat`. Judge size (files touched, lines changed, count of distinct logical changes).
+
+   - **Small** (roughly: single-digit files, one or two logical changes, no risky/architectural surface): use `AskUserQuestion` offering "Spawn Code Review" vs "Do Small Review" (small review as recommended default). If "Do Small Review" chosen, review the diff yourself directly — read it, reason about correctness/cleanup issues precisely, no subagent fan-out. Fix what you find.
+   - **Not small**: skip the question, run `/code-review` on development (the full 8-finder-angle skill).
+   - Either way: fix **every finding** returned (blockers and non-blockers alike) without asking for confirmation. Commit all fixes on development before continuing.
 
 2. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. Then pick the correct bump:
 

@@ -1155,7 +1155,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             Move to Top
           </button>
         )}
-        {upNextMenu.position !== queueIndex + 1 && upNextMenu.position !== queueIndex && (
+        {queueIndex + 1 < queue.length && upNextMenu.position !== queueIndex + 1 && upNextMenu.position !== queueIndex && (
           <button
             onClick={() => {
               moveQueueItem(upNextMenu.position, queueIndex + 1);
