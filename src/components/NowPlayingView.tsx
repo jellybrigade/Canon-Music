@@ -11,6 +11,7 @@ import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
+import { getBlurredBackdrop } from "../lib/artBlur";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -521,6 +522,19 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
     : currentTrack?.coverArtUrl ?? null;
 
+  const [blurBg, setBlurBg] = useState<string | null>(null);
+  useEffect(() => {
+    if (!blurArtUrl) {
+      setBlurBg(null);
+      return;
+    }
+    let cancelled = false;
+    void getBlurredBackdrop(blurArtUrl).then((dataUrl) => {
+      if (!cancelled) setBlurBg(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [blurArtUrl]);
+
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, pos) => {
       const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
@@ -606,7 +620,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     <div
       className="now-playing-view"
       style={{
-        ...(blurArtUrl ? { '--art-bg': `url("${blurArtUrl.replace(/"/g, '%22')}")` } : {}),
+        ...(blurBg ? { '--art-bg': `url("${blurBg}")` } : {}),
         ...(accent ? { '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
