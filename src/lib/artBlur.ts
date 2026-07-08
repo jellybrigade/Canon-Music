@@ -15,7 +15,7 @@ const CANVAS_HEIGHT = 100;
 const BLUR_RADIUS = 24;
 
 const MAX_CACHE_ENTRIES = 200;
-const blurCache = new Map<string, string | null>();
+const blurCache = new Map<string, string>();
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
@@ -87,10 +87,12 @@ export async function getBlurredBackdrop(imageUrl: string): Promise<string | nul
     result = await renderViaProxyFetch(imageUrl);
   }
 
-  if (blurCache.size >= MAX_CACHE_ENTRIES) {
-    const oldestKey = blurCache.keys().next().value;
-    if (oldestKey !== undefined) blurCache.delete(oldestKey);
+  if (result) {
+    if (blurCache.size >= MAX_CACHE_ENTRIES) {
+      const oldestKey = blurCache.keys().next().value;
+      if (oldestKey !== undefined) blurCache.delete(oldestKey);
+    }
+    blurCache.set(imageUrl, result);
   }
-  blurCache.set(imageUrl, result);
   return result;
 }

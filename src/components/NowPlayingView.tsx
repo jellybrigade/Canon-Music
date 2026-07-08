@@ -524,10 +524,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   const [blurBg, setBlurBg] = useState<string | null>(null);
   useEffect(() => {
-    if (!blurArtUrl) {
-      setBlurBg(null);
-      return;
-    }
+    setBlurBg(null);
+    if (!blurArtUrl) return;
     let cancelled = false;
     void getBlurredBackdrop(blurArtUrl).then((dataUrl) => {
       if (!cancelled) setBlurBg(dataUrl);
