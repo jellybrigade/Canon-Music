@@ -376,6 +376,52 @@
   color: var(--text-primary);
 }
 
+.settings-community {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-community-label {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+}
+
+.settings-community-links {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.settings-community-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--text-base);
+  font-weight: 500;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 150ms ease-out, border-color 150ms ease-out, background 150ms ease-out;
+}
+
+.settings-community-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.settings-community-btn svg {
+  flex-shrink: 0;
+}
+
 /* ── Server panel ────────────────────────────────────────────── */
 
 .settings-server-card {
