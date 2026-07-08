@@ -19,6 +19,17 @@ Add based on what task touches (kept in `.claude/design-docs/`, NOT auto-loaded 
 
 On top of rules below, not instead — those stay fast-recall summary; reference files for depth when task warrants.
 
+## Design tokens
+
+Before writing any raw value (opacity, color, spacing, z-index, duration, radius) `grep -rn "^\s*--<prefix>-" src/App.css src/styles/` for existing token scale first. Steps, in order:
+
+1. Search for a token family that covers the property (`--opacity-*`, `--space-*`, `--z-*`, `--duration-*`, `--tint-*`, etc.) in `src/App.css` (scale definitions) and `src/styles/`.
+2. Pick the closest existing value to your intended visual result — don't just grab the nearest one lazily; check neighbors too (e.g. `--opacity-40` vs `--opacity-45`) and confirm which actually matches intent.
+3. Grep where that token's already used elsewhere (`grep -rn "var(--opacity-40)" src/`) — if an existing usage is same context/purpose, matching it keeps consistency; if context differs, still fine to reuse, just note it's a different use case.
+4. Genuinely nothing fits (gap in the scale, new category of value) → add new token to the scale in `App.css` next to its siblings, don't inline a magic number and don't invent an ad-hoc one-off var outside the scale.
+
+Never ship a raw literal (`opacity: 0.4`, `z-index: 1000`, `#1a1a1a`) where a token scale for that property already exists in the codebase.
+
 ## Color
 
 - Body text ≥4.5:1 contrast vs background. Large text (≥18px, or bold ≥14px) ≥3:1. Placeholder text same 4.5:1 bar as body — don't reach for default muted gray.
