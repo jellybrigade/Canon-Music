@@ -1,7 +1,7 @@
 {
   "name": "canon",
   "private": true,
-  "version": "0.42.0",
+  "version": "0.43.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.18.0",
+    "stackblur-canvas": "^3.0.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {

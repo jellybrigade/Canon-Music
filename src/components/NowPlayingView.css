@@ -12,15 +12,18 @@
   background: #0c0c0c;
 }
 
-/* Blurred art atmosphere, overextends inset to hide blur edge */
+/* Blurred art atmosphere. The blur itself is precomputed on a tiny canvas
+   (see src/lib/artBlur.ts) and handed to us as a data-URL background image -
+   `--art-bg` is already blurred pixels. This layer only scales it to cover,
+   which is a cheap compositor operation, instead of running an expensive
+   `filter: blur()` raster over a viewport-size layer on every repaint. */
 .now-playing-view::before {
   content: '';
   position: absolute;
-  inset: -80px;
+  inset: 0;
   background-image: var(--art-bg);
   background-size: cover;
   background-position: center;
-  filter: blur(var(--blur-xl)) saturate(1.8) brightness(0.45);
   opacity: var(--opacity-60);
   z-index: 0;
   pointer-events: none;
@@ -68,6 +71,11 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(520px, 1.5fr);
   overflow: hidden;
+  /* Without paint containment, WebKitGTK repaints the whole view (confirmed via
+     Web Inspector timeline: every paint's damage quad was full-viewport, even for
+     a single progress-bar tick or lyric-line swap) instead of scoping to what
+     actually changed. contain: paint stops a repaint below here from escaping. */
+  contain: paint;
 }
 
 /* ── Left: art + controls ── */
@@ -80,6 +88,8 @@
   padding: var(--space-xl) var(--space-xl);
   overflow-y: auto;
   min-height: 0;
+  /* Isolate progress-bar tick repaints (5x/sec while playing) from the right column. */
+  contain: paint;
 }
 
 .now-playing-art {
@@ -230,12 +240,15 @@
   background: var(--tint-5);
   border-radius: var(--radius-2xs);
   cursor: pointer;
-  transition: height var(--duration-base);
   position: relative;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--duration-base);
 }
 
 .now-playing-progress-bar:hover {
-  height: 6px;
+  /* Scale instead of animating height - avoids layout thrash, same visual grow. */
+  transform: scaleY(1.5);
 }
 
 .now-playing-progress-fill {
@@ -342,9 +355,14 @@
   min-height: 0;
   overflow: hidden;
   padding: var(--space-lg) var(--space-xl);
-  background: rgba(5, 5, 5, 0.75);
-  backdrop-filter: blur(var(--blur-md)) saturate(0.8);
+  /* Was backdrop-filter: blur() over the already-blurred ::before art layer -
+     WebKitGTK re-samples the whole panel's backdrop on every repaint inside it
+     (lyric line change, up-next active row, scroll), dominating paint time.
+     Solid tint gives the same look since what's behind is pre-blurred anyway. */
+  background: rgba(5, 5, 5, 0.9);
   border-left: 1px solid var(--tint-2);
+  /* Isolate lyrics/up-next churn (line highlight swap, list scroll) from the left column. */
+  contain: paint;
 }
 
 /* ── Tabs ── */

@@ -47,6 +47,9 @@ importers:
       react-router-dom:
         specifier: ^7.18.0
         version: 7.18.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      stackblur-canvas:
+        specifier: ^3.0.1
+        version: 3.0.1
       zustand:
         specifier: ^5.0.13
         version: 5.0.13(@types/react@19.2.15)(react@19.2.6)
@@ -772,6 +775,10 @@ packages:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
 
+  stackblur-canvas@3.0.1:
+    resolution: {integrity: sha512-eJpxkL5PR39dioN3ZapIIhkjQd01wxcigCnBURzbRofZk5M+cHZUA8VwBelHLhsFW20gO9vdH6hFRIekA+jJfA==}
+    engines: {node: '>=0.1.16'}
+
   tinyglobby@0.2.16:
     resolution: {integrity: sha512-pn99VhoACYR8nFHhxqix+uvsbXineAasWm5ojXoN8xEwK5Kd3/TrhNn1wByuD52UxWRLy8pu+kRMniEi6Eq9Zg==}
     engines: {node: '>=12.0.0'}
@@ -1422,6 +1429,8 @@ snapshots:
   set-cookie-parser@2.7.2: {}
 
   source-map-js@1.2.1: {}
+
+  stackblur-canvas@3.0.1: {}
 
   tinyglobby@0.2.16:
     dependencies:
