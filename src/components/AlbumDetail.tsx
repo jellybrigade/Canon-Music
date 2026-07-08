@@ -32,6 +32,7 @@ import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { extractAccent } from "../lib/artColor";
+import { getBlurredBackdrop } from "../lib/artBlur";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
@@ -314,6 +315,17 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     return () => { cancelled = true; };
   }, [coverArtUrl, album.accent_color, album.id]);
 
+  const [heroBg, setHeroBg] = useState<string | null>(null);
+  useEffect(() => {
+    setHeroBg(null);
+    if (!coverArtUrl) return;
+    let cancelled = false;
+    void getBlurredBackdrop(coverArtUrl).then((dataUrl) => {
+      if (!cancelled) setHeroBg(dataUrl);
+    });
+    return () => { cancelled = true; };
+  }, [coverArtUrl]);
+
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {
       id: track.id,
@@ -458,10 +470,10 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
       style={(accentColor ? { "--album-accent": accentColor } : {}) as React.CSSProperties}
     >
       <div className="album-detail-header">
-        {coverArtUrl && (
+        {heroBg && (
           <div
             className="album-detail-hero-bg"
-            style={{ backgroundImage: `url(${coverArtUrl})` }}
+            style={{ backgroundImage: `url("${heroBg}")` }}
           />
         )}
         <button className="album-detail-back" onClick={onClose}>
