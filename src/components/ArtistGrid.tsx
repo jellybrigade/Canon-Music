@@ -1,13 +1,12 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
-import { useGridPagination } from "../hooks/useGridPagination";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
-import { Pagination } from "./TagsViewHelpers";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import { useScrollMemory } from "../hooks/useScrollMemory";
@@ -32,15 +31,43 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
   const artistImageMap = useArtistImageMap();
 
-  const { containerRef, cols, cardWidth, page, setPage, pageSize } = useGridPagination(artists.length, {
-    padding: PADDING,
-    colGap: COL_GAP,
-    cardMin: CARD_MIN,
-  });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerWidth(el.offsetWidth);
+    const obs = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry!.contentRect.width);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   useScrollMemory(scrollKey, containerRef);
 
-  const visibleArtists = artists.slice((page - 1) * pageSize, page * pageSize);
+  const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
+  const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
+  const cardWidth = available > 0 ? (available - COL_GAP * (cols - 1)) / cols : CARD_MIN;
+  const rowHeight = Math.round(cardWidth) + ROW_GAP;
+  const rowCount = Math.ceil(artists.length / cols);
+
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => containerRef.current,
+    estimateSize: () => rowHeight,
+    overscan: 3,
+  });
+
+  const prevLayoutKey = useRef(`${cols}-${rowHeight}`);
+  useLayoutEffect(() => {
+    const key = `${cols}-${rowHeight}`;
+    if (prevLayoutKey.current !== key) {
+      prevLayoutKey.current = key;
+      virtualizer.measure();
+    }
+  }, [cols, rowHeight, virtualizer]);
 
   if (artists.length === 0) {
     return <p className="empty-state">No artists found. Sync first.</p>;
@@ -49,13 +76,18 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   return (
     <>
       <div ref={containerRef} className="album-grid-scroller">
-        <div style={{ padding: `${PADDING}px`, display: "flex", flexDirection: "column", gap: `${ROW_GAP}px` }}>
-          {Array.from({ length: Math.ceil(visibleArtists.length / cols) }, (_, i) => {
-            const rowArtists = visibleArtists.slice(i * cols, i * cols + cols);
+        <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const rowStart = virtualRow.index * cols;
+            const rowArtists = artists.slice(rowStart, rowStart + cols);
             return (
               <div
-                key={i}
+                key={virtualRow.key}
                 style={{
+                  position: "absolute",
+                  top: `${PADDING + virtualRow.start}px`,
+                  left: `${PADDING}px`,
+                  right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,
                   display: "grid",
                   gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -111,11 +143,6 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
           })}
         </div>
       </div>
-      {artists.length > pageSize && (
-        <div className="album-grid-pagination">
-          <Pagination page={page} total={artists.length} pageSize={pageSize} onChange={setPage} />
-        </div>
-      )}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
           <button onClick={() => { onSelect(contextMenu.artist); setContextMenu(null); }}>

@@ -291,6 +291,7 @@ export default function App() {
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const unidentifiedCount = failedLookupIds?.length ?? 0;
+  const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
   const [filterSidebarOpen, setFilterSidebarOpen] = useBoolSetting("filter_sidebar_open", true);
 
@@ -856,6 +857,14 @@ export default function App() {
                   Rescan
                 </button>
               )}
+              <button
+                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                onClick={() => void setAlbumsPaginated(!albumsPaginated)}
+                title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
+              >
+                <LayoutList size={14} />
+                Pages
+              </button>
             </header>
             <div className="library-body">
               <FilterSidebar

@@ -1,7 +1,7 @@
-import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
-import { useGridPagination } from "../hooks/useGridPagination";
 import { Heart, CircleHelp } from "lucide-react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../types/library";
 import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -18,6 +18,8 @@ import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./AlbumGrid.css";
+
+const PAGE_SIZE = 100;
 
 const PADDING = 20;
 const COL_GAP = 16;
@@ -101,17 +103,26 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
+  const [paginated] = useBoolSetting("albums.pagination", false);
+  const [page, setPage] = useState(1);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
 
-  const { containerRef, cols, cardWidth, page, setPage, pageSize } = useGridPagination(albums.length, {
-    padding: PADDING,
-    colGap: COL_GAP,
-    cardMin: CARD_MIN,
-    resetKey: sort,
-  });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setContainerWidth(el.offsetWidth);
+    const obs = new ResizeObserver(([entry]) => {
+      setContainerWidth(entry!.contentRect.width);
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
 
   useScrollMemory(scrollKey, containerRef);
 
@@ -123,7 +134,27 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     void toggleAlbumLove(albumId, serverWithCredential);
   }, [toggleAlbumLove, serverWithCredential]);
 
-  const visibleAlbums = albums.slice((page - 1) * pageSize, page * pageSize);
+  // Reset to page 1 when sort/filter changes
+  const prevAlbumsLen = useRef(albums.length);
+  useLayoutEffect(() => {
+    const wasEmpty = prevAlbumsLen.current === 0;
+    prevAlbumsLen.current = albums.length;
+    if (wasEmpty && albums.length > 0) {
+      const el = containerRef.current;
+      if (el) setContainerWidth(el.offsetWidth);
+    }
+  }, [albums.length]);
+
+  useEffect(() => { setPage(1); }, [paginated, sort]);
+
+  const visibleAlbums = paginated
+    ? albums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : albums;
+
+  const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
+  const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
+  const cardWidth = available > 0 ? (available - COL_GAP * (cols - 1)) / cols : CARD_MIN;
+  const rowHeight = Math.round(cardWidth) + ROW_GAP;
 
   // Build mixed rows: year-header rows interleaved with album rows when sort=year
   const rows = useMemo<GridRow[]>(() => {
@@ -154,6 +185,58 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     return result;
   }, [visibleAlbums, sort, cols]);
 
+  const scrubberSections = useMemo(() => {
+    if (!sort || sort === "recently_added" || cols === 0) return [];
+    if (sort === "year") {
+      const yearHeaders = rows.flatMap((row, i) =>
+        row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : []
+      );
+      const seen = new Set<string>();
+      const sections: { label: string; rowIndex: number }[] = [];
+      for (const { label, rowIndex } of yearHeaders) {
+        const year = parseInt(label, 10);
+        const bucketLabel = isNaN(year) ? label : `${Math.floor(year / 10) * 10}s`;
+        if (!seen.has(bucketLabel)) {
+          seen.add(bucketLabel);
+          sections.push({ label: bucketLabel, rowIndex });
+        }
+      }
+      return sections;
+    }
+    const seen = new Set<string>();
+    const sections: { label: string; rowIndex: number }[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      if (row.type !== "albums") continue;
+      const album = row.items[0];
+      if (!album) continue;
+      const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
+      const ch = src[0]?.toUpperCase() ?? "#";
+      const label = /[A-Z]/.test(ch) ? ch : "#";
+      if (!seen.has(label)) {
+        seen.add(label);
+        sections.push({ label, rowIndex: i });
+      }
+    }
+    return sections;
+  }, [rows, sort, cols]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => containerRef.current,
+    estimateSize: (i) => rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight,
+    overscan: 3,
+  });
+
+  const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}`);
+  useLayoutEffect(() => {
+    const key = `${cols}-${rowHeight}-${rows.length}`;
+    if (prevLayoutKey.current !== key) {
+      prevLayoutKey.current = key;
+      virtualizer.measure();
+    }
+  }, [cols, rowHeight, rows.length, virtualizer]);
+
   return (
     <div
       className="album-grid-wrapper"
@@ -163,11 +246,24 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         {albums.length === 0 ? (
           <p className="empty-state">{emptyMessage ?? "No albums"}</p>
         ) : (
-        <div style={{ padding: `${PADDING}px`, display: "flex", flexDirection: "column", gap: `${ROW_GAP}px` }}>
-          {rows.map((row, i) => {
+        <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = rows[virtualRow.index];
+            if (!row) return null;
+
             if (row.type === "year-header") {
               return (
-                <div key={`yh-${i}`} className="year-group-header" style={{ height: `${YEAR_HEADER_HEIGHT}px` }}>
+                <div
+                  key={virtualRow.key}
+                  className="year-group-header"
+                  style={{
+                    position: "absolute",
+                    top: `${PADDING + virtualRow.start}px`,
+                    left: `${PADDING}px`,
+                    right: `${PADDING}px`,
+                    height: `${YEAR_HEADER_HEIGHT}px`,
+                  }}
+                >
                   {row.label}
                 </div>
               );
@@ -175,8 +271,12 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
 
             return (
               <div
-                key={`al-${i}`}
+                key={virtualRow.key}
                 style={{
+                  position: "absolute",
+                  top: `${PADDING + virtualRow.start}px`,
+                  left: `${PADDING}px`,
+                  right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,
                   display: "grid",
                   gridTemplateColumns: `repeat(${cols}, 1fr)`,
@@ -201,9 +301,22 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         </div>
         )}
       </div>
-      {albums.length > pageSize && (
+      {!paginated && scrubberSections.length > 1 && (
+        <div className="album-grid-scrubber">
+          {scrubberSections.map(({ label, rowIndex }) => (
+            <button
+              key={label}
+              className="album-grid-scrubber-item"
+              onClick={() => virtualizer.scrollToIndex(rowIndex, { align: "start" })}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      {paginated && albums.length > PAGE_SIZE && (
         <div className="album-grid-pagination">
-          <Pagination page={page} total={albums.length} pageSize={pageSize} onChange={setPage} />
+          <Pagination page={page} total={albums.length} pageSize={PAGE_SIZE} onChange={(p) => { setPage(p); containerRef.current?.scrollTo({ top: 0 }); }} />
         </div>
       )}
       {contextMenu && (
