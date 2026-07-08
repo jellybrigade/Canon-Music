@@ -286,10 +286,15 @@ function LyricsTabPanel({
   }, []);
 
   const activeLyricIndex = useMemo(() => {
-    if (!lyricsLines) return -1;
-    return lyricsLines.findIndex((line, i) =>
-      lyricsAdjElapsed >= line.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec)
-    );
+    if (!lyricsLines || lyricsLines.length === 0) return -1;
+    const isMatch = (i: number) =>
+      lyricsAdjElapsed >= lyricsLines[i]!.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
+    // Playback position moves forward almost always, so start the search from the last
+    // known index instead of rescanning the whole lyrics file on every 200ms tick.
+    const last = activeLyricIndexRef.current;
+    if (last >= 0 && last < lyricsLines.length && isMatch(last)) return last;
+    if (last >= 0 && last < lyricsLines.length - 1 && isMatch(last + 1)) return last + 1;
+    return lyricsLines.findIndex((_, i) => isMatch(i));
   }, [lyricsAdjElapsed, lyricsLines]);
 
   useEffect(() => {
@@ -463,7 +468,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     currentTrack?.id ?? null
   );
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
-  const lyricsLines = lyricsSynced ? parseLrc(lyricsSynced) : null;
+  const lyricsLines = useMemo(() => (lyricsSynced ? parseLrc(lyricsSynced) : null), [lyricsSynced]);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useBoolSetting("player.show_waveform", false);
@@ -524,7 +529,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     [queue, isShuffled, shuffleOrder]
   );
 
-  const otherAlbums = artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [];
+  const otherAlbums = useMemo(
+    () => artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [],
+    [artistAlbums, currentTrack?.albumId]
+  );
 
   useEffect(() => {
     setLyricsOverride(null);
@@ -852,9 +860,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                           className="now-playing-up-next-thumb"
                           src={getCoverArtUrl(server.url, server.username, credential, track.artworkRef, 64)}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                         />
                       ) : track.coverArtUrl ? (
-                        <img className="now-playing-up-next-thumb" src={track.coverArtUrl} alt="" />
+                        <img className="now-playing-up-next-thumb" src={track.coverArtUrl} alt="" loading="lazy" decoding="async" />
                       ) : (
                         <div className="now-playing-up-next-thumb now-playing-up-next-thumb--placeholder" />
                       )}
