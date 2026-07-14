@@ -38,7 +38,6 @@ import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
-import { useTrackEndedListener } from "./hooks/useTrackEndedListener";
 import { ScrobbleTracker } from "./hooks/useScrobble";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
@@ -212,7 +211,6 @@ function PlaylistDetailRoute({
 }
 
 export default function App() {
-  useTrackEndedListener();
   useMediaSession();
   useWakeLock();
   useRadio();

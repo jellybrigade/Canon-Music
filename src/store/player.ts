@@ -245,6 +245,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
   });
 
+  // Non-gapless fallback: Rust reports playback reached natural end of file.
+  void listen("track-ended", () => {
+    void get().next(true);
+  });
+
   // Gapless transition: Rust reports that the current source finished and the queued next one started.
   // Advance queue state without calling audio_play, the audio is already playing.
   void listen("track-advanced", () => {
