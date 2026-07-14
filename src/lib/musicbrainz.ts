@@ -69,6 +69,8 @@ export interface MbReleaseDetail {
   barcode: string | null;
   genres: MbGenre[];
   tags: MbGenre[];
+  /** Total track count summed across all media (discs), null if MB didn't report media. */
+  trackCount: number | null;
 }
 
 export interface MbArtistCandidate {
@@ -215,14 +217,18 @@ interface MbLookupReleaseResponse {
     label?: { name: string };
     "catalog-number"?: string;
   }>;
+  media?: Array<{ "track-count"?: number }>;
 }
 
 export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetail> {
   const data = await mbGet<MbLookupReleaseResponse>(`release/${releaseMbid}`, {
-    inc: "genres+tags+labels",
+    inc: "genres+tags+labels+media",
   });
 
   const labelInfo = data["label-info"]?.[0];
+  const trackCount = data.media
+    ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0)
+    : null;
   return {
     id: data.id,
     title: data.title,
@@ -233,6 +239,7 @@ export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetai
     barcode: data.barcode ?? null,
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
     tags: (data.tags ?? []).map((t) => ({ name: t.name, count: t.count })),
+    trackCount: trackCount && trackCount > 0 ? trackCount : null,
   };
 }
 

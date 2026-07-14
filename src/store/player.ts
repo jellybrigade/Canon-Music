@@ -245,6 +245,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
   });
 
+  // Non-gapless fallback: Rust reports playback reached natural end of file.
+  void listen("track-ended", () => {
+    void get().next(true);
+  });
+
   // Gapless transition: Rust reports that the current source finished and the queued next one started.
   // Advance queue state without calling audio_play, the audio is already playing.
   void listen("track-advanced", () => {
@@ -374,7 +379,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
         []
       );
-      if ((settingRows[0]?.value ?? "false") !== "true") return;
+      if ((settingRows[0]?.value ?? "true") !== "true") return;
 
       const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
       if (!streamUrlFor) return;
@@ -441,7 +446,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
         []
       );
-      if ((settingRows[0]?.value ?? "false") !== "true") return;
+      if ((settingRows[0]?.value ?? "true") !== "true") return;
 
       type Row = { peaks_json: string };
       const rows = await db.select<Row[]>(
@@ -1375,7 +1380,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
-        let showWaveform = false;
+        let showWaveform = true;
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);

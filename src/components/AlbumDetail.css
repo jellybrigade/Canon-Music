@@ -744,10 +744,6 @@
   color: var(--text-primary);
 }
 
-.tracklist-col-picker-popup input[type="checkbox"] {
-  accent-color: var(--accent);
-}
-
 /* ── Playlist list controls (header + col picker) ── */
 .playlist-list-controls {
   display: flex;

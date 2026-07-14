@@ -170,8 +170,6 @@
 }
 
 .feedback-sysinfo input[type="checkbox"] {
-  accent-color: var(--accent);
-  cursor: pointer;
   width: 13px;
   height: 13px;
 }

@@ -17,7 +17,7 @@ export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
   const seek = usePlayerStore((s) => s.seek);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
-  const [showWaveform] = useBoolSetting("player.show_waveform", false);
+  const [showWaveform] = useBoolSetting("player.show_waveform", true);
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;

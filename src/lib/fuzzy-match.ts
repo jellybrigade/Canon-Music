@@ -71,15 +71,23 @@ function artistSimilarity(a: string, b: string): number {
 }
 
 /**
- * Title similarity with containment boost.
- * "Twin Peaks" inside "Soundtrack From Twin Peaks" scores 0.75 instead of ~0.38.
- * Prevents exact-match penalty when album is part of a longer title.
+ * Title similarity with containment boost, checked both directions:
+ * "Twin Peaks" inside "Soundtrack From Twin Peaks" scores 0.75 instead of ~0.38,
+ * and "BRAT (Dolby Atmos Mix)" against MB's plain "BRAT" gets the same boost
+ * (local tag carries a mix/edition suffix MB's canonical title doesn't have).
  */
 function titleSimilarity(query: string, candidate: string): number {
   const base = similarity(query, candidate);
   const nq = normalizeForMatch(query);
   const nc = normalizeForMatch(candidate);
-  if (nq.length >= 4 && nc.includes(nq)) return Math.max(base, 0.75);
+  const shorter = nq.length <= nc.length ? nq : nc;
+  const longer = nq.length <= nc.length ? nc : nq;
+  // Whole-word containment only, not a bare substring - otherwise a short generic
+  // MB title ("Live", "Demo") would boost against any local title that happens to
+  // contain those letters anywhere, unrelated release or not.
+  if (shorter.length >= 4 && new RegExp(`(^|\\s)${shorter}(\\s|$)`).test(longer)) {
+    return Math.max(base, 0.75);
+  }
   return base;
 }
 
