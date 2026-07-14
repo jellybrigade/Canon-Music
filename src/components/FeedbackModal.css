@@ -169,13 +169,6 @@
   color: var(--text-secondary);
 }
 
-.feedback-sysinfo input[type="checkbox"] {
-  accent-color: var(--accent);
-  cursor: pointer;
-  width: 13px;
-  height: 13px;
-}
-
 .feedback-sysinfo-detail {
   color: var(--text-tertiary);
   font-size: var(--text-xs);

@@ -157,14 +157,6 @@
   padding-top: 0.1rem;
 }
 
-.setting-row-control input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
 /* ── Toggle switch ───────────────────────────────────────────── */
 
 .toggle-switch {
