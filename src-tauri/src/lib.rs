@@ -120,12 +120,14 @@ struct CoverProxyConfig {
     auth_params: String,
 }
 
-// Bounds concurrent cover-art request threads. Without this, a burst of grid
-// requests (e.g. rapid sidebar view-switching) spawns one OS thread per
-// request with no upper bound, which can thread-storm the process into an
-// unrecoverable SIGKILL. Permits are acquired in the accept loop *before*
-// spawning, so the accept loop itself backpressures instead of piling up
-// blocked threads.
+// Bounds concurrent cover-art request handling. Without this, a burst of grid
+// requests (e.g. rapid sidebar view-switching) fans out unbounded work with
+// no upper bound, which can thread-storm the process into an unrecoverable
+// SIGKILL. Permits are acquired in the accept loop *before* spawning, so the
+// accept loop itself backpressures instead of piling up queued work. Request
+// bodies run via `tauri::async_runtime::spawn_blocking`, which reuses tokio's
+// blocking thread pool rather than creating/destroying a fresh OS thread per
+// request.
 struct ThreadSemaphore {
     state: Mutex<usize>,
     cond: Condvar,
@@ -1099,7 +1101,7 @@ pub fn run() {
                         let config_req = Arc::clone(&config_clone);
                         let client_req = client.clone();
                         let permit = request_sem.acquire();
-                        std::thread::spawn(move || {
+                        tauri::async_runtime::spawn_blocking(move || {
                             let _permit = permit;
                             let url = request.url().to_string();
                             if let Some(encoded) = url.strip_prefix("/artist-image/") {
