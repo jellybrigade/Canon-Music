@@ -14,6 +14,12 @@ export function getDb(): Promise<Database> {
 }
 
 async function runMigrations(database: Database): Promise<void> {
+  // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
+  // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
+  // (DELETE mode) db, so concurrent sync/scrobble/enrichment writes can starve UI reads with
+  // "database is locked" errors. WAL is a persistent on-disk setting, but PRAGMA is cheap to re-run.
+  await database.execute("PRAGMA journal_mode=WAL");
+
   await database.execute(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY
