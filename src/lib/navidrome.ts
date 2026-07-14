@@ -2,15 +2,15 @@ import { md5 } from "js-md5";
 import { invoke } from "@tauri-apps/api/core";
 
 let _streamMaxBitrate = 0;
-let _coverServerPort: number | null = null;
+let _coverServerReady = false;
 
-export function initCoverServer(port: number): void {
-  _coverServerPort = port;
+export function initCoverServer(): void {
+  _coverServerReady = true;
 }
 
-/** True once the Rust loopback cover/artist-image proxy has a port assigned. */
+/** True once the Rust `cover://` scheme handler has a confirmed proxy config. */
 export function isCoverServerReady(): boolean {
-  return _coverServerPort !== null;
+  return _coverServerReady;
 }
 
 export async function updateCoverProxyConfig(
@@ -109,8 +109,8 @@ export function getCoverArtUrl(
   coverArtId: string,
   size = 300
 ): string {
-  if (_coverServerPort !== null) {
-    return `http://127.0.0.1:${_coverServerPort}/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
+  if (_coverServerReady) {
+    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
   }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
@@ -118,12 +118,12 @@ export function getCoverArtUrl(
   return `${normalizeUrl(baseUrl)}/rest/getCoverArt?${params.toString()}`;
 }
 
-/** Routes an external artist portrait URL (Last.fm/Wikidata) through the loopback
- * cover server so it's fetched once and cached, instead of hitting the external
- * host on every render. Falls back to the raw URL if the server isn't up yet. */
+/** Routes an external artist portrait URL (Last.fm/Wikidata) through the Rust
+ * `cover://` scheme handler so it's fetched once and cached, instead of hitting the
+ * external host on every render. Falls back to the raw URL if not ready yet. */
 export function getArtistImageUrl(sourceUrl: string): string {
-  if (_coverServerPort !== null) {
-    return `http://127.0.0.1:${_coverServerPort}/artist-image/${encodeURIComponent(sourceUrl)}`;
+  if (_coverServerReady) {
+    return `cover://localhost/artist-image/${encodeURIComponent(sourceUrl)}`;
   }
   return sourceUrl;
 }

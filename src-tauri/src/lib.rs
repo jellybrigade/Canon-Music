@@ -11,22 +11,11 @@ use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tauri::Manager;
-
-// fetch() enforces CORS (unlike <img> tags), so every response from the loopback
-// cover server — success or error — needs this header or the renderer sees an
-// opaque network error instead of the real status.
-fn cors_header() -> tiny_http::Header {
-    tiny_http::Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap()
-}
-
-fn cors_empty(status: u16) -> tiny_http::Response<std::io::Empty> {
-    tiny_http::Response::empty(tiny_http::StatusCode(status)).with_header(cors_header())
-}
 
 fn http_client() -> reqwest::blocking::Client {
     reqwest::blocking::Client::builder()
@@ -123,51 +112,73 @@ struct CoverProxyConfig {
 // Bounds concurrent cover-art request handling. Without this, a burst of grid
 // requests (e.g. rapid sidebar view-switching) fans out unbounded work with
 // no upper bound, which can thread-storm the process into an unrecoverable
-// SIGKILL. Permits are acquired in the accept loop *before* spawning, so the
-// accept loop itself backpressures instead of piling up queued work. Request
-// bodies run via `tauri::async_runtime::spawn_blocking`, which reuses tokio's
-// blocking thread pool rather than creating/destroying a fresh OS thread per
-// request.
-struct ThreadSemaphore {
-    state: Mutex<usize>,
-    cond: Condvar,
-    max: usize,
-}
+// SIGKILL. Permit acquired before the blocking fetch/decode work runs.
+const MAX_COVER_REQUESTS: usize = 16;
 
-impl ThreadSemaphore {
-    fn new(max: usize) -> Self {
-        Self { state: Mutex::new(0), cond: Condvar::new(), max }
-    }
+// In-memory cache capped at this many entries, cleared on overflow (simple,
+// avoids LRU overhead). Disk cache (unbounded lookup, bounded by eviction
+// sweep in `evict_disk_cache_if_needed`) backs it for cross-restart persistence.
+const MAX_COVER_CACHE_ENTRIES: usize = 500;
+const MAX_DISK_CACHE_ENTRIES: usize = 2000;
 
-    fn acquire(self: &Arc<Self>) -> SemaphoreGuard {
-        let mut count = self.state.lock().unwrap_or_else(|e| e.into_inner());
-        while *count >= self.max {
-            count = self.cond.wait(count).unwrap_or_else(|e| e.into_inner());
-        }
-        *count += 1;
-        SemaphoreGuard { sem: Arc::clone(self) }
-    }
-}
-
-struct SemaphoreGuard {
-    sem: Arc<ThreadSemaphore>,
-}
-
-impl Drop for SemaphoreGuard {
-    fn drop(&mut self) {
-        let mut count = self.sem.state.lock().unwrap_or_else(|e| e.into_inner());
-        *count -= 1;
-        self.sem.cond.notify_one();
-    }
-}
-
+#[derive(Clone)]
 struct CoverState {
-    port: u16,
-    #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
     cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
-    #[allow(dead_code)] // Arc kept alive here; actual reads happen via clone in the server thread
     artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
     proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
+    request_sem: Arc<tokio::sync::Semaphore>,
+    http_client: reqwest::blocking::Client,
+}
+
+// App-data-relative dir for the on-disk cover/artist-image cache tier. Set once in
+// `.setup()` (AppHandle not available before then); read from the scheme handler.
+static COVER_CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// Cache keys (cover ids, artist-image source URLs) can contain characters unsafe
+/// for filenames (`/`, `:`, `?`) - replace anything outside a safe set instead of
+/// hashing, so cache files stay debuggable by eye.
+fn sanitize_cache_key(key: &str) -> String {
+    key.chars()
+        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '_' })
+        .collect()
+}
+
+fn disk_cache_read(dir: &std::path::Path, key: &str) -> Option<(Vec<u8>, String)> {
+    let safe = sanitize_cache_key(key);
+    let bytes = std::fs::read(dir.join(&safe)).ok()?;
+    let content_type = std::fs::read_to_string(dir.join(format!("{safe}.ct"))).unwrap_or_else(|_| "image/jpeg".into());
+    Some((bytes, content_type))
+}
+
+fn disk_cache_write(dir: &std::path::Path, key: &str, bytes: &[u8], content_type: &str) {
+    let safe = sanitize_cache_key(key);
+    let _ = std::fs::write(dir.join(&safe), bytes);
+    let _ = std::fs::write(dir.join(format!("{safe}.ct")), content_type);
+    evict_disk_cache_if_needed(dir);
+}
+
+/// Sweeps the disk cache down to `MAX_DISK_CACHE_ENTRIES` image entries (each with
+/// its `.ct` sidecar) by deleting oldest-mtime files first, once the cap is exceeded.
+/// Bounded like the in-memory cache's clear-on-overflow, just LRU-ish instead of a
+/// full clear since disk persistence is the point.
+fn evict_disk_cache_if_needed(dir: &std::path::Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let mut images: Vec<(std::path::PathBuf, std::time::SystemTime)> = entries
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().ends_with(".ct"))
+        .filter_map(|e| e.metadata().ok().and_then(|m| m.modified().ok()).map(|t| (e.path(), t)))
+        .collect();
+    if images.len() <= MAX_DISK_CACHE_ENTRIES {
+        return;
+    }
+    images.sort_by_key(|(_, mtime)| *mtime);
+    let excess = images.len() - MAX_DISK_CACHE_ENTRIES;
+    for (path, _) in images.into_iter().take(excess) {
+        let mut sidecar = path.clone().into_os_string();
+        sidecar.push(".ct");
+        let _ = std::fs::remove_file(sidecar);
+        let _ = std::fs::remove_file(&path);
+    }
 }
 
 /// Minimal percent-decoder for the artist-image loopback route — the full source
@@ -194,17 +205,159 @@ fn percent_decode(s: &str) -> String {
 }
 
 #[tauri::command]
-fn get_cover_server_port(state: tauri::State<'_, CoverState>) -> u16 {
-    state.port
-}
-
-#[tauri::command]
 fn set_cover_proxy_config(
     state: tauri::State<'_, CoverState>,
     base_url: String,
     auth_params: String,
 ) {
     *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig { base_url, auth_params });
+}
+
+// `getBlurredBackdrop` (src/lib/artBlur.ts) loads cover images with
+// `img.crossOrigin = "anonymous"` so it can read pixels back via canvas for the
+// blurred NowPlaying backdrop. Per Tauri's custom-scheme docs, cross-origin
+// image/fetch loads against a registered scheme need an explicit
+// Access-Control-Allow-Origin or the browser treats the canvas as tainted -
+// needed on every response (including errors) or a failed fetch surfaces as an
+// opaque network error instead of the real status.
+fn cover_error_response(status: u16) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(status)
+        .header("Access-Control-Allow-Origin", "*")
+        .body(Vec::new())
+        .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
+}
+
+fn cover_image_response(bytes: Vec<u8>, content_type: &str) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(200)
+        .header("Content-Type", content_type)
+        .header("Cache-Control", "public, max-age=604800")
+        .header("Access-Control-Allow-Origin", "*")
+        .body(bytes)
+        .unwrap_or_else(|_| cover_error_response(500))
+}
+
+/// Handles a `cover://localhost/cover/<id>?size=<n>` or `cover://localhost/artist-image/<encoded>`
+/// request: in-memory cache -> on-disk cache -> upstream fetch (Navidrome or the raw artist-image
+/// source URL), populating both caches on a miss. Runs on a `spawn_blocking` thread, gated by
+/// `CoverState.request_sem` (see caller) - same 16-permit cap the old loopback server used.
+fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+    let path = request.uri().path();
+    let query = request.uri().query().unwrap_or("");
+
+    if let Some(encoded) = path.strip_prefix("/artist-image/") {
+        let source_url = percent_decode(encoded);
+        if source_url.is_empty() {
+            return cover_error_response(400);
+        }
+        let cached = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner()).get(&source_url).cloned();
+        let (bytes, content_type) = if let Some(entry) = cached {
+            entry
+        } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, &source_url)) {
+            let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
+            if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                cache.clear();
+            }
+            cache.insert(source_url.clone(), entry.clone());
+            entry
+        } else {
+            match state.http_client.get(&source_url).send() {
+                Ok(resp) if resp.status().is_success() => {
+                    let ct = resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_TYPE)
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or("image/jpeg")
+                        .to_string();
+                    match resp.bytes() {
+                        Ok(b) => {
+                            let b = b.to_vec();
+                            if let Some(dir) = COVER_CACHE_DIR.get() {
+                                disk_cache_write(dir, &source_url, &b, &ct);
+                            }
+                            let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
+                            if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                cache.clear();
+                            }
+                            cache.insert(source_url.clone(), (b.clone(), ct.clone()));
+                            (b, ct)
+                        }
+                        Err(_) => return cover_error_response(502),
+                    }
+                }
+                Ok(resp) => return cover_error_response(resp.status().as_u16()),
+                Err(_) => return cover_error_response(502),
+            }
+        };
+        return cover_image_response(bytes, &content_type);
+    }
+
+    let id = match path.strip_prefix("/cover/") {
+        Some(s) => s.to_string(),
+        None => return cover_error_response(404),
+    };
+    let size = query
+        .split('&')
+        .find_map(|kv| {
+            let mut parts = kv.splitn(2, '=');
+            if parts.next() == Some("size") {
+                parts.next().and_then(|v| v.parse::<u32>().ok())
+            } else {
+                None
+            }
+        })
+        .unwrap_or(300);
+    let cache_key = format!("{id}:{size}");
+    let cached = state.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&cache_key).cloned();
+    let (bytes, content_type) = if let Some(entry) = cached {
+        entry
+    } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, &cache_key)) {
+        let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
+        if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+            cache.clear();
+        }
+        cache.insert(cache_key.clone(), entry.clone());
+        entry
+    } else {
+        let cfg = state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        match cfg {
+            None => return cover_error_response(503),
+            Some(cfg) => {
+                let fetch_url = format!(
+                    "{}/rest/getCoverArt?{}&id={}&size={}",
+                    cfg.base_url, cfg.auth_params, id, size
+                );
+                match state.http_client.get(&fetch_url).send() {
+                    Ok(resp) if resp.status().is_success() => {
+                        let ct = resp
+                            .headers()
+                            .get(reqwest::header::CONTENT_TYPE)
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("image/jpeg")
+                            .to_string();
+                        match resp.bytes() {
+                            Ok(b) => {
+                                let b = b.to_vec();
+                                if let Some(dir) = COVER_CACHE_DIR.get() {
+                                    disk_cache_write(dir, &cache_key, &b, &ct);
+                                }
+                                let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
+                                if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                    cache.clear();
+                                }
+                                cache.insert(cache_key.clone(), (b.clone(), ct.clone()));
+                                (b, ct)
+                            }
+                            Err(_) => return cover_error_response(502),
+                        }
+                    }
+                    _ => return cover_error_response(502),
+                }
+            }
+        }
+    };
+    cover_image_response(bytes, &content_type)
 }
 
 fn build_tray_menu<R: tauri::Runtime>(
@@ -1057,200 +1210,38 @@ pub fn run() {
         .expect("Failed to spawn audio thread");
     let handle = rx.recv().unwrap_or(None);
 
-    // Bind cover art proxy server on a random OS-assigned port.
-    // Cache stores (bytes, content_type) so the forwarded Content-Type matches the upstream image format.
-    // Cache is capped at MAX_COVER_CACHE_ENTRIES and cleared on overflow (simple, avoids LRU overhead).
-    // Each request is handled in its own thread so concurrent cover art fetches don't serialize.
-    const MAX_COVER_CACHE_ENTRIES: usize = 500;
-    const MAX_COVER_REQUEST_THREADS: usize = 16;
+    // Cache stores (bytes, content_type) so the forwarded Content-Type matches the
+    // upstream image format. Served via a registered `cover://` URI scheme handler
+    // (see `handle_cover_request` below) instead of a loopback TCP server - no
+    // socket, so the thread-storm/SIGKILL bug class in `known-issues.md` is
+    // structurally impossible here.
     let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
-    // Non-fatal: if the loopback port can't be bound (exhaustion, sandboxing,
-    // platform firewall interference) cover art proxying is disabled but the
-    // app still opens, matching the audio-output degradation above.
-    let mut cover_port = 0u16;
-    let bound = std::net::TcpListener::bind("127.0.0.1:0").and_then(|listener| {
-        let port = listener.local_addr()?.port();
-        tiny_http::Server::from_listener(listener, None)
-            .map(|server| (server, port))
-            .map_err(std::io::Error::other)
-    });
-    match bound {
-        Ok((server, port)) => {
-            cover_port = port;
-            let cache_clone = Arc::clone(&cover_cache);
-            let artist_image_cache_clone = Arc::clone(&artist_image_cache);
-            let config_clone = Arc::clone(&cover_proxy_config);
-            let request_sem = Arc::new(ThreadSemaphore::new(MAX_COVER_REQUEST_THREADS));
-            std::thread::Builder::new()
-                .name("cover-server".into())
-                .spawn(move || {
-                    let client = reqwest::blocking::Client::builder()
-                        .timeout(Duration::from_secs(30))
-                        .user_agent(concat!(
-                            "Canon/",
-                            env!("CARGO_PKG_VERSION"),
-                            " ( https://github.com/jellybrigade/canon )"
-                        ))
-                        .build()
-                        .expect("cover proxy http client failed");
-                    for request in server.incoming_requests() {
-                        let cache_req = Arc::clone(&cache_clone);
-                        let artist_image_cache_req = Arc::clone(&artist_image_cache_clone);
-                        let config_req = Arc::clone(&config_clone);
-                        let client_req = client.clone();
-                        let permit = request_sem.acquire();
-                        tauri::async_runtime::spawn_blocking(move || {
-                            let _permit = permit;
-                            let url = request.url().to_string();
-                            if let Some(encoded) = url.strip_prefix("/artist-image/") {
-                                let source_url = percent_decode(encoded);
-                                if source_url.is_empty() {
-                                    let _ = request.respond(cors_empty(400));
-                                    return;
-                                }
-                                let cached = artist_image_cache_req.lock().unwrap_or_else(|e| e.into_inner()).get(&source_url).cloned();
-                                let (bytes, content_type) = if let Some(entry) = cached {
-                                    entry
-                                } else {
-                                    match client_req.get(&source_url).send() {
-                                        Ok(resp) if resp.status().is_success() => {
-                                            let ct = resp
-                                                .headers()
-                                                .get(reqwest::header::CONTENT_TYPE)
-                                                .and_then(|v| v.to_str().ok())
-                                                .unwrap_or("image/jpeg")
-                                                .to_string();
-                                            match resp.bytes() {
-                                                Ok(b) => {
-                                                    let b = b.to_vec();
-                                                    let mut cache = artist_image_cache_req.lock().unwrap_or_else(|e| e.into_inner());
-                                                    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
-                                                        cache.clear();
-                                                    }
-                                                    cache.insert(source_url.clone(), (b.clone(), ct.clone()));
-                                                    (b, ct)
-                                                }
-                                                Err(_) => {
-                                                    let _ = request.respond(cors_empty(502));
-                                                    return;
-                                                }
-                                            }
-                                        }
-                                        Ok(resp) => {
-                                            let _ = request.respond(cors_empty(resp.status().as_u16()));
-                                            return;
-                                        }
-                                        Err(_) => {
-                                            let _ = request.respond(cors_empty(502));
-                                            return;
-                                        }
-                                    }
-                                };
-                                let mut resp = tiny_http::Response::from_data(bytes);
-                                if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
-                                    resp = resp.with_header(h);
-                                }
-                                if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
-                                    resp = resp.with_header(h);
-                                }
-                                resp = resp.with_header(cors_header());
-                                let _ = request.respond(resp);
-                                return;
-                            }
-                            let path_query = match url.strip_prefix("/cover/") {
-                                Some(s) => s.to_string(),
-                                None => {
-                                    let _ = request.respond(cors_empty(404));
-                                    return;
-                                }
-                            };
-                            let (id, size) = if let Some(q) = path_query.find('?') {
-                                let id = path_query[..q].to_string();
-                                let size = path_query[q + 1..]
-                                    .split('&')
-                                    .find_map(|kv| {
-                                        let mut parts = kv.splitn(2, '=');
-                                        if parts.next() == Some("size") {
-                                            parts.next().and_then(|v| v.parse::<u32>().ok())
-                                        } else {
-                                            None
-                                        }
-                                    })
-                                    .unwrap_or(300);
-                                (id, size)
-                            } else {
-                                (path_query, 300u32)
-                            };
-                            let cache_key = format!("{id}:{size}");
-                            let cached = cache_req.lock().unwrap_or_else(|e| e.into_inner()).get(&cache_key).cloned();
-                            let (bytes, content_type) = if let Some(entry) = cached {
-                                entry
-                            } else {
-                                let cfg = config_req.lock().unwrap_or_else(|e| e.into_inner()).clone();
-                                match cfg {
-                                    None => {
-                                        let _ = request.respond(cors_empty(503));
-                                        return;
-                                    }
-                                    Some(cfg) => {
-                                        let fetch_url = format!(
-                                            "{}/rest/getCoverArt?{}&id={}&size={}",
-                                            cfg.base_url, cfg.auth_params, id, size
-                                        );
-                                        match client_req.get(&fetch_url).send() {
-                                            Ok(resp) if resp.status().is_success() => {
-                                                let ct = resp
-                                                    .headers()
-                                                    .get(reqwest::header::CONTENT_TYPE)
-                                                    .and_then(|v| v.to_str().ok())
-                                                    .unwrap_or("image/jpeg")
-                                                    .to_string();
-                                                match resp.bytes() {
-                                                    Ok(b) => {
-                                                        let b = b.to_vec();
-                                                        let mut cache = cache_req.lock().unwrap_or_else(|e| e.into_inner());
-                                                        if cache.len() >= MAX_COVER_CACHE_ENTRIES {
-                                                            cache.clear();
-                                                        }
-                                                        cache.insert(cache_key, (b.clone(), ct.clone()));
-                                                        (b, ct)
-                                                    }
-                                                    Err(_) => {
-                                                        let _ = request.respond(cors_empty(502));
-                                                        return;
-                                                    }
-                                                }
-                                            }
-                                            _ => {
-                                                let _ = request.respond(cors_empty(502));
-                                                return;
-                                            }
-                                        }
-                                    }
-                                }
-                            };
-                            let mut resp = tiny_http::Response::from_data(bytes);
-                            if let Ok(h) = tiny_http::Header::from_bytes("Content-Type", content_type.as_str()) {
-                                resp = resp.with_header(h);
-                            }
-                            if let Ok(h) = tiny_http::Header::from_bytes("Cache-Control", "public, max-age=604800") {
-                                resp = resp.with_header(h);
-                            }
-                            resp = resp.with_header(cors_header());
-                            let _ = request.respond(resp);
-                        });
-                    }
-                })
-                .expect("Failed to spawn cover server thread");
-        }
-        Err(e) => {
-            eprintln!("Cover art proxy server unavailable: {e}");
-        }
-    }
+    let cover_http_client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent(concat!(
+            "Canon/",
+            env!("CARGO_PKG_VERSION"),
+            " ( https://github.com/jellybrigade/canon )"
+        ))
+        .build()
+        .expect("cover proxy http client failed");
 
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("cover", |ctx, request, responder| {
+            let state = ctx.app_handle().state::<CoverState>().inner().clone();
+            tauri::async_runtime::spawn(async move {
+                let permit = state.request_sem.clone().acquire_owned().await;
+                let response = tauri::async_runtime::spawn_blocking(move || {
+                    let _permit = permit;
+                    handle_cover_request(&state, &request)
+                })
+                .await
+                .unwrap_or_else(|_| cover_error_response(500));
+                responder.respond(response);
+            });
+        })
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_sql::Builder::new().build())
@@ -1269,15 +1260,19 @@ pub fn run() {
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(CoverState {
-            port: cover_port,
             cache: cover_cache,
             artist_image_cache,
             proxy_config: cover_proxy_config,
+            request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
+            http_client: cover_http_client,
         })
         .setup(|app| {
             if let Ok(data_dir) = app.path().app_data_dir() {
                 let _ = std::fs::create_dir_all(&data_dir);
                 let _ = CRASH_FILE_PATH.set(data_dir.join("crash.txt"));
+                let cover_cache_dir = data_dir.join("cover-cache");
+                let _ = std::fs::create_dir_all(&cover_cache_dir);
+                let _ = COVER_CACHE_DIR.set(cover_cache_dir);
             }
 
             // Clean up orphaned spill files from prior crashes.
@@ -1400,7 +1395,6 @@ pub fn run() {
             tray_update,
             tray_set_visible,
             tray_set_close_to_tray,
-            get_cover_server_port,
             set_cover_proxy_config,
             take_crash_report,
         ])

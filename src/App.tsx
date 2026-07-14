@@ -391,13 +391,12 @@ export default function App() {
     if (!serverWithCred) return;
     void (async () => {
       try {
-        const port = await invoke<number>("get_cover_server_port");
         await updateCoverProxyConfig(
           serverWithCred.server.url,
           serverWithCred.server.username,
           serverWithCred.credential
         );
-        initCoverServer(port);
+        initCoverServer();
       } catch {
         // proxy unavailable; getCoverArtUrl falls back to direct Navidrome URL
       }
