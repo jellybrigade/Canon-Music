@@ -101,17 +101,26 @@ export async function autoIdentifyAlbum({
 
     const rgDetail = await lookupReleaseGroup(top.candidate.id);
 
-    const releaseId =
-      rgDetail.releases.find((r) => r.date)?.id ??
-      rgDetail.releases[0]?.id ??
-      null;
+    // Prefer a dated release as the first guess (most likely the canonical
+    // pressing), but a release group often bundles alternate editions (bonus
+    // disc, live, reissue) with different tracklists under one dated entry.
+    // If that guess's track count doesn't match, try a couple more releases
+    // before concluding the release group itself needs manual review.
+    const orderedReleaseIds = [
+      rgDetail.releases.find((r) => r.date)?.id,
+      ...rgDetail.releases.map((r) => r.id),
+    ].filter((id, i, arr): id is string => id != null && arr.indexOf(id) === i);
 
     let releaseDetail: MbReleaseDetail | null = null;
-    if (releaseId) {
+    for (const candidateReleaseId of orderedReleaseIds.slice(0, 3)) {
       try {
-        releaseDetail = await lookupRelease(releaseId);
+        const detail = await lookupRelease(candidateReleaseId);
+        releaseDetail = detail;
+        if (trackCount <= 0 || !detail.trackCount || Math.abs(detail.trackCount - trackCount) <= 1) {
+          break;
+        }
       } catch {
-        // Non-fatal: RG data alone is still useful
+        // Non-fatal: try the next release, or fall through with RG data alone
       }
     }
 
@@ -120,8 +129,8 @@ export async function autoIdentifyAlbum({
 
     // Text similarity alone can't tell a correct match from a same-titled
     // deluxe/live/compilation edition with a different tracklist. Downgrade
-    // to manual review when we know both counts and they disagree by more
-    // than one (allows for a bonus/hidden track without false-flagging).
+    // to manual review when none of the releases tried above match (allows
+    // for a bonus/hidden track without false-flagging).
     if (
       trackCount > 0 &&
       releaseDetail?.trackCount &&

@@ -107,7 +107,7 @@ Canon product, not marketing surface — task UI (library browsing, tag editing,
 - Decorative motion, no state meaning.
 - Inconsistent component vocabulary across screens (two different "save" button styles, two different modal chrome treatments).
 - Display fonts in labels, buttons, table data.
-- Reinvented standard affordances for flavor (custom scrollbars, nonstandard `<select>`/checkbox replacements, one-off modal chrome) — use platform/native conventions.
+- Reinvented standard affordances for flavor (custom scrollbars, nonstandard `<select>` replacements, one-off modal chrome) — use platform/native conventions. Exception: checkboxes — Canon's custom `appearance: none` checkbox with accent-tinted fill + SVG checkmark (`src/App.css`, global `input[type="checkbox"]` rule) is the established app-wide style, user-confirmed 2026-07-14. Match it, don't revert to bare native checkboxes.
 - Full-saturation accent color on inactive/disabled states.
 - Modal as first reach. Try inline editing or progressive disclosure before modal — Canon already has several (`ArtistMergeModal`, `SmartPlaylistModal`, `IdentifyDialog`); don't add fourth pattern casually where inline affordance would do.
 

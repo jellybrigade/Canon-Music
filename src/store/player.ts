@@ -1380,7 +1380,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
-        let showWaveform = false;
+        let showWaveform = true;
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);

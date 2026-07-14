@@ -82,7 +82,12 @@ function titleSimilarity(query: string, candidate: string): number {
   const nc = normalizeForMatch(candidate);
   const shorter = nq.length <= nc.length ? nq : nc;
   const longer = nq.length <= nc.length ? nc : nq;
-  if (shorter.length >= 4 && longer.includes(shorter)) return Math.max(base, 0.75);
+  // Whole-word containment only, not a bare substring - otherwise a short generic
+  // MB title ("Live", "Demo") would boost against any local title that happens to
+  // contain those letters anywhere, unrelated release or not.
+  if (shorter.length >= 4 && new RegExp(`(^|\\s)${shorter}(\\s|$)`).test(longer)) {
+    return Math.max(base, 0.75);
+  }
   return base;
 }
 

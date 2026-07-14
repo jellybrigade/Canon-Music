@@ -169,6 +169,11 @@
   color: var(--text-secondary);
 }
 
+.feedback-sysinfo input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+}
+
 .feedback-sysinfo-detail {
   color: var(--text-tertiary);
   font-size: var(--text-xs);

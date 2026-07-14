@@ -136,31 +136,42 @@ static COVER_CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::Onc
 
 /// Cache keys (cover ids, artist-image source URLs) can contain characters unsafe
 /// for filenames (`/`, `:`, `?`) - replace anything outside a safe set instead of
-/// hashing, so cache files stay debuggable by eye.
-fn sanitize_cache_key(key: &str) -> String {
-    key.chars()
+/// hashing, so cache files stay debuggable by eye. `kind` namespaces cover vs.
+/// artist-image keys into distinct filenames so a sanitized collision between
+/// the two (e.g. a cover `"id:size"` key and an unrelated artist-image URL both
+/// reducing to the same safe string) can't serve one type's bytes for the other.
+fn sanitize_cache_key(kind: &str, key: &str) -> String {
+    let safe: String = key
+        .chars()
         .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '_' })
-        .collect()
+        .collect();
+    format!("{kind}-{safe}")
 }
 
-fn disk_cache_read(dir: &std::path::Path, key: &str) -> Option<(Vec<u8>, String)> {
-    let safe = sanitize_cache_key(key);
+fn disk_cache_read(dir: &std::path::Path, kind: &str, key: &str) -> Option<(Vec<u8>, String)> {
+    let safe = sanitize_cache_key(kind, key);
     let bytes = std::fs::read(dir.join(&safe)).ok()?;
     let content_type = std::fs::read_to_string(dir.join(format!("{safe}.ct"))).unwrap_or_else(|_| "image/jpeg".into());
     Some((bytes, content_type))
 }
 
-fn disk_cache_write(dir: &std::path::Path, key: &str, bytes: &[u8], content_type: &str) {
-    let safe = sanitize_cache_key(key);
+fn disk_cache_write(dir: &std::path::Path, kind: &str, key: &str, bytes: &[u8], content_type: &str) {
+    let safe = sanitize_cache_key(kind, key);
     let _ = std::fs::write(dir.join(&safe), bytes);
     let _ = std::fs::write(dir.join(format!("{safe}.ct")), content_type);
-    evict_disk_cache_if_needed(dir);
+    // Full directory scan is real I/O - only worth doing once every so often
+    // rather than on every single cache-miss write on the cover-serving hot path.
+    static WRITE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if WRITE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 32 == 0 {
+        evict_disk_cache_if_needed(dir);
+    }
 }
 
 /// Sweeps the disk cache down to `MAX_DISK_CACHE_ENTRIES` image entries (each with
 /// its `.ct` sidecar) by deleting oldest-mtime files first, once the cap is exceeded.
 /// Bounded like the in-memory cache's clear-on-overflow, just LRU-ish instead of a
-/// full clear since disk persistence is the point.
+/// full clear since disk persistence is the point. Called periodically (not on
+/// every write) from `disk_cache_write` since it's a full directory scan.
 fn evict_disk_cache_if_needed(dir: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let mut images: Vec<(std::path::PathBuf, std::time::SystemTime)> = entries
@@ -254,7 +265,7 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
         let cached = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner()).get(&source_url).cloned();
         let (bytes, content_type) = if let Some(entry) = cached {
             entry
-        } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, &source_url)) {
+        } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, "artist", &source_url)) {
             let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
             if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                 cache.clear();
@@ -274,7 +285,7 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
                         Ok(b) => {
                             let b = b.to_vec();
                             if let Some(dir) = COVER_CACHE_DIR.get() {
-                                disk_cache_write(dir, &source_url, &b, &ct);
+                                disk_cache_write(dir, "artist", &source_url, &b, &ct);
                             }
                             let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
                             if cache.len() >= MAX_COVER_CACHE_ENTRIES {
@@ -312,7 +323,7 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
     let cached = state.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&cache_key).cloned();
     let (bytes, content_type) = if let Some(entry) = cached {
         entry
-    } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, &cache_key)) {
+    } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, "cover", &cache_key)) {
         let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= MAX_COVER_CACHE_ENTRIES {
             cache.clear();
@@ -340,7 +351,7 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
                             Ok(b) => {
                                 let b = b.to_vec();
                                 if let Some(dir) = COVER_CACHE_DIR.get() {
-                                    disk_cache_write(dir, &cache_key, &b, &ct);
+                                    disk_cache_write(dir, "cover", &cache_key, &b, &ct);
                                 }
                                 let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
                                 if cache.len() >= MAX_COVER_CACHE_ENTRIES {
