@@ -34,9 +34,12 @@ pub struct StreamingWriter {
 
 impl StreamingBuffer {
     pub fn new(content_length: Option<u64>) -> (Self, StreamingWriter) {
+        // Pre-allocate to the known size up front so `write_chunk` never triggers
+        // reallocation churn as the track downloads.
+        let capacity = content_length.map(|len| len as usize).unwrap_or(0);
         let shared = Arc::new(StreamingShared {
             state: Mutex::new(StreamingState {
-                buffer: Vec::new(),
+                buffer: Vec::with_capacity(capacity),
                 read_pos: 0,
                 finished: false,
                 cancelled: false,
