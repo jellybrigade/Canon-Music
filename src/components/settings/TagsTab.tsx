@@ -65,7 +65,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}`
     : fanartKey;
 
-  const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
+  const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
   const [enrichTracks, setEnrichTracks] = useBoolSetting("tags.enrich_tracks", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");

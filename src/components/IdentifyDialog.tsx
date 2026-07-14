@@ -8,6 +8,7 @@ import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../
 import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
 import { rankCandidates } from "../lib/fuzzy-match";
+import { stripTrailingBrackets } from "../lib/album-identify";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -78,7 +79,14 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
   const { data: rawSearchResults, isLoading: searchLoading } = useQuery({
     queryKey: ["mb-search-rg", artist, album],
-    queryFn: () => searchReleaseGroups(artist, album),
+    queryFn: async () => {
+      const results = await searchReleaseGroups(artist, album);
+      if (results.length > 0) return results;
+      // Retry without a trailing bracket, "BRAT (Dolby Atmos Mix)" → "BRAT",
+      // mirrors the fallback in useIdentifyAlbum's "Look up" flow.
+      const stripped = stripTrailingBrackets(album);
+      return stripped ? searchReleaseGroups(artist, stripped) : results;
+    },
     staleTime: 10 * 60 * 1000,
     enabled: !!(artist.trim() || album.trim()),
   });

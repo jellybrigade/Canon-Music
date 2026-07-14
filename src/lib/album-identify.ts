@@ -32,7 +32,7 @@ export interface AutoIdentifyResult {
   error: string | null;
 }
 
-const AUTO_CONFIRM_THRESHOLD = 0.80;
+const AUTO_CONFIRM_THRESHOLD = 0.90;
 const MIN_SCORE_GAP = 0.10;
 
 export function stripTrailingBrackets(title: string): string | null {
@@ -59,12 +59,11 @@ export async function autoIdentifyAlbum({
     let candidates = await searchReleaseGroups(artist, album);
     let searchTitle = album;
 
-    if (candidates.length === 0) {
-      const stripped = stripTrailingBrackets(album);
-      if (stripped) {
-        candidates = await searchReleaseGroups(artist, stripped);
-        if (candidates.length > 0) searchTitle = stripped;
-      }
+    const stripped = stripTrailingBrackets(album);
+
+    if (candidates.length === 0 && stripped) {
+      candidates = await searchReleaseGroups(artist, stripped);
+      if (candidates.length > 0) searchTitle = stripped;
     }
 
     if (candidates.length === 0) {
@@ -73,7 +72,24 @@ export async function autoIdentifyAlbum({
 
     candidates = filterByTrackCount(candidates, trackCount);
 
-    const ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
+    let ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
+
+    // The local title may carry a mix/edition suffix ("BRAT (Dolby Atmos Mix)")
+    // that MB's search still returns hits for, just scored poorly against the
+    // noisy full title. Retry with the bracket stripped and merge in anything
+    // new whenever the first pass didn't land a confident match.
+    if (stripped && stripped !== searchTitle && ranked[0]!.score < AUTO_CONFIRM_THRESHOLD) {
+      const strippedCandidates = await searchReleaseGroups(artist, stripped);
+      const seen = new Set(candidates.map((c) => c.id));
+      const merged = candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id)));
+      const mergedFiltered = filterByTrackCount(merged, trackCount);
+      const rankedByStripped = rankCandidates(mergedFiltered, artist, stripped, year, confirmedArtistMbid);
+      if (rankedByStripped[0]!.score > ranked[0]!.score) {
+        ranked = rankedByStripped;
+        searchTitle = stripped;
+      }
+    }
+
     const top = ranked[0]!;
     const second = ranked[1];
     const gap = second ? top.score - second.score : Infinity;
@@ -101,6 +117,27 @@ export async function autoIdentifyAlbum({
 
     const combinedGenres = combineGenres(rgDetail.genres, releaseDetail?.genres ?? []);
     const combinedTags = combineGenres(rgDetail.tags, releaseDetail?.tags ?? []);
+
+    // Text similarity alone can't tell a correct match from a same-titled
+    // deluxe/live/compilation edition with a different tracklist. Downgrade
+    // to manual review when we know both counts and they disagree by more
+    // than one (allows for a bonus/hidden track without false-flagging).
+    if (
+      trackCount > 0 &&
+      releaseDetail?.trackCount &&
+      Math.abs(releaseDetail.trackCount - trackCount) > 1
+    ) {
+      return {
+        decision: "needs_review",
+        score: top.score,
+        top: top.candidate,
+        detail: rgDetail,
+        release: releaseDetail,
+        combinedGenres,
+        combinedTags,
+        error: null,
+      };
+    }
 
     return {
       decision: "auto_confirmed",

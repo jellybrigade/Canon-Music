@@ -149,7 +149,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   }, [trackTagRows, genreMappings, skipYearGenres]);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
-  const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", false);
+  const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
 
