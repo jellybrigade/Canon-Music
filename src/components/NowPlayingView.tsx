@@ -476,7 +476,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const lyricsLines = useMemo(() => (lyricsSynced ? parseLrc(lyricsSynced) : null), [lyricsSynced]);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
-  const [showWaveform] = useBoolSetting("player.show_waveform", false);
+  const [showWaveform] = useBoolSetting("player.show_waveform", true);
   const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
   const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
   const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);

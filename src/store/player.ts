@@ -374,7 +374,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
         []
       );
-      if ((settingRows[0]?.value ?? "false") !== "true") return;
+      if ((settingRows[0]?.value ?? "true") !== "true") return;
 
       const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
       if (!streamUrlFor) return;
@@ -441,7 +441,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
         []
       );
-      if ((settingRows[0]?.value ?? "false") !== "true") return;
+      if ((settingRows[0]?.value ?? "true") !== "true") return;
 
       type Row = { peaks_json: string };
       const rows = await db.select<Row[]>(
