@@ -7,6 +7,7 @@ import type { Server } from "../types/server";
 import { QK } from "../lib/query-keys";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
+import { useLovedSessionStore } from "../store/lovedSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -56,8 +57,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           void queryClient.invalidateQueries({ queryKey: QK.allTracks() });
         }, 300);
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });
-          void queryClient.invalidateQueries({ queryKey: QK.loved_albums() });
+          useLovedSessionStore.getState().bumpRefresh();
           void queryClient.invalidateQueries({ queryKey: QK.playlists() });
         }, 600);
         setTimeout(() => {

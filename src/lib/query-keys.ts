@@ -17,10 +17,6 @@ export const QK = {
   genresRecent: () => ["genres", "recent"] as const,
   genreDisplayMappings: () => ["genre-display-mappings"] as const,
 
-  loved_tracks: () => ["loved_tracks"] as const,
-  loved_albums: () => ["loved_albums"] as const,
-  loved_track_albums: () => ["loved_track_albums"] as const,
-
   search: (query: string) => ["search", query] as const,
 
   tagIssues: () => ["tag_issues"] as const,
