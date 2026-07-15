@@ -23,6 +23,7 @@ import { getArtistImageFromServer } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 
 /** Probes a URL via Image() (sidesteps CORS, unlike fetch) so a server-scraped
  * portrait that 404s (no image on file) never reaches the cache/UI as a broken image. */
@@ -338,6 +339,7 @@ export function useEnrichArtist(
         // The artists grid/search reads portraits off its own query (joined once, not per-artist),
         // so a fresh portrait doesn't show up there until that list is invalidated too.
         void queryClient.invalidateQueries({ queryKey: QK.artists() });
+        useArtistBrowseSessionStore.getState().bumpRefresh();
       } catch {
         // silent
       } finally {

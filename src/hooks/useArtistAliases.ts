@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/query-keys";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 
 export interface ArtistAlias {
   alias_name: string;
@@ -60,6 +61,7 @@ export function useSetArtistAlias() {
     onSuccess: (_data, { aliasName, canonicalName }) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
       void qc.invalidateQueries({ queryKey: QK.artists() });
+      useArtistBrowseSessionStore.getState().bumpRefresh();
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
       void qc.invalidateQueries({ queryKey: QK.artistAlbums(aliasName) });
       void qc.invalidateQueries({ queryKey: QK.artistAlbums(canonicalName) });
@@ -83,6 +85,7 @@ export function useRemoveArtistAlias() {
     onSuccess: (canonicalName, aliasName) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
       void qc.invalidateQueries({ queryKey: QK.artists() });
+      useArtistBrowseSessionStore.getState().bumpRefresh();
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
       if (canonicalName) {
         void qc.invalidateQueries({ queryKey: QK.artistAlbums(canonicalName) });

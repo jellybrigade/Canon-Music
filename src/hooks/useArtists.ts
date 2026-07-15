@@ -1,15 +1,20 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
-import { QK } from "../lib/query-keys";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import type { ArtistRow } from "../types/library";
 export type { ArtistRow } from "../types/library";
 
 export function useArtists() {
-  return useQuery({
-    queryKey: QK.artists(),
-    queryFn: async (): Promise<ArtistRow[]> => {
+  const refreshTick = useArtistBrowseSessionStore((s) => s.refreshTick);
+  const [data, setData] = useState<ArtistRow[] | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setIsLoading(true);
       const db = await getDb();
-      return db.select<ArtistRow[]>(`
+      const rows = await db.select<ArtistRow[]>(`
         SELECT
           a.name,
           a.album_count,
@@ -26,6 +31,16 @@ export function useArtists() {
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE
       `);
-    },
-  });
+      if (!cancelled) {
+        setData(rows);
+        setIsLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  return { data, isLoading };
 }
