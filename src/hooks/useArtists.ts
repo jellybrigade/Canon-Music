@@ -19,7 +19,8 @@ export function useArtists() {
             LIMIT 1
           ) AS artwork_url,
           ai.lastfm_image_url,
-          ai.wikidata_image_url
+          ai.wikidata_image_url,
+          ai.navidrome_image_url
         FROM artists a
         LEFT JOIN artist_identity ai ON ai.artist_name = a.name
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)

@@ -17,6 +17,7 @@ export interface ArtistRow {
   artwork_url: string | null;
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
+  navidrome_image_url: string | null;
 }
 
 export interface TrackRow {

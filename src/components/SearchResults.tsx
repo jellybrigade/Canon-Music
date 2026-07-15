@@ -60,6 +60,7 @@ function toArtistRow(artist: SearchArtist): ArtistRow {
     artwork_url: null,
     lastfm_image_url: artist.lastfm_image_url,
     wikidata_image_url: artist.wikidata_image_url,
+    navidrome_image_url: artist.navidrome_image_url,
   };
 }
 
@@ -285,7 +286,7 @@ export function SearchResults({
           {trackMenu.track.artist && (
             <button
               onClick={() => {
-                onSelectArtist({ name: trackMenu.track.artist!, album_count: 0, lastfm_image_url: null, wikidata_image_url: null });
+                onSelectArtist({ name: trackMenu.track.artist!, album_count: 0, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null });
                 setTrackMenu(null);
               }}
             >

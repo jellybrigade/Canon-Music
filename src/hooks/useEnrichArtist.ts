@@ -19,7 +19,38 @@ import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists 
 import { similarity } from "../lib/fuzzy-match";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../lib/fanart";
 import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../lib/theaudiodb";
+import { getArtistImageFromServer } from "../lib/navidrome";
+import { stripServerPrefix } from "../utils/ids";
+import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
+
+/** Probes a URL via Image() (sidesteps CORS, unlike fetch) so a server-scraped
+ * portrait that 404s (no image on file) never reaches the cache/UI as a broken image. */
+function probeImageLoads(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+/** Looks up the artist's native (unprefixed) id on the given server, for the
+ * getArtistInfo2 portrait fallback. Returns null if the artist isn't synced locally. */
+async function findNativeArtistId(artistName: string, serverId: string): Promise<string | null> {
+  const db = await getDb();
+  const rows = await db.select<{ id: string }[]>(
+    `SELECT id FROM artists WHERE server_id = ? AND name = ?
+     UNION
+     SELECT a.id FROM artists a
+     JOIN artist_aliases al ON al.canonical_name = a.name
+     WHERE a.server_id = ? AND al.alias_name = ?
+     LIMIT 1`,
+    [serverId, artistName, serverId, artistName]
+  );
+  const row = rows[0];
+  return row ? stripServerPrefix(row.id, serverId) : null;
+}
 
 export interface ArtistEnrichmentRow {
   artist_name: string;
@@ -33,6 +64,7 @@ export interface ArtistEnrichmentRow {
   top_tags_json: string | null;  // JSON string[]
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
+  navidrome_image_url: string | null;
   enriched_at: number | null;
 }
 
@@ -152,6 +184,7 @@ async function enrichArtist(
   lastfmName: string,
   mbArtistId: string | null,
   hasWikidataImage: boolean,
+  serverWithCredential: ServerWithCredential | null,
 ): Promise<void> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
   // Only attempt when no MBID is set and no image is cached.
@@ -199,6 +232,21 @@ async function enrichArtist(
     if (!finalBio) finalBio = wikiBio;
   }
 
+  // Last-resort portrait: the server's own getArtistInfo2 scrape. No MBID or API
+  // key needed, just the artist's native id — but the server may have nothing on
+  // file, so the URL is preflighted before it's trusted (see probeImageLoads).
+  let navidromeImageUrl: string | null = null;
+  if (!imageUrl && !hasWikidataImage && serverWithCredential) {
+    const { server, credential } = serverWithCredential;
+    const nativeId = await findNativeArtistId(artistName, server.id).catch(() => null);
+    if (nativeId) {
+      const url = await getArtistImageFromServer(
+        server.url, server.username, credential, nativeId, server.alt_url ?? undefined
+      );
+      if (url && (await probeImageLoads(url))) navidromeImageUrl = url;
+    }
+  }
+
   const db = await getDb();
   // Only stamp enriched_at when Last.fm returned primary data, keeps the row retryable
   // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
@@ -209,8 +257,8 @@ async function enrichArtist(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
-        wikidata_image_url, enriched_at)
-     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+        wikidata_image_url, navidrome_image_url, enriched_at)
+     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
        bio = excluded.bio,
        listeners = excluded.listeners,
@@ -219,6 +267,7 @@ async function enrichArtist(
        top_tags_json = excluded.top_tags_json,
        lastfm_image_url = excluded.lastfm_image_url,
        wikidata_image_url = COALESCE(excluded.wikidata_image_url, artist_identity.wikidata_image_url),
+       navidrome_image_url = COALESCE(excluded.navidrome_image_url, artist_identity.navidrome_image_url),
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
@@ -229,13 +278,18 @@ async function enrichArtist(
       info.topTags.length > 0 ? JSON.stringify(info.topTags) : null,
       info.imageUrl,
       imageUrl,
+      navidromeImageUrl,
       enrichedAt,
     ]
   );
 }
 
-export function useEnrichArtist(artistName: string, options?: { enabled?: boolean }) {
+export function useEnrichArtist(
+  artistName: string,
+  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential }
+) {
   const enabled = options?.enabled ?? true;
+  const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
   const staleDays = Number(staleDaysStr) || 30;
@@ -279,8 +333,11 @@ export function useEnrichArtist(artistName: string, options?: { enabled?: boolea
       }
       await slot;
       try {
-        await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
+        await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
+        // The artists grid/search reads portraits off its own query (joined once, not per-artist),
+        // so a fresh portrait doesn't show up there until that list is invalidated too.
+        void queryClient.invalidateQueries({ queryKey: QK.artists() });
       } catch {
         // silent
       } finally {
@@ -288,7 +345,7 @@ export function useEnrichArtist(artistName: string, options?: { enabled?: boolea
       }
     })().finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
-  }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient]);
+  }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !artistName) return;
@@ -299,15 +356,16 @@ export function useEnrichArtist(artistName: string, options?: { enabled?: boolea
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
     try {
-      await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage);
+      await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
+      void queryClient.invalidateQueries({ queryKey: QK.artists() });
     } catch (e) {
       console.error("[useEnrichArtist] refresh failed:", e);
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setIsRefreshing(false);
     }
-  }, [artistName, isRefreshing, query.data, queryClient]);
+  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential]);
 
   return { data: query.data ?? null, isLoading: query.isLoading, isRefreshing, error, refresh };
 }

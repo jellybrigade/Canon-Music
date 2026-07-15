@@ -595,4 +595,8 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 46,
+    sql: `ALTER TABLE artist_identity ADD COLUMN navidrome_image_url TEXT;`,
+  },
 ];

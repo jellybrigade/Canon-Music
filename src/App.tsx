@@ -667,7 +667,7 @@ export default function App() {
           serverWithCredential={serverWithCred}
           playlists={playlists}
           onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null } }); }}
+          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
           onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
           onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -725,7 +725,7 @@ export default function App() {
               serverWithCredential={serverWithCred}
               playlists={playlists}
               onSelectAlbum={openAlbum}
-              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); }}
+              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -1074,7 +1074,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />
