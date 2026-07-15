@@ -805,27 +805,29 @@ export default function App() {
         } />
         <Route path="/library" element={
           <main className={`library${queueClass}`}>
-            <header className="library-header">
-              <CanonLockup height={22} className="library-header-logo" />
-              <span className="server-name">{server?.display_name}</span>
-              {syncStatus === "syncing" && (
-                <span className="sync-status">Syncing…</span>
-              )}
-              {syncStatus === "error" && (
-                <span className="sync-status sync-status--error" title={syncError}>
-                  Sync failed: {syncError}
-                </span>
-              )}
-              {syncStatus === "partial" && (
-                <span className="sync-status sync-status--error" title={syncError ?? undefined}>
-                  {syncError}
-                </span>
-              )}
-              {credError && (
-                <span className="sync-status sync-status--error">
-                  Credential error: {credError instanceof Error ? credError.message : String(credError)}
-                </span>
-              )}
+            <header className="library-header library-header--browse">
+              <div className="library-header-zone library-header-zone--start">
+                <CanonLockup height={22} className="library-header-logo" />
+                <span className="server-name">{server?.display_name}</span>
+                {syncStatus === "syncing" && (
+                  <span className="sync-status">Syncing…</span>
+                )}
+                {syncStatus === "error" && (
+                  <span className="sync-status sync-status--error" title={syncError}>
+                    Sync failed: {syncError}
+                  </span>
+                )}
+                {syncStatus === "partial" && (
+                  <span className="sync-status sync-status--error" title={syncError ?? undefined}>
+                    {syncError}
+                  </span>
+                )}
+                {credError && (
+                  <span className="sync-status sync-status--error">
+                    Credential error: {credError instanceof Error ? credError.message : String(credError)}
+                  </span>
+                )}
+              </div>
               <div className="sort-bar">
                 {SORT_OPTIONS.map((opt) => (
                   <button
@@ -837,31 +839,33 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button
-                className="search-trigger-btn"
-                onClick={() => { if (searchOpen || searchRaw) { clearSearch(); } else { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); } }}
-                title="Search (Ctrl+F)"
-              >
-                <Search size={15} />
-                Search…
-              </button>
-              {server && (
+              <div className="library-header-zone library-header-zone--end">
                 <button
-                  className="rescan-btn"
-                  onClick={() => runSync(server)}
-                  disabled={syncStatus === "syncing"}
+                  className="search-trigger-btn"
+                  onClick={() => { if (searchOpen || searchRaw) { clearSearch(); } else { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); } }}
+                  title="Search (Ctrl+F)"
                 >
-                  Rescan
+                  <Search size={15} />
+                  Search…
                 </button>
-              )}
-              <button
-                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
-                onClick={() => void setAlbumsPaginated(!albumsPaginated)}
-                title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
-              >
-                <LayoutList size={14} />
-                Pages
-              </button>
+                {server && (
+                  <button
+                    className="rescan-btn"
+                    onClick={() => runSync(server)}
+                    disabled={syncStatus === "syncing"}
+                  >
+                    Rescan
+                  </button>
+                )}
+                <button
+                  className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                  onClick={() => void setAlbumsPaginated(!albumsPaginated)}
+                  title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
+                >
+                  <LayoutList size={14} />
+                  Pages
+                </button>
+              </div>
             </header>
             <div className="library-body">
               <FilterSidebar
