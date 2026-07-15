@@ -1,8 +1,8 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import type Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
-import { QK } from "../lib/query-keys";
+import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 import {
   createNavidromePlaylist,
   deleteNavidromePlaylist,
@@ -45,18 +45,28 @@ export interface PlaylistRow {
 }
 
 export function usePlaylists() {
-  const queryClient = useQueryClient();
+  const refreshTick = usePlaylistSessionStore((s) => s.playlistsTick);
+  const [data, setData] = useState<PlaylistRow[] | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const query = useQuery({
-    queryKey: QK.playlists(),
-    queryFn: async () => {
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
       const db = await getDb();
-      return db.select<PlaylistRow[]>(
+      const rows = await db.select<PlaylistRow[]>(
         "SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json FROM playlists ORDER BY name ASC",
         []
       );
-    },
-  });
+      if (!cancelled) {
+        setData(rows);
+        setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
 
   async function createPlaylist(name: string, swc: ServerWithCredential): Promise<void> {
     const { server, credential } = swc;
@@ -67,7 +77,7 @@ export function usePlaylists() {
       "INSERT OR REPLACE INTO playlists (id, server_id, name, comment, track_count) VALUES (?, ?, ?, ?, ?)",
       [plDbId, server.id, created.name, created.comment ?? null, created.songCount]
     );
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
   }
 
   async function deletePlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
@@ -77,7 +87,7 @@ export function usePlaylists() {
     const db = await getDb();
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
     await db.execute("DELETE FROM playlists WHERE id = ?", [playlist.id]);
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
   }
 
   async function addTrackToPlaylist(
@@ -103,8 +113,8 @@ export function usePlaylists() {
       "UPDATE playlists SET track_count = track_count + 1 WHERE id = ?",
       [playlist.id]
     );
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
-    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
+    usePlaylistSessionStore.getState().bumpPlaylists();
+    usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
 
   async function renamePlaylist(
@@ -121,7 +131,7 @@ export function usePlaylists() {
       "UPDATE playlists SET name = ?, comment = ? WHERE id = ?",
       [name, comment, playlist.id]
     );
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
   }
 
   async function addAlbumToPlaylist(
@@ -149,14 +159,14 @@ export function usePlaylists() {
       "UPDATE playlists SET track_count = track_count + ? WHERE id = ?",
       [tracks.length, playlist.id]
     );
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
-    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
+    usePlaylistSessionStore.getState().bumpPlaylists();
+    usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
 
   async function setCustomCover(playlistId: string, dataUri: string | null): Promise<void> {
     const db = await getDb();
     await db.execute("UPDATE playlists SET custom_cover_data = ? WHERE id = ?", [dataUri, playlistId]);
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
   }
 
   async function createSmartPlaylist(filters: SmartFilters, swc: ServerWithCredential): Promise<void> {
@@ -175,7 +185,7 @@ export function usePlaylists() {
       [plDbId, server.id, filters.name, null, trackRows.length, JSON.stringify(filters)]
     );
     await insertPlaylistTracksBatch(db, plDbId, trackRows.map((t) => t.id), 0);
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
   }
 
   async function refreshSmartPlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
@@ -195,8 +205,8 @@ export function usePlaylists() {
     await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [playlist.id]);
     await insertPlaylistTracksBatch(db, playlist.id, trackRows.map((t) => t.id), 0);
     await db.execute("UPDATE playlists SET track_count = ? WHERE id = ?", [trackRows.length, playlist.id]);
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
-    await queryClient.invalidateQueries({ queryKey: QK.playlistTracks(playlist.id) });
+    usePlaylistSessionStore.getState().bumpPlaylists();
+    usePlaylistSessionStore.getState().bumpPlaylistTracks();
   }
 
   async function updateSmartPlaylistRules(playlist: PlaylistRow, filters: SmartFilters, swc: ServerWithCredential): Promise<void> {
@@ -205,9 +215,9 @@ export function usePlaylists() {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
     await updateNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, filters.name, undefined, server.alt_url ?? undefined);
-    await queryClient.invalidateQueries({ queryKey: QK.playlists() });
+    usePlaylistSessionStore.getState().bumpPlaylists();
     await refreshSmartPlaylist({ ...playlist, name: filters.name, rules_json: JSON.stringify(filters) }, swc);
   }
 
-  return { ...query, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover, createSmartPlaylist, refreshSmartPlaylist, updateSmartPlaylistRules };
+  return { data, isLoading, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover, createSmartPlaylist, refreshSmartPlaylist, updateSmartPlaylistRules };
 }

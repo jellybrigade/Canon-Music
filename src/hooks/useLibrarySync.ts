@@ -8,6 +8,9 @@ import { QK } from "../lib/query-keys";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import { useLovedSessionStore } from "../store/lovedSessionStore";
+import { useGenresSessionStore } from "../store/genresSessionStore";
+import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
+import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -53,12 +56,12 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: QK.artists() });
           useArtistBrowseSessionStore.getState().bumpRefresh();
-          void queryClient.invalidateQueries({ queryKey: QK.genres() });
-          void queryClient.invalidateQueries({ queryKey: QK.allTracks() });
+          useGenresSessionStore.getState().bumpRefresh();
+          useAllTracksSessionStore.getState().bumpRefresh();
         }, 300);
         setTimeout(() => {
           useLovedSessionStore.getState().bumpRefresh();
-          void queryClient.invalidateQueries({ queryKey: QK.playlists() });
+          usePlaylistSessionStore.getState().bumpPlaylists();
         }, 600);
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
