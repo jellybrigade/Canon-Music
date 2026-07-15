@@ -27,6 +27,7 @@ const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m)
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
 import { useArtists } from "./hooks/useArtists";
+import { useAllTracks } from "./hooks/useAllTracks";
 import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
 import { useSearch } from "./hooks/useSearch";
@@ -281,6 +282,7 @@ export default function App() {
 
   const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
+  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks();
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
@@ -960,6 +962,8 @@ export default function App() {
             {serverWithCred ? (
               <TrackTableView
                 serverWithCredential={serverWithCred}
+                tracks={allTracks}
+                isLoading={allTracksLoading}
                 onSelectAlbum={async (albumId) => {
                   const db = await getDb();
                   const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);

@@ -18,16 +18,18 @@ export function useArtists() {
         SELECT
           a.name,
           a.album_count,
-          (
-            SELECT al.artwork_url FROM albums al
-            WHERE al.artist = a.name AND al.server_id = a.server_id AND al.artwork_url IS NOT NULL
-            LIMIT 1
-          ) AS artwork_url,
+          art.artwork_url,
           ai.lastfm_image_url,
           ai.wikidata_image_url,
           ai.navidrome_image_url
         FROM artists a
         LEFT JOIN artist_identity ai ON ai.artist_name = a.name
+        LEFT JOIN (
+          SELECT artist, server_id, artwork_url
+          FROM albums
+          WHERE artwork_url IS NOT NULL
+          GROUP BY artist, server_id
+        ) art ON art.artist = a.name AND art.server_id = a.server_id
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE
       `);
