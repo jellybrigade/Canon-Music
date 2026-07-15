@@ -22,6 +22,7 @@ import { getCanonTree, findCanonicalSync } from "../lib/canonicalize";
 import { normalizeAlbum } from "../lib/tag-normalize";
 import { useAlbumIdentity } from "./useAlbumIdentity";
 import { useSetting } from "./useSetting";
+import { useTrackListSessionStore } from "../store/trackListSessionStore";
 
 // Module-level dedupe: one enrichment run per album at a time across all mounts.
 const inFlight = new Map<string, Promise<void>>();
@@ -158,7 +159,7 @@ export function useEnrichAlbumTracks(
 
     const promise = enrichAlbumTracks(albumId, albumArtist, albumName, staleDays, identity ?? null)
       .then(() => {
-        void queryClient.invalidateQueries({ queryKey: QK.tracks(albumId) });
+        useTrackListSessionStore.getState().bumpRefresh();
         void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
         void queryClient.invalidateQueries({ queryKey: QK.trackTagsAlbum(albumId) });
       })

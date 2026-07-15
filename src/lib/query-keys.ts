@@ -25,7 +25,6 @@ export const QK = {
   tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
-  tracks: (albumId: string | null) => ["tracks", albumId] as const,
   allTracks: () => ["all-tracks"] as const,
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,
   trackTagsAll: () => ["track_tags"] as const,

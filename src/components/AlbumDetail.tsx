@@ -15,6 +15,7 @@ import { shuffleArray } from "../lib/shuffle";
 import type { AlbumRow, TrackRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useTracks } from "../hooks/useTracks";
+import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import { useLoved } from "../hooks/useLoved";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
@@ -155,8 +156,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
 
   const doSyncTracks = useCallback(async () => {
     await syncAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
-    await queryClient.invalidateQueries({ queryKey: QK.tracks(album.id) });
-  }, [album.id, serverWithCredential, queryClient]);
+    useTrackListSessionStore.getState().bumpRefresh();
+  }, [album.id, serverWithCredential]);
 
   // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration
   useEffect(() => {
