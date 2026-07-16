@@ -1239,7 +1239,21 @@ pub fn run() {
         .build()
         .expect("cover proxy http client failed");
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Second launch focuses the existing window instead of spawning a duplicate
+    // process/window (doubled resource use, potential lock contention on the shared
+    // SQLite DB). Release builds only so dev hot-reload relaunches aren't blocked.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
+
+    builder
         .register_asynchronous_uri_scheme_protocol("cover", |ctx, request, responder| {
             let state = ctx.app_handle().state::<CoverState>().inner().clone();
             tauri::async_runtime::spawn(async move {
