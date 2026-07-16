@@ -11,8 +11,17 @@ export interface BandsintownEvent {
   lineup: string[];
 }
 
+const MAX_CACHE_ENTRIES = 2000;
 const cache = new Map<string, BandsintownEvent[]>();
 const inflight = new Map<string, Promise<BandsintownEvent[]>>();
+
+function setCached(key: string, events: BandsintownEvent[]): void {
+  if (cache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) cache.delete(oldestKey);
+  }
+  cache.set(key, events);
+}
 
 function cacheKey(name: string): string {
   return name.trim().toLowerCase();
@@ -31,12 +40,12 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
       const encoded = encodeURIComponent(artistName.trim());
       const res = await fetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
       if (!res.ok) {
-        cache.set(key, []);
+        setCached(key, []);
         return [];
       }
       const raw = (await res.json()) as Array<Record<string, unknown>>;
       if (!Array.isArray(raw)) {
-        cache.set(key, []);
+        setCached(key, []);
         return [];
       }
       const events: BandsintownEvent[] = raw.slice(0, 20).map((item) => {
@@ -54,10 +63,10 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
           lineup,
         };
       });
-      cache.set(key, events);
+      setCached(key, events);
       return events;
     } catch {
-      cache.set(key, []);
+      setCached(key, []);
       return [];
     } finally {
       inflight.delete(key);
