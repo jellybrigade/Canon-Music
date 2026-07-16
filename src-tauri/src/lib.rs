@@ -1351,6 +1351,22 @@ pub fn run() {
                 });
             }
 
+            // Reference project psysonic hits the same WebKitGTK freeze/thaw
+            // compositor race and defaults hardware_acceleration_policy to
+            // `OnDemand` rather than `Never` - their code notes `Never` is what
+            // breaks wheel scroll (matching Canon's known tradeoff in
+            // known-issues.md), while `OnDemand` still reduces GPU compositor
+            // churn without that cost. Untried middle ground for Canon.
+            #[cfg(target_os = "linux")]
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.with_webview(|webview| {
+                    use webkit2gtk::{HardwareAccelerationPolicy, SettingsExt, WebViewExt};
+                    if let Some(settings) = webview.inner().settings() {
+                        settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::OnDemand);
+                    }
+                });
+            }
+
             // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
             // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
             // active WebKit compositor/animation timer running, which may race the

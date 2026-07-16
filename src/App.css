@@ -284,6 +284,13 @@ button.primary:hover:not(:disabled) {
   to   { transform: rotate(360deg); }
 }
 
+/* Pause all CSS animations while window unfocused - reduces WebKitGTK GPU
+   compositor load during focus loss/regain, the trigger condition for the
+   freeze/thaw crash in known-issues.md. Ported from psysonic. */
+html[data-app-blurred] * {
+  animation-play-state: paused;
+}
+
 .player-spin {
   animation: spin 1s linear infinite;
 }
