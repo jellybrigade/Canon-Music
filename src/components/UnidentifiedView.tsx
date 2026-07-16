@@ -100,7 +100,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
       </div>
 
       {albums.length === 0 ? (
-        <p className="unidentified-empty">All albums have been identified.</p>
+        <p className="unidentified-empty">No failed matches yet. Albums are auto-identified when opened, so this list fills in as you browse.</p>
       ) : (
         <div className="unidentified-list">
           {albums.map((album) => {
