@@ -374,7 +374,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
     return () => observer.disconnect();
   }, [inView]);
 
-  const { data: enrichment } = useEnrichArtist(name, { enabled: inView });
+  const { data: enrichment } = useEnrichArtist(name, { enabled: inView, serverWithCredential: { server, credential } });
   const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
@@ -460,7 +460,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name);
   const { data: canonGenres = [] } = useArtistGenres(artist.name);
   const { data: rawTracks } = useArtistTopTracks(artist.name);
-  const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name);
+  const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name, { serverWithCredential });
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);

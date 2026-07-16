@@ -269,6 +269,41 @@ export async function fetchAlbumTracks(
   return response.album?.song ?? [];
 }
 
+// Navidrome forwards Last.fm's own "no image" placeholder verbatim, so reject it
+// the same way lib/lastfm.ts does for images fetched directly from Last.fm.
+const LASTFM_PLACEHOLDER_HASH = "2a96cbd8b46e442fc41c2b86b821562f";
+
+/** Server-side scraped artist portrait via getArtistInfo2 (no MBID or API key
+ * needed, just the artist's native Navidrome id). Returns null on any failure
+ * or when the server has no image on file. */
+export async function getArtistImageFromServer(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  artistId: string,
+  altUrl?: string
+): Promise<string | null> {
+  try {
+    const params = buildAuthParams(username, credential);
+    params.set("id", artistId);
+    const res = await apiPost(baseUrl, "getArtistInfo2", params, altUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": {
+        status: string;
+        artistInfo2?: { largeImageUrl?: string; mediumImageUrl?: string; smallImageUrl?: string };
+      };
+    };
+    const info = data["subsonic-response"]?.artistInfo2;
+    if (data["subsonic-response"]?.status !== "ok" || !info) return null;
+    const url = info.largeImageUrl || info.mediumImageUrl || info.smallImageUrl;
+    if (!url || url.includes(LASTFM_PLACEHOLDER_HASH)) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export interface NavidromeStarred {
   song?: Array<{ id: string }>;
   album?: Array<{ id: string }>;

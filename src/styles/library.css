@@ -63,8 +63,29 @@
   flex-shrink: 0;
 }
 
+.library-header--browse {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.library-header-zone {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.library-header-zone--start {
+  justify-content: flex-start;
+}
+
+.library-header-zone--end {
+  justify-content: flex-end;
+}
+
 .sort-bar {
   display: flex;
+  justify-content: center;
   gap: var(--space-2xs);
   flex-shrink: 0;
 }
@@ -198,7 +219,6 @@
 .sync-status {
   font-size: var(--text-base);
   color: var(--text-tertiary);
-  margin-left: auto;
 }
 
 .sync-status--error {

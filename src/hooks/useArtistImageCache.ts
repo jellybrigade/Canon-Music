@@ -70,8 +70,8 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
 
 async function getMissingArtistImageRows(): Promise<{ name: string; portrait_url: string }[]> {
   const db = await getDb();
-  const rows = await db.select<{ name: string; lastfm_image_url: string | null; wikidata_image_url: string | null }[]>(`
-    SELECT ai.artist_name AS name, ai.lastfm_image_url, ai.wikidata_image_url
+  const rows = await db.select<{ name: string; lastfm_image_url: string | null; wikidata_image_url: string | null; navidrome_image_url: string | null }[]>(`
+    SELECT ai.artist_name AS name, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
     FROM artist_identity ai
     LEFT JOIN artist_covers ac ON ac.artist_name = ai.artist_name
     WHERE ac.artist_name IS NULL

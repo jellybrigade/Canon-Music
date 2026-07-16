@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Heart, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
-import { useAllTracks, type AllTrackRow } from "../hooks/useAllTracks";
+import type { AllTrackRow } from "../hooks/useAllTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -50,13 +50,14 @@ const COL_DEFAULTS: TrackCols = {
 
 interface Props {
   serverWithCredential: ServerWithCredential;
+  tracks: AllTrackRow[] | undefined;
+  isLoading: boolean;
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
 }
 
-export function TrackTableView({ serverWithCredential, onSelectAlbum, onSelectArtist }: Props) {
+export function TrackTableView({ serverWithCredential, tracks, isLoading, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
-  const { data: tracks, isLoading } = useAllTracks();
   const genreMappings = useGenreMappings();
 
   const playQueue = usePlayerStore((s) => s.playQueue);

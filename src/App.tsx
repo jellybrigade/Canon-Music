@@ -27,6 +27,7 @@ const NowPlayingView = lazy(() => import("./components/NowPlayingView").then((m)
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
 import { useArtists } from "./hooks/useArtists";
+import { useAllTracks } from "./hooks/useAllTracks";
 import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
 import { useSearch } from "./hooks/useSearch";
@@ -177,17 +178,26 @@ function PlaylistDetailRoute({
   onSelectArtist,
   onClose,
   queueClass,
+  deletePlaylist,
+  renamePlaylist,
+  setCustomCover,
+  refreshSmartPlaylist,
+  updateSmartPlaylistRules,
 }: {
   serverWithCred: ServerWithCredential | null;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
   queueClass: string;
+  deletePlaylist: ReturnType<typeof usePlaylists>["deletePlaylist"];
+  renamePlaylist: ReturnType<typeof usePlaylists>["renamePlaylist"];
+  setCustomCover: ReturnType<typeof usePlaylists>["setCustomCover"];
+  refreshSmartPlaylist: ReturnType<typeof usePlaylists>["refreshSmartPlaylist"];
+  updateSmartPlaylistRules: ReturnType<typeof usePlaylists>["updateSmartPlaylistRules"];
 }) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const playlist = (state as { playlist?: PlaylistRow } | null)?.playlist ?? null;
-  const { deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
   if (!playlist || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>
@@ -281,10 +291,11 @@ export default function App() {
 
   const { data: albums } = useAlbums(sort, canonicalIdFilters);
   const { data: artists } = useArtists();
+  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks();
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, updateSmartPlaylistRules } = usePlaylists();
+  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -667,7 +678,7 @@ export default function App() {
           serverWithCredential={serverWithCred}
           playlists={playlists}
           onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null } }); }}
+          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null } }); }}
           onPlayTrack={(id) => { void handlePlayTrack(id); }}
           onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
           onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -725,7 +736,7 @@ export default function App() {
               serverWithCredential={serverWithCred}
               playlists={playlists}
               onSelectAlbum={openAlbum}
-              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); }}
+              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -770,6 +781,11 @@ export default function App() {
             onSelectArtist={openArtist}
             onClose={goBack}
             queueClass={queueClass}
+            deletePlaylist={deletePlaylist}
+            renamePlaylist={renamePlaylist}
+            setCustomCover={setCustomCover}
+            refreshSmartPlaylist={refreshSmartPlaylist}
+            updateSmartPlaylistRules={updateSmartPlaylistRules}
           />
         } />
         <Route path="/home" element={
@@ -805,27 +821,29 @@ export default function App() {
         } />
         <Route path="/library" element={
           <main className={`library${queueClass}`}>
-            <header className="library-header">
-              <CanonLockup height={22} className="library-header-logo" />
-              <span className="server-name">{server?.display_name}</span>
-              {syncStatus === "syncing" && (
-                <span className="sync-status">Syncing…</span>
-              )}
-              {syncStatus === "error" && (
-                <span className="sync-status sync-status--error" title={syncError}>
-                  Sync failed: {syncError}
-                </span>
-              )}
-              {syncStatus === "partial" && (
-                <span className="sync-status sync-status--error" title={syncError ?? undefined}>
-                  {syncError}
-                </span>
-              )}
-              {credError && (
-                <span className="sync-status sync-status--error">
-                  Credential error: {credError instanceof Error ? credError.message : String(credError)}
-                </span>
-              )}
+            <header className="library-header library-header--browse">
+              <div className="library-header-zone library-header-zone--start">
+                <CanonLockup height={22} className="library-header-logo" />
+                <span className="server-name">{server?.display_name}</span>
+                {syncStatus === "syncing" && (
+                  <span className="sync-status">Syncing…</span>
+                )}
+                {syncStatus === "error" && (
+                  <span className="sync-status sync-status--error" title={syncError}>
+                    Sync failed: {syncError}
+                  </span>
+                )}
+                {syncStatus === "partial" && (
+                  <span className="sync-status sync-status--error" title={syncError ?? undefined}>
+                    {syncError}
+                  </span>
+                )}
+                {credError && (
+                  <span className="sync-status sync-status--error">
+                    Credential error: {credError instanceof Error ? credError.message : String(credError)}
+                  </span>
+                )}
+              </div>
               <div className="sort-bar">
                 {SORT_OPTIONS.map((opt) => (
                   <button
@@ -837,31 +855,33 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button
-                className="search-trigger-btn"
-                onClick={() => { if (searchOpen || searchRaw) { clearSearch(); } else { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); } }}
-                title="Search (Ctrl+F)"
-              >
-                <Search size={15} />
-                Search…
-              </button>
-              {server && (
+              <div className="library-header-zone library-header-zone--end">
                 <button
-                  className="rescan-btn"
-                  onClick={() => runSync(server)}
-                  disabled={syncStatus === "syncing"}
+                  className="search-trigger-btn"
+                  onClick={() => { if (searchOpen || searchRaw) { clearSearch(); } else { setSearchOpen(true); setTimeout(() => { searchInputRef.current?.focus(); }, 0); } }}
+                  title="Search (Ctrl+F)"
                 >
-                  Rescan
+                  <Search size={15} />
+                  Search…
                 </button>
-              )}
-              <button
-                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
-                onClick={() => void setAlbumsPaginated(!albumsPaginated)}
-                title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
-              >
-                <LayoutList size={14} />
-                Pages
-              </button>
+                {server && (
+                  <button
+                    className="rescan-btn"
+                    onClick={() => runSync(server)}
+                    disabled={syncStatus === "syncing"}
+                  >
+                    Rescan
+                  </button>
+                )}
+                <button
+                  className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                  onClick={() => void setAlbumsPaginated(!albumsPaginated)}
+                  title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
+                >
+                  <LayoutList size={14} />
+                  Pages
+                </button>
+              </div>
             </header>
             <div className="library-body">
               <FilterSidebar
@@ -956,6 +976,8 @@ export default function App() {
             {serverWithCred ? (
               <TrackTableView
                 serverWithCredential={serverWithCred}
+                tracks={allTracks}
+                isLoading={allTracksLoading}
                 onSelectAlbum={async (albumId) => {
                   const db = await getDb();
                   const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
@@ -1074,7 +1096,7 @@ export default function App() {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
         onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null }); setCommandPaletteOpen(false); }}
+        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
       />

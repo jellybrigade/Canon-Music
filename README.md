@@ -1,5 +1,7 @@
 # Canon
 
+[canonmusic.de](https://canonmusic.de)
+
 Your music player for Navidrome.
 
 A desktop player for Navidrome libraries. Keeps tags and album titles tidy, and makes genre browsing as easy as it should be.

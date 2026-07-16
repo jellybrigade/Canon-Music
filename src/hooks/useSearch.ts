@@ -24,6 +24,7 @@ export interface SearchArtist {
   album_count: number;
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
+  navidrome_image_url: string | null;
 }
 
 export interface SearchResults {
@@ -80,9 +81,9 @@ async function runSearch(query: string): Promise<SearchResults> {
        LIMIT 200`,
       [fts]
     ),
-    db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null }[]>(
+    db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null; navidrome_image_url: string | null }[]>(
       `SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count,
-              ai.lastfm_image_url, ai.wikidata_image_url
+              ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
        FROM tracks_fts fts
        JOIN tracks t ON t.id = fts.id
        LEFT JOIN artist_identity ai ON ai.artist_name = t.artist

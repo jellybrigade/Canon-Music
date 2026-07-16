@@ -4,6 +4,7 @@ import { fetchAlbumTags, classifyTag } from "../lib/lastfm";
 import { QK } from "../lib/query-keys";
 import { findCanonical, getCanonTree, sqlNorm } from "../lib/canonicalize";
 import { useTagsStore } from "../store/tags";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { InboxItem, InboxTagRow } from "../store/tags";
 import type { AlbumRow } from "../types/library";
 
@@ -130,7 +131,7 @@ export function useTagPull() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+      useAlbumBrowseSessionStore.getState().bumpRefresh();
     },
   });
 
@@ -179,7 +180,7 @@ export function useAcceptInboxItem() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+      useAlbumBrowseSessionStore.getState().bumpRefresh();
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
     },
   });

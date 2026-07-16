@@ -1,15 +1,35 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
+import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import { useScrollMemory } from "../hooks/useScrollMemory";
+
+/** Lazily triggers portrait enrichment once a grid tile scrolls into view, so
+ * artists never opened individually still pick up a portrait (Navidrome scrape,
+ * Wikidata, etc.) instead of staying on the album-cover fallback forever. */
+function useLazyPortraitEnrich(artistName: string, serverWithCredential: ServerWithCredential, elRef: RefObject<HTMLElement | null>) {
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    if (inView) return;
+    const el = elRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries.some((entry) => entry.isIntersecting)) setInView(true); },
+      { rootMargin: "300px" }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [inView, elRef]);
+  useEnrichArtist(artistName, { enabled: inView, serverWithCredential });
+}
 
 const PADDING = 20;
 const COL_GAP = 16;
@@ -104,38 +124,16 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                     ? (cachedImageUrl ?? getArtistImageUrl(portraitUrl))
                     : fallbackUrl;
                   return (
-                    <div
+                    <ArtistGridCard
                       key={artist.name}
-                      className="album-card"
-                      onClick={() => onSelect(artist)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => e.key === "Enter" && onSelect(artist)}
+                      artist={artist}
+                      imgUrl={imgUrl}
+                      hasPortrait={!!portraitUrl}
+                      serverWithCredential={serverWithCredential}
+                      onSelect={() => onSelect(artist)}
                       onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, artist }); }}
-                    >
-                      {imgUrl ? (
-                        <img
-                          className="album-art"
-                          src={imgUrl}
-                          alt={artist.name}
-                          decoding="async"
-                          loading="lazy"
-                          onError={() => {
-                            if (portraitUrl) {
-                              setFailedPortraits((prev) => new Set(prev).add(artist.name));
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="album-art album-art--placeholder" />
-                      )}
-                      <div className="album-overlay">
-                        <span className="album-name">{artist.name}</span>
-                        <span className="album-artist">
-                          {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
-                        </span>
-                      </div>
-                    </div>
+                      onPortraitError={() => setFailedPortraits((prev) => new Set(prev).add(artist.name))}
+                    />
                   );
                 })}
               </div>
@@ -165,5 +163,51 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
         />
       )}
     </>
+  );
+}
+
+interface ArtistGridCardProps {
+  artist: ArtistRow;
+  imgUrl: string | null;
+  hasPortrait: boolean;
+  serverWithCredential: ServerWithCredential;
+  onSelect: () => void;
+  onContextMenu: (e: MouseEvent) => void;
+  onPortraitError: () => void;
+}
+
+function ArtistGridCard({ artist, imgUrl, hasPortrait, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
+  const cardRef = useRef<HTMLDivElement>(null);
+  useLazyPortraitEnrich(artist.name, serverWithCredential, cardRef);
+
+  return (
+    <div
+      ref={cardRef}
+      className="album-card"
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onSelect()}
+      onContextMenu={onContextMenu}
+    >
+      {imgUrl ? (
+        <img
+          className="album-art"
+          src={imgUrl}
+          alt={artist.name}
+          decoding="async"
+          loading="lazy"
+          onError={() => { if (hasPortrait) onPortraitError(); }}
+        />
+      ) : (
+        <div className="album-art album-art--placeholder" />
+      )}
+      <div className="album-overlay">
+        <span className="album-name">{artist.name}</span>
+        <span className="album-artist">
+          {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+        </span>
+      </div>
+    </div>
   );
 }

@@ -13,13 +13,7 @@ export const QK = {
 
   artists: () => ["artists"] as const,
 
-  genres: () => ["genres"] as const,
-  genresRecent: () => ["genres", "recent"] as const,
   genreDisplayMappings: () => ["genre-display-mappings"] as const,
-
-  loved_tracks: () => ["loved_tracks"] as const,
-  loved_albums: () => ["loved_albums"] as const,
-  loved_track_albums: () => ["loved_track_albums"] as const,
 
   search: (query: string) => ["search", query] as const,
 
@@ -29,8 +23,6 @@ export const QK = {
   tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,
   tagRapToHipHop: () => ["settings", "tags.rap_to_hiphop"] as const,
 
-  tracks: (albumId: string | null) => ["tracks", albumId] as const,
-  allTracks: () => ["all-tracks"] as const,
   trackTagsAlbum: (albumId: string) => ["track_tags", "album", albumId] as const,
   trackTagsAll: () => ["track_tags"] as const,
   trackTagsOffTree: () => ["track_tags", "off_tree_albums"] as const,
@@ -42,7 +34,6 @@ export const QK = {
   spotlightGenres: (albumId: string) => ["spotlight-genres", albumId] as const,
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
-  artistAlbums: (artistName: string) => ["artist-albums", artistName] as const,
   artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
   artistAppearsOn: (artistName: string) => ["artist-appears-on", artistName] as const,
   artistGenres: (artistName: string) => ["artist-genres", artistName] as const,
@@ -62,8 +53,6 @@ export const QK = {
   albumsLastComputedAt: () => ["albums", "last-computed-at"] as const,
   albumIdentityAll: () => ["album-identity"] as const,
 
-  playlists: () => ["playlists"] as const,
-  playlistTracks: (playlistId: string | null) => ["playlist_tracks", playlistId] as const,
 
   lyrics: (trackId: string | null, overrideArtist: string | null, overrideTitle: string | null) =>
     ["lyrics", trackId, overrideArtist, overrideTitle] as const,

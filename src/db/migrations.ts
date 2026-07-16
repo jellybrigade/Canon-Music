@@ -595,4 +595,14 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    version: 46,
+    sql: `ALTER TABLE artist_identity ADD COLUMN navidrome_image_url TEXT;`,
+  },
+  {
+    version: 47,
+    sql: `
+      CREATE INDEX IF NOT EXISTS idx_albums_artist_server_artwork ON albums(artist, server_id) WHERE artwork_url IS NOT NULL;
+    `,
+  },
 ];

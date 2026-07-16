@@ -5,6 +5,12 @@ import { invalidateGenreTreeCache } from "./useGenreTree";
 import { useSetting } from "./useSetting";
 import type { Server } from "../types/server";
 import { QK } from "../lib/query-keys";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
+import { useLovedSessionStore } from "../store/lovedSessionStore";
+import { useGenresSessionStore } from "../store/genresSessionStore";
+import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
+import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -21,7 +27,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+    useAlbumBrowseSessionStore.getState().bumpRefresh();
     // Progress fires every BATCH_NOTIFY_INTERVAL albums, which on a large library
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
@@ -30,7 +36,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       const now = Date.now();
       if (now - lastInvalidate < 1500) return;
       lastInvalidate = now;
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+      useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
       .then(({ failedAlbums, failedPlaylists }) => {
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
@@ -42,17 +48,16 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
           setSyncError(`Sync partial: failed to fetch tracks for ${parts.join(" and ")}.`);
         }
-        void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
+        useAlbumBrowseSessionStore.getState().bumpRefresh();
         invalidateGenreTreeCache();
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.artists() });
-          void queryClient.invalidateQueries({ queryKey: QK.genres() });
-          void queryClient.invalidateQueries({ queryKey: QK.allTracks() });
+          useArtistBrowseSessionStore.getState().bumpRefresh();
+          useGenresSessionStore.getState().bumpRefresh();
+          useAllTracksSessionStore.getState().bumpRefresh();
         }, 300);
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.loved_tracks() });
-          void queryClient.invalidateQueries({ queryKey: QK.loved_albums() });
-          void queryClient.invalidateQueries({ queryKey: QK.playlists() });
+          useLovedSessionStore.getState().bumpRefresh();
+          usePlaylistSessionStore.getState().bumpPlaylists();
         }, 600);
         setTimeout(() => {
           void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });

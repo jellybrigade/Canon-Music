@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
-import { QK } from "../lib/query-keys";
+import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 
 export interface AllTrackRow {
   id: string;
@@ -25,12 +25,16 @@ export interface AllTrackRow {
 }
 
 export function useAllTracks() {
-  return useQuery({
-    queryKey: QK.allTracks(),
-    staleTime: Infinity,
-    queryFn: async () => {
+  const refreshTick = useAllTracksSessionStore((s) => s.refreshTick);
+  const [data, setData] = useState<AllTrackRow[] | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
       const db = await getDb();
-      return db.select<AllTrackRow[]>(
+      const rows = await db.select<AllTrackRow[]>(
         `SELECT t.id, t.title, t.artist, t.album_artist, t.album_id,
                 a.name AS album_name, a.artwork_url AS album_artwork_url,
                 t.genre, t.track_number, t.disc_number, t.year, t.duration,
@@ -41,6 +45,15 @@ export function useAllTracks() {
          LEFT JOIN albums a ON a.id = t.album_id
          ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.disc_number, t.track_number`
       );
-    },
-  });
+      if (!cancelled) {
+        setData(rows);
+        setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshTick]);
+
+  return { data, isLoading };
 }
