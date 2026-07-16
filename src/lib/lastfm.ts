@@ -141,8 +141,8 @@ export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
 /** Picks the best available artist portrait: Wikidata (and fanart.tv/TheAudioDB,
  * folded into the same column by useEnrichArtist) first, then the server's own
- * scraped image (Navidrome's getArtistInfo2, no MBID needed), then Last.fm direct
- * — filtering out Last.fm's generic placeholder image. */
+ * scraped image (Navidrome's getArtistInfo2, no MBID needed), then Last.fm direct,
+ * filtering out Last.fm's generic placeholder image. */
 export function resolvePortraitUrl(
   enrichment: {
     lastfm_image_url: string | null;

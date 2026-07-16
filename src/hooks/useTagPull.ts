@@ -131,7 +131,6 @@ export function useTagPull() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     },
   });
@@ -181,7 +180,6 @@ export function useAcceptInboxItem() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
       void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
       useAlbumBrowseSessionStore.getState().bumpRefresh();
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
     },

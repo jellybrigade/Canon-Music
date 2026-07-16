@@ -178,17 +178,26 @@ function PlaylistDetailRoute({
   onSelectArtist,
   onClose,
   queueClass,
+  deletePlaylist,
+  renamePlaylist,
+  setCustomCover,
+  refreshSmartPlaylist,
+  updateSmartPlaylistRules,
 }: {
   serverWithCred: ServerWithCredential | null;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
   queueClass: string;
+  deletePlaylist: ReturnType<typeof usePlaylists>["deletePlaylist"];
+  renamePlaylist: ReturnType<typeof usePlaylists>["renamePlaylist"];
+  setCustomCover: ReturnType<typeof usePlaylists>["setCustomCover"];
+  refreshSmartPlaylist: ReturnType<typeof usePlaylists>["refreshSmartPlaylist"];
+  updateSmartPlaylistRules: ReturnType<typeof usePlaylists>["updateSmartPlaylistRules"];
 }) {
   const { state } = useLocation();
   const navigate = useNavigate();
   const playlist = (state as { playlist?: PlaylistRow } | null)?.playlist ?? null;
-  const { deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
   if (!playlist || !serverWithCred) return null;
   return (
     <main className={`library${queueClass}`}>
@@ -286,7 +295,7 @@ export default function App() {
   const { data: genres } = useGenres();
   const { data: vocab } = useTagVocab();
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, updateSmartPlaylistRules } = usePlaylists();
+  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
   const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
@@ -772,6 +781,11 @@ export default function App() {
             onSelectArtist={openArtist}
             onClose={goBack}
             queueClass={queueClass}
+            deletePlaylist={deletePlaylist}
+            renamePlaylist={renamePlaylist}
+            setCustomCover={setCustomCover}
+            refreshSmartPlaylist={refreshSmartPlaylist}
+            updateSmartPlaylistRules={updateSmartPlaylistRules}
           />
         } />
         <Route path="/home" element={

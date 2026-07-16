@@ -61,7 +61,6 @@ export function useSetArtistAlias() {
     },
     onSuccess: (_data, { aliasName }) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
-      void qc.invalidateQueries({ queryKey: QK.artists() });
       useArtistBrowseSessionStore.getState().bumpRefresh();
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
       useArtistAlbumsSessionStore.getState().bumpRefresh();
@@ -84,7 +83,6 @@ export function useRemoveArtistAlias() {
     },
     onSuccess: (canonicalName, aliasName) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
-      void qc.invalidateQueries({ queryKey: QK.artists() });
       useArtistBrowseSessionStore.getState().bumpRefresh();
       void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
       if (canonicalName) {

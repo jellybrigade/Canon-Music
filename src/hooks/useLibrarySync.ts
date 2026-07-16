@@ -27,7 +27,6 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
     useAlbumBrowseSessionStore.getState().bumpRefresh();
     // Progress fires every BATCH_NOTIFY_INTERVAL albums, which on a large library
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
@@ -37,7 +36,6 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       const now = Date.now();
       if (now - lastInvalidate < 1500) return;
       lastInvalidate = now;
-      void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
       .then(({ failedAlbums, failedPlaylists }) => {
@@ -50,11 +48,9 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
           setSyncError(`Sync partial: failed to fetch tracks for ${parts.join(" and ")}.`);
         }
-        void queryClient.invalidateQueries({ queryKey: QK.albumsAll() });
         useAlbumBrowseSessionStore.getState().bumpRefresh();
         invalidateGenreTreeCache();
         setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.artists() });
           useArtistBrowseSessionStore.getState().bumpRefresh();
           useGenresSessionStore.getState().bumpRefresh();
           useAllTracksSessionStore.getState().bumpRefresh();

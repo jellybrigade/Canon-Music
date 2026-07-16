@@ -234,7 +234,7 @@ async function enrichArtist(
   }
 
   // Last-resort portrait: the server's own getArtistInfo2 scrape. No MBID or API
-  // key needed, just the artist's native id — but the server may have nothing on
+  // key needed, just the artist's native id, but the server may have nothing on
   // file, so the URL is preflighted before it's trusted (see probeImageLoads).
   let navidromeImageUrl: string | null = null;
   if (!imageUrl && !hasWikidataImage && serverWithCredential) {
@@ -338,7 +338,6 @@ export function useEnrichArtist(
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
         // The artists grid/search reads portraits off its own query (joined once, not per-artist),
         // so a fresh portrait doesn't show up there until that list is invalidated too.
-        void queryClient.invalidateQueries({ queryKey: QK.artists() });
         useArtistBrowseSessionStore.getState().bumpRefresh();
       } catch {
         // silent
@@ -360,7 +359,7 @@ export function useEnrichArtist(
     try {
       await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
-      void queryClient.invalidateQueries({ queryKey: QK.artists() });
+      useArtistBrowseSessionStore.getState().bumpRefresh();
     } catch (e) {
       console.error("[useEnrichArtist] refresh failed:", e);
       setError(e instanceof Error ? e.message : String(e));

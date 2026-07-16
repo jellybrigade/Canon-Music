@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { removeTrackFromNavidromePlaylist } from "../lib/navidrome";
@@ -11,31 +11,42 @@ export function usePlaylistTracks(playlistId: string | null) {
   const refreshTick = usePlaylistSessionStore((s) => s.playlistTracksTick);
   const [data, setData] = useState<PlaylistTrackRow[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(!!playlistId);
+  const prevPlaylistIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!playlistId) {
       setData([]);
       setIsLoading(false);
+      prevPlaylistIdRef.current = null;
       return;
     }
+    if (prevPlaylistIdRef.current !== playlistId) {
+      setData(undefined);
+    }
+    prevPlaylistIdRef.current = playlistId;
     let cancelled = false;
     setIsLoading(true);
     (async () => {
-      const db = await getDb();
-      const rows = await db.select<PlaylistTrackRow[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
-                t.bit_rate, t.suffix,
-                pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
-         FROM playlist_tracks pt
-         JOIN tracks t ON pt.track_id = t.id
-         JOIN albums a ON t.album_id = a.id
-         WHERE pt.playlist_id = ?
-         ORDER BY pt.position ASC`,
-        [playlistId]
-      );
-      if (!cancelled) {
-        setData(rows);
-        setIsLoading(false);
+      try {
+        const db = await getDb();
+        const rows = await db.select<PlaylistTrackRow[]>(
+          `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
+                  t.bit_rate, t.suffix,
+                  pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
+           FROM playlist_tracks pt
+           JOIN tracks t ON pt.track_id = t.id
+           JOIN albums a ON t.album_id = a.id
+           WHERE pt.playlist_id = ?
+           ORDER BY pt.position ASC`,
+          [playlistId]
+        );
+        if (!cancelled) {
+          setData(rows);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("usePlaylistTracks: failed to load tracks", err);
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {
