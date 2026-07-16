@@ -1348,6 +1348,20 @@ pub fn run() {
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
 
+            // Main window is created hidden (tauri.conf.json `visible: false`) and revealed
+            // by the frontend after its first paint (src/main.tsx), reference project
+            // psysonic's pattern for shrinking the visible-but-settling window exposed to
+            // the WebKitGTK focus-loss crash below. Safety net in case the frontend bundle
+            // never loads or throws before that handshake runs - show() on an
+            // already-visible window is a no-op, so this never fights the normal reveal.
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                if let Some(w) = app_handle.get_webview_window("main") {
+                    let _ = w.show();
+                }
+            });
+
             // WebKitGTK runs the page in a separate WebProcess by design so a crash
             // there (e.g. the GTK freeze/thaw compositor race) doesn't have to take
             // the whole app down. wry doesn't wire up this signal itself, so without
