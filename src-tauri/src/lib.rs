@@ -1,3 +1,4 @@
+mod library_read;
 mod streaming;
 mod upnp;
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -1284,6 +1285,7 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .manage(library_read::LibraryReadStore::default())
         .manage(CoverState {
             cache: cover_cache,
             artist_image_cache,
@@ -1452,6 +1454,7 @@ pub fn run() {
             tray_set_close_to_tray,
             set_cover_proxy_config,
             take_crash_report,
+            library_read::get_albums,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
