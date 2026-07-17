@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
+import { getDb } from "../db";
 import type { TrackRow } from "../types/library";
 export type { TrackRow } from "../types/library";
 
@@ -28,6 +29,9 @@ export function useTracks(albumId: string | null) {
     setIsLoading(true);
     (async () => {
       try {
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
         const rows = await invoke<TrackRow[]>("get_tracks", { albumId });
         if (!cancelled) {
           setData(rows);

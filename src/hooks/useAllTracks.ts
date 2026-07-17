@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
+import { getDb } from "../db";
 
 export interface AllTrackRow {
   id: string;
@@ -38,12 +39,18 @@ export function useAllTracks() {
     let cancelled = false;
     setIsLoading(true);
     (async () => {
-      console.time("useAllTracks:get_all_tracks");
-      const rows = await invoke<AllTrackRow[]>("get_all_tracks");
-      console.timeEnd("useAllTracks:get_all_tracks");
-      if (!cancelled) {
-        setData(rows);
-        setIsLoading(false);
+      try {
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
+        const rows = await invoke<AllTrackRow[]>("get_all_tracks");
+        if (!cancelled) {
+          setData(rows);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("useAllTracks: failed to load tracks", err);
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {

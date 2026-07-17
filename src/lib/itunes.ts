@@ -1,12 +1,10 @@
+import { cappedSet } from "./boundedCache";
+
 const MAX_CACHE_ENTRIES = 2000;
 const cache = new Map<string, string | null>();
 
 function setCached(key: string, value: string | null): void {
-  if (cache.size >= MAX_CACHE_ENTRIES) {
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey !== undefined) cache.delete(oldestKey);
-  }
-  cache.set(key, value);
+  cappedSet(cache, key, value, MAX_CACHE_ENTRIES);
 }
 
 export async function fetchItunesCoverArt(

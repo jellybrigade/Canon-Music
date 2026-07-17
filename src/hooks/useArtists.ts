@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
+import { getDb } from "../db";
 import type { ArtistRow } from "../types/library";
 export type { ArtistRow } from "../types/library";
 
@@ -17,10 +18,18 @@ export function useArtists() {
     let cancelled = false;
     async function load() {
       setIsLoading(true);
-      const rows = await invoke<ArtistRow[]>("get_artists");
-      if (!cancelled) {
-        setData(rows);
-        setIsLoading(false);
+      try {
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
+        const rows = await invoke<ArtistRow[]>("get_artists");
+        if (!cancelled) {
+          setData(rows);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("useArtists: failed to load artists", err);
+        if (!cancelled) setIsLoading(false);
       }
     }
     void load();

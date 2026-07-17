@@ -1,3 +1,5 @@
+import { cappedSet } from "./boundedCache";
+
 const APP_ID = "js_app_id";
 const BASE_URL = "https://rest.bandsintown.com";
 
@@ -16,11 +18,7 @@ const cache = new Map<string, BandsintownEvent[]>();
 const inflight = new Map<string, Promise<BandsintownEvent[]>>();
 
 function setCached(key: string, events: BandsintownEvent[]): void {
-  if (cache.size >= MAX_CACHE_ENTRIES) {
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey !== undefined) cache.delete(oldestKey);
-  }
-  cache.set(key, events);
+  cappedSet(cache, key, events, MAX_CACHE_ENTRIES);
 }
 
 function cacheKey(name: string): string {
