@@ -1427,6 +1427,7 @@ pub fn run() {
             library_read::get_albums,
             library_read::get_artists,
             library_read::get_tracks,
+            library_read::get_all_tracks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

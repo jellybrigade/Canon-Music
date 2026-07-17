@@ -38,6 +38,29 @@ pub struct ArtistRowDto {
 }
 
 #[derive(Serialize)]
+pub struct AllTrackRowDto {
+    id: String,
+    title: String,
+    artist: Option<String>,
+    album_artist: Option<String>,
+    album_id: String,
+    album_name: Option<String>,
+    album_artwork_url: Option<String>,
+    genre: Option<String>,
+    track_number: Option<i64>,
+    disc_number: Option<i64>,
+    year: Option<i64>,
+    duration: Option<i64>,
+    play_count: Option<i64>,
+    bit_rate: Option<i64>,
+    suffix: Option<String>,
+    replay_gain_track_gain: Option<f64>,
+    replay_gain_track_peak: Option<f64>,
+    replay_gain_album_gain: Option<f64>,
+    replay_gain_album_peak: Option<f64>,
+}
+
+#[derive(Serialize)]
 pub struct TrackRowDto {
     id: String,
     title: String,
@@ -199,6 +222,62 @@ pub fn get_artists(
                 lastfm_image_url: row.get(3)?,
                 wikidata_image_url: row.get(4)?,
                 navidrome_image_url: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn get_all_tracks(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<Vec<AllTrackRowDto>, String> {
+    let path = db_path(&app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut guard = state.conn.lock().map_err(|_| "library read store lock poisoned".to_string())?;
+    if guard.is_none() {
+        *guard = Some(open_read_conn(&app)?);
+    }
+    let conn = guard.as_ref().expect("just set");
+
+    let sql = "SELECT t.id, t.title, t.artist, t.album_artist, t.album_id,
+                a.name AS album_name, a.artwork_url AS album_artwork_url,
+                t.genre, t.track_number, t.disc_number, t.year, t.duration,
+                t.play_count, t.bit_rate, t.suffix,
+                t.replay_gain_track_gain, t.replay_gain_track_peak,
+                t.replay_gain_album_gain, t.replay_gain_album_peak
+         FROM tracks t
+         LEFT JOIN albums a ON a.id = t.album_id
+         ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.disc_number, t.track_number";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(AllTrackRowDto {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                artist: row.get(2)?,
+                album_artist: row.get(3)?,
+                album_id: row.get(4)?,
+                album_name: row.get(5)?,
+                album_artwork_url: row.get(6)?,
+                genre: row.get(7)?,
+                track_number: row.get(8)?,
+                disc_number: row.get(9)?,
+                year: row.get(10)?,
+                duration: row.get(11)?,
+                play_count: row.get(12)?,
+                bit_rate: row.get(13)?,
+                suffix: row.get(14)?,
+                replay_gain_track_gain: row.get(15)?,
+                replay_gain_track_peak: row.get(16)?,
+                replay_gain_album_gain: row.get(17)?,
+                replay_gain_album_peak: row.get(18)?,
             })
         })
         .map_err(|e| e.to_string())?

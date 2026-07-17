@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getDb } from "../db";
+import { invoke } from "@tauri-apps/api/core";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 
 export interface AllTrackRow {
@@ -24,6 +24,11 @@ export interface AllTrackRow {
   replay_gain_album_peak: number | null;
 }
 
+// Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
+// split"). Mirrors useAlbums.ts/useArtists.ts/useTracks.ts - reads via
+// src-tauri/src/library_read.rs's dedicated read-only connection instead of
+// tauri-plugin-sql's sqlx pool. Ported after live measurement showed this hook's sqlx
+// select taking 1.8-3.5s vs ~100-250ms for the already-piloted rusqlite reads.
 export function useAllTracks() {
   const refreshTick = useAllTracksSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<AllTrackRow[] | undefined>(undefined);
@@ -33,18 +38,9 @@ export function useAllTracks() {
     let cancelled = false;
     setIsLoading(true);
     (async () => {
-      const db = await getDb();
-      const rows = await db.select<AllTrackRow[]>(
-        `SELECT t.id, t.title, t.artist, t.album_artist, t.album_id,
-                a.name AS album_name, a.artwork_url AS album_artwork_url,
-                t.genre, t.track_number, t.disc_number, t.year, t.duration,
-                t.play_count, t.bit_rate, t.suffix,
-                t.replay_gain_track_gain, t.replay_gain_track_peak,
-                t.replay_gain_album_gain, t.replay_gain_album_peak
-         FROM tracks t
-         LEFT JOIN albums a ON a.id = t.album_id
-         ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.disc_number, t.track_number`
-      );
+      console.time("useAllTracks:get_all_tracks");
+      const rows = await invoke<AllTrackRow[]>("get_all_tracks");
+      console.timeEnd("useAllTracks:get_all_tracks");
       if (!cancelled) {
         setData(rows);
         setIsLoading(false);
