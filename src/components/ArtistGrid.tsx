@@ -11,11 +11,19 @@ import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
 import { useScrollMemory } from "../hooks/useScrollMemory";
+import { useSetting } from "../hooks/useSetting";
 
 /** Lazily triggers portrait enrichment once a grid tile scrolls into view, so
  * artists never opened individually still pick up a portrait (Navidrome scrape,
- * Wikidata, etc.) instead of staying on the album-cover fallback forever. */
-function useLazyPortraitEnrich(artistName: string, serverWithCredential: ServerWithCredential, elRef: RefObject<HTMLElement | null>) {
+ * Wikidata, etc.) instead of staying on the album-cover fallback forever.
+ * Rendered as a null component (not a hook in the card) so the grid can skip it
+ * entirely for artists whose enrichment is already fresh - the common case -
+ * instead of mounting a query per card. */
+function LazyPortraitEnrich({ artistName, serverWithCredential, elRef }: {
+  artistName: string;
+  serverWithCredential: ServerWithCredential;
+  elRef: RefObject<HTMLElement | null>;
+}) {
   const [inView, setInView] = useState(false);
   useEffect(() => {
     if (inView) return;
@@ -29,6 +37,7 @@ function useLazyPortraitEnrich(artistName: string, serverWithCredential: ServerW
     return () => observer.disconnect();
   }, [inView, elRef]);
   useEnrichArtist(artistName, { enabled: inView, serverWithCredential });
+  return null;
 }
 
 const PADDING = 20;
@@ -50,6 +59,13 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
   const artistImageMap = useArtistImageMap();
+
+  // Same staleness rule as useEnrichArtist's isEnrichmentStale, computed here from
+  // the enriched_at already joined into get_artists, so fresh artists (the common
+  // case) never mount the per-card enrichment query at all.
+  const [staleDaysStr] = useSetting("tags.staleness_days", "30");
+  const staleDays = Number(staleDaysStr) || 30;
+  const staleCutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -129,6 +145,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                       artist={artist}
                       imgUrl={imgUrl}
                       hasPortrait={!!portraitUrl}
+                      enrichStale={artist.enriched_at === null || artist.enriched_at * 1000 < staleCutoff}
                       serverWithCredential={serverWithCredential}
                       onSelect={() => onSelect(artist)}
                       onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, artist }); }}
@@ -170,15 +187,15 @@ interface ArtistGridCardProps {
   artist: ArtistRow;
   imgUrl: string | null;
   hasPortrait: boolean;
+  enrichStale: boolean;
   serverWithCredential: ServerWithCredential;
   onSelect: () => void;
   onContextMenu: (e: MouseEvent) => void;
   onPortraitError: () => void;
 }
 
-function ArtistGridCard({ artist, imgUrl, hasPortrait, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
+function ArtistGridCard({ artist, imgUrl, hasPortrait, enrichStale, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
-  useLazyPortraitEnrich(artist.name, serverWithCredential, cardRef);
 
   return (
     <div
@@ -190,6 +207,9 @@ function ArtistGridCard({ artist, imgUrl, hasPortrait, serverWithCredential, onS
       onKeyDown={(e) => e.key === "Enter" && onSelect()}
       onContextMenu={onContextMenu}
     >
+      {enrichStale && (
+        <LazyPortraitEnrich artistName={artist.name} serverWithCredential={serverWithCredential} elRef={cardRef} />
+      )}
       {imgUrl ? (
         <img
           className="album-art"

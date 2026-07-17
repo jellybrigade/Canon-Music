@@ -18,6 +18,7 @@ export interface ArtistRow {
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
   navidrome_image_url: string | null;
+  enriched_at: number | null;
 }
 
 export interface TrackRow {

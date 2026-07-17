@@ -52,6 +52,7 @@ pub struct ArtistRowDto {
     lastfm_image_url: Option<String>,
     wikidata_image_url: Option<String>,
     navidrome_image_url: Option<String>,
+    enriched_at: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -216,7 +217,8 @@ pub fn get_artists(
                 art.artwork_url,
                 ai.lastfm_image_url,
                 ai.wikidata_image_url,
-                ai.navidrome_image_url
+                ai.navidrome_image_url,
+                ai.enriched_at
             FROM artists a
             LEFT JOIN artist_identity ai ON ai.artist_name = a.name
             LEFT JOIN (
@@ -237,6 +239,7 @@ pub fn get_artists(
                     lastfm_image_url: row.get(3)?,
                     wikidata_image_url: row.get(4)?,
                     navidrome_image_url: row.get(5)?,
+                    enriched_at: row.get(6)?,
                 })
             })
             .map_err(|e| e.to_string())?

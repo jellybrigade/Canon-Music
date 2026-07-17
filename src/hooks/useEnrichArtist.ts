@@ -310,7 +310,10 @@ export function useEnrichArtist(
       );
       return rows[0] ?? null;
     },
-    enabled: !!artistName,
+    // Gate on the caller's `enabled` too: grid/similar-artist cards mount dozens at
+    // once, and an ungated query here fired one sqlx IPC SELECT per card on mount
+    // even for cards never scrolled into view.
+    enabled: !!artistName && enabled,
     staleTime: Infinity,
   });
 

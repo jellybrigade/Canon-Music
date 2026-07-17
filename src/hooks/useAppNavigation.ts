@@ -64,7 +64,7 @@ export function useAppNavigation() {
   function openArtist(artist: ArtistRow | string) {
     const row: ArtistRow =
       typeof artist === "string"
-        ? { name: artist, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }
+        ? { name: artist, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }
         : artist;
     navigate(artistPath(row.name), { state: { artist: row, fromView: view } });
   }
