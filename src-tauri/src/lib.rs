@@ -1193,6 +1193,19 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
 
+    // Enlarge the audio output buffer to prevent ALSA underruns (choppy/robotic audio,
+    // "underrun occurred") under CPU/compositor load. rodio 0.19's OutputStream::try_default
+    // uses cpal's default ALSA buffer, which is small enough that the realtime callback can
+    // miss its deadline when the WebProcess or a decode/download thread saturates the CPU.
+    // Most modern Linux desktops route ALSA through PipeWire/PulseAudio, which honors
+    // PULSE_LATENCY_MSEC to size the client buffer; setting it larger gives the callback more
+    // headroom. No-op on a pure-ALSA (no Pulse/PipeWire) setup, and only set if the user
+    // hasn't already chosen a value, so it never overrides an explicit override.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("PULSE_LATENCY_MSEC").is_none() {
+        std::env::set_var("PULSE_LATENCY_MSEC", "60");
+    }
+
     // WebKitGTK instability under GPU compositing is driver-specific, not universal.
     // The old blanket WEBKIT_DISABLE_COMPOSITING_MODE=1 forced CPU software rendering
     // on every Linux machine, making all scrolling/painting sluggish. Instead apply
