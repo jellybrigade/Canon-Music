@@ -10,6 +10,7 @@
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  contain: paint;
 }
 
 /* ── Alpha/decade scrubber ── */
@@ -70,6 +71,10 @@
   overflow: hidden;
   aspect-ratio: 1 / 1;
   transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  /* WebKitGTK paint-skip for off-screen grid tiles (psysonic pattern); if tiles blank/flash on some GPUs, drop content-visibility here. */
+  content-visibility: auto;
+  contain-intrinsic-size: 0 220px;
+  contain: layout paint;
 }
 
 .album-card:hover {

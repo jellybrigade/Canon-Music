@@ -32,10 +32,23 @@ export interface AllTrackRow {
 // select taking 1.8-3.5s vs ~100-250ms for the already-piloted rusqlite reads.
 export function useAllTracks() {
   const refreshTick = useAllTracksSessionStore((s) => s.refreshTick);
-  const [data, setData] = useState<AllTrackRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Seed from the session-store cache synchronously so a view switch with unchanged
+  // data paints the previous rows immediately - no loading flash, no re-invoke. This
+  // hook's select is the heaviest (whole tracks table), so skipping it matters most.
+  const [data, setData] = useState<AllTrackRow[] | undefined>(() => {
+    const s = useAllTracksSessionStore.getState();
+    return s.rows && s.cachedTick === s.refreshTick ? (s.rows as AllTrackRow[]) : undefined;
+  });
+  const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    const s = useAllTracksSessionStore.getState();
+    if (s.rows && s.cachedTick === refreshTick) {
+      setData(s.rows as AllTrackRow[]);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     (async () => {
@@ -45,6 +58,7 @@ export function useAllTracks() {
         await getDb();
         const rows = await invoke<AllTrackRow[]>("get_all_tracks");
         if (!cancelled) {
+          useAllTracksSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
           setIsLoading(false);
         }

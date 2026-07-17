@@ -2,6 +2,10 @@
 
 Desktop music player + tag management tool for self-hosted music servers. Supports Navidrome. Built Tauri + React. Full spec: `plan.md`. File/data flow map: `ARCHITECTURE.md`.
 
+**"donow" always means `instructions/donow.md`.** When the user says "donow" (or "do now"), read that file and work its top task.
+
+**Research via explorer agents, never in chat.** When you need to research something (grep reference-projects, map unfamiliar code, locate patterns), delegate it to `caveman:cavecrew-investigator` / Explore agents to keep main-thread context lean. Don't run broad searches inline.
+
 ---
 
 ## Stack

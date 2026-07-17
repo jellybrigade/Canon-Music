@@ -3,6 +3,8 @@
   flex: 1;
   overflow-y: auto;
   padding: var(--space-xs) 0 var(--space-xl);
+  contain: paint;
+  position: relative; /* offsetParent for the virtualized card grid's scrollMargin */
 }
 
 .playlist-list-toolbar {

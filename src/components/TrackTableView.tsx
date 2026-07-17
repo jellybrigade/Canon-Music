@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Heart, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-react";
 import type { AllTrackRow } from "../hooks/useAllTracks";
@@ -55,6 +55,94 @@ interface Props {
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
 }
+
+interface TrackRowProps {
+  track: AllTrackRow;
+  index: number;
+  start: number;
+  gridTemplate: string;
+  cols: TrackCols;
+  genreMappings: ReturnType<typeof useGenreMappings>;
+  isCurrentTrack: boolean;
+  isCurrentlyPlaying: boolean;
+  isSelected: boolean;
+  isLoved: boolean;
+  measureElement: (node: Element | null) => void;
+  onRowClick: (e: React.MouseEvent, index: number) => void;
+  onRowContextMenu: (e: React.MouseEvent, track: AllTrackRow) => void;
+  onRowEnter: (index: number) => void;
+  onToggleLove: (trackId: string) => void;
+}
+
+const TrackRow = memo(function TrackRow({
+  track,
+  index,
+  start,
+  gridTemplate,
+  cols,
+  genreMappings,
+  isCurrentTrack,
+  isCurrentlyPlaying,
+  isSelected,
+  isLoved,
+  measureElement,
+  onRowClick,
+  onRowContextMenu,
+  onRowEnter,
+  onToggleLove,
+}: TrackRowProps) {
+  return (
+    <div
+      data-index={index}
+      ref={measureElement}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        transform: `translateY(${start}px)`,
+        gridTemplateColumns: gridTemplate,
+      }}
+      className={[
+        "playlist-vrow",
+        isCurrentTrack ? "playlist-vrow--active" : "",
+        isSelected ? "track-table-row--selected" : "",
+      ].filter(Boolean).join(" ")}
+      onClick={(e) => onRowClick(e, index)}
+      onContextMenu={(e) => onRowContextMenu(e, track)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") onRowEnter(index);
+      }}
+    >
+      <span className="playlist-vrow-num">
+        {isCurrentlyPlaying
+          ? <span className="track-playing-indicator"><Play size={12} /></span>
+          : index + 1}
+      </span>
+      <span className="playlist-vrow-title">{track.title}</span>
+      {cols.artist && <span className="playlist-vrow-artist">{track.artist ?? ""}</span>}
+      {cols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
+      {cols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
+      {cols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
+      {cols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
+      {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
+      {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
+      {cols.duration && <span className="playlist-vrow-duration">{track.duration ? formatDuration(track.duration) : ""}</span>}
+      <button
+        className={`track-heart${isLoved ? " track-heart--loved" : ""}`}
+        aria-label={isLoved ? "Unlove track" : "Love track"}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleLove(track.id);
+        }}
+      >
+        <Heart size={15} fill={isLoved ? "currentColor" : "none"} strokeWidth={2} />
+      </button>
+    </div>
+  );
+});
 
 export function TrackTableView({ serverWithCredential, tracks, isLoading, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
@@ -147,7 +235,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, onSele
       : <ChevronDown size={11} style={{ verticalAlign: "middle", marginLeft: 2 }} />;
   }
 
-  function buildTrackObj(track: AllTrackRow): CurrentTrack {
+  const buildTrackObj = useCallback((track: AllTrackRow): CurrentTrack => {
     const coverArtUrl = track.album_artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, track.album_artwork_url, 64)
       : null;
@@ -169,7 +257,11 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, onSele
           }
         : null,
     };
-  }
+  }, [server, credential]);
+
+  // Build the full queue of playable track objects once per (sorted, builder) change,
+  // so a single row click / Enter / "Play Now" no longer re-maps the entire library.
+  const trackObjs = useMemo(() => sorted.map(buildTrackObj), [sorted, buildTrackObj]);
 
   const handleRowClick = useCallback((e: React.MouseEvent, index: number) => {
     const isCtrl = e.ctrlKey || e.metaKey;
@@ -195,9 +287,22 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, onSele
       setSelectedIds(new Set());
       lastClickedRef.current = index;
       const startIndex = index;
-      playQueue(sorted.map(buildTrackObj), streamUrlFor, startIndex);
+      playQueue(trackObjs, streamUrlFor, startIndex);
     }
-  }, [sorted, streamUrlFor, playQueue]);
+  }, [trackObjs, streamUrlFor, playQueue]);
+
+  const handleRowContextMenu = useCallback((e: React.MouseEvent, track: AllTrackRow) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, track });
+  }, []);
+
+  const handleRowEnter = useCallback((index: number) => {
+    playQueue(trackObjs, streamUrlFor, index);
+  }, [trackObjs, streamUrlFor, playQueue]);
+
+  const handleToggleLove = useCallback((trackId: string) => {
+    void toggleTrackLove(trackId, serverWithCredential);
+  }, [toggleTrackLove, serverWithCredential]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -337,64 +442,25 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, onSele
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const track = sorted[virtualItem.index]!;
               const isCurrentTrack = currentTrack?.id === track.id;
-              const isCurrentlyPlaying = isCurrentTrack && isPlaying;
-              const isSelected = selectedIds.has(virtualItem.index);
               return (
-                <div
+                <TrackRow
                   key={track.id}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    transform: `translateY(${virtualItem.start}px)`,
-                    gridTemplateColumns: gridTemplate,
-                  }}
-                  className={[
-                    "playlist-vrow",
-                    isCurrentTrack ? "playlist-vrow--active" : "",
-                    isSelected ? "track-table-row--selected" : "",
-                  ].filter(Boolean).join(" ")}
-                  onClick={(e) => handleRowClick(e, virtualItem.index)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({ x: e.clientX, y: e.clientY, track });
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      playQueue(sorted.map(buildTrackObj), streamUrlFor, virtualItem.index);
-                    }
-                  }}
-                >
-                  <span className="playlist-vrow-num">
-                    {isCurrentlyPlaying
-                      ? <span className="track-playing-indicator"><Play size={12} /></span>
-                      : virtualItem.index + 1}
-                  </span>
-                  <span className="playlist-vrow-title">{track.title}</span>
-                  {cols.artist && <span className="playlist-vrow-artist">{track.artist ?? ""}</span>}
-                  {cols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
-                  {cols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
-                  {cols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
-                  {cols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
-                  {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
-                  {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
-                  {cols.duration && <span className="playlist-vrow-duration">{track.duration ? formatDuration(track.duration) : ""}</span>}
-                  <button
-                    className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
-                    aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void toggleTrackLove(track.id, serverWithCredential);
-                    }}
-                  >
-                    <Heart size={15} fill={lovedTrackIds.has(track.id) ? "currentColor" : "none"} strokeWidth={2} />
-                  </button>
-                </div>
+                  track={track}
+                  index={virtualItem.index}
+                  start={virtualItem.start}
+                  gridTemplate={gridTemplate}
+                  cols={cols}
+                  genreMappings={genreMappings}
+                  isCurrentTrack={isCurrentTrack}
+                  isCurrentlyPlaying={isCurrentTrack && isPlaying}
+                  isSelected={selectedIds.has(virtualItem.index)}
+                  isLoved={lovedTrackIds.has(track.id)}
+                  measureElement={virtualizer.measureElement}
+                  onRowClick={handleRowClick}
+                  onRowContextMenu={handleRowContextMenu}
+                  onRowEnter={handleRowEnter}
+                  onToggleLove={handleToggleLove}
+                />
               );
             })}
           </div>
@@ -409,7 +475,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, onSele
         >
           <button onClick={() => {
             const idx = sorted.findIndex((t) => t.id === contextMenu.track.id);
-            playQueue(sorted.map(buildTrackObj), streamUrlFor, idx >= 0 ? idx : 0);
+            playQueue(trackObjs, streamUrlFor, idx >= 0 ? idx : 0);
             setContextMenu(null);
           }}>
             Play Now

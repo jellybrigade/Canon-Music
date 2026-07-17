@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -173,32 +173,122 @@ function dataUrlToObjectUrl(dataUrl: string): string {
   return url;
 }
 
-// Decodes lazily, one album at a time, on .get() rather than eagerly over every row.
-// Libraries with 1000+ artists can have tens of thousands of cached covers; decoding
-// them all up front (base64 -> bytes -> Blob) in one synchronous pass blocked the main
-// thread hard enough to look like a freeze/crash when a view first mounted. Callers only
-// ever .get(id) for the handful of albums actually on screen, so only those get decoded.
-class LazyCoverMap {
-  constructor(private readonly dataUrlByAlbum: Map<string, string>) {}
+// --- On-demand cover data_url loading ---------------------------------------------------
+// APPROACH (chosen 2026-07-17): eager keyset + on-demand per-id base64 fetch.
+// useAlbumCoverMap used to eagerly run `SELECT album_id, data_url FROM album_covers` over
+// the WHOLE cache (staleTime/gcTime Infinity), pulling multi-MB of base64 resident into JS
+// at startup with a cost that scaled with library size. Now only the keyset (album_id) is
+// loaded eagerly (tiny); each row's data_url is pulled on demand the first time a caller
+// actually .get()s that id, and cached so each id is fetched at most once. Resident base64
+// now scales with the set of covers actually VIEWED in a session, not the whole library.
+//
+// This is a SQLite-flavored port of psysonic's warm-disk-peek pattern
+// (reference-projects/psysonic/src/cover/*): a synchronous cache read for consumers
+// (getDiskSrcForGrid), a dedup'd background fetch for misses (coverArtInFlight), a
+// subscriber notification to re-render when a fetch lands (subscribeDiskSrcCache), and a
+// bounded in-memory cache. Psysonic also warms a bounded first-N batch up front; we skip
+// that eager warm because callers already fall back to a server URL for un-warmed ids
+// (`coverMap.get(id) ?? getCoverArtUrl(...)`), so misses show real art immediately rather
+// than a blank, and the on-demand pull swaps in the cached bytes on the next render.
+//
+// CRITICAL: .get() stays SYNCHRONOUS. Every caller invokes it inline in render and uses the
+// result immediately (with a `?? fallback`). It returns the object-URL synchronously when
+// warmed; otherwise it kicks off a one-time background load, returns undefined this render,
+// and a version bump re-renders the consumer once the load lands.
 
-  get(albumId: string): string | undefined {
-    const dataUrl = this.dataUrlByAlbum.get(albumId);
-    return dataUrl ? dataUrlToObjectUrl(dataUrl) : undefined;
+const DATA_URL_CACHE_LIMIT = 2000;
+// albumId -> data_url, populated on demand, bounded LRU (recency = Map insertion order).
+const dataUrlByAlbum = new Map<string, string>();
+const albumLoadsInFlight = new Set<string>();
+
+// External store so ALL useAlbumCoverMap consumers re-render when any cover lands, not just
+// the one component whose .get() happened to trigger the load.
+let coverStoreVersion = 0;
+const coverStoreListeners = new Set<() => void>();
+function subscribeCoverStore(listener: () => void): () => void {
+  coverStoreListeners.add(listener);
+  return () => coverStoreListeners.delete(listener);
+}
+function getCoverStoreVersion(): number {
+  return coverStoreVersion;
+}
+function bumpCoverStore(): void {
+  coverStoreVersion++;
+  coverStoreListeners.forEach((l) => l());
+}
+
+function rememberAlbumDataUrl(albumId: string, dataUrl: string): void {
+  dataUrlByAlbum.delete(albumId);
+  dataUrlByAlbum.set(albumId, dataUrl);
+  if (dataUrlByAlbum.size > DATA_URL_CACHE_LIMIT) {
+    const oldest = dataUrlByAlbum.keys().next().value;
+    // Evicting the data_url string only frees the base64 here; the decoded object-URL is
+    // keyed by data_url content in objectUrlCache and evicted independently. A later re-get
+    // of this id just re-reads the (small, PK-indexed) row from SQLite.
+    if (oldest !== undefined) dataUrlByAlbum.delete(oldest);
   }
 }
 
-/** Returns a lazily-decoding albumId -> objectUrl lookup backed by the SQLite cover cache. */
+async function loadAlbumDataUrl(albumId: string): Promise<void> {
+  try {
+    const db = await getDb();
+    const rows = await db.select<CoverRow[]>(
+      `SELECT album_id, data_url FROM album_covers WHERE album_id = ? LIMIT 1`,
+      [albumId],
+    );
+    if (rows[0]) {
+      rememberAlbumDataUrl(albumId, rows[0].data_url);
+      bumpCoverStore();
+    }
+  } catch (err) {
+    console.error(`Cover cache: failed to load data_url for album ${albumId}`, err);
+  } finally {
+    albumLoadsInFlight.delete(albumId);
+  }
+}
+
+class OnDemandCoverMap {
+  constructor(private readonly ids: Set<string>) {}
+
+  get(albumId: string): string | undefined {
+    const dataUrl = dataUrlByAlbum.get(albumId);
+    if (dataUrl) {
+      // Refresh recency in the bounded album->data_url cache, then reuse the object-URL layer.
+      dataUrlByAlbum.delete(albumId);
+      dataUrlByAlbum.set(albumId, dataUrl);
+      return dataUrlToObjectUrl(dataUrl);
+    }
+    // Not warmed yet: kick off a one-time background load only if this id is actually cached.
+    if (this.ids.has(albumId) && !albumLoadsInFlight.has(albumId)) {
+      albumLoadsInFlight.add(albumId);
+      void loadAlbumDataUrl(albumId);
+    }
+    return undefined;
+  }
+}
+
+/** Returns a lazily-loading albumId -> objectUrl lookup backed by the SQLite cover cache.
+ *  Only the keyset is loaded eagerly; each cover's base64 is pulled on first .get(). */
 export function useAlbumCoverMap(): Pick<Map<string, string>, "get"> {
+  // Re-render this consumer whenever any cover data_url lands in the shared store.
+  useSyncExternalStore(subscribeCoverStore, getCoverStoreVersion);
+
   const { data } = useQuery({
     queryKey: QK.albumCovers(),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<CoverRow[]>(`SELECT album_id, data_url FROM album_covers`);
+      // This runs on initial load and on every invalidation (after a sync / cache-all pass).
+      // Drop cached data_urls so any covers whose bytes changed on re-sync get re-pulled
+      // fresh on demand instead of serving stale base64.
+      dataUrlByAlbum.clear();
+      albumLoadsInFlight.clear();
+      const rows = await db.select<{ album_id: string }[]>(`SELECT album_id FROM album_covers`);
+      return rows.map((r) => r.album_id);
     },
     staleTime: Infinity,
     gcTime: Infinity,
   });
 
-  const rows = data ?? [];
-  return useMemo(() => new LazyCoverMap(new Map(rows.map((r) => [r.album_id, r.data_url]))), [rows]);
+  const ids = data;
+  return useMemo(() => new OnDemandCoverMap(new Set(ids ?? [])), [ids]);
 }

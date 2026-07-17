@@ -1,4 +1,4 @@
-import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from "react";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Navigate, useNavigate, useLocation, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, Search, X, ListMusic, Headphones, House, ChevronLeft, ChevronRight, Layers, MessageSquare, Calendar, LayoutList, CircleHelp } from "lucide-react";
@@ -303,6 +303,16 @@ export default function App() {
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const unidentifiedCount = failedLookupIds?.length ?? 0;
   const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
+
+  const visibleAlbums = useMemo(() => {
+    if (albums === undefined) return [];
+    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
+    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
+    let result = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
+    if (yearFrom != null && !isNaN(yearFrom)) result = result.filter((a) => (a.year ?? 0) >= yearFrom);
+    if (yearTo != null && !isNaN(yearTo)) result = result.filter((a) => (a.year ?? 9999) <= yearTo);
+    return result;
+  }, [albums, lovedOnly, lovedAlbumIds, yearFromInput, yearToInput]);
 
   const [filterSidebarOpen, setFilterSidebarOpen] = useBoolSetting("filter_sidebar_open", true);
 
@@ -691,11 +701,6 @@ export default function App() {
     if (searchQuery && !searchResults) {
       return <p className="empty-state">Searching…</p>;
     }
-    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
-    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
-    let visibleAlbums = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
-    if (yearFrom != null && !isNaN(yearFrom)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 0) >= yearFrom);
-    if (yearTo != null && !isNaN(yearTo)) visibleAlbums = visibleAlbums.filter((a) => (a.year ?? 9999) <= yearTo);
     const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
       ? "No loved albums"

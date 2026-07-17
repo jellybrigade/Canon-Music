@@ -11,10 +11,22 @@ export type { ArtistRow } from "../types/library";
 // `artists` stay on tauri-plugin-sql.
 export function useArtists() {
   const refreshTick = useArtistBrowseSessionStore((s) => s.refreshTick);
-  const [data, setData] = useState<ArtistRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+
+  // Seed from the session-store cache synchronously so a view switch with unchanged
+  // data paints the previous rows immediately - no loading flash, no re-invoke.
+  const [data, setData] = useState<ArtistRow[] | undefined>(() => {
+    const s = useArtistBrowseSessionStore.getState();
+    return s.rows && s.cachedTick === s.refreshTick ? (s.rows as ArtistRow[]) : undefined;
+  });
+  const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    const s = useArtistBrowseSessionStore.getState();
+    if (s.rows && s.cachedTick === refreshTick) {
+      setData(s.rows as ArtistRow[]);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     async function load() {
       setIsLoading(true);
@@ -24,6 +36,7 @@ export function useArtists() {
         await getDb();
         const rows = await invoke<ArtistRow[]>("get_artists");
         if (!cancelled) {
+          useArtistBrowseSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
           setIsLoading(false);
         }
