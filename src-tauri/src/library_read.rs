@@ -27,6 +27,16 @@ pub struct AlbumRowDto {
     accent_color: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct ArtistRowDto {
+    name: String,
+    album_count: i64,
+    artwork_url: Option<String>,
+    lastfm_image_url: Option<String>,
+    wikidata_image_url: Option<String>,
+    navidrome_image_url: Option<String>,
+}
+
 fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // tauri-plugin-sql resolves "sqlite:canon.db" against app_config_dir, not
     // app_data_dir (confirmed in its wrapper.rs `DbPool::connect`) - must match.
@@ -121,4 +131,55 @@ pub fn get_albums(
             .map_err(|e| e.to_string())?;
         Ok(rows)
     }
+}
+
+#[tauri::command]
+pub fn get_artists(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<Vec<ArtistRowDto>, String> {
+    let path = db_path(&app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut guard = state.conn.lock().map_err(|_| "library read store lock poisoned".to_string())?;
+    if guard.is_none() {
+        *guard = Some(open_read_conn(&app)?);
+    }
+    let conn = guard.as_ref().expect("just set");
+
+    let sql = "SELECT
+            a.name,
+            a.album_count,
+            art.artwork_url,
+            ai.lastfm_image_url,
+            ai.wikidata_image_url,
+            ai.navidrome_image_url
+        FROM artists a
+        LEFT JOIN artist_identity ai ON ai.artist_name = a.name
+        LEFT JOIN (
+            SELECT artist, server_id, artwork_url
+            FROM albums
+            WHERE artwork_url IS NOT NULL
+            GROUP BY artist, server_id
+        ) art ON art.artist = a.name AND art.server_id = a.server_id
+        WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
+        ORDER BY a.name COLLATE NOCASE";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |row| {
+            Ok(ArtistRowDto {
+                name: row.get(0)?,
+                album_count: row.get(1)?,
+                artwork_url: row.get(2)?,
+                lastfm_image_url: row.get(3)?,
+                wikidata_image_url: row.get(4)?,
+                navidrome_image_url: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
 }

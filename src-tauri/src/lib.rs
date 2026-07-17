@@ -1455,6 +1455,7 @@ pub fn run() {
             set_cover_proxy_config,
             take_crash_report,
             library_read::get_albums,
+            library_read::get_artists,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
