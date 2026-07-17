@@ -14,8 +14,7 @@
       {
         "title": "Canon",
         "width": 1200,
-        "height": 800,
-        "visible": false
+        "height": 800
       }
     ],
     "security": {
