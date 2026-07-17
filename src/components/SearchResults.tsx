@@ -61,6 +61,7 @@ function toArtistRow(artist: SearchArtist): ArtistRow {
     lastfm_image_url: artist.lastfm_image_url,
     wikidata_image_url: artist.wikidata_image_url,
     navidrome_image_url: artist.navidrome_image_url,
+    enriched_at: null,
   };
 }
 
