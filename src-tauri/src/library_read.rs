@@ -37,6 +37,29 @@ pub struct ArtistRowDto {
     navidrome_image_url: Option<String>,
 }
 
+#[derive(Serialize)]
+pub struct TrackRowDto {
+    id: String,
+    title: String,
+    artist: Option<String>,
+    album_artist: Option<String>,
+    album_id: String,
+    genre: Option<String>,
+    track_number: Option<i64>,
+    disc_number: Option<i64>,
+    year: Option<i64>,
+    duration: Option<i64>,
+    file_path: Option<String>,
+    play_count: Option<i64>,
+    bit_rate: Option<i64>,
+    suffix: Option<String>,
+    file_size: Option<i64>,
+    replay_gain_track_gain: Option<f64>,
+    replay_gain_track_peak: Option<f64>,
+    replay_gain_album_gain: Option<f64>,
+    replay_gain_album_peak: Option<f64>,
+}
+
 fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // tauri-plugin-sql resolves "sqlite:canon.db" against app_config_dir, not
     // app_data_dir (confirmed in its wrapper.rs `DbPool::connect`) - must match.
@@ -176,6 +199,58 @@ pub fn get_artists(
                 lastfm_image_url: row.get(3)?,
                 wikidata_image_url: row.get(4)?,
                 navidrome_image_url: row.get(5)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+    Ok(rows)
+}
+
+#[tauri::command]
+pub fn get_tracks(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+    album_id: String,
+) -> Result<Vec<TrackRowDto>, String> {
+    let path = db_path(&app)?;
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut guard = state.conn.lock().map_err(|_| "library read store lock poisoned".to_string())?;
+    if guard.is_none() {
+        *guard = Some(open_read_conn(&app)?);
+    }
+    let conn = guard.as_ref().expect("just set");
+
+    let sql = "SELECT id, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak
+        FROM tracks
+        WHERE album_id = ?
+        ORDER BY disc_number, track_number";
+    let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([&album_id], |row| {
+            Ok(TrackRowDto {
+                id: row.get(0)?,
+                title: row.get(1)?,
+                artist: row.get(2)?,
+                album_artist: row.get(3)?,
+                album_id: row.get(4)?,
+                genre: row.get(5)?,
+                track_number: row.get(6)?,
+                disc_number: row.get(7)?,
+                year: row.get(8)?,
+                duration: row.get(9)?,
+                file_path: row.get(10)?,
+                play_count: row.get(11)?,
+                bit_rate: row.get(12)?,
+                suffix: row.get(13)?,
+                file_size: row.get(14)?,
+                replay_gain_track_gain: row.get(15)?,
+                replay_gain_track_peak: row.get(16)?,
+                replay_gain_album_gain: row.get(17)?,
+                replay_gain_album_peak: row.get(18)?,
             })
         })
         .map_err(|e| e.to_string())?
