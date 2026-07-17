@@ -13,11 +13,27 @@ export type { AlbumRow, AlbumSort } from "../types/library";
 // `albums` stay on tauri-plugin-sql for now; only this read path is piloted.
 export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = []) {
   const refreshTick = useAlbumBrowseSessionStore((s) => s.refreshTick);
-  const [data, setData] = useState<AlbumRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
   const canonicalIdsKey = canonicalIds.join(",");
+  const cacheKey = `${sort}|${canonicalIdsKey}`;
+
+  // Seed from the session-store cache synchronously so a view switch with unchanged
+  // data paints the previous rows immediately - no loading flash, no re-invoke.
+  const [data, setData] = useState<AlbumRow[] | undefined>(() => {
+    const s = useAlbumBrowseSessionStore.getState();
+    return s.rows && s.cachedTick === s.refreshTick && s.cachedKey === cacheKey
+      ? (s.rows as AlbumRow[])
+      : undefined;
+  });
+  const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    const s = useAlbumBrowseSessionStore.getState();
+    if (s.rows && s.cachedTick === refreshTick && s.cachedKey === cacheKey) {
+      // Cache hit for this exact (sort, ids, tick) - use it, skip the query.
+      setData(s.rows as AlbumRow[]);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     async function load() {
       setIsLoading(true);
@@ -27,6 +43,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
         await getDb();
         const rows = await invoke<AlbumRow[]>("get_albums", { sort, canonicalIds });
         if (!cancelled) {
+          useAlbumBrowseSessionStore.getState().setRows(rows, refreshTick, cacheKey);
           setData(rows);
           setIsLoading(false);
         }

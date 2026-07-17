@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type RefObject } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -54,11 +54,22 @@ interface Props {
 }
 
 export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, scrollKey }: Props) {
-  const { server, credential } = serverWithCredential;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
   const artistImageMap = useArtistImageMap();
+
+  // Stable, artist-agnostic handlers passed to every ArtistGridCard. The card binds
+  // them to its own artist internally, so these references never change per render
+  // and don't defeat ArtistGridCard's React.memo. (setContextMenu / setFailedPortraits
+  // are stable useState setters, so empty deps are correct.)
+  const handleContextMenu = useCallback((e: MouseEvent, artist: ArtistRow) => {
+    e.preventDefault();
+    setContextMenu({ x: e.clientX, y: e.clientY, artist });
+  }, []);
+  const handlePortraitError = useCallback((artistName: string) => {
+    setFailedPortraits((prev) => new Set(prev).add(artistName));
+  }, []);
 
   // Same staleness rule as useEnrichArtist's isEnrichmentStale, computed here from
   // the enriched_at already joined into get_artists, so fresh artists (the common
@@ -130,29 +141,19 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                   gap: `${COL_GAP}px`,
                 }}
               >
-                {rowArtists.map((artist) => {
-                  const portraitUrl = resolvePortraitUrl(artist);
-                  const cachedImageUrl = artistImageMap.get(artist.name) ?? null;
-                  const fallbackUrl = artist.artwork_url
-                    ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300)
-                    : null;
-                  const imgUrl = portraitUrl && !failedPortraits.has(artist.name)
-                    ? (cachedImageUrl ?? getArtistImageUrl(portraitUrl))
-                    : fallbackUrl;
-                  return (
-                    <ArtistGridCard
-                      key={artist.name}
-                      artist={artist}
-                      imgUrl={imgUrl}
-                      hasPortrait={!!portraitUrl}
-                      enrichStale={artist.enriched_at === null || artist.enriched_at * 1000 < staleCutoff}
-                      serverWithCredential={serverWithCredential}
-                      onSelect={() => onSelect(artist)}
-                      onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, artist }); }}
-                      onPortraitError={() => setFailedPortraits((prev) => new Set(prev).add(artist.name))}
-                    />
-                  );
-                })}
+                {rowArtists.map((artist) => (
+                  <ArtistGridCard
+                    key={artist.name}
+                    artist={artist}
+                    cachedImageUrl={artistImageMap.get(artist.name) ?? null}
+                    portraitFailed={failedPortraits.has(artist.name)}
+                    enrichStale={artist.enriched_at === null || artist.enriched_at * 1000 < staleCutoff}
+                    serverWithCredential={serverWithCredential}
+                    onSelect={onSelect}
+                    onContextMenu={handleContextMenu}
+                    onPortraitError={handlePortraitError}
+                  />
+                ))}
               </div>
             );
           })}
@@ -185,27 +186,49 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
 
 interface ArtistGridCardProps {
   artist: ArtistRow;
-  imgUrl: string | null;
-  hasPortrait: boolean;
+  cachedImageUrl: string | null;
+  portraitFailed: boolean;
   enrichStale: boolean;
   serverWithCredential: ServerWithCredential;
-  onSelect: () => void;
-  onContextMenu: (e: MouseEvent) => void;
-  onPortraitError: () => void;
+  onSelect: (artist: ArtistRow) => void;
+  onContextMenu: (e: MouseEvent, artist: ArtistRow) => void;
+  onPortraitError: (artistName: string) => void;
 }
 
-function ArtistGridCard({ artist, imgUrl, hasPortrait, enrichStale, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
+const ArtistGridCard = memo(function ArtistGridCard({ artist, cachedImageUrl, portraitFailed, enrichStale, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const { server, credential } = serverWithCredential;
+
+  // Derive image URLs here (not inline in the parent map) and memoize each on its
+  // real inputs. resolvePortraitUrl / getCoverArtUrl / getArtistImageUrl each build
+  // fresh strings per call, which would otherwise defeat this component's React.memo.
+  const portraitUrl = useMemo(() => resolvePortraitUrl(artist), [artist]);
+  const fallbackUrl = useMemo(
+    () => (artist.artwork_url ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300) : null),
+    [artist.artwork_url, server.url, server.username, credential],
+  );
+  const imgUrl = useMemo(
+    () => (portraitUrl && !portraitFailed ? (cachedImageUrl ?? getArtistImageUrl(portraitUrl)) : fallbackUrl),
+    [portraitUrl, portraitFailed, cachedImageUrl, fallbackUrl],
+  );
+  const hasPortrait = !!portraitUrl;
+
+  // Bind the parent's stable, artist-agnostic handlers to this card's artist here,
+  // so the parent can pass one stable callback per handler instead of a fresh
+  // closure per card per render (which would defeat this component's React.memo).
+  const handleSelect = useCallback(() => onSelect(artist), [onSelect, artist]);
+  const handleContextMenu = useCallback((e: MouseEvent) => onContextMenu(e, artist), [onContextMenu, artist]);
+  const handlePortraitError = useCallback(() => { if (hasPortrait) onPortraitError(artist.name); }, [onPortraitError, artist.name, hasPortrait]);
 
   return (
     <div
       ref={cardRef}
       className="album-card"
-      onClick={onSelect}
+      onClick={handleSelect}
       role="button"
       tabIndex={0}
-      onKeyDown={(e) => e.key === "Enter" && onSelect()}
-      onContextMenu={onContextMenu}
+      onKeyDown={(e) => e.key === "Enter" && handleSelect()}
+      onContextMenu={handleContextMenu}
     >
       {enrichStale && (
         <LazyPortraitEnrich artistName={artist.name} serverWithCredential={serverWithCredential} elRef={cardRef} />
@@ -217,7 +240,7 @@ function ArtistGridCard({ artist, imgUrl, hasPortrait, enrichStale, serverWithCr
           alt={artist.name}
           decoding="async"
           loading="lazy"
-          onError={() => { if (hasPortrait) onPortraitError(); }}
+          onError={handlePortraitError}
         />
       ) : (
         <div className="album-art album-art--placeholder" />
@@ -230,4 +253,4 @@ function ArtistGridCard({ artist, imgUrl, hasPortrait, enrichStale, serverWithCr
       </div>
     </div>
   );
-}
+});

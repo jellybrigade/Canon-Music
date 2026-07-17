@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { getArtistImageUrl, isCoverServerReady } from "../lib/navidrome";
@@ -152,27 +152,119 @@ interface ArtistCoverRow {
   data_url: string;
 }
 
-/** Returns a Map<artistName, dataUrl> loaded from the SQLite artist image cache. */
-export function useArtistImageMap(): Map<string, string> {
+// --- On-demand artist-image data_url loading -------------------------------------------
+// APPROACH (chosen 2026-07-17): eager keyset + on-demand per-name base64 fetch. Mirrors the
+// cover-cache rewrite in useCoverCache.ts (see the long comment there). useArtistImageMap
+// used to eagerly `SELECT artist_name, data_url FROM artist_covers` over the WHOLE cache
+// (staleTime/gcTime Infinity), pulling multi-MB of resident base64 into JS at startup with a
+// cost that scaled with library size. Now only the keyset (artist_name) is loaded eagerly;
+// each portrait's data_url is pulled on demand the first time a caller .get()s that name,
+// cached so each name is fetched at most once, bounded LRU.
+//
+// Unlike covers, artist portraits have no object-URL layer: .get() returns the raw data URL
+// string (callers feed it straight into <img src>), so the return contract is preserved
+// exactly. .get() stays SYNCHRONOUS: warmed -> return the data URL; miss -> kick off a
+// one-time background load, return undefined this render, and a version bump re-renders the
+// consumer once it lands. Callers (`resolveArtistImageUrl`) already `?? getArtistImageUrl()`
+// fall back to the loopback-routed source URL for un-warmed names, so a miss shows the live
+// portrait immediately and swaps to cached bytes on the next render.
+
+const ARTIST_DATA_URL_CACHE_LIMIT = 2000;
+// artistName -> data_url, populated on demand, bounded LRU (recency = Map insertion order).
+const dataUrlByArtist = new Map<string, string>();
+const artistLoadsInFlight = new Set<string>();
+
+// External store so ALL useArtistImageMap consumers re-render when any portrait lands.
+let artistStoreVersion = 0;
+const artistStoreListeners = new Set<() => void>();
+function subscribeArtistStore(listener: () => void): () => void {
+  artistStoreListeners.add(listener);
+  return () => artistStoreListeners.delete(listener);
+}
+function getArtistStoreVersion(): number {
+  return artistStoreVersion;
+}
+function bumpArtistStore(): void {
+  artistStoreVersion++;
+  artistStoreListeners.forEach((l) => l());
+}
+
+function rememberArtistDataUrl(name: string, dataUrl: string): void {
+  dataUrlByArtist.delete(name);
+  dataUrlByArtist.set(name, dataUrl);
+  if (dataUrlByArtist.size > ARTIST_DATA_URL_CACHE_LIMIT) {
+    const oldest = dataUrlByArtist.keys().next().value;
+    if (oldest !== undefined) dataUrlByArtist.delete(oldest);
+  }
+}
+
+async function loadArtistDataUrl(name: string): Promise<void> {
+  try {
+    const db = await getDb();
+    const rows = await db.select<ArtistCoverRow[]>(
+      `SELECT artist_name, data_url FROM artist_covers WHERE artist_name = ? LIMIT 1`,
+      [name],
+    );
+    if (rows[0]) {
+      rememberArtistDataUrl(name, rows[0].data_url);
+      bumpArtistStore();
+    }
+  } catch (err) {
+    console.error(`Artist image cache: failed to load data_url for ${name}`, err);
+  } finally {
+    artistLoadsInFlight.delete(name);
+  }
+}
+
+class OnDemandArtistImageMap {
+  constructor(private readonly names: Set<string>) {}
+
+  get(name: string): string | undefined {
+    const dataUrl = dataUrlByArtist.get(name);
+    if (dataUrl) {
+      dataUrlByArtist.delete(name);
+      dataUrlByArtist.set(name, dataUrl);
+      return dataUrl;
+    }
+    if (this.names.has(name) && !artistLoadsInFlight.has(name)) {
+      artistLoadsInFlight.add(name);
+      void loadArtistDataUrl(name);
+    }
+    return undefined;
+  }
+}
+
+/** Returns a lazily-loading artistName -> dataUrl lookup backed by the SQLite artist image
+ *  cache. Only the keyset is loaded eagerly; each portrait's base64 is pulled on first .get().
+ *  Return shape is a `.get()`-only view; callers only ever call .get(). */
+export function useArtistImageMap(): Pick<Map<string, string>, "get"> {
+  // Re-render this consumer whenever any portrait data_url lands in the shared store.
+  useSyncExternalStore(subscribeArtistStore, getArtistStoreVersion);
+
   const { data } = useQuery({
     queryKey: QK.artistCovers(),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<ArtistCoverRow[]>(`SELECT artist_name, data_url FROM artist_covers`);
+      // Runs on initial load + every invalidation (after a cache-all pass). Drop cached
+      // data_urls so re-fetched portraits get re-pulled fresh on demand.
+      dataUrlByArtist.clear();
+      artistLoadsInFlight.clear();
+      const rows = await db.select<{ artist_name: string }[]>(`SELECT artist_name FROM artist_covers`);
+      return rows.map((r) => r.artist_name);
     },
     staleTime: Infinity,
     gcTime: Infinity,
   });
 
-  const rows = data ?? [];
-  return useMemo(() => new Map(rows.map((r) => [r.artist_name, r.data_url])), [rows]);
+  const names = data;
+  return useMemo(() => new OnDemandArtistImageMap(new Set(names ?? [])), [names]);
 }
 
 /** Resolves the URL to render for an artist portrait: prefer the locally
  * cached data URL, falling back to the loopback-routed source URL. Returns
  * null when there's no source portrait URL at all. */
 export function resolveArtistImageUrl(
-  imageMap: Map<string, string>,
+  imageMap: Pick<Map<string, string>, "get">,
   artistName: string,
   rawPortraitUrl: string | null
 ): string | null {

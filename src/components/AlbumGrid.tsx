@@ -46,7 +46,8 @@ interface Props {
 
 interface CardProps {
   album: AlbumRow;
-  artUrl: string | null;
+  coverUrl: string | null;
+  serverWithCredential: ServerWithCredential;
   isLoved: boolean;
   showBadge: boolean;
   onSelect: (album: AlbumRow) => void;
@@ -54,8 +55,17 @@ interface CardProps {
   onToggleLove: (albumId: string) => void;
 }
 
-const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
+const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredential, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
   const albumDisplayName = useAlbumDisplayName();
+  const { server, credential } = serverWithCredential;
+  // Derive the fallback cover URL here (not inline in the parent's render) and
+  // memoize on its stable inputs so the same card gets the same string reference
+  // across renders. getCoverArtUrl returns a fresh string each call, which would
+  // otherwise defeat this component's React.memo.
+  const artUrl = useMemo(
+    () => coverUrl ?? (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null),
+    [coverUrl, album.artwork_url, server.url, server.username, credential],
+  );
   return (
     <div
       className="album-card"
@@ -99,7 +109,6 @@ const AlbumCard = memo(function AlbumCard({ album, artUrl, isLoved, showBadge, o
 });
 
 export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
-  const { server, credential } = serverWithCredential;
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
@@ -287,7 +296,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                   <AlbumCard
                     key={album.id}
                     album={album}
-                    artUrl={coverMap.get(album.id) ?? (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null)}
+                    coverUrl={coverMap.get(album.id) ?? null}
+                    serverWithCredential={serverWithCredential}
                     isLoved={lovedAlbumIds.has(album.id)}
                     showBadge={mbAutoIdentify && failedLookupSet.has(album.id)}
                     onSelect={handleSelect}

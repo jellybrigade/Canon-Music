@@ -6,6 +6,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+  position: relative; /* offsetParent for each virtualized section's scrollMargin */
 }
 
 .search-empty {

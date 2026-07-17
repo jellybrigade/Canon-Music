@@ -4,6 +4,7 @@
   flex-direction: column;
   flex: 1;
   overflow-y: auto;
+  contain: paint;
 }
 
 /* ── Hero, slim inline header, matches NowPlaying track-info row ── */
