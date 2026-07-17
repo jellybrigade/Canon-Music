@@ -88,11 +88,29 @@ export function useRadio() {
     wasRadioActiveRef.current = radioActive;
   }, [radioActive]);
 
+  // Both decay maps are scored as `Math.min(1, gap / decay)`, so once an entry's gap
+  // reaches its decay window it contributes a multiplier of exactly 1 - identical to
+  // not being in the map at all. Evicting past that point is therefore free, and it
+  // bounds each map at roughly its decay window (18 / 8 entries) instead of growing
+  // one entry per artist/album for the whole session. Every lookahead fill iterates
+  // these per candidate, so an unbounded map costs CPU on every fill, not just memory.
+  function pruneDecayMap(map: Map<string, number>, decay: number) {
+    const counter = sessionCounterRef.current;
+    for (const [key, last] of map) {
+      if (counter - last >= decay) map.delete(key);
+    }
+  }
+
   function recordPick(artist: string | null, albumId: string | null | undefined, trackId: string) {
     sessionCounterRef.current += 1;
     if (artist) artistLastPlayedRef.current.set(artist.toLowerCase(), sessionCounterRef.current);
     if (albumId) albumLastPlayedRef.current.set(albumId, sessionCounterRef.current);
+    // Not pruned: this is a hard exclusion set, so dropping entries would let already
+    // played tracks repeat. It grows one id per track played, which is negligible.
     playedTrackIdsRef.current.add(trackId);
+
+    pruneDecayMap(artistLastPlayedRef.current, ARTIST_DECAY_TRACKS);
+    pruneDecayMap(albumLastPlayedRef.current, ALBUM_DECAY_TRACKS);
   }
 
   useEffect(() => {

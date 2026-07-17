@@ -94,8 +94,20 @@ fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn open_read_conn(app: &tauri::AppHandle) -> Result<Connection, String> {
     let path = db_path(app)?;
-    let conn = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
-        .map_err(|e| e.to_string())?;
+    // Opened READ_WRITE despite only ever running SELECTs. canon.db is in WAL mode
+    // (src/db/migrations.ts), and a SQLITE_OPEN_READ_ONLY connection cannot create or
+    // recover the -wal/-shm shared-memory files - it can only attach to ones a writer
+    // already owns. Since this connection can open before the tauri-plugin-sql writer
+    // pool has established them, READ_ONLY makes every query here fail with
+    // SQLITE_READONLY / "unable to open database file" depending on launch ordering.
+    // READ_WRITE lets it participate in WAL normally. CREATE is deliberately omitted so
+    // a missing/misresolved path errors out instead of silently creating an empty db
+    // that would shadow the real one.
+    let conn = Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX | OpenFlags::SQLITE_OPEN_URI,
+    )
+    .map_err(|e| e.to_string())?;
     conn.busy_timeout(Duration::from_secs(5)).map_err(|e| e.to_string())?;
     conn.pragma_update(None, "cache_size", -64_000).map_err(|e| e.to_string())?;
     Ok(conn)
