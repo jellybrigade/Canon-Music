@@ -1193,13 +1193,19 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
 
-    // WebKitGTK's compositor can crash the whole process (silent, no Rust panic,
-    // no crash.txt) under bursts of concurrent image decodes/paints - e.g. opening
-    // an AlbumDetail that loads cover art + a related-albums grid + similar-artist
-    // portraits at once. Disabling accelerated compositing trades some GPU-assisted
-    // smoothness for stability; worth it until upstream fixes the compositor bug.
+    // WebKitGTK instability under GPU compositing is driver-specific, not universal.
+    // The old blanket WEBKIT_DISABLE_COMPOSITING_MODE=1 forced CPU software rendering
+    // on every Linux machine, making all scrolling/painting sluggish. Instead apply
+    // the targeted NVIDIA quirk (dmabuf renderer / explicit-sync workarounds) that
+    // psysonic uses; it is a no-op on Intel/AMD, where compositing is stable. The
+    // web-process-terminated -> reload() handler below remains as the safety net.
+    // Opt out with CANON_WEBKIT_GPU_ACCEL=1 to run fully unpatched.
     #[cfg(target_os = "linux")]
-    std::env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    if std::env::var("CANON_WEBKIT_GPU_ACCEL").is_err() {
+        webkit2gtk_nvidia_quirk::apply_workaround_with_options(
+            webkit2gtk_nvidia_quirk::ApplyWorkaroundOptions::default(),
+        );
+    }
 
     // Spawn a thread to own OutputStream so it stays alive for the process lifetime.
     // Non-fatal: if no audio device is available the app still opens, play commands
