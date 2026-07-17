@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
-import { getDb } from "../db";
+import { invoke } from "@tauri-apps/api/core";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { getDb } from "../db";
 import type { AlbumRow, AlbumSort } from "../types/library";
 export type { AlbumRow, AlbumSort } from "../types/library";
 
-const ORDER_BY: Record<AlbumSort, string> = {
-  artist: "a.artist COLLATE NOCASE, a.name COLLATE NOCASE",
-  alphabetical: "a.name COLLATE NOCASE",
-  year: "a.year DESC, a.name COLLATE NOCASE",
-  recently_added: "COALESCE(a.navidrome_created, a.created_at) DESC",
-};
-
+// Pilot for the tauri-plugin-sql -> rusqlite migration (psysonic pattern, see
+// instructions/donow.md "rusqlite write/read split"). This read goes straight to a
+// dedicated Rust read-only connection (src-tauri/src/library_read.rs) instead of
+// round-tripping through tauri-plugin-sql's sqlx pool - no per-query IPC/sqlx overhead,
+// and it can't contend with in-flight sync/enrichment writes. Writes/migrations for
+// `albums` stay on tauri-plugin-sql for now; only this read path is piloted.
 export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = []) {
   const refreshTick = useAlbumBrowseSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<AlbumRow[] | undefined>(undefined);
@@ -21,26 +21,18 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
     let cancelled = false;
     async function load() {
       setIsLoading(true);
-      const db = await getDb();
-      const order = ORDER_BY[sort];
-      const rows =
-        canonicalIds.length > 0
-          ? await db.select<AlbumRow[]>(
-              // Join through album_genres, covers both leaf and ancestor canon ids,
-              // as well as raw: synthetic ids for unmatched tags.
-              `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type
-               FROM albums a
-               JOIN album_genres ag ON ag.album_id = a.id
-               WHERE ag.canonical_id IN (${canonicalIds.map(() => "?").join(", ")})
-               ORDER BY ${order}`,
-              canonicalIds
-            )
-          : await db.select<AlbumRow[]>(
-              `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums a ORDER BY ${order}`
-            );
-      if (!cancelled) {
-        setData(rows);
-        setIsLoading(false);
+      try {
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
+        const rows = await invoke<AlbumRow[]>("get_albums", { sort, canonicalIds });
+        if (!cancelled) {
+          setData(rows);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("useAlbums: failed to load albums", err);
+        if (!cancelled) setIsLoading(false);
       }
     }
     void load();

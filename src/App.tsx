@@ -44,6 +44,7 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
+import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import type { ServerWithCredential } from "./hooks/useServer";
 import type { PlaylistRow } from "./hooks/usePlaylists";
 import { useSidebarResize } from "./hooks/useSidebarResize";
@@ -223,6 +224,7 @@ function PlaylistDetailRoute({
 export default function App() {
   useMediaSession();
   useWakeLock();
+  useAppActivityTracking();
   useRadio();
   useBackgroundNormalizer();
   useNowPlayingPrefetch();

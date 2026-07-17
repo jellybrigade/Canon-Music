@@ -1,9 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { getDb } from "../db";
+import { invoke } from "@tauri-apps/api/core";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
+import { getDb } from "../db";
 import type { TrackRow } from "../types/library";
 export type { TrackRow } from "../types/library";
 
+// Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
+// split"). Mirrors useAlbums.ts/useArtists.ts - reads via src-tauri/src/library_read.rs's
+// dedicated read-only connection instead of tauri-plugin-sql's sqlx pool.
 export function useTracks(albumId: string | null) {
   const refreshTick = useTrackListSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<TrackRow[] | undefined>(undefined);
@@ -25,14 +29,10 @@ export function useTracks(albumId: string | null) {
     setIsLoading(true);
     (async () => {
       try {
-        const db = await getDb();
-        const rows = await db.select<TrackRow[]>(
-          `SELECT id, title, artist, album_artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak
-           FROM tracks
-           WHERE album_id = ?
-           ORDER BY disc_number, track_number`,
-          [albumId]
-        );
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
+        const rows = await invoke<TrackRow[]>("get_tracks", { albumId });
         if (!cancelled) {
           setData(rows);
           setIsLoading(false);

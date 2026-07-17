@@ -1,3 +1,4 @@
+mod library_read;
 mod streaming;
 mod upnp;
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -1239,7 +1240,21 @@ pub fn run() {
         .build()
         .expect("cover proxy http client failed");
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Second launch focuses the existing window instead of spawning a duplicate
+    // process/window (doubled resource use, potential lock contention on the shared
+    // SQLite DB). Release builds only so dev hot-reload relaunches aren't blocked.
+    #[cfg(not(debug_assertions))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.show();
+            let _ = w.unminimize();
+            let _ = w.set_focus();
+        }
+    }));
+
+    builder
         .register_asynchronous_uri_scheme_protocol("cover", |ctx, request, responder| {
             let state = ctx.app_handle().state::<CoverState>().inner().clone();
             tauri::async_runtime::spawn(async move {
@@ -1270,6 +1285,7 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
+        .manage(library_read::LibraryReadStore::default())
         .manage(CoverState {
             cache: cover_cache,
             artist_image_cache,
@@ -1351,6 +1367,29 @@ pub fn run() {
                 });
             }
 
+            // The window is created hidden (`"visible": false` in tauri.conf.json) and
+            // revealed from the on_page_load hook below, once the webview has content to
+            // paint. Mapping an unpainted WebKitGTK webview is a startup-crash and
+            // white-flash trigger; the reference project (psysonic) never maps one.
+            //
+            // This is NOT the reverted `cde9841` reveal, which showed the window, hid it,
+            // then showed it again after first paint - that unmap/remap cycle is itself
+            // the freeze/thaw race. Here the window is mapped exactly once, and never
+            // unmapped.
+            //
+            // Safety net: if the frontend never loads (JS bundle error, dev server down),
+            // on_page_load never fires and the window would stay invisible forever with
+            // no way to reach it. Force it visible after 5s regardless.
+            if let Some(w) = app.get_webview_window("main") {
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(5));
+                    if !w.is_visible().unwrap_or(true) {
+                        eprintln!("[startup] page load never fired after 5s - showing window anyway");
+                        let _ = w.show();
+                    }
+                });
+            }
+
             // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
             // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
             // active WebKit compositor/animation timer running, which may race the
@@ -1375,6 +1414,14 @@ pub fn run() {
             // }
 
             Ok(())
+        })
+        .on_page_load(|window, _payload| {
+            // First reveal of the window (created hidden - see the comment in setup()).
+            // Fires on every navigation/reload, not just the first load, so this must be
+            // idempotent: show() on an already-visible window is a no-op, and crucially
+            // there is no hide() anywhere on this path, so a reload (e.g. the
+            // web-process-terminated recovery above) can't unmap and remap the window.
+            let _ = window.show();
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -1408,6 +1455,10 @@ pub fn run() {
             tray_set_close_to_tray,
             set_cover_proxy_config,
             take_crash_report,
+            library_read::get_albums,
+            library_read::get_artists,
+            library_read::get_tracks,
+            library_read::get_all_tracks,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

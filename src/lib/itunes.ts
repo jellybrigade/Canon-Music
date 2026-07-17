@@ -1,4 +1,11 @@
+import { cappedSet } from "./boundedCache";
+
+const MAX_CACHE_ENTRIES = 2000;
 const cache = new Map<string, string | null>();
+
+function setCached(key: string, value: string | null): void {
+  cappedSet(cache, key, value, MAX_CACHE_ENTRIES);
+}
 
 export async function fetchItunesCoverArt(
   artist: string | null,
@@ -12,14 +19,14 @@ export async function fetchItunesCoverArt(
     const res = await fetch(
       `https://itunes.apple.com/search?term=${term}&entity=album&limit=1&media=music`
     );
-    if (!res.ok) { cache.set(key, null); return null; }
+    if (!res.ok) { setCached(key, null); return null; }
     const data = (await res.json()) as { results?: Array<{ artworkUrl100?: string }> };
     const raw = data.results?.[0]?.artworkUrl100 ?? null;
     const url = raw ? raw.replace("100x100bb", "600x600bb") : null;
-    cache.set(key, url);
+    setCached(key, url);
     return url;
   } catch {
-    cache.set(key, null);
+    setCached(key, null);
     return null;
   }
 }
