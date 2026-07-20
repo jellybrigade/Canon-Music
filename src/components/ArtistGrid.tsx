@@ -10,7 +10,6 @@ import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
 import type { RadioMode } from "../store/player";
-import { useScrollMemory } from "../hooks/useScrollMemory";
 import { useSetting } from "../hooks/useSetting";
 
 /** Lazily triggers portrait enrichment once a grid tile scrolls into view, so
@@ -50,10 +49,9 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (artist: ArtistRow) => void;
   onStartRadio?: (artist: ArtistRow, mode: RadioMode) => void;
-  scrollKey?: string;
 }
 
-export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, scrollKey }: Props) {
+export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
@@ -91,8 +89,6 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
-
-  useScrollMemory(scrollKey, containerRef);
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));

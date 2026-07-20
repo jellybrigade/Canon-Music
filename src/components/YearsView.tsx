@@ -26,7 +26,6 @@ export function YearsView({ serverWithCredential, onSelect, onStartRadio, server
         onSelect={onSelect}
         onStartRadio={onStartRadio}
         emptyMessage="No albums yet. Sync your library first."
-        scrollKey="years"
         sort="year"
       />
     </main>

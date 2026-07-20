@@ -439,7 +439,6 @@ export function AppRoutes(props: AppViewProps) {
         onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
         playlists={playlists}
         emptyMessage={emptyMessage}
-        scrollKey={`library-${sort}-${lovedOnly ? "loved" : ""}-${canonicalIdFilters.join(",")}-${yearFromInput}-${yearToInput}`}
         sort={sort}
       />
     );
@@ -608,7 +607,6 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               onSelect={openArtist}
               onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-              scrollKey="artists"
             />
           ) : (
             <p className="empty-state">Loading…</p>
