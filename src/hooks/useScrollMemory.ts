@@ -23,17 +23,19 @@ export function useScrollMemory(
     const saved = useScrollMemoryStore.getState().positions[savedKey];
     let raf = 0;
     if (saved != null && saved > 0) {
-      // The virtualized grids (AlbumGrid/ArtistGrid) need a few frames after
-      // mount to reach full scroll height: container width -> column count ->
-      // row layout -> virtualizer total size. Assigning scrollTop before that
-      // height exists clamps it to 0, so retry across frames until the position
-      // sticks, or the content is simply too short to reach it.
+      // On remount the scroller starts empty: its data (SQLite reads) and the
+      // virtualized grid's full height (container width -> column count -> row
+      // layout -> total size) only arrive over the next several frames.
+      // Assigning scrollTop before the scroller can actually reach `saved`
+      // clamps it to 0, so wait until the content is tall enough, THEN assign
+      // once. Give up after ~1s if it never gets that tall (fewer items now).
       let attempts = 0;
       const tryRestore = () => {
-        el.scrollTop = saved;
-        const reached = Math.abs(el.scrollTop - saved) < 1;
-        const maxed = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
-        if (!reached && !maxed && attempts < 30) {
+        if (el.scrollHeight - el.clientHeight >= saved) {
+          el.scrollTop = saved;
+          return;
+        }
+        if (attempts < 60) {
           attempts++;
           raf = requestAnimationFrame(tryRestore);
         }

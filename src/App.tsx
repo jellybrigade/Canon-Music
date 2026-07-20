@@ -59,7 +59,6 @@ export default function App() {
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const play = usePlayerStore((s) => s.play);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
@@ -482,7 +481,8 @@ export default function App() {
     );
   }
 
-  const queueClass = isQueueOpen ? " library--queue-open" : "";
+  // The side queue panel was removed; the layout no longer shifts for it.
+  const queueClass = "";
 
   const shellProps: AppViewProps = {
     server,

@@ -1,7 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Search, X, ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
 import { PlayerBar } from "../components/PlayerBar";
-import { QueuePanel } from "../components/QueuePanel";
 import { ScrobbleTracker } from "../hooks/useScrobble";
 import { UpdatePrompt } from "../components/UpdatePrompt";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
@@ -166,7 +165,6 @@ export function AppShell(props: AppViewProps) {
         {renderContent()}
       </div>
       <ScrobbleTracker track={currentTrack} serverWithCred={serverWithCred ?? undefined} />
-      <QueuePanel serverWithCred={serverWithCred ?? undefined} />
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
