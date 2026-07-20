@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
-
-const scrollMemory = new Map<string, number>();
+import { useScrollMemoryStore } from "../store/scrollMemoryStore";
 
 /**
  * Saves and restores the scroll position of a container element, keyed by `key`.
@@ -19,10 +18,12 @@ export function useScrollMemory(
     const savedKey = key;
     keyRef.current = key;
     if (!savedKey || !el) return;
-    const saved = scrollMemory.get(savedKey);
+    // Read/write imperatively (not via the hook selector) so scroll bookkeeping
+    // never triggers a re-render, matching the old module-level Map's behavior.
+    const saved = useScrollMemoryStore.getState().positions[savedKey];
     if (saved != null) el.scrollTop = saved;
     return () => {
-      scrollMemory.set(savedKey, el.scrollTop);
+      useScrollMemoryStore.getState().save(savedKey, el.scrollTop);
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 }
