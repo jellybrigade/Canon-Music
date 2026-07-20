@@ -215,12 +215,12 @@ function ArtistDetailRoute({
   queueClass: string;
 }) {
   const { artistName } = useParams<{ artistName: string }>();
-  const { data: fetchedArtist } = useQuery<ArtistRow | null>({
+  const decodedName = artistName ? decodeURIComponent(artistName) : null;
+  const { data: fetchedArtist, isPending } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
     enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
-      const name = decodeURIComponent(artistName!);
       const serverId = serverWithCred!.server.id;
       const rows = await db.select<ArtistRow[]>(
         `SELECT a.name, a.album_count,
@@ -232,13 +232,26 @@ function ArtistDetailRoute({
          FROM artists a
          LEFT JOIN artist_identity ai ON ai.artist_name = a.name
          WHERE a.name = ? AND a.server_id = ?`,
-        [name, serverId]
+        [decodedName!, serverId]
       );
       return rows[0] ?? null;
     },
   });
-  const artist = fetchedArtist ?? null;
-  if (!artist || !serverWithCred) return null;
+  if (!serverWithCred || !decodedName || isPending) return null;
+  // Recommended/similar artists surfaced in an artist view are not in the local
+  // `artists` table, so the lookup above misses. Fall back to a minimal row
+  // synthesized from the URL name (same shape openArtist(string) builds) so
+  // ArtistDetail still renders and can enrich/look up by name, instead of
+  // hard-returning null (which painted a black screen).
+  const artist: ArtistRow = fetchedArtist ?? {
+    name: decodedName,
+    album_count: 0,
+    artwork_url: null,
+    lastfm_image_url: null,
+    wikidata_image_url: null,
+    navidrome_image_url: null,
+    enriched_at: null,
+  };
   return (
     <main className={`library${queueClass}`}>
       <ArtistDetail

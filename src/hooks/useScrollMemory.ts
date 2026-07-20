@@ -21,8 +21,27 @@ export function useScrollMemory(
     // Read/write imperatively (not via the hook selector) so scroll bookkeeping
     // never triggers a re-render, matching the old module-level Map's behavior.
     const saved = useScrollMemoryStore.getState().positions[savedKey];
-    if (saved != null) el.scrollTop = saved;
+    let raf = 0;
+    if (saved != null && saved > 0) {
+      // The virtualized grids (AlbumGrid/ArtistGrid) need a few frames after
+      // mount to reach full scroll height: container width -> column count ->
+      // row layout -> virtualizer total size. Assigning scrollTop before that
+      // height exists clamps it to 0, so retry across frames until the position
+      // sticks, or the content is simply too short to reach it.
+      let attempts = 0;
+      const tryRestore = () => {
+        el.scrollTop = saved;
+        const reached = Math.abs(el.scrollTop - saved) < 1;
+        const maxed = el.scrollTop >= el.scrollHeight - el.clientHeight - 1;
+        if (!reached && !maxed && attempts < 30) {
+          attempts++;
+          raf = requestAnimationFrame(tryRestore);
+        }
+      };
+      raf = requestAnimationFrame(tryRestore);
+    }
     return () => {
+      if (raf) cancelAnimationFrame(raf);
       useScrollMemoryStore.getState().save(savedKey, el.scrollTop);
     };
   }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
