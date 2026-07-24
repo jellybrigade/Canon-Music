@@ -4,7 +4,7 @@ import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, List, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -58,7 +58,6 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const queueIndex    = usePlayerStore((s) => s.queueIndex);
   const repeat        = usePlayerStore((s) => s.repeat);
   const isShuffled    = usePlayerStore((s) => s.isShuffled);
-  const isQueueOpen   = usePlayerStore((s) => s.isQueueOpen);
 
   const pause         = usePlayerStore((s) => s.pause);
   const resume        = usePlayerStore((s) => s.resume);
@@ -69,7 +68,6 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const toggleMute    = usePlayerStore((s) => s.toggleMute);
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const toggleQueue   = usePlayerStore((s) => s.toggleQueue);
   const pullProgress        = useTagsStore((s) => s.pullProgress);
   const enrichmentPending   = useTagsStore((s) => s.enrichmentPending);
   const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
@@ -460,14 +458,6 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             aria-label="Now playing"
           >
             <Headphones size={22} />
-          </button>
-          <button
-            className={`player-btn player-btn--icon${isQueueOpen ? " player-btn--active" : ""}`}
-            onClick={toggleQueue}
-            title="Queue"
-            aria-label="Queue"
-          >
-            <List size={22} />
           </button>
           <div
             className="player-volume"

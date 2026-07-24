@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CheckCircle, AlertCircle } from "lucide-react";
 import { getDb } from "../../db";
 import { authenticate, authenticateWithApiKey } from "../../lib/navidrome";
 import type { NavidromeCredential } from "../../lib/navidrome";
@@ -181,9 +182,13 @@ export function Wizard({ onSuccess }: Props) {
       <div className="wizard">
         <div className="wizard-steps">
           {([1, 2, 3, 4] as Step[]).map((s) => (
-            <div key={s} className={`wizard-step-dot${step === s ? " wizard-step-dot--active" : step > s ? " wizard-step-dot--done" : ""}`} />
+            <div key={s} className="wizard-step-dot-wrap">
+              <div className={`wizard-step-dot${step === s ? " wizard-step-dot--active" : step > s ? " wizard-step-dot--done" : ""}`} />
+              {s < 4 && <div className={`wizard-step-track${step > s ? " wizard-step-track--done" : ""}`} />}
+            </div>
           ))}
         </div>
+        <p className="wizard-step-label">Step {step} of 4</p>
 
         {step === 1 && (
           <div className="wizard-body">
@@ -285,8 +290,18 @@ export function Wizard({ onSuccess }: Props) {
                 />
               </label>
 
-              {testState === "error" && <p className="wizard-error">{testError}</p>}
-              {testState === "ok" && snapshotMatch && <p className="wizard-success">Connection successful.</p>}
+              {testState === "error" && (
+                <p className="wizard-feedback wizard-feedback--error">
+                  <AlertCircle size={14} />
+                  {testError}
+                </p>
+              )}
+              {testState === "ok" && snapshotMatch && (
+                <p className="wizard-feedback wizard-feedback--success">
+                  <CheckCircle size={14} />
+                  Connection successful.
+                </p>
+              )}
 
               <div className="wizard-actions">
                 <button
@@ -386,7 +401,7 @@ export function Wizard({ onSuccess }: Props) {
               </SettingRow>
             </section>
 
-            <section className="settings-section">
+            <section className="wizard-import-box">
               <h3 className="settings-section-title">Import settings</h3>
               <p className="settings-section-desc">Restore a previously exported settings backup.</p>
               <div className="settings-field settings-field--row">
@@ -422,7 +437,12 @@ export function Wizard({ onSuccess }: Props) {
             <p className="wizard-desc">
               Library syncing in background, start listening.
             </p>
-            {saveError && <p className="wizard-error">{saveError}</p>}
+            {saveError && (
+              <p className="wizard-feedback wizard-feedback--error">
+                <AlertCircle size={14} />
+                {saveError}
+              </p>
+            )}
             <div className="wizard-actions">
               <button
                 type="button"

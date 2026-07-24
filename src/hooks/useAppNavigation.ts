@@ -20,13 +20,6 @@ const VIEW_TO_PATH: Record<AppView, string> = {
   settings: "/settings",
 };
 
-type LocationState = {
-  album?: AlbumRow;
-  artist?: ArtistRow;
-  playlist?: PlaylistRow;
-  fromView?: AppView;
-};
-
 export function useAppNavigation() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -34,14 +27,16 @@ export function useAppNavigation() {
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
   const pathname = location.pathname;
-  const locationState = (location.state ?? {}) as LocationState;
 
+  // The URL is the sole source of truth for the active view (sidebar highlight).
+  // Detail routes map to the browse view they belong under, purely by prefix,
+  // no location.state involved (psysonic derives active nav from the URL only).
   const view: AppView = (() => {
     for (const [v, p] of Object.entries(VIEW_TO_PATH)) {
       if (pathname === p) return v as AppView;
     }
-    // For detail routes: restore the originating view from state
-    if (locationState.fromView) return locationState.fromView;
+    if (pathname.startsWith("/album/")) return "library";
+    if (pathname.startsWith("/artist/")) return "artists";
     if (pathname.startsWith("/playlist/")) return "playlists";
     return "library";
   })();
@@ -49,28 +44,25 @@ export function useAppNavigation() {
   function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
     if (v === "nowplaying" && isQueueOpen) toggleQueue();
     if (select?.album) {
-      navigate(albumPath(select.album.id), { state: { album: select.album, fromView: view } });
+      navigate(albumPath(select.album.id));
     } else if (select?.artist) {
-      navigate(artistPath(select.artist.name), { state: { artist: select.artist, fromView: view } });
+      navigate(artistPath(select.artist.name));
     } else {
       navigate(VIEW_TO_PATH[v]);
     }
   }
 
   function openAlbum(album: AlbumRow) {
-    navigate(albumPath(album.id), { state: { album, fromView: view } });
+    navigate(albumPath(album.id));
   }
 
   function openArtist(artist: ArtistRow | string) {
-    const row: ArtistRow =
-      typeof artist === "string"
-        ? { name: artist, album_count: 0, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }
-        : artist;
-    navigate(artistPath(row.name), { state: { artist: row, fromView: view } });
+    const name = typeof artist === "string" ? artist : artist.name;
+    navigate(artistPath(name));
   }
 
   function openPlaylist(playlist: PlaylistRow) {
-    navigate(playlistPath(playlist.id), { state: { playlist, fromView: "playlists" } });
+    navigate(playlistPath(playlist.id));
   }
 
   function goBack() {

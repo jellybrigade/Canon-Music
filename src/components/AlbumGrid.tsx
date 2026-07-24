@@ -3,7 +3,6 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../types/library";
-import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
@@ -40,7 +39,6 @@ interface Props {
   onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
   playlists?: PlaylistRow[];
   emptyMessage?: string;
-  scrollKey?: string;
   sort?: AlbumSort;
 }
 
@@ -108,7 +106,7 @@ const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredentia
   );
 });
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, scrollKey, sort }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, sort }: Props) {
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
@@ -132,8 +130,6 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
-
-  useScrollMemory(scrollKey, containerRef);
 
   const handleSelect = useCallback((album: AlbumRow) => onSelect(album), [onSelect]);
   const handleContextMenu = useCallback((x: number, y: number, album: AlbumRow) => {

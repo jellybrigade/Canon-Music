@@ -10,19 +10,28 @@
 }
 
 .wizard {
-  width: 420px;
+  width: 440px;
   max-width: 100%;
   margin: auto 0;
   padding: var(--space-xl) var(--space-xl) var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
 }
 
 .wizard-steps {
   display: flex;
-  gap: var(--space-xs);
+  align-items: center;
   justify-content: center;
+}
+
+.wizard-step-dot-wrap {
+  display: flex;
+  align-items: center;
 }
 
 .wizard-step-dot {
@@ -30,21 +39,53 @@
   height: 6px;
   border-radius: 50%;
   background: var(--surface-3);
-  transition: background var(--motion-fast) ease-out;
+  transition: background var(--motion-fast), transform var(--motion-fast);
+  flex-shrink: 0;
 }
 
 .wizard-step-dot--active {
   background: var(--accent);
+  transform: scale(1.4);
 }
 
 .wizard-step-dot--done {
   background: var(--text-tertiary);
 }
 
+.wizard-step-track {
+  width: 24px;
+  height: 2px;
+  background: var(--surface-3);
+  transition: background var(--motion-fast);
+}
+
+.wizard-step-track--done {
+  background: var(--text-tertiary);
+}
+
+.wizard-step-label {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: 0;
+}
+
 .wizard-body {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+  animation: wizard-step-in var(--duration-slow) var(--ease-out-expo);
+}
+
+@keyframes wizard-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .wizard-title-row {
@@ -59,9 +100,11 @@
 }
 
 .wizard-title {
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
   font-weight: 700;
+  letter-spacing: -0.01em;
   margin: 0;
+  text-wrap: balance;
 }
 
 .wizard-desc {
@@ -183,14 +226,35 @@
   margin-top: var(--space-2xs);
 }
 
-.wizard-error {
-  color: var(--danger);
+.wizard-feedback {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
   font-size: var(--text-md);
+  font-weight: 500;
+  padding: var(--space-2xs) var(--space-sm);
+  border-radius: var(--radius-base);
   margin: 0;
+  align-self: flex-start;
 }
 
-.wizard-success {
+.wizard-feedback svg {
+  flex-shrink: 0;
+}
+
+.wizard-feedback--error {
+  background: color-mix(in srgb, var(--danger) 15%, transparent);
+  color: var(--danger);
+}
+
+.wizard-feedback--success {
+  background: color-mix(in srgb, var(--success-b) 15%, transparent);
   color: var(--success-b);
-  font-size: var(--text-md);
-  margin: 0;
+}
+
+.wizard-import-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: var(--space-sm) var(--space-md);
 }
