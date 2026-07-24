@@ -18,6 +18,8 @@ import type { useAllTracks } from "../hooks/useAllTracks";
 import type { SearchResults as SearchResultsData } from "../hooks/useSearch";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { RadioMode, CurrentTrack } from "../store/player";
+
+const ArtistGridLazy = lazy(() => import("../components/ArtistGrid").then((m) => ({ default: m.ArtistGrid })));
 import type { RemoteNotice } from "../lib/notice";
 
 const AlbumDetail = lazy(() => import("../components/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -216,7 +218,7 @@ function ArtistDetailRoute({
 }) {
   const { artistName } = useParams<{ artistName: string }>();
   const decodedName = artistName ? decodeURIComponent(artistName) : null;
-  const { data: fetchedArtist, isPending } = useQuery<ArtistRow | null>({
+  const { data: fetchedArtist } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
     enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
@@ -237,7 +239,7 @@ function ArtistDetailRoute({
       return rows[0] ?? null;
     },
   });
-  if (!serverWithCred || !decodedName || isPending) return null;
+  if (!serverWithCred || !decodedName) return null;
   // Recommended/similar artists surfaced in an artist view are not in the local
   // `artists` table, so the lookup above misses. Fall back to a minimal row
   // synthesized from the URL name (same shape openArtist(string) builds) so
@@ -708,5 +710,3 @@ export function AppRoutes(props: AppViewProps) {
     </Routes>
   );
 }
-
-const ArtistGridLazy = lazy(() => import("../components/ArtistGrid").then((m) => ({ default: m.ArtistGrid })));
