@@ -694,6 +694,7 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/settings" element={
         <main className="content-main">
           <SettingsView
+            server={server}
             syncStatus={syncStatus}
             syncError={syncError}
             lastSyncedAt={lastSyncedAt}
