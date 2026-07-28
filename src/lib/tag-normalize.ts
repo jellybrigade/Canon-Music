@@ -5,6 +5,7 @@ import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import { getMinFolksonomyCount } from "./musicbrainz";
 import type { MbGenre } from "./musicbrainz";
 import { executeBatched } from "./db-batch";
+import { getManualGenreMappings } from "./manual-mappings";
 
 export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
@@ -114,12 +115,9 @@ async function _doNormalizeAlbum(
     [albumId]
   );
 
-  // Manual mappings override auto tree-matching
-  type MappingRow = { raw_value: string; canonical_id: string };
-  const manualRows = await db.select<MappingRow[]>(
-    "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'"
-  );
-  const manualMap = new Map(manualRows.map((r) => [canonicalKey(r.raw_value), r.canonical_id]));
+  // Manual mappings override auto tree-matching. Cached across albums, dropped by
+  // whatever mutation writes tag_mappings (see src/lib/manual-mappings.ts).
+  const manualMap = await getManualGenreMappings();
 
   // Use confirmed identity strings for Last.fm lookup if available
   const lfmArtist = identity?.lastfmArtistName ?? artist;

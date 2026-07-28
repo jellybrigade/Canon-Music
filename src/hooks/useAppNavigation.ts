@@ -71,6 +71,10 @@ export function useAppNavigation() {
 
   return {
     view,
+    // Exposed alongside `view` because `view` is deliberately coarse: detail routes
+    // fold into their browse view (/album/:id -> library), which is too broad for
+    // deciding whether a browse list's data actually needs loading.
+    pathname,
     navigateTo,
     openAlbum,
     openArtist,

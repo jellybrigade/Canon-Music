@@ -1478,6 +1478,11 @@ pub fn run() {
             library_read::get_artists,
             library_read::get_tracks,
             library_read::get_all_tracks,
+            library_read::get_genres,
+            library_read::get_recent_genres,
+            library_read::get_loved,
+            library_read::get_playlists,
+            library_read::get_unmapped_tag_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

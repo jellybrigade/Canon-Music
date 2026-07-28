@@ -13,7 +13,7 @@ import { useSearch } from "./hooks/useSearch";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
-import { useTagVocab } from "./hooks/useTagMappings";
+import { useUnmappedTagCount } from "./hooks/useTagMappings";
 import { useMediaSession } from "./hooks/useMediaSession";
 import { useRadio } from "./hooks/useRadio";
 import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
@@ -82,6 +82,7 @@ export default function App() {
 
   const {
     view,
+    pathname,
     navigateTo,
     openAlbum,
     openArtist,
@@ -117,14 +118,22 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
 
-  const { data: albums } = useAlbums(sort, canonicalIdFilters);
-  const { data: artists } = useArtists();
-  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks();
-  const { data: genres } = useGenres();
-  const { data: vocab } = useTagVocab();
+  // These four feed exactly one route each (see AppRoutes), so they are gated on the
+  // pathname rather than loaded for every view. Gating skips the fetch only - each
+  // hook keeps its last rows and its session-store seed, so returning to the route
+  // still paints immediately. `pathname` not `view`: view folds /album/:id into
+  // "library", which would drag the whole album list into every album detail page.
+  const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library");
+  const { data: artists } = useArtists(pathname === "/artists");
+  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks(pathname === "/tracks");
+  const { data: genres } = useGenres(pathname === "/library");
+  // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
-  const unmappedCount = vocab?.filter((r) => !r.canonical_id && r.album_count > 0).length ?? 0;
+  // Scalar count for the sidebar badge. The full tag vocabulary is fetched only inside
+  // the lazily-loaded Tags route, which is where the rows are actually used.
+  const { data: unmappedCountRaw } = useUnmappedTagCount();
+  const unmappedCount = unmappedCountRaw ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
   const { data: failedLookupIds } = useFailedLookupAlbumIds();
   const unidentifiedCount = failedLookupIds?.length ?? 0;

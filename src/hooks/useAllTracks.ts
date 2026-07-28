@@ -30,7 +30,10 @@ export interface AllTrackRow {
 // src-tauri/src/library_read.rs's dedicated read-only connection instead of
 // tauri-plugin-sql's sqlx pool. Ported after live measurement showed this hook's sqlx
 // select taking 1.8-3.5s vs ~100-250ms for the already-piloted rusqlite reads.
-export function useAllTracks() {
+// `enabled` lets the app root skip this fetch on routes that never render the track
+// table. When false the effect returns early without clearing `data` - the session-store
+// seed and last-loaded rows survive, so returning to the route paints instantly.
+export function useAllTracks(enabled: boolean = true) {
   const refreshTick = useAllTracksSessionStore((s) => s.refreshTick);
 
   // Seed from the session-store cache synchronously so a view switch with unchanged
@@ -43,6 +46,7 @@ export function useAllTracks() {
   const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    if (!enabled) return;
     const s = useAllTracksSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as AllTrackRow[]);
@@ -70,7 +74,7 @@ export function useAllTracks() {
     return () => {
       cancelled = true;
     };
-  }, [refreshTick]);
+  }, [refreshTick, enabled]);
 
   return { data, isLoading };
 }

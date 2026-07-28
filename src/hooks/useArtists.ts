@@ -9,7 +9,10 @@ export type { ArtistRow } from "../types/library";
 // split"). Mirrors useAlbums.ts - reads via src-tauri/src/library_read.rs's dedicated
 // read-only connection instead of tauri-plugin-sql's sqlx pool. Writes/migrations for
 // `artists` stay on tauri-plugin-sql.
-export function useArtists() {
+// `enabled` lets the app root skip this fetch on routes that never render an artist
+// list. When false the effect returns early without clearing `data` - the session-store
+// seed and last-loaded rows survive, so returning to the route paints instantly.
+export function useArtists(enabled: boolean = true) {
   const refreshTick = useArtistBrowseSessionStore((s) => s.refreshTick);
 
   // Seed from the session-store cache synchronously so a view switch with unchanged
@@ -21,6 +24,7 @@ export function useArtists() {
   const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    if (!enabled) return;
     const s = useArtistBrowseSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as ArtistRow[]);
@@ -49,7 +53,7 @@ export function useArtists() {
     return () => {
       cancelled = true;
     };
-  }, [refreshTick]);
+  }, [refreshTick, enabled]);
 
   return { data, isLoading };
 }

@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { fetchAlbumTags, classifyTag } from "../lib/lastfm";
 import { QK } from "../lib/query-keys";
 import { findCanonical, getCanonTree, sqlNorm } from "../lib/canonicalize";
+import { invalidateManualMappings } from "../lib/manual-mappings";
 import { useTagsStore } from "../store/tags";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { InboxItem, InboxTagRow } from "../store/tags";
@@ -84,6 +85,7 @@ async function applyInboxItem(item: InboxItem): Promise<void> {
          VALUES (?, ?, ?, 'manual', ?, datetime('now'), ?)`,
         [tag.rawValue, tag.kind, canonicalId, matchType, sqlNorm(tag.rawValue)]
       );
+      invalidateManualMappings();
     }
 
     for (const track of trackRows) {
