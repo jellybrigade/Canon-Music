@@ -1,11 +1,24 @@
 import { useEffect } from "react";
 import { getDb } from "../db";
 import { normalizeAlbum } from "../lib/tag-normalize";
+import { runPool } from "../lib/async-pool";
 import { fetchArtistInfo } from "../lib/lastfm";
 import { useSetting } from "./useSetting";
 import { useTagsStore } from "../store/tags";
 
-const INTERVAL_MS = 2000;
+// Pacing note (rewritten 2026-07-28): there is deliberately no inter-item delay here.
+// This loop used to sleep 2000ms between items, which on a cold library meant ~66 minutes
+// of pure sleeping for 2000 albums. That delay was redundant: every network call this pass
+// makes goes through Last.fm, and `src/lib/lastfm.ts` already funnels all of them through a
+// single process-wide 250ms token bucket (<= 4 req/s). The rate limiter is the real throttle,
+// so the wall clock is now bounded by the API budget instead of by a sleep on top of it.
+//
+// Concurrency exists only to overlap the local work (canon-tree scoring, ~10 SQLite
+// round trips per album) with the rate limiter's waits; it does NOT raise the request rate,
+// because the shared bucket still spaces every Last.fm call 250ms apart no matter how many
+// workers are in flight. Kept low so background writes don't starve UI reads on the
+// tauri-plugin-sql pool.
+const POOL_CONCURRENCY = 3;
 const AUTO_RUN_THRESHOLD = 300;
 
 let isRunning = false;
@@ -44,37 +57,56 @@ async function enrichArtistBackground(artistName: string, lastfmName: string): P
   );
 }
 
-async function doEnrich(albums: AlbumRow[], artists: ArtistRow[]): Promise<void> {
+async function doEnrich(albums: AlbumRow[], artists: ArtistRow[], signal?: AbortSignal): Promise<void> {
   const { setPullProgress } = useTagsStore.getState();
   const total = albums.length + artists.length;
   if (total === 0) return;
 
+  try {
+    await runEnrichPasses(albums, artists, signal);
+  } finally {
+    // Covers abort and throw as well as normal completion: a progress bar left mounted at
+    // "Fetching metadata... 431 / 2000" with no pass behind it never goes away on its own.
+    setPullProgress(null);
+  }
+}
+
+async function runEnrichPasses(albums: AlbumRow[], artists: ArtistRow[], signal?: AbortSignal): Promise<void> {
+  const { setPullProgress } = useTagsStore.getState();
+  const total = albums.length + artists.length;
+
   setPullProgress({ done: 0, total });
   let done = 0;
+  // Both passes report into one combined progress bar, so the counter is shared rather
+  // than taken from either pool's own per-pass count.
+  const tick = () => setPullProgress({ done: ++done, total });
 
-  for (const album of albums) {
-    try {
-      await normalizeAlbum(album.id, album.artist ?? "", album.name);
-    } catch (e) {
-      console.warn("Background normalizer failed for:", album.name, e);
-    }
-    done++;
-    setPullProgress({ done, total });
-    await new Promise<void>((r) => setTimeout(r, INTERVAL_MS));
-  }
+  await runPool(
+    albums,
+    async (album) => {
+      try {
+        await normalizeAlbum(album.id, album.artist ?? "", album.name);
+      } catch (e) {
+        console.warn("Background normalizer failed for:", album.name, e);
+      }
+      tick();
+    },
+    { concurrency: POOL_CONCURRENCY, signal },
+  );
+  if (signal?.aborted) return;
 
-  for (const artist of artists) {
-    try {
-      await enrichArtistBackground(artist.name, artist.lastfm_artist_name ?? artist.name);
-    } catch (e) {
-      console.warn("Background enricher failed for:", artist.name, e);
-    }
-    done++;
-    setPullProgress({ done, total });
-    await new Promise<void>((r) => setTimeout(r, INTERVAL_MS));
-  }
-
-  setPullProgress(null);
+  await runPool(
+    artists,
+    async (artist) => {
+      try {
+        await enrichArtistBackground(artist.name, artist.lastfm_artist_name ?? artist.name);
+      } catch (e) {
+        console.warn("Background enricher failed for:", artist.name, e);
+      }
+      tick();
+    },
+    { concurrency: POOL_CONCURRENCY, signal },
+  );
 }
 
 async function queryStale(staleDays: number): Promise<{ albums: AlbumRow[]; artists: ArtistRow[] }> {
@@ -115,10 +147,7 @@ export function useBackgroundNormalizer() {
       const { albums, artists } = await queryStale(staleDays);
       const total = albums.length + artists.length;
 
-      if (total === 0) {
-        isRunning = false;
-        return;
-      }
+      if (total === 0) return;
 
       if (total > AUTO_RUN_THRESHOLD) {
         const snoozeDb = await getDb();
@@ -129,15 +158,23 @@ export function useBackgroundNormalizer() {
         const snoozed = snooze === "forever"
           || (!!snooze && Number(snooze) > Math.floor(Date.now() / 1000));
         if (!snoozed) setEnrichmentPending(total);
-        isRunning = false;
         return;
       }
 
       await doEnrich(albums, artists);
-      isRunning = false;
     }
 
-    void checkStale();
+    // `isRunning` must be cleared on the throwing paths too. It was previously only reset on
+    // the three success returns, so a failing `queryStale` (or a failed settings read) left
+    // the flag latched true and killed the normalizer for the rest of the session.
+    void checkStale()
+      .catch((e) => console.warn("Background normalizer: stale check failed", e))
+      .finally(() => { isRunning = false; });
+
+    // Deliberately NO abort-on-cleanup here. StrictMode mounts this hook twice in dev, so
+    // aborting the first pass on the intervening cleanup would leave the second mount
+    // blocked by `isRunning` (still latched until the aborted pass settles) and no pass
+    // would run at all. `doEnrich` takes an optional signal for callers that can supply one.
   }, [autoRefresh, stalenessDays]);
 }
 

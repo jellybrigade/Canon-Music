@@ -3,15 +3,56 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { getArtistImageUrl, isCoverServerReady } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
+import { makeRateLimiter } from "../lib/rate-limiter";
+import { runPool } from "../lib/async-pool";
 import { QK } from "../lib/query-keys";
 
 // Wikimedia Commons rate-limits anonymous fetches aggressively; a batch of 5 concurrent
-// requests reliably trips 429s. Keep concurrency low and retry 429s with backoff instead
-// of counting a transient rate-limit as a permanent failure.
-const BATCH_SIZE = 2;
-const BATCH_DELAY_MS = 500;
+// requests reliably trips 429s. Keep the request RATE low and retry 429s with backoff
+// instead of counting a transient rate-limit as a permanent failure.
+//
+// Rate and concurrency are separated deliberately (rewritten 2026-07-28). This used to be
+// `BATCH_SIZE = 2` + a 500ms sleep between batches, which conflated the two: the sleep
+// paced requests, but the batch barrier also meant each pair of portraits cost
+// `max(fetch_a, fetch_b) + 500ms`, so one slow host stalled a fast one. Now a per-host
+// token bucket owns the rate (so a fetch from a host that is not Wikimedia is not slowed
+// by Wikimedia's budget) and a worker pool owns concurrency.
+const PORTRAIT_HOST_INTERVAL_MS = 250; // <= 4 req/s per host
+const POOL_CONCURRENCY = 4;
 const MAX_RETRIES_429 = 4;
 const RETRY_BASE_DELAY_MS = 1000;
+
+interface HostBudget {
+  /** Token bucket: spaces this host's requests PORTRAIT_HOST_INTERVAL_MS apart. */
+  limit: () => Promise<void>;
+  /** Epoch ms until which every worker must hold off this host, set on a 429. */
+  cooldownUntil: number;
+}
+
+const hostBudgets = new Map<string, HostBudget>();
+
+function hostBudgetFor(sourceUrl: string): HostBudget {
+  // Bucket on the ORIGINAL portrait host, not the cover:// proxy URL: the proxy is local
+  // and unmetered, the upstream host is the thing with a rate limit.
+  let host: string;
+  try {
+    host = new URL(sourceUrl).host;
+  } catch {
+    host = sourceUrl;
+  }
+  let budget = hostBudgets.get(host);
+  if (!budget) {
+    budget = { limit: makeRateLimiter(PORTRAIT_HOST_INTERVAL_MS), cooldownUntil: 0 };
+    hostBudgets.set(host, budget);
+  }
+  return budget;
+}
+
+async function awaitHostBudget(budget: HostBudget): Promise<void> {
+  const cooldown = budget.cooldownUntil - Date.now();
+  if (cooldown > 0) await new Promise((r) => setTimeout(r, cooldown));
+  await budget.limit();
+}
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -42,12 +83,18 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
   let url = "";
   try {
     url = getArtistImageUrl(portraitUrl);
+    const budget = hostBudgetFor(portraitUrl);
     let res: Response | null = null;
     for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
+      await awaitHostBudget(budget);
       res = await fetch(url);
       if (res.status !== 429) break;
       if (attempt === MAX_RETRIES_429) break;
-      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * 2 ** attempt));
+      // Back off the whole HOST, not just this request. With several workers in flight a
+      // per-request sleep lets the others keep hammering a host that just said "slow down",
+      // so each of them burns its own retry budget and the run ends with avoidable
+      // permanent failures. Parking the host makes every worker wait it out together.
+      budget.cooldownUntil = Math.max(budget.cooldownUntil, Date.now() + RETRY_BASE_DELAY_MS * 2 ** attempt);
     }
     if (!res!.ok) {
       console.error(`Artist image cache: ${res!.status} ${res!.statusText} fetching ${artistName} from ${url}`);
@@ -104,16 +151,19 @@ async function populateMissingArtistImages(
 
   let failed = 0;
 
-  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-    if (signal.aborted) return;
-    const batch = rows.slice(i, i + BATCH_SIZE);
-    const results = await Promise.all(batch.map((r) => fetchAndStoreArtistImage(r.name, r.portrait_url)));
-    failed += results.filter((ok) => !ok).length;
-    onProgress?.(Math.min(i + BATCH_SIZE, rows.length), rows.length);
-    if (i + BATCH_SIZE < rows.length) {
-      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-    }
-  }
+  await runPool(
+    rows,
+    async (row) => {
+      const ok = await fetchAndStoreArtistImage(row.name, row.portrait_url);
+      if (!ok) failed++;
+    },
+    {
+      concurrency: POOL_CONCURRENCY,
+      signal,
+      onProgress: (done, total) => onProgress?.(done, total),
+    },
+  );
+  if (signal.aborted) return;
   onDone(failed);
 }
 
