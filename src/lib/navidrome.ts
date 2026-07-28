@@ -76,30 +76,117 @@ function buildAuthParams(
   return p;
 }
 
+// A request stuck in DNS resolution is the dominant transient failure mode on Linux:
+// a stale/unreachable resolver entry (corporate VPN nameserver left in the global
+// systemd-resolved scope, for instance) makes every in-flight fetch hang together for
+// ~25s and then reject with an opaque "Load failed" TypeError, even though the network
+// is up and the next attempt succeeds off the resolver cache. Cap each attempt well
+// under that ceiling and retry, so a resolver hiccup costs a few seconds instead of
+// aborting a whole sync.
+const REQUEST_TIMEOUT_MS = 12_000;
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 400;
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Server-side conditions worth another attempt. Anything else (4xx, 500) is a real
+ *  answer and gets handed back to the caller unchanged. */
+function isRetriableStatus(status: number): boolean {
+  return status === 429 || status === 502 || status === 503 || status === 504;
+}
+
+/** Endpoints that change server state in a way a second call would compound: a timed-out
+ *  request may well have been applied before the response was lost, so retrying it would
+ *  scrobble a play twice, create a duplicate playlist, or add the same track again.
+ *  Everything else here is either a read or an idempotent set-to-this-value write
+ *  (star, unstar, setRating, savePlayQueue), which is safe to repeat. */
+const NON_IDEMPOTENT_ENDPOINTS = new Set([
+  "scrobble",
+  "createPlaylist",
+  "updatePlaylist",
+  "deletePlaylist",
+]);
+
+function isRetriableEndpoint(endpoint: string): boolean {
+  // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
+  return !NON_IDEMPOTENT_ENDPOINTS.has(endpoint.replace(/\.view$/, ""));
+}
+
+async function fetchWithTimeout(url: string, body: string): Promise<Response> {
+  // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
+  // the older WebKitGTK builds Canon still runs against on Linux.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isTimeout(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
+function describeError(err: unknown): string {
+  if (isTimeout(err)) {
+    return `timed out after ${REQUEST_TIMEOUT_MS}ms`;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
 async function apiPost(
   baseUrl: string,
   endpoint: string,
   params: URLSearchParams,
   altUrl?: string
 ): Promise<Response> {
-  const url = `${normalizeUrl(baseUrl)}/rest/${endpoint}`;
-  try {
-    return await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    });
-  } catch (err) {
-    if (altUrl && err instanceof TypeError) {
-      const fallbackUrl = `${normalizeUrl(altUrl)}/rest/${endpoint}`;
-      return fetch(fallbackUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: params.toString(),
-      });
+  const body = params.toString();
+  const urls = [`${normalizeUrl(baseUrl)}/rest/${endpoint}`];
+  // The alt URL (typically a LAN address for the same server) is tried within every
+  // attempt, not only on the first, since either route can be the one that is stalling.
+  if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
+
+  let lastFailure = "unknown error";
+  // A write that cannot be safely repeated gets exactly one shot per route, and only
+  // moves to the alt route when the first one never reached the server at all.
+  const retriable = isRetriableEndpoint(endpoint);
+  const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    for (const url of urls) {
+      try {
+        const res = await fetchWithTimeout(url, body);
+        if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
+          lastFailure = `HTTP ${res.status}`;
+          continue;
+        }
+        return res;
+      } catch (err) {
+        lastFailure = describeError(err);
+        // A timeout means the request may have been received and applied, so a
+        // non-idempotent endpoint must not be sent anywhere else.
+        if (!retriable && isTimeout(err)) break;
+      }
     }
-    throw err;
+    if (attempt < maxAttempts) {
+      await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+    }
   }
+
+  // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
+  // and the attempt count that were actually burned.
+  throw new Error(
+    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}`
+  );
 }
 
 export function getCoverArtUrl(
