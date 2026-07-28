@@ -68,7 +68,13 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         }, 300);
         setTimeout(() => {
           if (changed.loved) useLovedSessionStore.getState().bumpRefresh();
-          if (changed.playlists) usePlaylistSessionStore.getState().bumpPlaylists();
+          if (changed.playlists) {
+            // changed.playlists covers ordered track ids too, and the sync
+            // DELETEs + re-INSERTs playlist_tracks, so both ticks must move or
+            // an open playlist keeps showing stale track order.
+            usePlaylistSessionStore.getState().bumpPlaylists();
+            usePlaylistSessionStore.getState().bumpPlaylistTracks();
+          }
         }, 600);
         if (libraryChanged) {
           setTimeout(() => {

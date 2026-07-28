@@ -27,5 +27,10 @@ export const useLovedSessionStore = create<LovedSessionState>((set) => ({
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),
   sets: undefined,
   cachedTick: -1,
-  setSets: (sets, tick) => set({ sets, cachedTick: tick }),
+  // Reads are fired per tick and can resolve out of order (a sync-triggered read
+  // racing a love-toggle read). Dropping results older than what is already cached
+  // stops a slow stale read from clobbering fresher sets - nothing would refetch
+  // afterwards, since refreshTick has not moved, so the stale state would stick.
+  setSets: (sets, tick) =>
+    set((s) => (tick < s.cachedTick ? s : { sets, cachedTick: tick })),
 }));

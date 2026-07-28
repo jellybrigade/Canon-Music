@@ -125,6 +125,7 @@ export function useTagMappings() {
         "UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?",
         [locked ? 1 : 0, rawValue, kind],
       );
+      invalidateManualMappings();
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
