@@ -85,3 +85,25 @@ Cover art proxy server (`src-tauri/src/lib.rs`, `cover-server` thread) spawned o
 **Follow-up (2026-07-14):** per-request handling switched from `std::thread::spawn` to `tauri::async_runtime::spawn_blocking` — same 16-permit cap, but requests now run on tokio's reused blocking-thread pool instead of a freshly created/destroyed OS thread each time. No behavior change, lower per-request overhead.
 
 **If debugging a "gets laggier then vanishes" or unexplained SIGKILL on Linux:** check for thread-storm first (`ps -eLf | grep canon | wc -l` during repro, or watch thread count climb) before assuming it's the WebKitGTK freeze/thaw bug above — different signature, different fix.
+## `fetch()` fails with opaque "Load failed" after exactly ~25s when a stale resolver entry is configured (diagnosed 2026-07-28)
+
+Sync dies with `Error: Load failed` (WebKit's generic `TypeError` for a rejected `fetch()`). Instrumentation showed every in-flight request stalling **exactly ~25s** then failing together, `navigator.onLine === true`, while `curl` did 5 parallel POSTs to the same server in 0.45s.
+
+**Root cause was outside Canon:** `/etc/systemd/resolved.conf.d/vpn-anexia.conf` pinned corporate VPN nameservers (`DNS=10.61.242.1 10.61.242.2`) into systemd-resolved's **global** scope unconditionally. Off VPN those servers are unreachable, so resolved kept flapping its feature set on them (`Using degraded feature set UDP instead of TCP for DNS server 10.61.242.1.` every 5-15s in `journalctl -u systemd-resolved`), and any name not already cached took tens of seconds to resolve. Measured on the affected machine: `getent hosts <server-host>` 10.02s, `getent hosts wpad` 20.02s, while `resolvectl query <same host>` answered in 2.1ms marked `Data from: cache`.
+
+**Why it looked like a Canon bug:**
+- All concurrent requests fail at the same instant because they all block on the *same* host resolution, not on each other. Request concurrency is a red herring; a single sequential request fails identically.
+- `curl` tests always looked fine because they hit resolved's cache (`time_namelookup=0.006`), so they never paid for a resolution.
+- Intermittent by cache TTL: a cold-cache sync fails, a sync a few minutes later completes in 3s.
+- `online=true` throughout, since routing and sockets are fine. Only name lookup is broken.
+
+**Host-side fix:** make the VPN drop-in routing-only (`Domains=~anx.local ~anexia.com`), so the global scope stops being a default route and only corporate suffixes consult those servers. Better still, write/remove the drop-in from the VPN up/down script instead of leaving it permanent.
+
+**If a Linux-only "Load failed" / uniform-timeout network report comes in, check DNS before reading Canon's network code:**
+```bash
+journalctl -u systemd-resolved --since "-1h" | grep -i "degraded\|timed out"
+resolvectl status | head -20              # look for unreachable servers in the Global scope
+sudo resolvectl flush-caches && time getent ahosts <server-host>
+```
+
+**Canon-side hardening applied in the same pass (`src/lib/navidrome.ts`, `src/lib/sync.ts`):** `apiPost` now caps each attempt at 12s via an `AbortController` (not `AbortSignal.timeout`, which is missing on older WebKitGTK), retries up to 3 attempts with exponential backoff, tries the alt URL on every attempt rather than only the first, and throws a named error (`getAlbumList2 failed after 3 attempts: timed out after 12000ms`) instead of propagating an opaque `Load failed`. `syncLibrary` treats the loved (`getStarred2`) and playlist stages as non-fatal, since albums and tracks are already committed by then; a failed fetch there leaves the stored rows untouched, reports the stage via the new `skippedStages` return field, and the album-track pass gives up after 5 consecutive failures rather than burning the retry budget once per remaining album. This does not fix a broken resolver, it just keeps one from destroying a whole sync.

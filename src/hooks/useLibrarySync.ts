@@ -41,15 +41,19 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       lastInvalidate = now;
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
-      .then(({ failedAlbums, failedPlaylists, changed }) => {
-        const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
+      .then(({ failedAlbums, failedPlaylists, skippedStages, changed }) => {
+        const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
         if (hasPartialFailure) {
+          const messages = [];
           const parts = [];
           if (failedAlbums > 0) parts.push(`${failedAlbums} album${failedAlbums > 1 ? "s" : ""}`);
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
-          setSyncError(`Sync partial: failed to fetch tracks for ${parts.join(" and ")}.`);
+          if (parts.length > 0) messages.push(`failed to fetch tracks for ${parts.join(" and ")}`);
+          // Skipped stages kept their stored data, so say so rather than implying data loss.
+          if (skippedStages.length > 0) messages.push(`${skippedStages.join(" and ")} unchanged (server unreachable)`);
+          setSyncError(`Sync partial: ${messages.join("; ")}.`);
         }
         // Each bump invalidates a session-store snapshot and forces a full
         // re-read of that table, so only bump what this sync actually wrote.

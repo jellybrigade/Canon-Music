@@ -108,6 +108,9 @@ export async function syncLibrary(
   failedAlbums: number;
   failedPlaylists: number;
   skippedAlbums: number;
+  /** Stages skipped because their fetch failed, e.g. "loved" or "playlists". Stored data
+   *  for those stages is left untouched rather than half-written. */
+  skippedStages: string[];
   changed: SyncChanges;
 }> {
   const credJson = await keychain.get(`canon.server.${server.id}`, "credential");
@@ -126,8 +129,16 @@ export async function syncLibrary(
   }
 
   const altUrl = server.alt_url ?? undefined;
-  void fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential, server.id, altUrl);
+  const skippedStages: string[] = [];
+  // Deliberately not awaited: extension discovery is advisory. It still needs its own
+  // catch, or a transient network failure surfaces as an unhandled rejection.
+  fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential, server.id, altUrl).catch(
+    (err: unknown) => {
+      console.error("sync: failed to fetch OpenSubsonic extensions:", err);
+    }
+  );
 
+  // Fatal by design: without the album list there is no sync to run.
   const albums = await fetchAllAlbums(server.url, server.username, credential, altUrl);
 
   const db = await getDb();
@@ -243,13 +254,28 @@ export async function syncLibrary(
   if (onAlbumBatch && processedCount > 0) onAlbumBatch();
 
   let fetchedCount = 0;
+  // Each fetch already retries with its own timeout, so a server that went away mid-sync
+  // would otherwise cost that full budget once per remaining album. A run of consecutive
+  // failures means the server, not the album, is the problem: give up on the rest and let
+  // the next sync pick them up (they stay unfetched, so nothing is lost).
+  const CONSECUTIVE_FAILURE_LIMIT = 5;
+  let consecutiveFailures = 0;
   for (const { album, albumDbId } of albumsNeedingTracks) {
     let tracks;
     try {
       tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
+      consecutiveFailures = 0;
     } catch (err) {
       console.error(`sync: failed to fetch tracks for album "${album.name}" (${album.id}):`, err);
       failedAlbums++;
+      consecutiveFailures++;
+      if (consecutiveFailures >= CONSECUTIVE_FAILURE_LIMIT) {
+        console.error(
+          `sync: ${consecutiveFailures} album track fetches failed in a row, stopping the album pass early`
+        );
+        skippedStages.push("some album tracks");
+        break;
+      }
       continue;
     }
     await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
@@ -291,51 +317,80 @@ export async function syncLibrary(
   // Sync loved state via getStarred2, independent of incremental skip logic.
   // Compared against what is already stored so an unchanged starred list writes
   // nothing and leaves the loved session store untouched (~8 mounted consumers).
-  const starred = await fetchStarred2(server.url, server.username, credential, altUrl);
-  const starredAlbumIds = (starred.album ?? []).map((a) => `${server.id}:${a.id}`);
-  const starredTrackIds = (starred.song ?? []).map((s) => `${server.id}:${s.id}`);
-
-  const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
-    db.select<{ album_id: string }[]>(
-      "SELECT album_id FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
-      [server.id]
-    ),
-    db.select<{ track_id: string }[]>(
-      "SELECT track_id FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
-      [server.id]
-    ),
-  ]);
-
+  //
+  // Non-fatal: album and track rows are already committed at this point, so a network
+  // failure here skips the loved pass and leaves the stored state alone rather than
+  // throwing away a completed library sync. Skipping is also the only safe response,
+  // since the pass below treats the fetched list as authoritative and DELETEs first.
   let lovedChanged = false;
-  const existingLovedAlbumIds = new Set(existingLovedAlbums.map((r) => r.album_id));
-  if (
-    existingLovedAlbumIds.size !== new Set(starredAlbumIds).size ||
-    starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
-  ) {
-    lovedChanged = true;
-    await db.execute(
-      "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
-      [server.id]
-    );
-    await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
+  const starred = await fetchStarred2(server.url, server.username, credential, altUrl).catch(
+    (err: unknown) => {
+      console.error("sync: failed to fetch starred items, keeping stored loved state:", err);
+      skippedStages.push("loved");
+      return null;
+    }
+  );
+
+  if (starred) {
+    const starredAlbumIds = (starred.album ?? []).map((a) => `${server.id}:${a.id}`);
+    const starredTrackIds = (starred.song ?? []).map((s) => `${server.id}:${s.id}`);
+
+    const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
+      db.select<{ album_id: string }[]>(
+        "SELECT album_id FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
+        [server.id]
+      ),
+      db.select<{ track_id: string }[]>(
+        "SELECT track_id FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
+        [server.id]
+      ),
+    ]);
+
+    const existingLovedAlbumIds = new Set(existingLovedAlbums.map((r) => r.album_id));
+    if (
+      existingLovedAlbumIds.size !== new Set(starredAlbumIds).size ||
+      starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
+    ) {
+      lovedChanged = true;
+      await db.execute(
+        "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
+        [server.id]
+      );
+      await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
+    }
+
+    const existingLovedTrackIds = new Set(existingLovedTracks.map((r) => r.track_id));
+    if (
+      existingLovedTrackIds.size !== new Set(starredTrackIds).size ||
+      starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
+    ) {
+      lovedChanged = true;
+      await db.execute(
+        "DELETE FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
+        [server.id]
+      );
+      await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
+    }
   }
 
-  const existingLovedTrackIds = new Set(existingLovedTracks.map((r) => r.track_id));
-  if (
-    existingLovedTrackIds.size !== new Set(starredTrackIds).size ||
-    starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
-  ) {
-    lovedChanged = true;
-    await db.execute(
-      "DELETE FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
-      [server.id]
-    );
-    await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
-  }
-
-  // Sync playlists, collect all track lists before deleting to avoid wipe on partial failure
-  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl);
+  // Sync playlists, collect all track lists before deleting to avoid wipe on partial failure.
+  // Non-fatal for the same reason as the loved pass above: albums and tracks are already
+  // committed, so a failed playlist listing skips this pass instead of throwing away the
+  // whole sync.
   let failedPlaylists = 0;
+  // The write below is DELETE-all-then-re-INSERT-what-was-fetched, so an incomplete
+  // picture of the server's playlists must not reach it: a playlist whose track list
+  // failed would be erased outright. Any fetch failure in this pass blocks the write and
+  // leaves the stored playlists as they are until a later sync reads them cleanly.
+  let playlistWritesBlocked = false;
+  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl).catch(
+    (err: unknown) => {
+      console.error("sync: failed to fetch playlists, keeping stored playlists:", err);
+      skippedStages.push("playlists");
+      playlistWritesBlocked = true;
+      return [];
+    }
+  );
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
   const playlistsWithTracks: PlaylistWithTracks[] = [];
   for (const pl of playlists) {
@@ -344,6 +399,7 @@ export async function syncLibrary(
       playlistsWithTracks.push({ pl, tracks });
     } catch (err) {
       console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
+      playlistWritesBlocked = true;
       failedPlaylists++;
     }
   }
@@ -411,7 +467,7 @@ export async function syncLibrary(
     }))
   );
 
-  const playlistsChanged = fetchedSignature !== existingSignature;
+  const playlistsChanged = !playlistWritesBlocked && fetchedSignature !== existingSignature;
   if (playlistsChanged) {
     await db.execute(
       "DELETE FROM playlist_tracks WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",
@@ -451,6 +507,7 @@ export async function syncLibrary(
     failedAlbums,
     failedPlaylists,
     skippedAlbums,
+    skippedStages,
     changed: {
       albums: albumsChanged,
       tracks: tracksChanged,
