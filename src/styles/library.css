@@ -4,7 +4,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
+  padding-bottom: calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px));
   animation: fadeIn var(--motion-med);
 }
 
@@ -27,7 +27,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
+  padding-bottom: calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px));
   color: var(--text-tertiary);
   gap: var(--space-xs);
   animation: fadeIn var(--motion-med);
@@ -50,7 +50,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding-bottom: calc(var(--player-bar-height) + var(--normalizing-bar-height, 0px));
+  padding-bottom: calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px));
   animation: fadeIn var(--motion-med);
 }
 

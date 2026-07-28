@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type CSSProperties } from "react";
 import { Search, X, ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
 import { PlayerBar } from "../components/PlayerBar";
 import { ScrobbleTracker } from "../hooks/useScrobble";
@@ -110,16 +110,22 @@ export function AppShell(props: AppViewProps) {
     return <AppRoutes {...props} />;
   }
 
+  // The player bar is fixed-position and only rendered when a track is loaded
+  // (and never on the now-playing view). Views reserve bottom space through
+  // --player-bar-reserve so they don't leave a dead gap when it isn't there.
+  const playerBarVisible = Boolean(currentTrack) && view !== "nowplaying";
+
   return (
     <Suspense fallback={null}>
-      <div className="app-layout">
+      <div
+        className="app-layout"
+        style={{ "--player-bar-reserve": playerBarVisible ? "var(--player-bar-height)" : "0px" } as CSSProperties}
+      >
         <nav
           className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}${sidebarLiveWidth !== null ? " sidebar--dragging" : ""}`}
           style={{
             width: sidebarExpanded ? `${sidebarLiveWidth ?? sidebarWidth}px` : undefined,
-            paddingBottom: currentTrack
-              ? `calc(var(--player-bar-height) + ${metaBarVisible ? 28 : 4}px)`
-              : `${metaBarVisible ? 28 : 4}px`,
+            paddingBottom: `calc(var(--player-bar-reserve) + ${metaBarVisible ? 28 : 4}px)`,
           }}
         >
           {navItems.map(({ id, label, icon, badge }) => (

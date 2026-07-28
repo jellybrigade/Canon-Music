@@ -107,7 +107,7 @@
 .settings-panel-content {
   flex: 1;
   overflow-y: auto;
-  padding: 0 var(--space-xl) calc(var(--player-bar-height, var(--space-3xl)) + var(--normalizing-bar-height, 0px) + var(--space-lg));
+  padding: 0 var(--space-xl) calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px) + var(--space-lg));
 }
 
 .settings-advanced-divider {
