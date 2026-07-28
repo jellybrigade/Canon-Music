@@ -27,7 +27,10 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
-    useAlbumBrowseSessionStore.getState().bumpRefresh();
+    // No bump here: nothing has been written yet at sync start, so bumping would
+    // only force a full re-read of the album table for identical data. The
+    // progress callback below bumps once rows actually land.
+    //
     // Progress fires every BATCH_NOTIFY_INTERVAL albums, which on a large library
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
@@ -38,7 +41,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       lastInvalidate = now;
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
-      .then(({ failedAlbums, failedPlaylists }) => {
+      .then(({ failedAlbums, failedPlaylists, changed }) => {
         const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
@@ -48,20 +51,30 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
           setSyncError(`Sync partial: failed to fetch tracks for ${parts.join(" and ")}.`);
         }
-        useAlbumBrowseSessionStore.getState().bumpRefresh();
-        invalidateGenreTreeCache();
+        // Each bump invalidates a session-store snapshot and forces a full
+        // re-read of that table, so only bump what this sync actually wrote.
+        // An idle auto-sync (nothing changed server-side) now bumps nothing.
+        const libraryChanged = changed.albums || changed.tracks;
+        if (libraryChanged) {
+          useAlbumBrowseSessionStore.getState().bumpRefresh();
+          invalidateGenreTreeCache();
+        }
         setTimeout(() => {
-          useArtistBrowseSessionStore.getState().bumpRefresh();
-          useGenresSessionStore.getState().bumpRefresh();
-          useAllTracksSessionStore.getState().bumpRefresh();
+          if (changed.artists) useArtistBrowseSessionStore.getState().bumpRefresh();
+          if (libraryChanged) {
+            useGenresSessionStore.getState().bumpRefresh();
+            useAllTracksSessionStore.getState().bumpRefresh();
+          }
         }, 300);
         setTimeout(() => {
-          useLovedSessionStore.getState().bumpRefresh();
-          usePlaylistSessionStore.getState().bumpPlaylists();
+          if (changed.loved) useLovedSessionStore.getState().bumpRefresh();
+          if (changed.playlists) usePlaylistSessionStore.getState().bumpPlaylists();
         }, 600);
-        setTimeout(() => {
-          void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
-        }, 1000);
+        if (libraryChanged) {
+          setTimeout(() => {
+            void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
+          }, 1000);
+        }
       })
       .catch((err: unknown) => {
         setSyncStatus("error");
