@@ -5,6 +5,9 @@ interface PlaylistSessionState {
   playlistTracksTick: number;
   bumpPlaylists: () => void;
   bumpPlaylistTracks: () => void;
+  rows: unknown[] | undefined;
+  cachedTick: number;
+  setRows: (rows: unknown[], tick: number) => void;
 }
 
 // Seventh domain in the RQ -> local-SQLite-mirror migration (psysonic pattern).
@@ -18,4 +21,7 @@ export const usePlaylistSessionStore = create<PlaylistSessionState>((set) => ({
   playlistTracksTick: 0,
   bumpPlaylists: () => set((s) => ({ playlistsTick: s.playlistsTick + 1 })),
   bumpPlaylistTracks: () => set((s) => ({ playlistTracksTick: s.playlistTracksTick + 1 })),
+  rows: undefined,
+  cachedTick: -1,
+  setRows: (rows, tick) => set({ rows, cachedTick: tick }),
 }));

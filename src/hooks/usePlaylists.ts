@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import type Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
@@ -44,23 +45,41 @@ export interface PlaylistRow {
   rules_json: string | null;
 }
 
+// Load path reads via rusqlite (src-tauri/src/library_read.rs, psysonic pattern) and
+// caches rows on the session store keyed by tick, so the several components mounting
+// this hook share one fetch. Mutations below stay on tauri-plugin-sql - writes and
+// migrations are not part of the read split.
 export function usePlaylists() {
   const refreshTick = usePlaylistSessionStore((s) => s.playlistsTick);
-  const [data, setData] = useState<PlaylistRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<PlaylistRow[] | undefined>(() => {
+    const s = usePlaylistSessionStore.getState();
+    return s.rows && s.cachedTick === s.playlistsTick ? (s.rows as PlaylistRow[]) : undefined;
+  });
+  const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    const s = usePlaylistSessionStore.getState();
+    if (s.rows && s.cachedTick === refreshTick) {
+      setData(s.rows as PlaylistRow[]);
+      setIsLoading(false);
+      return;
+    }
     let cancelled = false;
     setIsLoading(true);
     (async () => {
-      const db = await getDb();
-      const rows = await db.select<PlaylistRow[]>(
-        "SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json FROM playlists ORDER BY name ASC",
-        []
-      );
-      if (!cancelled) {
-        setData(rows);
-        setIsLoading(false);
+      try {
+        // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+        // engines share canon.db and this read path has no schema awareness of its own.
+        await getDb();
+        const rows = await invoke<PlaylistRow[]>("get_playlists");
+        if (!cancelled) {
+          usePlaylistSessionStore.getState().setRows(rows, refreshTick);
+          setData(rows);
+          setIsLoading(false);
+        }
+      } catch (err) {
+        console.error("usePlaylists: failed to load playlists", err);
+        if (!cancelled) setIsLoading(false);
       }
     })();
     return () => {

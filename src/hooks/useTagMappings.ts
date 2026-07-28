@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import { sqlNorm } from "../lib/canonicalize";
 import type { TagKind } from "../lib/canonicalize";
@@ -181,6 +182,29 @@ export function useTagVocab() {
         GROUP BY tm.norm_value, tm.kind
         ORDER BY album_count DESC, raw_value
       `);
+    },
+  });
+}
+
+// ── useUnmappedTagCount ───────────────────────────────────────────────────────
+
+/**
+ * Scalar count of unresolved tags that still have albums in the library, i.e. the
+ * sidebar Tags badge number. The app root used to fetch the whole useTagVocab payload
+ * (every distinct raw tag in the library) and take `.length` of a filter over it; this
+ * runs the same predicate in SQL via rusqlite and returns one integer.
+ *
+ * Key is a child of QK.tagVocab() so the existing invalidations in saveMapping /
+ * deleteMapping / lockMapping / useAutoMapExact / useRapToHipHop match it by prefix.
+ */
+export function useUnmappedTagCount() {
+  return useQuery({
+    queryKey: [...QK.tagVocab(), "count"],
+    queryFn: async () => {
+      // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
+      // engines share canon.db and this read path has no schema awareness of its own.
+      await getDb();
+      return invoke<number>("get_unmapped_tag_count");
     },
   });
 }

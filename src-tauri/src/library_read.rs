@@ -101,6 +101,34 @@ pub struct TrackRowDto {
     replay_gain_album_peak: Option<f64>,
 }
 
+#[derive(Serialize)]
+pub struct GenreRowDto {
+    canonical_id: String,
+    name: String,
+    album_count: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LovedDto {
+    track_ids: Vec<String>,
+    album_ids: Vec<String>,
+    track_album_ids: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct PlaylistRowDto {
+    id: String,
+    server_id: String,
+    name: String,
+    comment: Option<String>,
+    track_count: i64,
+    cover_art_url: Option<String>,
+    custom_cover_data: Option<String>,
+    is_smart: i64,
+    rules_json: Option<String>,
+}
+
 fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // tauri-plugin-sql resolves "sqlite:canon.db" against app_config_dir, not
     // app_data_dir (confirmed in its wrapper.rs `DbPool::connect`) - must match.
@@ -336,5 +364,177 @@ pub fn get_tracks(
             .collect::<Result<Vec<_>, _>>()
             .map_err(|e| e.to_string())?;
         Ok(rows)
+    })
+}
+
+// Leaf (direct) canon-tree genres for the library filter sidebar. Mirrors the query
+// that used to live in src/hooks/useGenres.ts; raw: synthetic ids stay excluded.
+#[tauri::command]
+pub fn get_genres(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<Vec<GenreRowDto>, String> {
+    state.with_conn(&app, |conn| {
+        let sql = "SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
+             FROM album_genres
+             WHERE relation = 'direct'
+               AND canonical_id NOT LIKE 'raw:%'
+             GROUP BY canonical_id
+             ORDER BY name COLLATE NOCASE";
+        let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], map_genre_row)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(rows)
+    })
+}
+
+fn map_genre_row(row: &rusqlite::Row) -> rusqlite::Result<GenreRowDto> {
+    Ok(GenreRowDto {
+        canonical_id: row.get(0)?,
+        name: row.get(1)?,
+        album_count: row.get(2)?,
+    })
+}
+
+// Genres from the 10 most recently played albums, falling back to top genres by
+// album_count when there is no scrobble history. The fallback branch lived in JS
+// before (src/hooks/useGenres.ts useRecentGenres); it is decided here now so the
+// no-history case costs one IPC round trip instead of two.
+#[tauri::command]
+pub fn get_recent_genres(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<Vec<GenreRowDto>, String> {
+    state.with_conn(&app, |conn| {
+        let recent_sql = "WITH recent_albums AS (
+                SELECT t.album_id, MAX(sh.scrobbled_at) AS last_played
+                FROM scrobble_history sh
+                JOIN tracks t ON t.id = sh.track_id
+                GROUP BY t.album_id
+                ORDER BY last_played DESC
+                LIMIT 10
+            )
+            SELECT ag.canonical_id, ag.name, COUNT(DISTINCT ag.album_id) AS album_count
+            FROM recent_albums ra
+            JOIN album_genres ag ON ag.album_id = ra.album_id
+            WHERE ag.relation = 'direct'
+              AND ag.canonical_id NOT LIKE 'raw:%'
+            GROUP BY ag.canonical_id
+            HAVING (
+              SELECT COUNT(DISTINCT ag2.album_id) FROM album_genres ag2
+              WHERE ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
+            ) >= 5
+            ORDER BY MAX(ra.last_played) DESC";
+        let mut stmt = conn.prepare(recent_sql).map_err(|e| e.to_string())?;
+        let recent = stmt
+            .query_map([], map_genre_row)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        if !recent.is_empty() {
+            return Ok(recent);
+        }
+
+        let fallback_sql = "SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
+             FROM album_genres
+             WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
+             GROUP BY canonical_id
+             HAVING COUNT(DISTINCT album_id) >= 5
+             ORDER BY album_count DESC
+             LIMIT 18";
+        let mut stmt = conn.prepare(fallback_sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], map_genre_row)
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(rows)
+    })
+}
+
+// All three loved-id sets in one round trip. useLoved is mounted by ~8 components at
+// once, so the previous shape (3 sqlx selects per call site) multiplied badly.
+#[tauri::command]
+pub fn get_loved(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<LovedDto, String> {
+    state.with_conn(&app, |conn| {
+        let collect_ids = |sql: &str| -> Result<Vec<String>, String> {
+            let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+            let rows = stmt
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|e| e.to_string())?
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| e.to_string())?;
+            Ok(rows)
+        };
+        Ok(LovedDto {
+            track_ids: collect_ids("SELECT track_id FROM loved_tracks")?,
+            album_ids: collect_ids("SELECT album_id FROM loved_albums")?,
+            track_album_ids: collect_ids(
+                "SELECT DISTINCT t.album_id FROM tracks t
+                 INNER JOIN loved_tracks lt ON lt.track_id = t.id
+                 WHERE t.album_id IS NOT NULL",
+            )?,
+        })
+    })
+}
+
+#[tauri::command]
+pub fn get_playlists(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<Vec<PlaylistRowDto>, String> {
+    state.with_conn(&app, |conn| {
+        let sql = "SELECT id, server_id, name, comment, track_count, cover_art_url,
+                    custom_cover_data, is_smart, rules_json
+             FROM playlists
+             ORDER BY name ASC";
+        let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(PlaylistRowDto {
+                    id: row.get(0)?,
+                    server_id: row.get(1)?,
+                    name: row.get(2)?,
+                    comment: row.get(3)?,
+                    track_count: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    cover_art_url: row.get(5)?,
+                    custom_cover_data: row.get(6)?,
+                    is_smart: row.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                    rules_json: row.get(8)?,
+                })
+            })
+            .map_err(|e| e.to_string())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| e.to_string())?;
+        Ok(rows)
+    })
+}
+
+// Scalar replacement for the full useTagVocab payload at app root, which existed only
+// to compute this badge number. Reproduces the JS predicate exactly:
+// !canonical_id && album_count > 0. The UNION ALL arm of the vocab query always has
+// album_count = 0, so it can never satisfy the predicate and is dropped here.
+#[tauri::command]
+pub fn get_unmapped_tag_count(
+    app: tauri::AppHandle,
+    state: tauri::State<LibraryReadStore>,
+) -> Result<i64, String> {
+    state.with_conn(&app, |conn| {
+        let sql = "SELECT COUNT(*) AS n
+             FROM tag_vocab_cache c
+             LEFT JOIN (
+               SELECT norm_value, kind, canonical_id
+               FROM tag_mappings
+               GROUP BY norm_value, kind
+             ) tm ON tm.norm_value = c.norm_value AND tm.kind = c.kind
+             WHERE c.album_count > 0 AND tm.canonical_id IS NULL";
+        conn.query_row(sql, [], |row| row.get::<_, i64>(0))
+            .map_err(|e| e.to_string())
     })
 }

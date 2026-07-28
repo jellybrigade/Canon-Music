@@ -11,7 +11,14 @@ export type { AlbumRow, AlbumSort } from "../types/library";
 // round-tripping through tauri-plugin-sql's sqlx pool - no per-query IPC/sqlx overhead,
 // and it can't contend with in-flight sync/enrichment writes. Writes/migrations for
 // `albums` stay on tauri-plugin-sql for now; only this read path is piloted.
-export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = []) {
+// `enabled` lets the app root skip this fetch on routes that never render an album
+// list. When false the effect returns early without clearing `data` - the session-store
+// seed and last-loaded rows survive, so returning to the route paints instantly.
+export function useAlbums(
+  sort: AlbumSort = "artist",
+  canonicalIds: string[] = [],
+  enabled: boolean = true
+) {
   const refreshTick = useAlbumBrowseSessionStore((s) => s.refreshTick);
   const canonicalIdsKey = canonicalIds.join(",");
   const cacheKey = `${sort}|${canonicalIdsKey}`;
@@ -27,6 +34,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
   const [isLoading, setIsLoading] = useState(() => data === undefined);
 
   useEffect(() => {
+    if (!enabled) return;
     const s = useAlbumBrowseSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick && s.cachedKey === cacheKey) {
       // Cache hit for this exact (sort, ids, tick) - use it, skip the query.
@@ -57,7 +65,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort, canonicalIdsKey, refreshTick]);
+  }, [sort, canonicalIdsKey, refreshTick, enabled]);
 
   return { data, isLoading };
 }
