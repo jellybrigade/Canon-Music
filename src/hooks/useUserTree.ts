@@ -4,6 +4,7 @@ import { canonicalKey, bustCanonTreeCache } from "../lib/canonicalize";
 import canonTreeData from "../assets/canon-tree.json";
 import type { TreeNode } from "../lib/canonicalize";
 import { QK } from "../lib/query-keys";
+import { invalidateManualMappings } from "../lib/manual-mappings";
 
 export interface UserTreeNode {
   id: string;
@@ -166,6 +167,7 @@ export function useDeleteUserNode() {
       );
       // Clear any tag_mappings pointing to this node
       await db.execute("DELETE FROM tag_mappings WHERE canonical_id = ?", [id]);
+      invalidateManualMappings();
       await db.execute("UPDATE track_tags SET canonical_id = NULL WHERE canonical_id = ?", [id]);
       await db.execute("DELETE FROM user_tree_nodes WHERE id = ?", [id]);
 

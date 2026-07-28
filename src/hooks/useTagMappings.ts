@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { sqlNorm } from "../lib/canonicalize";
 import type { TagKind } from "../lib/canonicalize";
 import { QK } from "../lib/query-keys";
+import { invalidateManualMappings } from "../lib/manual-mappings";
 
 // ── Sentinel constants ────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ export function useTagMappings() {
          VALUES (?, ?, ?, ?, ?, datetime('now'), ?)`,
         [rawValue, kind, canonicalId, source, matchType, sqlNorm(rawValue)],
       );
+      invalidateManualMappings();
       // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
       if (canonicalId === ACCEPTED || canonicalId === IGNORED) {
         await db.execute(
@@ -93,6 +95,7 @@ export function useTagMappings() {
         throw new Error(`Mapping for "${rawValue}" is locked. Unlock it first.`);
       }
       await db.execute("DELETE FROM tag_mappings WHERE norm_value = ? AND kind = ?", [norm, kind]);
+      invalidateManualMappings();
       // Clear all raw variants that share the same norm_value, not just the one passed in
       await db.execute(
         "UPDATE track_tags SET canonical_id = NULL WHERE LOWER(REPLACE(REPLACE(TRIM(raw_value), '-', ' '), '_', ' ')) = ? AND kind = ?",
@@ -276,6 +279,7 @@ export function useAutoMapExact() {
           params,
         );
         mapped += res.rowsAffected;
+        invalidateManualMappings();
       }
 
       if (matches.length > 0) {
@@ -352,6 +356,7 @@ export function useRapToHipHop() {
         await db.execute(
           "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), 'rap')",
         );
+        invalidateManualMappings();
         await db.execute(
           "UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'",
         );
@@ -361,6 +366,7 @@ export function useRapToHipHop() {
         );
         if (rows[0]?.canonical_id === "hip-hop") {
           await db.execute("DELETE FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'");
+          invalidateManualMappings();
           await db.execute(
             "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = 'Rap' AND kind = 'genre' AND canonical_id = 'hip-hop'",
           );
