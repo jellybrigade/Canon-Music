@@ -97,6 +97,23 @@ function isRetriableStatus(status: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
+/** Endpoints that change server state in a way a second call would compound: a timed-out
+ *  request may well have been applied before the response was lost, so retrying it would
+ *  scrobble a play twice, create a duplicate playlist, or add the same track again.
+ *  Everything else here is either a read or an idempotent set-to-this-value write
+ *  (star, unstar, setRating, savePlayQueue), which is safe to repeat. */
+const NON_IDEMPOTENT_ENDPOINTS = new Set([
+  "scrobble",
+  "createPlaylist",
+  "updatePlaylist",
+  "deletePlaylist",
+]);
+
+function isRetriableEndpoint(endpoint: string): boolean {
+  // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
+  return !NON_IDEMPOTENT_ENDPOINTS.has(endpoint.replace(/\.view$/, ""));
+}
+
 async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
@@ -114,8 +131,12 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   }
 }
 
+function isTimeout(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 function describeError(err: unknown): string {
-  if (err instanceof DOMException && err.name === "AbortError") {
+  if (isTimeout(err)) {
     return `timed out after ${REQUEST_TIMEOUT_MS}ms`;
   }
   if (err instanceof Error) return err.message;
@@ -135,28 +156,37 @@ async function apiPost(
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
   let lastFailure = "unknown error";
+  // A write that cannot be safely repeated gets exactly one shot per route, and only
+  // moves to the alt route when the first one never reached the server at all.
+  const retriable = isRetriableEndpoint(endpoint);
+  const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     for (const url of urls) {
       try {
         const res = await fetchWithTimeout(url, body);
-        if (isRetriableStatus(res.status) && attempt < MAX_ATTEMPTS) {
+        if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
           continue;
         }
         return res;
       } catch (err) {
         lastFailure = describeError(err);
+        // A timeout means the request may have been received and applied, so a
+        // non-idempotent endpoint must not be sent anywhere else.
+        if (!retriable && isTimeout(err)) break;
       }
     }
-    if (attempt < MAX_ATTEMPTS) {
+    if (attempt < maxAttempts) {
       await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
     }
   }
 
   // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
   // and the attempt count that were actually burned.
-  throw new Error(`${endpoint} failed after ${MAX_ATTEMPTS} attempts: ${lastFailure}`);
+  throw new Error(
+    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}`
+  );
 }
 
 export function getCoverArtUrl(
