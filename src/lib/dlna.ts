@@ -7,7 +7,6 @@ export interface DlnaRenderer {
   avTransportControlUrl: string;
   renderingControlUrl: string;
   supportsVolume: boolean;
-  supportsSetNext: boolean;
 }
 
 interface ResolvedRenderer {
@@ -28,7 +27,6 @@ export async function discoverRenderers(timeoutMs = 4000): Promise<DlnaRenderer[
     avTransportControlUrl: r.av_transport_control_url,
     renderingControlUrl: r.rendering_control_url,
     supportsVolume: r.supports_volume,
-    supportsSetNext: true,
   }));
 }
 
@@ -84,13 +82,23 @@ function xmlTextContent(xml: string, tag: string): string | null {
 export function buildDidlMetadata(
   track: CurrentTrack,
   streamUrl: string,
-  coverArtUrl: string | null
+  coverArtUrl: string | null,
+  transcoding = true
 ): string {
   const title = escapeXml(track.title);
   const artist = escapeXml(track.artist ?? "");
   const album = escapeXml(track.album ?? "");
   const duration = track.duration ? secsToTime(track.duration) : "0:00:00";
-  const artUri = coverArtUrl ? `<upnp:albumArtURI>${escapeXml(coverArtUrl)}</upnp:albumArtURI>` : "";
+  // Only an address the renderer can fetch itself is worth sending. Canon's own art URLs
+  // use the private "cover://" scheme registered inside the app, which resolves nowhere
+  // else on the network, and some renderers reject the whole DIDL document over one
+  // unreachable albumArtURI rather than just skipping the art.
+  const artIsFetchable = !!coverArtUrl && /^https?:\/\//i.test(coverArtUrl);
+  const artUri = artIsFetchable ? `<upnp:albumArtURI>${escapeXml(coverArtUrl!)}</upnp:albumArtURI>` : "";
+  // Claiming audio/mpeg for a raw stream is a lie whenever the server holds FLAC, and a
+  // renderer that trusts protocolInfo over sniffing then refuses the track. "*" tells it
+  // to work the type out from the response instead.
+  const mime = transcoding ? "audio/mpeg" : "*";
 
   return `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">
   <item id="1" parentID="0" restricted="1">
@@ -100,7 +108,7 @@ export function buildDidlMetadata(
     <upnp:album>${album}</upnp:album>
     <upnp:class>object.item.audioItem.musicTrack</upnp:class>
     ${artUri}
-    <res duration="${duration}" protocolInfo="http-get:*:audio/mpeg:*">${escapeXml(streamUrl)}</res>
+    <res duration="${duration}" protocolInfo="http-get:*:${mime}:*">${escapeXml(streamUrl)}</res>
   </item>
 </DIDL-Lite>`;
 }
@@ -128,21 +136,6 @@ export async function setAvTransportUri(
     `<InstanceID>0</InstanceID>
      <CurrentURI>${escapeXml(streamUrl)}</CurrentURI>
      <CurrentURIMetaData>${escapeXml(metadata)}</CurrentURIMetaData>`
-  );
-}
-
-export async function setNextAvTransportUri(
-  controlUrl: string,
-  streamUrl: string,
-  metadata: string
-): Promise<void> {
-  await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "SetNextAVTransportURI",
-    `<InstanceID>0</InstanceID>
-     <NextURI>${escapeXml(streamUrl)}</NextURI>
-     <NextURIMetaData>${escapeXml(metadata)}</NextURIMetaData>`
   );
 }
 

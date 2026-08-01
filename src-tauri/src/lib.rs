@@ -1273,6 +1273,22 @@ fn soap_client() -> &'static reqwest::blocking::Client {
     })
 }
 
+// Pulls the text of the first `<tag>...</tag>` out of an XML document, ignoring any
+// namespace prefix on the tag. Deliberately minimal: it only has to read the two
+// fields of a UPnP SOAP fault, which are plain text with no nesting.
+fn xml_first_tag_text(xml: &str, tag: &str) -> Option<String> {
+    let open = format!("{tag}>");
+    let start = xml.find(&open)? + open.len();
+    let rest = &xml[start..];
+    let end = rest.find("</")?;
+    let value = rest[..end].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
 #[tauri::command]
 async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<String, String> {
     // CORS blocks native WebView fetch() for LAN UPnP devices; proxy through Rust.
@@ -1284,10 +1300,25 @@ async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<Str
             .body(body)
             .send()
             .map_err(|e| e.to_string())?;
-        if !resp.status().is_success() && resp.status().as_u16() != 500 {
-            return Err(format!("SOAP failed: {}", resp.status()));
+        let status = resp.status();
+        let text = resp.text().map_err(|e| e.to_string())?;
+        // UPnP signals every action failure as HTTP 500 with a SOAP fault body. Returning
+        // Ok here would make an unsupported action look like a successful one, so the
+        // caller's fallback path could never run. Surface the fault as an Err instead.
+        if status.as_u16() == 500 {
+            let code = xml_first_tag_text(&text, "errorCode");
+            let desc = xml_first_tag_text(&text, "errorDescription");
+            return Err(match (code, desc) {
+                (Some(c), Some(d)) => format!("UPnP error {c}: {d}"),
+                (Some(c), None) => format!("UPnP error {c}"),
+                (None, Some(d)) => format!("UPnP error: {d}"),
+                (None, None) => "UPnP SOAP fault (HTTP 500)".to_string(),
+            });
         }
-        resp.text().map_err(|e| e.to_string())
+        if !status.is_success() {
+            return Err(format!("SOAP failed: {status}"));
+        }
+        Ok(text)
     })
     .await
     .map_err(|e| e.to_string())?

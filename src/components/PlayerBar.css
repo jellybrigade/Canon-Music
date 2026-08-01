@@ -571,6 +571,14 @@
   border-color: transparent;
 }
 
+/* Both popovers are keyboard-reachable lists, so the focused row has to be visible.
+   The outline sits inset because the rows run edge to edge inside the panel. */
+.timer-popover-item:focus-visible,
+.cast-popover-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .timer-popover-item--active {
   color: var(--accent);
 }

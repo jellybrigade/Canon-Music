@@ -551,9 +551,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
                     gaplessEnqueued = null;
                   });
                 }
-              } else {
+              } else if (!castDevice) {
                 void activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
               }
+              // Nothing is handed to a cast target ahead of time. A renderer that has been
+              // given the next URI advances on its own, and Canon cannot observe that
+              // transition (GetTransportInfo reads PLAYING across it), so the UI would sit
+              // on the finished track for the whole of the next one and then play it again.
             }
           }
           // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
@@ -986,6 +990,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
             if (elapsed > 0) await activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
+            // load() starts audio on every target. Writing isPlaying: false without telling
+            // the target would leave a paused player audibly playing on the new one.
+            if (!isPlaying) activeTarget.pause(0);
             // Back on the local engine, so the same rule as playTrack applies: load() has
             // returned but nothing has been fetched yet. audio-format or the ticker clears this.
             set({ isPlaying, isLoading: false, isBuffering: isPlaying });
@@ -1005,7 +1012,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         activeTarget = new DlnaTarget(renderer, () => {
           // Called by DlnaTarget when track ends on renderer.
           void get().next(true);
-        }, castBitrate);
+        }, castBitrate, (message) => {
+          // The renderer stopped answering. Nothing else on the cast path surfaces this:
+          // there is no audio-error event, and the target has stopped its own timers.
+          set({ error: message, isPlaying: false, isBuffering: false });
+          stopElapsedTimer();
+        });
         set({ castDevice: renderer });
         // Resume on renderer at parked position.
         if (currentTrack && streamUrl) {
@@ -1014,6 +1026,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
             if (elapsed > 0) await activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
+            // avPlay ran inside load(), so a player that was paused has to be paused again
+            // on the renderer, not just recorded as paused in the store.
+            if (!isPlaying) activeTarget.pause(0);
             set({ isPlaying, isLoading: false, isBuffering: false });
           } catch (e) {
             set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
@@ -1744,7 +1759,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;
               const bitrateRow = rows.find((r2) => r2.key === "cast.max_bitrate");
               const savedBitrate = bitrateRow ? (parseInt(bitrateRow.value, 10) || 320) : 320;
-              activeTarget = new DlnaTarget(savedRenderer, () => { void get().next(true); }, savedBitrate);
+              activeTarget = new DlnaTarget(
+                savedRenderer,
+                () => { void get().next(true); },
+                savedBitrate,
+                (message) => {
+                  set({ error: message, isPlaying: false, isBuffering: false });
+                  stopElapsedTimer();
+                }
+              );
               set({ castDevice: savedRenderer });
             } catch { /* malformed, ignore */ }
           }
