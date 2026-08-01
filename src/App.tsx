@@ -343,26 +343,48 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string };
+    type TrackRow = {
+      id: string; title: string; artist: string | null; duration: number | null; album_id: string;
+      replay_gain_track_gain: number | null; replay_gain_track_peak: number | null;
+      replay_gain_album_gain: number | null; replay_gain_album_peak: number | null;
+      album_name: string | null; artwork_url: string | null;
+    };
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration, album_id FROM tracks WHERE id = ?",
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id,
+              t.replay_gain_track_gain, t.replay_gain_track_peak,
+              t.replay_gain_album_gain, t.replay_gain_album_peak,
+              a.name AS album_name, a.artwork_url
+       FROM tracks t
+       LEFT JOIN albums a ON a.id = t.album_id
+       WHERE t.id = ?`,
       [trackId]
     );
     const t = rows[0];
     if (!t) return;
-    type AlbumMeta = { artwork_url: string | null; name: string };
-    const albumRows = await db.select<AlbumMeta[]>(
-      "SELECT artwork_url, name FROM albums WHERE id = ?",
-      [t.album_id]
-    );
-    const albumData = albumRows[0] ?? null;
-    const artworkUrl = albumData?.artwork_url ?? null;
+    const artworkUrl = t.artwork_url;
     const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = artworkUrl
       ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64)
       : null;
     const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
-    await play({ id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: artworkUrl, album: albumData?.name ?? null, albumId: t.album_id }, streamUrl);
+    await play({
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
+      coverArtUrl,
+      artworkRef: artworkUrl,
+      album: t.album_name,
+      albumId: t.album_id,
+      replayGain: (t.replay_gain_track_gain != null || t.replay_gain_album_gain != null)
+        ? {
+            trackGain: t.replay_gain_track_gain,
+            trackPeak: t.replay_gain_track_peak,
+            albumGain: t.replay_gain_album_gain,
+            albumPeak: t.replay_gain_album_peak,
+          }
+        : null,
+    }, streamUrl);
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {

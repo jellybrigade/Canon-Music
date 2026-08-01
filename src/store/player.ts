@@ -65,6 +65,12 @@ let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 // instead of one per action.
 let queuePersistTimer: ReturnType<typeof setTimeout> | null = null;
 
+// Track ids with a waveform extraction currently running in Rust. Extraction writes to a
+// single temp file per track id, so two concurrent runs for the same track would interleave
+// their writes and produce a corrupt analysis. Also avoids downloading the same track twice
+// when a preloaded track becomes the current one before its extraction finishes.
+const waveformInFlight = new Set<string>();
+
 // Current ReplayGain linear amplitude multiplier. Updated on track change and mode change.
 // Stored outside the store so setVolume can access the latest value without a selector.
 let currentReplayGainLinear = 1.0;
@@ -245,6 +251,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
   });
 
+  // Single global listener for preloaded (not-yet-current) waveforms: caches the result and
+  // clears the in-flight marker. Registering one listener here instead of one per preloaded
+  // track means a failed extraction, which never emits, can't leave a listener behind.
+  void listen<{ track_id: string; peaks: number[] }>("waveform_complete", async (event) => {
+    const { track_id: trackId, peaks } = event.payload;
+    if (!waveformInFlight.delete(trackId)) return;
+    try {
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
+        [trackId, JSON.stringify(peaks), Math.floor(Date.now() / 1000)]
+      );
+    } catch (e) {
+      console.error("Failed to cache preloaded waveform:", e);
+    }
+  });
+
   // Non-gapless fallback: Rust reports playback reached natural end of file.
   void listen("track-ended", () => {
     void get().next(true);
@@ -299,13 +322,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     let prefetchedForIndex: number | null = null;
     let stallPos: number | null = null;
     let stallSince: number | null = null;
+    // Audio is only considered started once the position has actually advanced.
+    // audio_play returns before the download/decode finishes, so position stays at 0
+    // during initial buffering; arming the watchdog then would tear the stream down
+    // and restart it every 5s, meaning a slow-starting track never starts at all.
+    // A genuinely dead stream is handled by the audio-error retry listener instead.
+    let hasAdvanced = false;
     elapsedInterval = setInterval(() => {
       activeTarget.getPosition()
         .then((pos) => {
           set({ elapsed: pos });
+          if (pos > 0) hasAdvanced = true;
           const { isPlaying, isLoading, streamUrl, currentTrack, castDevice } = get();
           // Stall watchdog: only for local target (DLNA handles its own timing).
-          if (!castDevice && isPlaying && !isLoading) {
+          if (!castDevice && isPlaying && !isLoading && hasAdvanced) {
             if (stallPos !== pos) {
               stallPos = pos;
               stallSince = Date.now();
@@ -391,6 +421,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (!track) continue;
 
         type Row = { peaks_json: string };
+        if (waveformInFlight.has(track.id)) continue;
+
         const rows = await db.select<Row[]>(
           "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
           [track.id]
@@ -409,24 +441,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           }
         })();
 
-        // One-shot listener: cache result, no state update
-        const unlisten = await listen<{ track_id: string; peaks: number[] }>(
-          "waveform_complete",
-          async (event) => {
-            if (event.payload.track_id !== track.id) return;
-            unlisten();
-            const now = Math.floor(Date.now() / 1000);
-            await db.execute(
-              "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
-              [track.id, JSON.stringify(event.payload.peaks), now]
-            ).catch(() => {});
-          }
-        );
-
+        // Result is cached by the global waveform_complete listener registered above.
+        waveformInFlight.add(track.id);
         void invoke("audio_extract_waveform", {
           trackId: track.id,
           url: waveformUrl,
           durationSecs: track.duration ?? 0,
+        }).catch(() => {
+          // Extraction failed, so no waveform_complete will arrive to clear the marker.
+          waveformInFlight.delete(track.id);
         });
       }
     } catch (e) {
@@ -494,7 +517,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>(
         "waveform_complete",
-        async (event) => {
+        (event) => {
           // Guard before unlisten: a stale event from a prior track must not kill the current track's listeners
           if (event.payload.track_id !== trackId) return;
           unlistenChunk();
@@ -503,11 +526,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           if (get().currentTrack?.id === trackId) {
             set({ waveformPeaks: event.payload.peaks });
           }
-          const now = Math.floor(Date.now() / 1000);
-          await db.execute(
-            "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
-            [trackId, JSON.stringify(event.payload.peaks), now]
-          );
+          // Caching is owned by the global waveform_complete listener.
         }
       );
 
@@ -529,7 +548,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           return url;
         }
       })();
-      void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 });
+      // An extraction started by the preload pass may already be running for this track.
+      // Its chunk/complete events are broadcast, so the listeners above still receive them;
+      // invoking again would download the track a second time and both runs would write the
+      // same temp file, corrupting the analysis.
+      if (!waveformInFlight.has(trackId)) {
+        waveformInFlight.add(trackId);
+        void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 })
+          .catch(() => {
+            waveformInFlight.delete(trackId);
+          });
+      }
     } catch (e) {
       console.error("Failed to fetch waveform:", e);
     }

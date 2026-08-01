@@ -17,6 +17,10 @@ export interface SearchTrack {
   album_name: string | null;
   artwork_url: string | null;
   duration: number | null;
+  replay_gain_track_gain: number | null;
+  replay_gain_track_peak: number | null;
+  replay_gain_album_gain: number | null;
+  replay_gain_album_peak: number | null;
 }
 
 export interface SearchArtist {
@@ -72,8 +76,10 @@ async function runSearch(query: string): Promise<SearchResults> {
        LIMIT 200`,
       [fts]
     ),
-    db.select<{ id: string; title: string; artist: string | null; album_id: string; album_name: string | null; artwork_url: string | null; duration: number | null }[]>(
-      `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration
+    db.select<SearchTrack[]>(
+      `SELECT t.id, t.title, t.artist, t.album_id, a.name AS album_name, a.artwork_url, t.duration,
+              t.replay_gain_track_gain, t.replay_gain_track_peak,
+              t.replay_gain_album_gain, t.replay_gain_album_peak
        FROM tracks_fts fts
        JOIN tracks t ON t.id = fts.id
        LEFT JOIN albums a ON a.id = t.album_id
