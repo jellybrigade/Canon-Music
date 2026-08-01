@@ -139,3 +139,21 @@ Two related seek bugs fixed in the same pass:
 - `seek()` in `src/store/player.ts` wrote `elapsed`, but a `getPosition()` poll issued by the 200ms ticker just before the seek resolved just after it and wrote the pre-seek position back, making the bar visibly jump backwards for one tick. A module-level `seekGen` is sampled before each poll; a tick whose generation changed is dropped whole.
 
 **Generalizes:** when several commands share one cancellation token, check what each spawned task does *after* its loop. Cancelling "the work in progress" and cancelling "the outcome the user asked for" are different things, and a single counter cannot distinguish them. Same question as the `pauseRequestedDuringLoad` entry above, one level lower: state written after an await must be checked against intent, not just against whether something else happened.
+
+## A fast path that bypasses the central action function bypasses every guard that function owns (fixed 2026-08-01)
+
+Gapless playback advances the track without ever calling `next()` in `src/store/player.ts`: the Rust engine appends the next source to the same sink, and the `track-advanced` listener updates queue state in place. Every guard that lives inside `next()` is therefore skipped on the gapless path. The end-of-track sleep timer lived inside `next()`, so with gapless on (the default), "stop after this track" silently did nothing at all. Not a subtle failure, the whole feature was dead on the default path.
+
+**Fix:** the guard now sits at both ends. The elapsed ticker refuses to call `audio_enqueue_next`/`setNext` while `sleepTimerEndOfTrack` is set, so the hand-off never gets set up; and the `track-advanced` handler pauses on arrival, for the case where the timer was armed after the enqueue had already gone out.
+
+**Generalizes:** whenever an optimisation introduces a second route to the same outcome, enumerate what the original route did besides the obvious thing. `next()` also handles repeat-one, consume mode and shuffle re-seeding; those happened to be excluded from gapless deliberately (`canGapless` checks them), which is what makes the missing sleep-timer check an oversight rather than a design gap. A `canGapless`-style predicate is the right place for this class of condition, not a check buried in the slow path.
+
+## A suppression flag set optimistically by TS must have a cancellation event, not just a success event (fixed 2026-08-01)
+
+`gaplessActive` in `src/store/player.ts` is set the moment `audio_enqueue_next` is invoked, and suppresses the ticker's position-based fallback advance so it can't interrupt a gapless transition. It was cleared only by `track-advanced` (success) or the next `playTrack`. But `audio_enqueue_next` returns `Ok` immediately and does its work on a spawned thread with three silent bail-out paths: fetch error, decode error, and a superseded `play_id`. On any of those, TS never learned, `gaplessActive` stayed true, and the fallback stayed disabled. Self-healing only via `track-ended`, which is exactly the event the fallback exists to cover, so the double failure stops playback dead.
+
+**Fix:** every bail-out path emits `gapless-cancelled`; a listener in `player.ts` clears the flag.
+
+A second bug in the same command: the final `sink.append(source)` was guarded by `play_id` alone. If the download outlasted the current track, the watcher had already seen `sink.empty()` and emitted `track-ended`, but `play_id` is not bumped until the frontend's `audio_play` completes an IPC round trip. In that window the append fired on the empty sink, which starts playback immediately, producing an audible blip of the wrong track start before `audio_play`'s `old.stop()` killed it. It now checks `sink.empty()` before appending.
+
+**Generalizes:** a fire-and-forget Tauri command that returns `Ok` before doing its work owes the frontend an event on *every* terminal path, not just the happy one. And `play_id`-style generation guards only prove no newer request has *started*, never that the older one is still wanted.

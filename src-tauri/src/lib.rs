@@ -768,7 +768,11 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
 /// rodio transitions without silence. Emits `track-advanced` when the current
 /// source finishes and the next one begins.
 #[tauri::command]
-async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
+async fn audio_enqueue_next(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AudioState>,
+    url: String,
+) -> Result<(), String> {
     // Atomically claim the gapless slot — guards against two concurrent calls both
     // seeing false and both appending a source (TOCTOU).
     if state.gapless_queued.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {
@@ -782,6 +786,14 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
     let cache_arc = Arc::clone(&state.prefetch_cache);
 
     std::thread::spawn(move || {
+        // Releases the gapless slot and tells the frontend to stop suppressing its
+        // position-based fallback advance, which is otherwise disabled for the rest of the
+        // session on any bail-out path below.
+        let cancel = |gq: &std::sync::atomic::AtomicBool, app: &tauri::AppHandle| {
+            gq.store(false, Ordering::Release);
+            app.emit("gapless-cancelled", ()).ok();
+        };
+
         // Use prefetch cache if a concurrent audio_prefetch already downloaded this URL.
         let cached = { cache_arc.lock().unwrap_or_else(|e| e.into_inner()).remove(&url) };
         let bytes = if let Some(b) = cached {
@@ -791,7 +803,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
                 Ok(b) => b.to_vec(),
                 Err(e) => {
                     eprintln!("audio_enqueue_next fetch error: {e}");
-                    gapless_queued.store(false, Ordering::Release);
+                    cancel(&gapless_queued, &app);
                     return;
                 }
             }
@@ -799,7 +811,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
 
         // Abort if a newer explicit play started while we were downloading.
         if play_id_arc.load(Ordering::Relaxed) != snap_id {
-            gapless_queued.store(false, Ordering::Release);
+            cancel(&gapless_queued, &app);
             return;
         }
 
@@ -808,7 +820,7 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
             Ok(s) => s,
             Err(e) => {
                 eprintln!("audio_enqueue_next decode error: {e}");
-                gapless_queued.store(false, Ordering::Release);
+                cancel(&gapless_queued, &app);
                 return;
             }
         };
@@ -816,16 +828,26 @@ async fn audio_enqueue_next(state: tauri::State<'_, AudioState>, url: String) ->
         // Final play_id check before appending — guards against the decode
         // completing just as the user skips to a different track.
         if play_id_arc.load(Ordering::Relaxed) != snap_id {
-            gapless_queued.store(false, Ordering::Release);
+            cancel(&gapless_queued, &app);
             return;
         }
 
         let sink_opt = sink_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(sink) = sink_opt {
+            // The current track already ran out while this download was in flight, so the
+            // watcher has exited and emitted track-ended. play_id has not been bumped yet
+            // (the frontend's audio_play is still an IPC round trip away), so the checks
+            // above pass. Appending here would start this source on the dead sink for the
+            // few milliseconds until audio_play stops it — an audible blip of the wrong
+            // track start, with no watcher left to clear the gapless flag.
+            if sink.empty() {
+                cancel(&gapless_queued, &app);
+                return;
+            }
             sink.append(source);
             // Flag stays true — set in compare_exchange above; watcher clears it on transition.
         } else {
-            gapless_queued.store(false, Ordering::Release);
+            cancel(&gapless_queued, &app);
         }
     });
 

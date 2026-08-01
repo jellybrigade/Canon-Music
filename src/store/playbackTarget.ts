@@ -14,6 +14,12 @@ import {
   setVolume as dlnaSetVolume,
 } from "../lib/dlna";
 
+// How often DlnaTarget re-checks the renderer's transport state once the track is expected to
+// have finished, and how often it checks when the track's duration is unknown so there is no
+// expected finish time to aim at.
+const DLNA_TRACK_END_POLL_MS = 2000;
+const DLNA_UNKNOWN_DURATION_POLL_MS = 5000;
+
 // ── Interface ──────────────────────────────────────────────────────────────
 
 export interface PlaybackTarget {
@@ -120,9 +126,8 @@ export class DlnaTarget implements PlaybackTarget {
     this.positionUpdatedAt = Date.now();
     this.currentDuration = track.duration ?? 0;
     this.scheduleReconcile(2000);
-    if (track.duration) {
-      this.scheduleTrackEndTimer(track.duration);
-    }
+    // Armed even when duration is unknown; scheduleTrackEndTimer falls back to slow polling.
+    this.scheduleTrackEndTimer(this.currentDuration);
   }
 
   pause(): void {
@@ -143,9 +148,7 @@ export class DlnaTarget implements PlaybackTarget {
     // pause() cleared the track-end timer along with the reconcile timer. Without
     // rearming it here the track never auto-advances after a pause, and there is no
     // fallback: the natural-end check in the elapsed ticker is skipped for cast targets.
-    if (this.currentDuration > 0) {
-      this.scheduleTrackEndTimer(this.currentDuration);
-    }
+    this.scheduleTrackEndTimer(this.currentDuration);
   }
 
   stop(): void {
@@ -228,31 +231,39 @@ export class DlnaTarget implements PlaybackTarget {
     }, delayMs);
   }
 
+  // Arms a transport-state poll that keeps checking until the renderer reports it is done.
+  // A duration of 0 (track metadata without a length) still gets polled, just from the start
+  // and at a slower interval, because a cast target has no other end-of-track signal: the
+  // elapsed ticker's position-based fallback in player.ts is skipped for cast devices.
   private scheduleTrackEndTimer(durationSeconds: number) {
     if (this.trackEndTimer) clearTimeout(this.trackEndTimer);
-    const remaining = durationSeconds - this.positionSeconds;
-    const delay = Math.max(0, remaining - 1) * 1000;
-    this.trackEndTimer = setTimeout(async () => {
+    const known = durationSeconds > 0;
+    const delay = known
+      ? Math.max(0, durationSeconds - this.positionSeconds - 1) * 1000
+      : DLNA_UNKNOWN_DURATION_POLL_MS;
+    const retryMs = known ? DLNA_TRACK_END_POLL_MS : DLNA_UNKNOWN_DURATION_POLL_MS;
+    const poll = async () => {
+      this.trackEndTimer = null;
       if (!this.playing) return;
       // Confirm via GetTransportInfo that we're actually done.
+      let state: string;
       try {
-        const state = await getTransportInfo(this.renderer.avTransportControlUrl);
-        if (state === "STOPPED" || state === "NO_MEDIA_PRESENT") {
-          this.onTrackEnd?.();
-        } else {
-          // Not done yet, check again in 2s.
-          this.trackEndTimer = setTimeout(async () => {
-            const s2 = await getTransportInfo(this.renderer.avTransportControlUrl).catch(() => "STOPPED");
-            if (s2 === "STOPPED" || s2 === "NO_MEDIA_PRESENT") {
-              this.onTrackEnd?.();
-            }
-          }, 2000);
-        }
+        state = await getTransportInfo(this.renderer.avTransportControlUrl);
       } catch {
         // If we can't reach the renderer, assume track ended.
         this.onTrackEnd?.();
+        return;
       }
-    }, delay);
+      if (state === "STOPPED" || state === "NO_MEDIA_PRESENT") {
+        this.onTrackEnd?.();
+        return;
+      }
+      // Still playing. Keep polling: a single retry left the queue stranded on the finished
+      // track whenever the renderer ran even slightly past our duration estimate.
+      if (!this.playing) return;
+      this.trackEndTimer = setTimeout(() => void poll(), retryMs);
+    };
+    this.trackEndTimer = setTimeout(() => void poll(), delay);
   }
 
   private clearTimers() {

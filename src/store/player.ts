@@ -285,6 +285,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     void get().next(true);
   });
 
+  // The Rust enqueue thread gave up on a queued gapless source (fetch failed, decode failed, or a
+  // newer play superseded it). Without this the suppression flag below would stay set for the rest
+  // of the session, disabling the position-based fallback advance exactly when it is most needed.
+  void listen("gapless-cancelled", () => {
+    gaplessActive = false;
+  });
+
   // Gapless transition: Rust reports that the current source finished and the queued next one started.
   // Advance queue state without calling audio_play, the audio is already playing.
   void listen("track-advanced", () => {
@@ -323,6 +330,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       ? 1.0
       : computeReplayGainLinear(nextTrack.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
     void activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
+    // An end-of-track sleep timer set after the next source was already enqueued cannot stop the
+    // transition, the audio engine has moved on. Honour it here instead: the queue now sits at the
+    // start of the next track, paused. The enqueue itself is blocked while the flag is set (see the
+    // elapsed ticker), so this only covers a timer armed inside the gapless lead window.
+    if (get().sleepTimerEndOfTrack) {
+      get().clearSleepTimer();
+      activeTarget.pause(0);
+      set({ isPlaying: false });
+      void persistQueueState();
+      return;
+    }
     startElapsedTimer();
     void preloadWaveforms();
     void fetchWaveform(nextTrack.id, streamUrlFor(nextTrack));
@@ -370,7 +388,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             stallPos = null;
             stallSince = null;
           }
-          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, gapless, repeat, consumeMode } = get();
+          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, gapless, repeat, consumeMode, sleepTimerEndOfTrack } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
           const hasNext = nextPosition < queue.length || repeat === "repeat-all";
@@ -379,7 +397,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             pos / duration >= 0.8 &&
             hasNext &&
             streamUrlFor &&
-            prefetchedForIndex !== queueIndex
+            prefetchedForIndex !== queueIndex &&
+            // An end-of-track sleep timer means there is no next track to hand off to. Queuing one
+            // anyway makes the engine (or the renderer) advance on its own, past the point where
+            // next() would have stopped playback, so the timer never takes effect at all.
+            !sleepTimerEndOfTrack
           ) {
             prefetchedForIndex = queueIndex;
             const effectiveNext = nextPosition < queue.length ? nextPosition : 0;
