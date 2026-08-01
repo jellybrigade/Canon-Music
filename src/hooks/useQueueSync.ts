@@ -11,14 +11,11 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
   const playQueue = usePlayerStore((s) => s.playQueue);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
-  const restoredRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Restore queue from server on first connect (only if nothing is already playing)
   useEffect(() => {
-    restoredRef.current = false;
     if (!serverWithCred || isPlaying || currentTrack) return;
-    restoredRef.current = true;
 
     const { server, credential } = serverWithCred;
 
@@ -49,6 +46,12 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         .filter((r): r is TrackMeta => r != null);
 
       if (orderedTracks.length === 0) return;
+
+      // The "nothing is playing" check above ran before a network round trip and a DB read.
+      // loadSettings' own queue_state restore can land inside that window; playQueue would
+      // overwrite it, and clear radioActive/radioSeed along with it. Whoever got there first
+      // wins.
+      if (usePlayerStore.getState().currentTrack) return;
 
       const streamUrlFn = (t: { id: string }) =>
         getStreamUrl(server.url, server.username, credential, stripServerPrefix(t.id, server.id));
@@ -110,7 +113,10 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     }, 10_000);
 
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [serverWithCred, currentTrack?.id, queue.length]);
+    // Depends on the queue array itself, not its length: a reorder, or a removal paired with
+    // an addition, changes the queue without changing how long it is, and keying on length
+    // meant the server kept the stale order.
+  }, [serverWithCred, currentTrack?.id, queue]);
 
   // Save immediately on visibility change (tab loses focus) or page unload
   useEffect(() => {

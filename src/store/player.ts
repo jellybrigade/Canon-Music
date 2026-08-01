@@ -56,6 +56,17 @@ let lastEndedTrackId: string | null = null;
 // Suppresses the position-based fallback advance so it doesn't interrupt the gapless transition.
 let gaplessActive = false;
 
+// What was actually handed to the audio engine for the gapless transition, and the queue
+// position it sat at when it was enqueued. The engine takes the source up to a fifth of a
+// track before the transition, so the queue can be edited in between; on `track-advanced`
+// this is the only record of which track the user is now hearing.
+let gaplessEnqueued: { track: CurrentTrack; position: number } | null = null;
+
+// Bumped by every queue mutation. The elapsed ticker keys its "already handed off the next
+// track" guard on this as well as the index, so an edit that changes the successor re-arms
+// the hand-off instead of being locked out for the rest of the track.
+let queueRevision = 0;
+
 // Cancels in-flight audio-error retry listener when a new track starts.
 let cancelAudioError: (() => void) | null = null;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
@@ -238,6 +249,7 @@ interface PlayerState {
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
   removeManyFromQueue: (positions: number[]) => Promise<void>;
+  clearQueue: () => void;
   setAccentColor: (color: string | null) => void;
   moveQueueItem: (from: number, to: number) => void;
   playFromQueueIndex: (position: number) => Promise<void>;
@@ -290,28 +302,65 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   // of the session, disabling the position-based fallback advance exactly when it is most needed.
   void listen("gapless-cancelled", () => {
     gaplessActive = false;
+    gaplessEnqueued = null;
   });
 
   // Gapless transition: Rust reports that the current source finished and the queued next one started.
   // Advance queue state without calling audio_play, the audio is already playing.
   void listen("track-advanced", () => {
+    const enqueued = gaplessEnqueued;
     gaplessActive = false;
+    gaplessEnqueued = null;
     naturalEndFiredForIndex = null;
     lastEndedTrackId = null;
     const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, repeat } = get();
     if (!streamUrlFor) return;
     const nextPosition = queueIndex + 1;
-    let newQueueIndex = nextPosition;
+    const wrapped = nextPosition >= queue.length;
+    if (wrapped && repeat !== "repeat-all") return;
+
+    let newQueueIndex: number;
     let newShuffleOrder = shuffleOrder;
-    if (nextPosition < queue.length) {
-      newQueueIndex = nextPosition;
-    } else if (repeat === "repeat-all") {
+    let nextTrack: CurrentTrack | null;
+
+    if (wrapped) {
+      // Re-shuffle on loop-back so each pass plays a different order, but anchor the new
+      // order on the track the engine actually started. Anchoring on queue[0] instead would
+      // display a different track from the one playing every time shuffle is on, since the
+      // enqueue resolved position 0 against the order being replaced here.
+      const anchorIdx = enqueued ? queue.findIndex((t) => t.id === enqueued.track.id) : 0;
+      newShuffleOrder = isShuffled && queue.length > 1
+        ? buildShuffleOrder(queue.length, anchorIdx >= 0 ? anchorIdx : 0)
+        : shuffleOrder;
       newQueueIndex = 0;
-      newShuffleOrder = isShuffled && queue.length > 1 ? buildShuffleOrder(queue.length, 0) : shuffleOrder;
+      nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
+    } else if (enqueued) {
+      // The queue can be edited between the enqueue and the transition (play next, reorder,
+      // remove), so queueIndex + 1 is not necessarily still the track that is now audible.
+      // Follow the enqueued track to wherever it sits now.
+      const positionOf = (): number => {
+        if (resolveTrack(queue, shuffleOrder, isShuffled, enqueued.position)?.id === enqueued.track.id) {
+          return enqueued.position;
+        }
+        for (let p = 0; p < queue.length; p++) {
+          if (resolveTrack(queue, shuffleOrder, isShuffled, p)?.id === enqueued.track.id) return p;
+        }
+        return -1;
+      };
+      const found = positionOf();
+      if (found >= 0) {
+        newQueueIndex = found;
+        nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, found);
+      } else {
+        // Removed from the queue while it was already handed to the engine. It is still what
+        // the user hears, so show it; park the index so the next advance moves forward.
+        newQueueIndex = Math.min(nextPosition, Math.max(0, queue.length - 1));
+        nextTrack = enqueued.track;
+      }
     } else {
-      return;
+      newQueueIndex = nextPosition;
+      nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
     }
-    const nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
     if (!nextTrack) return;
     set({
       queueIndex: newQueueIndex,
@@ -349,7 +398,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
   function startElapsedTimer() {
     if (elapsedInterval) clearInterval(elapsedInterval);
-    let prefetchedForIndex: number | null = null;
+    // Keyed on index *and* queue revision: a reorder or removal changes which track follows
+    // without changing queueIndex, and an index-only guard would lock out the corrected
+    // hand-off for the rest of the track.
+    let prefetchedFor: string | null = null;
     let stallPos: number | null = null;
     let stallSince: number | null = null;
     // Audio is only considered started once the position has actually advanced.
@@ -397,13 +449,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             pos / duration >= 0.8 &&
             hasNext &&
             streamUrlFor &&
-            prefetchedForIndex !== queueIndex &&
+            prefetchedFor !== `${queueIndex}:${queueRevision}` &&
             // An end-of-track sleep timer means there is no next track to hand off to. Queuing one
             // anyway makes the engine (or the renderer) advance on its own, past the point where
             // next() would have stopped playback, so the timer never takes effect at all.
             !sleepTimerEndOfTrack
           ) {
-            prefetchedForIndex = queueIndex;
+            prefetchedFor = `${queueIndex}:${queueRevision}`;
             const effectiveNext = nextPosition < queue.length ? nextPosition : 0;
             const nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, effectiveNext);
             if (nextTrack) {
@@ -413,10 +465,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               // and consume mode (index shifts after removal would desync the gapless queue).
               const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
               if (canGapless) {
-                gaplessActive = true;
-                void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
-                  gaplessActive = false;
-                });
+                // A queue edit bumps the revision and gets us here a second time, but rodio
+                // cannot un-append a source: audio_enqueue_next sees its slot already claimed
+                // and returns without doing anything. Re-recording gaplessEnqueued here would
+                // name a track the engine never received, which is exactly the mismatch the
+                // record exists to prevent. Leave the first one standing.
+                if (!gaplessActive) {
+                  gaplessActive = true;
+                  gaplessEnqueued = { track: nextTrack, position: effectiveNext };
+                  void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
+                    gaplessActive = false;
+                    gaplessEnqueued = null;
+                  });
+                }
               } else {
                 void activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
               }
@@ -652,6 +713,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     naturalEndFiredForIndex = null;
     lastEndedTrackId = null;
     gaplessActive = false;
+    gaplessEnqueued = null;
     pauseRequestedDuringLoad = false;
     set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
@@ -746,6 +808,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   }
 
   function persistQueueState() {
+    // Every queue mutation funnels through here, so this is the one place that sees them all.
+    // The ticker's hand-off guard reads it to notice that the successor may have changed.
+    queueRevision++;
     if (queuePersistTimer) clearTimeout(queuePersistTimer);
     queuePersistTimer = setTimeout(() => {
       queuePersistTimer = null;
@@ -1431,6 +1496,18 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           get().stop();
         }
       }
+      void persistQueueState();
+    },
+
+    clearQueue: () => {
+      // Unlike stop(), this is an explicit request to throw the queue away, so the queue and
+      // its shuffle order go too. streamUrlFor is kept: App re-supplies it per server, and
+      // dropping it here would leave a later addToQueue with no way to build a stream URL.
+      get().stop();
+      set({ queue: [], queueIndex: 0, shuffleOrder: [] });
+      // A radio session survives an empty queue and would silently start appending again the
+      // next time something plays. Clearing the queue is an explicit "stop feeding me tracks".
+      if (get().radioActive) get().setRadioActive(false);
       void persistQueueState();
     },
 

@@ -491,6 +491,11 @@
   border: none;
 }
 
+.now-playing-up-next-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .now-playing-up-next-row--active {
   background: var(--tint-3);
 }
@@ -598,7 +603,9 @@
   font-size: var(--text-md);
   color: var(--text-tertiary);
   margin: auto;
+  max-width: 34ch;
   text-align: center;
+  text-wrap: pretty;
 }
 
 /* ── About tab ── */

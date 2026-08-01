@@ -3,7 +3,7 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX,
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -409,6 +409,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const playNext = usePlayerStore((s) => s.playNext);
   const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const clearQueue = usePlayerStore((s) => s.clearQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const radioActive = usePlayerStore((s) => s.radioActive);
@@ -766,6 +767,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 {t === "up-next" ? "Up Next" : t === "about" ? "About" : "Lyrics"}
               </button>
             ))}
+            {tab === "up-next" && queue.length > 0 && (
+              <button
+                className="now-playing-tab-refresh-btn"
+                title="Clear queue"
+                aria-label="Clear queue"
+                onClick={() => clearQueue()}
+              >
+                <ListX size={14} />
+              </button>
+            )}
             {tab === "lyrics" && (
               <div className="now-playing-tab-lyric-actions">
                 {lyricsLines && (
@@ -818,7 +829,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             {tab === "up-next" && (
               <>
                 {orderedTracks.length === 0 ? (
-                  <p className="now-playing-empty">Queue is empty.</p>
+                  <p className="now-playing-empty">Nothing queued. Play an album or track, or use "Add to queue" from any track menu.</p>
                 ) : (
                   orderedTracks.map(({ position, track }) => (
                     <button
