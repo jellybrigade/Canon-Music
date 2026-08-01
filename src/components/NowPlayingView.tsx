@@ -515,8 +515,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, pos) => {
       const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-      return { position: pos, track: queue[idx]! };
-    }),
+      return { position: pos, track: queue[idx] };
+    }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
     [queue, isShuffled, shuffleOrder]
   );
 

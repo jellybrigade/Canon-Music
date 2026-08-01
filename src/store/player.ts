@@ -179,8 +179,11 @@ function adjustIndexAfterMove(currentIdx: number, from: number, to: number): num
 // Appending to a shuffle order that does not already cover the whole queue silently shifts
 // every position, so callers that splice into it normalize first. A short order is repaired by
 // keeping the positions it does describe and appending whatever queue indices it left out.
+// Always returns a fresh array: every caller splices or pushes into the result, and handing
+// back the stored order itself would mutate live state in place and leave the reference
+// unchanged, so components subscribed to shuffleOrder would not re-render.
 function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
-  if (order.length === queueLength) return order;
+  if (order.length === queueLength) return [...order];
   const seen = new Set<number>();
   const repaired: number[] = [];
   for (const idx of order) {
@@ -330,6 +333,7 @@ interface PlayerState {
 
   play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
+  restoreQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, position: number) => void;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
   prev: () => Promise<void>;
   pause: () => void;
@@ -1304,6 +1308,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (hadRadio || hadSeed) void persistRadioState();
     },
 
+    // Seeds the queue from a saved session without starting playback. playQueue cannot be used
+    // for this: it calls playTrack, which spawns a download and decode in Rust, so restoring a
+    // session used to fetch a whole track at startup and then race a pause() against it. The
+    // engine stays empty here, and resume() routes a first play through retryCurrent so the
+    // track is loaded on demand.
+    restoreQueue: (tracks, streamUrlFn, position) => {
+      if (tracks.length === 0) return;
+      const clamped = Math.max(0, Math.min(position, tracks.length - 1));
+      set({
+        queue: tracks,
+        queueIndex: clamped,
+        shuffleOrder: [],
+        isShuffled: false,
+        currentTrack: tracks[clamped] ?? null,
+        streamUrl: null,
+        streamUrlFor: streamUrlFn,
+        isPlaying: false,
+        elapsed: 0,
+      });
+      void persistQueueState();
+    },
+
     setSleepTimer: (preset) => {
       if (sleepTimerTimeout) { clearTimeout(sleepTimerTimeout); sleepTimerTimeout = null; }
       if (preset === "end-of-track") {
@@ -1432,7 +1458,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     resume: () => {
-      const { pauseFadeMs, currentTrack, error } = get();
+      const { pauseFadeMs, currentTrack, error, streamUrl } = get();
       // Nothing loaded (queue ran out, queue cleared, or stop()). Without this guard an
       // OS-level play command leaves isPlaying true with no audio and an elapsed ticker
       // polling a position that counts up against silence.
@@ -1440,6 +1466,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       // The current track failed, so there is no sink to resume. Pressing play (or the media
       // key) means "try this again", which is what the Retry button does.
       if (error) {
+        get().retryCurrent();
+        return;
+      }
+      // A session restored from queue_state has a currentTrack but has never loaded anything
+      // into the engine, so there is no sink to resume either. Resuming one anyway left the
+      // store claiming to play with the position stuck at 0, which the stall watchdog cannot
+      // recover from because it requires the position to have advanced at least once.
+      if (!streamUrl) {
         get().retryCurrent();
         return;
       }
@@ -1834,7 +1868,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const newQueueIndex = adjustIndexAfterMove(queueIndex, from, to);
 
       if (isShuffled) {
-        const newOrder = [...shuffleOrder];
+        // Splicing an order that does not cover the whole queue shifts every position after
+        // the splice point, so this normalizes first for the same reason the append paths do.
+        const newOrder = normalizeShuffleOrder(shuffleOrder, queue.length);
         const [item] = newOrder.splice(from, 1);
         newOrder.splice(to, 0, item!);
         set({ shuffleOrder: newOrder, queueIndex: newQueueIndex });

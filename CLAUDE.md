@@ -77,7 +77,7 @@ Don't flatten single-parent. Don't merge `canon-tree.json` + `user-tree.json`. S
 - Artist enrichment: bio, stats, similar artists persisted `artist_identity` (schema v20); on-open + background
 - Tag issue detection + `TagIssuesView` w/ dismiss + sidebar badge
 - Shuffle re-seeds repeat-all wrap
-- Drag-to-reorder queue (HTML5 DnD)
+- Queue reorder via Now Playing context menu (move to start / play next / move to end). The drag-to-reorder side panel was removed with `QueuePanel` in `44bad32`; no HTML5 DnD on queue rows anymore.
 - OS media keys (`navigator.mediaSession`, exposes MPRIS Linux)
 - Radio Auto-DJ: canon tree ancestor scoring + Last.fm similar artists; 10-track lookahead
 - Lyrics: LRClib fetch + SQLite cache + synced auto-scroll NowPlayingOverlay

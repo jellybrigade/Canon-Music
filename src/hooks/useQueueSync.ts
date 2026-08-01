@@ -8,7 +8,7 @@ import { stripServerPrefix } from "../utils/ids";
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const queue = usePlayerStore((s) => s.queue);
-  const playQueue = usePlayerStore((s) => s.playQueue);
+  const restoreQueue = usePlayerStore((s) => s.restoreQueue);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -20,10 +20,21 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     const { server, credential } = serverWithCred;
 
     void (async () => {
+      const db = await getDb();
+
+      // "Restore queue on startup" is a single user-facing setting, so it has to gate the
+      // server-side restore too. Only loadSettings honoured it, which meant turning the
+      // setting off suppressed the local snapshot and then let the server put the queue
+      // straight back.
+      const settingRows = await db.select<{ value: string }[]>(
+        "SELECT value FROM settings WHERE key = 'queue.restore_on_startup'",
+        []
+      );
+      if (settingRows[0]?.value !== "true") return;
+
       const saved = await getPlayQueue(server.url, server.username, credential, server.alt_url ?? undefined);
       if (!saved || saved.trackIds.length === 0) return;
 
-      const db = await getDb();
       type TrackMeta = { id: string; title: string; artist: string | null; duration: number | null; album_id: string | null; artwork_url: string | null; album_name: string | null };
 
       // Batch-fetch all tracks by native ID
@@ -47,10 +58,9 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
       if (orderedTracks.length === 0) return;
 
-      // The "nothing is playing" check above ran before a network round trip and a DB read.
-      // loadSettings' own queue_state restore can land inside that window; playQueue would
-      // overwrite it, and clear radioActive/radioSeed along with it. Whoever got there first
-      // wins.
+      // The "nothing is playing" check above ran before a network round trip and two DB reads.
+      // loadSettings' own queue_state restore can land inside that window, and restoreQueue
+      // would overwrite it. Whoever got there first wins.
       if (usePlayerStore.getState().currentTrack) return;
 
       const streamUrlFn = (t: { id: string }) =>
@@ -74,10 +84,10 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         ? trackObjs.findIndex((t) => t.id === currentCanonId)
         : 0;
 
-      await playQueue(trackObjs, streamUrlFn, startIndex >= 0 ? startIndex : 0);
-
-      // Pause immediately after loading, don't autoplay on restore
-      usePlayerStore.getState().pause?.();
+      // Seeds the queue only. Loading the track here would download and decode it at startup
+      // for playback the user never asked for, and the pause that followed had to win a race
+      // against the download thread appending to the sink.
+      restoreQueue(trackObjs, streamUrlFn, startIndex >= 0 ? startIndex : 0);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverWithCred?.server.id]);
