@@ -41,15 +41,15 @@ export class LocalTarget implements PlaybackTarget {
   }
 
   pause(fadeMs = 150): void {
-    void invoke("audio_pause", { fadeMs });
+    void invoke("audio_pause", { fadeMs }).catch(() => {});
   }
 
   resume(fadeMs = 150): void {
-    void invoke("audio_resume", { fadeMs });
+    void invoke("audio_resume", { fadeMs }).catch(() => {});
   }
 
   stop(): void {
-    void invoke("audio_stop");
+    void invoke("audio_stop").catch(() => {});
   }
 
   async seek(seconds: number): Promise<void> {
@@ -70,7 +70,7 @@ export class LocalTarget implements PlaybackTarget {
   }
 
   teardown(): void {
-    void invoke("audio_stop");
+    void invoke("audio_stop").catch(() => {});
   }
 }
 
@@ -140,6 +140,12 @@ export class DlnaTarget implements PlaybackTarget {
     this.playing = true;
     void avPlay(this.renderer.avTransportControlUrl).catch(() => {});
     this.scheduleReconcile(2000);
+    // pause() cleared the track-end timer along with the reconcile timer. Without
+    // rearming it here the track never auto-advances after a pause, and there is no
+    // fallback: the natural-end check in the elapsed ticker is skipped for cast targets.
+    if (this.currentDuration > 0) {
+      this.scheduleTrackEndTimer(this.currentDuration);
+    }
   }
 
   stop(): void {

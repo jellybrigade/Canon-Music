@@ -861,15 +861,18 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
         return;
     }
 
-    let target_vol = *state.volume.lock().unwrap_or_else(|e| e.into_inner());
     let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
-        std::thread::spawn(move || {
+        // Ramp from wherever the volume actually is, not from the configured target. Pausing
+        // during an in-flight resume fade cancels that fade partway, so the sink can sit at any
+        // level; starting from the target would jump the volume up before fading it down.
+        let start_vol = sink.volume();
+        tauri::async_runtime::spawn_blocking(move || {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {
                 if fade_gen.load(Ordering::Relaxed) != gen { return; }
                 let t = i as f32 / steps as f32;
-                sink.set_volume(target_vol * (1.0 - t));
+                sink.set_volume(start_vol * (1.0 - t));
                 std::thread::sleep(Duration::from_millis(10));
             }
             if fade_gen.load(Ordering::Relaxed) == gen {
@@ -898,14 +901,18 @@ fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
             sink.play();
             return;
         }
-        sink.set_volume(0.0);
+        // Ramp up from the current level rather than forcing 0 first. A pause fade that was
+        // cancelled partway leaves the sink mid-ramp, and dropping it to 0 to fade back up
+        // produces an audible dip when play/pause is toggled quickly.
+        let start_vol = sink.volume().min(target_vol);
+        sink.set_volume(start_vol);
         sink.play();
-        std::thread::spawn(move || {
+        tauri::async_runtime::spawn_blocking(move || {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {
                 if fade_gen.load(Ordering::Relaxed) != gen { return; }
                 let t = i as f32 / steps as f32;
-                sink.set_volume(target_vol * t);
+                sink.set_volume(start_vol + (target_vol - start_vol) * t);
                 std::thread::sleep(Duration::from_millis(10));
             }
             if fade_gen.load(Ordering::Relaxed) == gen {

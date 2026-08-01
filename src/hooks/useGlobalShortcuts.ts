@@ -21,12 +21,17 @@ export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null |
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const store = usePlayerStore.getState();
-      const { currentTrack, isPlaying, elapsed, volume, queue, queueIndex, repeat } = store;
+      const { currentTrack, isPlaying, isLoading, elapsed, volume, queue, queueIndex, repeat } = store;
 
       switch (e.key) {
         case " ": {
           if (!currentTrack) return;
           e.preventDefault();
+          // Key auto-repeat would toggle at ~30/sec, each toggle starting a fade in the
+          // audio engine. Held space should be one toggle, like the on-screen button.
+          if (e.repeat) return;
+          // Matches the transport buttons, which are disabled while a track loads.
+          if (isLoading) return;
           isPlaying ? store.pause() : store.resume();
           break;
         }

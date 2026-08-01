@@ -720,6 +720,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn"
               onClick={() => void prev()}
               disabled={queue.length === 0}
+              aria-label="Previous"
             >
               <SkipBack size={26} />
             </button>
@@ -727,6 +728,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn player-btn--play player-btn--play-large"
               onClick={isPlaying ? pause : resume}
               disabled={isLoading}
+              aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading
                 ? <Loader size={24} className="player-spin" />
@@ -738,6 +740,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn"
               onClick={() => void next()}
               disabled={nextDisabled}
+              aria-label="Next"
             >
               <SkipForward size={26} />
             </button>

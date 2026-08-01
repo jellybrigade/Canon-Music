@@ -79,6 +79,12 @@ let currentReplayGainLinear = 1.0;
 // every mute button (PlayerBar, NowPlayingView) shares one source of truth instead of drifting.
 let preMuteVolume = 1.0;
 
+// Set when pause() is called while a track is still loading. playTrack's completion handler
+// unconditionally sets isPlaying, so without this the pause is silently overwritten: the engine
+// ends up paused while the UI claims to be playing, with the position frozen at 0 and the stall
+// watchdog unable to arm (it needs the position to have advanced at least once).
+let pauseRequestedDuringLoad = false;
+
 function computeReplayGainLinear(
   rg: CurrentTrack["replayGain"],
   mode: ReplayGainMode,
@@ -610,6 +616,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     naturalEndFiredForIndex = null;
     lastEndedTrackId = null;
     gaplessActive = false;
+    pauseRequestedDuringLoad = false;
     set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
 
@@ -622,14 +629,23 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         await activeTarget.load(url, track, track.coverArtUrl ?? null);
         if (get().currentTrack?.id !== track.id) return;
-        set({ isPlaying: true, isLoading: false });
+        const paused = pauseRequestedDuringLoad;
+        pauseRequestedDuringLoad = false;
+        set({ isPlaying: !paused, isLoading: false });
         // Apply ReplayGain for this track now that the sink exists
         const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
         currentReplayGainLinear = castDevice
           ? 1.0
           : computeReplayGainLinear(track.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
         void activeTarget.setVolume(volume * Math.sqrt(currentReplayGainLinear));
-        startElapsedTimer();
+        // The user asked to pause while this track was still loading. Re-apply that against the
+        // sink that now exists (the earlier pause raced the load and may have hit nothing), and
+        // leave the elapsed ticker stopped until they resume.
+        if (paused) {
+          activeTarget.pause(0);
+        } else {
+          startElapsedTimer();
+        }
         void fetchWaveform(track.id, url);
         void preloadWaveforms();
       } catch (e) {
@@ -1035,20 +1051,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     pause: () => {
-      const fadeMs = get().pauseFadeMs;
-      activeTarget.pause(fadeMs);
+      const { pauseFadeMs, currentTrack, isLoading } = get();
+      if (!currentTrack) return;
+      if (isLoading) pauseRequestedDuringLoad = true;
+      activeTarget.pause(pauseFadeMs);
       stopElapsedTimer();
       set({ isPlaying: false });
     },
 
     resume: () => {
-      const fadeMs = get().pauseFadeMs;
-      activeTarget.resume(fadeMs);
+      const { pauseFadeMs, currentTrack } = get();
+      // Nothing loaded (queue ran out, queue cleared, or stop()). Without this guard an
+      // OS-level play command leaves isPlaying true with no audio and an elapsed ticker
+      // polling a position that counts up against silence.
+      if (!currentTrack) return;
+      pauseRequestedDuringLoad = false;
+      activeTarget.resume(pauseFadeMs);
       startElapsedTimer();
       set({ isPlaying: true });
     },
 
     stop: () => {
+      pauseRequestedDuringLoad = false;
       activeTarget.stop();
       stopElapsedTimer();
       set({
