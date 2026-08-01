@@ -87,6 +87,7 @@ export interface AppViewProps {
   // Sync status
   syncStatus: SyncApi["syncStatus"];
   syncError: SyncApi["syncError"];
+  syncProgress: SyncApi["syncProgress"];
   lastSyncedAt: SyncApi["lastSyncedAt"];
   runSync: SyncApi["runSync"];
   credError: Error | null;
@@ -363,6 +364,7 @@ export function AppRoutes(props: AppViewProps) {
     setAlbumsPaginated,
     syncStatus,
     syncError,
+    syncProgress,
     runSync,
     credError,
     searchOpen,
@@ -519,7 +521,11 @@ export function AppRoutes(props: AppViewProps) {
               <CanonLockup height={22} className="library-header-logo" />
               <span className="server-name">{server?.display_name}</span>
               {syncStatus === "syncing" && (
-                <span className="sync-status">Syncing…</span>
+                <span className="sync-status">
+                  {syncProgress && syncProgress.total > 0
+                    ? `Syncing ${syncProgress.done} of ${syncProgress.total} albums…`
+                    : "Syncing…"}
+                </span>
               )}
               {syncStatus === "error" && (
                 <span className="sync-status sync-status--error" title={syncError}>

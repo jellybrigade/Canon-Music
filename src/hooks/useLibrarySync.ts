@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
+import type { SyncProgress } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
 import { useSetting } from "./useSetting";
 import type { Server } from "../types/server";
@@ -18,15 +19,22 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const syncingRef = useRef(false);
   const syncedRef = useRef<string | null>(null);
+  // Lets the settle handler below see which server is selected now, not which
+  // one this run started for.
+  const serverRef = useRef<Server | undefined>(server);
+  serverRef.current = server;
   const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
 
-  function runSync(s: Server) {
-    if (syncingRef.current) return;
+  /** Returns whether a run actually started. */
+  function runSync(s: Server): boolean {
+    if (syncingRef.current) return false;
     syncingRef.current = true;
     setSyncStatus("syncing");
     setSyncError("");
+    setSyncProgress(null);
     // No bump here: nothing has been written yet at sync start, so bumping would
     // only force a full re-read of the album table for identical data. The
     // progress callback below bumps once rows actually land.
@@ -35,14 +43,19 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
     let lastInvalidate = 0;
-    syncLibrary(s, () => {
+    syncLibrary(s, (progress) => {
+      // Progress state is cheap to set and is the only thing telling the user a
+      // long first sync is moving rather than hung, so it updates every tick.
+      // Only the store bump, which forces a full album re-read, is debounced.
+      setSyncProgress(progress);
       const now = Date.now();
       if (now - lastInvalidate < 1500) return;
       lastInvalidate = now;
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
-      .then(({ failedAlbums, failedPlaylists, skippedStages, changed }) => {
-        const hasPartialFailure = failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0;
+      .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
+        const hasPartialFailure =
+          failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0 || albumTracksIncomplete;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
         if (hasPartialFailure) {
@@ -53,6 +66,11 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           if (parts.length > 0) messages.push(`failed to fetch tracks for ${parts.join(" and ")}`);
           // Skipped stages kept their stored data, so say so rather than implying data loss.
           if (skippedStages.length > 0) messages.push(`${skippedStages.join(" and ")} unchanged (server unreachable)`);
+          // The album pass is different: it stopped part way, so those albums were
+          // not read at all and cannot be described as unchanged.
+          if (albumTracksIncomplete) {
+            messages.push("stopped reading album tracks early (server unreachable), the rest follow next sync");
+          }
           setSyncError(`Sync partial: ${messages.join("; ")}.`);
         }
         // Each bump invalidates a session-store snapshot and forces a full
@@ -93,13 +111,27 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       })
       .finally(() => {
         syncingRef.current = false;
+        setSyncProgress(null);
+        // The user may have switched servers while this run was in flight, in
+        // which case the effect below could not start one for the new server.
+        const latest = serverRef.current;
+        if (latest) syncIfNeeded(latest);
       });
+    return true;
+  }
+
+  // Claims the server as synced only once a run actually starts. Stamping first
+  // and calling runSync second lost the sync entirely when one was already in
+  // flight: runSync is a no-op then, but the server counted as done and nothing
+  // retried until the next auto-sync tick, or never when the interval is off.
+  function syncIfNeeded(s: Server) {
+    if (syncedRef.current === s.id) return;
+    if (runSync(s)) syncedRef.current = s.id;
   }
 
   useEffect(() => {
-    if (!server || syncedRef.current === server.id) return;
-    syncedRef.current = server.id;
-    runSync(server);
+    if (!server) return;
+    syncIfNeeded(server);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server]);
 
@@ -111,5 +143,5 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server, autoSyncIntervalMin]);
 
-  return { syncStatus, syncError, lastSyncedAt, runSync };
+  return { syncStatus, syncError, syncProgress, lastSyncedAt, runSync };
 }

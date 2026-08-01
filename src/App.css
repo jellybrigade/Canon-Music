@@ -527,3 +527,60 @@ html[data-app-blurred] * {
   --opacity-90: 0.9;
 }
 
+
+/* ── Fatal startup error (database unreadable) ──
+   Same shape as ErrorBoundary's panel, but rendered from App so it can offer a
+   retry against the query rather than a tree remount. */
+.app-fatal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  gap: var(--space-md);
+  padding: var(--space-xl);
+  text-align: center;
+  background: var(--bg);
+  color: var(--text-primary);
+}
+
+.app-fatal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.app-fatal-message {
+  max-width: 60ch;
+  color: var(--text-secondary);
+}
+
+.app-fatal-hint {
+  max-width: 60ch;
+  color: var(--text-tertiary);
+  font-size: 0.875rem;
+}
+
+.app-fatal-btn {
+  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-lg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color var(--duration-base), border-color var(--duration-base);
+}
+
+.app-fatal-btn:hover {
+  background: var(--bg-card);
+  border-color: var(--border-strong);
+}
+
+.app-fatal-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-fatal-btn:active {
+  background: var(--bg-hover-strong);
+}

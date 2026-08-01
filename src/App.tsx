@@ -101,14 +101,14 @@ export default function App() {
   });
 
   const queryClient = useQueryClient();
-  const { data: servers, isLoading: serversLoading } = useServers();
+  const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
   useMediaSession(serverWithCred);
 
-  const { syncStatus, syncError, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
+  const { syncStatus, syncError, syncProgress, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   useGlobalShortcuts(serverWithCred);
@@ -505,6 +505,30 @@ export default function App() {
 
   if (serversLoading) return null;
 
+  // `servers` is undefined for a failed read as well as an empty table, so
+  // falling through to the wizard here would show first-run setup to a fully
+  // configured user. Finishing it would insert a *second* server row, and
+  // `servers?.[0]` orders by created_at, so the app would then keep using the
+  // old row while the user had just entered credentials for the new one.
+  if (serversError) {
+    return (
+      <div className="app-fatal">
+        <h1 className="app-fatal-title">Canon could not read its database</h1>
+        <p className="app-fatal-message">
+          {serversError instanceof Error ? serversError.message : String(serversError)}
+        </p>
+        <p className="app-fatal-hint">
+          Your server settings and library are still on disk. This is usually a locked or
+          in-use database file, so closing any other running copy of Canon and trying again
+          is the first thing to check.
+        </p>
+        <button className="app-fatal-btn" onClick={() => { void refetchServers(); }}>
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   if (!servers || servers.length === 0) {
     return (
       <Suspense fallback={null}>
@@ -548,6 +572,7 @@ export default function App() {
     setAlbumsPaginated,
     syncStatus,
     syncError,
+    syncProgress,
     lastSyncedAt,
     runSync,
     credError: credError ?? null,

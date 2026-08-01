@@ -24,6 +24,14 @@ export function useServerWithCredential(serverId: string | undefined) {
   return useQuery({
     queryKey: QK.serverCredential(serverId),
     enabled: !!serverId,
+    // A missing keychain entry, a locked keyring and a corrupt payload are all
+    // permanent until the user acts, so retrying only delays the message telling
+    // them to. And the credential is written in exactly one place, which
+    // invalidates this key itself, so refetching it re-round-trips to the OS
+    // Secret Service over D-Bus for a value that cannot have changed.
+    retry: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
     queryFn: async (): Promise<ServerWithCredential> => {
       const db = await getDb();
       const rows = await db.select<Server[]>(
@@ -32,10 +40,17 @@ export function useServerWithCredential(serverId: string | undefined) {
       );
       const server = rows[0];
       if (!server) throw new Error(`Server ${serverId} not found`);
-      const credJson = await keychain.get(
-        `canon.server.${server.id}`,
-        "credential"
-      );
+      // `get_credential` rejects when the entry is absent rather than resolving
+      // to an empty string, so a falsy-check here would never fire and the raw
+      // keyring string ("No matching entry found in secure storage") would be
+      // what the user sees.
+      let credJson: string;
+      try {
+        credJson = await keychain.get(`canon.server.${server.id}`, "credential");
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        throw new Error(`Could not read the stored credential: ${detail}`);
+      }
       if (!credJson) {
         throw new Error(`No credentials found for server ${server.id}. Re-enter in Settings.`);
       }

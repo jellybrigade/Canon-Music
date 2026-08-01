@@ -155,22 +155,30 @@ export function Wizard({ onSuccess }: Props) {
     try {
       const id = crypto.randomUUID();
       await keychain.set(`canon.server.${id}`, "credential", JSON.stringify(testedCredential));
-      const db = await getDb();
-      const trimmedAltUrl = altUrl.trim().replace(/\/+$/, "") || null;
-      await db.execute(
-        `INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)`,
-        [
-          id,
-          url.trim().replace(/\/+$/, ""),
-          trimmedAltUrl,
-          displayName.trim(),
-          username.trim(),
-        ]
-      );
-      const rows = await db.select<Server[]>("SELECT * FROM servers WHERE id = ?", [id]);
-      const server = rows[0];
-      if (!server) throw new Error("Failed to load saved server");
-      onSuccess(server);
+      try {
+        const db = await getDb();
+        const trimmedAltUrl = altUrl.trim().replace(/\/+$/, "") || null;
+        await db.execute(
+          `INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)`,
+          [
+            id,
+            url.trim().replace(/\/+$/, ""),
+            trimmedAltUrl,
+            displayName.trim(),
+            username.trim(),
+          ]
+        );
+        const rows = await db.select<Server[]>("SELECT * FROM servers WHERE id = ?", [id]);
+        const server = rows[0];
+        if (!server) throw new Error("Failed to load saved server");
+        onSuccess(server);
+      } catch (err) {
+        // The id is freshly minted, so a failure here leaves a credential in the
+        // OS keychain that no row will ever reference again. Retrying mints
+        // another id, so without this every failed attempt strands another copy.
+        await keychain.delete(`canon.server.${id}`, "credential").catch(() => {});
+        throw err;
+      }
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
       setSaving(false);

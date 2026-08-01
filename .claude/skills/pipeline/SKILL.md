@@ -27,6 +27,10 @@ State clearly at the start which single item this invocation covers.
 
 ## Phase 2 — Map the pipeline
 
+**Mapping is ALWAYS delegated to an agent. Never map inline.** The main thread's context window is the scarce resource in this skill: Phase 3 needs room to hold the key files *and* reason across them, and a pipeline's grep/`ls`/dead-end output will eat that room before the review starts. So no inline `grep -rn` sweeps, no "quick" `ls`, no reading a file to find out whether it is relevant. If the agent's map comes back thin, send it back for more (`SendMessage`) or spawn a second one — do not fall back to searching yourself.
+
+This holds even if the user rejects the agent call, interrupts, or tells you to carry on: re-propose the agent (a narrower prompt, a different agent type) and say why. Carrying on inline is not the fallback. The only searching the main thread ever does is `Read` on a specific file:line the map already named.
+
 Spawn **one** `caveman:cavecrew-investigator` agent (per CLAUDE.md: research via explorer agents, never broad inline searches) to map the feature's full path. Ask it for a file:line map covering, wherever they apply:
 
 - entry point UI — component(s), the control the user actually touches
@@ -39,7 +43,7 @@ Spawn **one** `caveman:cavecrew-investigator` agent (per CLAUDE.md: research via
 - effects/listeners/intervals/timers set up, and their cleanup
 - CSS files owning the feature's visual states
 
-Read the key files directly yourself afterward — the agent locates, it does not judge.
+Read the key files directly yourself afterward — the agent locates, it does not judge. Read them by path from the map, not by searching for them.
 
 ## Phase 3 — Review the pipeline
 
