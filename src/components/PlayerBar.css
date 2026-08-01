@@ -248,20 +248,49 @@
   height: 3px;
   background-color: var(--progress-track);
   border-radius: var(--radius-2xs);
-  overflow: hidden;
-  outline: none;
-  transition: height var(--duration-moderate) ease;
+  position: relative;
+  cursor: pointer;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--duration-moderate) ease;
 }
 
+/* The visible track is 3px, far too thin to aim at. This extends the clickable area to 23px
+   without changing the layout, since the row's height is set by the time labels beside it. */
+.player-progress-bar::before {
+  content: "";
+  position: absolute;
+  inset: -10px 0;
+}
+
+.player-progress-bar[aria-disabled="true"] {
+  cursor: default;
+}
+
+.player-progress-bar[aria-disabled="true"]::before {
+  display: none;
+}
+
+/* Scale instead of animating height, matching .now-playing-progress-bar: same visual grow,
+   no relayout of the transport row. */
 .player-progress-bar:hover {
-  height: 5px;
+  transform: scaleY(1.667);
+}
+
+.player-progress-bar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .player-progress-fill {
+  width: 100%;
   height: 100%;
+  transform-origin: left center;
   background-color: var(--accent);
   border-radius: var(--radius-2xs);
-  transition: width var(--duration-longest) linear;
+  /* scaleX rather than width: width is a layout property, so animating it relayouts the
+     transport row five times a second while a track plays. */
+  transition: transform var(--duration-longest) linear;
 }
 
 .player-progress-bar--waveform {
@@ -274,8 +303,9 @@
   border-radius: 0;
 }
 
+/* The waveform variant is already 28px tall, so it doesn't take the hover grow. */
 .player-progress-bar--waveform:hover {
-  height: 28px;
+  transform: none;
 }
 
 .waveform-bar {

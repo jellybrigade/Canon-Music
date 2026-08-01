@@ -125,3 +125,17 @@ This was reachable on the normal play path: `preloadWaveforms` extracts the next
 **Fix:** module-level `pauseRequestedDuringLoad` flag, cleared at the start of `playTrack` and on `stop()`/`resume()`, checked by the completion handler, which re-applies the pause against the sink that now exists rather than asserting `isPlaying: true`.
 
 **Generalizes:** a track-id equality check is not a substitute for intent. Whenever a handler resumes after an await and writes state the user can also write, ask what happens if they wrote to it mid-flight. Related trap in the same file: `resume()` used to set `isPlaying: true` with no `currentTrack` guard, so an MPRIS play after the queue emptied started a 200ms elapsed ticker against silence forever.
+
+## One cancellation counter shared by several commands cancels intent, not just the effect (fixed 2026-08-01)
+
+`AudioState.fade_gen` (`src-tauri/src/lib.rs`) is a generation counter bumped by `audio_pause`, `audio_resume`, `audio_seek` and `audio_volume`; every spawned fade thread exits early once it sees a generation other than its own. That is correct for the volume ramp, which genuinely is superseded. It was wrong for the *action at the end of the ramp*: `audio_pause`'s thread called `sink.pause()` only after re-checking the generation, so any unrelated bump skipped the pause entirely.
+
+**Symptom:** hit pause, then click the progress bar within the 150ms fade. The store shows paused, the pause button shows a play icon, and the audio keeps playing. Same shape as the "phantom play" bugs already fixed on the load path, but reached through seek instead.
+
+**Fix:** a separate `pause_pending: AtomicBool` carries the *intent*, set by `audio_pause` and cleared by `audio_resume` / `audio_play` / `audio_stop`. The fade thread `break`s out of the ramp on a generation change but still consults `pause_pending` before its terminal `sink.pause()`.
+
+Two related seek bugs fixed in the same pass:
+- `audio_seek` set `pos.play_start = Some(Instant::now())` unconditionally, so seeking while paused restarted `PosTracker`'s wall clock and the reported position climbed in real time against silent audio. It now only re-arms `play_start` when it was already `Some`. The frontend's natural-end fallback in `src/store/player.ts` had no `isPlaying` guard, so that phantom position eventually skipped the user to the next track while paused; it now requires `isPlaying`.
+- `seek()` in `src/store/player.ts` wrote `elapsed`, but a `getPosition()` poll issued by the 200ms ticker just before the seek resolved just after it and wrote the pre-seek position back, making the bar visibly jump backwards for one tick. A module-level `seekGen` is sampled before each poll; a tick whose generation changed is dropped whole.
+
+**Generalizes:** when several commands share one cancellation token, check what each spawned task does *after* its loop. Cancelling "the work in progress" and cancelling "the outcome the user asked for" are different things, and a single counter cannot distinguish them. Same question as the `pauseRequestedDuringLoad` entry above, one level lower: state written after an await must be checked against intent, not just against whether something else happened.

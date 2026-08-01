@@ -246,17 +246,42 @@
   transition: transform var(--duration-base);
 }
 
+/* Extends the 4px track to a 24px pointer target without affecting layout. */
+.now-playing-progress-bar::before {
+  content: "";
+  position: absolute;
+  inset: -10px 0;
+}
+
+.now-playing-progress-bar[aria-disabled="true"] {
+  cursor: default;
+}
+
+.now-playing-progress-bar[aria-disabled="true"]::before {
+  display: none;
+}
+
 .now-playing-progress-bar:hover {
   /* Scale instead of animating height - avoids layout thrash, same visual grow. */
   transform: scaleY(1.5);
 }
 
+.now-playing-progress-bar:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+}
+
 .now-playing-progress-fill {
+  width: 100%;
   height: 100%;
+  transform-origin: left center;
   background: var(--accent);
   border-radius: var(--radius-2xs);
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
-  transition: background var(--duration-longest) ease, box-shadow var(--duration-longest) ease;
+  /* scaleX rather than width, so the 5x/sec position tick doesn't relayout the row. */
+  transition: transform var(--duration-longest) linear,
+    background var(--duration-longest) ease,
+    box-shadow var(--duration-longest) ease;
 }
 
 .now-playing-progress-bar--waveform {
@@ -269,8 +294,9 @@
   overflow: visible;
 }
 
+/* The waveform variant is already 48px tall, so it doesn't take the hover grow. */
 .now-playing-progress-bar--waveform:hover {
-  height: 48px;
+  transform: none;
 }
 
 .now-playing-waveform-bar {

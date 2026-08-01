@@ -20,6 +20,7 @@ import { parseLrc, type LrcLine } from "../lib/lrclib";
 import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
 import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
 import { useBoolSetting } from "../hooks/useSetting";
+import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
 import { TourCard } from "./TourCard";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
@@ -27,16 +28,7 @@ import { getDb } from "../db";
 import { AlbumArt } from "./AlbumArt";
 import "./NowPlayingView.css";
 
-const SECONDS_PER_MINUTE = 60;
-
 type Tab = "up-next" | "about" | "lyrics";
-
-function formatDuration(seconds: number): string {
-  const total = Math.floor(seconds);
-  const m = Math.floor(total / SECONDS_PER_MINUTE);
-  const s = total % SECONDS_PER_MINUTE;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 interface TopTrack {
   id: string;
@@ -154,48 +146,25 @@ interface Props {
 }
 
 function NowPlayingProgress({
-  duration, useWaveform, overlayPeaks, progressBarRef, onProgressClick,
+  duration, useWaveform, overlayPeaks,
 }: {
   duration: number;
   useWaveform: boolean;
   overlayPeaks: number[] | null;
-  progressBarRef: React.RefObject<HTMLDivElement | null>;
-  onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }) {
-  const elapsed = usePlayerStore((s) => s.elapsed);
-  const seek = usePlayerStore((s) => s.seek);
-  const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
+  const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
     [progress, overlayPeaks]
   );
 
-  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (duration <= 0) return;
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-      e.preventDefault();
-      void seek(Math.min(duration, elapsed + duration * 0.05));
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-      e.preventDefault();
-      void seek(Math.max(0, elapsed - duration * 0.05));
-    }
-  }
-
   return (
     <div className="now-playing-progress-row">
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
-        ref={progressBarRef}
+        ref={barRef}
         className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
-        role="slider"
-        aria-label="Seek"
-        aria-valuenow={Math.round(progress * 100)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        tabIndex={duration > 0 ? 0 : -1}
-        onClick={onProgressClick}
-        onKeyDown={handleProgressKeyDown}
-        style={{ cursor: duration > 0 ? "pointer" : "default" }}
+        {...sliderProps}
       >
         {useWaveform ? (
           <WaveformBars
@@ -205,7 +174,7 @@ function NowPlayingProgress({
             filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
           />
         ) : (
-          <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
+          <div className="now-playing-progress-fill" style={{ transform: `scaleX(${progress})` }} />
         )}
       </div>
       <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
@@ -445,7 +414,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const radioActive = usePlayerStore((s) => s.radioActive);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
-  const progressBarRef = useRef<HTMLDivElement>(null);
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -562,13 +530,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     const active = upNextRef.current.querySelector(".now-playing-up-next-row--active");
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab]);
-
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!progressBarRef.current || duration <= 0) return;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    void seek(ratio * duration);
-  }
 
   function buildTrack(t: TopTrack | SuggestedTrack) {
     const navId = stripServerPrefix(t.id, server.id);
@@ -687,8 +648,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             duration={duration}
             useWaveform={!!useWaveform}
             overlayPeaks={overlayPeaks}
-            progressBarRef={progressBarRef}
-            onProgressClick={handleProgressClick}
           />
 
           {radioActive && (

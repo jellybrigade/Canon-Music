@@ -71,6 +71,12 @@ let queuePersistTimer: ReturnType<typeof setTimeout> | null = null;
 // when a preloaded track becomes the current one before its extraction finishes.
 const waveformInFlight = new Set<string>();
 
+// Bumped by every seek. The elapsed ticker samples this before awaiting getPosition() and drops
+// the result if it changed, because a poll issued just before a seek resolves just after it and
+// would otherwise write the pre-seek position back over the position the user asked for. That
+// showed up as the progress bar jumping backwards for one tick after every click-to-seek.
+let seekGen = 0;
+
 // Current ReplayGain linear amplitude multiplier. Updated on track change and mode change.
 // Stored outside the store so setVolume can access the latest value without a selector.
 let currentReplayGainLinear = 1.0;
@@ -335,8 +341,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     // A genuinely dead stream is handled by the audio-error retry listener instead.
     let hasAdvanced = false;
     elapsedInterval = setInterval(() => {
+      const genAtPoll = seekGen;
       activeTarget.getPosition()
         .then((pos) => {
+          // A seek landed while this poll was in flight, so `pos` predates it. Dropping the
+          // whole tick (not just the set) keeps the stall watchdog and the natural-end check
+          // from reasoning about a position the engine has already moved away from.
+          if (genAtPoll !== seekGen) return;
           set({ elapsed: pos });
           if (pos > 0) hasAdvanced = true;
           const { isPlaying, isLoading, streamUrl, currentTrack, castDevice } = get();
@@ -392,7 +403,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
           // Suppressed while gaplessActive, the Rust engine is handling the transition.
           // For DLNA targets the DlnaTarget fires onTrackEnd directly, so skip fallback there.
-          if (!castDevice && !gaplessActive && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
+          // Requires isPlaying: a paused player must never advance on its own, whatever the
+          // reported position is. Without this, any position drift while paused (such as the
+          // seek-while-paused bug in audio_seek) silently skipped the user to the next track.
+          if (isPlaying && !castDevice && !gaplessActive && duration && pos >= duration - 0.25 && naturalEndFiredForIndex !== queueIndex) {
             naturalEndFiredForIndex = queueIndex;
             void get().next(true);
           }
@@ -1115,6 +1129,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     seek: async (seconds: number) => {
+      seekGen++;
       set({ elapsed: seconds });
       await activeTarget.seek(seconds);
     },

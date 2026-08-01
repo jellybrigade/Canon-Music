@@ -96,6 +96,10 @@ struct AudioState {
     prefetch_cache: Arc<Mutex<HashMap<String, Vec<u8>>>>,
     // Bumped on every pause/resume to cancel in-flight fade threads.
     fade_gen: Arc<AtomicU64>,
+    // True from audio_pause until the next resume/play/stop. The pause fade thread checks this
+    // rather than fade_gen when it reaches its final sink.pause(), so an unrelated fade_gen bump
+    // (audio_seek, audio_volume) cancels the volume ramp without also cancelling the pause itself.
+    pause_pending: Arc<AtomicBool>,
     // Set when a next track has been appended for gapless playback; cleared on transition or explicit play.
     gapless_queued: Arc<AtomicBool>,
 }
@@ -477,6 +481,8 @@ async fn audio_play(
     // Bump play_id BEFORE stopping old sink so the watcher thread sees the new id
     // before the poll loop exits, preventing a spurious track-ended event.
     let this_id = state.play_id.fetch_add(1, Ordering::Relaxed) + 1;
+    // A new track cancels any pause still pending on the outgoing sink.
+    state.pause_pending.store(false, Ordering::Relaxed);
 
     {
         let old_sink = state.sink.lock().unwrap_or_else(|e| e.into_inner()).take();
@@ -730,7 +736,12 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
         }
         let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
         pos.offset = seconds;
-        pos.play_start = Some(Instant::now());
+        // Only restart the wall clock if it was already running. Seeking while paused used to
+        // re-arm it, so PosTracker::current() climbed in real time against silent audio and the
+        // frontend eventually treated the phantom position as the end of the track.
+        if pos.play_start.is_some() {
+            pos.play_start = Some(Instant::now());
+        }
         drop(pos);
 
         // Ramp volume back up over 80 ms to mask any DC-offset click at the seek boundary.
@@ -847,6 +858,8 @@ async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Res
 fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     let fade_gen = Arc::clone(&state.fade_gen);
     let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+    let pause_pending = Arc::clone(&state.pause_pending);
+    pause_pending.store(true, Ordering::Relaxed);
 
     let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(t) = pos.play_start.take() {
@@ -870,12 +883,16 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
         tauri::async_runtime::spawn_blocking(move || {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {
-                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                // Abandon the ramp if another fade took over, but still fall through to the
+                // pause_pending check below: a seek mid-fade bumps fade_gen without meaning
+                // "keep playing", and skipping the pause left audio running with the UI
+                // showing a paused state.
+                if fade_gen.load(Ordering::Relaxed) != gen { break; }
                 let t = i as f32 / steps as f32;
                 sink.set_volume(start_vol * (1.0 - t));
                 std::thread::sleep(Duration::from_millis(10));
             }
-            if fade_gen.load(Ordering::Relaxed) == gen {
+            if pause_pending.load(Ordering::Relaxed) {
                 sink.pause();
             }
         });
@@ -886,6 +903,8 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
 fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     let fade_gen = Arc::clone(&state.fade_gen);
     let gen = fade_gen.fetch_add(1, Ordering::Relaxed) + 1;
+    // Clears the pending pause so a still-running pause fade thread can't pause us afterwards.
+    state.pause_pending.store(false, Ordering::Relaxed);
 
     let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     if pos.play_start.is_none() {
@@ -928,6 +947,7 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
     state.play_id.fetch_add(1, Ordering::Relaxed);
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
     state.gapless_queued.store(false, Ordering::Relaxed);
+    state.pause_pending.store(false, Ordering::Relaxed);
     let old_sink = state.sink.lock().unwrap_or_else(|e| e.into_inner()).take();
     if let Some(sink) = old_sink {
         sink.stop();
@@ -1308,6 +1328,7 @@ pub fn run() {
             speed: Arc::new(Mutex::new(1.0_f32)),
             prefetch_cache: Arc::new(Mutex::new(HashMap::new())),
             fade_gen: Arc::new(AtomicU64::new(0)),
+            pause_pending: Arc::new(AtomicBool::new(false)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
