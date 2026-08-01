@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw, Heart } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
@@ -190,7 +190,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id };
   }
 
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
   function handlePlayTrack(track: PlaylistTrackRow) {
     if (!tracks) return;
@@ -204,7 +204,11 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
          ON CONFLICT(playlist_id) DO UPDATE SET last_track_id=excluded.last_track_id, track_position=excluded.track_position, updated_at=excluded.updated_at`,
         [playlist.id, track.id, idx]
       );
-    }).catch(() => {});
+    }).catch((e) => {
+      // Resume position is a convenience, not part of playback: a failed write must not surface
+      // as an error over a track that is already playing fine.
+      console.error("Failed to record playlist resume position:", e);
+    });
   }
 
   function handlePlayAll() {

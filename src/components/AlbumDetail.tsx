@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } fr
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink, Shuffle, ListPlus, ListEnd } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -71,6 +71,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const addManyToQueue = usePlayerStore((s) => s.addManyToQueue);
+  const playNextMany = usePlayerStore((s) => s.playNextMany);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -348,7 +350,20 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     };
   }
 
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
+
+  // The album button does whatever album.play_action says, so its label and icon have to say so
+  // too. A fixed "Play Album" is a lie for three of the four settings.
+  const playActionLabel =
+    playAction === "queue_last" ? "Add to Queue"
+    : playAction === "queue_next" ? "Play Next"
+    : playAction === "shuffle" ? "Shuffle Album"
+    : "Play Album";
+  const PlayActionIcon =
+    playAction === "queue_last" ? ListEnd
+    : playAction === "queue_next" ? ListPlus
+    : playAction === "shuffle" ? Shuffle
+    : Play;
 
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
@@ -360,9 +375,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     if (!tracks || tracks.length === 0) return;
     const trackObjs = tracks.map(buildTrackObj);
     if (playAction === "queue_last") {
-      for (const t of trackObjs) addToQueue(t, streamUrlFor);
+      addManyToQueue(trackObjs, streamUrlFor);
     } else if (playAction === "queue_next") {
-      for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
+      playNextMany(trackObjs, streamUrlFor);
     } else if (playAction === "shuffle") {
       void playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
     } else {
@@ -589,9 +604,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
                 className="play-album-btn"
                 onClick={handlePlayAlbum}
                 disabled={!tracks || tracks.length === 0}
-                aria-label="Play album"
+                aria-label={playActionLabel}
               >
-                <Play size={16} /> Play Album
+                <PlayActionIcon size={16} /> {playActionLabel}
               </button>
               <button
                 className={`album-identify-btn${lovedAlbumIds.has(album.id) ? " album-identify-btn--loved" : ""}`}

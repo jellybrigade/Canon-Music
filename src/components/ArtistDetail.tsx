@@ -382,7 +382,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
   const { data: rawTracks } = useArtistTopTracks(name, { enabled: inView });
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
   function buildTrackObj(track: TopTrack): CurrentTrack {
@@ -614,7 +614,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     };
   }
 
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
   const handleAlbumClick = useCallback(
     (albumId: string) => {

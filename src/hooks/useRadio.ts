@@ -184,7 +184,10 @@ export function useRadio() {
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
           const wasAtEnd2 = !isPlaying && !isLoading && queueIndex === queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
-          if (wasAtEnd2) void playFromQueueIndex(queue.length);
+          // Read the length back off the store: an append can trim played entries off the front
+          // to stay under maxQueueSize, so the captured pre-append length is not the new track's
+          // position any more.
+          if (wasAtEnd2) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
           recordPick(track2.artist, track2.albumId, track2.id);
           return;
         }
@@ -242,7 +245,8 @@ export function useRadio() {
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
         const wasAtEnd = !isPlaying && !isLoading && queueIndex === queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
-        if (wasAtEnd) void playFromQueueIndex(queue.length);
+        // See the note above: the append may have trimmed the front of the queue.
+        if (wasAtEnd) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
         recordPick(track.artist, track.albumId, track.id);
       } catch (err) {
         console.error("Radio fill failed:", err);

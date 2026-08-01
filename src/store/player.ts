@@ -145,6 +145,61 @@ function adjustIndexAfterMove(currentIdx: number, from: number, to: number): num
   return adj;
 }
 
+// Returns a shuffle order that is guaranteed to cover every queue entry exactly once.
+// Appending to a shuffle order that does not already cover the whole queue silently shifts
+// every position, so callers that splice into it normalize first. A short order is repaired by
+// keeping the positions it does describe and appending whatever queue indices it left out.
+function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
+  if (order.length === queueLength) return order;
+  const seen = new Set<number>();
+  const repaired: number[] = [];
+  for (const idx of order) {
+    if (idx >= 0 && idx < queueLength && !seen.has(idx)) {
+      seen.add(idx);
+      repaired.push(idx);
+    }
+  }
+  for (let i = 0; i < queueLength; i++) {
+    if (!seen.has(i)) repaired.push(i);
+  }
+  return repaired;
+}
+
+// Drops already-played entries off the front of the queue once an append pushes it past the
+// user's maxQueueSize. playQueue has always windowed its input to the cap, but appends did not,
+// so a radio session (one addToQueue per track played, never trimmed) grew without bound and
+// re-serialised the whole array into SQLite on every mutation. Only entries behind the current
+// track are ever dropped, so nothing the user is about to hear is lost. Returns null when there
+// is nothing to trim.
+function trimQueueToCap(
+  queue: CurrentTrack[],
+  shuffleOrder: number[],
+  queueIndex: number,
+  isShuffled: boolean,
+  maxQueueSize: number
+): { queue: CurrentTrack[]; shuffleOrder: number[]; queueIndex: number } | null {
+  if (maxQueueSize <= 0 || queue.length <= maxQueueSize) return null;
+  const drop = Math.min(queue.length - maxQueueSize, queueIndex);
+  if (drop <= 0) return null;
+
+  if (isShuffled && shuffleOrder.length === queue.length) {
+    // Positions, not queue indices, are what "already played" means under shuffle, so the
+    // entries to drop come from the head of the order and are scattered through the queue.
+    const removed = new Set(shuffleOrder.slice(0, drop));
+    const newQueue: CurrentTrack[] = [];
+    const remap = new Map<number, number>();
+    for (let i = 0; i < queue.length; i++) {
+      if (removed.has(i)) continue;
+      remap.set(i, newQueue.length);
+      newQueue.push(queue[i]!);
+    }
+    const newOrder = shuffleOrder.slice(drop).map((i) => remap.get(i)!);
+    return { queue: newQueue, shuffleOrder: newOrder, queueIndex: queueIndex - drop };
+  }
+
+  return { queue: queue.slice(drop), shuffleOrder: [], queueIndex: queueIndex - drop };
+}
+
 // shuffleOrder[position] = index into queue[]; empty when not shuffled
 function resolveTrack(
   queue: CurrentTrack[],
@@ -266,6 +321,8 @@ interface PlayerState {
   loadSettings: () => Promise<void>;
   addToQueue: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
   playNext: (track: CurrentTrack, streamUrlFn: (t: CurrentTrack) => string) => void;
+  addManyToQueue: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
+  playNextMany: (tracks: CurrentTrack[], streamUrlFn: (t: CurrentTrack) => string) => void;
   toggleQueue: () => void;
   removeFromQueue: (position: number) => Promise<void>;
   removeManyFromQueue: (positions: number[]) => Promise<void>;
@@ -1112,7 +1169,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     playQueue: async (tracks, streamUrlFor, startIndex = 0) => {
-      const { isShuffled, maxQueueSize } = get();
+      const { isShuffled, maxQueueSize, radioActive: hadRadio, radioSeed: hadSeed } = get();
       let workingTracks = tracks;
       let workingStart = startIndex;
 
@@ -1138,13 +1195,22 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (isShuffled && workingTracks.length > 1) {
         shuffleOrder = buildShuffleOrder(workingTracks.length, workingStart);
         position = 0;
+      } else if (isShuffled && workingTracks.length === 1) {
+        // A one-track shuffled queue still needs an order covering that track. Leaving it empty
+        // lets a later addToQueue/playNext splice into [] and produce an order that is one short
+        // and offset by one, which makes queue[0] unreachable. Reached by every "start radio"
+        // entry point, which seeds playQueue with a single track and then appends to it.
+        shuffleOrder = [0];
       }
 
       set({ queue: workingTracks, queueIndex: position, streamUrlFor, shuffleOrder, radioActive: false, radioSeed: null });
       const track = resolveTrack(workingTracks, shuffleOrder, isShuffled, position);
       if (track) await playTrack(track, streamUrlFor(track));
       void persistQueueState();
-      void persistRadioState();
+      // Only write radio state if this call actually cleared one. The "start radio" callers run
+      // playQueue and startRadio back to back, and startRadio has already written the new state
+      // by the time this resumes, so persisting again is five redundant SQLite executes.
+      if (hadRadio || hadSeed) void persistRadioState();
     },
 
     setSleepTimer: (preset) => {
@@ -1506,30 +1572,56 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     addToQueue: (track, streamUrlFn) => {
-      const { queue, isShuffled, shuffleOrder, streamUrlFor } = get();
-      const newQueue = [...queue, track];
-      const newTrackIdx = queue.length;
-      if (isShuffled) {
-        set({ queue: newQueue, shuffleOrder: [...shuffleOrder, newTrackIdx], streamUrlFor: streamUrlFn ?? streamUrlFor });
-      } else {
-        set({ queue: newQueue, streamUrlFor: streamUrlFn ?? streamUrlFor });
-      }
-      void persistQueueState();
+      get().addManyToQueue([track], streamUrlFn);
     },
 
     playNext: (track, streamUrlFn) => {
-      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor } = get();
+      get().playNextMany([track], streamUrlFn);
+    },
+
+    // Batch appends commit once. Looping the single-track action instead (which is what the
+    // album "queue last" / "queue next" actions used to do) costs one store commit, one full
+    // queue copy and one persist bump per track, so a 20-track album fired 20 re-render passes
+    // and copied the queue 20 times.
+    addManyToQueue: (tracks, streamUrlFn) => {
+      if (tracks.length === 0) return;
+      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor, maxQueueSize } = get();
+      const newQueue = [...queue, ...tracks];
+      let newOrder: number[] = [];
       if (isShuffled) {
-        const newQueue = [...queue, track];
-        const newTrackIdx = queue.length;
-        const newOrder = [...shuffleOrder];
-        newOrder.splice(queueIndex + 1, 0, newTrackIdx);
-        set({ queue: newQueue, shuffleOrder: newOrder, streamUrlFor: streamUrlFn ?? streamUrlFor });
-      } else {
-        const newQueue = [...queue];
-        newQueue.splice(queueIndex + 1, 0, track);
-        set({ queue: newQueue, streamUrlFor: streamUrlFn ?? streamUrlFor });
+        newOrder = normalizeShuffleOrder(shuffleOrder, queue.length);
+        for (let i = 0; i < tracks.length; i++) newOrder.push(queue.length + i);
       }
+      const trimmed = trimQueueToCap(newQueue, newOrder, queueIndex, isShuffled, maxQueueSize);
+      set({
+        queue: trimmed?.queue ?? newQueue,
+        ...(isShuffled ? { shuffleOrder: trimmed?.shuffleOrder ?? newOrder } : {}),
+        ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
+        streamUrlFor: streamUrlFn ?? streamUrlFor,
+      });
+      void persistQueueState();
+    },
+
+    playNextMany: (tracks, streamUrlFn) => {
+      if (tracks.length === 0) return;
+      const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor, maxQueueSize } = get();
+      let newQueue: CurrentTrack[];
+      let newOrder: number[] = [];
+      if (isShuffled) {
+        newQueue = [...queue, ...tracks];
+        newOrder = normalizeShuffleOrder(shuffleOrder, queue.length);
+        newOrder.splice(queueIndex + 1, 0, ...tracks.map((_, i) => queue.length + i));
+      } else {
+        newQueue = [...queue];
+        newQueue.splice(queueIndex + 1, 0, ...tracks);
+      }
+      const trimmed = trimQueueToCap(newQueue, newOrder, queueIndex, isShuffled, maxQueueSize);
+      set({
+        queue: trimmed?.queue ?? newQueue,
+        ...(isShuffled ? { shuffleOrder: trimmed?.shuffleOrder ?? newOrder } : {}),
+        ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
+        streamUrlFor: streamUrlFn ?? streamUrlFor,
+      });
       void persistQueueState();
     },
 
