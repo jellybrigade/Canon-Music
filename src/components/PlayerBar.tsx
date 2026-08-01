@@ -6,7 +6,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore, isNextDisabled, repeatModeLabel } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
 import { useSetting } from "../hooks/useSetting";
@@ -60,6 +60,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const queueIndex    = usePlayerStore((s) => s.queueIndex);
   const repeat        = usePlayerStore((s) => s.repeat);
   const isShuffled    = usePlayerStore((s) => s.isShuffled);
+  const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
 
   const pause         = usePlayerStore((s) => s.pause);
   const resume        = usePlayerStore((s) => s.resume);
@@ -221,9 +222,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
 
   const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;
 
-  const repeatLabel =
-    repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
-  const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
+  const repeatLabel = repeatModeLabel(repeat);
+  const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
+  const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
 
   return (
     <>
@@ -353,8 +354,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             <button
               className={`player-btn player-btn--icon player-btn--hide-narrow${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
-              aria-label="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={20} />
             </button>
@@ -393,6 +395,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one"
                 ? <Repeat1 size={20} />
@@ -519,8 +522,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             <button
               className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
-              aria-label="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={18} />
             </button>
@@ -529,6 +533,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>

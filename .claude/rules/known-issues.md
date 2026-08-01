@@ -170,6 +170,12 @@ Everything the user can do to the queue in that window breaks the second computa
 
 **Generalizes:** the same shape as the `pauseRequestedDuringLoad` and `pause_pending` entries above, one step further out. Those ask what happens when state is written during an await. This one asks what happens when a *decision* is committed to another process early and the inputs to that decision keep moving. Whenever work is scheduled ahead of the moment it takes effect, the completion handler must be told what was scheduled, not left to re-derive it.
 
+**Follow-up (2026-08-01), same entry, one level deeper:** carrying *which track* was handed over is not enough when the hand-off also implies a *decision about future state*. `track-advanced` re-shuffled on a repeat-all wrap and anchored the new order on the enqueued track, which is correct as far as it goes, but the enqueued track had itself been resolved as position 0 of the *old* order. So the track that opened pass N opened pass N+1, and every pass after that, forever. The non-gapless path had the mirror-image bug for a different reason: `next()` called `buildShuffleOrder(queue.length, 0)`, pinning queue index 0 to position 0, so every wrap opened with `queue[0]`. Both look like re-shuffles in review, and both produce a fresh order for positions 1..n while position 0 never moves.
+
+**Fix:** the new order is built at enqueue time and travels with `gaplessEnqueued.wrapOrder`, so the source handed to the engine really is position 0 of the order that will be installed; `next()` passes `-1` as the anchor, which is the documented "no anchor" value.
+
+**Generalizes:** an anchor argument that is right at one call site (keep the playing track at position 0 when shuffle is switched on mid-track) is not automatically right at another (nothing is playing at a wrap). Grep for shared shuffle/order builders called with a constant index and ask what that constant means at each site. And the symptom to watch for is statistical, not a crash: "random" that is fresh everywhere except the one position anyone actually notices.
+
 A second guard in the same family: a "already did the hand-off for this track" flag keyed only on the current index never notices that the *successor* changed. Canon's ticker now keys it on `queueIndex` plus a `queueRevision` counter bumped by every queue mutation, so an edit re-arms the DLNA `setNext` instead of locking it out for the rest of the track.
 
 ## A loading flag derived from awaiting a fire-and-forget `invoke()` measures the IPC round trip, not the work (fixed 2026-08-01)

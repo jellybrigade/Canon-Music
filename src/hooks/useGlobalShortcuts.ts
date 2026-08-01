@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore, isNextDisabled } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
 import { useLoved } from "./useLoved";
 
@@ -21,7 +21,7 @@ export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null |
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const store = usePlayerStore.getState();
-      const { currentTrack, isPlaying, isLoading, elapsed, volume, queue, queueIndex, repeat } = store;
+      const { currentTrack, isPlaying, isLoading, elapsed, volume, queue, queueIndex, repeat, radioOnQueueEnd } = store;
 
       switch (e.key) {
         case " ": {
@@ -80,8 +80,7 @@ export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null |
           case "ArrowRight": {
             if (!currentTrack) return;
             e.preventDefault();
-            const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
-            if (!nextDisabled) void store.next();
+            if (!isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd)) void store.next();
             break;
           }
         }

@@ -5,7 +5,7 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX, AlertCircle,
 } from "lucide-react";
-import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
+import { usePlayerStore, isNextDisabled, repeatModeLabel, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -395,6 +395,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
+  const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
   const shuffleOrder = usePlayerStore((s) => s.shuffleOrder);
   const pause = usePlayerStore((s) => s.pause);
@@ -432,9 +433,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
-  const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
+  const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
-  const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
+  const repeatLabel = repeatModeLabel(repeat);
+  const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
 
   const primaryArtist = currentTrack?.artist
     ? (currentTrack.artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? currentTrack.artist)
@@ -685,7 +687,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             <button
               className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={18} />
             </button>
@@ -721,6 +725,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
+              aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>

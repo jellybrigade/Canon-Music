@@ -26,6 +26,22 @@ export type ReplayGainMode = "off" | "track" | "album";
 
 type RepeatMode = "off" | "repeat-all" | "repeat-one";
 
+// Both player surfaces and the keyboard shortcut have to agree on when "next" does nothing,
+// otherwise the button greys out on a track the shortcut will happily skip. Repeat-all wraps,
+// and radio-on-queue-end starts a new session off the last track, so neither is a dead end.
+export function isNextDisabled(
+  repeat: RepeatMode,
+  queueIndex: number,
+  queueLength: number,
+  radioOnQueueEnd: boolean
+): boolean {
+  return repeat === "off" && !radioOnQueueEnd && queueIndex >= queueLength - 1;
+}
+
+export function repeatModeLabel(repeat: RepeatMode): string {
+  return repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
+}
+
 export type RadioMode =
   | "curated"
   | "same-genre"
@@ -60,7 +76,11 @@ let gaplessActive = false;
 // position it sat at when it was enqueued. The engine takes the source up to a fifth of a
 // track before the transition, so the queue can be edited in between; on `track-advanced`
 // this is the only record of which track the user is now hearing.
-let gaplessEnqueued: { track: CurrentTrack; position: number } | null = null;
+// `wrapOrder` is set only when the hand-off is a repeat-all loop-back under shuffle: the new
+// order has to be built at enqueue time, because the enqueued track is resolved against it and
+// rodio cannot un-append. `track-advanced` adopts it rather than building a second, different
+// order that would not have the audible track at position 0.
+let gaplessEnqueued: { track: CurrentTrack; position: number; wrapOrder?: number[] } | null = null;
 
 // Bumped by every queue mutation. The elapsed ticker keys its "already handed off the next
 // track" guard on this as well as the index, so an edit that changes the successor re-arms
@@ -213,6 +233,10 @@ function resolveTrack(
   return queue[idx] ?? null;
 }
 
+// anchorQueueIndex pins that queue index to position 0, so the track already playing stays
+// playing when shuffle is switched on mid-track. Pass -1 to leave the shuffle unbiased: on a
+// repeat-all loop-back nothing is playing yet, and anchoring there would make every pass open
+// with the same track, which is the opposite of what re-shuffling on the wrap is for.
 function buildShuffleOrder(length: number, anchorQueueIndex: number): number[] {
   const indices = Array.from({ length }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
@@ -435,14 +459,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     let nextTrack: CurrentTrack | null;
 
     if (wrapped) {
-      // Re-shuffle on loop-back so each pass plays a different order, but anchor the new
-      // order on the track the engine actually started. Anchoring on queue[0] instead would
-      // display a different track from the one playing every time shuffle is on, since the
-      // enqueue resolved position 0 against the order being replaced here.
-      const anchorIdx = enqueued ? queue.findIndex((t) => t.id === enqueued.track.id) : 0;
-      newShuffleOrder = isShuffled && queue.length > 1
-        ? buildShuffleOrder(queue.length, anchorIdx >= 0 ? anchorIdx : 0)
-        : shuffleOrder;
+      // The enqueue already built the order for this pass and resolved the handed-over source
+      // against it, so adopt that one: rebuilding here would produce an order whose position 0
+      // is some other track than the one now audible. The length check catches a queue edited
+      // inside the lead window, where the carried order no longer describes the queue; fall back
+      // to a fresh order anchored on the track the engine actually started.
+      const carried = enqueued?.wrapOrder;
+      if (carried && carried.length === queue.length) {
+        newShuffleOrder = carried;
+      } else {
+        const anchorIdx = enqueued ? queue.findIndex((t) => t.id === enqueued.track.id) : 0;
+        newShuffleOrder = isShuffled && queue.length > 1
+          ? buildShuffleOrder(queue.length, anchorIdx >= 0 ? anchorIdx : 0)
+          : shuffleOrder;
+      }
       newQueueIndex = 0;
       nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
     } else if (enqueued) {
@@ -573,7 +603,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, gapless, repeat, consumeMode, sleepTimerEndOfTrack } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
-          const hasNext = nextPosition < queue.length || repeat === "repeat-all";
+          const wrapping = nextPosition >= queue.length;
+          const hasNext = !wrapping || repeat === "repeat-all";
           if (
             duration &&
             pos / duration >= 0.8 &&
@@ -586,35 +617,54 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             !sleepTimerEndOfTrack
           ) {
             prefetchedFor = `${queueIndex}:${queueRevision}`;
-            const effectiveNext = nextPosition < queue.length ? nextPosition : 0;
-            const nextTrack = resolveTrack(queue, shuffleOrder, isShuffled, effectiveNext);
-            if (nextTrack) {
-              const nextUrl = streamUrlFor(nextTrack);
-              // Gapless: enqueue directly into the audio engine so the transition is seamless.
-              // Disabled for DLNA (handles its own gapless), repeat-one (would enqueue wrong track),
-              // and consume mode (index shifts after removal would desync the gapless queue).
-              const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
-              if (canGapless) {
-                // A queue edit bumps the revision and gets us here a second time, but rodio
-                // cannot un-append a source: audio_enqueue_next sees its slot already claimed
-                // and returns without doing anything. Re-recording gaplessEnqueued here would
-                // name a track the engine never received, which is exactly the mismatch the
-                // record exists to prevent. Leave the first one standing.
-                if (!gaplessActive) {
-                  gaplessActive = true;
-                  gaplessEnqueued = { track: nextTrack, position: effectiveNext };
-                  void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
-                    gaplessActive = false;
-                    gaplessEnqueued = null;
-                  });
-                }
-              } else if (!castDevice) {
-                void activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
+            // Gapless: enqueue directly into the audio engine so the transition is seamless.
+            // Disabled for DLNA (handles its own gapless), repeat-one (would enqueue wrong track),
+            // and consume mode (index shifts after removal would desync the gapless queue).
+            const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
+            if (repeat === "repeat-one") {
+              // This same track plays again, so warming the successor downloads a whole file that
+              // will never be heard, once per repetition. Warm the current URL instead: audio_play
+              // consumes the prefetch cache, so the loop restarts instantly for the same bytes.
+              if (!castDevice && currentTrack && streamUrl) {
+                void activeTarget.setNext(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
               }
-              // Nothing is handed to a cast target ahead of time. A renderer that has been
-              // given the next URI advances on its own, and Canon cannot observe that
-              // transition (GetTransportInfo reads PLAYING across it), so the UI would sit
-              // on the finished track for the whole of the next one and then play it again.
+            } else {
+              // A repeat-all loop-back under shuffle installs a fresh order, and the track that
+              // opens the new pass is position 0 of *that* order, not of the one being replaced.
+              // rodio cannot un-append, so the order has to be decided here, before the source is
+              // handed over, and travel with it to track-advanced.
+              const wrapOrder = canGapless && wrapping && isShuffled && queue.length > 1
+                ? buildShuffleOrder(queue.length, -1)
+                : null;
+              const effectiveNext = wrapping ? 0 : nextPosition;
+              const nextTrack = resolveTrack(queue, wrapOrder ?? shuffleOrder, isShuffled, effectiveNext);
+              if (nextTrack) {
+                const nextUrl = streamUrlFor(nextTrack);
+                if (canGapless) {
+                  // A queue edit bumps the revision and gets us here a second time, but rodio
+                  // cannot un-append a source: audio_enqueue_next sees its slot already claimed
+                  // and returns without doing anything. Re-recording gaplessEnqueued here would
+                  // name a track the engine never received, which is exactly the mismatch the
+                  // record exists to prevent. Leave the first one standing.
+                  if (!gaplessActive) {
+                    gaplessActive = true;
+                    gaplessEnqueued = { track: nextTrack, position: effectiveNext, ...(wrapOrder ? { wrapOrder } : {}) };
+                    void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
+                      gaplessActive = false;
+                      gaplessEnqueued = null;
+                    });
+                  }
+                } else if (!castDevice && !(wrapping && isShuffled)) {
+                  // Skipped for a shuffled wrap: next() builds its own order when it gets there,
+                  // so which track opens the new pass is not knowable yet and this would warm the
+                  // wrong one.
+                  void activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
+                }
+                // Nothing is handed to a cast target ahead of time. A renderer that has been
+                // given the next URI advances on its own, and Canon cannot observe that
+                // transition (GetTransportInfo reads PLAYING across it), so the UI would sit
+                // on the finished track for the whole of the next one and then play it again.
+              }
             }
           }
           // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
@@ -1163,7 +1213,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     play: async (track, streamUrl) => {
-      set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: [] });
+      // A one-track queue still needs an order covering that track while shuffle is on. Leaving
+      // it empty lets the queue-mutating writers that index shuffleOrder without normalising
+      // first (removeFromQueue, moveQueueItem) read past the end of it. Same case playQueue
+      // handles for its single-track input.
+      const { isShuffled } = get();
+      set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: isShuffled ? [0] : [] });
       await playTrack(track, streamUrl);
       void persistQueueState();
     },
@@ -1285,9 +1340,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         const track = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
         if (track) await playTrack(track, streamUrlFor(track), true);
       } else if (repeat === "repeat-all") {
-        // Re-shuffle on loop-back so each pass plays a different order
+        // Re-shuffle on loop-back so each pass plays a different order. Unanchored (-1): the
+        // previous pass has finished, so there is no playing track to keep at position 0, and
+        // anchoring on queue index 0 made every single wrap open with queue[0].
         const newShuffleOrder = isShuffled && queue.length > 1
-          ? buildShuffleOrder(queue.length, 0)
+          ? buildShuffleOrder(queue.length, -1)
           : shuffleOrder;
         set({ queueIndex: 0, shuffleOrder: newShuffleOrder });
         const track = resolveTrack(queue, newShuffleOrder, isShuffled, 0);
