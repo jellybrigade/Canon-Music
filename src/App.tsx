@@ -49,7 +49,6 @@ import "./styles/base.css";
 import "./App.css";
 
 export default function App() {
-  useMediaSession();
   useWakeLock();
   useAppActivityTracking();
   useRadio();
@@ -105,6 +104,9 @@ export default function App() {
   const { data: servers, isLoading: serversLoading } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
+  // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
+  // so it is mounted here rather than at the top with the other playback hooks.
+  useMediaSession(serverWithCred);
 
   const { syncStatus, syncError, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
@@ -269,11 +271,14 @@ export default function App() {
     void invoke("tray_set_close_to_tray", { enabled: closeToTray }).catch(() => {});
   }, [closeToTray]);
   useEffect(() => {
+    // Rebuilding the tray menu allocates a fresh Menu and seven items on the Rust side,
+    // so skip the round trip entirely while the icon is hidden (the default).
+    if (!showTrayIcon) return;
     const title = currentTrack
       ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ""}`
       : "";
     void invoke("tray_update", { title, isPlaying }).catch(() => {});
-  }, [currentTrack?.id, isPlaying]);
+  }, [showTrayIcon, currentTrack?.id, isPlaying]);
 
   // Tray actions: play_pause and next forwarded to player store
   useEffect(() => {

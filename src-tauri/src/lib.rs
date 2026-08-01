@@ -410,7 +410,7 @@ fn tray_update(app: tauri::AppHandle, title: String, is_playing: bool) -> Result
         let tooltip = if title.is_empty() {
             "Canon".to_string()
         } else {
-            format!("Canon — {title}")
+            format!("Canon - {title}")
         };
         let _ = tray.set_tooltip(Some(&tooltip));
     }
