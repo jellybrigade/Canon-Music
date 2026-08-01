@@ -299,6 +299,28 @@
   transform: none;
 }
 
+/* Matches .player-progress-bar--buffering in PlayerBar.css, see the note there. */
+.now-playing-progress-bar--buffering {
+  background: var(--tint-6);
+}
+
+.now-playing-progress-bar--waveform.now-playing-progress-bar--buffering {
+  background: transparent;
+}
+
+.now-playing-progress-bar--buffering::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  opacity: var(--opacity-70);
+  animation: bufferSweep 1.2s ease-in-out infinite;
+}
+
 .now-playing-waveform-bar {
   flex: 1;
   height: calc(max(var(--peak, 0.05) * 48px, 2px));

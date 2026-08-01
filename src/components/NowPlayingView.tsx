@@ -153,6 +153,7 @@ function NowPlayingProgress({
   overlayPeaks: number[] | null;
 }) {
   const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
     [progress, overlayPeaks]
@@ -163,7 +164,8 @@ function NowPlayingProgress({
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
         ref={barRef}
-        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
+        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}${isBuffering ? " now-playing-progress-bar--buffering" : ""}`}
+        aria-busy={isBuffering || undefined}
         {...sliderProps}
       >
         {useWaveform ? (

@@ -295,6 +295,14 @@ html[data-app-blurred] * {
   animation: spin 1s linear infinite;
 }
 
+/* Indeterminate sweep for the buffering progress track. Used by PlayerBar.css and
+   NowPlayingView.css; the gradient is a background, so it stays inside the element box and
+   needs no overflow clipping on a track whose waveform variant is overflow: visible. */
+@keyframes bufferSweep {
+  from { background-position: -50% 0; }
+  to   { background-position: 150% 0; }
+}
+
 @keyframes playingPulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }

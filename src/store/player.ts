@@ -82,6 +82,11 @@ let queuePersistTimer: ReturnType<typeof setTimeout> | null = null;
 // when a preloaded track becomes the current one before its extraction finishes.
 const waveformInFlight = new Set<string>();
 
+// Track id whose successors have already been queued for waveform preloading. The preload is
+// triggered from the elapsed ticker, which restarts on every resume, so without this a pause and
+// resume would re-run the whole preload pass (three SQLite reads per candidate) for no reason.
+let waveformPreloadedFor: string | null = null;
+
 // Bumped by every seek. The elapsed ticker samples this before awaiting getPosition() and drops
 // the result if it changed, because a poll issued just before a seek resolves just after it and
 // would otherwise write the pre-seek position back over the position the user asked for. That
@@ -173,7 +178,14 @@ interface PlayerState {
   currentTrack: CurrentTrack | null;
   streamUrl: string | null;
   isPlaying: boolean;
+  // "A start request is in flight." On the local target audio_play returns as soon as it has
+  // spawned its download thread, so this is only the IPC round trip and lasts a few ms. It gates
+  // the transport buttons; it is not a signal that audio is being fetched. Use isBuffering for that.
   isLoading: boolean;
+  // "Playback has been asked for but no sound is coming out yet." Spans the real wait: HTTP
+  // connect, first bytes, format probing. Cleared by the audio-format event (emitted the instant
+  // the sink is appended) or by the position ticker seeing the position move off zero.
+  isBuffering: boolean;
   error: string | null;
   elapsed: number;
   volume: number;
@@ -271,8 +283,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   let naturalEndFiredForIndex: number | null = null;
 
   // Global listener: update audioFormat whenever Rust emits it at play start.
+  // Rust emits this immediately after sink.append(source), so it is also the earliest and most
+  // accurate signal that the fetch/probe wait is over and sound is starting. The ticker's
+  // position check below is the backstop for paths that produce no format event.
   void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
-    set({ audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec } });
+    set({
+      audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec },
+      isBuffering: false,
+    });
   });
 
   // Single global listener for preloaded (not-yet-current) waveforms: caches the result and
@@ -371,6 +389,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       playStartedAt: Date.now(),
       isPlaying: true,
       isLoading: false,
+      // Gapless: the engine already decoded and appended this source, nothing is being fetched.
+      isBuffering: false,
       waveformPeaks: null,
     });
     // Apply ReplayGain for the gapless-advanced track
@@ -391,7 +411,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       return;
     }
     startElapsedTimer();
-    void preloadWaveforms();
+    // preloadWaveforms is driven from the ticker's first advancing position, one call site for
+    // both the gapless and the audio_play path. Calling it here as well would run the whole pass
+    // twice, ~200ms apart, for the same track.
     void fetchWaveform(nextTrack.id, streamUrlFor(nextTrack));
     void persistQueueState();
   });
@@ -419,7 +441,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           // from reasoning about a position the engine has already moved away from.
           if (genAtPoll !== seekGen) return;
           set({ elapsed: pos });
-          if (pos > 0) hasAdvanced = true;
+          if (pos > 0 && !hasAdvanced) {
+            hasAdvanced = true;
+            // Backstop for the audio-format event: a retry, a prefetch-cache hit or a cast
+            // target can all get sound out without one arriving in the expected order.
+            if (get().isBuffering) set({ isBuffering: false });
+            // Waveform extraction for the *next* two tracks pulls two more full downloads off
+            // the same server. Running it from playTrack put them in direct contention with the
+            // audio the user is waiting to hear, so it waits until this track is audible.
+            const started = get().currentTrack;
+            if (started && waveformPreloadedFor !== started.id) {
+              waveformPreloadedFor = started.id;
+              void preloadWaveforms();
+            }
+          }
           const { isPlaying, isLoading, streamUrl, currentTrack, castDevice } = get();
           // Stall watchdog: only for local target (DLNA handles its own timing).
           if (!castDevice && isPlaying && !isLoading && hasAdvanced) {
@@ -431,7 +466,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               if (streamUrl && currentTrack) {
                 void activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null).then(() => {
                   if (get().streamUrl !== streamUrl) return;
-                  set({ isPlaying: true, isLoading: false });
+                  // The stream is being fetched from scratch again, so the wait is real.
+                  set({ isPlaying: true, isLoading: false, isBuffering: true });
                   startElapsedTimer();
                 }).catch(() => {});
               }
@@ -688,7 +724,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           try {
             await invoke("audio_play", { url });
             if (get().streamUrl !== url) return;
-            set({ isPlaying: true, isLoading: false, error: null });
+            set({ isPlaying: true, isLoading: false, isBuffering: true, error: null });
             startElapsedTimer();
           } catch {
             // next audio-error event triggers another retry if attempts remain
@@ -697,7 +733,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       } else {
         unlisten();
         cancelAudioError = null;
-        set({ isPlaying: false, isLoading: false, error: event.payload.message });
+        set({ isPlaying: false, isLoading: false, isBuffering: false, error: event.payload.message });
       }
     });
 
@@ -715,7 +751,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     gaplessActive = false;
     gaplessEnqueued = null;
     pauseRequestedDuringLoad = false;
-    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
+    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, isBuffering: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
 
     cancelAudioError?.();
@@ -729,7 +765,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (get().currentTrack?.id !== track.id) return;
         const paused = pauseRequestedDuringLoad;
         pauseRequestedDuringLoad = false;
-        set({ isPlaying: !paused, isLoading: false });
+        // isBuffering is deliberately not re-asserted here. A DLNA load has genuinely finished by
+        // this point so it clears, but on the local target audio_play has only spawned its
+        // download thread; audio-format may already have landed for a prefetch-cache hit, and
+        // setting the flag back to true would leave it stuck until the ticker cleared it.
+        set(get().castDevice ? { isPlaying: !paused, isLoading: false, isBuffering: false } : { isPlaying: !paused, isLoading: false });
         // Apply ReplayGain for this track now that the sink exists
         const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
         currentReplayGainLinear = castDevice
@@ -745,10 +785,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           startElapsedTimer();
         }
         void fetchWaveform(track.id, url);
-        void preloadWaveforms();
+        // preloadWaveforms is deliberately not called here, see the elapsed ticker.
       } catch (e) {
         if (get().currentTrack?.id !== track.id) return;
-        set({ isPlaying: false, isLoading: false, error: e instanceof Error ? e.message : String(e) });
+        set({ isPlaying: false, isLoading: false, isBuffering: false, error: e instanceof Error ? e.message : String(e) });
       }
     };
 
@@ -832,6 +872,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     streamUrl: null,
     isPlaying: false,
     isLoading: false,
+    isBuffering: false,
     error: null,
     elapsed: 0,
     volume: 1,
@@ -899,9 +940,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
             if (elapsed > 0) await activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
-            set({ isPlaying, isLoading: false });
+            // Back on the local engine, so the same rule as playTrack applies: load() has
+            // returned but nothing has been fetched yet. audio-format or the ticker clears this.
+            set({ isPlaying, isLoading: false, isBuffering: isPlaying });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
           }
         }
       } else {
@@ -921,13 +964,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // Resume on renderer at parked position.
         if (currentTrack && streamUrl) {
           try {
-            set({ isLoading: true });
+            set({ isLoading: true, isBuffering: true });
             await activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
             if (elapsed > 0) await activeTarget.seek(elapsed);
             if (isPlaying) startElapsedTimer();
-            set({ isPlaying, isLoading: false });
+            set({ isPlaying, isLoading: false, isBuffering: false });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
           }
         }
       }
@@ -1181,6 +1224,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         streamUrl: null,
         isPlaying: false,
         isLoading: false,
+        isBuffering: false,
         elapsed: 0,
         // queue, queueIndex, streamUrlFor preserved, accidental stop doesn't destroy queue
       });

@@ -308,6 +308,32 @@
   transform: none;
 }
 
+/* Buffering lives on the track, not on the play button. audio_play returns the moment it has
+   spawned its download thread, so the button's spinner is already gone before a single byte of
+   audio has arrived; showing the wait here also keeps play/pause interactive throughout it.
+   The brighter track carries the state on its own, so the sweep can be killed by
+   prefers-reduced-motion without the state becoming invisible. */
+.player-progress-bar--buffering {
+  background-color: var(--tint-6);
+}
+
+.player-progress-bar--waveform.player-progress-bar--buffering {
+  background-color: transparent;
+}
+
+.player-progress-bar--buffering::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background-image: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 45% 100%;
+  background-repeat: no-repeat;
+  opacity: var(--opacity-70);
+  animation: bufferSweep 1.2s ease-in-out infinite;
+}
+
 .waveform-bar {
   flex: 1;
   height: calc(max(var(--peak, 0.05) * 28px, 2px));

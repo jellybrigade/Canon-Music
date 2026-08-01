@@ -7,6 +7,7 @@ import { WaveformBars } from "./WaveformBars";
 export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
   const [showWaveform] = useBoolSetting("player.show_waveform", true);
 
   const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
@@ -22,7 +23,8 @@ export function PlayerProgress() {
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
         ref={barRef}
-        className={`player-progress-bar${useWaveform ? " player-progress-bar--waveform" : ""}`}
+        className={`player-progress-bar${useWaveform ? " player-progress-bar--waveform" : ""}${isBuffering ? " player-progress-bar--buffering" : ""}`}
+        aria-busy={isBuffering || undefined}
         {...sliderProps}
       >
         {useWaveform ? (
