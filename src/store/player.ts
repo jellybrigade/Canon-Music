@@ -125,7 +125,17 @@ let currentReplayGainLinear = 1.0;
 
 // Volume to restore on unmute. Lives outside the store (like currentReplayGainLinear above) so
 // every mute button (PlayerBar, NowPlayingView) shares one source of truth instead of drifting.
+// Updated by setVolume on every audible level, not only by toggleMute, so dragging the slider to
+// zero and then unmuting restores where the user actually was. Persisted alongside the volume
+// itself: without that, a mute held across a restart loads volume 0 with this back at its 1.0
+// default, and the first unmute jumps to full.
 let preMuteVolume = 1.0;
+
+// Debounces persistence of the volume. The slider fires onChange per 0.01 step (~100 events per
+// drag), the wheel handler fires per wheel tick, and a held ArrowUp repeats at ~30/s, so writing
+// on every call meant a SQLite round trip per event against the same WAL db the audio path uses.
+// The audible change stays immediate; only the write is deferred.
+let volumePersistTimer: ReturnType<typeof setTimeout> | null = null;
 
 // Set when pause() is called while a track is still loading. playTrack's completion handler
 // unconditionally sets isPlaying, so without this the pause is silently overwritten: the engine
@@ -1015,12 +1025,38 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     }, 500);
   }
 
-  // Flush the debounced write on quit so a skip/shuffle right before close isn't lost.
+  async function persistVolumeNow(rawVolume: number) {
+    try {
+      const db = await getDb();
+      await db.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('volume', ?), ('player.pre_mute_volume', ?)",
+        [String(rawVolume), String(preMuteVolume)]
+      );
+    } catch (e) {
+      console.error("Failed to persist volume:", e);
+    }
+  }
+
+  function persistVolume(rawVolume: number) {
+    if (volumePersistTimer) clearTimeout(volumePersistTimer);
+    volumePersistTimer = setTimeout(() => {
+      volumePersistTimer = null;
+      void persistVolumeNow(rawVolume);
+    }, 500);
+  }
+
+  // Flush the debounced writes on quit so a skip/shuffle/volume change right before close
+  // isn't lost.
   window.addEventListener("beforeunload", () => {
     if (queuePersistTimer) {
       clearTimeout(queuePersistTimer);
       queuePersistTimer = null;
       void persistQueueStateNow();
+    }
+    if (volumePersistTimer) {
+      clearTimeout(volumePersistTimer);
+      volumePersistTimer = null;
+      void persistVolumeNow(get().volume);
     }
   });
 
@@ -1367,11 +1403,19 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     prev: async () => {
-      const { queue, queueIndex, streamUrlFor, elapsed, isShuffled, shuffleOrder } = get();
+      const { queue, queueIndex, streamUrlFor, elapsed, isShuffled, shuffleOrder, error, currentTrack } = get();
       if (queue.length === 0 || !streamUrlFor) return;
-      const newPosition = elapsed > PREV_RESTART_THRESHOLD_S
-        ? queueIndex
-        : Math.max(0, queueIndex - 1);
+      const restart = elapsed > PREV_RESTART_THRESHOLD_S;
+      // Restarting the track the engine already holds is a seek, not a load. Going through
+      // playTrack re-fetched and re-decoded the whole file just to get back to zero, so the
+      // most common use of this button paid a network round trip and a buffering spinner for
+      // something the sink can do instantly. This is what the button's own hold-to-restart
+      // gesture already does. A failed track has no sink to seek, so that still reloads.
+      if (restart && currentTrack && !error) {
+        await get().seek(0);
+        return;
+      }
+      const newPosition = restart ? queueIndex : Math.max(0, queueIndex - 1);
       set({ queueIndex: newPosition });
       const track = resolveTrack(queue, shuffleOrder, isShuffled, newPosition);
       if (track) void playTrack(track, streamUrlFor(track), true);
@@ -1437,30 +1481,20 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
     setVolume: async (rawVolume: number) => {
       set({ volume: rawVolume });
+      if (rawVolume > 0) preMuteVolume = rawVolume;
       const { replayGainMode, replayGainPreAmp, replayGainFallbackGain, currentTrack, castDevice } = get();
       currentReplayGainLinear = castDevice
         ? 1.0
         : computeReplayGainLinear(currentTrack?.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
       await activeTarget.setVolume(rawVolume * Math.sqrt(currentReplayGainLinear));
-      try {
-        const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('volume', ?)",
-          [String(rawVolume)]
-        );
-      } catch (e) {
-        console.error("Failed to persist volume:", e);
-      }
+      persistVolume(rawVolume);
     },
 
     toggleMute: async () => {
       const { volume, setVolume } = get();
-      if (volume > 0) {
-        preMuteVolume = volume;
-        await setVolume(0);
-      } else {
-        await setVolume(preMuteVolume || 1);
-      }
+      // setVolume keeps preMuteVolume at the last audible level, so this restores where the
+      // user was whether they got to zero via this button or by dragging the slider down.
+      await setVolume(volume > 0 ? 0 : preMuteVolume || 1);
     },
 
     seek: async (seconds: number) => {
@@ -1817,7 +1851,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       try {
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
-          "SELECT key, value FROM settings WHERE key IN ('volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size')",
+          "SELECT key, value FROM settings WHERE key IN ('volume', 'player.pre_mute_volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size')",
           []
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
@@ -1830,6 +1864,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
               // Gain not yet loaded at this point; apply raw volume. Re-applied after all settings loaded.
               await invoke("audio_volume", { volume: volume ** 2 });
             }
+          } else if (row.key === "player.pre_mute_volume") {
+            // Restores the unmute level across a restart. Without it a session that quit while
+            // muted loads volume 0 with preMuteVolume back at its 1.0 default, so the first
+            // unmute jumps to full instead of returning to the level the user was using.
+            const preMute = parseFloat(row.value);
+            if (!isNaN(preMute) && preMute > 0) preMuteVolume = preMute;
           } else if (row.key === "repeat") {
             const valid: RepeatMode[] = ["off", "repeat-all", "repeat-one"];
             if (valid.includes(row.value as RepeatMode)) {

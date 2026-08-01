@@ -241,6 +241,15 @@
   border-color: transparent;
 }
 
+.player-btn:active:not(:disabled) {
+  background-color: var(--bg-hover-strong);
+}
+
+.player-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .player-btn:disabled {
   opacity: var(--opacity-30);
 }
@@ -428,6 +437,17 @@
   width: 80px;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+.player-volume-slider:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+.player-volume-slider:disabled {
+  opacity: var(--opacity-30);
+  cursor: default;
 }
 
 

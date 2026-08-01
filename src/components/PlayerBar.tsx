@@ -48,6 +48,29 @@ interface Props {
   serverWithCred?: ServerWithCredential;
 }
 
+/**
+ * Wheel-to-adjust on a volume control, attached natively rather than through React's onWheel.
+ * React registers wheel at the root as a passive listener, so preventDefault() from a JSX
+ * handler does nothing except log a console warning, and the page scrolls underneath while the
+ * user is adjusting volume. Reading the volume off the store inside the handler keeps the
+ * listener registered once instead of re-registering on every 0.01 step.
+ */
+function useVolumeWheel() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { volume, setVolume } = usePlayerStore.getState();
+      void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  return ref;
+}
+
 export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
@@ -128,6 +151,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
     enabled: !!nativeTrackId,
     staleTime: Infinity,
   });
+
+  const volumeWheelRef = useVolumeWheel();
+  const moreVolumeWheelRef = useVolumeWheel();
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -481,10 +507,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
           >
             <Headphones size={22} />
           </button>
-          <div
-            className="player-volume"
-            onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
-          >
+          <div className="player-volume" ref={volumeWheelRef}>
             <button
               type="button"
               className="player-btn player-btn--icon player-volume-mute-btn"
@@ -582,10 +605,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             >
               <Headphones size={18} />
             </button>
-            <div
-              className="player-more-volume"
-              onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
-            >
+            <div className="player-more-volume" ref={moreVolumeWheelRef}>
               <button
                 type="button"
                 className="player-btn player-btn--icon player-volume-mute-btn"
