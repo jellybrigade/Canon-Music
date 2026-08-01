@@ -226,6 +226,34 @@
   justify-content: center;
 }
 
+/* Sits between the progress bar and the transport, so the reason playback stopped is next to
+   the controls the user is about to reach for. The message wraps here rather than truncating,
+   there is room for it in the overlay. */
+.now-playing-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  background: var(--tint-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.now-playing-error-icon {
+  color: var(--danger);
+  flex-shrink: 0;
+}
+
+.now-playing-error-msg {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  max-width: 48ch;
+  text-wrap: pretty;
+}
+
 .now-playing-format {
   font-size: var(--text-sm);
   color: var(--overlay-30);

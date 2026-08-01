@@ -69,6 +69,12 @@ let queueRevision = 0;
 
 // Cancels in-flight audio-error retry listener when a new track starts.
 let cancelAudioError: (() => void) | null = null;
+// Fires if a track that was asked to play never produces a single sample. Rust emits audio-error
+// for a connection that fails outright, but a server that accepts the connection and then stalls
+// mid-body errors nowhere: the buffering indicator sweeps forever, and the stall watchdog cannot
+// help because it only arms once the position has advanced at least once.
+let bufferDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
+const BUFFER_DEADLINE_MS = 30000;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
 let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounces local queue-state persistence so a burst of skips/shuffles against a
@@ -240,6 +246,8 @@ interface PlayerState {
   pause: () => void;
   resume: () => void;
   stop: () => void;
+  // Re-runs the current track from the start after a playback failure, with a fresh retry budget.
+  retryCurrent: () => void;
   setVolume: (volume: number) => Promise<void>;
   toggleMute: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
@@ -287,11 +295,39 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
   // accurate signal that the fetch/probe wait is over and sound is starting. The ticker's
   // position check below is the backstop for paths that produce no format event.
   void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
+    clearBufferDeadline();
     set({
       audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec },
       isBuffering: false,
     });
   });
+
+  function clearBufferDeadline() {
+    if (bufferDeadlineTimer) clearTimeout(bufferDeadlineTimer);
+    bufferDeadlineTimer = null;
+  }
+
+  // Armed whenever playback is asked for and disarmed the moment sound actually starts. If it
+  // reaches the end of its wait with the position still at zero, the stream is never going to
+  // produce audio and the user is told so instead of watching an indefinite sweep.
+  function armBufferDeadline(url: string) {
+    clearBufferDeadline();
+    bufferDeadlineTimer = setTimeout(() => {
+      bufferDeadlineTimer = null;
+      const { streamUrl, isBuffering, elapsed } = get();
+      if (streamUrl !== url || !isBuffering || elapsed > 0) return;
+      cancelAudioError?.();
+      cancelAudioError = null;
+      stopElapsedTimer();
+      void activeTarget.stop();
+      set({
+        isPlaying: false,
+        isLoading: false,
+        isBuffering: false,
+        error: "The track never started playing. The server may be unreachable or overloaded",
+      });
+    }, BUFFER_DEADLINE_MS);
+  }
 
   // Single global listener for preloaded (not-yet-current) waveforms: caches the result and
   // clears the in-flight marker. Registering one listener here instead of one per preloaded
@@ -445,6 +481,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             hasAdvanced = true;
             // Backstop for the audio-format event: a retry, a prefetch-cache hit or a cast
             // target can all get sound out without one arriving in the expected order.
+            clearBufferDeadline();
             if (get().isBuffering) set({ isBuffering: false });
             // Waveform extraction for the *next* two tracks pulls two more full downloads off
             // the same server. Running it from playTrack put them in direct contention with the
@@ -710,13 +747,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const retryDelays = [2000, 4000, 8000, 16000];
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const unlisten = await listen<{ url: string; message: string }>("audio-error", (event) => {
+    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean }>("audio-error", (event) => {
       if (event.payload.url !== url) return;
       if (get().streamUrl !== url) return;
 
       if (retryTimer) clearTimeout(retryTimer);
 
-      if (retryCount < retryDelays.length) {
+      // A 404, a decode failure or a missing output device produce the same result on every
+      // attempt. Retrying them costs the user 30 seconds of silence before the error appears.
+      const retryable = event.payload.retryable !== false;
+
+      if (retryable && retryCount < retryDelays.length) {
         const delay = retryDelays[retryCount++]!;
         retryTimer = setTimeout(async () => {
           retryTimer = null;
@@ -725,6 +766,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             await invoke("audio_play", { url });
             if (get().streamUrl !== url) return;
             set({ isPlaying: true, isLoading: false, isBuffering: true, error: null });
+            armBufferDeadline(url);
             startElapsedTimer();
           } catch {
             // next audio-error event triggers another retry if attempts remain
@@ -733,6 +775,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       } else {
         unlisten();
         cancelAudioError = null;
+        if (event.payload.detail) console.error("Playback failed:", event.payload.detail);
+        clearBufferDeadline();
+        stopElapsedTimer();
         set({ isPlaying: false, isLoading: false, isBuffering: false, error: event.payload.message });
       }
     });
@@ -753,6 +798,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     pauseRequestedDuringLoad = false;
     set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, isBuffering: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
     stopElapsedTimer();
+    armBufferDeadline(url);
 
     cancelAudioError?.();
     cancelAudioError = null;
@@ -1204,27 +1250,47 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     resume: () => {
-      const { pauseFadeMs, currentTrack } = get();
+      const { pauseFadeMs, currentTrack, error } = get();
       // Nothing loaded (queue ran out, queue cleared, or stop()). Without this guard an
       // OS-level play command leaves isPlaying true with no audio and an elapsed ticker
       // polling a position that counts up against silence.
       if (!currentTrack) return;
+      // The current track failed, so there is no sink to resume. Pressing play (or the media
+      // key) means "try this again", which is what the Retry button does.
+      if (error) {
+        get().retryCurrent();
+        return;
+      }
       pauseRequestedDuringLoad = false;
       activeTarget.resume(pauseFadeMs);
       startElapsedTimer();
       set({ isPlaying: true });
     },
 
+    retryCurrent: () => {
+      const { currentTrack, streamUrl, streamUrlFor } = get();
+      if (!currentTrack) return;
+      // Rebuild the URL where possible: a failure caused by an expired or rotated credential
+      // would otherwise be retried against the same stale URL forever.
+      const url = streamUrlFor ? streamUrlFor(currentTrack) : streamUrl;
+      if (!url) return;
+      void playTrack(currentTrack, url);
+    },
+
     stop: () => {
       pauseRequestedDuringLoad = false;
       activeTarget.stop();
       stopElapsedTimer();
+      clearBufferDeadline();
+      cancelAudioError?.();
+      cancelAudioError = null;
       set({
         currentTrack: null,
         streamUrl: null,
         isPlaying: false,
         isLoading: false,
         isBuffering: false,
+        error: null,
         elapsed: 0,
         // queue, queueIndex, streamUrlFor preserved, accidental stop doesn't destroy queue
       });

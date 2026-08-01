@@ -10,6 +10,10 @@ struct StreamingState {
     read_pos: u64,
     finished: bool,
     cancelled: bool,
+    // Set by `fail()` when the download ended early. Distinguishes a truncated body from a
+    // deliberate cancellation so the reader can report the right error, and so a short stream
+    // is never handed to the decoder as a clean EOF.
+    failed: bool,
     content_length: Option<u64>,
 }
 
@@ -43,6 +47,7 @@ impl StreamingBuffer {
                 read_pos: 0,
                 finished: false,
                 cancelled: false,
+                failed: false,
                 content_length,
             }),
             data_available: Condvar::new(),
@@ -82,13 +87,24 @@ impl StreamingWriter {
         state.finished = true;
         self.shared.data_available.notify_all();
     }
+
+    /// End the stream as a failure rather than a completion. The reader gets an error instead
+    /// of EOF, so a truncated download cannot be mistaken for a track that played to its end.
+    pub fn fail(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.failed = true;
+        state.cancelled = true;
+        self.shared.data_available.notify_all();
+    }
 }
 
 impl Read for StreamingBuffer {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut state = self.shared.state.lock().unwrap();
         loop {
-            if state.cancelled {
+            // A failed stream still serves whatever arrived before the connection died, so the
+            // user hears the part of the track that was actually downloaded, and only then errors.
+            if state.cancelled && !state.failed {
                 return Err(io::Error::new(io::ErrorKind::Interrupted, "playback superseded"));
             }
             let buffered = state.buffer.len() as u64;
@@ -99,6 +115,9 @@ impl Read for StreamingBuffer {
                 buf[..n].copy_from_slice(&state.buffer[start..start + n]);
                 state.read_pos += n as u64;
                 return Ok(n);
+            }
+            if state.failed {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "stream truncated"));
             }
             if state.finished {
                 return Ok(0); // EOF
@@ -144,6 +163,7 @@ struct FileBufState {
     bytes_written: u64,
     finished: bool,
     cancelled: bool,
+    failed: bool,
     content_length: Option<u64>,
 }
 
@@ -183,6 +203,7 @@ impl FileBackedStreamingBuffer {
                 bytes_written: 0,
                 finished: false,
                 cancelled: false,
+                failed: false,
                 content_length,
             }),
             data_available: Condvar::new(),
@@ -253,13 +274,21 @@ impl FileBackedStreamingWriter {
         state.finished = true;
         self.shared.data_available.notify_all();
     }
+
+    /// See `StreamingWriter::fail`.
+    pub fn fail(&self) {
+        let mut state = self.shared.state.lock().unwrap();
+        state.failed = true;
+        state.cancelled = true;
+        self.shared.data_available.notify_all();
+    }
 }
 
 impl Read for FileBackedStreamingBuffer {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut state = self.shared.state.lock().unwrap();
         loop {
-            if state.cancelled {
+            if state.cancelled && !state.failed {
                 return Err(io::Error::new(io::ErrorKind::Interrupted, "playback superseded"));
             }
             if self.read_pos < state.bytes_written {
@@ -269,6 +298,9 @@ impl Read for FileBackedStreamingBuffer {
                 let read_n = self.file.read(&mut buf[..n])?;
                 self.read_pos += read_n as u64;
                 return Ok(read_n);
+            }
+            if state.failed {
+                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "stream truncated"));
             }
             if state.finished {
                 return Ok(0);
@@ -328,6 +360,13 @@ impl AnyWriter {
         match self {
             AnyWriter::Ram(w) => w.finish(),
             AnyWriter::File(w) => w.finish(),
+        }
+    }
+
+    pub fn fail(self) {
+        match self {
+            AnyWriter::Ram(w) => w.fail(),
+            AnyWriter::File(w) => w.fail(),
         }
     }
 }

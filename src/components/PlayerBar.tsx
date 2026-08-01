@@ -4,7 +4,7 @@ import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { useTagsStore } from "../store/tags";
@@ -53,6 +53,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   const coverMap = useAlbumCoverMap();
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
+  const error         = usePlayerStore((s) => s.error);
+  const retryCurrent  = usePlayerStore((s) => s.retryCurrent);
   const volume        = usePlayerStore((s) => s.volume);
   const queue         = usePlayerStore((s) => s.queue);
   const queueIndex    = usePlayerStore((s) => s.queueIndex);
@@ -313,19 +315,36 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
           </div>
           <div className="player-track-info">
             <span className="player-title">{currentTrack.title}</span>
-            {currentTrack.artist && (
-              onSelectArtist ? (
+            {error ? (
+              <div className="player-error" role="alert">
+                <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
+                <span className="player-error-msg" title={error}>{error}</span>
+                <button className="player-error-action" onClick={retryCurrent}>Retry</button>
                 <button
-                  className="player-artist player-artist--link"
-                  onClick={() => onSelectArtist(currentTrack.artist!)}
+                  className="player-error-action"
+                  onClick={() => void next()}
+                  disabled={nextDisabled}
                 >
-                  {currentTrack.artist}
+                  Skip
                 </button>
-              ) : (
-                <span className="player-artist">{currentTrack.artist}</span>
-              )
+              </div>
+            ) : (
+              <>
+                {currentTrack.artist && (
+                  onSelectArtist ? (
+                    <button
+                      className="player-artist player-artist--link"
+                      onClick={() => onSelectArtist(currentTrack.artist!)}
+                    >
+                      {currentTrack.artist}
+                    </button>
+                  ) : (
+                    <span className="player-artist">{currentTrack.artist}</span>
+                  )
+                )}
+                <RadioChip />
+              </>
             )}
-            <RadioChip />
           </div>
         </div>
 

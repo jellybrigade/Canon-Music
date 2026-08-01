@@ -3,7 +3,7 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX, AlertCircle,
 } from "lucide-react";
 import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -400,6 +400,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const pause = usePlayerStore((s) => s.pause);
   const resume = usePlayerStore((s) => s.resume);
   const next = usePlayerStore((s) => s.next);
+  const error = usePlayerStore((s) => s.error);
+  const retryCurrent = usePlayerStore((s) => s.retryCurrent);
   const prev = usePlayerStore((s) => s.prev);
   const seek = usePlayerStore((s) => s.seek);
   const setVolume = usePlayerStore((s) => s.setVolume);
@@ -652,6 +654,15 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             useWaveform={!!useWaveform}
             overlayPeaks={overlayPeaks}
           />
+
+          {error && (
+            <div className="now-playing-error" role="alert">
+              <AlertCircle size={15} className="now-playing-error-icon" aria-hidden="true" />
+              <span className="now-playing-error-msg">{error}</span>
+              <button className="player-error-action" onClick={retryCurrent}>Retry</button>
+              <button className="player-error-action" onClick={() => void next()} disabled={nextDisabled}>Skip</button>
+            </div>
+          )}
 
           {radioActive && (
             <div className="now-playing-radio-chip-row">

@@ -531,10 +531,38 @@ async fn audio_play(
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("audio_play fetch error: {e}");
-                    app.emit("audio-error", serde_json::json!({ "url": url, "message": e.to_string() })).ok();
+                    app.emit("audio-error", serde_json::json!({
+                        "url": url,
+                        "message": "Could not reach the server",
+                        "detail": e.to_string(),
+                        "retryable": true,
+                    })).ok();
                     return;
                 }
             };
+            // reqwest treats a 404 or a 500 as a successful request, so without this the error
+            // page body streams straight into the decoder and surfaces as a bogus "unrecognised
+            // format" several seconds later, after the retry ladder has burned four attempts on
+            // a URL that was never going to work.
+            if !response.status().is_success() {
+                let status = response.status();
+                eprintln!("audio_play HTTP error: {status}");
+                let code = status.as_u16();
+                app.emit("audio-error", serde_json::json!({
+                    "url": url,
+                    "message": if code == 404 {
+                        "This track is not on the server anymore".to_string()
+                    } else if code == 401 || code == 403 {
+                        "The server rejected the request. Check the server credentials in Settings".to_string()
+                    } else {
+                        format!("Server returned {status}")
+                    },
+                    // A 4xx will not fix itself on a retry, so surface it now instead of after
+                    // 30 seconds of silent backoff. 408 and 429 are the two that will.
+                    "retryable": status.is_server_error() || code == 408 || code == 429,
+                })).ok();
+                return;
+            }
             let ct = response.headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
@@ -576,19 +604,49 @@ async fn audio_play(
 
             // Stream HTTP chunks into the buffer on a dedicated thread.
             let play_id_dl = Arc::clone(&play_id_arc);
+            let app_dl = app.clone();
+            let url_dl = url.clone();
             let mut response = response;
             std::thread::spawn(move || {
                 let mut chunk = vec![0u8; 65536];
                 let mut writer = writer;
+                let mut received: u64 = 0;
+                // A read error part-way through the body, or a body that stops short of the
+                // advertised Content-Length, is a truncated track. Ending the writer normally
+                // would hand the decoder a clean EOF, the sink would empty, and a server dying
+                // mid-track would look exactly like a track that reached its end: silently cut
+                // short, then auto-advanced past, with no error anywhere.
+                let mut truncated = false;
                 loop {
                     if play_id_dl.load(Ordering::Relaxed) != this_id { break; }
                     match response.read(&mut chunk) {
-                        Ok(0) => break,
-                        Ok(n) => { if !writer.write_chunk(&chunk[..n]) { break; } }
-                        Err(_) => break,
+                        Ok(0) => {
+                            truncated = content_length.is_some_and(|len| received < len);
+                            break;
+                        }
+                        Ok(n) => {
+                            received += n as u64;
+                            if !writer.write_chunk(&chunk[..n]) { break; }
+                        }
+                        Err(e) => {
+                            eprintln!("audio_play stream read error: {e}");
+                            truncated = true;
+                            break;
+                        }
                     }
                 }
-                writer.finish();
+                // Cancellation is not a failure: a skip or a stop bumps play_id and exits the
+                // loop the same way, and must not raise an error at the user.
+                if truncated && play_id_dl.load(Ordering::Relaxed) == this_id {
+                    writer.fail();
+                    app_dl.emit("audio-error", serde_json::json!({
+                        "url": url_dl,
+                        "message": "The connection dropped while the track was downloading",
+                        "retryable": true,
+                    })).ok();
+                } else {
+                    writer.finish();
+                }
             });
 
             (reader_box, codec)
@@ -604,7 +662,13 @@ async fn audio_play(
             Ok(s) => s,
             Err(e) => {
                 eprintln!("audio_play decode error: {e}");
-                app.emit("audio-error", serde_json::json!({ "url": url, "message": e.to_string() })).ok();
+                app.emit("audio-error", serde_json::json!({
+                    "url": url,
+                    "message": "This file could not be decoded. The format may be unsupported or the file may be damaged",
+                    "detail": e.to_string(),
+                    // Re-downloading a file the decoder cannot read produces the same result.
+                    "retryable": false,
+                })).ok();
                 return;
             }
         };
@@ -619,7 +683,18 @@ async fn audio_play(
 
         let sink = match Sink::try_new(&handle) {
             Ok(s) => Arc::new(s),
-            Err(e) => { eprintln!("audio_play sink error: {e}"); return; }
+            // Without an event here the frontend is left asserting "buffering" forever: the
+            // position never leaves zero, so the stall watchdog cannot arm either.
+            Err(e) => {
+                eprintln!("audio_play sink error: {e}");
+                app.emit("audio-error", serde_json::json!({
+                    "url": url,
+                    "message": "The audio output device is unavailable",
+                    "detail": e.to_string(),
+                    "retryable": false,
+                })).ok();
+                return;
+            }
         };
         let current_volume = *volume_arc.lock().unwrap_or_else(|e| e.into_inner());
         let current_speed = *speed_arc.lock().unwrap_or_else(|e| e.into_inner());
