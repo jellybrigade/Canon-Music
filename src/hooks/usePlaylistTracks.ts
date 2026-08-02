@@ -67,6 +67,23 @@ export function usePlaylistTracks(playlistId: string | null) {
       "DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?",
       [playlist.id, position]
     );
+    // Close the hole the delete left. `position` doubles as the server's
+    // songIndexToRemove (see the call in PlaylistDetail), and the server compacts its
+    // own indexes on removal, so leaving a gap here means the next removal in the same
+    // session sends a stale index and deletes the wrong track server side. It is also
+    // what the row numbering renders, so a gap shows up as 1, 2, 4.
+    //
+    // Two passes through negative space because PRIMARY KEY (playlist_id, position)
+    // is enforced per row: a single in-place decrement collides with the row still
+    // holding the target position whenever SQLite happens to scan descending.
+    await db.execute(
+      "UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?",
+      [playlist.id, position]
+    );
+    await db.execute(
+      "UPDATE playlist_tracks SET position = -position WHERE playlist_id = ? AND position < 0",
+      [playlist.id]
+    );
     await db.execute(
       "UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?",
       [playlist.id]

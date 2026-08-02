@@ -49,6 +49,26 @@ async function loadLoved(tick: number): Promise<void> {
   return promise;
 }
 
+// Toggles for one id run one at a time, chained off whatever toggle for that id is
+// still running. The love state a toggle acts on is read from SQLite rather than from
+// the render-time sets: bumpRefresh only reloads asynchronously and the session store
+// deliberately keeps the previous sets while that reload is in flight, so a second
+// click inside the window used to read the same pre-click state as the first, take the
+// same branch and leave the heart where it started.
+const toggleChains = new Map<string, Promise<void>>();
+
+function serializeByKey(key: string, work: () => Promise<void>): Promise<void> {
+  const prev = toggleChains.get(key) ?? Promise.resolve();
+  const next = prev.then(work, work).catch((err) => {
+    console.error("useLoved: toggle failed", err);
+  });
+  toggleChains.set(key, next);
+  void next.finally(() => {
+    if (toggleChains.get(key) === next) toggleChains.delete(key);
+  });
+  return next;
+}
+
 export function useLoved() {
   const refreshTick = useLovedSessionStore((s) => s.refreshTick);
   const bumpRefresh = useLovedSessionStore((s) => s.bumpRefresh);
@@ -66,50 +86,62 @@ export function useLoved() {
   const { trackIds: lovedTrackIds, albumIds: lovedAlbumIds, trackAlbumIds: lovedTrackAlbumIds } =
     sets ?? EMPTY_SETS;
 
-  async function toggleTrackLove(trackId: string, serverWithCred: ServerWithCredential) {
-    const { server, credential } = serverWithCred;
-    const db = await getDb();
-    const loved = lovedTrackIds.has(trackId);
-    if (loved) {
-      await db.execute("DELETE FROM loved_tracks WHERE track_id = ?", [trackId]);
-    } else {
-      await db.execute("INSERT OR REPLACE INTO loved_tracks (track_id) VALUES (?)", [trackId]);
-    }
-    bumpRefresh();
-    const nativeId = stripServerPrefix(trackId, server.id);
-    const altUrl = server.alt_url ?? undefined;
-    if (loved) {
-      unstarTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-        console.error("unstar track failed:", err)
+  function toggleTrackLove(trackId: string, serverWithCred: ServerWithCredential) {
+    return serializeByKey(`track:${trackId}`, async () => {
+      const { server, credential } = serverWithCred;
+      const db = await getDb();
+      const rows = await db.select<{ track_id: string }[]>(
+        "SELECT track_id FROM loved_tracks WHERE track_id = ?",
+        [trackId]
       );
-    } else {
-      starTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-        console.error("star track failed:", err)
-      );
-    }
+      const loved = rows.length > 0;
+      if (loved) {
+        await db.execute("DELETE FROM loved_tracks WHERE track_id = ?", [trackId]);
+      } else {
+        await db.execute("INSERT OR REPLACE INTO loved_tracks (track_id) VALUES (?)", [trackId]);
+      }
+      bumpRefresh();
+      const nativeId = stripServerPrefix(trackId, server.id);
+      const altUrl = server.alt_url ?? undefined;
+      if (loved) {
+        unstarTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
+          console.error("unstar track failed:", err)
+        );
+      } else {
+        starTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
+          console.error("star track failed:", err)
+        );
+      }
+    });
   }
 
-  async function toggleAlbumLove(albumId: string, serverWithCred: ServerWithCredential) {
-    const { server, credential } = serverWithCred;
-    const db = await getDb();
-    const loved = lovedAlbumIds.has(albumId);
-    if (loved) {
-      await db.execute("DELETE FROM loved_albums WHERE album_id = ?", [albumId]);
-    } else {
-      await db.execute("INSERT OR REPLACE INTO loved_albums (album_id) VALUES (?)", [albumId]);
-    }
-    bumpRefresh();
-    const nativeId = stripServerPrefix(albumId, server.id);
-    const altUrl = server.alt_url ?? undefined;
-    if (loved) {
-      unstarAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-        console.error("unstar album failed:", err)
+  function toggleAlbumLove(albumId: string, serverWithCred: ServerWithCredential) {
+    return serializeByKey(`album:${albumId}`, async () => {
+      const { server, credential } = serverWithCred;
+      const db = await getDb();
+      const rows = await db.select<{ album_id: string }[]>(
+        "SELECT album_id FROM loved_albums WHERE album_id = ?",
+        [albumId]
       );
-    } else {
-      starAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-        console.error("star album failed:", err)
-      );
-    }
+      const loved = rows.length > 0;
+      if (loved) {
+        await db.execute("DELETE FROM loved_albums WHERE album_id = ?", [albumId]);
+      } else {
+        await db.execute("INSERT OR REPLACE INTO loved_albums (album_id) VALUES (?)", [albumId]);
+      }
+      bumpRefresh();
+      const nativeId = stripServerPrefix(albumId, server.id);
+      const altUrl = server.alt_url ?? undefined;
+      if (loved) {
+        unstarAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
+          console.error("unstar album failed:", err)
+        );
+      } else {
+        starAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
+          console.error("star album failed:", err)
+        );
+      }
+    });
   }
 
   return { lovedTrackIds, lovedAlbumIds, lovedTrackAlbumIds, toggleTrackLove, toggleAlbumLove };

@@ -7,6 +7,7 @@ import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 import { rebuildTagVocabCache } from "./tag-normalize";
 import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batch";
+import { runPool } from "./async-pool";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -530,14 +531,23 @@ export async function syncLibrary(
     const starredAlbumIds = (starred.album ?? []).map((a) => `${server.id}:${a.id}`);
     const starredTrackIds = (starred.song ?? []).map((s) => `${server.id}:${s.id}`);
 
+    // Scoped by id prefix, not by a join to albums/tracks. The write below is
+    // unscoped (it inserts every starred id the server reported), so a starred item
+    // with no local row - an album whose track fetch failed, a track pruned server
+    // side but still starred - would be written and then be invisible to this read.
+    // The counts could never match again, so lovedChanged stayed true on every sync,
+    // rewriting both tables and bumping the session store (~8 mounted consumers)
+    // every auto-sync tick forever, while the join-scoped DELETE left the orphan in
+    // place. Reading and deleting the same set the write produces closes both.
+    const idPrefix = `${server.id}:%`;
     const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
       db.select<{ album_id: string }[]>(
-        "SELECT album_id FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
-        [server.id]
+        "SELECT album_id FROM loved_albums WHERE album_id LIKE ?",
+        [idPrefix]
       ),
       db.select<{ track_id: string }[]>(
-        "SELECT track_id FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
-        [server.id]
+        "SELECT track_id FROM loved_tracks WHERE track_id LIKE ?",
+        [idPrefix]
       ),
     ]);
 
@@ -547,10 +557,7 @@ export async function syncLibrary(
       starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute(
-        "DELETE FROM loved_albums WHERE album_id IN (SELECT id FROM albums WHERE server_id = ?)",
-        [server.id]
-      );
+      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ?", [idPrefix]);
       await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
     }
 
@@ -560,10 +567,7 @@ export async function syncLibrary(
       starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute(
-        "DELETE FROM loved_tracks WHERE track_id IN (SELECT id FROM tracks WHERE server_id = ?)",
-        [server.id]
-      );
+      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ?", [idPrefix]);
       await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
     }
   }
@@ -573,7 +577,7 @@ export async function syncLibrary(
   // committed, so a failed playlist listing skips this pass instead of throwing away the
   // whole sync.
   let failedPlaylists = 0;
-  // The write below is DELETE-all-then-re-INSERT-what-was-fetched, so an incomplete
+  // The write below prunes playlists absent from the fetched list, so an incomplete
   // picture of the server's playlists must not reach it: a playlist whose track list
   // failed would be erased outright. Any fetch failure in this pass blocks the write and
   // leaves the stored playlists as they are until a later sync reads them cleanly.
@@ -587,17 +591,28 @@ export async function syncLibrary(
     }
   );
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
-  const playlistsWithTracks: PlaylistWithTracks[] = [];
-  for (const pl of playlists) {
-    try {
-      const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id, altUrl);
-      playlistsWithTracks.push({ pl, tracks });
-    } catch (err) {
-      console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
-      playlistWritesBlocked = true;
-      failedPlaylists++;
-    }
-  }
+  // One getPlaylist round trip per playlist, and every auto-sync tick pays for all of
+  // them because the comparison below needs the track lists to build its signature.
+  // Serially that is playlistCount * round-trip on the critical path of every sync;
+  // the pool bounds how many are in flight without changing what is fetched.
+  const fetchedByIndex = new Array<PlaylistWithTracks | undefined>(playlists.length);
+  await runPool(
+    playlists,
+    async (pl, index) => {
+      try {
+        const tracks = await fetchPlaylistTracks(server.url, server.username, credential, pl.id, altUrl);
+        fetchedByIndex[index] = { pl, tracks };
+      } catch (err) {
+        console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
+        playlistWritesBlocked = true;
+        failedPlaylists++;
+      }
+    },
+    { concurrency: 4 }
+  );
+  const playlistsWithTracks: PlaylistWithTracks[] = fetchedByIndex.filter(
+    (entry): entry is PlaylistWithTracks => entry !== undefined
+  );
 
   // Same idea as loved: build a signature of the fetched playlists (metadata plus
   // ordered track ids) and compare it to what is stored, so an unchanged
@@ -664,18 +679,44 @@ export async function syncLibrary(
 
   const playlistsChanged = !playlistWritesBlocked && fetchedSignature !== existingSignature;
   if (playlistsChanged) {
-    await db.execute(
-      "DELETE FROM playlist_tracks WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",
-      [server.id]
-    );
-    await db.execute("DELETE FROM playlists WHERE server_id = ?", [server.id]);
+    // Upsert the server-owned columns rather than DELETE-all-then-INSERT. is_smart,
+    // rules_json and custom_cover_data are local-only and the server knows nothing
+    // about them, so re-inserting from the fetched payload erased them: a smart
+    // playlist lost its rules and silently became an ordinary one the first time any
+    // playlist's signature changed, which a freshly created smart playlist causes by
+    // itself (the server reports a coverArt the local insert never wrote).
+    const fetchedIds = new Set(playlistsWithTracks.map(({ pl }) => `${server.id}:${pl.id}`));
+    const removedIds = existingPlaylists.map((r) => r.id).filter((id) => !fetchedIds.has(id));
+    if (removedIds.length > 0) {
+      await executeIdChunks(db, removedIds, (ph) => `DELETE FROM playlist_tracks WHERE playlist_id IN (${ph})`);
+      await executeIdChunks(db, removedIds, (ph) => `DELETE FROM playlist_resume WHERE playlist_id IN (${ph})`);
+      await executeIdChunks(db, removedIds, (ph) => `DELETE FROM playlists WHERE id IN (${ph})`);
+    }
+
     for (const { pl, tracks } of playlistsWithTracks) {
       const plDbId = `${server.id}:${pl.id}`;
       await db.execute(
-        "INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url) VALUES (?, ?, ?, ?, ?, ?)",
+        `INSERT INTO playlists (id, server_id, name, comment, track_count, cover_art_url)
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           name = excluded.name,
+           comment = excluded.comment,
+           track_count = excluded.track_count,
+           cover_art_url = excluded.cover_art_url`,
         [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
       );
-      const trackRows = tracks.map((t, position) => [plDbId, `${server.id}:${t.id}`, position]);
+      // Only rewrite the track rows of playlists whose own ordered list moved. The
+      // signature above is server-wide, so one edited playlist used to rewrite every
+      // playlist's rows.
+      const fetchedTrackIds = tracks.map((t) => `${server.id}:${t.id}`);
+      const storedTrackIds = existingTrackIdsByPlaylist.get(plDbId) ?? [];
+      const sameTracks =
+        storedTrackIds.length === fetchedTrackIds.length &&
+        fetchedTrackIds.every((id, i) => storedTrackIds[i] === id);
+      if (sameTracks) continue;
+
+      await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [plDbId]);
+      const trackRows = fetchedTrackIds.map((trackId, position) => [plDbId, trackId, position]);
       await executeBatched(
         db,
         trackRows,

@@ -654,7 +654,7 @@ export function AppRoutes(props: AppViewProps) {
           </header>
           {serverWithCred ? (
             <PlaylistList
-              playlists={playlists ?? []}
+              playlists={playlists}
               serverWithCredential={serverWithCred}
               onSelect={openPlaylist}
               onCreatePlaylist={createPlaylist}
