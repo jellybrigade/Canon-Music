@@ -17,7 +17,22 @@ export function useListeningStats() {
       return db.select<AlbumStatRow[]>(
         `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
                 a.play_count + COALESCE(q.pending, 0) AS plays,
-                COALESCE(MAX(sh.scrobbled_at), '') AS last_played
+                -- Local scrobbles only know about plays through Canon, so on a fresh
+                -- install against an established server every album would come back
+                -- with no timestamp at all and "On Repeat" would be permanently empty.
+                -- Fall back to the server's own last-played. scrobbled_at is stored as
+                -- "YYYY-MM-DD HH:MM:SS" and played_at is ISO 8601, so the local side is
+                -- reshaped to match before either is compared lexicographically here or
+                -- against the ISO cutoff below.
+                COALESCE(
+                  MAX(
+                    MAX(
+                      COALESCE(REPLACE(sh.scrobbled_at, ' ', 'T') || 'Z', ''),
+                      COALESCE(a.played_at, '')
+                    )
+                  ),
+                  ''
+                ) AS last_played
          FROM albums a
          LEFT JOIN tracks t ON t.album_id = a.id
          LEFT JOIN scrobble_history sh ON sh.track_id = t.id

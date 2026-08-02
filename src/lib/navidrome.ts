@@ -43,6 +43,7 @@ export interface NavidromeAlbum {
   created?: string;
   songCount?: number;
   playCount?: number;
+  played?: string;
   releaseTypes?: string[];
   releaseType?: string;
 }
@@ -419,6 +420,22 @@ export async function fetchStarred2(
   return response.starred2 ?? {};
 }
 
+/**
+ * A rejection the server itself issued, as opposed to a transport failure.
+ * The distinction matters to anything that retries: a transport failure is worth
+ * trying again later, whereas a Subsonic error code means the request was received
+ * and understood and will be refused identically forever (code 70, "not found") or
+ * until something else changes (code 40, bad credentials).
+ */
+export class SubsonicError extends Error {
+  readonly code: number | null;
+  constructor(endpoint: string, code: number | null, message?: string) {
+    super(message ?? `${endpoint} failed${code === null ? "" : ` with code ${code}`}`);
+    this.name = "SubsonicError";
+    this.code = code;
+  }
+}
+
 async function callSubsonicVoid(
   baseUrl: string,
   username: string,
@@ -432,11 +449,11 @@ async function callSubsonicVoid(
   const res = await apiPost(baseUrl, endpoint, params, altUrl);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
   const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { message: string } };
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? `${endpoint} failed`);
+    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message);
   }
 }
 

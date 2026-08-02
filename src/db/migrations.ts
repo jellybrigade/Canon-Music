@@ -605,4 +605,12 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_albums_artist_server_artwork ON albums(artist, server_id) WHERE artwork_url IS NOT NULL;
     `,
   },
+  {
+    // The server's own "last played" timestamp. Without it the listening-stats
+    // carousels only ever know about plays Canon itself scrobbled, so a fresh
+    // install against a long-established server shows an empty "On Repeat" and
+    // sorts "From the Vault" on empty strings.
+    version: 48,
+    sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
+  },
 ];

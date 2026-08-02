@@ -309,12 +309,13 @@ export async function syncLibrary(
     artwork_url: string | null;
     navidrome_created: string | null;
     play_count: number | null;
+    played_at: string | null;
     release_type: string | null;
   };
   type TrackCountRow = { album_id: string; c: number };
   const [existingAlbumRows, trackCountRows] = await Promise.all([
     db.select<ExistingAlbumRow[]>(
-      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type
+      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type
        FROM albums WHERE server_id = ?`,
       [server.id]
     ),
@@ -352,7 +353,7 @@ export async function syncLibrary(
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     const row = [
       albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null,
-      album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, releaseType,
+      album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, album.played ?? null, releaseType,
     ];
 
     if (existing === undefined) {
@@ -368,6 +369,7 @@ export async function syncLibrary(
         sameValue(existing.artwork_url, album.coverArt) &&
         sameValue(existing.navidrome_created, album.created) &&
         sameValue(existing.play_count ?? 0, album.playCount ?? 0) &&
+        sameValue(existing.played_at, album.played) &&
         sameValue(existing.release_type, releaseType);
       if (!unchanged) {
         albumUpsertParams.push(row);
@@ -390,9 +392,9 @@ export async function syncLibrary(
   await executeBatched(
     db,
     albumUpsertParams,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    10,
-    (placeholders) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, release_type)
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    11,
+    (placeholders) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -403,6 +405,7 @@ export async function syncLibrary(
          artwork_url = excluded.artwork_url,
          navidrome_created = excluded.navidrome_created,
          play_count = excluded.play_count,
+         played_at = excluded.played_at,
          release_type = excluded.release_type`
   );
 
