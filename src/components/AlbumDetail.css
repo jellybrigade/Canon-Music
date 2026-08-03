@@ -210,6 +210,69 @@
   color: var(--text-primary);
 }
 
+.album-meta-refresh-error {
+  font-size: var(--text-base);
+  color: var(--danger);
+}
+
+/* ── Loading skeletons ──
+   Shaped like the rows they stand in for, so the layout does not shift when real
+   data lands. The app-wide prefers-reduced-motion rule in App.css freezes the pulse. */
+@keyframes canon-skeleton-pulse {
+  0%, 100% { opacity: var(--opacity-40); }
+  50%      { opacity: var(--opacity-20); }
+}
+
+.album-track-skeleton {
+  padding: var(--space-xs) 0;
+}
+
+.album-track-skeleton-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 34px;
+  padding: 0 var(--space-xs);
+}
+
+.album-track-skeleton-bar,
+.track-skeleton-bar {
+  height: 9px;
+  border-radius: var(--radius-xs);
+  background: var(--text-tertiary);
+  animation: canon-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.album-track-skeleton-bar--num,
+.track-skeleton-bar--num {
+  width: 1.25rem;
+}
+
+.album-track-skeleton-bar--short {
+  width: 2.5rem;
+  justify-self: end;
+}
+
+/* Stagger so the rows read as a list settling in, not one block flashing. */
+.album-track-skeleton-row:nth-child(2n) .album-track-skeleton-bar { animation-delay: 0.12s; }
+.album-track-skeleton-row:nth-child(3n) .album-track-skeleton-bar { animation-delay: 0.24s; }
+
+.track-skeleton-list {
+  padding: var(--space-xs) 0;
+}
+
+.track-skeleton-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 40px;
+  padding: 0 var(--space-sm);
+}
+
+.track-skeleton-row:nth-child(2n) .track-skeleton-bar { animation-delay: 0.12s; }
+.track-skeleton-row:nth-child(3n) .track-skeleton-bar { animation-delay: 0.24s; }
+
 .album-detail-actions {
   display: flex;
   align-items: center;

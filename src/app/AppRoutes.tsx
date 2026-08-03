@@ -15,6 +15,7 @@ import type { PlaylistRow, usePlaylists } from "../hooks/usePlaylists";
 import type { useLibrarySync } from "../hooks/useLibrarySync";
 import type { useGenres } from "../hooks/useGenres";
 import type { useAllTracks } from "../hooks/useAllTracks";
+import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 import type { SearchResults as SearchResultsData } from "../hooks/useSearch";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { RadioMode, CurrentTrack } from "../store/player";
@@ -61,6 +62,7 @@ export interface AppViewProps {
   artists: ArtistRow[] | undefined;
   allTracks: ReturnType<typeof useAllTracks>["data"];
   allTracksLoading: boolean;
+  allTracksError: string | null;
   genres: ReturnType<typeof useGenres>["data"];
   playlists: PlaylistRow[] | undefined;
   searchResults: SearchResultsData | undefined;
@@ -344,6 +346,7 @@ export function AppRoutes(props: AppViewProps) {
     artists,
     allTracks,
     allTracksLoading,
+    allTracksError,
     genres,
     playlists,
     searchResults,
@@ -676,6 +679,8 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               tracks={allTracks}
               isLoading={allTracksLoading}
+              error={allTracksError}
+              onRetry={() => useAllTracksSessionStore.getState().bumpRefresh()}
               onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
               onSelectArtist={openArtist}
             />

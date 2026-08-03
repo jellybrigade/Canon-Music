@@ -127,7 +127,7 @@ export default function App() {
   // "library", which would drag the whole album list into every album detail page.
   const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library");
   const { data: artists } = useArtists(pathname === "/artists");
-  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks(pathname === "/tracks");
+  const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
   const { data: genres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
@@ -552,6 +552,7 @@ export default function App() {
     artists,
     allTracks,
     allTracksLoading,
+    allTracksError,
     genres,
     playlists,
     searchResults,

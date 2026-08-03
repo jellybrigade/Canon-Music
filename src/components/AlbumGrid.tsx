@@ -249,7 +249,16 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     >
       <div ref={containerRef} className="album-grid-scroller">
         {albums.length === 0 ? (
-          <p className="empty-state">{emptyMessage ?? "No albums"}</p>
+          emptyMessage ? (
+            <p className="empty-state">{emptyMessage}</p>
+          ) : (
+            <div className="empty-state">
+              <p className="empty-state-title">No albums here yet</p>
+              <p className="empty-state-hint">
+                Connect a server in Settings and sync your library to fill this grid.
+              </p>
+            </div>
+          )
         ) : (
         <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {

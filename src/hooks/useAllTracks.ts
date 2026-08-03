@@ -44,6 +44,9 @@ export function useAllTracks(enabled: boolean = true) {
     return s.rows && s.cachedTick === s.refreshTick ? (s.rows as AllTrackRow[]) : undefined;
   });
   const [isLoading, setIsLoading] = useState(() => data === undefined);
+  // A failed read leaves `data` undefined, which is indistinguishable from an empty
+  // library. Callers need the difference to avoid rendering "no tracks" over a failure.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -51,10 +54,12 @@ export function useAllTracks(enabled: boolean = true) {
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as AllTrackRow[]);
       setIsLoading(false);
+      setError(null);
       return;
     }
     let cancelled = false;
     setIsLoading(true);
+    setError(null);
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -68,7 +73,10 @@ export function useAllTracks(enabled: boolean = true) {
         }
       } catch (err) {
         console.error("useAllTracks: failed to load tracks", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setIsLoading(false);
+        }
       }
     })();
     return () => {
@@ -76,5 +84,5 @@ export function useAllTracks(enabled: boolean = true) {
     };
   }, [refreshTick, enabled]);
 
-  return { data, isLoading };
+  return { data, isLoading, error };
 }

@@ -43,6 +43,7 @@ import "./AlbumDetail.css";
 
 const SECONDS_PER_MINUTE = 60;
 const RELATED_SHELF_LIMIT = 6;
+const TRACK_SKELETON_ROWS = 8;
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
@@ -66,7 +67,7 @@ interface DrawerState {
 
 export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
   const { server, credential } = serverWithCredential;
-  const { data: tracks, isLoading } = useTracks(album.id);
+  const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -155,23 +156,32 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
+  const [tagRefreshError, setTagRefreshError] = useState<string | null>(null);
 
   const doSyncTracks = useCallback(async () => {
     await syncAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
     useTrackListSessionStore.getState().bumpRefresh();
   }, [album.id, serverWithCredential]);
 
-  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration
+  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration.
+  // Guarded to one attempt per album: doSyncTracks bumps the track-list refresh tick,
+  // which makes useTracks hand back a fresh array and re-run this effect. If the server
+  // reports no bitRate for these tracks, the condition is still true on that new array,
+  // so without the guard this re-syncs the album over the network forever.
+  const bitRateSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!tracks || tracks.length === 0) return;
+    if (bitRateSyncedRef.current === album.id) return;
     if (tracks.every((t) => t.bit_rate === null)) {
+      bitRateSyncedRef.current = album.id;
       void doSyncTracks();
     }
-  }, [tracks, doSyncTracks]);
+  }, [tracks, doSyncTracks, album.id]);
 
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
     setIsTagRefreshing(true);
+    setTagRefreshError(null);
     try {
       await doSyncTracks();
       await normalizeAlbum(album.id, album.artist ?? "", album.name, {
@@ -186,8 +196,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
       });
       await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
       await queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(album.id) });
-    } catch {
-      // silent
+    } catch (err) {
+      console.error("AlbumDetail: tag refresh failed", err);
+      setTagRefreshError("Refresh failed. Check the server connection and try again.");
     } finally {
       setIsTagRefreshing(false);
     }
@@ -598,6 +609,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
               >
                 {isTagRefreshing ? "Refreshing…" : "Refresh"}
               </button>
+              {tagRefreshError && (
+                <span className="album-meta-refresh-error" role="status">{tagRefreshError}</span>
+              )}
             </div>
             <div className="album-detail-actions">
               <button
@@ -772,9 +786,33 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
           </div>
         )}
         {isLoading ? (
-          <p className="empty-state">Loading tracks…</p>
+          <div className="album-track-skeleton" aria-label="Loading tracks" aria-busy="true">
+            {Array.from({ length: TRACK_SKELETON_ROWS }, (_, i) => (
+              <div key={i} className="album-track-skeleton-row">
+                <span className="album-track-skeleton-bar album-track-skeleton-bar--num" />
+                <span className="album-track-skeleton-bar" />
+                <span className="album-track-skeleton-bar album-track-skeleton-bar--short" />
+              </div>
+            ))}
+          </div>
+        ) : tracksError ? (
+          <div className="empty-state">
+            <p className="empty-state-title">Couldn't load this album's tracks</p>
+            <p className="empty-state-hint">{tracksError}</p>
+            <button
+              className="empty-state-action"
+              onClick={() => useTrackListSessionStore.getState().bumpRefresh()}
+            >
+              Try again
+            </button>
+          </div>
         ) : !tracks || tracks.length === 0 ? (
-          <p className="empty-state">No tracks synced yet.</p>
+          <div className="empty-state">
+            <p className="empty-state-title">No tracks synced yet</p>
+            <p className="empty-state-hint">
+              Run a library sync and this album's tracks appear here, ready to play.
+            </p>
+          </div>
         ) : (
           <div className="tracklist-wrapper">
             <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
