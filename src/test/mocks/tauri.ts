@@ -8,8 +8,11 @@
  *   vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
  *   vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
  *
- * Call `resetTauriMocks()` in `beforeEach` so a queued invoke handler or a stale listener from
- * the previous test cannot leak forward.
+ * Call `resetTauriMocks()` in `beforeEach` so a queued invoke handler from the previous test
+ * cannot leak forward. This does NOT clear registered event listeners: a store built with
+ * `create()` (e.g. `usePlayerStore`) calls `listen()` exactly once, at module import, not per
+ * test - clearing the listener map here would silently strip its event handlers for the rest
+ * of the suite after the first test runs.
  */
 import { vi } from "vitest";
 
@@ -60,7 +63,6 @@ export function listenerCount(event: string): number {
 }
 
 export function resetTauriMocks(): void {
-  listeners.clear();
   invokeHandlers.clear();
   invoke.mockClear();
   listen.mockClear();
