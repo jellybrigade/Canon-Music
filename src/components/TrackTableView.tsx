@@ -8,6 +8,7 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -342,6 +343,8 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
     estimateSize: () => ROW_HEIGHT,
     overscan: 10,
   });
+
+  useScrollMemory(scrollRef, `tracks:${sortField}:${sortDir}`, sorted.length > 0);
 
   // Right-clicking a row that is part of a multi-row selection acts on the whole
   // selection; right-clicking anywhere else acts on that one row and leaves the

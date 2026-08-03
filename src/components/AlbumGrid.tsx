@@ -7,6 +7,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
 import { useBoolSetting } from "../hooks/useSetting";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { AlbumArt } from "./AlbumArt";
@@ -232,6 +233,10 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     estimateSize: (i) => rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight,
     overscan: 3,
   });
+
+  // Keyed by sort because each sort is a different ordering of the same rows,
+  // so an offset taken under one is meaningless under another.
+  useScrollMemory(containerRef, `albums:${sort ?? "default"}`, rows.length > 0);
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}`);
   useLayoutEffect(() => {

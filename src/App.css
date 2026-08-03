@@ -354,7 +354,10 @@ html[data-app-blurred] * {
   z-index: 10;
 }
 
-.sidebar-resize-handle:hover {
+.sidebar-resize-handle:hover,
+/* Held through the whole drag: the pointer leaves the 6px strip almost
+   immediately, and losing the highlight mid-gesture reads as a dropped drag. */
+.sidebar--dragging .sidebar-resize-handle {
   background: var(--tint-4);
   border-radius: var(--radius-xs);
 }
@@ -396,6 +399,13 @@ html[data-app-blurred] * {
 .sidebar-btn:hover:not(:disabled) {
   color: var(--text-secondary);
   background-color: var(--bg-hover);
+}
+
+.sidebar-btn:focus-visible,
+.sidebar-feedback-btn:focus-visible,
+.sidebar-expand-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .sidebar-btn--active {

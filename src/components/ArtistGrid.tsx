@@ -6,6 +6,7 @@ import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -102,6 +103,8 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     estimateSize: () => rowHeight,
     overscan: 3,
   });
+
+  useScrollMemory(containerRef, "artists", rowCount > 0);
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}`);
   useLayoutEffect(() => {

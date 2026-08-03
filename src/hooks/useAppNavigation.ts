@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlayerStore } from "../store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
@@ -68,6 +69,39 @@ export function useAppNavigation() {
   function goBack() {
     navigate(-1);
   }
+
+  // Back and forward for the whole app. The only other way to go back is the
+  // per-detail-page back button, and there was no way to go forward at all.
+  // Alt+Arrow is the desktop convention and is free here: useGlobalShortcuts
+  // bails on altKey, so its left/right seek bindings can't collide. Mouse
+  // buttons 3 and 4 are the thumb buttons; WebKit does not act on them itself.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        navigate(1);
+      }
+    }
+    function onMouseUp(e: MouseEvent) {
+      if (e.button === 3) {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.button === 4) {
+        e.preventDefault();
+        navigate(1);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [navigate]);
 
   return {
     view,

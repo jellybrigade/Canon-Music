@@ -27,7 +27,6 @@ const AlbumDetail = lazy(() => import("../components/AlbumDetail").then((m) => (
 const ArtistDetail = lazy(() => import("../components/ArtistDetail").then((m) => ({ default: m.ArtistDetail })));
 const PlaylistDetail = lazy(() => import("../components/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
 const PlaylistList = lazy(() => import("../components/PlaylistList").then((m) => ({ default: m.PlaylistList })));
-const SearchResults = lazy(() => import("../components/SearchResults").then((m) => ({ default: m.SearchResults })));
 const SettingsView = lazy(() => import("../components/SettingsView").then((m) => ({ default: m.SettingsView })));
 const TagsView = lazy(() => import("../components/TagsView").then((m) => ({ default: m.TagsView })));
 const UnidentifiedView = lazy(() => import("../components/UnidentifiedView").then((m) => ({ default: m.UnidentifiedView })));
@@ -374,8 +373,6 @@ export function AppRoutes(props: AppViewProps) {
     allTracksError,
     genres,
     playlists,
-    searchResults,
-    searchError,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
@@ -399,7 +396,6 @@ export function AppRoutes(props: AppViewProps) {
     searchOpen,
     setSearchOpen,
     searchRaw,
-    searchQuery,
     searchInputRef,
     clearSearch,
     homeSearchRaw,
@@ -436,29 +432,9 @@ export function AppRoutes(props: AppViewProps) {
     if (!serverWithCred || albums === undefined) {
       return <p className="empty-state">Loading…</p>;
     }
-    if (searchQuery && searchError) {
-      return <p className="empty-state">Search failed. The library database could not be read.</p>;
-    }
-    if (searchQuery && searchResults) {
-      return (
-        <SearchResults
-          albums={searchResults.albums}
-          tracks={searchResults.tracks}
-          artists={searchResults.artists}
-          serverWithCredential={serverWithCred}
-          playlists={playlists}
-          onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null } }); }}
-          onPlayTrack={(id) => { void handlePlayTrack(id); }}
-          onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
-          onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-          onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
-        />
-      );
-    }
-    if (searchQuery && !searchResults) {
-      return <p className="empty-state">Searching…</p>;
-    }
+    // No search branch here on purpose: AppShell renders the search overlay in
+    // place of the whole route tree while a search is active, so anything keyed
+    // on searchQuery in this function is unreachable.
     const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
       ? "No loved albums"

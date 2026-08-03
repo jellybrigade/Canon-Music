@@ -8,6 +8,7 @@ import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { ContextMenu } from "./ContextMenu";
 import { parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
 import { fileToScaledDataUri } from "../lib/imageDataUri";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import "./PlaylistList.css";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
@@ -103,6 +104,8 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
     overscan: 3,
     scrollMargin,
   });
+
+  useScrollMemory(containerRef, "playlists", rows.length > 0);
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}-${scrollMargin}`);
   useLayoutEffect(() => {
