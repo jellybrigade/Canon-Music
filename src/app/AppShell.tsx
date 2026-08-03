@@ -16,6 +16,7 @@ export function AppShell(props: AppViewProps) {
     serverWithCred,
     playlists,
     searchResults,
+    searchError,
     searchOpen,
     searchQuery,
     searchRaw,
@@ -87,7 +88,9 @@ export function AppShell(props: AppViewProps) {
               <X size={15} />
             </button>
           </header>
-          {serverWithCred && searchResults && searchQuery ? (
+          {searchQuery && searchError ? (
+            <p className="empty-state">Search failed. The library database could not be read.</p>
+          ) : serverWithCred && searchResults && searchQuery ? (
             <SearchResults
               albums={searchResults.albums}
               tracks={searchResults.tracks}

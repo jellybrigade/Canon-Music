@@ -66,6 +66,7 @@ export interface AppViewProps {
   genres: ReturnType<typeof useGenres>["data"];
   playlists: PlaylistRow[] | undefined;
   searchResults: SearchResultsData | undefined;
+  searchError: boolean;
 
   // Library filters
   canonicalIdFilters: string[];
@@ -350,6 +351,7 @@ export function AppRoutes(props: AppViewProps) {
     genres,
     playlists,
     searchResults,
+    searchError,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
@@ -409,6 +411,9 @@ export function AppRoutes(props: AppViewProps) {
   function renderLibraryContent() {
     if (!serverWithCred || albums === undefined) {
       return <p className="empty-state">Loading…</p>;
+    }
+    if (searchQuery && searchError) {
+      return <p className="empty-state">Search failed. The library database could not be read.</p>;
     }
     if (searchQuery && searchResults) {
       return (

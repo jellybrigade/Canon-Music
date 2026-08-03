@@ -889,7 +889,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   }, []);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { data: searchResults } = useSearch(homeSearchQuery);
+  const { data: searchResults, isError: searchError } = useSearch(homeSearchQuery, server.id);
 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
@@ -1141,7 +1141,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       </div>
 
       {isSearching ? (
-        searchResults && homeSearchQuery ? (
+        searchError ? (
+          <p className="empty-state">Search failed. The library database could not be read.</p>
+        ) : searchResults && homeSearchQuery ? (
           <SearchResults
             albums={searchResults.albums}
             tracks={searchResults.tracks}

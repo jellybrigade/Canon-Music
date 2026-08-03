@@ -15,7 +15,7 @@ export const QK = {
 
   genreDisplayMappings: () => ["genre-display-mappings"] as const,
 
-  search: (query: string) => ["search", query] as const,
+  search: (serverId: string, query: string) => ["search", serverId, query] as const,
 
   tagIssues: () => ["tag_issues"] as const,
   tagVocab: () => ["tag-vocab"] as const,

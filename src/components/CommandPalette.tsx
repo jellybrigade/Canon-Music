@@ -1,4 +1,4 @@
-import React, { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
 import { useSearch } from "../hooks/useSearch";
@@ -20,6 +20,7 @@ interface NavCommand {
 interface AlbumResult {
   kind: "album";
   id: string;
+  server_id: string;
   name: string;
   artist: string | null;
   artwork_url: string | null;
@@ -53,6 +54,10 @@ const NAV_COMMANDS: NavCommand[] = [
 
 const RESULTS_CAP = 5;
 
+// useDeferredValue only defers rendering - it still fires one search per
+// keystroke. A real debounce keeps typing from queuing an FTS scan per character.
+const SEARCH_DEBOUNCE_MS = 150;
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -66,14 +71,21 @@ interface Props {
 export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential }: Props) {
   const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
-  const deferred = useDeferredValue(raw.trim());
+  const [deferred, setDeferred] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const focusedRef = useRef<HTMLButtonElement>(null);
   const [focusedIdx, setFocusedIdx] = useState(0);
 
-  const { data: results } = useSearch(deferred);
+  const trimmedRaw = raw.trim();
+  useEffect(() => {
+    const t = setTimeout(() => setDeferred(trimmedRaw), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [trimmedRaw]);
+
+  const { data: results, isError } = useSearch(deferred, serverWithCredential?.server.id);
 
   const searchAlbums: AlbumResult[] = deferred
-    ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({ kind: "album" as const, id: a.id, name: a.name, artist: a.artist, artwork_url: a.artwork_url })) ?? [])
+    ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({ kind: "album" as const, id: a.id, server_id: a.server_id, name: a.name, artist: a.artist, artwork_url: a.artwork_url })) ?? [])
     : [];
   const searchTracks: TrackResult[] = deferred
     ? (results?.tracks.slice(0, RESULTS_CAP).map((t) => ({ kind: "track" as const, id: t.id, title: t.title, artist: t.artist, album_name: t.album_name })) ?? [])
@@ -96,7 +108,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     } else if (item.kind === "album") {
       onSelectAlbum({
         id: item.id,
-        server_id: serverWithCredential?.server.id ?? "",
+        // From the row, never the selected server: stamping the current
+        // selection onto a row is what silently builds URLs against the
+        // wrong host (see known-issues.md).
+        server_id: item.server_id,
         name: item.name,
         artist: item.artist,
         year: null,
@@ -113,12 +128,21 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   useEffect(() => {
     if (open) {
       setRaw("");
+      // Reset the debounced value too, or the palette re-opens showing the
+      // previous session's results for the 150ms until the timer catches up.
+      setDeferred("");
       setFocusedIdx(0);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
   useEffect(() => { setFocusedIdx(0); }, [deferred]);
+
+  // .cp-results is a 420px scroller and there can be 15 result rows, so arrowing
+  // down past the fold otherwise moves a selection the user can't see.
+  useEffect(() => {
+    focusedRef.current?.scrollIntoView({ block: "nearest" });
+  }, [focusedIdx]);
 
   useEffect(() => {
     if (!open) return;
@@ -142,7 +166,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
 
   if (!open) return null;
 
-  const isEmpty = deferred && results && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
+  // placeholderData keeps the previous query's rows around on failure, so the
+  // error branch has to win outright rather than render alongside stale results.
+  const showResults = !isError && results;
+  const isEmpty = deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
 
   return (
     <div className="cp-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -168,6 +195,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                 {NAV_COMMANDS.map((cmd, i) => (
                   <button
                     key={cmd.id}
+                    ref={i === focusedIdx ? focusedRef : null}
                     className={`cp-nav-item${i === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedIdx(i)}
                     onMouseDown={(e) => { e.preventDefault(); activate(cmd); }}
@@ -180,15 +208,19 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
             </div>
           )}
 
-          {deferred && !results && (
+          {deferred && isError && (
+            <p className="cp-empty">Search failed. The library database could not be read.</p>
+          )}
+
+          {deferred && !isError && !results && (
             <p className="cp-empty">Searching…</p>
           )}
 
-          {deferred && results && isEmpty && (
+          {deferred && showResults && isEmpty && (
             <p className="cp-empty">No results for "{deferred}"</p>
           )}
 
-          {deferred && results && searchArtists.length > 0 && (
+          {deferred && showResults && searchArtists.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Artists</p>
               {searchArtists.map((artist, i) => {
@@ -196,6 +228,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                 return (
                   <button
                     key={artist.name}
+                    ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedIdx(idx)}
                     onMouseDown={(e) => { e.preventDefault(); activate(artist); }}
@@ -209,7 +242,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
             </div>
           )}
 
-          {deferred && results && searchAlbums.length > 0 && (
+          {deferred && showResults && searchAlbums.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Albums</p>
               {searchAlbums.map((album, i) => {
@@ -220,6 +253,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                 return (
                   <button
                     key={album.id}
+                    ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedIdx(idx)}
                     onMouseDown={(e) => { e.preventDefault(); activate(album); }}
@@ -235,7 +269,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
             </div>
           )}
 
-          {deferred && results && searchTracks.length > 0 && (
+          {deferred && showResults && searchTracks.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Tracks</p>
               {searchTracks.map((track, i) => {
@@ -243,6 +277,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                 return (
                   <button
                     key={track.id}
+                    ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedIdx(idx)}
                     onMouseDown={(e) => { e.preventDefault(); activate(track); }}

@@ -158,7 +158,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { data: searchResults } = useSearch(searchQuery);
+  const { data: searchResults, isError: searchError } = useSearch(searchQuery, server?.id);
 
   const [homeSearchRaw, setHomeSearchRaw] = useState("");
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
@@ -212,10 +212,21 @@ export default function App() {
   }, []);
 
   const clearSearch = useCallback(() => {
+    // Cancel the pending debounce first. Without this, clearing within 200ms of
+    // the last keystroke lets the timer fire afterwards and set searchQuery back,
+    // which re-opens the search view for a query the now-empty input doesn't show.
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
     setSearchRaw("");
     setSearchQuery("");
     setSearchOpen(false);
     searchInputRef.current?.blur();
+  }, []);
+
+  useEffect(() => () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
   }, []);
 
   useEffect(() => {
@@ -556,6 +567,7 @@ export default function App() {
     genres,
     playlists,
     searchResults,
+    searchError,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
