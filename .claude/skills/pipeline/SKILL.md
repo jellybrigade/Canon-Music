@@ -130,9 +130,11 @@ For anything in the ask-first set, ask before touching it. Anything the user dec
 
 Show why each fix is correct, don't just assert it. For a leak: what was unbounded, what bounds it now. For a race: the interleaving that broke, and why it can't happen now.
 
-If the change is UI-visible, write a concrete numbered manual check for the user — actions in the running app and the specific before/after difference this fix produces, not "click around". Then ask if they want a live check. **Do not auto-launch the app or browser automation** (`feedback-no-auto-browser-verify`).
+If the change is UI-visible, write a concrete numbered manual check for the user — actions in the running app and the specific before/after difference this fix produces, not "click around". Leave it with them and move on.
 
-Asking that question ends the turn, so run Phases 7 and 8 before you ask it, not after. Ask the live-check question in the same message that reports the commit.
+**Never ask whether they want a live check.** Not "want me to verify this in the app?", not "should I launch it?", not any rephrasing. The user runs the app themselves and will say so if they want something checked. Asking wastes a turn on a question whose answer is already known, and it ends the turn in the one place the skill must not end — before Phases 7 and 8.
+
+**Do not auto-launch the app or browser automation either** (`feedback-no-auto-browser-verify`). Both halves hold at once: don't launch it, and don't ask to. Write the steps, then go straight to recording and committing.
 
 ## Phase 7 — Record (mandatory, never deferred)
 
