@@ -69,7 +69,10 @@ export function useLyrics(
         "SELECT plain, synced FROM lyrics WHERE track_id = ?",
         [track.id]
       );
-      if (cached.length > 0) {
+      // A row with both columns null is an offset-only row left behind by `refresh`, which
+      // clears the lyrics but keeps the timing the user dialled in. Treating its presence as a
+      // cache hit would make the refresh it was written by return "no lyrics" forever.
+      if (cached.length > 0 && (cached[0]!.plain || cached[0]!.synced)) {
         return { plain: cached[0]!.plain, synced: cached[0]!.synced };
       }
 
@@ -137,9 +140,15 @@ export function useLyrics(
   const refresh = useCallback(async () => {
     if (!track) return;
     const db = await getDb();
-    await db.execute("DELETE FROM lyrics WHERE track_id = ?", [track.id]);
+    // Clears the lyrics without dropping the row: `offset_ms` is the user's own work, and a
+    // DELETE threw it away every time they re-fetched a badly-timed set of lyrics, which is
+    // exactly when they had already spent effort lining it up.
+    await db.execute(
+      "UPDATE lyrics SET plain = NULL, synced = NULL WHERE track_id = ?",
+      [track.id]
+    );
     await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
-  }, [track, overrideArtist, overrideTitle, queryClient]);
+  }, [track, queryClient]);
 
   const [offsetMs, setOffsetMsState] = useState(0);
 

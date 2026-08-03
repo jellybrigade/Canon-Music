@@ -76,8 +76,16 @@
   z-index: 1;
 }
 
-.player-thumb-wrap:hover .player-thumb-expand {
+/* Also on focus: at opacity 0 the button is still in the tab order, so a keyboard user could
+   land on an invisible control and see nothing move. */
+.player-thumb-wrap:hover .player-thumb-expand,
+.player-thumb-expand:focus-visible {
   opacity: 1;
+}
+
+.player-thumb-expand:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .player-thumb-expand:hover {

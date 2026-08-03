@@ -17,123 +17,56 @@ import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
 import { parseLrc, type LrcLine } from "../lib/lrclib";
-import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
+import {
+  primaryArtistOf,
+  fetchArtistAlbums,
+  fetchArtistTopTracksForNowPlaying,
+  fetchSuggestedTracksForNowPlaying,
+  NOW_PLAYING_STALE_TIME,
+  SUGGESTED_STALE_TIME,
+  type NowPlayingTrack,
+} from "../lib/now-playing-queries";
 import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
 import { TourCard } from "./TourCard";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { getDb } from "../db";
 import { AlbumArt } from "./AlbumArt";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
 
-interface TopTrack {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  album_name: string | null;
-  album_id: string | null;
-  artwork_url: string | null;
-}
-
-interface SuggestedTrack {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  album_name: string | null;
-  album_id: string | null;
-  artwork_url: string | null;
-}
+type TopTrack = NowPlayingTrack;
+type SuggestedTrack = NowPlayingTrack;
 
 function useArtistAlbums(artistName: string | null) {
   return useQuery({
     queryKey: QK.nowPlayingAlbums(artistName),
-    queryFn: async (): Promise<AlbumRow[]> => {
-      if (!artistName) return [];
-      const db = await getDb();
-      return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url
-         FROM albums WHERE artist = ?
-         ORDER BY year IS NULL, year DESC, name`,
-        [artistName]
-      );
-    },
+    queryFn: (): Promise<AlbumRow[]> => fetchArtistAlbums(artistName!),
     enabled: !!artistName,
+    // Matches what useNowPlayingPrefetch warms it with. Left at the default, the prefetched
+    // entry was stale the instant it landed and the tab re-ran the query on every open.
+    staleTime: NOW_PLAYING_STALE_TIME,
   });
 }
 
 function useArtistTopTracks(artistName: string | null) {
   return useQuery({
     queryKey: QK.nowPlayingTopTracks(artistName),
-    queryFn: async (): Promise<TopTrack[]> => {
-      if (!artistName) return [];
-      const db = await getDb();
-
-      // Try Last.fm global popularity ranking first
-      const trackNames = await fetchArtistTopTracks(artistName);
-      if (trackNames.length > 0) {
-        const localTracks = await db.select<TopTrack[]>(
-          `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                  t.album_id, a.artwork_url
-           FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-           WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'`,
-          [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
-        );
-        const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
-        const matched: TopTrack[] = [];
-        for (const { name } of trackNames) {
-          const track = byTitle.get(name.toLowerCase());
-          if (track && !matched.some((m) => m.id === track.id)) {
-            matched.push(track);
-            if (matched.length >= 10) break;
-          }
-        }
-        if (matched.length > 0) return matched;
-      }
-
-      // Fallback: local library ordering
-      return db.select<TopTrack[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url
-         FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'
-         ORDER BY t.track_number, t.title
-         LIMIT 10`,
-        [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
-      );
-    },
+    queryFn: (): Promise<TopTrack[]> => fetchArtistTopTracksForNowPlaying(artistName!),
     enabled: !!artistName,
-    staleTime: 30 * 60 * 1000,
+    staleTime: NOW_PLAYING_STALE_TIME,
   });
 }
 
 function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
   return useQuery({
     queryKey: QK.suggestedTracks(artistName, currentTrackId),
-    queryFn: async (): Promise<SuggestedTrack[]> => {
-      if (!artistName) return [];
-      const similarArtists = await fetchSimilarArtists(artistName);
-      if (similarArtists.length === 0) return [];
-      const db = await getDb();
-      const placeholders = similarArtists.map(() => "?").join(", ");
-      return db.select<SuggestedTrack[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url
-         FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist IN (${placeholders})
-           AND t.id != ?
-         ORDER BY random()
-         LIMIT 10`,
-        [...similarArtists, currentTrackId ?? ""]
-      );
-    },
+    queryFn: (): Promise<SuggestedTrack[]> =>
+      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId),
     enabled: !!artistName,
-    staleTime: 5 * 60 * 1000,
+    staleTime: SUGGESTED_STALE_TIME,
   });
 }
 
@@ -208,13 +141,10 @@ interface LyricLineProps {
 }
 
 const LyricLine = React.memo(function LyricLine({ index, text, isActive }: LyricLineProps) {
-  const activeLyricRef = useRef<HTMLDivElement>(null);
   return (
     <div
-      ref={isActive ? activeLyricRef : undefined}
       data-lyric-index={index}
       className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-      style={{ cursor: "pointer" }}
     >
       {text || " "}
     </div>
@@ -438,15 +368,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const repeatLabel = repeatModeLabel(repeat);
   const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
 
-  const primaryArtist = currentTrack?.artist
-    ? (currentTrack.artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? currentTrack.artist)
-    : null;
-  const { data: artistAlbums } = useArtistAlbums(primaryArtist);
-  const { data: topTracks } = useArtistTopTracks(primaryArtist);
+  const primaryArtist = primaryArtistOf(currentTrack?.artist);
+  const { data: artistAlbums, isPending: albumsPending } = useArtistAlbums(primaryArtist);
+  const { data: topTracks, isPending: topTracksPending } = useArtistTopTracks(primaryArtist);
   const { data: suggestedTracks } = useSuggestedTracks(
     primaryArtist,
     currentTrack?.id ?? null
   );
+  // Both start out `undefined`, which is indistinguishable from "the artist has nothing" unless
+  // the pending flags are consulted. Without them the About tab asserted "No artist info
+  // available." for the whole of the Last.fm round trip, then replaced it with the content.
+  const aboutPending = !!primaryArtist && (albumsPending || topTracksPending);
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = useMemo(() => (lyricsSynced ? parseLrc(lyricsSynced) : null), [lyricsSynced]);
   const accent = usePlayerStore((s) => s.accentColor);
@@ -506,9 +438,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     setBlurBg(null);
     if (!blurArtUrl) return;
     let cancelled = false;
-    void getBlurredBackdrop(blurArtUrl).then((dataUrl) => {
-      if (!cancelled) setBlurBg(dataUrl);
-    });
+    // A cover the cache cannot fetch or decode rejects here. Without the catch that surfaces as
+    // an unhandled rejection, and the backdrop simply stays on the flat fallback either way.
+    void getBlurredBackdrop(blurArtUrl)
+      .then((dataUrl) => { if (!cancelled) setBlurBg(dataUrl); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [blurArtUrl]);
 
@@ -532,11 +466,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     setLyricsSearchTitle(currentTrack?.title ?? "");
   }, [currentTrack?.id]);
 
+  // Also keyed on queueIndex: with the tab left open, a track advance moved the highlight but
+  // not the scroll position, so the playing row walked off the bottom of a long queue.
   useEffect(() => {
     if (tab !== "up-next" || !upNextRef.current) return;
     const active = upNextRef.current.querySelector(".now-playing-up-next-row--active");
     if (active) active.scrollIntoView({ block: "nearest" });
-  }, [tab]);
+  }, [tab, queueIndex]);
 
   function buildTrack(t: TopTrack | SuggestedTrack) {
     const navId = stripServerPrefix(t.id, server.id);
@@ -910,6 +846,24 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
             {tab === "about" && (
               <>
+                {aboutPending && (
+                  <div className="now-playing-about-skeleton" aria-hidden="true">
+                    <div className="now-playing-about-skeleton-title" />
+                    <div className="now-playing-about-skeleton-chips">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="now-playing-about-skeleton-chip" />
+                      ))}
+                    </div>
+                    <div className="now-playing-about-skeleton-title" />
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <div key={i} className="now-playing-about-skeleton-row">
+                        <div className="now-playing-about-skeleton-thumb" />
+                        <div className="now-playing-about-skeleton-bar" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
@@ -1036,8 +990,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   </div>
                 )}
 
-                {otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
-                  <p className="now-playing-empty">No artist info available.</p>
+                {!aboutPending && otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
+                  <p className="now-playing-empty">
+                    Nothing else by {primaryArtist ?? "this artist"} in your library yet. Other
+                    albums and top tracks show up here once they are synced.
+                  </p>
                 )}
 
                 {primaryArtist && (

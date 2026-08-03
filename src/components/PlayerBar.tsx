@@ -236,7 +236,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   function handleStarClick(star: number) {
     if (!currentTrack || !serverWithCred || !nativeTrackId) return;
     const newRating = star === trackRating ? 0 : star;
-    queryClient.setQueryData(["trackRating", nativeTrackId], newRating);
+    queryClient.setQueryData(QK.trackRating(nativeTrackId), newRating);
     const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
@@ -322,7 +322,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
                   setArtOpen((v) => !v);
                 }
               }}
-              aria-label="Go to album"
+              aria-label={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
+              title={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
             >
               <AlbumArt
                 src={(currentTrack.albumId ? coverMap.get(currentTrack.albumId) : undefined) ?? currentTrack.coverArtUrl ?? null}
@@ -391,6 +392,11 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onPointerDown={handlePrevPointerDown}
               onPointerUp={handlePrevPointerUp}
               onPointerLeave={handlePrevPointerLeave}
+              // Enter and Space on a focused button dispatch click and nothing else: no
+              // pointerdown, no pointerup. With only the pointer handlers above, Previous did
+              // nothing at all for a keyboard user. detail === 0 identifies exactly that case,
+              // so a real pointer click is still handled once, by handlePrevPointerUp.
+              onClick={(e) => { if (e.detail === 0) void prev(); }}
               disabled={queue.length === 0}
               aria-label="Previous"
             >

@@ -217,12 +217,8 @@
 
 /* ── Loading skeletons ──
    Shaped like the rows they stand in for, so the layout does not shift when real
-   data lands. The app-wide prefers-reduced-motion rule in App.css freezes the pulse. */
-@keyframes canon-skeleton-pulse {
-  0%, 100% { opacity: var(--opacity-40); }
-  50%      { opacity: var(--opacity-20); }
-}
-
+   data lands. The app-wide prefers-reduced-motion rule in App.css freezes the pulse, and
+   canon-skeleton-pulse is defined there too. */
 .album-track-skeleton {
   padding: var(--space-xs) 0;
 }

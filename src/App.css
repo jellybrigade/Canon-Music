@@ -308,6 +308,13 @@ html[data-app-blurred] * {
   50%       { opacity: 0.3; }
 }
 
+/* Shared by every loading skeleton (AlbumDetail.css, NowPlayingView.css). Defined here rather
+   than per-file because a keyframes name is global: two copies are one copy that can drift. */
+@keyframes canon-skeleton-pulse {
+  0%, 100% { opacity: var(--opacity-40); }
+  50%      { opacity: var(--opacity-20); }
+}
+
 /* ── App shell ── */
 .app-layout {
   display: flex;

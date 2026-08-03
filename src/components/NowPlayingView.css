@@ -658,7 +658,67 @@
   text-wrap: pretty;
 }
 
-/* ── About tab ── */
+/* ── About tab ──
+   Skeleton shaped like the section title + album chip row + track rows it stands in for, so
+   nothing shifts when the Last.fm round trip lands. The app-wide prefers-reduced-motion rule
+   in App.css freezes the pulse, and canon-skeleton-pulse is defined there too. */
+.now-playing-about-skeleton {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.now-playing-about-skeleton-title,
+.now-playing-about-skeleton-bar,
+.now-playing-about-skeleton-chip,
+.now-playing-about-skeleton-thumb {
+  background: var(--text-tertiary);
+  border-radius: var(--radius-xs);
+  animation: canon-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.now-playing-about-skeleton-title {
+  height: 10px;
+  width: 8rem;
+}
+
+.now-playing-about-skeleton-chips {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.now-playing-about-skeleton-chip {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-sm-md);
+  flex-shrink: 0;
+}
+
+.now-playing-about-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 34px;
+}
+
+.now-playing-about-skeleton-thumb {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.now-playing-about-skeleton-bar {
+  height: 9px;
+  flex: 1;
+  max-width: 18rem;
+}
+
+/* Stagger so the rows read as a list settling in, not one block flashing. */
+.now-playing-about-skeleton-row:nth-child(2n) .now-playing-about-skeleton-bar { animation-delay: 0.12s; }
+.now-playing-about-skeleton-row:nth-child(3n) .now-playing-about-skeleton-bar { animation-delay: 0.24s; }
+
 .now-playing-more-section {
   width: 100%;
   margin-bottom: var(--space-lg);
@@ -740,6 +800,7 @@
 
 /* ── Track rows ── */
 .now-playing-track-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-xs);
@@ -748,7 +809,8 @@
   transition: background var(--duration-fast);
 }
 
-.now-playing-track-row:hover {
+.now-playing-track-row:hover,
+.now-playing-track-row:focus-within {
   background: var(--tint-2);
 }
 
@@ -799,21 +861,37 @@
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  transition: opacity var(--duration-fast);
 }
 
+/* Revealed on hover, and on focus-within so the buttons are reachable by keyboard. They were
+   previously display: none until hover, which takes them out of the tab order altogether, and
+   a control that cannot be focused can never trigger the :focus-within that would show it.
+   Taking them out of flow instead keeps the duration in its own place, so the row does not
+   reflow when the actions appear over it. */
 .now-playing-track-actions {
-  display: none;
+  position: absolute;
+  right: var(--space-xs);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
   align-items: center;
   gap: 0.1rem;
   flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast);
 }
 
-.now-playing-track-row:hover .now-playing-track-actions {
-  display: flex;
+.now-playing-track-row:hover .now-playing-track-actions,
+.now-playing-track-row:focus-within .now-playing-track-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.now-playing-track-row:hover .now-playing-track-duration {
-  display: none;
+.now-playing-track-row:hover .now-playing-track-duration,
+.now-playing-track-row:focus-within .now-playing-track-duration {
+  opacity: 0;
 }
 
 .now-playing-track-action-btn {
@@ -834,6 +912,13 @@
   opacity: 1;
   background: var(--tint-3) !important;
   border: none !important;
+}
+
+.now-playing-track-action-btn:focus-visible,
+.now-playing-album-chip:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* ── Lyrics ── */
@@ -879,13 +964,24 @@
   background: color-mix(in srgb, var(--accent) 40%, rgba(20, 20, 20, 0.85));
 }
 
+/* Every line seeks to its own timestamp, so the whole block is a click target. */
 .lyrics-line {
   padding: var(--space-xs) var(--space-xs);
   font-size: var(--text-md);
   color: var(--overlay-40);
   line-height: 1.6;
   border-radius: var(--radius-sm-md);
+  cursor: pointer;
   transition: color var(--duration-slower), background var(--duration-slower);
+}
+
+.lyrics-line:hover {
+  color: var(--overlay-70);
+  background: var(--tint-3);
+}
+
+.lyrics-line--active:hover {
+  color: var(--accent);
 }
 
 .lyrics-line--active {
