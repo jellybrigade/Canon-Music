@@ -30,20 +30,14 @@
   pointer-events: none;
 }
 
-/* Blur is precomputed on a tiny canvas (src/lib/artBlur.ts) and handed to us
-   as an already-blurred data-URL background image - this layer only scales
-   it to cover, a cheap compositor op, instead of running an expensive
-   `filter: blur()` raster over a large layer on every repaint (same
-   WebKitGTK cost that NowPlayingView's backdrop had, see NowPlayingView.css). */
+/* Rendered by ArtBackdrop, which crossfades between covers. Blur is precomputed
+   on a tiny canvas (src/lib/artBlur.ts), so its layers only scale already-blurred
+   pixels to cover - a cheap compositor op - instead of running an expensive
+   `filter: blur()` raster over a large layer on every repaint (same WebKitGTK
+   cost that NowPlayingView's backdrop had, see NowPlayingView.css). */
 .album-detail-hero-bg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center top;
+  --art-backdrop-pos: center top;
   opacity: var(--opacity-30);
-  z-index: 0;
-  pointer-events: none;
-  transition: opacity var(--duration-long) ease;
 }
 
 .album-detail-back {

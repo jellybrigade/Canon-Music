@@ -11,7 +11,7 @@ import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { getBlurredBackdrop } from "../lib/artBlur";
+import { ArtBackdrop } from "./ArtBackdrop";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -433,19 +433,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
     : currentTrack?.coverArtUrl ?? null;
 
-  const [blurBg, setBlurBg] = useState<string | null>(null);
-  useEffect(() => {
-    setBlurBg(null);
-    if (!blurArtUrl) return;
-    let cancelled = false;
-    // A cover the cache cannot fetch or decode rejects here. Without the catch that surfaces as
-    // an unhandled rejection, and the backdrop simply stays on the flat fallback either way.
-    void getBlurredBackdrop(blurArtUrl)
-      .then((dataUrl) => { if (!cancelled) setBlurBg(dataUrl); })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, [blurArtUrl]);
-
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, pos) => {
       const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
@@ -526,10 +513,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     <div
       className="now-playing-view"
       style={{
-        ...(blurBg ? { '--art-bg': `url("${blurBg}")` } : {}),
         ...(accent ? { '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
+      <ArtBackdrop imageUrl={blurArtUrl} className="now-playing-backdrop" />
       {onBack && (
         <button className="now-playing-back-btn player-btn player-btn--icon" onClick={onBack} title="Back">
           <ChevronLeft size={22} />

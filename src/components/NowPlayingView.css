@@ -12,22 +12,13 @@
   background: #0c0c0c;
 }
 
-/* Blurred art atmosphere. The blur itself is precomputed on a tiny canvas
-   (see src/lib/artBlur.ts) and handed to us as a data-URL background image -
-   `--art-bg` is already blurred pixels. This layer only scales it to cover,
-   which is a cheap compositor operation, instead of running an expensive
-   `filter: blur()` raster over a viewport-size layer on every repaint. */
-.now-playing-view::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: var(--art-bg);
-  background-size: cover;
-  background-position: center;
+/* Blurred art atmosphere, rendered by ArtBackdrop (crossfades between covers on
+   track change). The blur is precomputed on a tiny canvas (src/lib/artBlur.ts),
+   so those layers only scale already-blurred pixels to cover - a cheap
+   compositor operation - instead of running an expensive `filter: blur()`
+   raster over a viewport-size layer on every repaint. */
+.now-playing-backdrop {
   opacity: var(--opacity-40);
-  z-index: 0;
-  pointer-events: none;
-  transition: opacity var(--duration-long) ease;
 }
 
 /* Dominant color radial glow at top, derived from album art accent */
