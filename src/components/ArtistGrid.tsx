@@ -10,6 +10,7 @@ import { useScrollMemory } from "../hooks/useScrollMemory";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
+import { CardGridSkeleton } from "./Skeleton";
 import type { RadioMode } from "../store/player";
 import { useSetting } from "../hooks/useSetting";
 
@@ -50,9 +51,14 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (artist: ArtistRow) => void;
   onStartRadio?: (artist: ArtistRow, mode: RadioMode) => void;
+  /** True only while there is nothing to show yet - a refresh over existing rows keeps them. */
+  isLoading?: boolean;
+  /** Set when the read failed. Without it a failure renders as an empty library. */
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio }: Props) {
+export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, isLoading = false, error = null, onRetry }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
@@ -115,8 +121,42 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     }
   }, [cols, rowHeight, virtualizer]);
 
+  // Error before loading: a failed read leaves the caller's data undefined, so `isLoading`
+  // is still true and a skeleton would otherwise pulse forever over the failure. Before
+  // this, both states fell through to the empty state below, which told the user to sync -
+  // advice that cannot fix a failed local read, and that hid the failure entirely.
+  if (artists.length === 0 && error) {
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">Couldn't load your artists</p>
+        <p className="empty-state-hint">{error}</p>
+        {onRetry && <button className="empty-state-action" onClick={onRetry}>Try again</button>}
+      </div>
+    );
+  }
+
+  if (artists.length === 0 && isLoading) {
+    return (
+      <CardGridSkeleton
+        count={18}
+        minWidth={CARD_MIN}
+        gap={COL_GAP}
+        padding={PADDING}
+        round
+        label="Loading artists"
+      />
+    );
+  }
+
   if (artists.length === 0) {
-    return <p className="empty-state">No artists found. Sync first.</p>;
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">No artists yet</p>
+        <p className="empty-state-hint">
+          Sync your library from Settings and every artist on your server shows up here.
+        </p>
+      </div>
+    );
   }
 
   return (

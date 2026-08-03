@@ -128,8 +128,10 @@ export default function App() {
   // Also gated on `sortLoaded`: until the stored sort has been read back, `sort` is
   // only the "artist" default, and firing here would scan the whole library in the
   // wrong order, paint it, then scan again once the real sort arrived.
-  const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
-  const { data: artists } = useArtists(pathname === "/artists");
+  const { data: albums, isLoading: albumsLoading, error: albumsError } =
+    useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
+  const { data: artists, isLoading: artistsLoading, error: artistsError } =
+    useArtists(pathname === "/artists");
   const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
   const { data: genres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
@@ -562,8 +564,12 @@ export default function App() {
     server,
     serverWithCred: serverWithCred ?? null,
     albums,
+    albumsLoading,
+    albumsError,
     visibleAlbums,
     artists,
+    artistsLoading,
+    artistsError,
     allTracks,
     allTracksLoading,
     allTracksError,

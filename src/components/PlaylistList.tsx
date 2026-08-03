@@ -9,6 +9,7 @@ import { ContextMenu } from "./ContextMenu";
 import { parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
 import { fileToScaledDataUri } from "../lib/imageDataUri";
 import { useScrollMemory } from "../hooks/useScrollMemory";
+import { CardGridSkeleton } from "./Skeleton";
 import "./PlaylistList.css";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
@@ -232,9 +233,24 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
           </button>
         </form>
       )}
-      {isLoading && <p className="empty-state">Loading playlists…</p>}
+      {isLoading && (
+        <CardGridSkeleton
+          count={12}
+          minWidth={CARD_MIN}
+          gap={GRID_GAP}
+          padding={GRID_PAD_X}
+          captioned
+          label="Loading playlists"
+        />
+      )}
       {!isLoading && playlists.length === 0 && !creating && (
-        <p className="empty-state">No playlists. Create one or Rescan.</p>
+        <div className="empty-state">
+          <p className="empty-state-title">No playlists yet</p>
+          <p className="empty-state-hint">
+            Create one with New Playlist above. Playlists already on your server appear here after
+            the next library sync.
+          </p>
+        </div>
       )}
       {playlists.length > 0 && (
         <div ref={gridRef} style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>

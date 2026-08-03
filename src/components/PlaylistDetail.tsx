@@ -19,6 +19,7 @@ import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
 import "./AlbumGrid.css";
+import { RowListSkeleton } from "./Skeleton";
 import "./PlaylistList.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -500,13 +501,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
 
       <div className="album-detail-body" ref={scrollRef}>
         {isLoading ? (
-          <p className="empty-state">Loading…</p>
+          <RowListSkeleton count={12} label="Loading tracks" />
         ) : !tracks || tracks.length === 0 ? (
-          <p className="empty-state">
-            {playlist.is_smart
-              ? "No tracks match these rules. Edit the rules to widen them, then Refresh."
-              : "Playlist is empty. Right-click any album or track and choose Add to Playlist."}
-          </p>
+          <div className="empty-state">
+            <p className="empty-state-title">
+              {playlist.is_smart ? "No tracks match these rules" : "Playlist is empty"}
+            </p>
+            <p className="empty-state-hint">
+              {playlist.is_smart
+                ? "Edit the rules to widen them, then Refresh."
+                : "Right-click any album or track and choose Add to Playlist."}
+            </p>
+          </div>
         ) : (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {

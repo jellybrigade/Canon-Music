@@ -164,49 +164,10 @@
   text-shadow: 0 1px 4px var(--scrim-4);
 }
 
-.empty-state {
-  padding: var(--space-2xl);
-  text-align: center;
-  color: var(--text-tertiary);
-}
-
-.empty-state-title {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: var(--text-lg);
-  font-weight: 600;
-}
-
-.empty-state-hint {
-  margin: var(--space-xs) auto 0;
-  max-width: 46ch;
-  color: var(--text-tertiary);
-  line-height: 1.6;
-  text-wrap: pretty;
-}
-
-.empty-state-action {
-  margin-top: var(--space-md);
-  padding: var(--space-xs) var(--space-md);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.empty-state-action:hover {
-  border-color: var(--accent);
-}
-
-.empty-state-action:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.empty-state-action:active {
-  background: var(--bg-card);
-}
+/* The .empty-state* rules used to live here, but AppShell, AppRoutes, ArtistGrid, HomeView,
+   PlaylistList, PlaylistDetail and TrackTableView all use them without importing this file -
+   they only rendered correctly because the bundler flattens every imported stylesheet into
+   one. Moved to App.css, which every view genuinely shares. */
 
 /* ── Loved / hearts ── */
 .track-heart-cell {

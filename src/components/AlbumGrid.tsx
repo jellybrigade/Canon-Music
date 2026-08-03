@@ -15,6 +15,7 @@ import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { Pagination } from "./TagsViewHelpers";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
+import { CardGridSkeleton } from "./Skeleton";
 import type { RadioMode } from "../store/player";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import "./AlbumGrid.css";
@@ -39,8 +40,15 @@ interface Props {
   onAddAlbumToQueue?: (album: AlbumRow) => void;
   onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
   playlists?: PlaylistRow[];
-  emptyMessage?: string;
+  /** Title plus a hint, so a caller-supplied empty state teaches the same way the default
+      one does instead of degrading to a single unexplained line. */
+  emptyMessage?: { title: string; hint: string };
   sort?: AlbumSort;
+  /** True only while there is nothing to show yet - a refresh over existing rows keeps them. */
+  isLoading?: boolean;
+  /** Set when the read failed. Without it a failure renders as an empty library. */
+  error?: string | null;
+  onRetry?: () => void;
 }
 
 interface CardProps {
@@ -107,7 +115,7 @@ const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredentia
   );
 });
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, sort }: Props) {
+export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, sort, isLoading = false, error = null, onRetry }: Props) {
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
@@ -253,9 +261,30 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       style={{ "--album-grid-trailing-space": `${PADDING + ROW_GAP}px` } as CSSProperties}
     >
       <div ref={containerRef} className="album-grid-scroller">
-        {albums.length === 0 ? (
+        {/* Error first: a failed read leaves the caller's data undefined, so `isLoading`
+            is still true and a skeleton would otherwise pulse forever over the failure.
+            Both states are gated on having no rows, so a failed background refresh keeps
+            the rows already on screen rather than replacing them with a wall. */}
+        {error && albums.length === 0 ? (
+          <div className="empty-state">
+            <p className="empty-state-title">Couldn't load your albums</p>
+            <p className="empty-state-hint">{error}</p>
+            {onRetry && <button className="empty-state-action" onClick={onRetry}>Try again</button>}
+          </div>
+        ) : isLoading && albums.length === 0 ? (
+          <CardGridSkeleton
+            count={18}
+            minWidth={CARD_MIN}
+            gap={COL_GAP}
+            padding={PADDING}
+            label="Loading albums"
+          />
+        ) : albums.length === 0 ? (
           emptyMessage ? (
-            <p className="empty-state">{emptyMessage}</p>
+            <div className="empty-state">
+              <p className="empty-state-title">{emptyMessage.title}</p>
+              <p className="empty-state-hint">{emptyMessage.hint}</p>
+            </div>
           ) : (
             <div className="empty-state">
               <p className="empty-state-title">No albums here yet</p>

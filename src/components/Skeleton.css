@@ -1,0 +1,68 @@
+/* Shared loading skeletons. See Skeleton.tsx for why these are shared rather than
+   hand-rolled per view. The pulse keyframe and the app-wide prefers-reduced-motion rule
+   that freezes it both live in App.css. Bar colour and height match the existing
+   .track-skeleton-bar in AlbumDetail.css so the two read as one system. */
+
+.skeleton-bar {
+  display: block;
+  height: 9px;
+  border-radius: var(--radius-xs);
+  background: var(--text-tertiary);
+  animation: canon-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+/* ── Card grid ──
+   Column count resolves the same way the real grid's virtualizer resolves it: auto-fill
+   over the same CARD_MIN and gap, passed in from the TS constants so the number has one
+   writer rather than a copy here that can drift out of step. */
+.skeleton-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--skeleton-card-min), 1fr));
+  gap: var(--skeleton-card-gap);
+  padding: var(--skeleton-card-pad);
+  align-content: start;
+}
+
+.skeleton-card-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+  background: var(--text-tertiary);
+  animation: canon-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-card-art--round {
+  border-radius: 50%;
+}
+
+.skeleton-card-caption {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  margin-top: var(--space-xs);
+}
+
+/* Stagger by column so the grid reads as content settling in rather than one block
+   flashing. Same intent as the row stagger in AlbumDetail.css. */
+.skeleton-card:nth-child(2n) .skeleton-card-art,
+.skeleton-card:nth-child(2n) .skeleton-bar { animation-delay: 0.12s; }
+.skeleton-card:nth-child(3n) .skeleton-card-art,
+.skeleton-card:nth-child(3n) .skeleton-bar { animation-delay: 0.24s; }
+
+/* ── Row list ── */
+.skeleton-row-list {
+  padding: var(--space-xs) 0;
+}
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 34px;
+  padding: 0 var(--space-xs);
+}
+
+.skeleton-row:nth-child(2n) .skeleton-bar { animation-delay: 0.12s; }
+.skeleton-row:nth-child(3n) .skeleton-bar { animation-delay: 0.24s; }

@@ -16,6 +16,8 @@ import type { useLibrarySync } from "../hooks/useLibrarySync";
 import type { useGenres } from "../hooks/useGenres";
 import type { useAllTracks } from "../hooks/useAllTracks";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import type { SearchResults as SearchResultsData } from "../hooks/useSearch";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { RadioMode, CurrentTrack } from "../store/player";
@@ -57,8 +59,12 @@ export interface AppViewProps {
   server: Server | undefined;
   serverWithCred: ServerWithCredential | null;
   albums: AlbumRow[] | undefined;
+  albumsLoading: boolean;
+  albumsError: string | null;
   visibleAlbums: AlbumRow[];
   artists: ArtistRow[] | undefined;
+  artistsLoading: boolean;
+  artistsError: string | null;
   allTracks: ReturnType<typeof useAllTracks>["data"];
   allTracksLoading: boolean;
   allTracksError: string | null;
@@ -366,8 +372,12 @@ export function AppRoutes(props: AppViewProps) {
     server,
     serverWithCred,
     albums,
+    albumsLoading,
+    albumsError,
     visibleAlbums,
     artists,
+    artistsLoading,
+    artistsError,
     allTracks,
     allTracksLoading,
     allTracksError,
@@ -429,18 +439,35 @@ export function AppRoutes(props: AppViewProps) {
   } = props;
 
   function renderLibraryContent() {
-    if (!serverWithCred || albums === undefined) {
-      return <p className="empty-state">Loading…</p>;
+    // `albums === undefined` used to render a bare "Loading…" line, which a failed read
+    // also reached (useAlbums left `data` undefined on error) and never left. The grid now
+    // owns all three states, so a failure surfaces with a retry instead of a permanent wait.
+    if (!serverWithCred) {
+      return (
+        <div className="empty-state">
+          <p className="empty-state-title">No server connected</p>
+          <p className="empty-state-hint">Add your Navidrome server in Settings to browse your library.</p>
+        </div>
+      );
     }
     // No search branch here on purpose: AppShell renders the search overlay in
     // place of the whole route tree while a search is active, so anything keyed
     // on searchQuery in this function is unreachable.
     const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
-      ? "No loved albums"
+      ? {
+          title: "No loved albums",
+          hint: "Albums you heart show up here. Hover any album's cover and click the heart to add one.",
+        }
       : filtersActive
-        ? "No albums match this filter"
-        : "No albums yet. Syncing…";
+        ? {
+            title: "No albums match this filter",
+            hint: "Widen or clear the genre, year and loved filters in the sidebar to see more.",
+          }
+        : {
+            title: "No albums yet",
+            hint: "Sync your library from Settings and every album on your server fills this grid.",
+          };
     return (
       <AlbumGrid
         albums={visibleAlbums}
@@ -452,6 +479,9 @@ export function AppRoutes(props: AppViewProps) {
         playlists={playlists}
         emptyMessage={emptyMessage}
         sort={sort}
+        isLoading={albumsLoading || albums === undefined}
+        error={albumsError}
+        onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}
       />
     );
   }
@@ -624,9 +654,15 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               onSelect={openArtist}
               onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+              isLoading={artistsLoading || artists === undefined}
+              error={artistsError}
+              onRetry={() => useArtistBrowseSessionStore.getState().bumpRefresh()}
             />
           ) : (
-            <p className="empty-state">Loading…</p>
+            <div className="empty-state">
+              <p className="empty-state-title">No server connected</p>
+              <p className="empty-state-hint">Add your Navidrome server in Settings to browse artists.</p>
+            </div>
           )}
         </main>
       } />
