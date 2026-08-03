@@ -370,3 +370,218 @@ impl AnyWriter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+    use std::time::Duration;
+
+    /// Reads until the reader reports EOF or an error, returning both the bytes that
+    /// arrived and the terminal outcome. Written by hand rather than with
+    /// `read_to_end` because the whole point of these tests is the distinction
+    /// between a clean `Ok(0)` and an `Err`, which `read_to_end` collapses.
+    fn drain<R: Read>(r: &mut R) -> (Vec<u8>, io::Result<usize>) {
+        let mut out = Vec::new();
+        let mut chunk = [0u8; 8];
+        loop {
+            match r.read(&mut chunk) {
+                Ok(0) => return (out, Ok(0)),
+                Ok(n) => out.extend_from_slice(&chunk[..n]),
+                Err(e) => return (out, Err(e)),
+            }
+        }
+    }
+
+    // ── RAM-backed buffer ─────────────────────────────────────────────────────
+
+    #[test]
+    fn finish_makes_the_reader_report_a_clean_eof_after_the_buffered_bytes() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(5));
+        assert!(writer.write_chunk(b"hello"));
+        writer.finish();
+
+        let (bytes, terminal) = drain(&mut buf);
+        assert_eq!(bytes, b"hello");
+        assert_eq!(terminal.expect("finish must produce EOF, not an error"), 0);
+    }
+
+    #[test]
+    fn fail_makes_the_reader_report_unexpected_eof() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(1024));
+        writer.fail();
+
+        let err = buf
+            .read(&mut [0u8; 8])
+            .expect_err("a failed stream must not read as EOF");
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+    }
+
+    #[test]
+    fn fail_still_serves_the_bytes_that_arrived_before_the_download_died() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(1024));
+        assert!(writer.write_chunk(b"partial audio"));
+        writer.fail();
+
+        let (bytes, terminal) = drain(&mut buf);
+        assert_eq!(bytes, b"partial audio");
+        assert_eq!(
+            terminal.expect_err("truncated stream must end in an error").kind(),
+            io::ErrorKind::UnexpectedEof
+        );
+    }
+
+    #[test]
+    fn a_forward_read_blocks_until_a_concurrent_writer_supplies_the_bytes() {
+        let (mut buf, writer) = StreamingBuffer::new(None);
+        let handle = std::thread::spawn(move || {
+            for chunk in [&b"aaaa"[..], &b"bbbb"[..], &b"cccc"[..]] {
+                std::thread::sleep(Duration::from_millis(10));
+                assert!(writer.write_chunk(chunk));
+            }
+            writer.finish();
+        });
+
+        let (bytes, terminal) = drain(&mut buf);
+        handle.join().expect("writer thread panicked");
+        assert_eq!(bytes, b"aaaabbbbcccc");
+        assert_eq!(terminal.expect("stream finished cleanly"), 0);
+    }
+
+    #[test]
+    fn write_chunk_reports_failure_once_the_reader_has_been_dropped() {
+        let (buf, writer) = StreamingBuffer::new(Some(4));
+        assert!(writer.write_chunk(b"ab"));
+        drop(buf);
+        assert!(
+            !writer.write_chunk(b"cd"),
+            "a cancelled stream must tell the download thread to stop"
+        );
+    }
+
+    #[test]
+    fn seek_from_end_resolves_against_content_length_while_still_downloading() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(100));
+        assert!(writer.write_chunk(b"only ten b"));
+
+        // Would deadlock if it waited for finish(), which is exactly the regression
+        // this guards: rodio probes the tail of the file before playback starts.
+        assert_eq!(buf.seek(SeekFrom::End(0)).unwrap(), 100);
+        assert_eq!(buf.seek(SeekFrom::Start(4)).unwrap(), 4);
+        assert_eq!(buf.seek(SeekFrom::Current(2)).unwrap(), 6);
+    }
+
+    #[test]
+    fn seek_from_current_clamps_a_negative_offset_to_the_start() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(8));
+        assert!(writer.write_chunk(b"12345678"));
+        buf.seek(SeekFrom::Start(3)).unwrap();
+        assert_eq!(buf.seek(SeekFrom::Current(-99)).unwrap(), 0);
+    }
+
+    #[test]
+    fn a_seek_backwards_re_reads_bytes_already_consumed() {
+        let (mut buf, writer) = StreamingBuffer::new(Some(6));
+        assert!(writer.write_chunk(b"abcdef"));
+        writer.finish();
+
+        let mut first = [0u8; 6];
+        buf.read_exact(&mut first).unwrap();
+        buf.seek(SeekFrom::Start(2)).unwrap();
+        let (rest, _) = drain(&mut buf);
+        assert_eq!(&rest, b"cdef");
+    }
+
+    // ── File-backed buffer ────────────────────────────────────────────────────
+
+    /// Unique scratch dir per test, removed on drop. Avoids pulling in `tempfile`
+    /// for what amounts to two directories.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            static SEQ: AtomicU32 = AtomicU32::new(0);
+            let n = SEQ.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!(
+                "canon-streaming-test-{label}-{}-{n}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&dir);
+            fs::create_dir_all(&dir).expect("scratch dir");
+            ScratchDir(dir)
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn the_file_backed_buffer_round_trips_bytes_through_the_spill_file() {
+        let scratch = ScratchDir::new("roundtrip");
+        let (mut buf, mut writer) =
+            FileBackedStreamingBuffer::new(&scratch.0, 1, Some(9)).expect("spill file");
+        assert!(writer.write_chunk(b"spilled!!"));
+        writer.finish();
+
+        let (bytes, terminal) = drain(&mut buf);
+        assert_eq!(bytes, b"spilled!!");
+        assert_eq!(terminal.expect("finish must produce EOF"), 0);
+    }
+
+    #[test]
+    fn the_file_backed_buffer_reports_unexpected_eof_after_fail_and_keeps_partial_bytes() {
+        let scratch = ScratchDir::new("fail");
+        let (mut buf, mut writer) =
+            FileBackedStreamingBuffer::new(&scratch.0, 2, Some(4096)).expect("spill file");
+        assert!(writer.write_chunk(b"half a track"));
+        writer.fail();
+
+        let (bytes, terminal) = drain(&mut buf);
+        assert_eq!(bytes, b"half a track");
+        assert_eq!(
+            terminal.expect_err("truncated spill must error").kind(),
+            io::ErrorKind::UnexpectedEof
+        );
+    }
+
+    #[test]
+    fn dropping_the_file_backed_writer_without_finishing_wakes_a_blocked_reader() {
+        let scratch = ScratchDir::new("orphan");
+        let (mut buf, mut writer) =
+            FileBackedStreamingBuffer::new(&scratch.0, 3, None).expect("spill file");
+        assert!(writer.write_chunk(b"xy"));
+
+        // Consume everything available first, so the read below is guaranteed to be
+        // the blocking one rather than racing the drop for the buffered bytes.
+        let mut got = [0u8; 2];
+        buf.read_exact(&mut got).unwrap();
+        assert_eq!(&got, b"xy");
+
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            // Deliberately no finish()/fail(): simulates the download thread dying.
+            drop(writer);
+        });
+
+        let err = buf
+            .read(&mut [0u8; 8])
+            .expect_err("an abandoned download must not read as EOF");
+        handle.join().expect("writer thread panicked");
+        assert_eq!(err.kind(), io::ErrorKind::Interrupted);
+    }
+
+    #[test]
+    fn dropping_the_file_backed_buffer_removes_its_spill_file() {
+        let scratch = ScratchDir::new("cleanup");
+        let (buf, mut writer) =
+            FileBackedStreamingBuffer::new(&scratch.0, 7, Some(2)).expect("spill file");
+        assert!(writer.write_chunk(b"ab"));
+        let path = scratch.0.join("play-7.spill");
+        assert!(path.exists());
+        drop(buf);
+        assert!(!path.exists(), "spill file must not outlive the reader");
+    }
+}

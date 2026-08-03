@@ -1,4 +1,4 @@
-Space most underused design tool. Find layout's real problem (monotone spacing, weak hierarchy, identical card grids) — fix structure, not surface.
+Space most underused design tool. Fix structure (monotone spacing, weak hierarchy, identical card grids), not surface.
 
 ---
 
@@ -10,68 +10,27 @@ Product: predictable grids, consistent densities, familiar nav patterns. Respons
 
 ---
 
-## Assess Current Layout
+## Spacing system
 
-Analyze what's weak in spatial design:
+- Consistent scale (Tailwind, rem tokens, custom — all fine). What matters: values from a defined set, never arbitrary.
+- Prefer 4pt base (4, 8, 12, 16, 24, 32, 48, 64, 96px) over 8pt — 8pt too coarse, you'll often need 12 between 8 and 16.
+- Semantic token names (`--space-xs`...`--space-xl`), not value names.
+- `gap` for sibling spacing, not margins — kills margin-collapse hacks.
+- `clamp()` for fluid spacing on brand/marketing surfaces only.
 
-1. **Spacing**:
-   - Consistent or arbitrary? (random padding/margin values)
-   - All spacing same? (equal padding everywhere = no rhythm)
-   - Related elements grouped tight, generous space between groups?
+## Rhythm
 
-2. **Visual hierarchy**:
-   - Squint test: blur eyes. Still spot most important element, second, clear groupings?
-   - Hierarchy effective? (space + weight alone can suffice; current approach work?)
-   - Whitespace guide eye to what matters?
+- Tight grouping for related elements (8-12px between siblings).
+- Generous separation between distinct sections (48-96px).
+- Vary spacing within sections — not every row needs the same gap.
+- Asymmetric compositions: deliberate choice when content invites it, never default.
 
-3. **Grid & structure**:
-   - Clear underlying structure, or random feel?
-   - Identical card grids everywhere? (icon + heading + text, repeated endless)
+## Layout tool choice
 
-4. **Rhythm & variety**:
-   - Layout have visual rhythm? (alternating tight/generous)
-   - Every section same structure? (monotonous repeat)
-   - Intentional surprise/emphasis moments?
-
-5. **Density**:
-   - Too cramped? (no breathing room)
-   - Too sparse? (excess whitespace, no purpose)
-   - Density match content type? (data-dense UI = tighter spacing; marketing page = more air)
-
-**CRITICAL**: Layout problems often root cause of "off" interfaces even when colors/fonts fine. Space is design material — use with intention.
-
-## Plan Layout Improvements
-
-Build systematic plan:
-
-- **Spacing system**: consistent scale (framework's built-in like Tailwind, rem-based tokens, or custom). Values matter less than consistency.
-- **Hierarchy strategy**: how space communicate importance?
-- **Layout approach**: what structure fit content? Flex for 1D, Grid for 2D, named areas for complex page layouts.
-- **Rhythm**: where tight vs generous?
-
-## Improve Layout Systematically
-
-### Establish a Spacing System
-
-- Consistent spacing scale (Tailwind, rem tokens, custom — all work). What matters: values from defined set, not arbitrary numbers.
-- Prefer 4pt base scale (4, 8, 12, 16, 24, 32, 48, 64, 96px) over 8pt; 8pt too coarse, you'll often need 12px between 8 and 16.
-- Name tokens semantically if custom properties: `--space-xs` through `--space-xl`, not `--spacing-8`
-- Use `gap` for sibling spacing instead of margins; kills margin collapse hacks
-- Apply `clamp()` for fluid spacing that breathes on larger screens
-
-### Create Visual Rhythm
-
-- **Tight grouping** for related elements (8-12px between siblings)
-- **Generous separation** between distinct sections (48-96px)
-- **Varied spacing** within sections (not every row needs same gap)
-- **Asymmetric compositions**: deliberate choice when content invites it (not default to chase)
-
-### Choose the Right Layout Tool
-
-- **Flexbox for 1D layouts**: rows of items, nav bars, button groups, card contents, most component internals.
-- **Grid for 2D layouts**: page-level structure, dashboards, data-dense interfaces, anything rows AND columns need coordinated control.
-- Named grid areas (`grid-template-areas`) for complex page layouts; redefine at breakpoints.
-- **Container queries** for components, viewport queries for page layouts. Card in narrow sidebar stays compact while same card in main content expands auto:
+- Flexbox: 1D — rows, nav bars, button groups, card contents, most component internals.
+- Grid: 2D — page-level structure, dashboards, anything needing coordinated rows AND columns.
+- Named grid areas for complex page layouts, redefined per breakpoint.
+- Container queries for components (card compact in sidebar, expanded in main content), viewport queries for page layout:
 
 ```css
 .card-container { container-type: inline-size; }
@@ -81,74 +40,60 @@ Build systematic plan:
 }
 ```
 
-### Break Card Grid Monotony
+## Card grids
 
-- Don't default to card grids for everything; spacing + alignment create visual grouping naturally
-- Cards only when content truly distinct and actionable. Never nest cards inside cards
-- Vary card sizes, span columns, or mix cards with non-card content to break repetition
+Not the default. Cards only when content is genuinely distinct and actionable; never nest cards. Vary sizes / span columns / mix cards with non-card content rather than repeating one icon+heading+text template.
 
-### Strengthen Visual Hierarchy
+## Visual hierarchy
 
-- Use fewest dimensions needed for clear hierarchy. Space alone can suffice; generous whitespace around element draws eye. Some polished designs achieve rhythm with just space + weight. Add color/size contrast only when simpler means insufficient.
-- Best hierarchy combines 2–3 dimensions at once. Heading larger, bolder, AND more space above reads as primary without trying:
+Fewest dimensions needed for clarity — space + weight alone often suffices. Add color/size contrast only when that's insufficient. Best hierarchy combines 2-3 dimensions at once (larger + bolder + more space above = primary, without trying):
 
-| Tool | Strong Hierarchy | Weak Hierarchy |
-|------|------------------|----------------|
-| **Size** | 3:1 ratio or more | <2:1 ratio |
-| **Weight** | Bold vs Regular | Medium vs Regular |
-| **Color** | High contrast | Similar tones |
-| **Position** | Top/left (primary) | Bottom/right |
-| **Space** | Surrounded by white space | Crowded |
+| Tool | Strong | Weak |
+|------|--------|------|
+| Size | 3:1+ | <2:1 |
+| Weight | Bold vs Regular | Medium vs Regular |
+| Color | High contrast | Similar tones |
+| Position | Top/left (primary) | Bottom/right |
+| Space | Surrounded by whitespace | Crowded |
 
-- Reading flow: LTR languages, eye scans top-left to bottom-right naturally, but primary action placement depends on context (e.g. bottom-right in dialogs, top in nav).
-- Create clear content groupings via proximity + separation.
+Reading flow LTR: top-left → bottom-right, but primary action placement is contextual (bottom-right in dialogs, top in nav). Build groupings via proximity + separation.
 
-### Manage Depth & Elevation
+## Elevation
 
-- Build consistent shadow scale (sm → md → lg → xl); shadows subtle
-- Elevation reinforces hierarchy, not decoration
+Consistent shadow scale (sm → md → lg → xl), subtle. Reinforces hierarchy, not decoration.
 
-### Optical Adjustments
+## Optical adjustments
 
-- Icon visually off-center despite geometrically centered? Nudge it. Only if confident it actually looks wrong. Don't adjust speculatively.
-- Text at `margin-left: 0` looks slight indented from letterform whitespace; negative margin (`-0.05em`) optically aligns. Geometrically centered glyphs often look off-center (play icons shift right, arrows shift toward direction).
-- Touch targets 44×44px minimum even when visual element smaller. Expand hit area with padding or pseudo-element:
+Nudge only when confident it looks wrong, never speculatively — e.g. play icons/arrows read as off-center when geometrically centered; text at `margin-left: 0` can want `-0.05em` to align with letterform whitespace. Touch targets 44×44px minimum even when the visual element is smaller:
 
 ```css
 .icon-button { width: 24px; height: 24px; position: relative; }
-.icon-button::before {
-  content: ''; position: absolute; inset: -10px;
-}
+.icon-button::before { content: ''; position: absolute; inset: -10px; }
 ```
 
-**NEVER**:
-- Arbitrary spacing values outside scale
-- All spacing equal (variety creates hierarchy)
-- Wrap everything in cards (not everything needs container)
-- Nest cards inside cards (use spacing + dividers for hierarchy within)
-- Identical card grids everywhere (icon + heading + text, repeated)
-- Default to hero metric layout (big number, small label, stats, gradient) as template. If showing real user data, prominent metric can work — but display actual data, not decorative numbers.
+## Bans
 
-## Verify Layout Improvements
+- Arbitrary spacing outside the scale.
+- Uniform spacing everywhere (no rhythm).
+- Wrapping everything in cards; nesting cards.
+- Identical repeated card grids as default section layout.
+- Hero-metric template (big number + small label + gradient) unless showing real user data.
 
-- **Squint test**: spot primary, secondary, groupings with blurred vision?
-- **Rhythm**: page have satisfying beat of tight and generous spacing?
-- **Hierarchy**: most important content obvious within 2 seconds?
-- **Breathing room**: layout feel comfortable, not cramped or wasteful?
-- **Consistency**: spacing system applied uniformly?
-- **Responsiveness**: layout adapt gracefully across screen sizes?
+## Verify
 
-When rhythm and hierarchy land, hand off to `/impeccable polish` for final pass.
+Squint test (blurred vision still shows primary/secondary/groupings), rhythm (tight/generous beat), hierarchy obvious in 2s, breathing room without waste, spacing scale applied uniformly, layout adapts across sizes.
+
+Once rhythm/hierarchy land, hand off to `/impeccable polish`.
 
 ## Live-mode signature params
 
-Each variant MUST declare `density` param. Drive all spacing tokens in variant's scoped CSS through `calc(var(--p-density, 1) * <base>)`: paddings, gaps, column widths. Users slide airy to packed, layout re-breathes, no regeneration.
+Every variant declares `density`. Drive all spacing tokens through `calc(var(--p-density, 1) * <base>)`.
 
 ```json
 {"id":"density","kind":"range","min":0.6,"max":1.4,"step":0.05,"default":1,"label":"Density"}
 ```
 
-For variants whose topology genuinely changes (stacked vs side-by-side, grid vs bento), use `steps` param whose scoped CSS branches via `:scope[data-p-structure="X"]`. One structure param + one density param = powerful combo; resist adding third.
+Variants whose topology genuinely changes (stacked vs side-by-side, grid vs bento) get a `steps` param branching scoped CSS via `:scope[data-p-structure="X"]`:
 
 ```json
 {"id":"structure","kind":"steps","default":"grid","label":"Structure","options":[
@@ -158,4 +103,4 @@ For variants whose topology genuinely changes (stacked vs side-by-side, grid vs 
 ]}
 ```
 
-Param kinds: `range` (slider, drives `--p-<id>` CSS var), `steps` (segmented control, drives `data-p-<id>` attribute), `toggle` (on/off, drives both). Budget scales with composition size: leaf/tiny 0, small composition 0-1, medium 1-2, large composition 2-3 (hard cap 4).
+Param kinds: `range` (slider → `--p-<id>`), `steps` (segmented control → `data-p-<id>`), `toggle` (on/off, drives both). Budget by composition size: leaf/tiny 0, small 0-1, medium 1-2, large 2-3 (hard cap 4).

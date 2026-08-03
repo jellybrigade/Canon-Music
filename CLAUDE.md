@@ -27,6 +27,10 @@ pnpm install                    # install JS deps
 pnpm tauri dev                  # run app in dev mode (hot reload)
 pnpm tauri build                # production build (.AppImage/.dmg/.msi)
 pnpm tsc --noEmit               # typecheck
+pnpm test                       # vitest watch
+pnpm test:run                   # vitest one-shot (run before commit)
+pnpm test:cov                   # coverage
+cd src-tauri && cargo test      # rust tests
 cd src-tauri && cargo check     # rust typecheck
 cd src-tauri && cargo clippy    # rust lint
 cd src-tauri && cargo fmt       # rust format
@@ -44,6 +48,52 @@ Two branches:
 **Always commit after change done**, even if user skip `/next` or `/commit`. Every finished logical unit lands commit before session end/move on.
 
 Release: run `/release`. Skill handle code review, version bump, merge, push.
+
+---
+
+## Testing — TDD from now on
+
+Canon test plan + baseline inventory: `instructions/tests.md`. Read it before writing tests. Tooling: Vitest (+ jsdom, React Testing Library) for `src/`, `cargo test` for `src-tauri/`.
+
+### Test-first is default
+
+New feature or bugfix → **write failing test first, then code until green.** Order:
+
+1. Write test asserting intended behavior. Run it. Confirm it fails, and fails for the right reason (not import error, not typo).
+2. Write minimum code to pass.
+3. Refactor with test green.
+
+Bugfix has extra rule: **test must reproduce the bug against unfixed code.** Fix that lands with a test that passed before the fix proves nothing. If reproducing is genuinely impossible (needs real WebKit, real renderer, real audio device), say so explicitly instead of shipping a fake test.
+
+### What gets a test
+
+| Kind | Bar |
+|---|---|
+| Pure function (`src/lib/`, `src/utils/`) | Always. Happy path + each edge case + degenerate input |
+| Store action (`src/store/`) | Always. Plus invariants it touches (e.g. `shuffleOrder.length === queue.length`) |
+| DB / sync logic | Always, against in-memory SQLite harness. Include the delete/prune path, not only writes |
+| Hook | Yes when it holds logic. Skip pure-passthrough wrappers |
+| Component | Behavior only: renders, primary action fires, loading/empty/error distinguishable. No snapshots |
+| Rust pure fn | Always |
+| Rust command touching `AudioState`/app handle | Extract logic to free fn, test that. Don't skip because command shape awkward |
+
+### Rules
+
+- **No snapshot tests.** They pass on wrong output and rot.
+- **No mocking the thing under test.** Mock the boundary (`invoke`, `fetch`, DB), never the module you're asserting on.
+- Tests colocated: `foo.ts` → `foo.test.ts` next to it.
+- Test names state behavior, not function name: `"drops scrobble row on Subsonic error 70"`, not `"test flush"`.
+- `retry: false` on every React Query client in tests. Otherwise failures take 30s and hide.
+- Fake timers for anything with backoff, debounce, interval, or fade.
+- A flaky test is a broken test. Fix or delete it same session, never leave it to rot the suite's credibility.
+
+### Regression tests are mandatory
+
+Every entry in `.claude/rules/known-issues.md` is a bug that shipped once. When touching code near one, add the regression test if missing, and tick it in `instructions/tests.md`. New bug found → new `known-issues.md` entry **and** new test, same commit.
+
+### Part of "done"
+
+Change is not done until `pnpm test:run` and `cargo test` pass. Same standing as `pnpm tsc --noEmit` and updating `ARCHITECTURE.md`. Don't commit red. If a pre-existing test fails for unrelated reasons, say so explicitly rather than silently ignoring or deleting it.
 
 ---
 

@@ -1643,3 +1643,440 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        disk_cache_read, disk_cache_write, evict_disk_cache_if_needed, friendly_keyring_error,
+        percent_decode, sanitize_cache_key, xml_first_tag_text, MAX_DISK_CACHE_ENTRIES,
+    };
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    /// Unique scratch dir per test, removed on drop. Avoids pulling in `tempfile`
+    /// as a dev-dependency for a handful of directories.
+    struct ScratchDir(PathBuf);
+
+    impl ScratchDir {
+        fn new(label: &str) -> Self {
+            static SEQ: AtomicU32 = AtomicU32::new(0);
+            let n = SEQ.fetch_add(1, Ordering::Relaxed);
+            let dir = std::env::temp_dir().join(format!(
+                "canon-cover-cache-test-{label}-{}-{n}",
+                std::process::id()
+            ));
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).expect("scratch dir");
+            ScratchDir(dir)
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for ScratchDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    // ── sanitize_cache_key ────────────────────────────────────────────────────
+
+    #[test]
+    fn sanitize_cache_key_prefixes_the_kind_so_the_two_caches_cannot_collide() {
+        assert_eq!(sanitize_cache_key("cover", "al-123:300"), "cover-al-123_300");
+        assert_ne!(
+            sanitize_cache_key("cover", "same"),
+            sanitize_cache_key("artist-image", "same")
+        );
+    }
+
+    #[test]
+    fn sanitize_cache_key_keeps_only_ascii_alphanumerics_dot_underscore_and_hyphen() {
+        assert_eq!(sanitize_cache_key("k", "a.b_c-d9Z"), "k-a.b_c-d9Z");
+        assert_eq!(sanitize_cache_key("k", "a/b?c:d&e=f #g"), "k-a_b_c_d_e_f__g");
+    }
+
+    #[test]
+    fn a_traversal_key_sanitizes_to_a_single_path_component() {
+        let safe = sanitize_cache_key("cover", "../../../etc/passwd");
+        assert_eq!(safe, "cover-.._.._.._etc_passwd");
+        assert!(!safe.contains('/') && !safe.contains('\\'));
+        assert_eq!(
+            Path::new(&safe).components().count(),
+            1,
+            "a sanitized key must never introduce a directory hop"
+        );
+        // The concrete guarantee that matters: joining it stays inside the cache dir.
+        let joined = Path::new("/tmp/cover-cache").join(&safe);
+        assert_eq!(joined.parent(), Some(Path::new("/tmp/cover-cache")));
+    }
+
+    #[test]
+    fn a_windows_style_traversal_key_also_sanitizes_to_a_single_component() {
+        let safe = sanitize_cache_key("cover", r"..\..\windows\system32");
+        assert_eq!(safe, "cover-.._.._windows_system32");
+        assert_eq!(Path::new(&safe).components().count(), 1);
+    }
+
+    #[test]
+    fn a_key_that_is_only_dot_segments_still_yields_a_usable_filename() {
+        // "cover-.." and "cover-." are ordinary names, not the parent/current dir.
+        for key in ["..", ".", "/", ""] {
+            let safe = sanitize_cache_key("cover", key);
+            let joined = Path::new("/tmp/cover-cache").join(&safe);
+            assert_eq!(
+                joined.parent(),
+                Some(Path::new("/tmp/cover-cache")),
+                "key {key:?} escaped the cache dir as {safe:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn null_bytes_in_a_key_are_replaced_so_the_filename_stays_valid() {
+        let safe = sanitize_cache_key("cover", "ab\0cd\0");
+        assert_eq!(safe, "cover-ab_cd_");
+        assert!(!safe.contains('\0'));
+    }
+
+    #[test]
+    fn control_and_whitespace_characters_in_a_key_are_replaced() {
+        assert_eq!(sanitize_cache_key("k", "a\tb\nc\rd e"), "k-a_b_c_d_e");
+    }
+
+    #[test]
+    fn non_ascii_characters_are_replaced_one_underscore_per_character_not_per_byte() {
+        // "é" is two UTF-8 bytes but one char; per-byte mapping would give two underscores.
+        assert_eq!(sanitize_cache_key("k", "Beyoncé"), "k-Beyonc_");
+        assert_eq!(sanitize_cache_key("k", "日本語"), "k-___");
+        assert_eq!(sanitize_cache_key("k", "Mötley Crüe"), "k-M_tley_Cr_e");
+    }
+
+    #[test]
+    fn sanitize_cache_key_does_not_cap_length_so_the_output_tracks_the_input_char_count() {
+        // Documents current behaviour: there is no truncation, so a pathological key
+        // is passed through to the filesystem at full length. If a cap is ever added,
+        // this assertion is the one that should be updated deliberately.
+        let long = "a".repeat(5000);
+        let safe = sanitize_cache_key("cover", &long);
+        assert_eq!(safe.len(), "cover-".len() + 5000);
+        assert!(safe.starts_with("cover-a"));
+    }
+
+    // ── percent_decode ────────────────────────────────────────────────────────
+
+    #[test]
+    fn percent_decode_turns_percent_20_into_a_space() {
+        assert_eq!(percent_decode("The%20Velvet%20Underground"), "The Velvet Underground");
+    }
+
+    #[test]
+    fn percent_decode_turns_percent_2f_into_a_slash_in_either_hex_case() {
+        assert_eq!(percent_decode("https%3A%2F%2Fhost%2Fimg.jpg"), "https://host/img.jpg");
+        assert_eq!(percent_decode("a%2fb"), "a/b");
+    }
+
+    #[test]
+    fn percent_decode_leaves_an_invalid_hex_escape_untouched() {
+        assert_eq!(percent_decode("100%ZZ"), "100%ZZ");
+        assert_eq!(percent_decode("%GG-%2G"), "%GG-%2G");
+    }
+
+    #[test]
+    fn percent_decode_leaves_a_truncated_escape_at_the_end_untouched() {
+        assert_eq!(percent_decode("done%"), "done%");
+        assert_eq!(percent_decode("done%2"), "done%2");
+        assert_eq!(percent_decode("%"), "%");
+    }
+
+    #[test]
+    fn percent_decode_reassembles_multi_byte_utf8_from_consecutive_escapes() {
+        assert_eq!(percent_decode("Beyonc%C3%A9"), "Beyoncé");
+        assert_eq!(percent_decode("%E6%97%A5%E6%9C%AC"), "日本");
+    }
+
+    #[test]
+    fn percent_decode_passes_through_input_with_nothing_to_decode() {
+        assert_eq!(percent_decode(""), "");
+        assert_eq!(percent_decode("plain-ascii_123"), "plain-ascii_123");
+    }
+
+    #[test]
+    fn percent_decode_replaces_bytes_that_do_not_form_valid_utf8() {
+        // %FF is not a valid UTF-8 sequence; lossy decoding substitutes U+FFFD
+        // rather than failing, so the route always gets a String back.
+        assert_eq!(percent_decode("a%FFb"), "a\u{FFFD}b");
+    }
+
+    #[test]
+    fn percent_decode_decodes_a_percent_sign_that_was_itself_encoded() {
+        assert_eq!(percent_decode("50%2520"), "50%20");
+    }
+
+    // ── xml_first_tag_text ────────────────────────────────────────────────────
+
+    #[test]
+    fn xml_first_tag_text_extracts_a_soap_fault_field() {
+        let xml = "<s:Fault><detail><UPnPError>\
+             <errorCode>701</errorCode>\
+             <errorDescription>Transition not available</errorDescription>\
+             </UPnPError></detail></s:Fault>";
+        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("701".to_string()));
+        assert_eq!(
+            xml_first_tag_text(xml, "errorDescription"),
+            Some("Transition not available".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_matches_a_tag_that_carries_a_namespace_prefix() {
+        let xml = "<u:errorCode>718</u:errorCode>";
+        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("718".to_string()));
+    }
+
+    #[test]
+    fn xml_first_tag_text_trims_surrounding_whitespace() {
+        let xml = "<errorDescription>\n   Invalid Action  \n</errorDescription>";
+        assert_eq!(
+            xml_first_tag_text(xml, "errorDescription"),
+            Some("Invalid Action".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_when_the_tag_is_absent() {
+        assert_eq!(xml_first_tag_text("<s:Fault/>", "errorCode"), None);
+        assert_eq!(xml_first_tag_text("", "errorCode"), None);
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_for_an_empty_or_whitespace_only_value() {
+        assert_eq!(xml_first_tag_text("<errorCode></errorCode>", "errorCode"), None);
+        assert_eq!(xml_first_tag_text("<errorCode>   </errorCode>", "errorCode"), None);
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_when_the_element_is_never_closed() {
+        assert_eq!(xml_first_tag_text("<errorCode>701", "errorCode"), None);
+    }
+
+    #[test]
+    fn xml_first_tag_text_takes_the_first_occurrence_when_a_tag_repeats() {
+        let xml = "<errorCode>701</errorCode><errorCode>402</errorCode>";
+        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("701".to_string()));
+    }
+
+    // ── friendly_keyring_error ────────────────────────────────────────────────
+
+    const GUIDANCE: &str = "Secret Service provider";
+
+    #[test]
+    fn platform_failure_gains_secret_service_guidance_on_top_of_the_platform_detail() {
+        let msg = friendly_keyring_error(keyring::Error::PlatformFailure(Box::from(
+            "dbus connection refused",
+        )));
+        assert!(msg.contains(GUIDANCE), "expected guidance, got: {msg}");
+        assert!(
+            msg.contains("dbus connection refused"),
+            "platform detail must be preserved: {msg}"
+        );
+    }
+
+    #[test]
+    fn no_storage_access_gains_secret_service_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::NoStorageAccess(Box::from(
+            "keyring is locked",
+        )));
+        assert!(msg.contains(GUIDANCE), "expected guidance, got: {msg}");
+        assert!(msg.contains("keyring is locked"), "detail must be preserved: {msg}");
+    }
+
+    #[test]
+    fn no_entry_is_reported_verbatim_without_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::NoEntry);
+        assert_eq!(msg, keyring::Error::NoEntry.to_string());
+        assert!(!msg.contains(GUIDANCE));
+    }
+
+    #[test]
+    fn bad_encoding_is_reported_verbatim_without_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::BadEncoding(vec![0xff, 0xfe]));
+        assert_eq!(msg, keyring::Error::BadEncoding(vec![0xff, 0xfe]).to_string());
+        assert!(!msg.contains(GUIDANCE));
+    }
+
+    #[test]
+    fn too_long_is_reported_verbatim_without_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::TooLong("password".into(), 512));
+        assert_eq!(msg, keyring::Error::TooLong("password".into(), 512).to_string());
+        assert!(!msg.contains(GUIDANCE));
+    }
+
+    #[test]
+    fn invalid_is_reported_verbatim_without_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::Invalid(
+            "service".into(),
+            "cannot be empty".into(),
+        ));
+        assert_eq!(
+            msg,
+            keyring::Error::Invalid("service".into(), "cannot be empty".into()).to_string()
+        );
+        assert!(!msg.contains(GUIDANCE));
+    }
+
+    #[test]
+    fn ambiguous_is_reported_verbatim_without_guidance() {
+        let msg = friendly_keyring_error(keyring::Error::Ambiguous(Vec::new()));
+        assert_eq!(msg, keyring::Error::Ambiguous(Vec::new()).to_string());
+        assert!(!msg.contains(GUIDANCE));
+    }
+
+    // ── disk cover cache ──────────────────────────────────────────────────────
+
+    #[test]
+    fn a_disk_cache_write_is_readable_back_with_its_bytes_and_content_type() {
+        let scratch = ScratchDir::new("roundtrip");
+        disk_cache_write(scratch.path(), "cover", "al-1:300", b"\x89PNG-ish", "image/png");
+
+        let (bytes, content_type) =
+            disk_cache_read(scratch.path(), "cover", "al-1:300").expect("entry just written");
+        assert_eq!(bytes, b"\x89PNG-ish");
+        assert_eq!(content_type, "image/png");
+    }
+
+    #[test]
+    fn a_disk_cache_read_misses_for_a_key_that_was_never_written() {
+        let scratch = ScratchDir::new("miss");
+        assert!(disk_cache_read(scratch.path(), "cover", "nope").is_none());
+    }
+
+    #[test]
+    fn the_kind_namespace_keeps_a_cover_and_an_artist_image_with_the_same_key_apart() {
+        let scratch = ScratchDir::new("kinds");
+        disk_cache_write(scratch.path(), "cover", "shared", b"cover-bytes", "image/jpeg");
+        disk_cache_write(
+            scratch.path(),
+            "artist-image",
+            "shared",
+            b"artist-bytes",
+            "image/webp",
+        );
+
+        assert_eq!(
+            disk_cache_read(scratch.path(), "cover", "shared").unwrap(),
+            (b"cover-bytes".to_vec(), "image/jpeg".to_string())
+        );
+        assert_eq!(
+            disk_cache_read(scratch.path(), "artist-image", "shared").unwrap(),
+            (b"artist-bytes".to_vec(), "image/webp".to_string())
+        );
+    }
+
+    #[test]
+    fn a_disk_cache_read_defaults_to_jpeg_when_the_content_type_sidecar_is_missing() {
+        let scratch = ScratchDir::new("no-sidecar");
+        let safe = sanitize_cache_key("cover", "al-9");
+        std::fs::write(scratch.path().join(&safe), b"raw").unwrap();
+
+        let (bytes, content_type) = disk_cache_read(scratch.path(), "cover", "al-9").unwrap();
+        assert_eq!(bytes, b"raw");
+        assert_eq!(content_type, "image/jpeg");
+    }
+
+    #[test]
+    fn a_traversal_key_writes_inside_the_cache_dir_rather_than_above_it() {
+        let scratch = ScratchDir::new("traversal");
+        let nested = scratch.path().join("cover-cache");
+        std::fs::create_dir_all(&nested).unwrap();
+
+        disk_cache_write(&nested, "cover", "../escaped", b"payload", "image/jpeg");
+
+        assert!(
+            !scratch.path().join("escaped").exists(),
+            "sanitization must keep the write inside the cache dir"
+        );
+        assert_eq!(
+            disk_cache_read(&nested, "cover", "../escaped").unwrap().0,
+            b"payload"
+        );
+    }
+
+    #[test]
+    fn eviction_leaves_the_cache_untouched_while_it_is_under_the_cap() {
+        let scratch = ScratchDir::new("under-cap");
+        for i in 0..5 {
+            disk_cache_write(scratch.path(), "cover", &format!("al-{i}"), b"x", "image/jpeg");
+        }
+        evict_disk_cache_if_needed(scratch.path());
+
+        for i in 0..5 {
+            assert!(
+                disk_cache_read(scratch.path(), "cover", &format!("al-{i}")).is_some(),
+                "entry al-{i} must survive an under-cap sweep"
+            );
+        }
+    }
+
+    #[test]
+    fn eviction_deletes_the_oldest_mtime_entries_and_their_sidecars_down_to_the_cap() {
+        let scratch = ScratchDir::new("evict");
+        let over_by = 3usize;
+        let total = MAX_DISK_CACHE_ENTRIES + over_by;
+
+        // Written directly rather than through disk_cache_write, which would fire its
+        // own periodic sweep partway through and make the starting state ambiguous.
+        for i in 0..total {
+            let safe = sanitize_cache_key("cover", &format!("al-{i}"));
+            std::fs::write(scratch.path().join(&safe), b"x").unwrap();
+            std::fs::write(scratch.path().join(format!("{safe}.ct")), "image/jpeg").unwrap();
+        }
+
+        // Backdate exactly `over_by` entries so the eviction order is unambiguous
+        // rather than dependent on filesystem mtime granularity.
+        let ancient = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let oldest: Vec<String> = (0..over_by).map(|i| format!("al-{i}")).collect();
+        for key in &oldest {
+            let safe = sanitize_cache_key("cover", key);
+            let f = std::fs::OpenOptions::new()
+                .write(true)
+                .open(scratch.path().join(&safe))
+                .unwrap();
+            f.set_modified(ancient).unwrap();
+        }
+
+        evict_disk_cache_if_needed(scratch.path());
+
+        for key in &oldest {
+            assert!(
+                disk_cache_read(scratch.path(), "cover", key).is_none(),
+                "{key} was the oldest and should have been evicted"
+            );
+            let safe = sanitize_cache_key("cover", key);
+            assert!(
+                !scratch.path().join(format!("{safe}.ct")).exists(),
+                "{key}'s content-type sidecar must be removed with its image"
+            );
+        }
+        for i in over_by..total {
+            assert!(
+                disk_cache_read(scratch.path(), "cover", &format!("al-{i}")).is_some(),
+                "al-{i} is within the cap and must survive"
+            );
+        }
+
+        let remaining = std::fs::read_dir(scratch.path())
+            .unwrap()
+            .flatten()
+            .filter(|e| !e.file_name().to_string_lossy().ends_with(".ct"))
+            .count();
+        assert_eq!(remaining, MAX_DISK_CACHE_ENTRIES);
+    }
+
+    #[test]
+    fn eviction_on_an_unreadable_directory_is_a_no_op_rather_than_a_panic() {
+        evict_disk_cache_if_needed(Path::new("/definitely/not/a/real/cover/cache/dir"));
+    }
+}

@@ -538,3 +538,54 @@ pub fn get_unmapped_tag_count(
             .map_err(|e| e.to_string())
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::order_by_clause;
+
+    #[test]
+    fn each_allowlisted_sort_key_maps_to_its_own_order_by_fragment() {
+        assert_eq!(
+            order_by_clause("artist").unwrap(),
+            "a.artist COLLATE NOCASE, a.name COLLATE NOCASE"
+        );
+        assert_eq!(order_by_clause("alphabetical").unwrap(), "a.name COLLATE NOCASE");
+        assert_eq!(order_by_clause("year").unwrap(), "a.year DESC, a.name COLLATE NOCASE");
+        assert_eq!(
+            order_by_clause("recently_added").unwrap(),
+            "COALESCE(a.navidrome_created, a.created_at) DESC"
+        );
+    }
+
+    #[test]
+    fn an_unknown_sort_key_is_rejected_and_named_in_the_error() {
+        let err = order_by_clause("popularity").expect_err("unknown keys must not fall through");
+        assert!(err.contains("popularity"), "error should name the offending key: {err}");
+    }
+
+    #[test]
+    fn sort_keys_are_matched_exactly_so_case_and_padding_variants_are_rejected() {
+        for key in ["Artist", "ARTIST", " artist", "artist ", "artist\n"] {
+            assert!(
+                order_by_clause(key).is_err(),
+                "{key:?} is not an allowlisted key and must be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn a_sort_key_carrying_sql_is_rejected_rather_than_interpolated() {
+        for injection in [
+            "artist; DROP TABLE albums",
+            "a.name/**/UNION/**/SELECT/**/1",
+            "1 -- ",
+            "artist' OR '1'='1",
+            "",
+        ] {
+            assert!(
+                order_by_clause(injection).is_err(),
+                "{injection:?} must never reach the SQL string"
+            );
+        }
+    }
+}
