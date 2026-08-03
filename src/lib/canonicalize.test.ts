@@ -127,6 +127,18 @@ describe("getParentChain", () => {
     const root = node({ id: "root", name: "Root" });
     expect(getParentChain(root, new Map([["root", root]]))).toEqual([]);
   });
+
+  it("follows only the first parent on a multi-parent node (DAG, not a tree)", () => {
+    const primary = node({ id: "primary", name: "Primary Parent" });
+    const secondary = node({ id: "secondary", name: "Secondary Parent" });
+    const child = node({ id: "child", name: "Child", parents: ["primary", "secondary"] });
+    const byId = new Map([
+      ["primary", primary],
+      ["secondary", secondary],
+      ["child", child],
+    ]);
+    expect(getParentChain(child, byId)).toEqual(["Primary Parent"]);
+  });
 });
 
 describe("getAncestorIds", () => {
@@ -204,6 +216,49 @@ describe("findCanonicalSync", () => {
     const tree = buildTree([node({ id: "x", name: "Completely Unrelated Thing" })]);
     const result = findCanonicalSync("zzz", "genre", tree);
     expect(result).toEqual({ node: null, matchType: "none" });
+  });
+
+  it.each([
+    ["rnb"],
+    ["r n b"],
+    ["r and b"],
+    ["r'n'b"],
+    ["r.n.b"],
+    ["rhythm and blues"],
+    ["rhythm & blues"],
+  ])("resolves alias %s to r&b", (raw) => {
+    const rnb = node({ id: "rnb", name: "R&B" });
+    const tree = buildTree([rnb]);
+    expect(findCanonicalSync(raw, "genre", tree)).toEqual({ node: rnb, matchType: "exact" });
+  });
+
+  it("does not rewrite an alias substring embedded in a longer word", () => {
+    // "rnb" is a whole-word alias; "urban" contains no alias boundary match.
+    const tree = buildTree([node({ id: "urban", name: "Urban" })]);
+    expect(findCanonicalSync("Urban", "genre", tree)).toEqual({
+      node: tree.byId.get("urban"),
+      matchType: "exact",
+    });
+  });
+
+  it("tries the exact node before falling back to the rap/hip-hop alias", () => {
+    // "gangsta rap" has its own tree node, so the fallback alias (rap -> hip hop)
+    // must never fire and turn it into "gangsta hip hop".
+    const gangstaRap = node({ id: "gr", name: "Gangsta Rap" });
+    const tree = buildTree([gangstaRap]);
+    expect(findCanonicalSync("Gangsta Rap", "genre", tree)).toEqual({
+      node: gangstaRap,
+      matchType: "exact",
+    });
+  });
+
+  it("falls back to the rap/hip-hop alias only when the raw term has no direct match", () => {
+    const hipHop = node({ id: "hh", name: "Midwest Hip Hop" });
+    const tree = buildTree([hipHop]);
+    expect(findCanonicalSync("Midwest Rap", "genre", tree)).toEqual({
+      node: hipHop,
+      matchType: "exact",
+    });
   });
 
   it("resolves a mapping to null when the mapped id no longer exists in the tree", () => {
