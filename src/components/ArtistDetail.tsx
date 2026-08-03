@@ -74,6 +74,32 @@ function useArtistTopTracks(artistName: string, options?: { enabled?: boolean })
   });
 }
 
+/** One row, purely as a radio seed for a similar-artist card. Kept separate from
+ * useArtistTopTracks because that query selects every track the artist has, and a
+ * strip of similar artists is entirely on screen at once - twelve whole-table
+ * scans to read twelve first rows. */
+function useArtistSeedTrack(artistName: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: QK.artistSeedTrack(artistName),
+    enabled: options?.enabled,
+    queryFn: async (): Promise<TopTrack | null> => {
+      const db = await getDb();
+      const rows = await db.select<TopTrack[]>(
+        `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
+                t.album_id, a.artwork_url, t.play_count
+         FROM tracks t
+         LEFT JOIN albums a ON t.album_id = a.id
+         WHERE t.artist = ?
+            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+         ORDER BY t.play_count DESC, t.track_number, t.title
+         LIMIT 1`,
+        [artistName, artistName]
+      );
+      return rows[0] ?? null;
+    },
+  });
+}
+
 function useArtistGenres(artistName: string) {
   return useQuery({
     queryKey: QK.artistGenres(artistName),
@@ -174,6 +200,23 @@ const ESSENTIAL_MIN_ALBUMS = 3;
 const ESSENTIAL_RATIO = 0.25;
 const SIMILAR_ARTISTS_MAX = 12;
 
+function buildTrackObj(track: TopTrack, server: Server, credential: NavidromeCredential): CurrentTrack {
+  const artworkRef = track.artwork_url ?? null;
+  const coverArtUrl = artworkRef
+    ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500)
+    : null;
+  return {
+    id: track.id,
+    title: track.title,
+    artist: track.artist,
+    duration: track.duration,
+    coverArtUrl,
+    artworkRef,
+    album: track.album_name ?? null,
+    albumId: track.album_id ?? null,
+  };
+}
+
 function formatDuration(seconds: number | null): string {
   if (!seconds) return "-";
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
@@ -209,6 +252,18 @@ async function matchLastfmTracks(
   const result: TopTrack[] = tracks.map((t) => ({ ...t }));
   const byId = new Map(result.map((t) => [t.id, t]));
 
+  // Every ambiguous group used to cost a `track.getInfo` call, and those calls are
+  // serialized behind Last.fm's shared 250ms limiter, so an artist with many
+  // repeated titles (live sets, compilations) spent seconds of the same budget the
+  // similar-artist cards on this page enrich against, and the Popular list visibly
+  // re-sorted when it finally landed. Only the groups that can reach the visible
+  // list are worth a lookup; the rest fall back to the local play-count heuristic,
+  // which is what a failed lookup uses anyway.
+  const ambiguous = [...groups.entries()]
+    .filter(([key, group]) => group.length > 1 && lastfmByTitle.has(key))
+    .sort(([a], [b]) => lastfmByTitle.get(b)!.playcount - lastfmByTitle.get(a)!.playcount);
+  const lookupTitles = new Set(ambiguous.slice(0, POPULAR_TRACKS_MAX).map(([key]) => key));
+
   for (const [key, group] of groups) {
     const lfm = lastfmByTitle.get(key);
     if (!lfm) continue;
@@ -224,7 +279,7 @@ async function matchLastfmTracks(
     }
 
     let winner: TopTrack | undefined;
-    const repAlbum = await fetchTrackAlbum(artistName, first.title);
+    const repAlbum = lookupTitles.has(key) ? await fetchTrackAlbum(artistName, first.title) : null;
     if (repAlbum) {
       const repNorm = normalizeTrackTitle(repAlbum);
       winner = group.find((t) => t.album_name && normalizeTrackTitle(t.album_name) === repNorm);
@@ -379,31 +434,14 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
 
-  const { data: rawTracks } = useArtistTopTracks(name, { enabled: inView });
+  const { data: seedTrack } = useArtistSeedTrack(name, { enabled: inView });
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
-  function buildTrackObj(track: TopTrack): CurrentTrack {
-    const artworkRef = track.artwork_url ?? null;
-    const coverArtUrl = artworkRef
-      ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500)
-      : null;
-    return {
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      duration: track.duration,
-      coverArtUrl,
-      artworkRef,
-      album: track.album_name ?? null,
-      albumId: track.album_id ?? null,
-    };
-  }
-
   function handleContextMenu(e: React.MouseEvent) {
-    if (!owned || !rawTracks?.length) return;
+    if (!owned || !seedTrack) return;
     e.preventDefault();
     setMenu({ x: e.clientX, y: e.clientY });
   }
@@ -427,9 +465,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
         <span className="artist-similar-tag">{owned ? "in library" : "search →"}</span>
       </button>
 
-      {menu && rawTracks && rawTracks.length > 0 && (() => {
-        const seed = rawTracks[0]!;
-        return (
+      {menu && seedTrack && (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
           <button
             onClick={() => {
@@ -441,15 +477,14 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
           </button>
           <StartRadioSubmenu
             onSelect={(mode) => {
-              const track = buildTrackObj(seed);
+              const track = buildTrackObj(seedTrack, server, credential);
               void playQueue([track], streamUrlFor, 0);
               startRadio(track, mode);
               setMenu(null);
             }}
           />
         </ContextMenu>
-        );
-      })()}
+      )}
     </>
   );
 });
@@ -572,13 +607,18 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     return () => { cancelled = true; };
   }, [portraitUrl]);
 
-  const similar: string[] = useMemo(
-    () =>
-      enrichment?.similar_json
-        ? (JSON.parse(enrichment.similar_json) as string[]).slice(0, SIMILAR_ARTISTS_MAX)
-        : [],
-    [enrichment?.similar_json]
-  );
+  // Parsed defensively: a malformed or legacy `similar_json` value would otherwise
+  // throw inside render and blank the whole artist page via the error boundary.
+  const similar: string[] = useMemo(() => {
+    if (!enrichment?.similar_json) return [];
+    try {
+      const parsed: unknown = JSON.parse(enrichment.similar_json);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((n): n is string => typeof n === "string").slice(0, SIMILAR_ARTISTS_MAX);
+    } catch {
+      return [];
+    }
+  }, [enrichment?.similar_json]);
   const { data: inLibrarySet } = useSimilarInLibrary(similar);
   const similarInLibrary = useMemo(
     () => similar.filter((name) => inLibrarySet?.has(name)),
@@ -597,22 +637,10 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     `${artist.album_count} ${artist.album_count === 1 ? "album" : "albums"} in library`,
   ].filter((x): x is string => x !== null);
 
-  function buildTrackObj(track: TopTrack): CurrentTrack {
-    const artworkRef = track.artwork_url ?? null;
-    const coverArtUrl = artworkRef
-      ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500)
-      : null;
-    return {
-      id: track.id,
-      title: track.title,
-      artist: track.artist,
-      duration: track.duration,
-      coverArtUrl,
-      artworkRef,
-      album: track.album_name ?? null,
-      albumId: track.album_id ?? null,
-    };
-  }
+  const toTrackObj = useCallback(
+    (track: TopTrack) => buildTrackObj(track, server, credential),
+    [server, credential]
+  );
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
@@ -628,26 +656,26 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     (track: TopTrack) => {
       if (!topTracks.length) return;
       const startIndex = topTracks.findIndex((t) => t.id === track.id);
-      playQueue(topTracks.map(buildTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
+      playQueue(topTracks.map(toTrackObj), streamUrlFor, startIndex >= 0 ? startIndex : 0);
     },
     [topTracks, playQueue, streamUrlFor]
   );
 
   function handlePlayAll() {
     if (!topTracks.length) return;
-    playQueue(topTracks.map(buildTrackObj), streamUrlFor, 0);
+    playQueue(topTracks.map(toTrackObj), streamUrlFor, 0);
   }
 
   function handleShuffleAll() {
     if (!topTracks.length) return;
     const shuffled = shuffleArray(topTracks);
-    playQueue(shuffled.map(buildTrackObj), streamUrlFor, 0);
+    playQueue(shuffled.map(toTrackObj), streamUrlFor, 0);
   }
 
   function handleStartRadio() {
     const seed = topTracks[0];
     if (!seed) return;
-    const track = buildTrackObj(seed);
+    const track = toTrackObj(seed);
     void playQueue([track], streamUrlFor, 0);
     startRadio(track);
   }
@@ -1025,7 +1053,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              playNext(buildTrackObj(contextMenu.track), streamUrlFor);
+              playNext(toTrackObj(contextMenu.track), streamUrlFor);
               setContextMenu(null);
             }}
           >
@@ -1033,7 +1061,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <button
             onClick={() => {
-              addToQueue(buildTrackObj(contextMenu.track), streamUrlFor);
+              addToQueue(toTrackObj(contextMenu.track), streamUrlFor);
               setContextMenu(null);
             }}
           >
@@ -1041,7 +1069,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           </button>
           <StartRadioSubmenu
             onSelect={(mode) => {
-              const track = buildTrackObj(contextMenu.track);
+              const track = toTrackObj(contextMenu.track);
               void playQueue([track], streamUrlFor, 0);
               startRadio(track, mode);
               setContextMenu(null);

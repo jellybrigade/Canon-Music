@@ -335,6 +335,7 @@
   margin: 0 auto var(--space-sm);
   object-fit: cover;
   background-color: var(--bg-card);
+  transition: box-shadow var(--motion-fast);
 }
 
 .artist-similar-avatar--fallback {
@@ -355,6 +356,17 @@
   opacity: var(--opacity-90);
 }
 
+/* An owned card sits at full opacity already, so it needs its own hover cue,
+   otherwise the in-library tab is the one place in the strip that gives no
+   feedback at all. */
+.artist-similar-card--owned:hover .artist-similar-avatar {
+  box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-border);
+}
+
+.artist-similar-card--owned:hover .artist-similar-name {
+  color: var(--accent);
+}
+
 .artist-similar-name {
   display: block;
   font-size: var(--text-md);
@@ -363,6 +375,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color var(--motion-fast);
 }
 
 .artist-similar-tag {
@@ -668,6 +681,14 @@
 
 .artist-enrichment-refresh:hover {
   opacity: 1;
+}
+
+/* Disabled for the length of a refresh, so it has to stop reading as clickable. */
+.artist-enrichment-refresh:disabled,
+.artist-enrichment-refresh:disabled:hover {
+  cursor: default;
+  opacity: var(--opacity-50);
+  text-decoration: none;
 }
 
 .artist-enrichment-error {

@@ -222,12 +222,17 @@ function ArtistDetailRoute({
 }) {
   const { artistName } = useParams<{ artistName: string }>();
   const decodedName = artistName ? decodeURIComponent(artistName) : null;
-  const { data: fetchedArtist } = useQuery<ArtistRow | null>({
+  const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
     enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
       const serverId = serverWithCred!.server.id;
+      // Matched case-insensitively because the name in the URL can come from a
+      // Last.fm similar-artist card, whose spelling drifts from the local one
+      // ("Tyler, The Creator" vs "Tyler, the Creator"). `a.name` is selected, so
+      // everything downstream queries with the library's own spelling and finds
+      // the artist's albums and tracks.
       const rows = await db.select<ArtistRow[]>(
         `SELECT a.name, a.album_count,
            (SELECT al.artwork_url FROM albums al
@@ -237,13 +242,18 @@ function ArtistDetailRoute({
            ai.wikidata_image_url
          FROM artists a
          LEFT JOIN artist_identity ai ON ai.artist_name = a.name
-         WHERE a.name = ? AND a.server_id = ?`,
+         WHERE LOWER(TRIM(a.name)) = LOWER(TRIM(?)) AND a.server_id = ?`,
         [decodedName!, serverId]
       );
       return rows[0] ?? null;
     },
   });
   if (!serverWithCred || !decodedName) return null;
+  // Held until the lookup settles: `data` is undefined while pending as well as
+  // when the artist is genuinely absent, so rendering the fallback immediately
+  // painted a library artist's hero as "0 albums in library" with no portrait
+  // for the length of the query, then swapped it out.
+  if (artistPending) return <main className={`library${queueClass}`} />;
   // Recommended/similar artists surfaced in an artist view are not in the local
   // `artists` table, so the lookup above misses. Fall back to a minimal row
   // synthesized from the URL name (same shape openArtist(string) builds) so

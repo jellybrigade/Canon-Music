@@ -35,6 +35,9 @@ export const QK = {
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
   artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
+  // Deliberately not artistTopTracks: this is a single-row probe, and writing a
+  // one-element result under the full list's key would starve the artist page.
+  artistSeedTrack: (artistName: string) => ["artist-seed-track", artistName] as const,
   artistAppearsOn: (artistName: string) => ["artist-appears-on", artistName] as const,
   artistGenres: (artistName: string) => ["artist-genres", artistName] as const,
   lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
