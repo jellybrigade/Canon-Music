@@ -53,6 +53,8 @@ interface SpotlightPick {
 }
 
 interface ForYouGroup {
+  /** Category key, not the label: two custom categories can share a kicker. */
+  key: string;
   kicker: string;
   albums: AlbumRow[];
 }
@@ -216,7 +218,7 @@ function buildForYouGroups(
   const used = new Set<string>(spotlightIds);
 
   let catIdx = 0;
-  const groupFrom = (kicker: string, source: AlbumRow[]) => {
+  const groupFrom = (key: string, kicker: string, source: AlbumRow[]) => {
     const withArt = source.filter(a => a.artwork_url);
     if (withArt.length === 0) { catIdx++; return; }
     // Shuffle with a per-category seed so different categories pick independently.
@@ -229,13 +231,13 @@ function buildForYouGroups(
       used.add(a.id);
       albums.push(a);
     }
-    if (albums.length > 0) groups.push({ kicker, albums });
+    if (albums.length > 0) groups.push({ key, kicker, albums });
   };
 
   for (const cat of config) {
     if (!cat.enabled) continue;
     const source = sources[cat.key] ?? [];
-    groupFrom(cat.kicker, source);
+    groupFrom(cat.key, cat.kicker, source);
   }
 
   return groups;
@@ -280,6 +282,10 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
         const db = await getDb();
         await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, pick.album.id]);
       }
+    }).catch(err => {
+      // Cosmetic only: the card renders without an accent tint and the next
+      // mount retries. Swallowing this silently would hide a failing db handle.
+      console.error(`Spotlight: accent extraction failed for ${pick.album.id}`, err);
     });
     return () => { cancelled = true; };
   }, [artUrl, pick.album.accent_color, pick.album.id]);
@@ -306,7 +312,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
       </button>
       <div className="home-spotlight__text">
         <p className="home-spotlight__kicker">{pick.kicker}</p>
-        <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name)}</h2>
+        <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name, pick.album.id)}</h2>
         {(pick.album.artist || pick.album.year) && (
           <p className="home-spotlight__meta">
             {pick.album.artist && onSelectArtist ? (
@@ -396,20 +402,20 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
-  const descByKicker = useMemo(() => {
+  const descByKey = useMemo(() => {
     const map: Record<string, string> = {};
     for (const cat of config) {
       if (cat.customFilter) {
-        map[cat.kicker] = cat.customFilter.type === "decade"
+        map[cat.key] = cat.customFilter.type === "decade"
           ? `Albums from the ${cat.customFilter.decade}s`
           : `Albums by ${cat.customFilter.artist}`;
       } else if (FOR_YOU_CATEGORY_DESC[cat.key]) {
-        map[cat.kicker] = FOR_YOU_CATEGORY_DESC[cat.key]!;
+        map[cat.key] = FOR_YOU_CATEGORY_DESC[cat.key]!;
       }
     }
     return map;
   }, [config]);
-  const [activeTabKicker, setActiveTabKicker] = useState<string | null>(null);
+  const [activeTabKey, setActiveTabKey] = useState<string | null>(null);
   const [locked, setLocked] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
@@ -441,13 +447,13 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     );
   }
 
-  const activeTabGroup = groups.find(g => g.kicker === activeTabKicker) ?? groups[0]!;
+  const activeTabGroup = groups.find(g => g.key === activeTabKey) ?? groups[0]!;
 
   function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
     e.preventDefault();
     const next = e.key === "ArrowRight" ? (index + 1) % groups.length : (index - 1 + groups.length) % groups.length;
-    setActiveTabKicker(groups[next]!.kicker);
+    setActiveTabKey(groups[next]!.key);
   }
 
   function reorderConfig(fromIndex: number, toIndex: number) {
@@ -459,8 +465,8 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
     onConfigChange(next);
   }
 
-  function toggleEnabled(kicker: string) {
-    onConfigChange(config.map(c => c.kicker === kicker ? { ...c, enabled: !c.enabled } : c));
+  function toggleEnabled(key: string) {
+    onConfigChange(config.map(c => c.key === key ? { ...c, enabled: !c.enabled } : c));
   }
 
   function removeCustom(key: string) {
@@ -541,13 +547,13 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         <div className="foryou-v2-tabs__list">
           {locked
             ? groups.map((group, i) => (
-                <div key={group.kicker} className="foryou-v2-tab-slot">
+                <div key={group.key} className="foryou-v2-tab-slot">
                   <button
                     role="tab"
-                    aria-selected={activeTabGroup.kicker === group.kicker}
-                    tabIndex={activeTabGroup.kicker === group.kicker ? 0 : -1}
-                    className={`foryou-v2-tab${activeTabGroup.kicker === group.kicker ? " foryou-v2-tab--active" : ""}`}
-                    onClick={() => setActiveTabKicker(group.kicker)}
+                    aria-selected={activeTabGroup.key === group.key}
+                    tabIndex={activeTabGroup.key === group.key ? 0 : -1}
+                    className={`foryou-v2-tab${activeTabGroup.key === group.key ? " foryou-v2-tab--active" : ""}`}
+                    onClick={() => setActiveTabKey(group.key)}
                     onKeyDown={e => handleTabKeyDown(e, i)}
                   >
                     {group.kicker}
@@ -559,10 +565,10 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                   {dropIndex === i && <div className="foryou-v2-drop-line" />}
                   <button
                     role="tab"
-                    aria-selected={activeTabGroup.kicker === cat.kicker}
+                    aria-selected={activeTabGroup.key === cat.key}
                     aria-pressed={cat.enabled}
-                    className={`foryou-v2-tab foryou-v2-tab--draggable${activeTabGroup.kicker === cat.kicker ? " foryou-v2-tab--active" : ""}${!cat.enabled ? " foryou-v2-tab--disabled" : ""}`}
-                    onClick={() => toggleEnabled(cat.kicker)}
+                    className={`foryou-v2-tab foryou-v2-tab--draggable${activeTabGroup.key === cat.key ? " foryou-v2-tab--active" : ""}${!cat.enabled ? " foryou-v2-tab--disabled" : ""}`}
+                    onClick={() => toggleEnabled(cat.key)}
                     draggable
                     onDragStart={e => handleTabDragStart(e, i)}
                     onDragOver={e => handleTabDragOver(e, i)}
@@ -655,8 +661,8 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
         </form>
       )}
 
-      {descByKicker[activeTabGroup.kicker] && (
-        <p className="foryou-v2-desc">{descByKicker[activeTabGroup.kicker]}</p>
+      {descByKey[activeTabGroup.key] && (
+        <p className="foryou-v2-desc">{descByKey[activeTabGroup.key]}</p>
       )}
 
       <div className="foryou-v2-grid" role="tabpanel">
@@ -682,7 +688,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
                   <Play size={13} fill="currentColor" />
                 </button>
               </div>
-              <p className="foryou-v2-tile__name">{albumDisplayName(album.name)}</p>
+              <p className="foryou-v2-tile__name">{albumDisplayName(album.name, album.id)}</p>
               {album.artist && <p className="foryou-v2-tile__artist">{album.artist}</p>}
             </div>
           );
@@ -739,20 +745,50 @@ interface AlbumCarouselProps {
   onRadio?: () => void;
 }
 
-const CARD_WIDTH = 168 + 14;
+/** Card stride is measured off the DOM rather than hardcoded: the card width and the
+ *  flex gap both live in home.css, so a constant here silently desyncs when they move
+ *  and every arrow click accumulates the difference until cards sit half-cut. */
+function cardStride(track: HTMLDivElement): number {
+  const card = track.firstElementChild as HTMLElement | null;
+  if (!card) return 0;
+  const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
+  return card.offsetWidth + gap;
+}
 
 function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
+  const [atStart, setAtStart] = useState(true);
+  const [atEnd, setAtEnd] = useState(true);
+
+  const itemCount = items?.length ?? 0;
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const update = () => {
+      // 1px slack: fractional scroll positions never land exactly on the extent.
+      setAtStart(el.scrollLeft <= 1);
+      setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 1);
+    };
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      ro.disconnect();
+    };
+  }, [itemCount, isLoading]);
 
   if (!isLoading && (!items || items.length === 0)) return null;
 
   const scroll = (dir: "prev" | "next") => {
     const el = trackRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir === "next" ? CARD_WIDTH * 3 : -CARD_WIDTH * 3, behavior: "smooth" });
+    const step = cardStride(el) * 3;
+    el.scrollBy({ left: dir === "next" ? step : -step, behavior: "smooth" });
   };
 
   const skeletons = Array.from({ length: 6 });
@@ -769,7 +805,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
         )}
       </div>
       <div className="album-carousel">
-        <button className="album-carousel__arrow album-carousel__arrow--prev" onClick={() => scroll("prev")} aria-label="Scroll left">
+        <button className="album-carousel__arrow album-carousel__arrow--prev" onClick={() => scroll("prev")} disabled={atStart} aria-label="Scroll left">
           <ChevronLeft size={15} />
         </button>
         <div className="album-carousel__track" ref={trackRef}>
@@ -813,7 +849,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
                 );
               })}
         </div>
-        <button className="album-carousel__arrow album-carousel__arrow--next" onClick={() => scroll("next")} aria-label="Scroll right">
+        <button className="album-carousel__arrow album-carousel__arrow--next" onClick={() => scroll("next")} disabled={atEnd} aria-label="Scroll right">
           <ChevronRight size={15} />
         </button>
       </div>
@@ -858,7 +894,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: recentRaw, isLoading: recentLoading } = useCarouselAlbums(serverWithCredential, "recent");
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
-  const { data: recentlyReleasedRaw } = useRecentlyReleasedAlbums();
+  const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums();
   const { genres: recentGenres } = useRecentGenres();
   const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
@@ -890,11 +926,15 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     if (!currentTrack || !recommendedAlbum) return null;
     const album: AlbumRow = {
       id: recommendedAlbum.id,
-      server_id: server.id,
+      // Read back off the row, never stamped from the selected server: the
+      // recommendation query spans the whole mirror, so the album can belong
+      // to a different server and its stream URL has to be built against that one.
+      server_id: recommendedAlbum.server_id,
       name: recommendedAlbum.name,
       artist: recommendedAlbum.artist,
       year: recommendedAlbum.year,
       artwork_url: recommendedAlbum.artwork_url,
+      accent_color: recommendedAlbum.accent_color,
     };
     const primaryArtist = currentTrack.artist
       ? stripFeaturedArtists(currentTrack.artist)
@@ -905,12 +945,27 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
 
+  // Picks sourced from the carousels arrive as NavidromeAlbum rows, which carry no
+  // accent_color. Without this the Spotlight effect re-extracts and re-writes an
+  // accent the albums table already holds, once per mount, and flashes the accent
+  // off in between. Fill it from the local mirror before rendering.
+  const accentByAlbumId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of allAlbums ?? []) {
+      if (a.accent_color) map.set(a.id, a.accent_color);
+    }
+    return map;
+  }, [allAlbums]);
+
   const spotlightPicks = useMemo(
     () => dedupePicks(
       recommendedPick ? [recommendedPick, ...spotlightCandidates] : spotlightCandidates,
       3
+    ).map(pick => pick.album.accent_color
+      ? pick
+      : { ...pick, album: { ...pick.album, accent_color: accentByAlbumId.get(pick.album.id) ?? null } }
     ),
-    [recommendedPick, spotlightCandidates]
+    [recommendedPick, spotlightCandidates, accentByAlbumId]
   );
   const primarySpotlight = spotlightPicks[0] ?? null;
   const secondarySpotlights = spotlightPicks.slice(1);
@@ -1103,8 +1158,10 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         )
       ) : (
         <>
+          {/* Deliberately unkeyed: forYouSeed already feeds forYouGroups, and keying on it
+              remounted the rail on every Refresh, throwing away the selected tab and the
+              unlocked edit state. */}
           <ForYouRail
-            key={forYouSeed}
             groups={forYouGroups}
             isLoading={statsLoading || recentLoading || allLoading}
             serverWithCred={serverWithCredential}
@@ -1118,11 +1175,11 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           />
 
           <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} isLoading={recentlyReleasedLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
         </>
       )}
       {contextMenu && (

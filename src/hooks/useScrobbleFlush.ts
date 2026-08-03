@@ -87,8 +87,7 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
 
       if (sent > 0 && !cancelled) {
         void queryClient.invalidateQueries({ queryKey: QK.albumsListeningStats() });
-        void queryClient.invalidateQueries({ queryKey: QK.albumsFinishThe() });
-        void queryClient.invalidateQueries({ queryKey: QK.albumsAlmostDone() });
+        void queryClient.invalidateQueries({ queryKey: QK.albumsPartiallyHeard() });
         void queryClient.invalidateQueries({ queryKey: QK.scrobbleQueueCount() });
       }
     }

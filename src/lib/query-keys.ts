@@ -4,8 +4,8 @@ export const QK = {
 
   albums: (sort?: string, canonicalIds?: unknown) => ["albums", sort, canonicalIds] as const,
   albumsListeningStats: () => ["albums", "listening-stats"] as const,
-  albumsFinishThe: () => ["albums", "finish-the-album"] as const,
-  albumsAlmostDone: () => ["albums", "almost-done"] as const,
+  /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
+  albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
   // Partial key for broad invalidation of all album queries
   albumsAll: () => ["albums"] as const,
 

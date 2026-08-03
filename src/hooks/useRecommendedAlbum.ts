@@ -4,10 +4,12 @@ import { QK } from "../lib/query-keys";
 
 interface RecommendedAlbumRow {
   id: string;
+  server_id: string;
   name: string;
   artist: string | null;
   year: number | null;
   artwork_url: string | null;
+  accent_color: string | null;
 }
 
 /**
@@ -21,7 +23,7 @@ export function useRecommendedAlbum(albumId: string | null) {
       if (!albumId) return null;
       const db = await getDb();
       const rows = await db.select<RecommendedAlbumRow[]>(
-        `SELECT a.id, a.name, a.artist, a.year, a.artwork_url,
+        `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.accent_color,
                 COUNT(*) AS genre_match,
                 (SELECT COUNT(*) FROM album_genres WHERE album_id = a.id AND relation = 'direct') AS genre_total
          FROM album_genres ag

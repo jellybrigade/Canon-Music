@@ -11,6 +11,15 @@ You are invoked in plan mode. Work the phases in order.
 
 Distinct from `/performance` (which profiles for speed against `performance-audit.md`) and `/code-review` (which reviews a diff). This skill reviews one *whole feature path* in the existing codebase, regardless of what changed recently.
 
+**Never end a turn before `instructions/review.md` is updated and the work is committed.** Phases 7 and 8 are not optional trailing steps, and they are not "next turn's job". Before you hand control back to the user for any reason, both of these must already be true:
+
+1. `instructions/review.md` has the item's box checked, the trailing note written, and every unfixed finding recorded as a `LATER:` bullet.
+2. The `/commit` skill has run and the changes are committed to `development`.
+
+This holds even when the turn is ending for some reason other than finishing the phases. If the user interrupts, asks a question mid-review, redirects you to something else, or you are about to ask them something (including the Phase 6 live-check question) - record and commit **first**, then answer or ask. A review whose findings only exist in the transcript is a review that did not happen, and uncommitted edits are the one thing the next session cannot recover.
+
+If a fix is incomplete or the user has declined part of the plan, that does not defer the rule: commit what is done and write the rest as `LATER:` bullets. There is no state in which stopping without recording and committing is correct.
+
 ## Phase 1 — Pick the item
 
 Don't `Read` the whole file once it accumulates trailing notes. `grep` for the next unchecked item:
@@ -123,7 +132,9 @@ Show why each fix is correct, don't just assert it. For a leak: what was unbound
 
 If the change is UI-visible, write a concrete numbered manual check for the user — actions in the running app and the specific before/after difference this fix produces, not "click around". Then ask if they want a live check. **Do not auto-launch the app or browser automation** (`feedback-no-auto-browser-verify`).
 
-## Phase 7 — Record
+Asking that question ends the turn, so run Phases 7 and 8 before you ask it, not after. Ask the live-check question in the same message that reports the commit.
+
+## Phase 7 — Record (mandatory, never deferred)
 
 - Check the item's box in `instructions/review.md` and append a one-line trailing note: what was found and what changed (or "already clean, reason").
 - Update `ARCHITECTURE.md` in the same commit if any file was added, moved, deleted, or repurposed, or a Tauri command / migration / invariant changed.
@@ -131,6 +142,8 @@ If the change is UI-visible, write a concrete numbered manual check for the user
 - Anything deferred that is a genuine backlog item in its own right (a feature, not a defect in this pipeline) also goes to `/whattodo`.
 - If a finding is a genuine platform gotcha or a bug class likely to recur, add it to `.claude/rules/known-issues.md`.
 
-## Phase 8 — Commit
+## Phase 8 — Commit (mandatory, never deferred)
 
 Invoke the `/commit` skill. Then stop — the next item is a separate invocation.
+
+Do not stop at "the code is written and typechecks". That is the middle of the skill, not the end of it. If you find yourself about to end a turn and cannot point to a `/commit` invocation in it, you are not done: go back and run Phases 7 and 8.
