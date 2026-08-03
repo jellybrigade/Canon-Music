@@ -281,7 +281,12 @@
   color: var(--danger);
 }
 
-.loved-filter-btn {
+/* Library-header toggle (currently the scroll/pages switch). Named for the role,
+   not for one occupant - it was `.loved-filter-btn` back when the loved filter
+   lived in the header, and kept the loved filter's red active state after the
+   filter itself moved into FilterSidebar, which made an active toggle read as an
+   error rather than as a selection. */
+.header-toggle-btn {
   font-size: var(--text-base);
   padding: 0.25em 0.65em;
   box-shadow: none;
@@ -290,10 +295,10 @@
   gap: 0.3em;
 }
 
-.loved-filter-btn--active {
-  background-color: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
-  border-color: rgba(231, 76, 60, 0.3);
+.header-toggle-btn--active {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 

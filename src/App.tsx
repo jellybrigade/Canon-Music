@@ -115,7 +115,7 @@ export default function App() {
   useQueueSync(serverWithCred);
   useScrobbleFlush(serverWithCred);
 
-  const [rawSort, setSort] = useSetting("library_sort", "artist");
+  const [rawSort, setSort, sortLoaded] = useSetting("library_sort", "artist");
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
@@ -125,7 +125,10 @@ export default function App() {
   // hook keeps its last rows and its session-store seed, so returning to the route
   // still paints immediately. `pathname` not `view`: view folds /album/:id into
   // "library", which would drag the whole album list into every album detail page.
-  const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library");
+  // Also gated on `sortLoaded`: until the stored sort has been read back, `sort` is
+  // only the "artist" default, and firing here would scan the whole library in the
+  // wrong order, paint it, then scan again once the real sort arrived.
+  const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
   const { data: artists } = useArtists(pathname === "/artists");
   const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
   const { data: genres } = useGenres(pathname === "/library");

@@ -19,6 +19,7 @@
   --accent:        #5a8ef8;
   --accent-hover:  #4a7ef0;
   --accent-subtle: rgba(90, 142, 248, 0.15);
+  --accent-border: rgba(90, 142, 248, 0.3);
 
   --danger:        #e74c3c;
   --success-a:     #4caf7d;

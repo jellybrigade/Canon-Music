@@ -581,7 +581,7 @@ export function AppRoutes(props: AppViewProps) {
                 </button>
               )}
               <button
-                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                className={`header-toggle-btn${albumsPaginated ? " header-toggle-btn--active" : ""}`}
                 onClick={() => void setAlbumsPaginated(!albumsPaginated)}
                 title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
               >

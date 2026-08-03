@@ -105,7 +105,7 @@
 .filter-sidebar-loved--active {
   color: var(--accent);
   background: var(--accent-subtle);
-  border-color: rgba(57, 108, 216, 0.25);
+  border-color: var(--accent-border);
 }
 
 .filter-sidebar-section {
@@ -242,6 +242,14 @@
 .filter-sidebar-genre-item--active {
   color: var(--accent);
   background: var(--accent-subtle);
+}
+
+.filter-sidebar-genre-empty {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  padding: var(--space-2xs) var(--space-xs);
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .filter-sidebar-genre-name {
