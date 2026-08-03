@@ -182,7 +182,7 @@ function adjustIndexAfterMove(currentIdx: number, from: number, to: number): num
 // Always returns a fresh array: every caller splices or pushes into the result, and handing
 // back the stored order itself would mutate live state in place and leave the reference
 // unchanged, so components subscribed to shuffleOrder would not re-render.
-function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
+export function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
   if (order.length === queueLength) return [...order];
   const seen = new Set<number>();
   const repaired: number[] = [];
