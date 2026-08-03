@@ -4,8 +4,14 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 
-import { resetTauriMocks } from "../test/mocks/tauri";
+import { resetTauriMocks, onInvoke, invoke } from "../test/mocks/tauri";
 import { usePlayerStore, normalizeShuffleOrder, isNextDisabled, type CurrentTrack } from "./player";
+
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve!: (v: T) => void;
+  const promise = new Promise<T>((r) => (resolve = r));
+  return { promise, resolve };
+}
 
 function makeTrack(id: string): CurrentTrack {
   return { id, title: `Track ${id}`, artist: "Artist", duration: 200 };
@@ -28,6 +34,16 @@ function resetStore() {
     currentTrack: null,
     radioActive: false,
     radioSeed: null,
+    streamUrl: null,
+    isPlaying: false,
+    isLoading: false,
+    isBuffering: false,
+    error: null,
+    castDevice: null,
+    gapless: false,
+    repeat: "off",
+    consumeMode: false,
+    sleepTimerEndOfTrack: false,
   });
 }
 
@@ -271,5 +287,116 @@ describe("player store - queue/shuffle invariants", () => {
       const b = isNextDisabled("off", 2, 3, false);
       expect(a).toBe(b);
     });
+  });
+});
+
+describe("player store - transport intent", () => {
+  it("pause() called during playTrack's load await leaves the engine paused once load resolves", async () => {
+    const track = makeTrack("a");
+    const { promise: loadPromise, resolve: resolveLoad } = deferred<undefined>();
+    onInvoke("audio_play", () => loadPromise);
+
+    const playPromise = usePlayerStore.getState().play(track, "http://test/a");
+    expect(usePlayerStore.getState().isLoading).toBe(true);
+
+    // Pause races the in-flight load: this must not be lost by the async completion.
+    usePlayerStore.getState().pause();
+    expect(usePlayerStore.getState().isPlaying).toBe(false);
+
+    resolveLoad(undefined);
+    await playPromise;
+
+    expect(usePlayerStore.getState().isPlaying).toBe(false);
+    expect(usePlayerStore.getState().isLoading).toBe(false);
+  });
+
+  describe("resume()", () => {
+    it("with currentTrack set but streamUrl null routes to retryCurrent, never sets isPlaying directly", () => {
+      const track = makeTrack("restored");
+      usePlayerStore.setState({ currentTrack: track, streamUrl: null, error: null, streamUrlFor: () => "http://test/restored" });
+
+      usePlayerStore.getState().resume();
+
+      const state = usePlayerStore.getState();
+      // retryCurrent fires playTrack, which immediately marks loading and isPlaying false -
+      // resume()'s own "just resume" branch (which sets isPlaying: true synchronously) must not run.
+      expect(state.isLoading).toBe(true);
+      expect(state.isPlaying).toBe(false);
+    });
+
+    it("with no currentTrack is a no-op: no engine call, no ticker started", () => {
+      usePlayerStore.setState({ currentTrack: null, streamUrl: null });
+      const timersBefore = vi.getTimerCount();
+      const invokeCallsBefore = invoke.mock.calls.length;
+
+      usePlayerStore.getState().resume();
+
+      expect(usePlayerStore.getState().isPlaying).toBe(false);
+      expect(vi.getTimerCount()).toBe(timersBefore);
+      expect(invoke.mock.calls.length).toBe(invokeCallsBefore);
+    });
+  });
+
+  it("stop() clears pauseRequestedDuringLoad so a subsequent track is not born paused", async () => {
+    const trackA = makeTrack("a");
+    const { promise: loadA, resolve: resolveLoadA } = deferred<undefined>();
+    onInvoke("audio_play", () => loadA);
+
+    const playA = usePlayerStore.getState().play(trackA, "http://test/a");
+    usePlayerStore.getState().pause(); // sets pauseRequestedDuringLoad while trackA is loading
+    resolveLoadA(undefined);
+    await playA;
+
+    usePlayerStore.getState().stop();
+    expect(usePlayerStore.getState().currentTrack).toBeNull();
+
+    const trackB = makeTrack("b");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(trackB, "http://test/b");
+
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+
+  it("seek() bumps seekGen so an in-flight position poll from before the seek is dropped", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+
+    const { promise: posPromise, resolve: resolvePos } = deferred<number>();
+    onInvoke("audio_get_pos", () => posPromise);
+    onInvoke("audio_seek", () => Promise.resolve(undefined));
+
+    // Ticker tick fires and captures seekGen before the position resolves.
+    await vi.advanceTimersByTimeAsync(200);
+
+    await usePlayerStore.getState().seek(5);
+    expect(usePlayerStore.getState().elapsed).toBe(5);
+
+    // The poll that started before the seek now resolves with a stale position.
+    resolvePos(50);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(usePlayerStore.getState().elapsed).toBe(5);
+  });
+
+  it("natural-end fallback advance does not fire while isPlaying is false", async () => {
+    const firstTrack = makeTrack("0");
+    const tracks = [firstTrack, makeTrack("1")];
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+
+    // Isolate the isPlaying guard: the ticker keeps polling but playback is not audibly active.
+    usePlayerStore.setState({ isPlaying: false });
+    const audioPlayCallsBefore = invoke.mock.calls.filter((c) => c[0] === "audio_play").length;
+    onInvoke("audio_get_pos", () => Promise.resolve((firstTrack.duration ?? 0) - 0.1));
+
+    await vi.advanceTimersByTimeAsync(200);
+
+    const audioPlayCallsAfter = invoke.mock.calls.filter((c) => c[0] === "audio_play").length;
+    expect(audioPlayCallsAfter).toBe(audioPlayCallsBefore);
+    expect(usePlayerStore.getState().queueIndex).toBe(0);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("0");
   });
 });
