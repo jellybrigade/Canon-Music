@@ -47,9 +47,17 @@ export async function executeIdChunks(
   buildSql: (placeholders: string) => string,
 ): Promise<void> {
   if (ids.length === 0) return;
+  let first = true;
   for (let start = 0; start < ids.length; start += SQLITE_MAX_VARIABLES) {
     const chunk = ids.slice(start, start + SQLITE_MAX_VARIABLES);
     const placeholders = chunk.map(() => "?").join(", ");
-    await db.execute(buildSql(placeholders), chunk);
+    const sql = buildSql(placeholders);
+    if (first) {
+      if (/\bnot\s+in\b/i.test(sql)) {
+        throw new Error("executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep");
+      }
+      first = false;
+    }
+    await db.execute(sql, chunk);
   }
 }
