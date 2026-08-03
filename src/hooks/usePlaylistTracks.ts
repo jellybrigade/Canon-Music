@@ -29,13 +29,17 @@ export function usePlaylistTracks(playlistId: string | null) {
     (async () => {
       try {
         const db = await getDb();
+        // LEFT JOIN on albums, not an inner one: `album_name` and `album_id` are already
+        // nullable on PlaylistTrackRow, and an inner join dropped any track whose album
+        // row is missing (pruned by a sync, or a single not-yet-mirrored album) out of the
+        // list entirely, so the playlist silently rendered fewer tracks than it holds.
         const rows = await db.select<PlaylistTrackRow[]>(
           `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
                   t.bit_rate, t.suffix,
                   pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
            FROM playlist_tracks pt
            JOIN tracks t ON pt.track_id = t.id
-           JOIN albums a ON t.album_id = a.id
+           LEFT JOIN albums a ON t.album_id = a.id
            WHERE pt.playlist_id = ?
            ORDER BY pt.position ASC`,
           [playlistId]

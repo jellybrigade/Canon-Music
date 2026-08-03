@@ -6,7 +6,8 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { ContextMenu } from "./ContextMenu";
-import type { SmartFilters } from "../lib/smartPlaylist";
+import { parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
+import { fileToScaledDataUri } from "../lib/imageDataUri";
 import "./PlaylistList.css";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
@@ -47,6 +48,12 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editSmartPlaylist, setEditSmartPlaylist] = useState<PlaylistRow | null>(null);
+  // Parsed outside the render body's JSX: an unparseable `rules_json` used to throw from
+  // inside the element tree, which the ErrorBoundary turns into a blank playlists page.
+  const editSmartRules = useMemo(
+    () => parseSmartFilters(editSmartPlaylist?.rules_json ?? null),
+    [editSmartPlaylist]
+  );
   const renameInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetId = useRef<string | null>(null);
@@ -151,13 +158,11 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
   function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     const targetId = coverTargetId.current;
-    if (!file || !onSetCustomCover || !targetId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      void onSetCustomCover(targetId, reader.result as string);
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file || !onSetCustomCover || !targetId) return;
+    fileToScaledDataUri(file)
+      .then((dataUri) => onSetCustomCover(targetId, dataUri))
+      .catch((err) => console.error("Failed to set playlist cover:", err));
   }
 
   useEffect(() => {
@@ -344,10 +349,10 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
         style={{ display: "none" }}
         onChange={handleCoverPick}
       />
-      {editSmartPlaylist && onUpdateSmartRules && editSmartPlaylist.rules_json && (
+      {editSmartPlaylist && onUpdateSmartRules && editSmartRules && (
         <SmartPlaylistModal
           title="Edit Smart Playlist"
-          initialFilters={JSON.parse(editSmartPlaylist.rules_json) as SmartFilters}
+          initialFilters={editSmartRules}
           onSave={(filters) => onUpdateSmartRules(editSmartPlaylist, filters, serverWithCredential)}
           onClose={() => setEditSmartPlaylist(null)}
         />

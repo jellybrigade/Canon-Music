@@ -34,6 +34,26 @@ export const DEFAULT_SMART_FILTERS: SmartFilters = {
   minPlayCount: 0,
 };
 
+// `rules_json` is read back in three places, two of them inside a render body, so a
+// malformed or legacy value must not throw. Merging over the defaults also covers rows
+// written before a field existed: an absent `genreMode` used to read as `undefined`,
+// which `buildSmartQuery` treats as "exclude", and an absent `selectedGenres` threw on
+// `.length` there. Returns null only when the JSON itself is unusable.
+export function parseSmartFilters(rulesJson: string | null): SmartFilters | null {
+  if (!rulesJson) return null;
+  try {
+    const parsed = JSON.parse(rulesJson) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    const merged = { ...DEFAULT_SMART_FILTERS, ...(parsed as Partial<SmartFilters>) };
+    if (!Array.isArray(merged.selectedGenres)) merged.selectedGenres = [];
+    if (merged.genreMode !== "include" && merged.genreMode !== "exclude") merged.genreMode = "include";
+    if (typeof merged.name !== "string") merged.name = "";
+    return merged;
+  } catch {
+    return null;
+  }
+}
+
 export const SORT_OPTIONS = [
   { value: "+random", label: "Random" },
   { value: "-playcount", label: "Most played" },

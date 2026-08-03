@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -284,6 +284,7 @@ function ArtistDetailRoute({
 
 function PlaylistDetailRoute({
   serverWithCred,
+  playlists,
   onSelectAlbum,
   onSelectArtist,
   onClose,
@@ -295,6 +296,7 @@ function PlaylistDetailRoute({
   updateSmartPlaylistRules,
 }: {
   serverWithCred: ServerWithCredential | null;
+  playlists: PlaylistRow[] | undefined;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
@@ -307,19 +309,31 @@ function PlaylistDetailRoute({
 }) {
   const { playlistId } = useParams<{ playlistId: string }>();
   const navigate = useNavigate();
-  const { data: playlist } = useQuery<PlaylistRow | null>({
-    queryKey: ["playlist-by-id", playlistId],
-    enabled: !!playlistId,
-    queryFn: async () => {
-      const db = await getDb();
-      const rows = await db.select<PlaylistRow[]>(
-        `SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json FROM playlists WHERE id = ?`,
-        [decodeURIComponent(playlistId!)]
-      );
-      return rows[0] ?? null;
-    },
-  });
-  if (!playlist || !serverWithCred) return null;
+  // Resolved out of the same list the playlists view renders rather than through a second
+  // query of its own. The previous `["playlist-by-id"]` key was outside `QK` and nothing
+  // invalidated it, while every playlist mutation signals through the playlist session
+  // store instead - so renaming, editing the description, setting a cover or refreshing a
+  // smart playlist from this page left the row this component rendered untouched, and the
+  // edit visibly reverted until the default staleTime lapsed.
+  const decodedId = playlistId ? decodeURIComponent(playlistId) : null;
+  const playlist = useMemo(
+    () => (decodedId ? playlists?.find((p) => p.id === decodedId) ?? null : null),
+    [playlists, decodedId]
+  );
+  if (!serverWithCred) return null;
+  if (!playlist) {
+    return (
+      <main className={`library${queueClass}`}>
+        {playlists === undefined ? (
+          <p className="empty-state">Loading playlist…</p>
+        ) : (
+          <p className="empty-state">
+            That playlist is no longer here. It may have been deleted on the server.
+          </p>
+        )}
+      </main>
+    );
+  }
   return (
     <main className={`library${queueClass}`}>
       <PlaylistDetail
@@ -490,6 +504,7 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/playlist/:playlistId" element={
         <PlaylistDetailRoute
           serverWithCred={serverWithCred}
+          playlists={playlists}
           onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
           onSelectArtist={openArtist}
           onClose={goBack}
