@@ -119,8 +119,8 @@ async function getCuratedCandidates(
       `SELECT ${TRACK_PROJECTION}
        FROM tracks t JOIN albums a ON t.album_id = a.id
        WHERE t.server_id = ? AND t.id != ?
-       ORDER BY RANDOM() LIMIT 20`,
-      [seed.serverId, seedTrackId]
+       ORDER BY RANDOM() LIMIT ?`,
+      [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
     );
     return fallback.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 0.1));
   }
