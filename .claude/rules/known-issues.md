@@ -113,3 +113,25 @@ Related, same pass: `keychain.get` *rejects* on a missing entry (doesn't resolve
 
 ## A frontend feature can be dead on the default path (fixed)
 See "fast path bypassing central action" and "gapless bypassing sleep timer" above — same lesson, worth its own reminder: when a code path exists that skips the normal function, audit it against every side effect that function had, not just the one that motivated the optimization.
+
+## State deciding which subtree renders, but absent from the URL, must be dismissed by navigation itself (fixed)
+`AppShell.renderContent` returns the search overlay *instead of* `<AppRoutes>` whenever `searchOpen || searchQuery`, and both live in `App.tsx` `useState`, not in the URL. So every navigation while a search is open lands behind the overlay: the route mounts, the overlay stays painted, and the click reads as inert. Fixed once in `5fa9b06` by adding `clearSearch()` to `SearchResults`' two handlers — but the command palette's four handlers (`onNavigate`/`onSelectAlbum`/`onSelectArtist`/`onPlayTrack`), 90 lines below in the same file, kept navigating unguarded and stayed broken. Real fix: `useClearSearchOnNavigate(pathname, clearSearch)` in `App.tsx`, so the dismissal is owned by navigation rather than repeated at each call site. The per-call-site `clearSearch()` in `SearchResults`' handlers is kept deliberately: re-selecting the route you are already on produces no pathname change, so the hook cannot fire.
+**Generalizes:** any state that (a) decides which subtree renders and (b) is not in the URL is a second, invisible router. Enumerate everything that can navigate — not just the component the overlay contains — because each one is a place the two routers can disagree. Grep tell: a `renderX()` that returns a component *instead of* `<Routes>`/`<Outlet>` based on `useState`, or a top-level early `return` before the router.
+**Second-order lesson, the reason this shipped twice:** the first fix patched the instances it could see and never wrote this entry, so the class was never greppable. A fix whose cause generalizes owes an entry here in the same commit, not a commit message.
+
+## A partial opt-out of a global base rule keeps the properties it forgot to name (37 open instances)
+`src/App.css:178` styles `input, button` together with `border-radius: var(--radius-md)`, `border: 1px solid transparent` and `box-shadow: var(--shadow-xs) var(--scrim-1)`. A component that wants a bare text button writes `background: none; border: none` and stops there, so the drop shadow survives with no background to sit on and renders as a floating glassy pill around the label. Reported by the user against `.album-suffix-add-btn` / `.album-suffix-toggle-btn` (`AlbumDetail.css`), fixed there.
+**37 further instances are open repo-wide** — spot-confirmed on `.settings-nav-item`, `.tags-seg-btn`, `.genre-line__item`. Find them with:
+```
+python3 - <<'PY'
+import re,glob
+for f in sorted(glob.glob('src/**/*.css',recursive=True)):
+    t=open(f).read()
+    for m in re.finditer(r'([^{}]+)\{([^{}]*)\}',t):
+        sel,body=m.group(1).strip(),m.group(2)
+        if any(p in sel for p in (':hover',':focus',':active',':disabled','@')): continue
+        if re.search(r'\bbackground(-color)?\s*:\s*(none|transparent)',body) and re.search(r'\bborder\s*:\s*none',body) and 'box-shadow' not in body:
+            print(f"{f}:{t[:m.start()].count(chr(10))+1}  {sel}")
+PY
+```
+**Generalizes:** an element-level base rule (`input, button { ... }`) is inherited by every component rule that doesn't name the property, so "opting out" means naming *every* property the base sets, not the two that are visually obvious. Whenever a base rule gains a property, every partial opt-out silently gains it too. The durable fix is to stop the base rule reaching bare buttons at all (scope it to a class, or reset `box-shadow`/`border-radius` in a shared `.btn-bare`), not to keep chasing instances.

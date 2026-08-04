@@ -91,6 +91,10 @@ Bugfix has extra rule: **test must reproduce the bug against unfixed code.** Fix
 
 Every entry in `.claude/rules/known-issues.md` is a bug that shipped once. When touching code near one, add the regression test if missing, and tick it in `instructions/tests.md`. New bug found → new `known-issues.md` entry **and** new test, same commit.
 
+**Fix the class, not the instance.** Before fixing any bug, phrase its cause without naming the file, turn that into a grep ("who else calls this action", "what else inherits this rule", "what other queries hit this table"), run it, and fix every hit whose description is the same sentence. Then write that grep into the `known-issues.md` entry. Two bugs have shipped twice in this repo for want of this step. If you cannot phrase the grep, you have not identified the class yet.
+
+**A user's bug report comes from the installed build, not from HEAD.** Check `git log -- <file>` and `git tag --contains <sha>` before reading code: the fix may exist on `development` and simply be unreleased, in which case the work is `/release`.
+
 ### Part of "done"
 
 Change is not done until `pnpm test:run` and `cargo test` pass. Same standing as `pnpm tsc --noEmit` and updating `ARCHITECTURE.md`. Don't commit red. If a pre-existing test fails for unrelated reasons, say so explicitly rather than silently ignoring or deleting it.

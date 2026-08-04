@@ -9,6 +9,8 @@ You are invoked in plan mode. Work the phases in order.
 
 **One item per invocation. Never two.** No batching, no "while I'm here I'll also check the neighbouring item", no parallel fan-out across items. Run `/pipeline` again for the next one.
 
+**This rule constrains items, not instances of one defect.** Fixing the same defect everywhere it appears is one finding, not two items - see Phase 3's "Sweep the class". The rule exists so a review of playback doesn't become a review of sync; it does not license leaving the identical bug unfixed 90 lines below the one you just fixed. That has happened (`AppShell.tsx`, search overlay vs command palette: fixed for one caller, shipped broken for the other, `known-issues.md`).
+
 Distinct from `/performance` (which profiles for speed against `performance-audit.md`) and `/code-review` (which reviews a diff). This skill reviews one *whole feature path* in the existing codebase, regardless of what changed recently.
 
 **Never end a turn before `instructions/review.md` is updated and the work is committed.** Phases 7 and 8 are not optional trailing steps, and they are not "next turn's job". Before you hand control back to the user for any reason, both of these must already be true:
@@ -33,6 +35,15 @@ That first match, top to bottom, is the item. Exception: if the user named a spe
 If no unchecked items remain, say so and stop.
 
 State clearly at the start which single item this invocation covers.
+
+**If the user is pointing you at a bug they hit in the app, check the release lag first.** The installed build can be many commits behind `development`, so the bug may already be fixed and merely unshipped:
+
+```bash
+git log --oneline -8 -- <suspect file>   # already fixed on development?
+git tag --contains <fix sha>             # empty = fixed but never released
+```
+
+If HEAD already has the fix, say so and stop - the work is `/release`, not a review. Precedent: `5fa9b06` fixed the search overlay on 2026-08-03 and was still unreleased on 2026-08-04 (latest tag `v0.47.3`, 2026-07-28), so it got re-reported against code that no longer existed. Still worth checking whether the shipped fix covered every instance (see Phase 3's sweep) - in that case it had not.
 
 ## Phase 2 — Map the pipeline
 
@@ -90,6 +101,16 @@ Go stage by stage along the path. Hunt for:
 - raw literals where a design token scale already exists
 - empty state that says "nothing here" instead of teaching the interface
 
+**Sweep the class — run this for every defect found above, before planning fixes.** Ask of each finding: *does the cause generalize?* An invariant one caller forgot, a base rule partly opted out of, an ownership column one query dropped, a cancellation one code path skips - all of these have siblings. Then:
+
+1. Write the one-line description of the defect without naming the file.
+2. Turn it into a grep. "Who else calls this action?" "What else inherits this base rule?" "What other queries hit this table?" If you cannot phrase the grep, the class is not identified yet, and the next instance will ship.
+3. Run it. Every hit whose description is *the same sentence* is in scope for this pass, whatever file it lives in. A hit needing a different sentence is a `LATER:`.
+
+This is the step whose absence has cost the most in this repo: the search overlay was diagnosed correctly, fixed at two call sites, and left broken at four more in the same file; the glassy bare-button rule was fixed on one component with 37 other instances live. Both were one grep away.
+
+Delegate the grep to `caveman:cavecrew-investigator` if it needs more than one pattern, per the Phase 2 rule about inline searching.
+
 **Improvement — run this pass even when nothing above turned up.** Absence of bugs is not the end of the review. A pipeline with zero defects can still be slower, heavier, or clumsier than it needs to be. Ask, explicitly, for this feature:
 
 - **Faster?** What is the actual latency the user feels here, and where does it go? Could work move off the critical path (prefetch, background, lazy), start earlier (fire the request before the view mounts), or not happen at all (cached, precomputed, derived)? Is a round trip to the server doing what a local query already answers, or vice versa?
@@ -110,6 +131,8 @@ In plan mode, propose what to change. Split explicitly:
 - **fix now** — small, safe, clearly correct
 - **ask first** — risky, cross-cutting, or a behaviour change the user should sign off on
 - **backlog** — real but out of scope for this pass
+
+**Default to fix now.** A quick win doesn't get parked as `LATER:` just because it's easy to defer — if it's small, safe, and clearly correct, it belongs in the fix-now set regardless of whether it's the finding that triggered this item or an adjacent one-liner spotted along the way. Reserve ask-first/backlog for findings that are genuinely large (would blow out the context budget for this single-item invocation, touch many files, or amount to a refactor) or genuinely need the user's call (behaviour change, risk, ambiguous intent) — not for findings that are merely inconvenient to fix right now.
 
 Anything in the ask-first or backlog set is recorded as a `LATER:` line under the item (see Phase 7), whatever the user decides. Nothing found is allowed to evaporate just because it wasn't fixed.
 
@@ -142,7 +165,8 @@ If the change is UI-visible, write a concrete numbered manual check for the user
 - Update `ARCHITECTURE.md` in the same commit if any file was added, moved, deleted, or repurposed, or a Tauri command / migration / invariant changed.
 - **Everything found but not changed gets written into `instructions/review.md` directly beneath the item, one indented `LATER: <thing>` bullet each.** This covers anything left out because scope wouldn't allow it, because it was too risky, because it belongs to a different item, or because the user declined it. Each `LATER:` line carries enough context to be picked up standalone: the file:line, what the problem is, and the intended fix. Write these even when the user says no to acting on them — the point is that the finding survives the session.
 - Anything deferred that is a genuine backlog item in its own right (a feature, not a defect in this pipeline) also goes to `/whattodo`.
-- If a finding is a genuine platform gotcha or a bug class likely to recur, add it to `.claude/rules/known-issues.md`.
+- **Every defect whose cause generalizes gets a `.claude/rules/known-issues.md` entry, this commit. Mandatory, not "if it seems worth it".** The entry carries: what broke, the fix, a `**Generalizes:**` line, and the grep from Phase 3's sweep. Writing it is what makes the class findable by a future session that has never seen this bug - a commit message is not greppable in any workflow anyone actually runs. The search-overlay bug shipped a second time precisely because the pass that fixed it wrote no entry, so the class existed nowhere a later session would look.
+- If the item being reviewed already has a ticked box and this pass found something that ticked box should have covered, say so on the item: a bold `**MISSED, fixed <date> (<sha>)**` or `**INCOMPLETE, finished ...**` line under it, naming why the earlier pass didn't see it. A tick that silently hides a known miss is worse than an unchecked box, because the next session reads it as covered.
 
 ## Phase 8 — Commit (mandatory, never deferred)
 
