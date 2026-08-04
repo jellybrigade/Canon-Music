@@ -3,8 +3,10 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
+vi.mock("../db", () => ({ getDb: vi.fn() }));
 
 import { resetTauriMocks, onInvoke, invoke, emitTauriEvent } from "../test/mocks/tauri";
+import { getDb } from "../db";
 import {
   usePlayerStore,
   normalizeShuffleOrder,
@@ -12,6 +14,25 @@ import {
   buildShuffleOrder,
   type CurrentTrack,
 } from "./player";
+
+// Boundary mock for getDb(): tests configure `select`/`execute` per case, never a real DB.
+function mockDb(
+  overrides: {
+    select?: (sql: string, params: unknown[]) => Promise<unknown[]>;
+    execute?: (sql: string, params: unknown[]) => Promise<unknown>;
+  } = {}
+) {
+  const db = {
+    select: vi.fn(overrides.select ?? (() => Promise.resolve([]))),
+    execute: vi.fn(overrides.execute ?? (() => Promise.resolve(undefined))),
+  };
+  (getDb as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(db);
+  return db;
+}
+
+function last<T>(arr: T[]): T {
+  return arr[arr.length - 1]!;
+}
 
 function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
   let resolve!: (v: T) => void;
@@ -57,6 +78,7 @@ beforeEach(() => {
   resetTauriMocks();
   vi.useFakeTimers();
   resetStore();
+  mockDb();
 });
 
 afterEach(() => {
@@ -807,5 +829,479 @@ describe("buildShuffleOrder anchor semantics", () => {
     expect(a).not.toBe(b);
     a.push(99);
     expect(buildShuffleOrder(5, 0)).toHaveLength(5);
+  });
+});
+
+describe("player store - buffering vs loading", () => {
+  it("isBuffering is set on play() and stays true through the invoke round trip, cleared only by audio-format", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+
+    const playPromise = usePlayerStore.getState().play(track, "http://test/a");
+    expect(usePlayerStore.getState().isBuffering).toBe(true);
+
+    await playPromise;
+    // audio_play resolving (the invoke round trip) is not the same as sound starting: for a
+    // local target isBuffering is deliberately left alone here.
+    expect(usePlayerStore.getState().isBuffering).toBe(true);
+
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    expect(usePlayerStore.getState().isBuffering).toBe(false);
+  });
+
+  it("isLoading clears at the invoke round trip while isBuffering is still true (pause stays clickable)", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    const state = usePlayerStore.getState();
+    expect(state.isLoading).toBe(false);
+    expect(state.isBuffering).toBe(true);
+  });
+
+  it("buffer deadline force-stops with an error if position never advances past zero", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    expect(usePlayerStore.getState().isBuffering).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(30000);
+
+    const state = usePlayerStore.getState();
+    expect(state.isBuffering).toBe(false);
+    expect(state.isPlaying).toBe(false);
+    expect(state.error).toMatch(/never started playing/);
+  });
+
+  it("buffer deadline does not fire if audio-format already cleared it", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    await vi.advanceTimersByTimeAsync(30000);
+
+    expect(usePlayerStore.getState().error).toBeNull();
+  });
+
+  it("switching tracks clears the previous track's deadline instead of leaking a second timer", async () => {
+    const trackA = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(trackA, "http://test/a");
+    const timersAfterA = vi.getTimerCount();
+
+    const trackB = makeTrack("b");
+    await usePlayerStore.getState().play(trackB, "http://test/b");
+
+    // playTrack re-arms armBufferDeadline, which clears the previous timer first: switching
+    // tracks must not leave trackA's deadline running alongside trackB's.
+    expect(vi.getTimerCount()).toBe(timersAfterA);
+
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    await vi.advanceTimersByTimeAsync(30000);
+
+    expect(usePlayerStore.getState().error).toBeNull();
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("b");
+  });
+
+  it("a successful audio-error retry re-arms isBuffering rather than leaving it stuck", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    expect(usePlayerStore.getState().isBuffering).toBe(false);
+
+    emitTauriEvent("audio-error", { url: "http://test/a", message: "connection reset", retryable: true });
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await vi.advanceTimersByTimeAsync(2000);
+
+    const state = usePlayerStore.getState();
+    expect(state.isBuffering).toBe(true);
+    expect(state.isPlaying).toBe(true);
+  });
+
+  it("an exhausted, unretryable audio-error clears isBuffering and isLoading together", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-error", { url: "http://test/a", message: "404 not found", retryable: false });
+
+    const state = usePlayerStore.getState();
+    expect(state.isBuffering).toBe(false);
+    expect(state.isLoading).toBe(false);
+    expect(state.error).toBe("404 not found");
+  });
+});
+
+describe("player store - waveform prefetch gated on audible playback", () => {
+  // waveformPreloadedFor (the "already ran the prefetch pass for this track" guard) is
+  // module-level, not store state, so it survives across tests in this file. Every test here
+  // needs a track id no earlier test in the file has used as its *current* track, or the guard
+  // silently no-ops and the pass never runs.
+  let wfTag = 0;
+  function makeWfTracks(n: number): CurrentTrack[] {
+    const tag = `wf${wfTag++}`;
+    return Array.from({ length: n }, (_, i) => makeTrack(`${tag}-${i}`));
+  }
+
+  it("does not prefetch upcoming tracks' waveforms from play()/playQueue() itself", async () => {
+    const tracks = makeWfTracks(3);
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+
+    // fetchWaveform (the *current* track's own waveform) is allowed to have fired here; what must
+    // not have happened yet is the next-tracks prefetch pass, which only the ticker triggers.
+    const extractCallsAtPlay = invoke.mock.calls.filter(
+      (c) => c[0] === "audio_extract_waveform" && c[1] && (c[1] as { trackId: string }).trackId !== tracks[0]!.id
+    ).length;
+    expect(extractCallsAtPlay).toBe(0);
+  });
+
+  it("prefetches offsets 1 and 2 ahead once the ticker observes a non-zero position", async () => {
+    const tracks = makeWfTracks(3);
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+
+    onInvoke("audio_get_pos", () => Promise.resolve(1));
+    await vi.advanceTimersByTimeAsync(200);
+
+    const prefetchedIds = invoke.mock.calls
+      .filter((c) => c[0] === "audio_extract_waveform")
+      .map((c) => (c[1] as { trackId: string }).trackId);
+    expect(prefetchedIds).toEqual(expect.arrayContaining([tracks[1]!.id, tracks[2]!.id]));
+  });
+
+  it("does not re-run the prefetch pass on a second tick for the same track (pause/resume)", async () => {
+    const tracks = makeWfTracks(3);
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+
+    onInvoke("audio_get_pos", () => Promise.resolve(1));
+    await vi.advanceTimersByTimeAsync(200);
+    const countAfterFirstTick = invoke.mock.calls.filter((c) => c[0] === "audio_extract_waveform").length;
+
+    await vi.advanceTimersByTimeAsync(200);
+    const countAfterSecondTick = invoke.mock.calls.filter((c) => c[0] === "audio_extract_waveform").length;
+
+    expect(countAfterSecondTick).toBe(countAfterFirstTick);
+  });
+
+  it("skips a track whose waveform is already cached", async () => {
+    const tracks = makeWfTracks(3);
+    mockDb({
+      select: (sql: string, params: unknown[]) =>
+        sql.includes("waveform_cache") && params[0] === tracks[1]!.id
+          ? Promise.resolve([{ peaks_json: "[1]" }])
+          : Promise.resolve([]),
+    });
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+
+    onInvoke("audio_get_pos", () => Promise.resolve(1));
+    await vi.advanceTimersByTimeAsync(200);
+
+    const prefetchedIds = invoke.mock.calls
+      .filter((c) => c[0] === "audio_extract_waveform")
+      .map((c) => (c[1] as { trackId: string }).trackId);
+    expect(prefetchedIds).not.toContain(tracks[1]!.id);
+    expect(prefetchedIds).toContain(tracks[2]!.id);
+  });
+
+  it("does nothing when player.show_waveform is off", async () => {
+    mockDb({
+      select: (sql: string) =>
+        sql.includes("show_waveform") ? Promise.resolve([{ value: "false" }]) : Promise.resolve([]),
+    });
+    const tracks = makeWfTracks(3);
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().playQueue(tracks, streamUrlFor, 0);
+
+    onInvoke("audio_get_pos", () => Promise.resolve(1));
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(invoke.mock.calls.some((c) => c[0] === "audio_extract_waveform")).toBe(false);
+  });
+});
+
+describe("player store - sleep timer", () => {
+  it("a numeric preset arms sleepTimerEndsAt and pauses + clears itself after that many minutes", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    onInvoke("audio_pause", () => Promise.resolve(undefined));
+
+    usePlayerStore.getState().setSleepTimer(30);
+    const state = usePlayerStore.getState();
+    expect(state.sleepTimerEndOfTrack).toBe(false);
+    expect(state.sleepTimerEndsAt).toBeGreaterThan(Date.now());
+
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+
+    const after = usePlayerStore.getState();
+    expect(after.isPlaying).toBe(false);
+    expect(after.sleepTimerEndsAt).toBeNull();
+  });
+
+  it("'end-of-track' sets the flag without arming a setTimeout pause", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+
+    const timersBefore = vi.getTimerCount();
+    usePlayerStore.getState().setSleepTimer("end-of-track");
+    const state = usePlayerStore.getState();
+    expect(state.sleepTimerEndOfTrack).toBe(true);
+    expect(state.sleepTimerEndsAt).toBeNull();
+    // Unlike the numeric-preset branch, "end-of-track" must not add a setTimeout: nothing should
+    // be there to fire, at any distance, since the whole point is "no timer, just a flag".
+    expect(vi.getTimerCount()).toBe(timersBefore);
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000);
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+
+  it("calling setSleepTimer again cancels the previous timer instead of stacking a second pause", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    onInvoke("audio_pause", () => Promise.resolve(undefined));
+
+    usePlayerStore.getState().setSleepTimer(30);
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    usePlayerStore.getState().setSleepTimer(30);
+    await vi.advanceTimersByTimeAsync(20 * 60 * 1000);
+
+    // Only 20 of the second timer's 30 minutes have elapsed: still playing.
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+
+  it("clearSleepTimer cancels a pending numeric timer so it never fires", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    onInvoke("audio_pause", () => Promise.resolve(undefined));
+
+    usePlayerStore.getState().setSleepTimer(30);
+    usePlayerStore.getState().clearSleepTimer();
+    await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
+
+    expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+
+  it("clearSleepTimer resets both fields regardless of which mode was armed", () => {
+    usePlayerStore.getState().setSleepTimer("end-of-track");
+    usePlayerStore.getState().clearSleepTimer();
+    const state = usePlayerStore.getState();
+    expect(state.sleepTimerEndOfTrack).toBe(false);
+    expect(state.sleepTimerEndsAt).toBeNull();
+  });
+
+  it("clearSleepTimer does not touch an unrelated in-flight gapless enqueue", async () => {
+    await usePlayerStore.getState().playQueue(makeTracks(2), streamUrlFor, 0);
+    usePlayerStore.setState({ gapless: true });
+    onInvoke("audio_get_pos", () => Promise.resolve(ENQUEUE_POS));
+    onInvoke("audio_enqueue_next", () => Promise.resolve(undefined));
+    await vi.advanceTimersByTimeAsync(200);
+    const enqueueCallsBefore = invoke.mock.calls.filter((c) => c[0] === "audio_enqueue_next").length;
+
+    usePlayerStore.getState().setSleepTimer(30);
+    usePlayerStore.getState().clearSleepTimer();
+
+    // clearSleepTimer only ever touches sleepTimerEndsAt/sleepTimerEndOfTrack; the gapless
+    // hand-off already in flight is untouched, so track-advanced still follows it normally.
+    emitTauriEvent("track-advanced", undefined);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
+    expect(invoke.mock.calls.filter((c) => c[0] === "audio_enqueue_next").length).toBe(enqueueCallsBefore);
+  });
+});
+
+describe("player store - replay gain", () => {
+  function trackWith(replayGain: CurrentTrack["replayGain"]): CurrentTrack {
+    return { ...makeTrack("rg"), replayGain };
+  }
+
+  function volumeCalls() {
+    return invoke.mock.calls.filter((c) => c[0] === "audio_volume").map((c) => (c[1] as { volume: number }).volume);
+  }
+
+  it("mode 'off' applies unity gain regardless of tags", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith({ trackGain: -10 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("off");
+    expect(last(volumeCalls())).toBeCloseTo(1, 5);
+  });
+
+  it("mode 'track' uses trackGain/trackPeak", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith({ trackGain: -3, trackPeak: 0.9 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    const expectedLinear = Math.min(Math.pow(10, -3 / 20), 1.0 / 0.9);
+    expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
+  });
+
+  it("mode 'album' falls through to trackGain when albumGain is null, not straight to the fallback", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith({ albumGain: null, trackGain: -3, trackPeak: 1 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    const expectedLinear = Math.pow(10, -3 / 20);
+    expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
+  });
+
+  it("falls back to replayGainFallbackGain only when both album and track gain are missing", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: -6 });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    const expectedLinear = Math.pow(10, -6 / 20);
+    expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
+  });
+
+  it("clips the linear multiplier so the peak sample never exceeds 1.0", async () => {
+    // +10dB is huge gain; peak 0.5 means the clip ceiling (1/0.5 = 2.0) binds before the raw gain does.
+    usePlayerStore.setState({ currentTrack: trackWith({ trackGain: 10, trackPeak: 0.5 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    const rawLinear = Math.pow(10, 10 / 20);
+    expect(rawLinear).toBeGreaterThan(2.0);
+    expect(last(volumeCalls())).toBeCloseTo(2.0, 5);
+  });
+
+  it("setReplayGainPreAmp clamps to [-15, 15]", async () => {
+    await usePlayerStore.getState().setReplayGainPreAmp(100);
+    expect(usePlayerStore.getState().replayGainPreAmp).toBe(15);
+    await usePlayerStore.getState().setReplayGainPreAmp(-100);
+    expect(usePlayerStore.getState().replayGainPreAmp).toBe(-15);
+  });
+
+  it("setReplayGainFallbackGain clamps to [-15, 15]", async () => {
+    await usePlayerStore.getState().setReplayGainFallbackGain(100);
+    expect(usePlayerStore.getState().replayGainFallbackGain).toBe(15);
+    await usePlayerStore.getState().setReplayGainFallbackGain(-100);
+    expect(usePlayerStore.getState().replayGainFallbackGain).toBe(-15);
+  });
+
+  it("persists mode/pre-amp/fallback to settings, each under its own key", async () => {
+    const db = mockDb();
+    await usePlayerStore.getState().setReplayGainMode("album");
+    await usePlayerStore.getState().setReplayGainPreAmp(3);
+    await usePlayerStore.getState().setReplayGainFallbackGain(-4);
+
+    const keys = db.execute.mock.calls.map((c) => c[1]?.[0]);
+    expect(keys).toContain("album");
+    expect(keys).toContain("3");
+    expect(keys).toContain("-4");
+  });
+
+  it("a persistence failure leaves the in-memory setting applied rather than rolling it back", async () => {
+    mockDb({ execute: () => Promise.reject(new Error("disk full")) });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    expect(usePlayerStore.getState().replayGainMode).toBe("album");
+  });
+
+  it("no current track: setting replay gain does not throw", async () => {
+    usePlayerStore.setState({ currentTrack: null });
+    await expect(usePlayerStore.getState().setReplayGainMode("track")).resolves.toBeUndefined();
+  });
+});
+
+describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
+  function settingsRows(rows: Record<string, string>) {
+    return Object.entries(rows).map(([key, value]) => ({ key, value }));
+  }
+
+  it("restores queue_state when restore_on_startup is 'true' and no track is current", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(
+          settingsRows({
+            "queue.restore_on_startup": "true",
+            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0, currentTrack: makeTrack("saved") }),
+          })
+        ),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("saved");
+  });
+
+  it("does not restore queue_state when restore_on_startup is not 'true'", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(
+          settingsRows({
+            "queue.restore_on_startup": "false",
+            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0 }),
+          })
+        ),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().currentTrack).toBeNull();
+  });
+
+  it("does not clobber a track already playing when settings load resolves late", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(
+          settingsRows({
+            "queue.restore_on_startup": "true",
+            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0 }),
+          })
+        ),
+    });
+    usePlayerStore.setState({ currentTrack: makeTrack("already-playing") });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("already-playing");
+  });
+
+  it("malformed queue_state JSON is ignored rather than throwing", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(settingsRows({ "queue.restore_on_startup": "true", queue_state: "{not json" })),
+    });
+
+    await expect(usePlayerStore.getState().loadSettings()).resolves.toBeUndefined();
+    expect(usePlayerStore.getState().currentTrack).toBeNull();
+  });
+
+  it("an empty saved queue is not restored even when restore_on_startup is true", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(
+          settingsRows({ "queue.restore_on_startup": "true", queue_state: JSON.stringify({ queue: [], queueIndex: 0 }) })
+        ),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().currentTrack).toBeNull();
+  });
+
+  it("restores replay gain settings clamped to [-15, 15] even if the stored value is out of range", async () => {
+    mockDb({
+      select: () =>
+        Promise.resolve(
+          settingsRows({ "player.replay_gain_pre_amp": "50", "player.replay_gain_fallback_gain": "-50" })
+        ),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const state = usePlayerStore.getState();
+    expect(state.replayGainPreAmp).toBe(15);
+    expect(state.replayGainFallbackGain).toBe(-15);
+  });
+
+  it("ignores an invalid replay_gain_mode value, leaving the mode unchanged", async () => {
+    usePlayerStore.setState({ replayGainMode: "track" });
+    mockDb({ select: () => Promise.resolve(settingsRows({ "player.replay_gain_mode": "bogus" })) });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().replayGainMode).toBe("track");
   });
 });
