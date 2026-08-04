@@ -22,6 +22,7 @@ import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
+import { useClearSearchOnNavigate } from "./hooks/useClearSearchOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
@@ -229,6 +230,11 @@ export default function App() {
     setSearchOpen(false);
     searchInputRef.current?.blur();
   }, []);
+
+  // The search overlay renders instead of the router's content and is not
+  // URL-backed, so anything that navigates while it is open (command palette,
+  // player bar, context menu) lands behind it and the click looks inert.
+  useClearSearchOnNavigate(pathname, clearSearch);
 
   useEffect(() => () => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);

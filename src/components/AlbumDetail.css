@@ -96,11 +96,16 @@
   line-height: 1.15;
 }
 
+/* Both suffix controls are plain text affordances sitting in the hero. The
+   global `input, button` rule gives every button a radius and a drop shadow,
+   which on a transparent background renders as a floating glassy pill around
+   the text - so the shadow and the radius are cleared explicitly here. */
 .album-suffix-toggle-btn {
   appearance: none;
   background: none;
   border: none;
   border-radius: 0;
+  box-shadow: none;
   padding: 0 var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
@@ -109,22 +114,37 @@
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 1;
+  transition: color var(--duration-fast);
 }
-.album-suffix-toggle-btn:hover { color: var(--text-primary); }
+.album-suffix-toggle-btn:hover:not(:disabled) { color: var(--text-primary); }
+.album-suffix-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .album-suffix-add-btn {
+  appearance: none;
   background: none;
   border: none;
+  border-radius: 0;
+  box-shadow: none;
   padding: 0;
+  /* The hero meta column is a stretch-aligned flex column, so without this the
+     button's hit area runs the full width of the page past its own label. */
+  align-self: flex-start;
   color: var(--text-tertiary);
   cursor: pointer;
   font-size: var(--text-base);
+  line-height: 1.4;
   text-align: left;
   font-family: inherit;
+  transition: color var(--duration-fast);
 }
-.album-suffix-add-btn:hover { color: var(--accent); }
-.album-suffix-add-btn--undo { color: var(--text-tertiary); }
-.album-suffix-add-btn--undo:hover { color: var(--text-primary); }
+.album-suffix-add-btn:hover:not(:disabled) { color: var(--text-primary); }
+.album-suffix-add-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .album-detail-artist {
   font-size: var(--text-md);

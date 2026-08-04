@@ -531,7 +531,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
             )}
             {suffixIsExcluded && detectedSuffix && (
               <button
-                className="album-suffix-add-btn album-suffix-add-btn--undo"
+                className="album-suffix-add-btn"
                 onClick={() => void unexcludeFromSuffix(album.id)}
                 title="Re-apply suffix stripping to this album."
               >
