@@ -250,7 +250,7 @@ function resolveTrack(
 // playing when shuffle is switched on mid-track. Pass -1 to leave the shuffle unbiased: on a
 // repeat-all loop-back nothing is playing yet, and anchoring there would make every pass open
 // with the same track, which is the opposite of what re-shuffling on the wrap is for.
-function buildShuffleOrder(length: number, anchorQueueIndex: number): number[] {
+export function buildShuffleOrder(length: number, anchorQueueIndex: number): number[] {
   const indices = Array.from({ length }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

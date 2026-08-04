@@ -5,7 +5,13 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 
 import { resetTauriMocks, onInvoke, invoke, emitTauriEvent } from "../test/mocks/tauri";
-import { usePlayerStore, normalizeShuffleOrder, isNextDisabled, type CurrentTrack } from "./player";
+import {
+  usePlayerStore,
+  normalizeShuffleOrder,
+  isNextDisabled,
+  buildShuffleOrder,
+  type CurrentTrack,
+} from "./player";
 
 function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
   let resolve!: (v: T) => void;
@@ -714,5 +720,92 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().currentTrack?.id).toBe("0");
       expect(usePlayerStore.getState().queueIndex).toBe(0);
     });
+  });
+});
+
+describe("buildShuffleOrder anchor semantics", () => {
+  function isPermutationOf(order: number[], n: number): boolean {
+    if (order.length !== n) return false;
+    const seen = new Set(order);
+    if (seen.size !== n) return false;
+    for (let i = 0; i < n; i++) if (!seen.has(i)) return false;
+    return true;
+  }
+
+  it("returns a permutation of 0..n-1 for every anchor", () => {
+    for (const anchor of [-1, 0, 3, 9]) {
+      for (let run = 0; run < 50; run++) {
+        expect(isPermutationOf(buildShuffleOrder(10, anchor), 10)).toBe(true);
+      }
+    }
+  });
+
+  it("keeps length === n, which is the shuffleOrder/queue parallel-array invariant", () => {
+    for (const n of [0, 1, 2, 3, 10, 137]) {
+      expect(buildShuffleOrder(n, -1)).toHaveLength(n);
+      expect(buildShuffleOrder(n, 0)).toHaveLength(n);
+    }
+  });
+
+  it("returns [] for length 0", () => {
+    expect(buildShuffleOrder(0, -1)).toEqual([]);
+    expect(buildShuffleOrder(0, 0)).toEqual([]);
+  });
+
+  it("returns [0] for length 1 whatever the anchor", () => {
+    expect(buildShuffleOrder(1, 0)).toEqual([0]);
+    expect(buildShuffleOrder(1, -1)).toEqual([0]);
+    expect(buildShuffleOrder(1, 5)).toEqual([0]);
+  });
+
+  it("pins an in-range anchor to position 0 on every run", () => {
+    for (const anchor of [0, 1, 4, 9]) {
+      for (let run = 0; run < 200; run++) {
+        expect(buildShuffleOrder(10, anchor)[0]).toBe(anchor);
+      }
+    }
+  });
+
+  it("pins the anchor at length 2, the smallest case where the swap is observable", () => {
+    for (let run = 0; run < 100; run++) {
+      expect(buildShuffleOrder(2, 1)).toEqual([1, 0]);
+      expect(buildShuffleOrder(2, 0)).toEqual([0, 1]);
+    }
+  });
+
+  it("regression: anchor -1 leaves position 0 genuinely random, never pinned", () => {
+    // known-issues.md "A hand-off decided ahead of time must carry what it decided": the
+    // repeat-all wrap re-shuffled with an anchor, so every pass re-opened on the same
+    // track forever. -1 is the documented "no anchor" value and must not bias position 0.
+    const seenFirst = new Set<number>();
+    for (let run = 0; run < 1000; run++) {
+      seenFirst.add(buildShuffleOrder(5, -1)[0]!);
+    }
+    expect(seenFirst).toEqual(new Set([0, 1, 2, 3, 4]));
+  });
+
+  it("leaves no index pinned to position 1 either, under an anchor", () => {
+    const seenSecond = new Set<number>();
+    for (let run = 0; run < 1000; run++) {
+      seenSecond.add(buildShuffleOrder(5, 0)[1]!);
+    }
+    // Everything except the anchor itself must be reachable at position 1.
+    expect(seenSecond).toEqual(new Set([1, 2, 3, 4]));
+  });
+
+  it("degrades to unanchored when the anchor is out of range, without throwing", () => {
+    const seenFirst = new Set<number>();
+    for (let run = 0; run < 1000; run++) {
+      seenFirst.add(buildShuffleOrder(5, 99)[0]!);
+    }
+    expect(seenFirst).toEqual(new Set([0, 1, 2, 3, 4]));
+  });
+
+  it("returns a fresh array per call, since every caller splices into the result", () => {
+    const a = buildShuffleOrder(5, 0);
+    const b = buildShuffleOrder(5, 0);
+    expect(a).not.toBe(b);
+    a.push(99);
+    expect(buildShuffleOrder(5, 0)).toHaveLength(5);
   });
 });
