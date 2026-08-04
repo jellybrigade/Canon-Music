@@ -119,7 +119,7 @@ Don't flatten single-parent. Don't merge `canon-tree.json` + `user-tree.json`. S
 
 ## Status
 
-**v0.6.x — active dev.** Schema v20, all workstreams shipped:
+**v0.6.x — active dev.** Schema v48, all workstreams shipped:
 
 - Full library sync (incremental, artists table, tag issues scan)
 - Scrobble queue + flush Navidrome (`useScrobbleFlush`)

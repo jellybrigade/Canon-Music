@@ -14,7 +14,7 @@
  *   so tests here exercise the `Error` branch.
  */
 import BetterSqlite3 from "better-sqlite3";
-import { migrations } from "../db/migrations";
+import { runMigrations } from "../db/migrations";
 
 export interface QueryResult {
   rowsAffected: number;
@@ -72,35 +72,12 @@ export function createTestDb(): FakeDatabase {
 }
 
 /**
- * Applies `src/db/migrations.ts` the same way `src/db/index.ts` does, including the
- * split-on-";" behavior, since a migration that only works as one blob would pass here and
- * fail in the app.
+ * Runs the real `runMigrations` from `src/db/migrations.ts` against the harness db. This calls
+ * production code on purpose: the harness used to carry its own copy of the runner, so a fix to
+ * one copy left the other stale and the suite green either way.
  */
 export async function migrateTestDb(db: FakeDatabase): Promise<void> {
-  await db.execute("PRAGMA journal_mode=WAL");
-  await db.execute(`CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)`);
-
-  const rows = await db.select<{ version: number }[]>(
-    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
-  );
-  const current = rows[0]?.version ?? 0;
-
-  for (const migration of migrations) {
-    if (migration.version <= current) continue;
-    const statements = migration.sql
-      .split(";")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-    for (const statement of statements) {
-      try {
-        await db.execute(statement);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (!message.includes("duplicate column name")) throw e;
-      }
-    }
-    await db.execute("INSERT INTO schema_migrations (version) VALUES (?)", [migration.version]);
-  }
+  await runMigrations(db);
 }
 
 export async function createMigratedTestDb(): Promise<FakeDatabase> {

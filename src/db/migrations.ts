@@ -3,6 +3,62 @@ export interface Migration {
   sql: string;
 }
 
+/**
+ * The subset of tauri-plugin-sql's `Database` that `runMigrations` needs. Declared here so the
+ * test harness can drive the real runner instead of re-implementing it, which is what let the
+ * two copies drift apart before.
+ */
+export interface MigrationDb {
+  execute(query: string, bindValues?: unknown[]): Promise<unknown>;
+  select<T>(query: string, bindValues?: unknown[]): Promise<T>;
+}
+
+export async function runMigrations(database: MigrationDb): Promise<void> {
+  // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
+  // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
+  // (DELETE mode) db, so concurrent sync/scrobble/enrichment writes can starve UI reads with
+  // "database is locked" errors. WAL is a persistent on-disk setting, but PRAGMA is cheap to re-run.
+  await database.execute("PRAGMA journal_mode=WAL");
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY
+    )
+  `);
+
+  type Row = { version: number };
+  const rows = await database.select<Row[]>(
+    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+  );
+  const current = rows[0]?.version ?? 0;
+
+  for (const migration of migrations) {
+    if (migration.version > current) {
+      // tauri-plugin-sql only executes one statement per execute() call;
+      // split on ";" and run each non-empty statement individually.
+      const statements = migration.sql
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      for (const statement of statements) {
+        try {
+          await database.execute(statement);
+        } catch (e) {
+          // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
+          // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
+          // tauri-plugin-sql rejects with a plain string, not an Error instance, so check both shapes.
+          const message = e instanceof Error ? e.message : String(e);
+          if (!message.includes("duplicate column name")) throw e;
+        }
+      }
+      await database.execute(
+        "INSERT INTO schema_migrations (version) VALUES (?)",
+        [migration.version]
+      );
+    }
+  }
+}
+
 export const migrations: Migration[] = [
   {
     version: 1,
