@@ -30,6 +30,14 @@ export interface FakeDatabase {
   raw: BetterSqlite3.Database;
   /** Count of `execute` calls, for "an idempotent sync writes nothing" assertions. */
   executeCount: number;
+  /** Count of `select` calls, for "this pass reads the library once" assertions. */
+  selectCount: number;
+  /**
+   * Every statement seen, in order, tagged by kind. Waste assertions usually want a count
+   * of one *shape* of query rather than of all SQL, and a total alone cannot tell a second
+   * read of the same table from a different read that had to happen.
+   */
+  queryLog: { kind: "execute" | "select"; sql: string }[];
 }
 
 function toBindable(value: unknown): unknown {
@@ -46,10 +54,13 @@ export function createTestDb(): FakeDatabase {
   const db: FakeDatabase = {
     raw,
     executeCount: 0,
+    selectCount: 0,
+    queryLog: [],
     async execute(query, bindValues = []) {
       db.executeCount++;
       const params = bindValues.map(toBindable);
       const trimmed = query.trim();
+      db.queryLog.push({ kind: "execute", sql: trimmed });
       // PRAGMA and other statements that return rows cannot go through `.run()`.
       if (/^pragma\b/i.test(trimmed)) {
         raw.prepare(trimmed).all(...(params as never[]));
@@ -59,8 +70,11 @@ export function createTestDb(): FakeDatabase {
       return { rowsAffected: info.changes, lastInsertId: Number(info.lastInsertRowid) };
     },
     async select<T>(query: string, bindValues: unknown[] = []) {
+      db.selectCount++;
       const params = bindValues.map(toBindable);
-      return raw.prepare(query.trim()).all(...(params as never[])) as T;
+      const trimmed = query.trim();
+      db.queryLog.push({ kind: "select", sql: trimmed });
+      return raw.prepare(trimmed).all(...(params as never[])) as T;
     },
     async close() {
       raw.close();
@@ -84,5 +98,7 @@ export async function createMigratedTestDb(): Promise<FakeDatabase> {
   const db = createTestDb();
   await migrateTestDb(db);
   db.executeCount = 0;
+  db.selectCount = 0;
+  db.queryLog.length = 0;
   return db;
 }

@@ -87,6 +87,27 @@ Bugfix has extra rule: **test must reproduce the bug against unfixed code.** Fix
 - Fake timers for anything with backoff, debounce, interval, or fade.
 - A flaky test is a broken test. Fix or delete it same session, never leave it to rot the suite's credibility.
 
+### Waste is a defect, test it like one
+
+Correct output is half of "done". The other half is what it cost: how many renders, how many fetches, how much work per second. A component that re-renders 5x/sec, a hook that fetches the same album four times, an effect that re-runs itself forever - all of these pass every correctness assertion in this repo. So every new feature or bugfix gets a waste assertion alongside the behavior one, whenever any of these apply:
+
+| If the change... | Assert |
+|---|---|
+| Subscribes to a store | The subscriber re-renders only on the slice it reads. Exact render count across N state changes it doesn't care about (usually 0 extra) |
+| Adds a query / fetch / `invoke` | Exact call count for the whole flow. One album open = one album query. Also: no call fires twice with the same argument |
+| Adds an effect that writes state its own deps read | It runs a bounded number of times when the repair can't succeed (the `AlbumDetail` backfill loop class) |
+| Adds an interval / timer / listener | Exactly one exists after the path that arms it runs twice, and it's torn down on unmount |
+| Adds input-driven fetching | N keystrokes fire fewer than N query rounds (debounced, not `useDeferredValue` - that defers rendering, not fetching) |
+| Adds a sync / batch write | Second run over unchanged data writes nothing (`FakeDatabase.executeCount`), and reads it once (`selectCount`) |
+
+Rules for these assertions:
+
+- **Exact counts only.** `toHaveBeenCalled()` passes on 1 call and on 500. `expect(count).toBe(5)`, never `toBeGreaterThan(0)`.
+- **Measure a span of time, not one tick.** Anything periodic gets fake timers advanced a fixed span, with the count compared against the rate. A doubled interval is invisible in a single tick.
+- **Prove the probe can fail.** A waste test that would pass against the wasteful version is worse than none. Break the property deliberately once, confirm red, restore.
+
+Harness: `src/test/perf.ts` (`trackRenders`, `invokeCount`, `invokeArgs`) and `FakeDatabase.executeCount` / `selectCount` / `queryLog` in `src/test/sqlite.ts`. Worked examples in `src/store/player.waste.test.ts`. Inventory + checklist: section 4.6 of `instructions/tests.md`.
+
 ### Regression tests are mandatory
 
 Every entry in `.claude/rules/known-issues.md` is a bug that shipped once. When touching code near one, add the regression test if missing, and tick it in `instructions/tests.md`. New bug found → new `known-issues.md` entry **and** new test, same commit.
