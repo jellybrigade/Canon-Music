@@ -76,6 +76,19 @@ export function useRadio() {
   const playedTrackIdsRef = useRef(new Set<string>());
   const wasRadioActiveRef = useRef(false);
 
+  // "Stopped at the end of the queue" is the auto-advance trigger, but a queue restored at
+  // startup with radio_active=1 satisfies it without anything ever having played: not playing,
+  // not loading, index at the last entry. That made launching the app start a random radio
+  // track. Auto-advance therefore also requires that playback actually happened since mount.
+  // Subscribed rather than selected so play/pause does not re-render the whole radio effect.
+  const hasPlayedRef = useRef(false);
+  useEffect(() => {
+    if (usePlayerStore.getState().isPlaying) hasPlayedRef.current = true;
+    return usePlayerStore.subscribe((s) => {
+      if (s.isPlaying) hasPlayedRef.current = true;
+    });
+  }, []);
+
   useEffect(() => {
     if (radioActive && !wasRadioActiveRef.current) {
       sessionCounterRef.current = 0;
@@ -185,7 +198,7 @@ export function useRadio() {
           // those four are in the effect's deps, so the closure can be holding values from
           // well before the user paused, skipped, or the track naturally ended.
           const live2 = usePlayerStore.getState();
-          const wasAtEnd2 = !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
+          const wasAtEnd2 = hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
           // Read the length back off the store: an append can trim played entries off the front
           // to stay under maxQueueSize, so the captured pre-append length is not the new track's
@@ -248,7 +261,7 @@ export function useRadio() {
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
         // Same staleness concern as the same-album branch above: read live state, not closure.
         const live = usePlayerStore.getState();
-        const wasAtEnd = !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
+        const wasAtEnd = hasPlayedRef.current && !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
         // See the note above: the append may have trimmed the front of the queue.
         if (wasAtEnd) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
