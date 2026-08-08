@@ -385,18 +385,27 @@ mod tests {
 
     #[test]
     fn resolve_base_handles_a_location_with_no_path_component() {
-        assert_eq!(resolve_base("http://10.0.0.5:1400", "<root/>"), "http://10.0.0.5:1400");
+        assert_eq!(
+            resolve_base("http://10.0.0.5:1400", "<root/>"),
+            "http://10.0.0.5:1400"
+        );
     }
 
     #[test]
     fn resolve_base_returns_a_location_without_a_scheme_verbatim() {
-        assert_eq!(resolve_base("10.0.0.5:1400/desc.xml", "<root/>"), "10.0.0.5:1400/desc.xml");
+        assert_eq!(
+            resolve_base("10.0.0.5:1400/desc.xml", "<root/>"),
+            "10.0.0.5:1400/desc.xml"
+        );
     }
 
     #[test]
     fn resolve_base_keeps_a_url_base_that_has_no_trailing_slash() {
         let xml = "<URLBase>https://renderer.local:9000/base</URLBase>";
-        assert_eq!(resolve_base("http://other/desc.xml", xml), "https://renderer.local:9000/base");
+        assert_eq!(
+            resolve_base("http://other/desc.xml", xml),
+            "https://renderer.local:9000/base"
+        );
     }
 
     // ── parse_response ────────────────────────────────────────────────────────
@@ -411,7 +420,10 @@ mod tests {
     #[test]
     fn parse_response_extracts_location_usn_and_server_from_a_200_advertisement() {
         let r = parse_response(OK_RESPONSE).expect("well-formed 200 response should parse");
-        assert_eq!(r.location, "http://10.0.0.5:1400/xml/device_description.xml");
+        assert_eq!(
+            r.location,
+            "http://10.0.0.5:1400/xml/device_description.xml"
+        );
         assert_eq!(
             r.usn,
             "uuid:RINCON_ABC::urn:schemas-upnp-org:device:MediaRenderer:1"
@@ -421,7 +433,8 @@ mod tests {
 
     #[test]
     fn parse_response_matches_header_names_case_insensitively() {
-        let text = "HTTP/1.1 200 OK\r\nlocation: http://h/d.xml\r\nUsn: uuid:x\r\nsErVeR: box\r\n\r\n";
+        let text =
+            "HTTP/1.1 200 OK\r\nlocation: http://h/d.xml\r\nUsn: uuid:x\r\nsErVeR: box\r\n\r\n";
         let r = parse_response(text).expect("lowercase headers should still parse");
         assert_eq!(r.location, "http://h/d.xml");
         assert_eq!(r.usn, "uuid:x");

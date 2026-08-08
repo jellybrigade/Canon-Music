@@ -53,7 +53,9 @@ impl StreamingBuffer {
             data_available: Condvar::new(),
         });
         (
-            StreamingBuffer { shared: shared.clone() },
+            StreamingBuffer {
+                shared: shared.clone(),
+            },
             StreamingWriter { shared },
         )
     }
@@ -105,7 +107,10 @@ impl Read for StreamingBuffer {
             // A failed stream still serves whatever arrived before the connection died, so the
             // user hears the part of the track that was actually downloaded, and only then errors.
             if state.cancelled && !state.failed {
-                return Err(io::Error::new(io::ErrorKind::Interrupted, "playback superseded"));
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "playback superseded",
+                ));
             }
             let buffered = state.buffer.len() as u64;
             if state.read_pos < buffered {
@@ -117,7 +122,10 @@ impl Read for StreamingBuffer {
                 return Ok(n);
             }
             if state.failed {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "stream truncated"));
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "stream truncated",
+                ));
             }
             if state.finished {
                 return Ok(0); // EOF
@@ -289,7 +297,10 @@ impl Read for FileBackedStreamingBuffer {
         let mut state = self.shared.state.lock().unwrap();
         loop {
             if state.cancelled && !state.failed {
-                return Err(io::Error::new(io::ErrorKind::Interrupted, "playback superseded"));
+                return Err(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "playback superseded",
+                ));
             }
             if self.read_pos < state.bytes_written {
                 let avail = (state.bytes_written - self.read_pos) as usize;
@@ -300,7 +311,10 @@ impl Read for FileBackedStreamingBuffer {
                 return Ok(read_n);
             }
             if state.failed {
-                return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "stream truncated"));
+                return Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "stream truncated",
+                ));
             }
             if state.finished {
                 return Ok(0);
@@ -426,7 +440,9 @@ mod tests {
         let (bytes, terminal) = drain(&mut buf);
         assert_eq!(bytes, b"partial audio");
         assert_eq!(
-            terminal.expect_err("truncated stream must end in an error").kind(),
+            terminal
+                .expect_err("truncated stream must end in an error")
+                .kind(),
             io::ErrorKind::UnexpectedEof
         );
     }

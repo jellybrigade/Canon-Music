@@ -12,8 +12,8 @@ use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Seek};
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
 use tauri::Manager;
@@ -148,7 +148,13 @@ static COVER_CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::Onc
 fn sanitize_cache_key(kind: &str, key: &str) -> String {
     let safe: String = key
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     format!("{kind}-{safe}")
 }
@@ -156,11 +162,18 @@ fn sanitize_cache_key(kind: &str, key: &str) -> String {
 fn disk_cache_read(dir: &std::path::Path, kind: &str, key: &str) -> Option<(Vec<u8>, String)> {
     let safe = sanitize_cache_key(kind, key);
     let bytes = std::fs::read(dir.join(&safe)).ok()?;
-    let content_type = std::fs::read_to_string(dir.join(format!("{safe}.ct"))).unwrap_or_else(|_| "image/jpeg".into());
+    let content_type = std::fs::read_to_string(dir.join(format!("{safe}.ct")))
+        .unwrap_or_else(|_| "image/jpeg".into());
     Some((bytes, content_type))
 }
 
-fn disk_cache_write(dir: &std::path::Path, kind: &str, key: &str, bytes: &[u8], content_type: &str) {
+fn disk_cache_write(
+    dir: &std::path::Path,
+    kind: &str,
+    key: &str,
+    bytes: &[u8],
+    content_type: &str,
+) {
     let safe = sanitize_cache_key(kind, key);
     let _ = std::fs::write(dir.join(&safe), bytes);
     let _ = std::fs::write(dir.join(format!("{safe}.ct")), content_type);
@@ -178,11 +191,18 @@ fn disk_cache_write(dir: &std::path::Path, kind: &str, key: &str, bytes: &[u8], 
 /// full clear since disk persistence is the point. Called periodically (not on
 /// every write) from `disk_cache_write` since it's a full directory scan.
 fn evict_disk_cache_if_needed(dir: &std::path::Path) {
-    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
     let mut images: Vec<(std::path::PathBuf, std::time::SystemTime)> = entries
         .flatten()
         .filter(|e| !e.file_name().to_string_lossy().ends_with(".ct"))
-        .filter_map(|e| e.metadata().ok().and_then(|m| m.modified().ok()).map(|t| (e.path(), t)))
+        .filter_map(|e| {
+            e.metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map(|t| (e.path(), t))
+        })
         .collect();
     if images.len() <= MAX_DISK_CACHE_ENTRIES {
         return;
@@ -226,7 +246,10 @@ fn set_cover_proxy_config(
     base_url: String,
     auth_params: String,
 ) {
-    *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig { base_url, auth_params });
+    *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig {
+        base_url,
+        auth_params,
+    });
 }
 
 // `getBlurredBackdrop` (src/lib/artBlur.ts) loads cover images with
@@ -258,7 +281,10 @@ fn cover_image_response(bytes: Vec<u8>, content_type: &str) -> tauri::http::Resp
 /// request: in-memory cache -> on-disk cache -> upstream fetch (Navidrome or the raw artist-image
 /// source URL), populating both caches on a miss. Runs on a `spawn_blocking` thread, gated by
 /// `CoverState.request_sem` (see caller) - same 16-permit cap the old loopback server used.
-fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u8>>) -> tauri::http::Response<Vec<u8>> {
+fn handle_cover_request(
+    state: &CoverState,
+    request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
     let path = request.uri().path();
     let query = request.uri().query().unwrap_or("");
 
@@ -267,11 +293,22 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
         if source_url.is_empty() {
             return cover_error_response(400);
         }
-        let cached = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner()).get(&source_url).cloned();
+        let cached = state
+            .artist_image_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(&source_url)
+            .cloned();
         let (bytes, content_type) = if let Some(entry) = cached {
             entry
-        } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, "artist", &source_url)) {
-            let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
+        } else if let Some(entry) = COVER_CACHE_DIR
+            .get()
+            .and_then(|dir| disk_cache_read(dir, "artist", &source_url))
+        {
+            let mut cache = state
+                .artist_image_cache
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
             if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                 cache.clear();
             }
@@ -292,7 +329,10 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
                             if let Some(dir) = COVER_CACHE_DIR.get() {
                                 disk_cache_write(dir, "artist", &source_url, &b, &ct);
                             }
-                            let mut cache = state.artist_image_cache.lock().unwrap_or_else(|e| e.into_inner());
+                            let mut cache = state
+                                .artist_image_cache
+                                .lock()
+                                .unwrap_or_else(|e| e.into_inner());
                             if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                                 cache.clear();
                             }
@@ -325,10 +365,18 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
         })
         .unwrap_or(300);
     let cache_key = format!("{id}:{size}");
-    let cached = state.cache.lock().unwrap_or_else(|e| e.into_inner()).get(&cache_key).cloned();
+    let cached = state
+        .cache
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&cache_key)
+        .cloned();
     let (bytes, content_type) = if let Some(entry) = cached {
         entry
-    } else if let Some(entry) = COVER_CACHE_DIR.get().and_then(|dir| disk_cache_read(dir, "cover", &cache_key)) {
+    } else if let Some(entry) = COVER_CACHE_DIR
+        .get()
+        .and_then(|dir| disk_cache_read(dir, "cover", &cache_key))
+    {
         let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
         if cache.len() >= MAX_COVER_CACHE_ENTRIES {
             cache.clear();
@@ -336,7 +384,11 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
         cache.insert(cache_key.clone(), entry.clone());
         entry
     } else {
-        let cfg = state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let cfg = state
+            .proxy_config
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
         match cfg {
             None => return cover_error_response(503),
             Some(cfg) => {
@@ -358,7 +410,8 @@ fn handle_cover_request(state: &CoverState, request: &tauri::http::Request<Vec<u
                                 if let Some(dir) = COVER_CACHE_DIR.get() {
                                     disk_cache_write(dir, "cover", &cache_key, &b, &ct);
                                 }
-                                let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
+                                let mut cache =
+                                    state.cache.lock().unwrap_or_else(|e| e.into_inner());
                                 if cache.len() >= MAX_COVER_CACHE_ENTRIES {
                                     cache.clear();
                                 }
@@ -382,23 +435,41 @@ fn build_tray_menu<R: tauri::Runtime>(
     is_playing: bool,
 ) -> tauri::Result<tauri::menu::Menu<R>> {
     use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem};
-    let label = if track_label.is_empty() { "Canon" } else { track_label };
+    let label = if track_label.is_empty() {
+        "Canon"
+    } else {
+        track_label
+    };
     let display = if label.chars().count() > 45 {
         format!("{}…", label.chars().take(45).collect::<String>())
     } else {
         label.to_string()
     };
     let track_item = MenuItemBuilder::new(&display).enabled(false).build(app)?;
-    let play_pause = MenuItemBuilder::new(if is_playing { "⏸  Pause" } else { "▶  Play" })
-        .id("play_pause")
+    let play_pause = MenuItemBuilder::new(if is_playing {
+        "⏸  Pause"
+    } else {
+        "▶  Play"
+    })
+    .id("play_pause")
+    .build(app)?;
+    let next_item = MenuItemBuilder::new("⏭  Next track")
+        .id("next")
         .build(app)?;
-    let next_item = MenuItemBuilder::new("⏭  Next track").id("next").build(app)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let show_item = MenuItemBuilder::new("Show Canon").id("show").build(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit_item = MenuItemBuilder::new("Quit Canon").id("quit").build(app)?;
     MenuBuilder::new(app)
-        .items(&[&track_item, &play_pause, &next_item, &sep1, &show_item, &sep2, &quit_item])
+        .items(&[
+            &track_item,
+            &play_pause,
+            &next_item,
+            &sep1,
+            &show_item,
+            &sep2,
+            &quit_item,
+        ])
         .build()
 }
 
@@ -476,7 +547,11 @@ async fn audio_play(
     state: tauri::State<'_, AudioState>,
     url: String,
 ) -> Result<(), String> {
-    let handle = state.handle.as_ref().ok_or("No audio output device available")?.clone();
+    let handle = state
+        .handle
+        .as_ref()
+        .ok_or("No audio output device available")?
+        .clone();
 
     // Bump play_id BEFORE stopping old sink so the watcher thread sees the new id
     // before the poll loop exits, preventing a spurious track-ended event.
@@ -509,7 +584,10 @@ async fn audio_play(
 
     // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
-        let mut cache = state.prefetch_cache.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cache = state
+            .prefetch_cache
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         let hit = cache.remove(&url);
         cache.clear();
         hit
@@ -521,7 +599,11 @@ async fn audio_play(
     // (~first 64 KB), reducing initial buffering wait. Tracks >64 MiB spill to a
     // temp file in stream-spill/ to avoid accumulating large Vec<u8> in RAM.
     std::thread::spawn(move || {
-        let spill_dir = app.path().app_data_dir().ok().map(|d| d.join("stream-spill"));
+        let spill_dir = app
+            .path()
+            .app_data_dir()
+            .ok()
+            .map(|d| d.join("stream-spill"));
 
         // Build reader: either from prefetch cache or a streaming HTTP response.
         let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
@@ -531,12 +613,16 @@ async fn audio_play(
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("audio_play fetch error: {e}");
-                    app.emit("audio-error", serde_json::json!({
-                        "url": url,
-                        "message": "Could not reach the server",
-                        "detail": e.to_string(),
-                        "retryable": true,
-                    })).ok();
+                    app.emit(
+                        "audio-error",
+                        serde_json::json!({
+                            "url": url,
+                            "message": "Could not reach the server",
+                            "detail": e.to_string(),
+                            "retryable": true,
+                        }),
+                    )
+                    .ok();
                     return;
                 }
             };
@@ -563,18 +649,28 @@ async fn audio_play(
                 })).ok();
                 return;
             }
-            let ct = response.headers()
+            let ct = response
+                .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("")
                 .to_lowercase();
-            let codec = if ct.contains("flac") { "FLAC" }
-                else if ct.contains("mpeg") || ct.contains("mp3") { "MP3" }
-                else if ct.contains("ogg") { "OGG" }
-                else if ct.contains("aac") || ct.contains("mp4") || ct.contains("m4a") { "AAC" }
-                else if ct.contains("opus") { "Opus" }
-                else if ct.contains("wav") { "WAV" }
-                else { "" }.to_string();
+            let codec = if ct.contains("flac") {
+                "FLAC"
+            } else if ct.contains("mpeg") || ct.contains("mp3") {
+                "MP3"
+            } else if ct.contains("ogg") {
+                "OGG"
+            } else if ct.contains("aac") || ct.contains("mp4") || ct.contains("m4a") {
+                "AAC"
+            } else if ct.contains("opus") {
+                "Opus"
+            } else if ct.contains("wav") {
+                "WAV"
+            } else {
+                ""
+            }
+            .to_string();
             let content_length = response.content_length();
 
             const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
@@ -582,25 +678,24 @@ async fn audio_play(
             // streams don't accumulate unbounded in RAM.
             let use_spill = content_length.map_or(true, |cl| cl > SPILL_THRESHOLD);
 
-            let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) =
-                if use_spill {
-                    if let Some(ref dir) = spill_dir {
-                        match FileBackedStreamingBuffer::new(dir, this_id, content_length) {
-                            Ok((buf, w)) => (Box::new(buf), AnyWriter::File(w)),
-                            Err(e) => {
-                                eprintln!("stream-spill init failed ({e}); using RAM buffer");
-                                let (buf, w) = StreamingBuffer::new(content_length);
-                                (Box::new(buf), AnyWriter::Ram(w))
-                            }
+            let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) = if use_spill {
+                if let Some(ref dir) = spill_dir {
+                    match FileBackedStreamingBuffer::new(dir, this_id, content_length) {
+                        Ok((buf, w)) => (Box::new(buf), AnyWriter::File(w)),
+                        Err(e) => {
+                            eprintln!("stream-spill init failed ({e}); using RAM buffer");
+                            let (buf, w) = StreamingBuffer::new(content_length);
+                            (Box::new(buf), AnyWriter::Ram(w))
                         }
-                    } else {
-                        let (buf, w) = StreamingBuffer::new(content_length);
-                        (Box::new(buf), AnyWriter::Ram(w))
                     }
                 } else {
                     let (buf, w) = StreamingBuffer::new(content_length);
                     (Box::new(buf), AnyWriter::Ram(w))
-                };
+                }
+            } else {
+                let (buf, w) = StreamingBuffer::new(content_length);
+                (Box::new(buf), AnyWriter::Ram(w))
+            };
 
             // Stream HTTP chunks into the buffer on a dedicated thread.
             let play_id_dl = Arc::clone(&play_id_arc);
@@ -618,7 +713,9 @@ async fn audio_play(
                 // short, then auto-advanced past, with no error anywhere.
                 let mut truncated = false;
                 loop {
-                    if play_id_dl.load(Ordering::Relaxed) != this_id { break; }
+                    if play_id_dl.load(Ordering::Relaxed) != this_id {
+                        break;
+                    }
                     match response.read(&mut chunk) {
                         Ok(0) => {
                             truncated = content_length.is_some_and(|len| received < len);
@@ -626,7 +723,9 @@ async fn audio_play(
                         }
                         Ok(n) => {
                             received += n as u64;
-                            if !writer.write_chunk(&chunk[..n]) { break; }
+                            if !writer.write_chunk(&chunk[..n]) {
+                                break;
+                            }
                         }
                         Err(e) => {
                             eprintln!("audio_play stream read error: {e}");
@@ -639,11 +738,16 @@ async fn audio_play(
                 // loop the same way, and must not raise an error at the user.
                 if truncated && play_id_dl.load(Ordering::Relaxed) == this_id {
                     writer.fail();
-                    app_dl.emit("audio-error", serde_json::json!({
-                        "url": url_dl,
-                        "message": "The connection dropped while the track was downloading",
-                        "retryable": true,
-                    })).ok();
+                    app_dl
+                        .emit(
+                            "audio-error",
+                            serde_json::json!({
+                                "url": url_dl,
+                                "message": "The connection dropped while the track was downloading",
+                                "retryable": true,
+                            }),
+                        )
+                        .ok();
                 } else {
                     writer.finish();
                 }
@@ -687,12 +791,16 @@ async fn audio_play(
             // position never leaves zero, so the stall watchdog cannot arm either.
             Err(e) => {
                 eprintln!("audio_play sink error: {e}");
-                app.emit("audio-error", serde_json::json!({
-                    "url": url,
-                    "message": "The audio output device is unavailable",
-                    "detail": e.to_string(),
-                    "retryable": false,
-                })).ok();
+                app.emit(
+                    "audio-error",
+                    serde_json::json!({
+                        "url": url,
+                        "message": "The audio output device is unavailable",
+                        "detail": e.to_string(),
+                        "retryable": false,
+                    }),
+                )
+                .ok();
                 return;
             }
         };
@@ -710,11 +818,15 @@ async fn audio_play(
             pos.play_start = Some(Instant::now());
         }
 
-        app.emit("audio-format", serde_json::json!({
-            "sample_rate": sample_rate,
-            "channels": channels,
-            "codec": codec
-        })).ok();
+        app.emit(
+            "audio-format",
+            serde_json::json!({
+                "sample_rate": sample_rate,
+                "channels": channels,
+                "codec": codec
+            }),
+        )
+        .ok();
 
         // Poll-based watcher: checks every 100ms so it can't hang if sink never empties.
         // Also detects gapless track transitions by watching sink.len() decrease.
@@ -764,7 +876,11 @@ async fn audio_play(
 
 #[tauri::command]
 fn audio_get_pos(state: tauri::State<'_, AudioState>) -> f64 {
-    state.pos.lock().unwrap_or_else(|e| e.into_inner()).current()
+    state
+        .pos
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .current()
 }
 
 #[tauri::command]
@@ -772,7 +888,12 @@ fn audio_volume(state: tauri::State<'_, AudioState>, volume: f32) {
     // Cancel any in-flight seek fade so it doesn't overwrite this new volume.
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
     *state.volume.lock().unwrap_or_else(|e| e.into_inner()) = volume;
-    if let Some(sink) = state.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+    if let Some(sink) = state
+        .sink
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+    {
         sink.set_volume(volume);
     }
 }
@@ -826,7 +947,9 @@ fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
             const STEPS: u64 = 8;
             for i in 1..=STEPS {
                 std::thread::sleep(Duration::from_millis(10));
-                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                if fade_gen.load(Ordering::Relaxed) != gen {
+                    return;
+                }
                 let t = i as f32 / STEPS as f32;
                 sink.set_volume(target_vol * t);
             }
@@ -850,7 +973,11 @@ async fn audio_enqueue_next(
 ) -> Result<(), String> {
     // Atomically claim the gapless slot — guards against two concurrent calls both
     // seeing false and both appending a source (TOCTOU).
-    if state.gapless_queued.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed).is_err() {
+    if state
+        .gapless_queued
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+        .is_err()
+    {
         return Ok(());
     }
 
@@ -870,7 +997,12 @@ async fn audio_enqueue_next(
         };
 
         // Use prefetch cache if a concurrent audio_prefetch already downloaded this URL.
-        let cached = { cache_arc.lock().unwrap_or_else(|e| e.into_inner()).remove(&url) };
+        let cached = {
+            cache_arc
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&url)
+        };
         let bytes = if let Some(b) = cached {
             b
         } else {
@@ -936,8 +1068,8 @@ const MAX_PREFETCH_CACHE_ENTRIES: usize = 12;
 #[tauri::command]
 async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
     let cache_arc = Arc::clone(&state.prefetch_cache);
-    std::thread::spawn(move || {
-        match http_client().get(&url).send().and_then(|r| r.bytes()) {
+    std::thread::spawn(
+        move || match http_client().get(&url).send().and_then(|r| r.bytes()) {
             Ok(b) => {
                 let mut cache = cache_arc.lock().unwrap_or_else(|e| e.into_inner());
                 if cache.len() >= MAX_PREFETCH_CACHE_ENTRIES {
@@ -945,9 +1077,11 @@ async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Res
                 }
                 cache.insert(url, b.to_vec());
             }
-            Err(e) => { eprintln!("audio_prefetch fetch error: {e}"); }
-        }
-    });
+            Err(e) => {
+                eprintln!("audio_prefetch fetch error: {e}");
+            }
+        },
+    );
     Ok(())
 }
 
@@ -965,7 +1099,12 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
     drop(pos);
 
     if fade_ms == 0 {
-        if let Some(sink) = state.sink.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        if let Some(sink) = state
+            .sink
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+        {
             sink.pause();
         }
         return;
@@ -984,7 +1123,9 @@ fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
                 // pause_pending check below: a seek mid-fade bumps fade_gen without meaning
                 // "keep playing", and skipping the pause left audio running with the UI
                 // showing a paused state.
-                if fade_gen.load(Ordering::Relaxed) != gen { break; }
+                if fade_gen.load(Ordering::Relaxed) != gen {
+                    break;
+                }
                 let t = i as f32 / steps as f32;
                 sink.set_volume(start_vol * (1.0 - t));
                 std::thread::sleep(Duration::from_millis(10));
@@ -1026,7 +1167,9 @@ fn audio_resume(state: tauri::State<'_, AudioState>, fade_ms: u64) {
         tauri::async_runtime::spawn_blocking(move || {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {
-                if fade_gen.load(Ordering::Relaxed) != gen { return; }
+                if fade_gen.load(Ordering::Relaxed) != gen {
+                    return;
+                }
                 let t = i as f32 / steps as f32;
                 sink.set_volume(start_vol + (target_vol - start_vol) * t);
                 std::thread::sleep(Duration::from_millis(10));
@@ -1049,7 +1192,11 @@ fn audio_stop(state: tauri::State<'_, AudioState>) {
     if let Some(sink) = old_sink {
         sink.stop();
     }
-    state.prefetch_cache.lock().unwrap_or_else(|e| e.into_inner()).clear();
+    state
+        .prefetch_cache
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clear();
     let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     pos.play_start = None;
     pos.offset = 0.0;
@@ -1068,7 +1215,13 @@ async fn audio_extract_waveform(
         // Sanitize track_id for use as a filename component
         let safe_id: String = track_id
             .chars()
-            .map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' })
+            .map(|c| {
+                if c.is_alphanumeric() || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
             .collect();
         let temp_path = std::env::temp_dir().join(format!("canon_wf_{}.tmp", safe_id));
         let temp_path_dl = temp_path.clone();
@@ -1108,7 +1261,11 @@ async fn audio_extract_waveform(
             std::thread::sleep(Duration::from_millis(10));
         }
 
-        if let Some(e) = download_err.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some(e) = download_err
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+        {
             let _ = std::fs::remove_file(&temp_path);
             return Err(e);
         }
@@ -1182,11 +1339,14 @@ async fn audio_extract_waveform(
                     bucket_count = 0;
 
                     if pending_batch.len() >= EMIT_BATCH {
-                        let _ = app.emit("waveform_chunk", serde_json::json!({
-                            "track_id": track_id,
-                            "offset": batch_offset,
-                            "peaks": pending_batch
-                        }));
+                        let _ = app.emit(
+                            "waveform_chunk",
+                            serde_json::json!({
+                                "track_id": track_id,
+                                "offset": batch_offset,
+                                "peaks": pending_batch
+                            }),
+                        );
                         batch_offset = raw_peaks.len();
                         pending_batch.clear();
                     }
@@ -1200,22 +1360,28 @@ async fn audio_extract_waveform(
 
         // Flush remaining batch
         if !pending_batch.is_empty() {
-            let _ = app.emit("waveform_chunk", serde_json::json!({
-                "track_id": track_id,
-                "offset": batch_offset,
-                "peaks": pending_batch
-            }));
+            let _ = app.emit(
+                "waveform_chunk",
+                serde_json::json!({
+                    "track_id": track_id,
+                    "offset": batch_offset,
+                    "peaks": pending_batch
+                }),
+            );
         }
 
         // Flush any partial final bucket
         if bucket_count > 0 && raw_peaks.len() < BUCKET_COUNT {
             let rms = (bucket_sum_sq / bucket_count as f32).sqrt();
             raw_peaks.push(rms);
-            let _ = app.emit("waveform_chunk", serde_json::json!({
-                "track_id": track_id,
-                "offset": raw_peaks.len() - 1,
-                "peaks": [rms]
-            }));
+            let _ = app.emit(
+                "waveform_chunk",
+                serde_json::json!({
+                    "track_id": track_id,
+                    "offset": raw_peaks.len() - 1,
+                    "peaks": [rms]
+                }),
+            );
         }
         while raw_peaks.len() < BUCKET_COUNT {
             raw_peaks.push(0.0);
@@ -1228,10 +1394,13 @@ async fn audio_extract_waveform(
                 *p /= max_peak;
             }
         }
-        let _ = app.emit("waveform_complete", serde_json::json!({
-            "track_id": track_id,
-            "peaks": raw_peaks
-        }));
+        let _ = app.emit(
+            "waveform_complete",
+            serde_json::json!({
+                "track_id": track_id,
+                "peaks": raw_peaks
+            }),
+        );
 
         let _ = dl_handle.join();
         let _ = std::fs::remove_file(&temp_path);
@@ -1381,16 +1550,16 @@ pub fn run() {
     let (tx, rx) = std::sync::mpsc::sync_channel(0);
     std::thread::Builder::new()
         .name("audio-output".into())
-        .spawn(move || {
-            match rodio::OutputStream::try_default() {
-                Ok((_stream, handle)) => {
-                    let _ = tx.send(Some(handle));
-                    loop { std::thread::park(); }
+        .spawn(move || match rodio::OutputStream::try_default() {
+            Ok((_stream, handle)) => {
+                let _ = tx.send(Some(handle));
+                loop {
+                    std::thread::park();
                 }
-                Err(e) => {
-                    eprintln!("Audio output unavailable: {e}");
-                    let _ = tx.send(None);
-                }
+            }
+            Err(e) => {
+                eprintln!("Audio output unavailable: {e}");
+                let _ = tx.send(None);
             }
         })
         .expect("Failed to spawn audio thread");
@@ -1401,8 +1570,10 @@ pub fn run() {
     // (see `handle_cover_request` below) instead of a loopback TCP server - no
     // socket, so the thread-storm/SIGKILL bug class in `known-issues.md` is
     // structurally impossible here.
-    let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
-    let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> = Arc::new(Mutex::new(HashMap::new()));
+    let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     let cover_http_client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -1685,7 +1856,10 @@ mod tests {
 
     #[test]
     fn sanitize_cache_key_prefixes_the_kind_so_the_two_caches_cannot_collide() {
-        assert_eq!(sanitize_cache_key("cover", "al-123:300"), "cover-al-123_300");
+        assert_eq!(
+            sanitize_cache_key("cover", "al-123:300"),
+            "cover-al-123_300"
+        );
         assert_ne!(
             sanitize_cache_key("cover", "same"),
             sanitize_cache_key("artist-image", "same")
@@ -1695,7 +1869,10 @@ mod tests {
     #[test]
     fn sanitize_cache_key_keeps_only_ascii_alphanumerics_dot_underscore_and_hyphen() {
         assert_eq!(sanitize_cache_key("k", "a.b_c-d9Z"), "k-a.b_c-d9Z");
-        assert_eq!(sanitize_cache_key("k", "a/b?c:d&e=f #g"), "k-a_b_c_d_e_f__g");
+        assert_eq!(
+            sanitize_cache_key("k", "a/b?c:d&e=f #g"),
+            "k-a_b_c_d_e_f__g"
+        );
     }
 
     #[test]
@@ -1769,12 +1946,18 @@ mod tests {
 
     #[test]
     fn percent_decode_turns_percent_20_into_a_space() {
-        assert_eq!(percent_decode("The%20Velvet%20Underground"), "The Velvet Underground");
+        assert_eq!(
+            percent_decode("The%20Velvet%20Underground"),
+            "The Velvet Underground"
+        );
     }
 
     #[test]
     fn percent_decode_turns_percent_2f_into_a_slash_in_either_hex_case() {
-        assert_eq!(percent_decode("https%3A%2F%2Fhost%2Fimg.jpg"), "https://host/img.jpg");
+        assert_eq!(
+            percent_decode("https%3A%2F%2Fhost%2Fimg.jpg"),
+            "https://host/img.jpg"
+        );
         assert_eq!(percent_decode("a%2fb"), "a/b");
     }
 
@@ -1823,7 +2006,10 @@ mod tests {
              <errorCode>701</errorCode>\
              <errorDescription>Transition not available</errorDescription>\
              </UPnPError></detail></s:Fault>";
-        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("701".to_string()));
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("701".to_string())
+        );
         assert_eq!(
             xml_first_tag_text(xml, "errorDescription"),
             Some("Transition not available".to_string())
@@ -1833,7 +2019,10 @@ mod tests {
     #[test]
     fn xml_first_tag_text_matches_a_tag_that_carries_a_namespace_prefix() {
         let xml = "<u:errorCode>718</u:errorCode>";
-        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("718".to_string()));
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("718".to_string())
+        );
     }
 
     #[test]
@@ -1853,8 +2042,14 @@ mod tests {
 
     #[test]
     fn xml_first_tag_text_returns_none_for_an_empty_or_whitespace_only_value() {
-        assert_eq!(xml_first_tag_text("<errorCode></errorCode>", "errorCode"), None);
-        assert_eq!(xml_first_tag_text("<errorCode>   </errorCode>", "errorCode"), None);
+        assert_eq!(
+            xml_first_tag_text("<errorCode></errorCode>", "errorCode"),
+            None
+        );
+        assert_eq!(
+            xml_first_tag_text("<errorCode>   </errorCode>", "errorCode"),
+            None
+        );
     }
 
     #[test]
@@ -1865,7 +2060,10 @@ mod tests {
     #[test]
     fn xml_first_tag_text_takes_the_first_occurrence_when_a_tag_repeats() {
         let xml = "<errorCode>701</errorCode><errorCode>402</errorCode>";
-        assert_eq!(xml_first_tag_text(xml, "errorCode"), Some("701".to_string()));
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("701".to_string())
+        );
     }
 
     // ── friendly_keyring_error ────────────────────────────────────────────────
@@ -1890,7 +2088,10 @@ mod tests {
             "keyring is locked",
         )));
         assert!(msg.contains(GUIDANCE), "expected guidance, got: {msg}");
-        assert!(msg.contains("keyring is locked"), "detail must be preserved: {msg}");
+        assert!(
+            msg.contains("keyring is locked"),
+            "detail must be preserved: {msg}"
+        );
     }
 
     #[test]
@@ -1903,14 +2104,20 @@ mod tests {
     #[test]
     fn bad_encoding_is_reported_verbatim_without_guidance() {
         let msg = friendly_keyring_error(keyring::Error::BadEncoding(vec![0xff, 0xfe]));
-        assert_eq!(msg, keyring::Error::BadEncoding(vec![0xff, 0xfe]).to_string());
+        assert_eq!(
+            msg,
+            keyring::Error::BadEncoding(vec![0xff, 0xfe]).to_string()
+        );
         assert!(!msg.contains(GUIDANCE));
     }
 
     #[test]
     fn too_long_is_reported_verbatim_without_guidance() {
         let msg = friendly_keyring_error(keyring::Error::TooLong("password".into(), 512));
-        assert_eq!(msg, keyring::Error::TooLong("password".into(), 512).to_string());
+        assert_eq!(
+            msg,
+            keyring::Error::TooLong("password".into(), 512).to_string()
+        );
         assert!(!msg.contains(GUIDANCE));
     }
 
@@ -1939,7 +2146,13 @@ mod tests {
     #[test]
     fn a_disk_cache_write_is_readable_back_with_its_bytes_and_content_type() {
         let scratch = ScratchDir::new("roundtrip");
-        disk_cache_write(scratch.path(), "cover", "al-1:300", b"\x89PNG-ish", "image/png");
+        disk_cache_write(
+            scratch.path(),
+            "cover",
+            "al-1:300",
+            b"\x89PNG-ish",
+            "image/png",
+        );
 
         let (bytes, content_type) =
             disk_cache_read(scratch.path(), "cover", "al-1:300").expect("entry just written");
@@ -1956,7 +2169,13 @@ mod tests {
     #[test]
     fn the_kind_namespace_keeps_a_cover_and_an_artist_image_with_the_same_key_apart() {
         let scratch = ScratchDir::new("kinds");
-        disk_cache_write(scratch.path(), "cover", "shared", b"cover-bytes", "image/jpeg");
+        disk_cache_write(
+            scratch.path(),
+            "cover",
+            "shared",
+            b"cover-bytes",
+            "image/jpeg",
+        );
         disk_cache_write(
             scratch.path(),
             "artist-image",
@@ -2008,7 +2227,13 @@ mod tests {
     fn eviction_leaves_the_cache_untouched_while_it_is_under_the_cap() {
         let scratch = ScratchDir::new("under-cap");
         for i in 0..5 {
-            disk_cache_write(scratch.path(), "cover", &format!("al-{i}"), b"x", "image/jpeg");
+            disk_cache_write(
+                scratch.path(),
+                "cover",
+                &format!("al-{i}"),
+                b"x",
+                "image/jpeg",
+            );
         }
         evict_disk_cache_if_needed(scratch.path());
 
