@@ -14,8 +14,9 @@ Distinct from `/pipeline` (reviews an existing feature end-to-end for bugs) and 
 **Never end a turn before `instructions/tests.md` is updated and the work is committed.** Before handing control back to the user for any reason:
 
 1. Every item covered this pass is ticked `[x]` in `instructions/tests.md`, and the "Progress log" section has a new entry naming the test file(s) and what they cover.
-2. `pnpm test:run` (and `cargo test` if Rust was touched) is green.
-3. The `/commit` skill has run.
+2. Anything found along the way (bug, smell, wider cleanup) is written into `instructions/donow.md` with a half-sentence of provenance - see Phase 6.
+3. `pnpm test:run` (and `cargo test` if Rust was touched) is green.
+4. The `/commit` skill has run.
 
 If the user interrupts, redirects, or you're about to ask them something, record and commit what's done first, then respond. Partial progress within a scope still gets ticked/logged/committed for what's actually covered - don't let an interruption erase finished work from the file.
 
@@ -96,6 +97,9 @@ All green, including the full suite - not just the new file. A new test file pas
 - If Phase 3 found a real bug you fixed: add it to `.claude/rules/known-issues.md` per CLAUDE.md, same commit - with a `**Generalizes:**` line and a grep tell, so the class is findable rather than just the instance.
 - If a scope's tests would have to pin currently-broken output to pass (the cross-cutting CSS rule in section 5 is the live example: 37 violations exist today), do **not** write the test and do **not** tick the box. Say so, and record which review.md item has to land first. A test that codifies a bug as expected behavior is worse than no test.
 - If Phase 3 found a real bug you didn't fix (out of scope call): don't tick the box, write a `Follow-ups this pass created` bullet instead, and tell the user explicitly - don't bury a known bug in a passing-looking commit.
+- **Anything found also goes to `instructions/donow.md`, same pass.** A `Follow-ups this pass created` bullet in `tests.md` is a note to the *next test pass*; `donow.md` is the queue that actually gets worked. A finding recorded only in `tests.md` never gets fixed. Append one `##` section per finding, in donow.md's existing style: what it is, where (`file:line`), the fix shape, and - the part that matters - **half a sentence of provenance**: what you were doing when you tripped over it. "Found while covering `getCoverArtUrl`'s ready branch for `/tests`" tells a future session the finding is a side effect of a test pass, not a triaged bug report, so it still needs its own verification. A finding with no provenance line reads as authoritative and gets acted on blind.
+  - This applies to every finding, not only bugs you declined to fix: a bug you *did* fix that suggests a wider cleanup, a missing abstraction, a duplicated literal, an architectural smell. If it's real and out of this scope, it goes in donow.md.
+  - Don't stage `instructions/donow.md` - the whole directory is gitignored. Write it, mention it, move on.
 
 ## Phase 7 - Commit (mandatory, never deferred)
 
