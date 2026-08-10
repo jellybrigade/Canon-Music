@@ -575,7 +575,8 @@ describe("syncLibrary per-album track prune", () => {
     serveLibrary([album("al-1", { songCount: many.length, created: "2026-02-02T00:00:00Z" })], { "al-1": many });
     const result = await syncLibrary(server());
     expect(result.prunedTracks).toBe(2);
-  });
+    // Serves ~32k tracks through the real schema; slow by construction, not hung.
+  }, 30_000);
 
   it("only queries for stale tracks on an album that already had rows", async () => {
     const seen: string[] = [];

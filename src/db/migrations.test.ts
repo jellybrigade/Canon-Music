@@ -142,7 +142,9 @@ describe("runMigrations", () => {
       await runMigrations(db);
       expect(schemaSnapshot(db), `resumed from v${version}`).toEqual(baseline);
     }
-  });
+    // One full migration run per declared version, so this is legitimately slow rather than
+    // hung; the 5s default tips over once the suite's workers contend.
+  }, 30_000);
 
   it("carries seeded rows through a resume from before the tag-vocab backfill", async () => {
     // v27 normalizes tag_mappings.norm_value and backfills tag_vocab_cache from track_tags joined
