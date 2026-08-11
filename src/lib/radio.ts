@@ -13,10 +13,10 @@ export interface RadioCandidate {
   score: number;
 }
 
-const MOOD_WEIGHT = 0.4;
-const CANDIDATE_LIMIT = 200;
+export const MOOD_WEIGHT = 0.4;
+export const CANDIDATE_LIMIT = 200;
 
-function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
+export function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
   const s = Math.max(0, Math.min(1, scale));
   return {
     tagW:      0.60 - 0.40 * s,
@@ -70,7 +70,7 @@ function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   };
 }
 
-function buildAncestorWeights(
+export function buildAncestorWeights(
   nodeId: string,
   byId: Map<string, { id: string; parents: string[] }>,
   maxDepth = 4
