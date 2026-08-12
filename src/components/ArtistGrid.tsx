@@ -103,11 +103,17 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const rowHeight = Math.round(cardWidth) + ROW_GAP;
   const rowCount = Math.ceil(artists.length / cols);
 
+  // Padding declared to the virtualizer rather than added to each row's `top` by hand, so
+  // the offsets it computes live in the same coordinate space as the rows the grid paints.
+  // See known-issues, "A layout constant the component applies by hand is invisible to the
+  // library that computes offsets from the same coordinate space".
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => containerRef.current,
     estimateSize: () => rowHeight,
     overscan: 3,
+    paddingStart: PADDING,
+    paddingEnd: PADDING,
   });
 
   useScrollMemory(containerRef, "artists", rowCount > 0);
@@ -162,7 +168,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   return (
     <>
       <div ref={containerRef} className="album-grid-scroller">
-        <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const rowStart = virtualRow.index * cols;
             const rowArtists = artists.slice(rowStart, rowStart + cols);
@@ -171,7 +177,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                 key={virtualRow.key}
                 style={{
                   position: "absolute",
-                  top: `${PADDING + virtualRow.start}px`,
+                  top: `${virtualRow.start}px`,
                   left: `${PADDING}px`,
                   right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,

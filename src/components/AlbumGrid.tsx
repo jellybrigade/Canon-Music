@@ -235,11 +235,17 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     return sections;
   }, [rows, sort, cols]);
 
+  // The grid's padding is declared to the virtualizer rather than added to each row's `top`
+  // by hand. Hand-adding it left every offset the virtualizer computes itself 20px short of
+  // where the row was actually painted, so the scrubber's `scrollToIndex` landed its target
+  // row tucked under the top edge. One writer for the number.
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => containerRef.current,
     estimateSize: (i) => rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight,
     overscan: 3,
+    paddingStart: PADDING,
+    paddingEnd: PADDING,
   });
 
   // Keyed by sort because each sort is a different ordering of the same rows,
@@ -294,7 +300,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
             </div>
           )
         ) : (
-        <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = rows[virtualRow.index];
             if (!row) return null;
@@ -306,7 +312,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                   className="year-group-header"
                   style={{
                     position: "absolute",
-                    top: `${PADDING + virtualRow.start}px`,
+                    top: `${virtualRow.start}px`,
                     left: `${PADDING}px`,
                     right: `${PADDING}px`,
                     height: `${YEAR_HEADER_HEIGHT}px`,
@@ -322,7 +328,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
                 key={virtualRow.key}
                 style={{
                   position: "absolute",
-                  top: `${PADDING + virtualRow.start}px`,
+                  top: `${virtualRow.start}px`,
                   left: `${PADDING}px`,
                   right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,
