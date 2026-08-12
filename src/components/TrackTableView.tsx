@@ -205,7 +205,10 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
   // Keyed by track id, not row index: a background refresh (or a re-sort) reorders the
   // rows, and an index-keyed selection would silently come to mean different tracks.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const lastClickedRef = useRef<number | null>(null);
+  // The shift-range anchor is a track id for the same reason the selection is. Held as an
+  // index it survived a refresh pointing at whatever track landed on that row, so a range
+  // extended after a sync covered tracks the user never anchored on.
+  const lastClickedIdRef = useRef<string | null>(null);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: AllTrackRow } | null>(null);
 
@@ -239,7 +242,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
 
   function handleSortHeader(field: SortField) {
     setSelectedIds(new Set());
-    lastClickedRef.current = null;
+    lastClickedIdRef.current = null;
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -280,33 +283,43 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
     const isCtrl = e.ctrlKey || e.metaKey;
     const isShift = e.shiftKey;
 
+    const id = sorted[index]?.id;
+    if (id === undefined) return;
+
     if (isCtrl) {
-      const id = sorted[index]?.id;
-      if (id === undefined) return;
       setSelectedIds((prev) => {
         const next = new Set(prev);
         if (next.has(id)) next.delete(id);
         else next.add(id);
         return next;
       });
-      lastClickedRef.current = index;
-    } else if (isShift && lastClickedRef.current !== null) {
-      const from = Math.min(lastClickedRef.current, index);
-      const to = Math.max(lastClickedRef.current, index);
+      lastClickedIdRef.current = id;
+      return;
+    }
+
+    if (isShift) {
+      const anchorId = lastClickedIdRef.current;
+      const anchorIndex = anchorId === null ? -1 : sorted.findIndex((t) => t.id === anchorId);
+      // No usable anchor - either the first interaction, or the anchored track is gone
+      // after a refresh. Select the clicked row and anchor there. A modifier click is a
+      // selection gesture, so it must not fall through to the playback branch.
+      const from = anchorIndex < 0 ? index : Math.min(anchorIndex, index);
+      const to = anchorIndex < 0 ? index : Math.max(anchorIndex, index);
       setSelectedIds((prev) => {
         const next = new Set(prev);
         for (let i = from; i <= to; i++) {
-          const id = sorted[i]?.id;
-          if (id !== undefined) next.add(id);
+          const rowId = sorted[i]?.id;
+          if (rowId !== undefined) next.add(rowId);
         }
         return next;
       });
-    } else {
-      setSelectedIds(new Set());
-      lastClickedRef.current = index;
-      const startIndex = index;
-      playQueue(trackObjs, streamUrlFor, startIndex);
+      if (anchorIndex < 0) lastClickedIdRef.current = id;
+      return;
     }
+
+    setSelectedIds(new Set());
+    lastClickedIdRef.current = id;
+    playQueue(trackObjs, streamUrlFor, index);
   }, [sorted, trackObjs, streamUrlFor, playQueue]);
 
   const handleRowContextMenu = useCallback((e: React.MouseEvent, track: AllTrackRow) => {
@@ -350,8 +363,13 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
   // selection; right-clicking anywhere else acts on that one row and leaves the
   // selection alone. Built in visible order so the queue matches what the user sees.
   const bulkTarget = useMemo(() => {
-    if (!contextMenu || selectedIds.size < 2 || !selectedIds.has(contextMenu.track.id)) return null;
-    return sorted.filter((t) => selectedIds.has(t.id)).map(buildTrackObj);
+    if (!contextMenu || !selectedIds.has(contextMenu.track.id)) return null;
+    // Counted against the rows actually in view, not against selectedIds: a refresh drops
+    // tracks without their ids leaving the set, and gating on the raw size opened a bulk
+    // menu reading "Play 1 tracks" over a selection of one.
+    const rows = sorted.filter((t) => selectedIds.has(t.id));
+    if (rows.length < 2) return null;
+    return rows.map(buildTrackObj);
   }, [contextMenu, selectedIds, sorted, buildTrackObj]);
 
   const numColWidth = `${Math.max(2, String(sorted.length).length) + 1.5}ch`;
