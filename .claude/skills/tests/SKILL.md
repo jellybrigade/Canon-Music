@@ -9,6 +9,26 @@ You are invoked in plan mode for Phase 2 (scoping) only - Phase 1 picking happen
 
 **One scope per invocation.** Not one function, not the whole section. Run `/tests` again for the next scope.
 
+## Mix: at least 20% acceptance, at most 80% developer
+
+Two kinds of test live in this repo and the skill owes both:
+
+- **Developer TDD (DTDD)** - unit-level, test-first against one function/action/hook. Pure fns, store actions, DB paths, Rust fns, waste assertions. This is sections 1, 2, 3, 4, 4.6, 6 and most of 5.
+- **Acceptance TDD (ATDD)** - outside-in, one test per user-visible behavior, mounting `App`/`AppShell` and driving it the way a user does. No mocking of anything inside the app; only the boundary (`invoke`/`fetch`/DB). This is section 4.5, and it is the *only* level that can see a seam.
+
+**Floor: at least 1 in 5 test files is acceptance-level.** Not 1 in 5 assertions - files, because an acceptance test is one broad path and a unit file is thirty narrow ones, so counting assertions would let the floor be satisfied on paper by a suite with no acceptance tests at all. Measure before picking a scope:
+
+```bash
+find src -name '*.test.*' | wc -l                       # total test files
+ls src/app/*.test.tsx 2>/dev/null | wc -l               # acceptance files
+```
+
+If acceptance files are under 20% of the total, **the next scope must be a section 4.5 scope**, regardless of what "Suggested order of work" says next. The order section governs priority *within* each kind, not the balance between them. Say the ratio out loud in Phase 1 and say which side of the floor it puts you on.
+
+Why the floor exists: every bug in `.claude/rules/known-issues.md` that shipped past a green suite - the search overlay swallowing routes, gapless playing a track the queue no longer pointed at, radio auto-starting from restored state, `server_id` rebuilt from the selected server - failed at a seam between units that were each individually correct and individually tested. A suite made only of DTDD is structurally blind to that entire class; adding more of it cannot help. The 80% ceiling is equally load-bearing in the other direction: acceptance tests are slow, coarse, and diagnose badly, so they are a smoke layer over the units, never a replacement for them.
+
+An ATDD scope is sized by user-visible behavior, not by file: "opening the command palette while a track is loading and jumping to an album" is one scope even though it crosses four files. Write the acceptance test first, watch it fail for the right reason (it can genuinely fail here - it is asserting an integration nobody pinned), then drop to DTDD for whatever it exposes underneath.
+
 Distinct from `/pipeline` (reviews an existing feature end-to-end for bugs) and `/code-review` (reviews a diff). This skill's only job is closing gaps in `instructions/tests.md` - it can fix a bug it finds along the way (a bugfix test must reproduce the bug per CLAUDE.md), but it is not hunting for bugs as its primary mode.
 
 **Never end a turn before `instructions/tests.md` is updated and the work is committed.** Before handing control back to the user for any reason:
@@ -22,7 +42,9 @@ If the user interrupts, redirects, or you're about to ask them something, record
 
 ## Phase 1 - Pick a scope
 
-`instructions/tests.md` is **not** a flat checklist - the "Baseline is complete when these are green" section near the top and the "Suggested order of work" section at the bottom define priority. Respect that order; don't cherry-pick an easy item out of sequence unless the user names one.
+Run the ratio check from "Mix" first. Under 20% acceptance files means the scope is a section 4.5 scope and the rest of this phase only picks *which* one.
+
+Otherwise: `instructions/tests.md` is **not** a flat checklist - the "Baseline is complete when these are green" section near the top and the "Suggested order of work" section at the bottom define priority. Respect that order; don't cherry-pick an easy item out of sequence unless the user names one.
 
 ```bash
 grep -n '^\- \[ \]' instructions/tests.md | head -20
@@ -93,7 +115,7 @@ All green, including the full suite - not just the new file. A new test file pas
 
 - Tick every `- [ ]` covered this pass to `- [x]` in `instructions/tests.md`.
 - Add one row/entry to the "Progress log" section naming the new test file(s) and, in the same terse style as existing entries, exactly what's covered - specific enough that a future session can tell what's *not* covered without re-reading the test file.
-- Bump the top-of-file test count line (`pnpm test:run` = N tests / M files) to the new totals.
+- Bump the top-of-file test count line (`pnpm test:run` = N tests / M files) to the new totals, and append the acceptance ratio to it (`acceptance N/M files = P%`) so the next invocation reads the floor off the file instead of recomputing it blind.
 - If Phase 3 found a real bug you fixed: add it to `.claude/rules/known-issues.md` per CLAUDE.md, same commit - with a `**Generalizes:**` line and a grep tell, so the class is findable rather than just the instance.
 - If a scope's tests would have to pin currently-broken output to pass (the cross-cutting CSS rule in section 5 is the live example: 37 violations exist today), do **not** write the test and do **not** tick the box. Say so, and record which review.md item has to land first. A test that codifies a bug as expected behavior is worse than no test.
 - If Phase 3 found a real bug you didn't fix (out of scope call): don't tick the box, write a `Follow-ups this pass created` bullet instead, and tell the user explicitly - don't bury a known bug in a passing-looking commit.
