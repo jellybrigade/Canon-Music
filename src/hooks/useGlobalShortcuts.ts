@@ -2,22 +2,14 @@ import { useEffect } from "react";
 import { usePlayerStore, isNextDisabled } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
 import { useLoved } from "./useLoved";
-
-function isInputTarget(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement;
-  return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLTextAreaElement ||
-    t.isContentEditable
-  );
-}
+import { isTextEntryTarget } from "../lib/keyboard";
 
 export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null | undefined) {
   const { toggleTrackLove } = useLoved();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (isInputTarget(e)) return;
+      if (isTextEntryTarget(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const store = usePlayerStore.getState();

@@ -19,6 +19,7 @@ import { useRadio } from "./hooks/useRadio";
 import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useSearchShortcuts } from "./hooks/useSearchShortcuts";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
@@ -240,28 +241,14 @@ export default function App() {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
   }, []);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        setCommandPaletteOpen((open) => !open);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault();
-        setSearchOpen(true);
-        setTimeout(() => {
-          searchInputRef.current?.focus();
-          searchInputRef.current?.select();
-        }, 0);
-      }
-      if (e.key === "Escape" && (searchRaw || searchOpen)) {
-        clearSearch();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [searchRaw, searchOpen, clearSearch]);
+  useSearchShortcuts({
+    searchInputRef,
+    searchActive: !!searchRaw || searchOpen,
+    commandPaletteOpen,
+    toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
+    openSearch: useCallback(() => setSearchOpen(true), []),
+    clearSearch,
+  });
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
