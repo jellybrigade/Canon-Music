@@ -12,6 +12,7 @@ import type { TreeNode } from "../lib/canonicalize";
 import type { NormalizedTag } from "../lib/tag-normalize";
 import type { MbGenre } from "../lib/musicbrainz";
 import { CanonCombobox, ACCEPTED, IGNORED } from "./TagsViewHelpers";
+import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
 import "./TagDrawer.css";
 import "./TagsView.css";
 
@@ -261,6 +262,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
   const { data: identity } = useAlbumIdentity(albumId);
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
+  const dismiss = useOverlayDismiss(onClose);
 
   async function handleIgnoreUnmappedGenre(rawName: string) {
     try {
@@ -297,8 +299,8 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
   }, [onClose]);
 
   return createPortal(
-    <div className="tag-drawer-overlay" onClick={onClose}>
-      <div className="tag-drawer" onClick={(e) => e.stopPropagation()}>
+    <div className="tag-drawer-overlay" {...dismiss}>
+      <div className="tag-drawer">
         <div className="tag-drawer-header">
           <h2 className="tag-drawer-title">
             {trackId ? "Track Tags" : "Album Tags"}

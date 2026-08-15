@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { ListMusic, X, RefreshCw } from "lucide-react";
 import { useGenres } from "../hooks/useGenres";
+import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
 import {
   DEFAULT_SMART_FILTERS,
   SORT_OPTIONS,
@@ -23,6 +24,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
   const [filters, setFilters] = useState<SmartFilters>(initialFilters ?? DEFAULT_SMART_FILTERS);
   const [saving, setSaving] = useState(false);
   const [genreSearch, setGenreSearch] = useState("");
+  const dismiss = useOverlayDismiss(onClose);
   const { data: allGenres = [] } = useGenres();
 
   const availableGenres = useMemo(() => {
@@ -62,8 +64,8 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
   }
 
   return createPortal(
-    <div className="spm-overlay" onClick={onClose}>
-      <div className="spm-dialog" onClick={(e) => e.stopPropagation()}>
+    <div className="spm-overlay" {...dismiss}>
+      <div className="spm-dialog">
         <div className="spm-header">
           <h2 className="spm-title">
             <ListMusic size={16} />
@@ -97,7 +99,13 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   min={1}
                   max={LIMIT_MAX}
                   value={filters.limit}
-                  onChange={(e) => set("limit", Math.max(1, Math.min(LIMIT_MAX, Number(e.target.value) || 50)))}
+                  onChange={(e) => {
+                    // `Number(raw) || 50` sent "0" down the falsy branch, so a typed zero
+                    // snapped to the default instead of clamping to the floor beside it.
+                    const raw = e.target.value.trim();
+                    const n = raw === "" ? 50 : Number(raw);
+                    set("limit", Number.isFinite(n) ? Math.max(1, Math.min(LIMIT_MAX, Math.trunc(n))) : 50);
+                  }}
                 />
               </div>
               <div className="spm-field spm-field--half">
