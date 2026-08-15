@@ -290,3 +290,64 @@ describe("AppShell: search overlay dismissed by every navigation source", () => 
     expectOverlayOpen();
   });
 });
+
+/**
+ * Two mechanisms dismiss the overlay and they cover different cases:
+ *
+ *   1. useClearSearchOnNavigate, which fires on a pathname *change*.
+ *   2. The per-call-site clearSearch() wrapped around SearchResults'
+ *      onSelectAlbum / onSelectArtist in AppShell.renderContent.
+ *
+ * (2) looks redundant next to (1) and is exactly the kind of thing a later
+ * cleanup deletes. It is not redundant: selecting the row for the album or
+ * artist whose route is already open navigates to an identical pathname
+ * string, so the hook's `lastPathname.current === pathname` guard
+ * short-circuits and (1) never runs. Without (2) the overlay would stay
+ * painted over the route the user just asked for, which is the whole bug
+ * known-issues.md records under "State deciding which subtree renders, but
+ * absent from the URL".
+ *
+ * These tests pin each mechanism against the case only it can handle, so
+ * deleting either one turns this block red.
+ */
+describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
+  it("search results album click dismisses the overlay when that album's route is already open", () => {
+    // Same pathname before and after, so useClearSearchOnNavigate cannot fire.
+    // Only AppShell's own clearSearch() in the onSelectAlbum wrapper can do this.
+    renderHarness({ entries: ["/album/srv%3Aalb3"] });
+    expectOverlayOpen();
+    fireEvent.click(screen.getByTestId("sr-select-album"));
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb3");
+  });
+
+  it("search results artist click dismisses the overlay when that artist's route is already open", () => {
+    renderHarness({ entries: ["/artist/Artist%20Z"] });
+    expectOverlayOpen();
+    fireEvent.click(screen.getByTestId("sr-select-artist"));
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/artist/Artist%20Z");
+  });
+
+  it("a source with no clearSearch of its own still dismisses when the pathname changes", () => {
+    // The command palette's handlers do not call clearSearch. Mechanism (1)
+    // is the only thing dismissing the overlay here, which is why deleting
+    // the hook cannot be covered by the two tests above.
+    renderHarness({ entries: ["/library"] });
+    fireEvent.click(screen.getByTestId("cp-select-album"));
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb1");
+  });
+
+  it("sidebar item for the already-active view still changes the pathname from a detail route", () => {
+    // useAppNavigation folds /album/* into the "library" view, so the Library
+    // sidebar item is rendered active while an album is open. Clicking it is
+    // a real pathname change, so the hook covers it and the gap where no
+    // mechanism applies is narrower than "the active sidebar item".
+    renderHarness({ entries: ["/album/srv%3Aalb1"] });
+    expectOverlayOpen();
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/library");
+  });
+});
