@@ -184,7 +184,7 @@ function AlbumDetailRoute({
   queueClass: string;
 }) {
   const { albumId } = useParams<{ albumId: string }>();
-  const { data: fetchedAlbum } = useQuery<AlbumRow | null>({
+  const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
     queryKey: ["album-by-id", albumId],
     enabled: !!albumId,
     queryFn: async () => {
@@ -196,12 +196,28 @@ function AlbumDetailRoute({
       return rows[0] ?? null;
     },
   });
-  const album = fetchedAlbum ?? null;
-  if (!album || !serverWithCred) return null;
+  if (!serverWithCred) return null;
+  // `data` is undefined while the lookup is in flight as well as when the album is genuinely
+  // absent from the mirror, so the old `fetchedAlbum ?? null` folded both into one bare
+  // `return null` and painted a blank page for each. Same split, and the same copy shape, as
+  // PlaylistDetailRoute below.
+  if (!fetchedAlbum) {
+    return (
+      <main className={`library${queueClass}`}>
+        {albumPending ? (
+          <p className="empty-state">Loading album…</p>
+        ) : (
+          <p className="empty-state">
+            That album is no longer here. It may have been removed from the server.
+          </p>
+        )}
+      </main>
+    );
+  }
   return (
     <main className={`library${queueClass}`}>
       <AlbumDetail
-        album={album}
+        album={fetchedAlbum}
         serverWithCredential={serverWithCred}
         onClose={onClose}
         onSelectAlbum={onSelectAlbum}
