@@ -20,6 +20,7 @@ import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useSearchShortcuts } from "./hooks/useSearchShortcuts";
+import { useAnyModalOpen } from "./hooks/useModalChrome";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
@@ -175,6 +176,7 @@ export default function App() {
   }, [homeSearchRaw]);
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const anyModalOpen = useAnyModalOpen();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [crashReport, setCrashReport] = useState<string | null>(null);
   useEffect(() => {
@@ -245,7 +247,11 @@ export default function App() {
     searchInputRef,
     searchActive: !!searchRaw || searchOpen,
     commandPaletteOpen,
-    overlayAbove: commandPaletteOpen || feedbackOpen,
+    // The two named overlays plus anything registered through `useModalChrome`. The named
+    // pair cannot be extended to cover a modal opened inside the search overlay itself
+    // (`SearchResults`' identify dialog) - that state never reaches this component - so the
+    // registry answers "is something painted over me" for every modal at once.
+    overlayAbove: commandPaletteOpen || feedbackOpen || anyModalOpen,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
     openSearch: useCallback(() => setSearchOpen(true), []),
     clearSearch,

@@ -614,15 +614,28 @@ describe("SmartPlaylistModal chrome and dismissal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("does nothing on Escape, and traps no focus", async () => {
-    // Pinning an absence, as TrackTableView does for arrow keys. There is no keydown listener,
-    // no focus trap and no role="dialog" here; review.md defers all three to an app-wide modal
-    // chrome pass. When that lands, this test goes red and has to be rewritten deliberately.
+  // The app-wide modal chrome pass landed 2026-08-17 (`useModalChrome`), so the three
+  // absences this block used to pin are now behaviors. The hook's own contract is covered in
+  // `src/hooks/useModalChrome.test.tsx`; what belongs here is that this modal is wired to it
+  // and that its own save gate is respected.
+
+  it("closes on Escape", async () => {
     const { onClose } = await mount();
-    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.keyDown(dialog(), { key: "Escape" });
-    expect(onClose).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes the dialog to assistive tech under its own title", async () => {
+    await mount();
+    const d = screen.getByRole("dialog", { name: "New Smart Playlist" });
+    expect(d.getAttribute("aria-modal")).toBe("true");
+  });
+
+  it("keeps focus on the autofocused Name field rather than the first button", async () => {
+    // The trap moves focus in only when nothing inside already holds it, so this modal's own
+    // `autoFocus` still wins.
+    await mount();
+    expect(document.activeElement).toBe(field("Name"));
   });
 });
 

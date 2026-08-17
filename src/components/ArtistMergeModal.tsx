@@ -4,6 +4,7 @@ import { GitMerge, X } from "lucide-react";
 import { useArtists } from "../hooks/useArtists";
 import { useSetArtistAlias } from "../hooks/useArtistAliases";
 import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useModalChrome } from "../hooks/useModalChrome";
 import "./ArtistMergeModal.css";
 
 interface Props {
@@ -15,6 +16,7 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
   const { data: allArtists = [] } = useArtists();
   const setAlias = useSetArtistAlias();
   const dismiss = useOverlayDismiss(onClose);
+  const chrome = useModalChrome(onClose, { closable: !setAlias.isPending });
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -34,7 +36,7 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
 
   return createPortal(
     <div className="merge-overlay" {...dismiss}>
-      <div className="merge-dialog">
+      <div className="merge-dialog" {...chrome} aria-label="Merge Artist">
         <div className="merge-header">
           <h2 className="merge-title">
             <GitMerge size={16} />

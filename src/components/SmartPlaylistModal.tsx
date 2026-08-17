@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ListMusic, X, RefreshCw } from "lucide-react";
 import { useGenres } from "../hooks/useGenres";
 import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useModalChrome } from "../hooks/useModalChrome";
 import {
   DEFAULT_SMART_FILTERS,
   SORT_OPTIONS,
@@ -25,6 +26,9 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
   const [saving, setSaving] = useState(false);
   const [genreSearch, setGenreSearch] = useState("");
   const dismiss = useOverlayDismiss(onClose);
+  // Escape stands down while a save is in flight, matching the Cancel button that is already
+  // disabled for the same reason - otherwise Escape is a second route around the same gate.
+  const chrome = useModalChrome(onClose, { closable: !saving });
   const { data: allGenres = [] } = useGenres();
 
   const availableGenres = useMemo(() => {
@@ -65,7 +69,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
 
   return createPortal(
     <div className="spm-overlay" {...dismiss}>
-      <div className="spm-dialog">
+      <div className="spm-dialog" {...chrome} aria-label={title}>
         <div className="spm-header">
           <h2 className="spm-title">
             <ListMusic size={16} />

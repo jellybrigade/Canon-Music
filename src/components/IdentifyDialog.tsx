@@ -9,6 +9,7 @@ import { searchReleaseGroups, searchArtists } from "../lib/musicbrainz";
 import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../lib/musicbrainz";
 import { rankCandidates } from "../lib/fuzzy-match";
 import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useModalChrome } from "../hooks/useModalChrome";
 import { stripTrailingBrackets } from "../lib/album-identify";
 import "./IdentifyDialog.css";
 
@@ -47,6 +48,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
   const dismiss = useOverlayDismiss(onClose);
+  const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
 
   const [mbRgId, setMbRgId] = useState("");
   const [mbReleaseId, setMbReleaseId] = useState("");
@@ -170,7 +172,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
   return createPortal(
     <div className="identify-overlay" {...dismiss}>
-      <div className="identify-dialog">
+      <div className="identify-dialog" {...chrome} aria-label="Identify Album">
         <div className="identify-header">
           <h2 className="identify-title">Identify Album</h2>
           <button className="identify-close" onClick={onClose} aria-label="Close">✕</button>
@@ -400,6 +402,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
   const { data: savedIdentity } = useArtistIdentity(artistName);
   const saveIdentity = useSaveArtistIdentity();
   const dismiss = useOverlayDismiss(onClose);
+  const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
 
   const [mbArtistId, setMbArtistId] = useState("");
   const [lfmArtist, setLfmArtist] = useState("");
@@ -479,7 +482,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
   return createPortal(
     <div className="identify-overlay" {...dismiss}>
-      <div className="identify-dialog">
+      <div className="identify-dialog" {...chrome} aria-label="Identify Artist">
         <div className="identify-header">
           <h2 className="identify-title">Identify Artist</h2>
           <button className="identify-close" onClick={onClose} aria-label="Close">✕</button>
