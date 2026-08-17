@@ -99,6 +99,7 @@ export interface AppViewProps {
   lastSyncedAt: SyncApi["lastSyncedAt"];
   runSync: SyncApi["runSync"];
   credError: Error | null;
+  credPending: boolean;
 
   // Search
   searchOpen: boolean;
@@ -168,8 +169,49 @@ export interface AppViewProps {
   handleSidebarResizeMouseDown: (e: React.MouseEvent) => void;
 }
 
+/**
+ * What a detail route paints while it has no credential yet. All three of them need one before
+ * they can render anything, and `serverWithCred` is null for the whole keychain round-trip as
+ * well as for a read that failed - the same pending-vs-absent collapse the album lookup below
+ * had, one prerequisite earlier. There is no "no server configured" case to express here:
+ * `App` renders the setup wizard when the `servers` table is empty, so the router only mounts
+ * with a server row present. And the credential query is `retry: false`, so a failure is
+ * permanent rather than transient, which is why it gets a message pointing at the fix instead
+ * of sitting on the loading state forever.
+ *
+ * Shared rather than written out three times because the two states have to stay in step; the
+ * per-route copy below drifted for exactly this reason before it was consolidated.
+ */
+function CredentialGate({
+  credError,
+  credPending,
+  queueClass,
+}: {
+  credError: Error | null;
+  credPending: boolean;
+  queueClass: string;
+}) {
+  return (
+    <main className={`library${queueClass}`}>
+      {credError || !credPending ? (
+        <div className="empty-state">
+          <p className="empty-state-title">Canon could not read the saved credential</p>
+          <p className="empty-state-hint">
+            {credError ? credError.message : "The stored credential could not be loaded."}
+          </p>
+          <p className="empty-state-hint">Re-enter your server password in Settings.</p>
+        </div>
+      ) : (
+        <p className="empty-state">Connecting to your server…</p>
+      )}
+    </main>
+  );
+}
+
 function AlbumDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
   onSelectAlbum,
   onSelectArtist,
   onTagFilter,
@@ -177,6 +219,8 @@ function AlbumDetailRoute({
   queueClass,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onTagFilter: (canonicalId: string) => void;
@@ -196,7 +240,9 @@ function AlbumDetailRoute({
       return rows[0] ?? null;
     },
   });
-  if (!serverWithCred) return null;
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
   // `data` is undefined while the lookup is in flight as well as when the album is genuinely
   // absent from the mirror, so the old `fetchedAlbum ?? null` folded both into one bare
   // `return null` and painted a blank page for each. Same split, and the same copy shape, as
@@ -230,12 +276,16 @@ function AlbumDetailRoute({
 
 function ArtistDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
   onSelectAlbum,
   onSelectArtist,
   onClose,
   queueClass,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
@@ -269,7 +319,10 @@ function ArtistDetailRoute({
       return rows[0] ?? null;
     },
   });
-  if (!serverWithCred || !decodedName) return null;
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
+  if (!decodedName) return null;
   // Held until the lookup settles: `data` is undefined while pending as well as
   // when the artist is genuinely absent, so rendering the fallback immediately
   // painted a library artist's hero as "0 albums in library" with no portrait
@@ -305,6 +358,8 @@ function ArtistDetailRoute({
 
 function PlaylistDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
   playlists,
   onSelectAlbum,
   onSelectArtist,
@@ -317,6 +372,8 @@ function PlaylistDetailRoute({
   updateSmartPlaylistRules,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
   playlists: PlaylistRow[] | undefined;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
@@ -341,7 +398,9 @@ function PlaylistDetailRoute({
     () => (decodedId ? playlists?.find((p) => p.id === decodedId) ?? null : null),
     [playlists, decodedId]
   );
-  if (!serverWithCred) return null;
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
   if (!playlist) {
     return (
       <main className={`library${queueClass}`}>
@@ -419,6 +478,7 @@ export function AppRoutes(props: AppViewProps) {
     syncProgress,
     runSync,
     credError,
+    credPending,
     searchOpen,
     setSearchOpen,
     searchRaw,
@@ -507,6 +567,8 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/album/:albumId" element={
         <AlbumDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
@@ -517,6 +579,8 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/artist/:artistName" element={
         <ArtistDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onClose={goBack}
@@ -526,6 +590,8 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/playlist/:playlistId" element={
         <PlaylistDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
           playlists={playlists}
           onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
           onSelectArtist={openArtist}

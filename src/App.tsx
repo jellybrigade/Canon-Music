@@ -107,6 +107,11 @@ export default function App() {
   const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
+  // Derived rather than read off `isPending` on purpose: that query is `enabled: !!server?.id`,
+  // and a disabled React Query stays `pending` forever, so `isPending` cannot tell "the keychain
+  // read is running" from "there is no server to read one for". Consumers need the distinction
+  // because a falsy `serverWithCred` is otherwise indistinguishable from a permanent failure.
+  const credPending = !!server && !serverWithCred && !credError;
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
   useMediaSession(serverWithCred);
@@ -598,6 +603,7 @@ export default function App() {
     lastSyncedAt,
     runSync,
     credError: credError ?? null,
+    credPending,
     searchOpen,
     setSearchOpen,
     searchRaw,
