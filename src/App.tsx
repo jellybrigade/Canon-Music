@@ -245,6 +245,7 @@ export default function App() {
     searchInputRef,
     searchActive: !!searchRaw || searchOpen,
     commandPaletteOpen,
+    overlayAbove: commandPaletteOpen || feedbackOpen,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
     openSearch: useCallback(() => setSearchOpen(true), []),
     clearSearch,

@@ -9,6 +9,12 @@ export interface SearchShortcutOptions {
   searchActive: boolean;
   /** Whether the command palette is currently open. */
   commandPaletteOpen: boolean;
+  /**
+   * Whether any overlay is painted *over* the search overlay (the command palette, the
+   * feedback modal). Escape belongs to the topmost layer, so the search overlay's own
+   * dismissal has to stand down while one of these is up.
+   */
+  overlayAbove: boolean;
   toggleCommandPalette: () => void;
   openSearch: () => void;
   clearSearch: () => void;
@@ -27,7 +33,12 @@ export interface SearchShortcutOptions {
  *   focus - where re-pressing it usefully re-selects the text.
  * - **Escape** dismisses the search overlay, and is pressed from inside the search input almost
  *   every time. But Escape inside any *other* field belongs to that field (a rename box, a
- *   modal form), so the exemption is by ref identity, not by "an input has focus".
+ *   modal form), so the exemption is by ref identity, not by "an input has focus". And it
+ *   belongs to whatever is stacked *above* the search overlay before it belongs to the search
+ *   overlay at all - focus alone cannot answer that, because the layer on top may hold no
+ *   focus (a click on its blank chrome) while the layer underneath may hold it (Ctrl+F focuses
+ *   the search input through the palette). In both of those the ref-identity exemption is
+ *   precisely what lets one keypress collapse the whole stack.
  *
  * Options are read through a ref, so the listener is registered once for the lifetime of the
  * app rather than being torn down and re-registered on every keystroke in the search box.
@@ -42,6 +53,7 @@ export function useSearchShortcuts(options: SearchShortcutOptions) {
         searchInputRef,
         searchActive,
         commandPaletteOpen,
+        overlayAbove,
         toggleCommandPalette,
         openSearch,
         clearSearch,
@@ -71,6 +83,11 @@ export function useSearchShortcuts(options: SearchShortcutOptions) {
       }
 
       if (e.key === "Escape" && searchActive) {
+        // Topmost layer first. These overlays run their own Escape handlers (the palette on
+        // `window`, registered later than this one; the feedback modal on `document`, so
+        // earlier), and none of them stops propagation, so without this the press dismisses
+        // the layer the user aimed at *and* throws away the search underneath it.
+        if (overlayAbove) return;
         if (typing && e.target !== searchInputRef.current) return;
         clearSearch();
       }
