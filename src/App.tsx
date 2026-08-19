@@ -24,7 +24,7 @@ import { useAnyModalOpen } from "./hooks/useModalChrome";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
-import { useClearSearchOnNavigate } from "./hooks/useClearSearchOnNavigate";
+import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
@@ -239,10 +239,18 @@ export default function App() {
     searchInputRef.current?.blur();
   }, []);
 
-  // The search overlay renders instead of the router's content and is not
-  // URL-backed, so anything that navigates while it is open (command palette,
-  // player bar, context menu) lands behind it and the click looks inert.
-  useClearSearchOnNavigate(pathname, clearSearch);
+  // Neither overlay is URL-backed: the search overlay renders instead of the router's
+  // content, the command palette paints over it. So anything that navigates while one is up
+  // (player bar, context menu, Alt+Arrow, the mouse thumb buttons) lands behind it and the
+  // click looks inert. Both are dismissed here, at the one place navigation is observed,
+  // rather than at each source - the palette used to rely on the five setCommandPaletteOpen
+  // calls in its own handlers, which by construction could not cover navigation that started
+  // anywhere else.
+  const dismissOverlays = useCallback(() => {
+    clearSearch();
+    setCommandPaletteOpen(false);
+  }, [clearSearch]);
+  useDismissOnNavigate(pathname, dismissOverlays);
 
   useEffect(() => () => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);

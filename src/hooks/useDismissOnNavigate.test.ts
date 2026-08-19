@@ -1,18 +1,18 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
-import { useClearSearchOnNavigate } from "./useClearSearchOnNavigate";
+import { useDismissOnNavigate } from "./useDismissOnNavigate";
 
-describe("useClearSearchOnNavigate", () => {
+describe("useDismissOnNavigate", () => {
   it("leaves the search overlay alone on the first render", () => {
     const clear = vi.fn();
-    renderHook(() => useClearSearchOnNavigate("/home", clear));
+    renderHook(() => useDismissOnNavigate("/home", clear));
     expect(clear).not.toHaveBeenCalled();
   });
 
   it("clears the search overlay when the route changes under it", () => {
     const clear = vi.fn();
-    const { rerender } = renderHook(({ path }) => useClearSearchOnNavigate(path, clear), {
+    const { rerender } = renderHook(({ path }) => useDismissOnNavigate(path, clear), {
       initialProps: { path: "/home" },
     });
     rerender({ path: "/album/abc" });
@@ -21,7 +21,7 @@ describe("useClearSearchOnNavigate", () => {
 
   it("does not re-clear while the route stays put", () => {
     const clear = vi.fn();
-    const { rerender } = renderHook(({ path }) => useClearSearchOnNavigate(path, clear), {
+    const { rerender } = renderHook(({ path }) => useDismissOnNavigate(path, clear), {
       initialProps: { path: "/home" },
     });
     rerender({ path: "/album/abc" });
@@ -31,7 +31,7 @@ describe("useClearSearchOnNavigate", () => {
 
   it("clears again on each further navigation", () => {
     const clear = vi.fn();
-    const { rerender } = renderHook(({ path }) => useClearSearchOnNavigate(path, clear), {
+    const { rerender } = renderHook(({ path }) => useDismissOnNavigate(path, clear), {
       initialProps: { path: "/home" },
     });
     rerender({ path: "/album/abc" });
@@ -43,7 +43,7 @@ describe("useClearSearchOnNavigate", () => {
     const first = vi.fn();
     const second = vi.fn();
     const { rerender } = renderHook(
-      ({ path, clear }: { path: string; clear: () => void }) => useClearSearchOnNavigate(path, clear),
+      ({ path, clear }: { path: string; clear: () => void }) => useDismissOnNavigate(path, clear),
       { initialProps: { path: "/home", clear: first } }
     );
     rerender({ path: "/album/abc", clear: second });

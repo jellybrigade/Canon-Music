@@ -6,7 +6,7 @@ import { useState, useCallback } from "react";
 import { AppShell } from "./AppShell";
 import type { AppViewProps } from "./AppRoutes";
 import { useAppNavigation } from "../hooks/useAppNavigation";
-import { useClearSearchOnNavigate } from "../hooks/useClearSearchOnNavigate";
+import { useDismissOnNavigate } from "../hooks/useDismissOnNavigate";
 
 /**
  * Guards known-issues.md's "State deciding which subtree renders, but absent
@@ -15,7 +15,7 @@ import { useClearSearchOnNavigate } from "../hooks/useClearSearchOnNavigate";
  * instead of AppRoutes. Every source that can navigate must dismiss it -
  * table-driven so a new source added later fails until it is wired.
  *
- * Mounts AppShell wired to the *real* useAppNavigation + useClearSearchOnNavigate,
+ * Mounts AppShell wired to the *real* useAppNavigation + useDismissOnNavigate,
  * the same composition App.tsx uses, so this catches wiring bugs a leaf-level
  * unit test of either hook alone cannot.
  */
@@ -104,7 +104,7 @@ function Inner({ startSearchOpen }: { startSearchOpen?: boolean }) {
     setSearchQuery("");
     setSearchOpen(false);
   }, []);
-  useClearSearchOnNavigate(pathname, clearSearch);
+  useDismissOnNavigate(pathname, clearSearch);
 
   async function openAlbumById(albumId: string) {
     const row = await mockLookupAlbum(albumId);
@@ -294,7 +294,7 @@ describe("AppShell: search overlay dismissed by every navigation source", () => 
 /**
  * Two mechanisms dismiss the overlay and they cover different cases:
  *
- *   1. useClearSearchOnNavigate, which fires on a pathname *change*.
+ *   1. useDismissOnNavigate, which fires on a pathname *change*.
  *   2. The per-call-site clearSearch() wrapped around SearchResults'
  *      onSelectAlbum / onSelectArtist in AppShell.renderContent.
  *
@@ -312,7 +312,7 @@ describe("AppShell: search overlay dismissed by every navigation source", () => 
  */
 describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
   it("search results album click dismisses the overlay when that album's route is already open", () => {
-    // Same pathname before and after, so useClearSearchOnNavigate cannot fire.
+    // Same pathname before and after, so useDismissOnNavigate cannot fire.
     // Only AppShell's own clearSearch() in the onSelectAlbum wrapper can do this.
     renderHarness({ entries: ["/album/srv%3Aalb3"] });
     expectOverlayOpen();
