@@ -235,7 +235,10 @@ function AlbumDetailRoute({
       const db = await getDb();
       const rows = await db.select<AlbumRow[]>(
         `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums WHERE id = ?`,
-        [decodeURIComponent(albumId!)]
+        // `useParams` has already decoded the segment, so `albumId` is the id `albumPath`
+        // encoded. Decoding again throws on an id holding a literal `%` and silently
+        // rewrites one holding the text `%20` into a space.
+        [albumId!]
       );
       return rows[0] ?? null;
     },
@@ -292,7 +295,10 @@ function ArtistDetailRoute({
   queueClass: string;
 }) {
   const { artistName } = useParams<{ artistName: string }>();
-  const decodedName = artistName ? decodeURIComponent(artistName) : null;
+  // `useParams` decodes the segment already, so this is the name `artistPath` encoded.
+  // Decoding a second time threw `URIError` on any name holding a literal `%` - in the
+  // render body, so it took the whole tree down, not just this route.
+  const decodedName = artistName ?? null;
   const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
     enabled: !!artistName && !!serverWithCred,
@@ -393,7 +399,8 @@ function PlaylistDetailRoute({
   // store instead - so renaming, editing the description, setting a cover or refreshing a
   // smart playlist from this page left the row this component rendered untouched, and the
   // edit visibly reverted until the default staleTime lapsed.
-  const decodedId = playlistId ? decodeURIComponent(playlistId) : null;
+  // Already decoded by `useParams`; see the note in `ArtistDetailRoute`.
+  const decodedId = playlistId ?? null;
   const playlist = useMemo(
     () => (decodedId ? playlists?.find((p) => p.id === decodedId) ?? null : null),
     [playlists, decodedId]
