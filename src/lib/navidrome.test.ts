@@ -13,6 +13,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 
 import {
   SubsonicError,
+  addTrackToNavidromePlaylist,
   fetchAlbumListByType,
   fetchAllAlbums,
   fetchStarred2,
@@ -333,18 +334,33 @@ describe("non-idempotent endpoints", () => {
     expect(urls()).toEqual(["http://music.example/rest/scrobble.view"]);
   });
 
-  it("still falls through to the alt url when a scrobble rejects without timing out", async () => {
-    // Current behavior, pinned deliberately: only a timeout breaks out of the url loop, so
-    // a plain transport rejection reaches the alt route. See the follow-up note in
-    // instructions/tests.md.
+  it("does not send an opaquely rejected scrobble to the alt url", async () => {
+    // The dominant Linux failure is a resolver stall rejecting with TypeError("Load failed"),
+    // not an AbortError, and fetch cannot say whether the request reached the server. Both
+    // routes are the same Navidrome, so a write that reached either one is already applied.
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
     await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000, ALT))).rejects.toThrow();
 
-    expect(urls()).toEqual([
-      "http://music.example/rest/scrobble.view",
-      "http://192.168.1.5:4533/rest/scrobble.view",
-    ]);
+    expect(urls()).toEqual(["http://music.example/rest/scrobble.view"]);
+  });
+
+  it("does not send an opaquely rejected playlist update to the alt url", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(
+      settle(addTrackToNavidromePlaylist(BASE, "alice", cred, "pl-1", "tr-1", ALT))
+    ).rejects.toThrow();
+
+    expect(urls()).toEqual(["http://music.example/rest/updatePlaylist"]);
+  });
+
+  it("still tries the alt url for an idempotent endpoint that rejects", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(starTrack(BASE, "alice", cred, "tr-1", ALT))).rejects.toThrow();
+
+    expect(urls()).toContain("http://192.168.1.5:4533/rest/star.view");
   });
 
   it("does not retry a non-idempotent endpoint answering with a retriable status", async () => {

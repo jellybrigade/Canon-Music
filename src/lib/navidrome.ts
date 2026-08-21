@@ -157,8 +157,9 @@ async function apiPost(
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
   let lastFailure = "unknown error";
-  // A write that cannot be safely repeated gets exactly one shot per route, and only
-  // moves to the alt route when the first one never reached the server at all.
+  // A write that cannot be safely repeated gets exactly one shot, full stop. Both routes
+  // are the same Navidrome, and fetch cannot say whether a rejected request reached it,
+  // so any rejection has to be treated as "may already have been applied".
   const retriable = isRetriableEndpoint(endpoint);
   const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
 
@@ -173,9 +174,10 @@ async function apiPost(
         return res;
       } catch (err) {
         lastFailure = describeError(err);
-        // A timeout means the request may have been received and applied, so a
-        // non-idempotent endpoint must not be sent anywhere else.
-        if (!retriable && isTimeout(err)) break;
+        // fetch rejects identically whether the request never left the machine or was
+        // applied and lost its response (the common Linux resolver stall surfaces as an
+        // opaque TypeError, not an AbortError), so a non-idempotent write stops here.
+        if (!retriable) break;
       }
     }
     if (attempt < maxAttempts) {
