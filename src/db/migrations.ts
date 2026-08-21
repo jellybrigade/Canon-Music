@@ -13,6 +13,24 @@ export interface MigrationDb {
   select<T>(query: string, bindValues?: unknown[]): Promise<T>;
 }
 
+/**
+ * Thrown when the database records a schema version this build does not know about, which means
+ * it was written by a newer Canon and there is no downgrade path.
+ */
+export class SchemaTooNewError extends Error {
+  readonly found: number;
+  readonly supported: number;
+
+  constructor(found: number, supported: number) {
+    super(
+      `This library was created by a newer version of Canon (database schema v${found}, this build understands up to v${supported}). Update Canon to open it.`
+    );
+    this.name = "SchemaTooNewError";
+    this.found = found;
+    this.supported = supported;
+  }
+}
+
 export async function runMigrations(database: MigrationDb): Promise<void> {
   // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
   // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
@@ -31,6 +49,13 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
     "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
   );
   const current = rows[0]?.version ?? 0;
+
+  // A high-water mark answers "what still needs running", never "is this file too new for me".
+  // Without this the loop body simply never executes and the older build then runs its own
+  // queries against a newer schema, failing scattered and late instead of once and clearly.
+  if (current > LATEST_SCHEMA_VERSION) {
+    throw new SchemaTooNewError(current, LATEST_SCHEMA_VERSION);
+  }
 
   for (const migration of migrations) {
     if (migration.version > current) {
@@ -696,3 +721,6 @@ export const migrations: Migration[] = [
     sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
   },
 ];
+
+/** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */
+export const LATEST_SCHEMA_VERSION = Math.max(...migrations.map((m) => m.version));

@@ -45,6 +45,7 @@ import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
 import { AppShell } from "./app/AppShell";
+import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import "./styles/tokens.css";
 import "./styles/library.css";
@@ -541,20 +542,10 @@ export default function App() {
   // old row while the user had just entered credentials for the new one.
   if (serversError) {
     return (
-      <div className="app-fatal">
-        <h1 className="app-fatal-title">Canon could not read its database</h1>
-        <p className="app-fatal-message">
-          {serversError instanceof Error ? serversError.message : String(serversError)}
-        </p>
-        <p className="app-fatal-hint">
-          Your server settings and library are still on disk. This is usually a locked or
-          in-use database file, so closing any other running copy of Canon and trying again
-          is the first thing to check.
-        </p>
-        <button className="app-fatal-btn" onClick={() => { void refetchServers(); }}>
-          Try again
-        </button>
-      </div>
+      <DatabaseErrorScreen
+        error={serversError}
+        onRetry={() => { void refetchServers(); }}
+      />
     );
   }
 

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { migrations, runMigrations, type MigrationDb } from "./migrations";
+import {
+  LATEST_SCHEMA_VERSION,
+  SchemaTooNewError,
+  migrations,
+  runMigrations,
+  type MigrationDb,
+} from "./migrations";
 import { createTestDb, createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 
 const LATEST = Math.max(...migrations.map((m) => m.version));
@@ -177,15 +183,34 @@ describe("runMigrations", () => {
     expect(mappings[0]?.norm_value).toBe("hip hop");
   });
 
-  it("skips every block when the recorded version is ahead of the latest declared one", async () => {
-    // A db written by a newer Canon build. The runner has no downgrade path and no guard: it
-    // silently does nothing, leaving whatever schema was already there.
+  it("refuses a database written by a newer build instead of running against it", async () => {
+    // No downgrade path exists, so the honest outcome is one accurate message at startup rather
+    // than a scattering of unrelated-looking failures deep in sync or tag normalization.
     const db = createTestDb();
     await db.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)");
     await db.execute("INSERT INTO schema_migrations (version) VALUES (999)");
-    await runMigrations(db);
 
+    await expect(runMigrations(db)).rejects.toBeInstanceOf(SchemaTooNewError);
     expect(userTables(db)).toEqual(["schema_migrations"]);
+  });
+
+  it("names both versions on the too-new error so the message can say which build wrote it", async () => {
+    const db = createTestDb();
+    await db.execute("CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY)");
+    await db.execute("INSERT INTO schema_migrations (version) VALUES (?)", [LATEST + 1]);
+
+    const err = await runMigrations(db).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SchemaTooNewError);
+    const tooNew = err as SchemaTooNewError;
+    expect(tooNew.found).toBe(LATEST + 1);
+    expect(tooNew.supported).toBe(LATEST_SCHEMA_VERSION);
+    expect(LATEST_SCHEMA_VERSION).toBe(LATEST);
+  });
+
+  it("migrates normally when the recorded version equals the latest declared one", async () => {
+    // The guard compares with >, not >=: an up-to-date database is not a too-new one.
+    const db = await createMigratedTestDb();
+    await expect(runMigrations(db)).resolves.toBeUndefined();
   });
 
   it("fails loudly on a gapped schema_migrations rather than half-migrating", async () => {

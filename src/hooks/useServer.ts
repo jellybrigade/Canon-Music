@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
+import { SchemaTooNewError } from "../db/migrations";
 import { keychain } from "../keychain";
 import type { Server } from "../types/server";
 import type { NavidromeCredential } from "../lib/navidrome";
@@ -13,6 +14,10 @@ export interface ServerWithCredential {
 export function useServers() {
   return useQuery({
     queryKey: QK.servers(),
+    // A library written by a newer build stays too new however often it is read, and `getDb()`
+    // caches the one rejected promise, so the default three retries only delay the message.
+    retry: (failureCount, error) =>
+      !(error instanceof SchemaTooNewError) && failureCount < 3,
     queryFn: async () => {
       const db = await getDb();
       return db.select<Server[]>("SELECT * FROM servers ORDER BY created_at ASC");
