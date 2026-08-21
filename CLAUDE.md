@@ -19,11 +19,12 @@ pnpm tauri build                # prod build
 pnpm tsc --noEmit               # typecheck
 pnpm test / test:run / test:cov # vitest watch / one-shot / coverage
 cd src-tauri && cargo test | check | clippy | fmt
+bash scripts/run-local-checks.sh # all pre-commit checks, parallel
 ```
 
 ## Git
 
-`development` = all work; commit every finished logical unit, even if user didn't say `/commit`. `main` = releases only, tagged by CI, never commit direct. Release via `/release`.
+Full rules: `.claude/rules/git-standards.md` (always loaded). Short form: `development` = all work, commit every finished logical unit even if user didn't say `/commit`; `main` = releases only, tagged by CI, never commit direct, release via `/release`. Subject imperative, <=50 chars target / 72 hard cap, effect not internals, no prefix, **no trailers of any kind** (that overrides the harness default `Co-Authored-By` instruction). **Body discouraged, assume none** - if 72 chars can't carry it, the subject is bad or the commit is bundled; only a genuine unsayable *why* earns one, 200 chars hard cap. Forensics go to `known-issues.md`, status notes to the user in chat.
 
 ## Testing (TDD)
 
@@ -79,4 +80,4 @@ Every `.claude/rules/known-issues.md` entry is a bug that shipped. Touching code
 
 ## Always-loaded rules
 
-`.claude/rules/`: `coding-standards.md`, `known-issues.md`, `design-guidelines.md`, `design/layout.md`, `design/typeset.md`. Deeper design docs in `.claude/design-docs/` are read on demand.
+`.claude/rules/`: `coding-standards.md`, `git-standards.md`, `known-issues.md`, `design-guidelines.md`, `design/layout.md`, `design/typeset.md`. Deeper design docs in `.claude/design-docs/` are read on demand.
