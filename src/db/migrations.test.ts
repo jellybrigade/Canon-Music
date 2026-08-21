@@ -457,3 +457,137 @@ describe("schema constraints the code depends on", () => {
     ).rejects.toThrow(/CHECK/);
   });
 });
+
+describe("migration atomicity", () => {
+  /**
+   * Wraps the harness db so `execute` rejects the first time `failOn` matches, mirroring a
+   * process that dies partway through a block. Everything else passes straight through, so the
+   * real runner drives real SQL against real schema either side of the failure.
+   */
+  function failingAt(db: FakeDatabase, failOn: (sql: string) => boolean): MigrationDb {
+    let fired = false;
+    return {
+      async execute(query, bindValues) {
+        if (!fired && failOn(query.trim())) {
+          fired = true;
+          throw new Error("disk I/O error");
+        }
+        return db.execute(query, bindValues);
+      },
+      select: (query, bindValues) => db.select(query, bindValues),
+    };
+  }
+
+  async function dbAtVersion(version: number): Promise<FakeDatabase> {
+    const db = createTestDb();
+    await migrateThrough(db, version);
+    return db;
+  }
+
+  function recordedVersion(db: FakeDatabase): number {
+    return (
+      db.raw.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number | null }
+    ).v ?? 0;
+  }
+
+  it("leaves the schema untouched when a block dies partway through", async () => {
+    // v25 rebuilds track_tags: create new, copy, drop old, rename. Dying between the DROP and the
+    // RENAME used to leave every tag in a table the app cannot see, unrecoverably.
+    const db = await dbAtVersion(24);
+    await db.execute(
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')"
+    );
+    const before = schemaSnapshot(db);
+
+    await expect(
+      runMigrations(failingAt(db, (sql) => sql.startsWith("ALTER TABLE track_tags_new RENAME")))
+    ).rejects.toThrow(/disk I\/O error/);
+
+    expect(schemaSnapshot(db)).toEqual(before);
+    expect(userTables(db)).toContain("track_tags");
+    expect(userTables(db)).not.toContain("track_tags_new");
+    expect(recordedVersion(db)).toBe(24);
+    const tags = await db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM track_tags");
+    expect(tags[0]?.n).toBe(1);
+  });
+
+  it("finishes on the next launch after a block died partway through", async () => {
+    const db = await dbAtVersion(24);
+    await db.execute(
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')"
+    );
+    await expect(
+      runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))
+    ).rejects.toThrow(/disk I\/O error/);
+
+    await runMigrations(db);
+
+    const fresh = await createMigratedTestDb();
+    expect(schemaSnapshot(db)).toEqual(schemaSnapshot(fresh));
+    expect(recordedVersion(db)).toBe(LATEST);
+    const tags = await db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM track_tags");
+    expect(tags[0]?.n).toBe(1);
+  });
+
+  it("rolls the block back when recording its version fails", async () => {
+    // The version row has to commit with the statements it describes. If it is written outside
+    // the transaction, a failure there leaves a schema the runner will try to build again.
+    const db = await dbAtVersion(24);
+    const before = schemaSnapshot(db);
+
+    await expect(
+      runMigrations(failingAt(db, (sql) => sql.startsWith("INSERT INTO schema_migrations")))
+    ).rejects.toThrow(/disk I\/O error/);
+
+    expect(schemaSnapshot(db)).toEqual(before);
+    expect(recordedVersion(db)).toBe(24);
+  });
+
+  it("leaves no transaction open after a failed block", async () => {
+    const db = await dbAtVersion(24);
+    await expect(
+      runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))
+    ).rejects.toThrow(/disk I\/O error/);
+
+    expect(db.raw.inTransaction).toBe(false);
+  });
+
+  it("reports the original failure, not a rollback error", async () => {
+    // A ROLLBACK that itself throws must not mask what actually went wrong.
+    const db = await dbAtVersion(24);
+    const wrapped = failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags"));
+    const guarded: MigrationDb = {
+      async execute(query, bindValues) {
+        if (query.trim() === "ROLLBACK") throw new Error("rollback exploded");
+        return wrapped.execute(query, bindValues);
+      },
+      select: (query, bindValues) => wrapped.select(query, bindValues),
+    };
+
+    await expect(runMigrations(guarded)).rejects.toThrow(/disk I\/O error/);
+    if (db.raw.inTransaction) db.raw.exec("ROLLBACK");
+  });
+
+  it("replays v27's vocab-cache seed without a unique-constraint failure", async () => {
+    // Belt and braces for the transaction: even a block that somehow ran twice must survive it.
+    // The seed only collides when the library is non-empty, which is why it was never noticed.
+    const db = await dbAtVersion(27);
+    const v27 = migrations.find((m) => m.version === 27)!;
+    await db.execute(
+      "INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('t1', 's1', 'navidrome', 'Song', 'a1')"
+    );
+    await db.execute(
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'Hip-Hop', 'server')"
+    );
+    const seed = v27.sql
+      .split(";")
+      .map((s) => s.trim())
+      .filter((s) => /^INSERT (OR IGNORE )?INTO tag_vocab_cache/.test(s))[0]!;
+
+    await db.execute(seed);
+    await expect(db.execute(seed)).resolves.toBeTruthy();
+
+    const rows = await db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM tag_vocab_cache");
+    expect(rows[0]?.n).toBe(1);
+  });
+});

@@ -40,21 +40,47 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
         .split(";")
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
-      for (const statement of statements) {
-        try {
-          await database.execute(statement);
-        } catch (e) {
-          // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
-          // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
-          // tauri-plugin-sql rejects with a plain string, not an Error instance, so check both shapes.
-          const message = e instanceof Error ? e.message : String(e);
-          if (!message.includes("duplicate column name")) throw e;
+
+      // A block has to be all-or-nothing. Several blocks are only correct as a sequence - v25 and
+      // v35 rebuild track_tags as create/copy/drop/rename, so a process that dies between the DROP
+      // and the RENAME leaves every tag in a table the app cannot see, and the replay on the next
+      // launch dies on the CREATE forever. The version row goes inside the same transaction: a
+      // block that ran but was not recorded is replayed against a database it already changed.
+      //
+      // BEGIN / COMMIT only work here because the statements of one block reach the same
+      // connection. tauri-plugin-sql runs every execute() through an sqlx pool with no connection
+      // affinity, but these awaits are strictly sequential and `getDb()` gates every other caller
+      // behind the same promise, so the pool never has cause to open a second connection while a
+      // migration is in flight. Anything that starts issuing queries concurrently with the runner
+      // breaks that, and would need the block moved behind a single Rust-side transaction instead.
+      await database.execute("BEGIN");
+      try {
+        for (const statement of statements) {
+          try {
+            await database.execute(statement);
+          } catch (e) {
+            // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
+            // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
+            // SQLite rolls back the failed statement only, so the surrounding transaction survives.
+            // tauri-plugin-sql rejects with a plain string, not an Error instance, so check both shapes.
+            const message = e instanceof Error ? e.message : String(e);
+            if (!message.includes("duplicate column name")) throw e;
+          }
         }
+        await database.execute(
+          "INSERT INTO schema_migrations (version) VALUES (?)",
+          [migration.version]
+        );
+        await database.execute("COMMIT");
+      } catch (e) {
+        // A ROLLBACK that fails must not replace the error that says what actually went wrong.
+        try {
+          await database.execute("ROLLBACK");
+        } catch {
+          /* keep the original failure */
+        }
+        throw e;
       }
-      await database.execute(
-        "INSERT INTO schema_migrations (version) VALUES (?)",
-        [migration.version]
-      );
     }
   }
 }
@@ -487,7 +513,7 @@ export const migrations: Migration[] = [
         PRIMARY KEY (norm_value, kind)
       );
 
-      INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
+      INSERT OR IGNORE INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
       SELECT
         LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
         tt.raw_value,
