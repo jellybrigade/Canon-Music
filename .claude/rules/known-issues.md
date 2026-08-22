@@ -51,7 +51,7 @@ Fixed unless marked OPEN.
 
 ## Data / state
 
-- **A claim stamped when work starts and cleared only on success is permanent after the first failure.** `useLibrarySync` now arms a bounded backoff `[30s, 2min, 5min]` from the settle handler. Every terminal path owes the flag a decision.
+- **A claim stamped when work starts and cleared only on success is permanent after the first failure.** `useLibrarySync` now arms a bounded backoff `[30s, 2min, 5min]` from the settle handler. Every terminal path owes the flag a decision. Third instance, same grep: `useEnrichAlbumTracks` stamped `ranRef` before the run and its `.catch` was a bare silent no-op, so one failed album left every track unenriched for the life of that mount. The clear goes in `.catch` here (unlike `useLibrarySync`, whose settle handler re-enters) because nothing but a dep moving re-runs the effect.
   ```
   grep -rn "Ref.current = " src/hooks --include='*.ts*' | grep -v '\.test\.'
   ```

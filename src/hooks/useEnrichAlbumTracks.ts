@@ -163,7 +163,9 @@ export function useEnrichAlbumTracks(
         void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
         void queryClient.invalidateQueries({ queryKey: QK.trackTagsAlbum(albumId) });
       })
-      .catch(() => { /* silent */ })
+      // A failed run releases the claim so a later trigger can retry. Safe against a loop:
+      // nothing here re-runs the effect, only a dep moving does.
+      .catch(() => { ranRef.current = false; })
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);
