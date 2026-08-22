@@ -390,6 +390,7 @@ describe("syncLibrary album prune", () => {
       INSERT INTO album_unresolved_genres (album_id, raw_value, source) VALUES ('${SRV}:al-2', 'weird', 'server');
       INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01');
       INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t3', '[]', 1);
+      INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${SRV}:al-2', 'data:x', 1);
     `);
 
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
@@ -401,6 +402,7 @@ describe("syncLibrary album prune", () => {
     expect(await count("tracks_fts", "WHERE id LIKE '%t3'")).toBe(0);
     const albumKeyed: [string, string][] = [
       ["loved_albums", "album_id"], ["album_genres", "album_id"], ["album_unresolved_genres", "album_id"],
+      ["album_covers", "album_id"],
     ];
     for (const [table, column] of albumKeyed) {
       expect({ table, rows: await count(table, `WHERE ${column} = '${SRV}:al-2'`) }).toEqual({ table, rows: 0 });
@@ -417,12 +419,13 @@ describe("syncLibrary album prune", () => {
     db().raw.exec(`
       INSERT INTO album_identity (album_id, mb_release_group_id) VALUES ('${SRV}:al-2', 'mbid');
       INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('${SRV}:al-2', 'rock', 'Rock');
+      INSERT INTO album_genre_exclusions (album_id, canonical_id) VALUES ('${SRV}:al-2', 'pop');
       INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES ('${SRV}:t3', 'T', 'A', 1);
       INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${SRV}:t3', 1);
     `);
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     await syncLibrary(server());
-    for (const table of ["album_identity", "album_user_genres", "scrobble_queue", "scrobble_history"]) {
+    for (const table of ["album_identity", "album_user_genres", "album_genre_exclusions", "scrobble_queue", "scrobble_history"]) {
       expect({ table, rows: await count(table) }).toEqual({ table, rows: 1 });
     }
   });

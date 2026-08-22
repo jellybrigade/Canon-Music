@@ -67,6 +67,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A cache table exempted from a prune inherits the exemption written for user-authored rows beside it.** `pruneAlbums` deleted `album_genres`/`album_unresolved_genres` but not `album_covers`, whose neighbours (`album_identity`, `album_user_genres`, `album_genre_exclusions`) are kept on purpose; the cache is a base64 `data_url`, so every album that disappears server-side stranded tens to hundreds of KB no read path can reach, forever, and `useAlbumCoverMap`'s keyset scan grew with them. A table is exempt only if *its own* content justifies it. Compare the two delete lists whenever either moves:
+  ```
+  grep -n "viaAlbums(\"\|DELETE FROM album" src/lib/sync.ts
+  ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.

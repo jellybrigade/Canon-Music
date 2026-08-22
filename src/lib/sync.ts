@@ -41,6 +41,12 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
 // Drop albums the server no longer lists, along with their tracks and every
 // derived row keyed off either. Dependent rows go first so the subselects can
 // still find the tracks they are keyed to.
+//
+// album_covers goes because it is a pure cache holding a base64 data_url, so a
+// stranded row is tens to hundreds of KB no read path can reach. album_identity,
+// album_user_genres and album_genre_exclusions stay for the reason given above
+// deleteTracksByIds: they are user-authored or user-corrected, and the album ids
+// survive a re-add of the same server.
 async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
   const viaTracks = (table: string, column: string) => (ph: string) =>
@@ -57,6 +63,7 @@ async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<v
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_unresolved_genres WHERE album_id IN (${ph})`,
+    (ph: string) => `DELETE FROM album_covers WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM albums WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
