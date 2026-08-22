@@ -48,7 +48,18 @@ function toBindable(value: unknown): unknown {
 }
 
 export function createTestDb(): FakeDatabase {
-  const raw = new BetterSqlite3(":memory:");
+  return wrapRaw(new BetterSqlite3(":memory:"));
+}
+
+/**
+ * A second in-memory database holding a byte copy of `db`'s current contents. Lets a test reach
+ * an expensive intermediate state once and branch off it, instead of rebuilding it per case.
+ */
+export function forkTestDb(db: FakeDatabase): FakeDatabase {
+  return wrapRaw(new BetterSqlite3(db.raw.serialize()));
+}
+
+function wrapRaw(raw: BetterSqlite3.Database): FakeDatabase {
   raw.pragma("foreign_keys = ON");
 
   const db: FakeDatabase = {

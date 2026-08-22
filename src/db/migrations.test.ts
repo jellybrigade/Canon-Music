@@ -6,7 +6,7 @@ import {
   runMigrations,
   type MigrationDb,
 } from "./migrations";
-import { createTestDb, createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+import { createTestDb, createMigratedTestDb, forkTestDb, type FakeDatabase } from "../test/sqlite";
 
 const LATEST = Math.max(...migrations.map((m) => m.version));
 
@@ -36,32 +36,40 @@ function columnsOf(db: FakeDatabase, table: string): string[] {
   return (db.raw.pragma(`table_info(${table})`) as { name: string }[]).map((c) => c.name);
 }
 
-/**
- * Applies every block up to and including `version` and records it, mirroring the runner's own
- * split and duplicate-column swallow, so a partially-migrated db can be handed back to
- * `runMigrations` to finish the job.
- */
-async function migrateThrough(db: FakeDatabase, version: number): Promise<void> {
-  // Byte-identical to the runner's own DDL, so a resumed db's sqlite_master matches a fresh one.
+/** Byte-identical to the runner's own DDL, so a resumed db's sqlite_master matches a fresh one. */
+async function createVersionTable(db: FakeDatabase): Promise<void> {
   await db.execute(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY
     )
   `);
+}
+
+/**
+ * Applies one block and records it, mirroring the runner's own split and duplicate-column
+ * swallow, so a partially-migrated db can be handed back to `runMigrations` to finish the job.
+ */
+async function applyBlock(db: FakeDatabase, migration: (typeof migrations)[number]): Promise<void> {
+  for (const statement of migration.sql
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)) {
+    try {
+      await db.execute(statement);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (!message.includes("duplicate column name")) throw e;
+    }
+  }
+  await db.execute("INSERT INTO schema_migrations (version) VALUES (?)", [migration.version]);
+}
+
+/** Applies every block up to and including `version`. */
+async function migrateThrough(db: FakeDatabase, version: number): Promise<void> {
+  await createVersionTable(db);
   for (const migration of migrations) {
     if (migration.version > version) break;
-    for (const statement of migration.sql
-      .split(";")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)) {
-      try {
-        await db.execute(statement);
-      } catch (e) {
-        const message = e instanceof Error ? e.message : String(e);
-        if (!message.includes("duplicate column name")) throw e;
-      }
-    }
-    await db.execute("INSERT INTO schema_migrations (version) VALUES (?)", [migration.version]);
+    await applyBlock(db, migration);
   }
 }
 
@@ -142,15 +150,19 @@ describe("runMigrations", () => {
 
   it("reaches the same schema from every intermediate version", async () => {
     const baseline = schemaSnapshot(await createMigratedTestDb());
-    for (const { version } of migrations) {
-      const db = createTestDb();
-      await migrateThrough(db, version);
-      await runMigrations(db);
-      expect(schemaSnapshot(db), `resumed from v${version}`).toEqual(baseline);
+    // The ladder is climbed once and forked at each rung, rather than rebuilt per version: a
+    // rebuild replays the heavy early blocks (the initial schema, the FTS table) once for every
+    // later version, which makes the case's cost grow with the square of the block count.
+    const ladder = createTestDb();
+    await createVersionTable(ladder);
+    for (const migration of migrations) {
+      await applyBlock(ladder, migration);
+      const resumed = forkTestDb(ladder);
+      await runMigrations(resumed);
+      expect(schemaSnapshot(resumed), `resumed from v${migration.version}`).toEqual(baseline);
+      await resumed.close();
     }
-    // One full migration run per declared version, so this is legitimately slow rather than
-    // hung; the 5s default tips over once the suite's workers contend.
-  }, 30_000);
+  });
 
   it("carries seeded rows through a resume from before the tag-vocab backfill", async () => {
     // v27 normalizes tag_mappings.norm_value and backfills tag_vocab_cache from track_tags joined

@@ -115,12 +115,24 @@ async function openSearchWithResults(query = "abba") {
   await act(async () => { press("f", { ctrlKey: true }); });
   await waitFor(() => expect(searchInput()).not.toBeNull());
   fireEvent.change(searchInput()!, { target: { value: query } });
-  // `handleSearchChange` debounces 200ms before `searchQuery` moves, and the FTS round trip
-  // through the real migrated DB lands after that, so the default 1s `waitFor` is too tight.
-  // The wait has to be inside `act` rather than left to `waitFor`: the FTS round trip resolves
-  // off React's watch, and only an act-scoped flush commits the result.
-  await act(async () => { await new Promise((r) => setTimeout(r, 1500)); });
-  await waitFor(() => expect(screen.queryByText("Arrival")).not.toBeNull(), { timeout: 5000 });
+  await actUntil(() => screen.queryByText("Arrival") !== null, "the album card to render");
+}
+
+/**
+ * `handleSearchChange` debounces 200ms before `searchQuery` moves, and the FTS round trip
+ * through the real migrated DB lands after that. The wait has to be inside `act` rather than
+ * left to `waitFor`: the round trip resolves off React's watch, and only an act-scoped flush
+ * commits the result. Polled rather than slept through, so a case costs what the debounce and
+ * the query actually take instead of a fixed ceiling.
+ */
+async function actUntil(ready: () => boolean, what: string) {
+  const STEP_MS = 25;
+  const LIMIT_MS = 5000;
+  for (let waited = 0; waited < LIMIT_MS; waited += STEP_MS) {
+    await act(async () => { await new Promise((r) => setTimeout(r, STEP_MS)); });
+    if (ready()) return;
+  }
+  throw new Error(`timed out waiting for ${what}`);
 }
 
 /** Right-click the album card and pick "Identify on MusicBrainz…" from its context menu. */
