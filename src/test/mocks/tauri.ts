@@ -29,6 +29,24 @@ export const invoke = vi.fn(async (cmd: string, args?: unknown): Promise<unknown
 
 const invokeHandlers = new Map<string, (args: unknown) => unknown>();
 
+/**
+ * Commands whose unmocked return value is not a harmless `undefined`. A caller that
+ * destructures the result throws, its own catch swallows that into a console.error, and the
+ * suite then asserts against state that is empty because the read failed rather than because
+ * there was nothing to read. Seeded on every reset; `onInvoke` still overrides per test.
+ */
+const defaultInvokeHandlers: Record<string, (args: unknown) => unknown> = {
+  get_loved: () => ({ trackIds: [], albumIds: [], trackAlbumIds: [] }),
+};
+
+function seedDefaultHandlers(): void {
+  for (const [cmd, handler] of Object.entries(defaultInvokeHandlers)) {
+    invokeHandlers.set(cmd, handler);
+  }
+}
+
+seedDefaultHandlers();
+
 /** Register the return value (or throw) for one Tauri command. */
 export function onInvoke(cmd: string, handler: (args: unknown) => unknown): void {
   invokeHandlers.set(cmd, handler);
@@ -64,6 +82,7 @@ export function listenerCount(event: string): number {
 
 export function resetTauriMocks(): void {
   invokeHandlers.clear();
+  seedDefaultHandlers();
   invoke.mockClear();
   listen.mockClear();
 }
