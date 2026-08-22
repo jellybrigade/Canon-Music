@@ -101,7 +101,13 @@ const searchInput = () => document.querySelector(".search-bar-input") as HTMLInp
 const pathname = () => screen.getByTestId("pathname").textContent;
 
 const expectPaletteOpen = () => expect(paletteInput()).not.toBeNull();
-const expectPaletteClosed = () => expect(paletteInput()).toBeNull();
+/**
+ * The dismissal is a state update made from a `window` listener and from a navigation effect,
+ * so the commit that removes `.cp-input` lands after the assertion rather than inside it.
+ * Asserting the removal directly races that commit, and the race reads as a missed dismissal
+ * on whichever case the machine happened to slow down.
+ */
+const expectPaletteClosed = () => waitFor(() => expect(paletteInput()).toBeNull());
 
 /** Ctrl+K from `body`. `useSearchShortcuts` bails while a text field has focus. */
 async function openPalette() {
@@ -154,7 +160,7 @@ describe("command palette dismissed by navigation it did not originate", () => {
       await openPalette();
       await act(async () => { source.fire(); });
       await waitFor(() => expect(pathname()).toBe(source.lands));
-      expectPaletteClosed();
+      await expectPaletteClosed();
     });
   }
 
@@ -171,8 +177,8 @@ describe("command palette dismissed by navigation it did not originate", () => {
     await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }); });
 
     await waitFor(() => expect(pathname()).toBe("/library"));
-    expectPaletteClosed();
-    expect(searchInput()).toBeNull();
+    await expectPaletteClosed();
+    await waitFor(() => expect(searchInput()).toBeNull());
     expect(screen.getByTestId("route-content")).not.toBeNull();
   });
 
@@ -204,6 +210,6 @@ describe("command palette dismissed by navigation it did not originate", () => {
     await mountApp(["/library"], 0);
     await openPalette();
     await act(async () => { press("Escape", { target: paletteInput()! }); });
-    await waitFor(() => expectPaletteClosed());
+    await expectPaletteClosed();
   });
 });

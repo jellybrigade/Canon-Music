@@ -90,6 +90,16 @@ const searchInput = () => document.querySelector(".search-bar-input") as HTMLInp
 const routeContent = () => screen.queryByTestId("route-content");
 
 /**
+ * Every dismissal here is a React state update made from a listener the app registered on
+ * `window` or `document`, not from a handler React dispatched, so the commit that removes the
+ * overlay lands after the press rather than inside it. Asserting the removal directly races
+ * that commit, and the race is invisible in the assertion - it reads as a wrong dismissal on
+ * whichever case the machine happened to slow down. The `searchInput()` check beside each of
+ * these is the positive control that keeps the absent assertion honest.
+ */
+const expectGone = (get: () => Element | null) => waitFor(() => expect(get()).toBeNull());
+
+/**
  * Open the search overlay with text in it, then stack the palette on top.
  * Leaves focus in the palette's input, which is where the app itself puts it.
  */
@@ -133,7 +143,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("Escape", { target: paletteInput()! }); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
   });
@@ -149,7 +159,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("Escape", { target: document.body }); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
   });
@@ -170,7 +180,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("Escape", { target: searchInput()! }); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
   });
@@ -180,6 +190,7 @@ describe("command palette stacked over the search overlay", () => {
     await stackPaletteOverSearch();
 
     await act(async () => { press("Escape", { target: paletteInput()! }); });
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
 
     await act(async () => { press("Escape", { target: searchInput()! }); });
@@ -197,7 +208,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("Escape", { target: paletteInput()! }); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(routeContent()).not.toBeNull();
   });
 
@@ -221,7 +232,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { fireEvent.mouseDown(paletteBackdrop()!); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
     expect(routeContent()).toBeNull();
@@ -263,7 +274,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("Escape", { target: document.body }); });
 
-    expect(document.querySelector(".feedback-modal")).toBeNull();
+    await expectGone(() => document.querySelector(".feedback-modal"));
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
   });
@@ -274,7 +285,7 @@ describe("command palette stacked over the search overlay", () => {
 
     await act(async () => { press("k", { ctrlKey: true, target: paletteInput()! }); });
 
-    expect(paletteInput()).toBeNull();
+    await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
     expect(routeContent()).toBeNull();
