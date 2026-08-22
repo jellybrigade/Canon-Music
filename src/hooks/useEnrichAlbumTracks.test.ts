@@ -28,6 +28,7 @@ import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { useEnrichAlbumTracks } from "./useEnrichAlbumTracks";
 
 const ALBUM_ID = "srv-a:alb";
+const OTHER_ALBUM_ID = "srv-a:alb2";
 const TRACKS_SELECT = "SELECT id, title, artist, album_artist, tags_enriched_at";
 
 let db: FakeDatabase;
@@ -53,6 +54,21 @@ function failTrackRead() {
 
 function restoreTrackRead() {
   db.select = realSelect;
+}
+
+/** A second album on the same server, as a navigation target within one `AlbumDetail` mount. */
+function insertOtherAlbum() {
+  db.raw
+    .prepare(
+      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine')`
+    )
+    .run(OTHER_ALBUM_ID, "Isn't Anything");
+  db.raw
+    .prepare(
+      `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id)
+       VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`
+    )
+    .run("srv-a:t2", "Soft As Snow", OTHER_ALBUM_ID);
 }
 
 function trackTagRows(): { track_id: string; raw_value: string }[] {
@@ -131,6 +147,22 @@ describe("useEnrichAlbumTracks", () => {
     await reidentifyAlbum();
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
+  });
+
+  it("enriches the second album when the view swaps albums without remounting", async () => {
+    insertOtherAlbum();
+    const { rerender } = renderHook(
+      ({ id, name }: { id: string; name: string }) =>
+        useEnrichAlbumTracks(id, "my bloody valentine", name),
+      { wrapper, initialProps: { id: ALBUM_ID, name: "Loveless" } }
+    );
+
+    await waitFor(() => expect(trackTagRows()).toHaveLength(1));
+
+    rerender({ id: OTHER_ALBUM_ID, name: "Isn't Anything" });
+
+    await waitFor(() => expect(trackTagRows()).toHaveLength(2));
+    expect(trackTagRows().map((r) => r.track_id)).toEqual(["srv-a:t1", "srv-a:t2"]);
   });
 
   it("costs exactly one attempt per trigger after a failure, never a retry loop", async () => {

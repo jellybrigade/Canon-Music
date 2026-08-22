@@ -144,18 +144,20 @@ export function useEnrichAlbumTracks(
   const parsed = Number(staleDaysStr);
   const staleDays = Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
   const { data: identity, isSuccess: identityReady } = useAlbumIdentity(albumId);
-  const ranRef = useRef(false);
+  // Holds the album the claim was stamped for, not a bare boolean: `AlbumDetail` has no `key`,
+  // so navigating between two cached albums re-runs this effect on the same mount.
+  const ranRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (enrichTracks !== "true") return;
     if (!albumId || !albumArtist) return;
     // Wait for identity query to settle (may be null for albums with no identity).
     if (!identityReady) return;
-    if (ranRef.current) return;
+    if (ranRef.current === albumId) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
     // permanently prevent this mount from retrying.
     if (inFlight.has(albumId)) return;
-    ranRef.current = true;
+    ranRef.current = albumId;
 
     const promise = enrichAlbumTracks(albumId, albumArtist, albumName, staleDays, identity ?? null)
       .then(() => {
@@ -165,7 +167,7 @@ export function useEnrichAlbumTracks(
       })
       // A failed run releases the claim so a later trigger can retry. Safe against a loop:
       // nothing here re-runs the effect, only a dep moving does.
-      .catch(() => { ranRef.current = false; })
+      .catch(() => { if (ranRef.current === albumId) ranRef.current = null; })
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);

@@ -55,6 +55,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "Ref.current = " src/hooks --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A per-mount claim on work keyed by an argument stands against every later value of that argument.** `useEnrichAlbumTracks`, `useEnrichArtist` and `useNormalizeAlbum` held `useRef(false)`; `AlbumDetail` has no `key`, so navigating between two cached albums swaps `albumId`/`album.artist` inside one mount and the stamp from the first silently suppressed the second. Refs now hold the id (`ranRef.current === albumId`), and every clear checks the id it clears. Each hit below must guard work that cannot change identity within one mount, or hold the id.
+  ```
+  grep -rn "useRef(false)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A parallel-array invariant enforced by one writer holds only until another runs.** `shuffleOrder.length === queue.length`; `normalizeShuffleOrder` repairs before splice sites. Grep for a length guard one writer has and others don't.
 - **A "safe copy" helper must copy on every path, including the no-op one.** `return [...order]` always, or reference equality kills the re-render.
 - **A restore path writing `currentTrack` without loading the engine is unplayable.** `resume()` treats null `streamUrl` as `error`; server-side restore uses state-only `restoreQueue`.
