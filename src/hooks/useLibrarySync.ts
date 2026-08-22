@@ -15,6 +15,15 @@ import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
+// A failed run cannot stay claimed: with the auto-sync interval off nothing else
+// would ever retry it, so a server that was down at launch stays unsynced until
+// the user presses sync or restarts. Clearing the claim in the settle handler
+// instead would restart the run immediately and hammer an unreachable server, so
+// the retry is delayed and bounded - past the last delay the manual sync button
+// and a server switch are the only ways back, which is what the interval-off
+// setting asks for.
+const RETRY_DELAYS_MS = [30_000, 120_000, 300_000];
+
 export function useLibrarySync(server: Server | undefined, queryClient: QueryClient) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
@@ -27,11 +36,38 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const serverRef = useRef<Server | undefined>(server);
   serverRef.current = server;
   const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryRef = useRef<{ id: string; attempts: number } | null>(null);
+
+  function clearRetryTimer() {
+    if (retryTimerRef.current === null) return;
+    clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = null;
+  }
+
+  function scheduleRetry(s: Server) {
+    const attempts = retryRef.current?.id === s.id ? retryRef.current.attempts : 0;
+    const delay = RETRY_DELAYS_MS[attempts];
+    if (delay === undefined) return;
+    retryRef.current = { id: s.id, attempts: attempts + 1 };
+    clearRetryTimer();
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = null;
+      const latest = serverRef.current;
+      if (!latest || latest.id !== s.id) return;
+      // The claim is the only thing stopping this server being synced again, so
+      // it has to go before syncIfNeeded can do anything.
+      if (syncedRef.current === s.id) syncedRef.current = null;
+      syncIfNeeded(latest);
+    }, delay);
+  }
 
   /** Returns whether a run actually started. */
   function runSync(s: Server): boolean {
     if (syncingRef.current) return false;
     syncingRef.current = true;
+    clearRetryTimer();
+    let failed = false;
     setSyncStatus("syncing");
     setSyncError("");
     setSyncProgress(null);
@@ -58,6 +94,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0 || albumTracksIncomplete;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
+        if (retryRef.current?.id === s.id) retryRef.current = null;
         if (hasPartialFailure) {
           const messages = [];
           const parts = [];
@@ -105,6 +142,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         }
       })
       .catch((err: unknown) => {
+        failed = true;
         setSyncStatus("error");
         setSyncError(err instanceof Error ? err.message : String(err));
         console.error("Sync failed:", err);
@@ -115,7 +153,15 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         // The user may have switched servers while this run was in flight, in
         // which case the effect below could not start one for the new server.
         const latest = serverRef.current;
-        if (latest) syncIfNeeded(latest);
+        if (!latest) return;
+        // A failure leaves the server claimed, so syncIfNeeded would do nothing
+        // here; the backoff is what gets it retried. A server switched to while
+        // this run was failing is a different server and syncs straight away.
+        if (failed && latest.id === s.id) {
+          scheduleRetry(s);
+          return;
+        }
+        syncIfNeeded(latest);
       });
     return true;
   }
@@ -134,6 +180,10 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     syncIfNeeded(server);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server]);
+
+  // Only touches refs, so the identity it captures on mount behaves like any later one.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => clearRetryTimer, []);
 
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);

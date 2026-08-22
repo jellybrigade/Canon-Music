@@ -207,26 +207,70 @@ describe("useLibrarySync server claim", () => {
     expect(syncLibrary).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps a failed server claimed, so nothing retries it with the interval off", async () => {
+  it("retries a failed server on a backoff with the interval off", async () => {
     intervalSetting = "0";
     renderSync(SRV_A);
     await tick();
     await failRun(0, new Error("boom"));
 
-    await tick(60 * MINUTE);
+    // The settle handler must not restart it, or an unreachable server is a hot loop.
     expect(syncLibrary).toHaveBeenCalledTimes(1);
+
+    // failRun already advanced FANOUT_MS of the 30s first step.
+    await tick(30 * 1000 - FANOUT_MS - 1);
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    await tick(1);
+    expect(syncLibrary).toHaveBeenCalledTimes(2);
+    expect(openRun(1).server.id).toBe("a");
   });
 
-  it("settles a repeatedly failing sync without re-entering itself", async () => {
+  it("gives up on a permanently failing server after the last backoff step", async () => {
     intervalSetting = "0";
     renderSync(SRV_A);
     await tick();
 
+    // 30s, then 2min, then 5min, then nothing.
     await failRun(0, new Error("permanent"));
-    await tick(10 * MINUTE);
+    await tick(30 * 1000);
+    await failRun(1, new Error("permanent"));
+    await tick(2 * MINUTE);
+    await failRun(2, new Error("permanent"));
+    await tick(5 * MINUTE);
+    await failRun(3, new Error("permanent"));
 
-    // finally -> syncIfNeeded -> runSync must not form a loop: the stamp breaks it.
+    await tick(60 * MINUTE);
+    expect(syncLibrary).toHaveBeenCalledTimes(4);
+  });
+
+  it("starts the backoff over after a run that succeeded", async () => {
+    intervalSetting = "0";
+    const { result } = renderSync(SRV_A);
+    await tick();
+
+    await failRun(0, new Error("boom"));
+    await tick(30 * 1000);
+    await settle(1);
+
+    // The claim only clears on a retry, so the manual button is what reaches a
+    // server that has already synced once.
+    await act(async () => { result.current.runSync(SRV_A); });
+    await failRun(2, new Error("boom"));
+
+    // A fresh first step, not the second one the earlier failure would have left.
+    await tick(30 * 1000);
+    expect(syncLibrary).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not retry a failed server after unmount", async () => {
+    intervalSetting = "0";
+    const { unmount } = renderSync(SRV_A);
+    await tick();
+    await failRun(0, new Error("boom"));
+    unmount();
+
+    await tick(60 * MINUTE);
     expect(syncLibrary).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 
