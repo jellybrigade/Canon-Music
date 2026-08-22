@@ -51,7 +51,7 @@ Every feature/bugfix gets a waste assertion when it:
 
 Exact counts only (`toBe(5)`, never `toBeGreaterThan(0)`). Measure a span with fake timers, not one tick. Prove the probe can fail: break the property once, confirm red, restore.
 
-Harness: `src/test/perf.ts` (`trackRenders`, `invokeCount`, `invokeArgs`), `FakeDatabase.executeCount`/`selectCount`/`queryLog` in `src/test/sqlite.ts`. Examples: `src/store/player.waste.test.ts`.
+Harness: `src/test/perf.ts` (`trackRenders`, `invokeCount`, `invokeArgs`), `FakeDatabase.executeCount`/`selectCount`/`queryLog` in `src/test/sqlite.ts`. Examples: `src/store/player.waste.test.ts`. A suite that mounts the whole `App` calls `allowSlowAppMounts()` (`src/test/appMount.ts`) at module scope, so the `findBy*` window measures the behaviour and not the mount.
 
 ### Regression
 

@@ -62,10 +62,13 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import App from "../App";
+import { allowSlowAppMounts } from "../test/appMount";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+
+allowSlowAppMounts();
 
 let testDb: FakeDatabase;
 
