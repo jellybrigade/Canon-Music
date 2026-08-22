@@ -1026,11 +1026,20 @@ describe("player store - waveform prefetch gated on audible playback", () => {
 });
 
 describe("player store - sleep timer", () => {
+  // play() arms the 200ms position ticker, and advanceTimersByTimeAsync then runs it once per
+  // 200ms of the advanced span: an hour is 18000 promise-chained iterations, which is what put
+  // these cases at the 5s timeout at random. The sleep timer never reads the ticker, so the
+  // playing state it needs is set directly and the spans below cost nothing.
+  function armPlayingTrack(): void {
+    usePlayerStore.setState({
+      currentTrack: makeTrack("a"),
+      streamUrl: "http://test/a",
+      isPlaying: true,
+    });
+  }
+
   it("a numeric preset arms sleepTimerEndsAt and pauses + clears itself after that many minutes", async () => {
-    const track = makeTrack("a");
-    onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
-    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    armPlayingTrack();
     onInvoke("audio_pause", () => Promise.resolve(undefined));
 
     usePlayerStore.getState().setSleepTimer(30);
@@ -1046,10 +1055,7 @@ describe("player store - sleep timer", () => {
   });
 
   it("'end-of-track' sets the flag without arming a setTimeout pause", async () => {
-    const track = makeTrack("a");
-    onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
-    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    armPlayingTrack();
 
     const timersBefore = vi.getTimerCount();
     usePlayerStore.getState().setSleepTimer("end-of-track");
@@ -1065,10 +1071,7 @@ describe("player store - sleep timer", () => {
   });
 
   it("calling setSleepTimer again cancels the previous timer instead of stacking a second pause", async () => {
-    const track = makeTrack("a");
-    onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
-    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    armPlayingTrack();
     onInvoke("audio_pause", () => Promise.resolve(undefined));
 
     usePlayerStore.getState().setSleepTimer(30);
@@ -1081,10 +1084,7 @@ describe("player store - sleep timer", () => {
   });
 
   it("clearSleepTimer cancels a pending numeric timer so it never fires", async () => {
-    const track = makeTrack("a");
-    onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
-    emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
+    armPlayingTrack();
     onInvoke("audio_pause", () => Promise.resolve(undefined));
 
     usePlayerStore.getState().setSleepTimer(30);
