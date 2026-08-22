@@ -92,9 +92,32 @@ function savedFilters(onSave: ReturnType<typeof vi.fn>, call = 0): SmartFilters 
   return args[0] as SmartFilters;
 }
 
-const saveBtn = () => screen.getByRole("button", { name: /Create|Save & Refresh|Saving/ });
-const cancelBtn = () => screen.getByRole("button", { name: "Cancel" });
-const closeBtn = () => screen.getByRole("button", { name: "Close" });
+/**
+ * An accessible-name lookup walks the whole tree per call, and this modal renders 60 genre
+ * chips, so a `getByRole("button", { name })` here cost 150-300ms each (see known-issues,
+ * "An accessible-name query is a whole-tree scan"). These select on class instead, keeping
+ * the `button` half of what the role check asserted, and throw when nothing matches so a
+ * stale selector fails loudly rather than passing an absent-assertion.
+ */
+function button(selector: string, what: string): HTMLButtonElement {
+  const el = document.querySelector<HTMLButtonElement>(`button${selector}`);
+  if (!el) throw new Error(`no ${what} button matching "button${selector}"`);
+  return el;
+}
+
+/** Finds a chip or toggle by its own label, which is the leading text before any icon. */
+function buttonLabelled(selector: string, label: string): HTMLButtonElement {
+  const all = Array.from(document.querySelectorAll<HTMLButtonElement>(`button${selector}`));
+  const el = all.find((b) => (b.textContent ?? "").trim() === label);
+  if (!el) throw new Error(`no "${label}" among ${all.length} "button${selector}"`);
+  return el;
+}
+
+const saveBtn = () => button(".spm-btn--primary", "save");
+const cancelBtn = () => button(".spm-btn:not(.spm-btn--primary)", "cancel");
+const closeBtn = () => button(".spm-close", "close");
+const genreChip = (name: string) => buttonLabelled(".spm-genre-chip", name);
+const modeBtn = (name: string) => buttonLabelled(".spm-mode-btn", name);
 const overlay = () => document.querySelector(".spm-overlay") as HTMLElement;
 const dialog = () => document.querySelector(".spm-dialog") as HTMLElement;
 const selectedChips = () =>
@@ -325,7 +348,7 @@ describe("SmartPlaylistModal genre selection", () => {
     await mount();
     expect(availableChips()).toEqual(["Rock", "Jazz", "Post-Rock"]);
 
-    fireEvent.click(screen.getByRole("button", { name: "Jazz" }));
+    fireEvent.click(genreChip("Jazz"));
 
     expect(selectedChips()).toEqual(["Jazz"]);
     expect(availableChips()).toEqual(["Rock", "Post-Rock"]);
@@ -334,7 +357,7 @@ describe("SmartPlaylistModal genre selection", () => {
   it("returns to the empty state when the selected chip is clicked again", async () => {
     const { onSave } = await mount();
     type(field("Name"), "Mix");
-    fireEvent.click(screen.getByRole("button", { name: "Jazz" }));
+    fireEvent.click(genreChip("Jazz"));
     fireEvent.click(document.querySelector(".spm-genre-chip--selected") as HTMLElement);
 
     expect(document.querySelector(".spm-genre-selected")).toBeNull();
@@ -356,7 +379,7 @@ describe("SmartPlaylistModal genre selection", () => {
 
   it("shows the empty message when the search matches nothing, keeping the chips visible", async () => {
     await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Jazz" }));
+    fireEvent.click(genreChip("Jazz"));
     type(document.querySelector(".spm-genre-search") as HTMLInputElement, "zzzz");
 
     expect(screen.getByText("No genres found")).toBeInTheDocument();
@@ -393,8 +416,8 @@ describe("SmartPlaylistModal genre selection", () => {
   it("swaps IN for NOT IN in the built query when exclude mode is chosen", async () => {
     const { onSave } = await mount();
     type(field("Name"), "Mix");
-    fireEvent.click(screen.getByRole("button", { name: "Jazz" }));
-    fireEvent.click(screen.getByRole("button", { name: "Exclude" }));
+    fireEvent.click(genreChip("Jazz"));
+    fireEvent.click(modeBtn("Exclude"));
     fireEvent.click(saveBtn());
     await act(async () => {});
 
@@ -405,8 +428,8 @@ describe("SmartPlaylistModal genre selection", () => {
 
   it("marks the active genre mode by class, since the buttons carry no pressed state", async () => {
     await mount();
-    const include = screen.getByRole("button", { name: "Include" });
-    const exclude = screen.getByRole("button", { name: "Exclude" });
+    const include = modeBtn("Include");
+    const exclude = modeBtn("Exclude");
     expect(include.className).toContain("spm-mode-btn--active");
     expect(exclude.className).not.toContain("spm-mode-btn--active");
 
@@ -646,7 +669,7 @@ describe("SmartPlaylistModal waste", () => {
     type(document.querySelector(".spm-genre-search") as HTMLInputElement, "r");
     type(document.querySelector(".spm-genre-search") as HTMLInputElement, "ro");
     type(document.querySelector(".spm-genre-search") as HTMLInputElement, "roc");
-    fireEvent.click(screen.getByRole("button", { name: "Rock" }));
+    fireEvent.click(genreChip("Rock"));
     type(field("Limit"), "100");
     await act(async () => {});
 
