@@ -413,20 +413,35 @@ describe("useLibrarySync auto-sync interval", () => {
     expect(syncLibrary).toHaveBeenCalledTimes(2);
   });
 
-  it("never fires when a new server object resets the countdown each render", async () => {
+  it("keeps counting down when a new server object arrives each render", async () => {
     const { rerender } = renderSync(SRV_A);
     await tick();
     await settle(0);
 
     // App.tsx derives `server` from a react-query result, so an equal-but-new object is routine.
+    // Re-arming on each one would reset the countdown before any 5-minute tick could land.
     for (let i = 0; i < 8; i++) {
-      await tick(4 * MINUTE);
       rerender({ server: { ...SRV_A } });
-      await tick();
+      await tick(4 * MINUTE);
+      await settle(runs.length - 1);
     }
 
     expect(vi.getTimerCount()).toBe(1);
-    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    // 32 simulated minutes at a 5-minute interval, plus the mount sync.
+    expect(syncLibrary).toHaveBeenCalledTimes(7);
+  });
+
+  it("syncs the server selected now when a tick lands after a switch", async () => {
+    const { rerender } = renderSync(SRV_A);
+    await tick();
+    await settle(0);
+
+    rerender({ server: SRV_B });
+    await tick();
+    await settle(1);
+
+    await tick(5 * MINUTE);
+    expect(openRun(2).server.id).toBe("b");
   });
 
   it("holds exactly one interval across a remount", async () => {

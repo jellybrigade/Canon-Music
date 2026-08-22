@@ -188,10 +188,17 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);
     if (!server || isNaN(intervalMin) || intervalMin <= 0) return;
-    const id = setInterval(() => { runSync(server); }, intervalMin * 60 * 1000);
+    // Keyed on the id, not the object: `App.tsx` derives the server from a query result, so an
+    // equal-but-new object arrives on any refetch or remount, and re-arming on each one would
+    // reset the countdown before a tick could land. The tick reads the live server for the
+    // same reason it cannot depend on it.
+    const id = setInterval(() => {
+      const latest = serverRef.current;
+      if (latest) runSync(latest);
+    }, intervalMin * 60 * 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server, autoSyncIntervalMin]);
+  }, [server?.id, autoSyncIntervalMin]);
 
   return { syncStatus, syncError, syncProgress, lastSyncedAt, runSync };
 }
