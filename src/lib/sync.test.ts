@@ -16,7 +16,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import type { NavidromeAlbum, NavidromePlaylist, NavidromeStarred, NavidromeTrack } from "./navidrome";
-import type { Server } from "../types/server";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 
@@ -41,6 +40,7 @@ import {
   fetchAndStoreOpenSubsonicExtensions,
 } from "./navidrome";
 import { purgeServerData, syncLibrary, syncAlbumTracks } from "./sync";
+import { album, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -53,50 +53,6 @@ const mExtensions = vi.mocked(fetchAndStoreOpenSubsonicExtensions);
 // plugin's Database provides, which FakeDatabase already implements.
 function asDb(db: FakeDatabase): Database {
   return db as unknown as Database;
-}
-
-const SRV = "srv-a";
-const OTHER = "srv-b";
-
-function server(id = SRV, overrides: Partial<Server> = {}): Server {
-  return {
-    id,
-    type: "navidrome",
-    url: "http://music.local",
-    alt_url: null,
-    display_name: "Music",
-    username: "user",
-    created_at: "2026-01-01T00:00:00Z",
-    ...overrides,
-  };
-}
-
-function album(id: string, overrides: Partial<NavidromeAlbum> = {}): NavidromeAlbum {
-  return {
-    id,
-    name: `Album ${id}`,
-    artist: "Artist One",
-    artistId: "ar-1",
-    coverArt: `co-${id}`,
-    year: 2020,
-    created: "2026-01-01T00:00:00Z",
-    songCount: 2,
-    playCount: 0,
-    ...overrides,
-  };
-}
-
-function track(id: string, albumId: string, overrides: Partial<NavidromeTrack> = {}): NavidromeTrack {
-  return {
-    id,
-    title: `Track ${id}`,
-    artist: "Artist One",
-    albumId,
-    genre: "Rock",
-    track: 1,
-    duration: 200,
-    ...overrides,
-  };
 }
 
 /** Point the album-list and per-album track mocks at one canned library. */
@@ -556,27 +512,9 @@ describe("syncLibrary per-album track prune", () => {
     expect(await count("tracks")).toBe(3);
   });
 
-  it("skips the prune rather than chunking a NOT IN at the variable ceiling", async () => {
-    const { SQLITE_MAX_VARIABLES } = await import("./db-batch");
-    await seedAlbumWithTracks(["t1", "t2"]);
-    const many = Array.from({ length: SQLITE_MAX_VARIABLES - 1 }, (_, i) => track(`big${i}`, "al-1"));
-    serveLibrary([album("al-1", { songCount: many.length, created: "2026-02-02T00:00:00Z" })], { "al-1": many });
-    const result = await syncLibrary(server());
-    // A NOT IN cannot be chunked without each chunk deleting what the others keep, so at the
-    // ceiling the prune bails entirely and the two originals survive.
-    expect(result.prunedTracks).toBe(0);
-    expect(await count("tracks", "WHERE id IN (?, ?)", [`${SRV}:t1`, `${SRV}:t2`])).toBe(2);
-  });
-
-  it("still prunes one variable below the ceiling", async () => {
-    const { SQLITE_MAX_VARIABLES } = await import("./db-batch");
-    await seedAlbumWithTracks(["t1", "t2"]);
-    const many = Array.from({ length: SQLITE_MAX_VARIABLES - 2 }, (_, i) => track(`big${i}`, "al-1"));
-    serveLibrary([album("al-1", { songCount: many.length, created: "2026-02-02T00:00:00Z" })], { "al-1": many });
-    const result = await syncLibrary(server());
-    expect(result.prunedTracks).toBe(2);
-    // Serves ~32k tracks through the real schema; slow by construction, not hung.
-  }, 30_000);
+  // The bound-parameter ceiling either side of `SQLITE_MAX_VARIABLES - 1` is pinned in
+  // `sync.pruneCeiling.test.ts`, which stubs the constant small - asserting that boundary
+  // against the real 32000 costs ~5s per case for nothing the assertion reads.
 
   it("only queries for stale tracks on an album that already had rows", async () => {
     const seen: string[] = [];
