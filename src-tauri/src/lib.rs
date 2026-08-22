@@ -50,7 +50,7 @@ impl Read for GrowingFileReader {
 
             // Compute how many bytes are safely readable without risking EOF.
             // Leave an 8 KB margin to match Supersonic's approach.
-            let current_pos = self.file.seek(std::io::SeekFrom::Current(0))?;
+            let current_pos = self.file.stream_position()?;
             let file_size = self.file.metadata().map(|m| m.len()).unwrap_or(0);
             let safe_bytes = file_size.saturating_sub(current_pos + 8192) as usize;
 
@@ -127,10 +127,13 @@ const MAX_COVER_REQUESTS: usize = 16;
 const MAX_COVER_CACHE_ENTRIES: usize = 500;
 const MAX_DISK_CACHE_ENTRIES: usize = 2000;
 
+/// Cache key -> (image bytes, content type), shared across the scheme handler threads.
+type ImageCache = Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>;
+
 #[derive(Clone)]
 struct CoverState {
-    cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
-    artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>>,
+    cache: ImageCache,
+    artist_image_cache: ImageCache,
     proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
     request_sem: Arc<tokio::sync::Semaphore>,
     http_client: reqwest::blocking::Client,
@@ -181,7 +184,10 @@ fn disk_cache_write(
     // Full directory scan is real I/O - only worth doing once every so often
     // rather than on every single cache-miss write on the cover-serving hot path.
     static WRITE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    if WRITE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) % 32 == 0 {
+    if WRITE_COUNT
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        .is_multiple_of(32)
+    {
         evict_disk_cache_if_needed(dir);
     }
 }
@@ -677,7 +683,7 @@ async fn audio_play(
             const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
             // Unknown Content-Length (chunked transfer) defaults to spill so large
             // streams don't accumulate unbounded in RAM.
-            let use_spill = content_length.map_or(true, |cl| cl > SPILL_THRESHOLD);
+            let use_spill = content_length.is_none_or(|cl| cl > SPILL_THRESHOLD);
 
             let (reader_box, writer): (Box<dyn AudioReader>, AnyWriter) = if use_spill {
                 if let Some(ref dir) = spill_dir {
@@ -1571,10 +1577,8 @@ pub fn run() {
     // (see `handle_cover_request` below) instead of a loopback TCP server - no
     // socket, so the thread-storm/SIGKILL bug class in `known-issues.md` is
     // structurally impossible here.
-    let cover_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    let artist_image_cache: Arc<Mutex<HashMap<String, (Vec<u8>, String)>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let cover_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
+    let artist_image_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
     let cover_http_client = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(30))
