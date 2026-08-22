@@ -71,6 +71,10 @@ Fixed unless marked OPEN.
   ```
   grep -n "viaAlbums(\"\|DELETE FROM album" src/lib/sync.ts
   ```
+- **A read filtered in the loop body instead of in SQL costs its whole table on every pass, and any count beside it tells a different story.** `useScrobbleFlush` selected all of `scrobble_queue` and `continue`d past rows lacking the current server's id prefix, so a second server's backlog was re-read every 60s forever while being unsendable, and the Diagnostics count (unscoped `COUNT(*)`) reported a backlog no wait could clear. Both now scope on `track_id LIKE ? ESCAPE '\\\\'` via one `ownerPattern` helper, and the count's query key carries the server id. `purgeServerData` was never the gap - it has covered `scrobble_queue` since `d153621`. Ask of any per-row `continue`: could the WHERE clause have said this, and does every count over the same table agree with it?
+  ```
+  grep -rn "continue;" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.

@@ -95,7 +95,7 @@ export const QK = {
   settingsMbMinFolksonomy: () => ["settings", "musicbrainz.min_folksonomy_count"] as const,
   settingsFanartApiKey: () => ["settings", "fanart.api_key"] as const,
   settingsAll: () => ["settings"] as const,
-  scrobbleQueueCount: () => ["scrobble_queue", "count"] as const,
+  scrobbleQueueCount: (serverId?: string) => ["scrobble_queue", "count", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,

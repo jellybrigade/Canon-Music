@@ -1,9 +1,9 @@
 import { useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../db";
 import { QK } from "../../lib/query-keys";
 import { getMissingCoverCount, useCacheAllCovers } from "../../hooks/useCoverCache";
 import { getMissingArtistImageCount, useCacheAllArtistImages } from "../../hooks/useArtistImageCache";
+import { getScrobbleQueueCount } from "../../hooks/useScrobbleFlush";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { exportSettingsFile, importSettingsFile } from "../../lib/settings-backup";
 
@@ -47,15 +47,11 @@ function useMissingArtistImageCount() {
   });
 }
 
-function useScrobbleQueueCount() {
+function useScrobbleQueueCount(serverId: string | undefined) {
   return useQuery({
-    queryKey: QK.scrobbleQueueCount(),
-    queryFn: async () => {
-      const db = await getDb();
-      type Row = { n: number };
-      const rows = await db.select<Row[]>("SELECT COUNT(*) as n FROM scrobble_queue");
-      return rows[0]?.n ?? 0;
-    },
+    queryKey: QK.scrobbleQueueCount(serverId),
+    queryFn: () => getScrobbleQueueCount(serverId as string),
+    enabled: !!serverId,
     refetchInterval: 5000,
   });
 }
@@ -63,7 +59,7 @@ function useScrobbleQueueCount() {
 export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery, serverWithCredential }: Props) {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount();
+  const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverWithCredential?.server.id);
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
   const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
   const { data: missingArtistImageCount, refetch: refetchMissingArtistImageCount } = useMissingArtistImageCount();

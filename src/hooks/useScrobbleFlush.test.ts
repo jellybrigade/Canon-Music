@@ -34,7 +34,7 @@ import { SubsonicError, scrobbleTrack, type NavidromeCredential } from "../lib/n
 import { QK } from "../lib/query-keys";
 import type { Server } from "../types/server";
 import type { ServerWithCredential } from "./useServer";
-import { useScrobbleFlush } from "./useScrobbleFlush";
+import { useScrobbleFlush, getScrobbleQueueCount } from "./useScrobbleFlush";
 
 const FLUSH_MS = 60_000;
 
@@ -511,7 +511,9 @@ describe("useScrobbleFlush invalidation", () => {
     expect(invalidate.mock.calls.map((c) => c[0]!.queryKey)).toEqual([
       QK.albumsListeningStats(),
       QK.albumsPartiallyHeard(),
-      QK.scrobbleQueueCount(),
+      // Server-scoped: the count the Diagnostics tab shows is this server's backlog, so an
+      // unscoped key here would refresh nothing that anyone reads.
+      QK.scrobbleQueueCount(SRV.id),
     ]);
   });
 
@@ -665,5 +667,81 @@ describe("useScrobbleFlush lifecycle and waste", () => {
     expect(db.executeCount - executesBefore).toBe(0);
     expect(scrobbleTrack).toHaveBeenCalledTimes(1);
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("useScrobbleFlush server scoping", () => {
+  /**
+   * Counts the rows each `scrobble_queue` SELECT actually returned. The drain loop's
+   * behaviour is identical whether a foreign row is excluded by SQL or skipped in the
+   * body, so behaviour alone cannot see this; what the read costs can.
+   */
+  function trackQueueReads(): number[] {
+    const sizes: number[] = [];
+    const realSelect = db.select.bind(db);
+    db.select = (async (sql: string, binds?: unknown[]) => {
+      const rows = await realSelect(sql, binds);
+      if (/FROM scrobble_queue/i.test(sql)) sizes.push((rows as unknown[]).length);
+      return rows;
+    }) as typeof db.select;
+    return sizes;
+  }
+
+  it("reads only its own server's rows, not the whole queue", async () => {
+    for (let i = 0; i < 5; i++) seedQueue(`srv-b:t${i}`, 1700000000 + i);
+    seedQueue("srv-a:t1", 1700000010);
+    seedTrack("srv-a:t1");
+    const reads = trackQueueReads();
+
+    renderFlush(swc());
+    await tick();
+
+    expect(reads).toEqual([1]);
+  });
+
+  it("keeps reading only its own rows on later ticks", async () => {
+    for (let i = 0; i < 3; i++) seedQueue(`srv-b:t${i}`, 1700000000 + i);
+    const reads = trackQueueReads();
+
+    renderFlush(swc());
+    await tick();
+    await tick(FLUSH_MS);
+
+    expect(reads).toEqual([0, 0]);
+  });
+
+  it("does not treat a wildcard in a server id as a pattern", async () => {
+    const oddServer: Server = { ...SRV, id: "srv_a" };
+    seedQueue("srvXa:t1", 1700000001);
+    const reads = trackQueueReads();
+
+    renderFlush(swc(oddServer));
+    await tick();
+
+    expect(reads).toEqual([0]);
+    expect(scrobbleTrack).not.toHaveBeenCalled();
+    expect(queueTrackIds()).toEqual(["srvXa:t1"]);
+  });
+});
+
+describe("getScrobbleQueueCount", () => {
+  it("counts only the given server's queued rows", async () => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedQueue("srv-a:t2", 1700000002);
+    seedQueue("srv-b:t9", 1700000003);
+
+    expect(await getScrobbleQueueCount("srv-a")).toBe(2);
+  });
+
+  it("returns zero for a server with nothing queued", async () => {
+    seedQueue("srv-b:t9", 1700000001);
+
+    expect(await getScrobbleQueueCount("srv-a")).toBe(0);
+  });
+
+  it("does not treat a wildcard in a server id as a pattern", async () => {
+    seedQueue("srvXa:t1", 1700000001);
+
+    expect(await getScrobbleQueueCount("srv_a")).toBe(0);
   });
 });

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { scrobbleTrack, SubsonicError } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
+import { escapeLike } from "../lib/sql";
 import { QK } from "../lib/query-keys";
 import type { ServerWithCredential } from "./useServer";
 
@@ -17,6 +18,26 @@ const FLUSH_INTERVAL_MS = 60_000;
  * offline backlog, since re-entering the password makes those rows sendable again.
  */
 const PERMANENT_SUBSONIC_CODES = new Set([70]);
+
+/**
+ * Rows are owned by the server whose id prefixes their `track_id`. Scoping the read in SQL
+ * rather than skipping foreign rows in the loop keeps the 60-second tick's cost proportional
+ * to what it can actually send: a second server's backlog is unsendable until that server is
+ * selected, and re-reading it every minute buys nothing.
+ */
+function ownerPattern(serverId: string): string {
+  return `${escapeLike(serverId)}:%`;
+}
+
+/** Queued rows the currently selected server could send, i.e. what a backlog count may claim. */
+export async function getScrobbleQueueCount(serverId: string): Promise<number> {
+  const db = await getDb();
+  const rows = await db.select<{ n: number }[]>(
+    "SELECT COUNT(*) as n FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\'",
+    [ownerPattern(serverId)]
+  );
+  return rows[0]?.n ?? 0;
+}
 
 export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefined) {
   const queryClient = useQueryClient();
@@ -40,12 +61,12 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
         const db = await getDb();
         type ScrobbleRow = { id: number; track_id: string; timestamp: number };
         const rows = await db.select<ScrobbleRow[]>(
-          "SELECT id, track_id, timestamp FROM scrobble_queue ORDER BY timestamp"
+          "SELECT id, track_id, timestamp FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\' ORDER BY timestamp",
+          [ownerPattern(server.id)]
         );
 
         for (const row of rows) {
           if (cancelled) break;
-          if (!row.track_id.startsWith(server.id + ":")) continue;
           try {
             const nativeId = stripServerPrefix(row.track_id, server.id);
             await scrobbleTrack(server.url, server.username, credential, nativeId, row.timestamp * 1000, server.alt_url ?? undefined);
@@ -88,7 +109,7 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
       if (sent > 0 && !cancelled) {
         void queryClient.invalidateQueries({ queryKey: QK.albumsListeningStats() });
         void queryClient.invalidateQueries({ queryKey: QK.albumsPartiallyHeard() });
-        void queryClient.invalidateQueries({ queryKey: QK.scrobbleQueueCount() });
+        void queryClient.invalidateQueries({ queryKey: QK.scrobbleQueueCount(server.id) });
       }
     }
 
