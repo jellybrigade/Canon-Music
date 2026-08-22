@@ -225,8 +225,12 @@ export async function fetchAllAlbums(
   altUrl?: string
 ): Promise<NavidromeAlbum[]> {
   const PAGE_SIZE = 500;
+  // A server that ignores `offset` answers every request with the same full page, so the
+  // short-page exit never fires. Both guards below turn that hang into a failed sync.
+  const MAX_ALBUMS = 500_000;
   const albums: NavidromeAlbum[] = [];
   let offset = 0;
+  let previousFirstId: string | undefined;
 
   while (true) {
     const params = buildAuthParams(username, credential);
@@ -251,10 +255,18 @@ export async function fetchAllAlbums(
     }
 
     const page = response.albumList2?.album ?? [];
+    const firstId = page[0]?.id;
+    if (firstId !== undefined && firstId === previousFirstId) {
+      throw new Error(`getAlbumList2 ignored the offset: the page at ${offset} repeats the last`);
+    }
+    previousFirstId = firstId;
     albums.push(...page);
 
     if (page.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
+    if (offset >= MAX_ALBUMS) {
+      throw new Error(`getAlbumList2 exceeded the ${MAX_ALBUMS} album ceiling`);
+    }
   }
 
   return albums;

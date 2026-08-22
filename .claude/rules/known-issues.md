@@ -63,6 +63,10 @@ Fixed unless marked OPEN.
 - **A "safe copy" helper must copy on every path, including the no-op one.** `return [...order]` always, or reference equality kills the re-render.
 - **A restore path writing `currentTrack` without loading the engine is unplayable.** `resume()` treats null `streamUrl` as `error`; server-side restore uses state-only `restoreQueue`.
 - **A sync that only upserts diverges from its source, and the divergence feeds itself.** `syncLibrary` prunes albums/tracks absent from the fetch, refusing an empty or partial one. Same pass: playlist refresh upserts server-owned columns only; loved-stage compare scopes both sides by id prefix; `playlist_tracks.position` compacted via two negative-space passes. Grep `DELETE` against mirrored tables and ask what depends on a row's absence.
+- **A paging loop whose only exit is a condition the server controls is not bounded.** `fetchAllAlbums` walked `offset` until a page came back short, so a server ignoring `offset` looped forever and grew the array until the process died, with no error to report. Now a repeated first id throws, and `offset` is capped at 500,000 albums. Any `while (true)` over a remote cursor owes both an advance check and a ceiling.
+  ```
+  grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.

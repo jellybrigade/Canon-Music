@@ -481,6 +481,8 @@ describe("fetchAllAlbums", () => {
   // Mirrors the PAGE_SIZE constant inside fetchAllAlbums. If that changes, the
   // "requests another page after an exactly-full one" test goes red, which is the point.
   const PAGE_SIZE = 500;
+  // Mirrors MAX_ALBUMS inside fetchAllAlbums for the same reason.
+  const MAX_ALBUMS = 500_000;
 
   it("returns an empty list from a single request for an empty library", async () => {
     fetchMock.mockResolvedValue(albumPage(0));
@@ -569,6 +571,42 @@ describe("fetchAllAlbums", () => {
     await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
       "getAlbumList2 failed after 3 attempts: Load failed"
     );
+  });
+
+  it("throws instead of looping when the server ignores the offset and repeats a page", async () => {
+    // A fresh Response per call: one instance's body can only be read once.
+    fetchMock.mockImplementation(() => Promise.resolve(albumPage(PAGE_SIZE)));
+
+    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
+      "getAlbumList2 ignored the offset"
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("throws once the walk passes the album ceiling instead of growing without bound", async () => {
+    // Every page is full and distinct, so only the ceiling can stop the walk. The tail is
+    // shared between pages so driving MAX_PAGES of them stays cheap.
+    const tail: NavidromeAlbum[] = Array.from({ length: PAGE_SIZE - 1 }, (_, i) => ({
+      id: `tail-${i}`,
+      name: `Tail ${i}`,
+      artist: "Artist",
+      artistId: "ar-1",
+    }));
+    let served = 0;
+    fetchMock.mockImplementation(() => {
+      const album = [
+        { id: `head-${served++}`, name: "Head", artist: "Artist", artistId: "ar-1" },
+        ...tail,
+      ];
+      return Promise.resolve(ok({ status: "ok", albumList2: { album } }));
+    });
+
+    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
+      `getAlbumList2 exceeded the ${MAX_ALBUMS} album ceiling`
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(MAX_ALBUMS / PAGE_SIZE);
   });
 
   it("threads the alt url through every page", async () => {
