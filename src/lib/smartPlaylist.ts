@@ -1,3 +1,5 @@
+import { escapeLike } from "./sql";
+
 const YEAR_MIN = 1900;
 const YEAR_MAX = new Date().getFullYear() + 1;
 const LIMIT_MAX = 500;
@@ -83,15 +85,15 @@ export function buildSmartQuery(
 
   if (filters.titleContains.trim()) {
     conditions.push("t.title LIKE ? ESCAPE '\\'");
-    params.push(`%${filters.titleContains.trim().replace(/[%_\\]/g, "\\$&")}%`);
+    params.push(`%${escapeLike(filters.titleContains.trim())}%`);
   }
   if (filters.artistContains.trim()) {
     conditions.push("t.artist LIKE ? ESCAPE '\\'");
-    params.push(`%${filters.artistContains.trim().replace(/[%_\\]/g, "\\$&")}%`);
+    params.push(`%${escapeLike(filters.artistContains.trim())}%`);
   }
   if (filters.albumContains.trim()) {
     conditions.push("a.name LIKE ? ESCAPE '\\'");
-    params.push(`%${filters.albumContains.trim().replace(/[%_\\]/g, "\\$&")}%`);
+    params.push(`%${escapeLike(filters.albumContains.trim())}%`);
   }
 
   if (filters.yearFrom !== null) {

@@ -4,6 +4,7 @@ import type { CurrentTrack } from "../store/player";
 import { getRadioCandidates } from "../lib/radio";
 import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../lib/lastfm";
 import { getDb } from "../db";
+import { escapeLike } from "../lib/sql";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
@@ -38,8 +39,8 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   type Row = { track_id: string };
   const cutoff = Math.floor(Date.now() / 1000) - RECENT_PLAYED_WINDOW_S;
   const rows = await db.select<Row[]>(
-    "SELECT track_id FROM scrobble_history WHERE track_id LIKE ? AND timestamp > ?",
-    [`${serverId}:%`, cutoff]
+    "SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?",
+    [`${escapeLike(serverId)}:%`, cutoff]
   );
   return new Set(rows.map((r) => r.track_id));
 }

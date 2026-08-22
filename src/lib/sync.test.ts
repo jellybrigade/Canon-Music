@@ -715,6 +715,25 @@ describe("syncLibrary loved stage", () => {
     expect(await count("loved_tracks", "WHERE track_id = ?", [`${OTHER}:t9`])).toBe(1);
   });
 
+  it("does not delete a sibling server whose id differs only at a LIKE wildcard", async () => {
+    // `srv_a` and `srv-a` differ only where the underscore sits, and `_` is a single-character
+    // wildcard, so an unescaped `<id>:%` prefix matches both. The loved DELETEs are scoped by
+    // exactly that prefix, so the sibling's user-authored rows were the thing destroyed.
+    const WILD = "srv_a";
+    db().raw.exec(`INSERT INTO loved_tracks (track_id) VALUES ('srv-a:t9')`);
+    db().raw.exec(`INSERT INTO loved_albums (album_id) VALUES ('srv-a:al-9')`);
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    mStarred.mockResolvedValue({ song: [{ id: "t1" }], album: [] });
+
+    await syncLibrary(server(WILD));
+
+    expect(await count("loved_tracks", "WHERE track_id = ?", ["srv-a:t9"])).toBe(1);
+    expect(await count("loved_albums", "WHERE album_id = ?", ["srv-a:al-9"])).toBe(1);
+    // Positive control: the wildcard server's own row was still written, so the assertions
+    // above are not passing against a sync that did nothing.
+    expect(await count("loved_tracks", "WHERE track_id = ?", [`${WILD}:t1`])).toBe(1);
+  });
+
   it("keeps stored loved state and reports the stage when the starred fetch fails", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }] });

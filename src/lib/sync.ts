@@ -5,6 +5,7 @@ import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
 import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
+import { escapeLike } from "./sql";
 import { rebuildTagVocabCache } from "./tag-normalize";
 import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batch";
 import { runPool } from "./async-pool";
@@ -542,14 +543,14 @@ export async function syncLibrary(
     // rewriting both tables and bumping the session store (~8 mounted consumers)
     // every auto-sync tick forever, while the join-scoped DELETE left the orphan in
     // place. Reading and deleting the same set the write produces closes both.
-    const idPrefix = `${server.id}:%`;
+    const idPrefix = `${escapeLike(server.id)}:%`;
     const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
       db.select<{ album_id: string }[]>(
-        "SELECT album_id FROM loved_albums WHERE album_id LIKE ?",
+        "SELECT album_id FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'",
         [idPrefix]
       ),
       db.select<{ track_id: string }[]>(
-        "SELECT track_id FROM loved_tracks WHERE track_id LIKE ?",
+        "SELECT track_id FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'",
         [idPrefix]
       ),
     ]);
@@ -560,7 +561,9 @@ export async function syncLibrary(
       starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ?", [idPrefix]);
+      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [
+        idPrefix,
+      ]);
       await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
     }
 
@@ -570,7 +573,9 @@ export async function syncLibrary(
       starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ?", [idPrefix]);
+      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [
+        idPrefix,
+      ]);
       await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
     }
   }

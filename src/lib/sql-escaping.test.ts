@@ -56,21 +56,22 @@ export function decodeSingleQuoted(source: string, open: number): string | null 
 
 function escapeLiterals(text: string): string[] {
   const out: string[] = [];
-  for (const match of text.matchAll(/ESCAPE\s+/g)) {
-    const open = match.index + match[0].length;
+  // Anchored on the quote so the word "ESCAPE" in prose is not read as a SQL literal. A clause
+  // whose quote is opened and never closed still decodes to null, which is the case that matters.
+  for (const match of text.matchAll(/ESCAPE\s+'/g)) {
+    const open = match.index + match[0].length - 1;
     const decoded = decodeSingleQuoted(text, open);
     out.push(decoded ?? "<unterminated>");
   }
   return out;
 }
 
-// `LIKE ?` sites that deliberately have no ESCAPE clause, with the reason. Every one of these
-// binds `${server.id}:%`, and server ids are `crypto.randomUUID()`, so they cannot contain a LIKE
-// metacharacter. Adding a site here is a decision; adding one by accident fails the test.
-const UNESCAPED_LIKE_EXEMPTIONS = new Set([
-  "hooks/useRadio.ts",
-  "lib/sync.ts",
-]);
+// `LIKE ?` sites that deliberately have no ESCAPE clause, with the reason. Empty as of the pass
+// that routed every ownership prefix through `escapeLike`: relying on server ids being
+// `crypto.randomUUID()` made the safety incidental rather than designed, and two of the sites
+// were DELETEs, so the failure mode was data loss. Adding a site here is a decision; adding one
+// by accident fails the test below.
+const UNESCAPED_LIKE_EXEMPTIONS = new Set<string>([]);
 
 describe("decodeSingleQuoted", () => {
   // The probe has to be able to fail, so both spellings are asserted here: this is the check that

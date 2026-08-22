@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { escapeLike } from "./sql";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "./lastfm";
 import type { AlbumRow } from "../types/library";
 
@@ -37,11 +38,6 @@ const TRACK_COLUMNS = `t.id, t.title, t.artist, t.duration, a.name AS album_name
 export function primaryArtistOf(artist: string | null | undefined): string | null {
   if (!artist) return null;
   return artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? artist;
-}
-
-/** LIKE treats % and _ as wildcards, so a name containing either has to be escaped. */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
 export async function fetchArtistAlbums(artistName: string): Promise<AlbumRow[]> {
