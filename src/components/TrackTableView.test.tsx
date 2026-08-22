@@ -109,6 +109,26 @@ function rowTitles(): string[] {
   return rows().map((r) => r.querySelector(".playlist-vrow-title")!.textContent!);
 }
 
+/**
+ * Header lookups go through the DOM rather than `getByRole`: computing an accessible name
+ * walks the whole tree, and at ~8 sort headers it made these the slowest cases in the file
+ * (2.3s for the all-columns loop), which timed out under full-suite load. The selector keeps
+ * the "this is a real button" half of what the role query was checking.
+ */
+function querySortHeader(label: string): HTMLElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>("button.track-sort-btn")).find((b) =>
+      (b.textContent ?? "").trimStart().startsWith(label)
+    ) ?? null
+  );
+}
+
+function sortHeader(label: string): HTMLElement {
+  const found = querySortHeader(label);
+  if (!found) throw new Error(`no sort header for ${label}`);
+  return found;
+}
+
 function rowFor(title: string): HTMLElement {
   const found = rows().find((r) => r.querySelector(".playlist-vrow-title")!.textContent === title);
   if (!found) throw new Error(`no row titled ${title}; have ${rowTitles().join(", ")}`);
@@ -198,9 +218,9 @@ describe("TrackTableView sorting", () => {
         track({ id: "srv-a:t2", title: "Alpha", artist: "Artist B" }),
       ],
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Title/ }));
+    fireEvent.click(sortHeader("Title"));
     expect(rowTitles()).toEqual(["Alpha", "Zulu"]);
-    fireEvent.click(screen.getByRole("button", { name: /^Title/ }));
+    fireEvent.click(sortHeader("Title"));
     expect(rowTitles()).toEqual(["Zulu", "Alpha"]);
   });
 
@@ -212,18 +232,18 @@ describe("TrackTableView sorting", () => {
     const lo = track({ id: "srv-a:t1", title: "Low", artist: "Artist B", album_name: "Beta", year: 1990, duration: 100, play_count: 1, bit_rate: 128, suffix: "flac" });
     const hi = track({ id: "srv-a:t2", title: "High", artist: "Artist A", album_name: "Alpha", year: 2020, duration: 300, play_count: 9, bit_rate: 320, suffix: "mp3" });
     renderTable({ tracks: [lo, hi] });
-    const cases: Array<[RegExp, string[]]> = [
-      [/^Title/, ["High", "Low"]],
-      [/^Artist/, ["High", "Low"]],
-      [/^Album/, ["High", "Low"]],
-      [/^Year/, ["Low", "High"]],
-      [/^Format/, ["Low", "High"]],
-      [/^Bitrate/, ["Low", "High"]],
-      [/^Plays/, ["Low", "High"]],
-      [/^Duration/, ["Low", "High"]],
+    const cases: Array<[string, string[]]> = [
+      ["Title", ["High", "Low"]],
+      ["Artist", ["High", "Low"]],
+      ["Album", ["High", "Low"]],
+      ["Year", ["Low", "High"]],
+      ["Format", ["Low", "High"]],
+      ["Bitrate", ["Low", "High"]],
+      ["Plays", ["Low", "High"]],
+      ["Duration", ["Low", "High"]],
     ];
     for (const [name, expected] of cases) {
-      fireEvent.click(screen.getByRole("button", { name }));
+      fireEvent.click(sortHeader(name));
       expect(rowTitles(), `ascending sort for ${name}`).toEqual(expected);
     }
   });
@@ -237,9 +257,9 @@ describe("TrackTableView sorting", () => {
         track({ id: "srv-a:t3", title: "New", artist: "Artist C", year: 2020 }),
       ],
     });
-    fireEvent.click(screen.getByRole("button", { name: /^Year/ }));
+    fireEvent.click(sortHeader("Year"));
     expect(rowTitles()).toEqual(["Old", "New", "NoYear"]);
-    fireEvent.click(screen.getByRole("button", { name: /^Year/ }));
+    fireEvent.click(sortHeader("Year"));
     expect(rowTitles()).toEqual(["New", "Old", "NoYear"]);
   });
 
@@ -247,14 +267,17 @@ describe("TrackTableView sorting", () => {
     localStorage.setItem("canon-track-table-cols", JSON.stringify({ genre: true }));
     renderTable();
     expect(screen.getByText("Genre").tagName).toBe("SPAN");
-    expect(screen.queryByRole("button", { name: /^Genre/ })).not.toBeInTheDocument();
+    // Positive control: a null answer for Genre must mean "no such header", not "the
+    // selector matches nothing".
+    expect(querySortHeader("Title")).not.toBeNull();
+    expect(querySortHeader("Genre")).toBeNull();
   });
 
   it("clears the selection when the sort changes", () => {
     renderTable();
     fireEvent.click(rowFor("Song B"), { ctrlKey: true });
     expect(selectedTitles()).toEqual(["Song B"]);
-    fireEvent.click(screen.getByRole("button", { name: /^Title/ }));
+    fireEvent.click(sortHeader("Title"));
     expect(selectedTitles()).toEqual([]);
   });
 });
@@ -494,15 +517,15 @@ describe("TrackTableView row controls", () => {
   it("falls back to the default columns when the stored column config is corrupt", () => {
     localStorage.setItem("canon-track-table-cols", "{{{");
     renderTable();
-    expect(screen.getByRole("button", { name: /^Artist/ })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Year/ })).not.toBeInTheDocument();
+    expect(sortHeader("Artist")).toBeInTheDocument();
+    expect(querySortHeader("Year")).not.toBeInTheDocument();
   });
 
   it("persists a column toggle", () => {
     renderTable();
     fireEvent.click(screen.getByTitle("Show/hide columns"));
     fireEvent.click(screen.getByLabelText("Year"));
-    expect(screen.getByRole("button", { name: /^Year/ })).toBeInTheDocument();
+    expect(sortHeader("Year")).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem("canon-track-table-cols")!).year).toBe(true);
   });
 });
