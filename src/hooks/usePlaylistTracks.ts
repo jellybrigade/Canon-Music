@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
 import { removeTrackFromNavidromePlaylist } from "../lib/navidrome";
@@ -66,32 +67,12 @@ export function usePlaylistTracks(playlistId: string | null) {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
     await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position, server.alt_url ?? undefined);
-    const db = await getDb();
-    await db.execute(
-      "DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?",
-      [playlist.id, position]
-    );
-    // Close the hole the delete left. `position` doubles as the server's
-    // songIndexToRemove (see the call in PlaylistDetail), and the server compacts its
-    // own indexes on removal, so leaving a gap here means the next removal in the same
-    // session sends a stale index and deletes the wrong track server side. It is also
-    // what the row numbering renders, so a gap shows up as 1, 2, 4.
-    //
-    // Two passes through negative space because PRIMARY KEY (playlist_id, position)
-    // is enforced per row: a single in-place decrement collides with the row still
-    // holding the target position whenever SQLite happens to scan descending.
-    await db.execute(
-      "UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?",
-      [playlist.id, position]
-    );
-    await db.execute(
-      "UPDATE playlist_tracks SET position = -position WHERE playlist_id = ? AND position < 0",
-      [playlist.id]
-    );
-    await db.execute(
-      "UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?",
-      [playlist.id]
-    );
+    // The delete and the position compaction after it run as one transaction in Rust, not
+    // here: tauri-plugin-sql has no connection affinity, so a "BEGIN" issued from TS is only
+    // a real transaction while nothing else queries, which a user-triggered edit overlapping
+    // the 5-minute sync cannot promise. The compaction transits through negative positions,
+    // and a half-applied one is a state nothing repairs (see known-issues.md).
+    await invoke("playlist_remove_track", { playlistId: playlist.id, position });
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
     usePlaylistSessionStore.getState().bumpPlaylists();
   }

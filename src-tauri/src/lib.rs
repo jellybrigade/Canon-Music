@@ -1,4 +1,5 @@
 mod library_read;
+mod library_write;
 mod streaming;
 mod upnp;
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -1632,6 +1633,7 @@ pub fn run() {
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
+        .manage(library_write::LibraryWriteStore::default())
         .manage(CoverState {
             cache: cover_cache,
             artist_image_cache,
@@ -1810,6 +1812,7 @@ pub fn run() {
             library_read::get_loved,
             library_read::get_playlists,
             library_read::get_unmapped_tag_count,
+            library_write::playlist_remove_track,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,12 +5,17 @@
  *
  * Regressions pinned (known-issues.md):
  *  - "`playlist_tracks.position` doubles as remote Subsonic index; a local hole desyncs the
- *    second removal." The two negative-space passes in `removeTrack` are the fix; the tests
- *    below assert the *sequence of remote indexes sent* across two removals, not just the
- *    final table state, because the table state alone cannot prove the remote index was right.
- *  - "A mirror not scoped by owner depends entirely on its delete path." Every statement in
- *    `removeTrack` and the load query carry `playlist_id = ?`; a sibling playlist on another
- *    server must be byte-identical after a removal.
+ *    second removal." The tests below assert the *sequence of remote indexes sent* across two
+ *    removals, not just the final table state, because the table state alone cannot prove the
+ *    remote index was right.
+ *  - "A mirror not scoped by owner depends entirely on its delete path." The load query
+ *    carries `playlist_id = ?`.
+ *
+ * The removal's own SQL - the delete, the two negative-space compaction passes and the
+ * `track_count` decrement - moved to the `playlist_remove_track` Rust command so it can run in
+ * one transaction, and `src-tauri/src/library_write.rs` owns its table-state coverage. What is
+ * left here is the hook's half of the contract: the server is told first, the command is
+ * invoked once, and both session ticks fire so the list re-reads.
  *
  * Adjacent but out of scope: the playlist-refresh DELETE-then-INSERT entry belongs to
  * `src/lib/sync.ts` - this hook never writes `playlists` columns other than `track_count`.
@@ -28,6 +33,7 @@ vi.mock("../lib/navidrome", async () => {
 import { renderHook, act, cleanup, waitFor } from "@testing-library/react";
 import { getDb } from "../db";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+import { invoke, onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { removeTrackFromNavidromePlaylist, type NavidromeCredential } from "../lib/navidrome";
 import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 import type { Server } from "../types/server";
@@ -123,8 +129,39 @@ async function flush() {
   });
 }
 
+/**
+ * Stands in for the `playlist_remove_track` Rust command. Deliberately a reimplementation and
+ * not the real statements: `src-tauri/src/library_write.rs` owns those and its own tests pin
+ * their table state, including the rollback this double cannot model. It exists so the two
+ * tests that need a compacted table to read back from - the second-removal index and the
+ * re-render - have one.
+ */
+function applyNativeRemoval(playlistId: string, position: number): void {
+  db.raw.transaction(() => {
+    db.raw
+      .prepare("DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?")
+      .run(playlistId, position);
+    db.raw
+      .prepare(
+        "UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?"
+      )
+      .run(playlistId, position);
+    db.raw
+      .prepare("UPDATE playlist_tracks SET position = -position WHERE playlist_id = ? AND position < 0")
+      .run(playlistId);
+    db.raw
+      .prepare("UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?")
+      .run(playlistId);
+  })();
+}
+
 beforeEach(async () => {
   db = await createMigratedTestDb();
+  resetTauriMocks();
+  onInvoke("playlist_remove_track", (args) => {
+    const { playlistId, position } = args as { playlistId: string; position: number };
+    applyNativeRemoval(playlistId, position);
+  });
   vi.mocked(getDb).mockResolvedValue(db as never);
   vi.mocked(removeTrackFromNavidromePlaylist).mockReset();
   vi.mocked(removeTrackFromNavidromePlaylist).mockResolvedValue(undefined);
@@ -424,12 +461,11 @@ describe("usePlaylistTracks removeTrack", () => {
     ["a", "b", "c"].forEach((id) => seedTrack(id));
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
-    const writesBefore = db.executeCount;
     vi.mocked(removeTrackFromNavidromePlaylist).mockRejectedValueOnce(new Error("http 500"));
 
     await expect(result.current.removeTrack(1, { id: pl }, swc())).rejects.toThrow("http 500");
 
-    expect(db.executeCount).toBe(writesBefore);
+    expect(invoke).not.toHaveBeenCalled();
     expect(positionsOf(pl).map((r) => r.position)).toEqual([0, 1, 2]);
     expect(trackCountOf(pl)).toBe(3);
     expect(usePlaylistSessionStore.getState().playlistTracksTick).toBe(0);
@@ -442,95 +478,6 @@ describe("usePlaylistTracks removeTrack", () => {
 
     await expect(result.current.removeTrack(0, { id: pl }, swc(SRV))).rejects.toThrow(/server prefix/);
     expect(removeTrackFromNavidromePlaylist).not.toHaveBeenCalled();
-  });
-
-  it("closes the hole when a middle track is removed", async () => {
-    const pl = seedPlaylist("pl1");
-    ["a", "b", "c", "d"].forEach((id) => seedTrack(id));
-    seedPlaylistTracks(pl, ["a", "b", "c", "d"]);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(1, { id: pl }, swc());
-    });
-
-    expect(positionsOf(pl)).toEqual([
-      { position: 0, track_id: "srv-a:a" },
-      { position: 1, track_id: "srv-a:c" },
-      { position: 2, track_id: "srv-a:d" },
-    ]);
-  });
-
-  it("closes the hole when position 0 is removed, where the first shifted row lands on -0", async () => {
-    // The negative-space pass maps position 1 to -(1-1) = 0, which is NOT negative, so the
-    // second pass skips it. That is still correct only because position 0 was just deleted.
-    // If positions ever become 1-based, or the `position < 0` filter changes, this breaks
-    // silently - which is why it gets its own test.
-    const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
-    seedPlaylistTracks(pl, ["a", "b", "c"]);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(0, { id: pl }, swc());
-    });
-
-    expect(positionsOf(pl)).toEqual([
-      { position: 0, track_id: "srv-a:b" },
-      { position: 1, track_id: "srv-a:c" },
-    ]);
-  });
-
-  it("leaves the surviving rows alone when the last track is removed", async () => {
-    const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
-    seedPlaylistTracks(pl, ["a", "b", "c"]);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(2, { id: pl }, swc());
-    });
-
-    expect(positionsOf(pl)).toEqual([
-      { position: 0, track_id: "srv-a:a" },
-      { position: 1, track_id: "srv-a:b" },
-    ]);
-  });
-
-  it("empties the table for the playlist when its only track is removed", async () => {
-    const pl = seedPlaylist("pl1");
-    seedTrack("a");
-    seedPlaylistTracks(pl, ["a"]);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(0, { id: pl }, swc());
-    });
-
-    expect(positionsOf(pl)).toEqual([]);
-    expect(trackCountOf(pl)).toBe(0);
-  });
-
-  it("heals a pre-existing hole rather than preserving it", async () => {
-    const pl = seedPlaylist("pl1", SRV, 3);
-    ["a", "c", "d"].forEach((id) => seedTrack(id));
-    const stmt = db.raw.prepare(
-      "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)"
-    );
-    stmt.run(pl, "srv-a:a", 0);
-    stmt.run(pl, "srv-a:c", 2);
-    stmt.run(pl, "srv-a:d", 3);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(1, { id: pl }, swc());
-    });
-
-    expect(positionsOf(pl)).toEqual([
-      { position: 0, track_id: "srv-a:a" },
-      { position: 1, track_id: "srv-a:c" },
-      { position: 2, track_id: "srv-a:d" },
-    ]);
   });
 
   it("sends the compacted index on a second removal in the same session", async () => {
@@ -554,57 +501,6 @@ describe("usePlaylistTracks removeTrack", () => {
 
     expect(vi.mocked(removeTrackFromNavidromePlaylist).mock.calls.map((c) => c[4])).toEqual([0, 0]);
     expect(positionsOf(pl)).toEqual([{ position: 0, track_id: "srv-a:c" }]);
-  });
-
-  it("does not touch another server's playlist rows or track count", async () => {
-    const plA = seedPlaylist("pl1", SRV);
-    const plB = seedPlaylist("pl2", SRV_B);
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
-    ["x", "y", "z"].forEach((id) => seedTrack(id, `${id}-alb`, SRV_B));
-    seedPlaylistTracks(plA, ["a", "b", "c"]);
-    seedPlaylistTracks(plB, ["x", "y", "z"], SRV_B);
-    const { result } = await mount(plA);
-
-    await act(async () => {
-      await result.current.removeTrack(0, { id: plA }, swc());
-    });
-
-    expect(positionsOf(plB)).toEqual([
-      { position: 0, track_id: "srv-b:x" },
-      { position: 1, track_id: "srv-b:y" },
-      { position: 2, track_id: "srv-b:z" },
-    ]);
-    expect(trackCountOf(plB)).toBe(3);
-  });
-
-  it("compacts a long playlist without hitting the (playlist_id, position) primary key", async () => {
-    // The two negative-space passes exist because a single in-place decrement collides with
-    // the row still holding the target position whenever SQLite scans descending.
-    const pl = seedPlaylist("pl1");
-    const ids = Array.from({ length: 200 }, (_, i) => `t${i}`);
-    ids.forEach((id) => seedTrack(id, null));
-    seedPlaylistTracks(pl, ids);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(0, { id: pl }, swc());
-    });
-
-    const rows = positionsOf(pl);
-    expect(rows).toHaveLength(199);
-    expect(rows.map((r) => r.position)).toEqual(Array.from({ length: 199 }, (_, i) => i));
-    expect(rows[0]!.track_id).toBe("srv-a:t1");
-  });
-
-  it("clamps track_count at zero rather than going negative", async () => {
-    const pl = seedPlaylist("pl1", SRV, 0);
-    const { result } = await mount(pl);
-
-    await act(async () => {
-      await result.current.removeTrack(0, { id: pl }, swc());
-    });
-
-    expect(trackCountOf(pl)).toBe(0);
   });
 
   it("bumps both session ticks exactly once so the list and the sidebar both re-read", async () => {
@@ -637,20 +533,20 @@ describe("usePlaylistTracks removeTrack", () => {
     expect(result.current.data!.map((r) => r.id)).toEqual(["srv-a:a", "srv-a:c"]);
   });
 
-  it("decrements track_count even when the position does not exist, so the count can drift", async () => {
-    // Current behavior, pinned deliberately: the DELETE matches nothing but the count still
-    // moves. The server was told to remove that index too, so a mismatch here is a symptom of
-    // the caller, not of this function. Flip this assertion if the count ever becomes derived.
+  it("invokes the removal command exactly once per removal", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b"].forEach((id) => seedTrack(id));
-    seedPlaylistTracks(pl, ["a", "b"]);
+    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
 
     await act(async () => {
-      await result.current.removeTrack(9, { id: pl }, swc());
+      await result.current.removeTrack(1, { id: pl }, swc());
     });
 
-    expect(positionsOf(pl)).toHaveLength(2);
-    expect(trackCountOf(pl)).toBe(1);
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith("playlist_remove_track", {
+      playlistId: pl,
+      position: 1,
+    });
   });
 });

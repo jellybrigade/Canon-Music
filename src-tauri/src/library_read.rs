@@ -129,7 +129,7 @@ pub struct PlaylistRowDto {
     rules_json: Option<String>,
 }
 
-fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn db_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     // tauri-plugin-sql resolves "sqlite:canon.db" against app_config_dir, not
     // app_data_dir (confirmed in its wrapper.rs `DbPool::connect`) - must match.
     app.path()
