@@ -89,6 +89,8 @@ grep -rn "\.catch((" src/hooks --include='*.ts*' -A 4 | grep -v '\.test\.' | gre
 ```
 Each hit of the first grep that stamps an id or a boolean before starting async work must either be cleared on failure or say why a permanent claim is correct.
 
+**Second instance, found by running that grep (fixed): `useScrobble` lost a play whose queue write failed.** `scrobbedRef` was stamped before the `INSERT INTO scrobble_queue`, and the `.catch` only wrote a console line, so a rejected insert - database locked by a concurrent write, disk full - dropped that play permanently: the threshold had already been crossed, the guard short-circuited every later tick, and nothing re-attempted the row. Exactly the failure `scrobble_queue` exists to survive, handled for an unreachable server and not for a failed local write. Fix: the `.catch` clears the stamp so the next position poll retries, bounded by `MAX_QUEUE_WRITE_ATTEMPTS = 3` per play. The bound is the load-bearing half - the retry clock here is the store's 200ms `elapsed` ticker, not the failure, so an unbounded clear turns a locked database into five failing statements a second for the rest of the track. Contrast `useLibrarySync` above, where clearing in `.catch` was rejected outright because its settle handler re-entered immediately; the shape of the fix follows what re-triggers the work, not the class.
+
 
 **A parallel-array invariant enforced by one writer holds only until another runs** (fixed). `shuffleOrder.length === queue.length` broke on shuffled 1-track queue + append; the `?? position` fallback turned a crash into a silent skip+duplicate. Fix: `playQueue` writes `[0]`; `normalizeShuffleOrder` repairs before splice sites. Grep for a length guard (`if (n > 1)`) one writer has and others don't.
 

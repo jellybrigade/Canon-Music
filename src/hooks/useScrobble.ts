@@ -7,11 +7,17 @@ import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
 
+// A rejected insert clears the stamp so the next position poll retries, which makes the
+// poll the retry clock: unbounded, a database that stays locked would write five failing
+// statements a second for the rest of the track.
+const MAX_QUEUE_WRITE_ATTEMPTS = 3;
+
 export function useScrobble(
   track: CurrentTrack | null,
   serverWithCred: ServerWithCredential | undefined
 ) {
   const scrobbedRef = useRef(false);
+  const writeAttemptsRef = useRef(0);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
@@ -21,6 +27,7 @@ export function useScrobble(
 
   useEffect(() => {
     scrobbedRef.current = false;
+    writeAttemptsRef.current = 0;
   }, [playStartedAt]);
 
   useEffect(() => {
@@ -44,6 +51,7 @@ export function useScrobble(
     if (!thresholdMet) return;
 
     scrobbedRef.current = true;
+    writeAttemptsRef.current += 1;
     const timestamp = Math.floor(Date.now() / 1000);
 
     getDb()
@@ -53,7 +61,10 @@ export function useScrobble(
           [track.id, track.title, track.artist ?? "", timestamp]
         )
       )
-      .catch((e) => console.error("Failed to write scrobble_queue:", e));
+      .catch((e) => {
+        console.error("Failed to write scrobble_queue:", e);
+        if (writeAttemptsRef.current < MAX_QUEUE_WRITE_ATTEMPTS) scrobbedRef.current = false;
+      });
   }, [track, elapsed]);
 }
 
