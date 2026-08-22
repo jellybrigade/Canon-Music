@@ -85,6 +85,25 @@ Do not implement anything. Do not exit plan mode. Tell the user: research done, 
 
 Read the first item in `instructions/donow.md`. That is the only item for this run.
 
+### Phase 1.5I — Verify the item before building anything
+
+**Only when the item is a bug or defect report** - a described symptom with a stated or probable cause attached. A feature item or a "port this pattern" item skips this phase entirely.
+
+Spawn one `caveman:cavecrew-investigator` agent (read-only) and give it the item's **What** text verbatim, the files and line numbers it names, and the cause it claims. Ask it two separate questions, and require a separate verdict on each:
+
+1. **Does the symptom exist in the code as it stands today?** Read the named code. Check `git log -- <file>` and `git tag --contains <sha>` per CLAUDE.md's "bug reports come from the installed build, not HEAD" - the fix may already be on `development`. Report the concrete path from an entry point to the broken behavior, or say it cannot find one.
+2. **Is the stated cause actually the cause?** The symptom existing does not confirm the diagnosis. Ask the agent to find the code the item blames, confirm it can produce that symptom, and to name any *other* mechanism that could produce the same symptom. A cause that cannot be traced to the symptom is not confirmed, however plausible it reads.
+
+The agent returns three verdicts per item: symptom CONFIRMED / NOT FOUND / ALREADY FIXED, cause CONFIRMED / WRONG / PARTIAL, plus the file:line evidence for each.
+
+Act on the verdicts before writing any code:
+
+- **Symptom confirmed, cause confirmed** → proceed to Phase 2I as written.
+- **Symptom confirmed, cause wrong or partial** → the item's implementation sketch is built on the wrong diagnosis and will not fix the bug. Rewrite that item's **What** and **Implementation sketch** in donow.md to the cause the agent actually found, say so to the user, then proceed against the corrected item.
+- **Symptom not found, or already fixed on `development`** → do not implement it. Delete the item from donow.md and from `instructions/what-to-do.md`, tell the user which it was and what the evidence was, and move to the next item in donow.md (re-run this phase against that one). If it was already fixed but unreleased, say `/release` is the actual work.
+
+Never build against an unverified diagnosis, and never report an item as done when what got fixed was a symptom nobody confirmed.
+
 ### Phase 2I — Plan
 
 Present a concise plan:
