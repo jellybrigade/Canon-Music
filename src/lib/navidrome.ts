@@ -119,7 +119,7 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -132,6 +132,12 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
     // otherwise leave the caller's `res.json()` pending forever, with nothing for the
     // retry loop to catch and no terminal state for the sync above it. Every caller
     // parses JSON, so buffering the body costs nothing and leaves them unchanged.
+    //
+    // Rearmed rather than left running: the ceiling exists to bound a stall, not the
+    // total size of an answer, and a 500-album page over a slow link can legitimately
+    // take longer to transfer than the handshake left of the original budget.
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const text = await res.text();
     // A null-body status (204/304) rejects a non-null body, and "" is non-null.
     return new Response(text === "" ? null : text, {

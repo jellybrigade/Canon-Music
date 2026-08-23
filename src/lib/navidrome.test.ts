@@ -202,6 +202,40 @@ describe("apiPost request shape", () => {
     await settle(promise);
   });
 
+  it("gives the body transfer its own budget rather than the handshake's leftovers", async () => {
+    // A slow link can spend most of the ceiling on the handshake and still be perfectly
+    // healthy; the timeout is there to bound a stall, not the size of a legitimate answer.
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      const signal = init.signal as AbortSignal;
+      // The stream is built when the headers land, not when the call is made, so the body
+      // transfer genuinely starts its 8s after the handshake has spent its own 8s.
+      return new Promise<Response>((resolve) => {
+        setTimeout(() => {
+          const stream = new ReadableStream<Uint8Array>({
+            start(controller) {
+              signal.addEventListener("abort", () =>
+                controller.error(new DOMException("aborted", "AbortError"))
+              );
+              setTimeout(() => {
+                controller.enqueue(
+                  new TextEncoder().encode('{"subsonic-response":{"status":"ok","starred2":{}}}')
+                );
+                controller.close();
+              }, 8_000);
+            },
+          });
+          resolve(new Response(stream, { status: 200 }));
+        }, 8_000);
+      });
+    });
+
+    const promise = fetchStarred2(BASE, "alice", cred);
+    await vi.advanceTimersByTimeAsync(16_000);
+
+    await expect(promise).resolves.toBeDefined();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("leaves no timer armed once a stalled body has been abandoned", async () => {
     fetchMock.mockImplementation((_url: string, init: RequestInit) =>
       Promise.resolve(stalledBody(init.signal as AbortSignal))
