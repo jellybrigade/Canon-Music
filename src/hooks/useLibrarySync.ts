@@ -29,6 +29,9 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
   const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
+  // When the bounded backoff below will fire, so the failure banner can count it
+  // down instead of reading as a permanent fault. Null once the backoff is spent.
+  const [nextRetryAt, setNextRetryAt] = useState<number | null>(null);
   const syncingRef = useRef(false);
   const syncedRef = useRef<string | null>(null);
   // Lets the settle handler below see which server is selected now, not which
@@ -48,11 +51,18 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   function scheduleRetry(s: Server) {
     const attempts = retryRef.current?.id === s.id ? retryRef.current.attempts : 0;
     const delay = RETRY_DELAYS_MS[attempts];
-    if (delay === undefined) return;
+    if (delay === undefined) {
+      setNextRetryAt(null);
+      return;
+    }
     retryRef.current = { id: s.id, attempts: attempts + 1 };
     clearRetryTimer();
+    setNextRetryAt(Date.now() + delay);
     retryTimerRef.current = setTimeout(() => {
       retryTimerRef.current = null;
+      // The stamp is spent whether or not this retry goes on to start a run: the
+      // bail-outs below leave nothing to count down to.
+      setNextRetryAt(null);
       const latest = serverRef.current;
       if (!latest || latest.id !== s.id) return;
       // The claim is the only thing stopping this server being synced again, so
@@ -71,6 +81,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     setSyncStatus("syncing");
     setSyncError("");
     setSyncProgress(null);
+    setNextRetryAt(null);
     // No bump here: nothing has been written yet at sync start, so bumping would
     // only force a full re-read of the album table for identical data. The
     // progress callback below bumps once rows actually land.
@@ -200,5 +211,5 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [server?.id, autoSyncIntervalMin]);
 
-  return { syncStatus, syncError, syncProgress, lastSyncedAt, runSync };
+  return { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync };
 }
