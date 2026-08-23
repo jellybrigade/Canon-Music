@@ -5,6 +5,7 @@ import { useMeasuredElement } from "./useMeasuredElement";
 
 const WIDTH = 640;
 const HEIGHT = 480;
+const SCROLLBAR = 15;
 
 const observed: HTMLElement[] = [];
 const disconnects: number[] = [];
@@ -27,7 +28,12 @@ beforeAll(() => {
     disconnect() { disconnects.push(1); }
   }
   globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver;
-  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => WIDTH });
+  // The observer reports the content box, so the initial synchronous measurement has to
+  // read the same box. offset* is the border box and on a scrolling element it is wider by
+  // the scrollbar gutter, modelled here so a regression back to it is visible.
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => WIDTH });
+  Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => HEIGHT });
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => WIDTH + SCROLLBAR });
   Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => HEIGHT });
 });
 
@@ -60,6 +66,13 @@ describe("useMeasuredElement", () => {
 
   it("measures an element present from the first render", () => {
     render(<LateBox ready={true} />);
+    expect(size()).toBe(`${WIDTH}x${HEIGHT}`);
+  });
+
+  it("measures in the same box the observer reports, not the border box", () => {
+    render(<LateBox ready={true} />);
+    // The scrollbar gutter must not be counted: a first measurement one gutter wider than
+    // every later one relays the whole grid after first paint.
     expect(size()).toBe(`${WIDTH}x${HEIGHT}`);
   });
 

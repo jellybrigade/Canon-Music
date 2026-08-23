@@ -34,7 +34,12 @@ export function useMeasuredElement<T extends HTMLElement>(): MeasuredElement<T> 
     // cannot re-render every card in the grid reading this.
     const apply = (width: number, height: number) =>
       setSize((prev) => (prev.width === width && prev.height === height ? prev : { width, height }));
-    apply(el.offsetWidth, el.offsetHeight);
+    // clientWidth/Height, not offsetWidth/Height: the observer below reports the content
+    // box, and offset* is the border box, so on a scrolling element the two differ by the
+    // scrollbar gutter. Measuring in different boxes made every mount compute once from
+    // the wider number and again from the narrower one, relaying the grid after paint
+    // whenever the pair straddled a column boundary.
+    apply(el.clientWidth, el.clientHeight);
     const observer = new ResizeObserver(([entry]) => {
       const box = entry!.contentRect;
       apply(box.width, box.height);
