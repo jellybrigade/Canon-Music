@@ -1,4 +1,5 @@
-import { useEffect, useRef, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useMeasuredElement } from "../hooks/useMeasuredElement";
 import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { TagVocabRow } from "../hooks/useTagMappings";
 import type { TreeNode, TagKind } from "../lib/canonicalize";
@@ -79,21 +80,11 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
 
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [containerHeight, setContainerHeight] = useState<number | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // Measured on attach: the loading and error branches below return before the element
+  // exists, and an effect keyed on nothing would never see it arrive.
+  const { attach: attachContainer, height: containerHeight } = useMeasuredElement<HTMLDivElement>();
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const observer = new ResizeObserver((entries) => {
-      const h = entries[0]?.contentRect.height ?? 0;
-      if (h > 0) setContainerHeight(h);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
-
-  const pageSize = containerHeight !== null
+  const pageSize = containerHeight > 0
     ? Math.max(1, Math.floor(containerHeight / ROW_HEIGHT))
     : DEFAULT_PAGE_SIZE;
 
@@ -171,7 +162,7 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
             : "Clear the search filter to see all pending tags."}
         </div>
       ) : (
-        <div className="review-fit" ref={containerRef}>
+        <div className="review-fit" ref={attachContainer}>
           {filteredRows.slice((page - 1) * pageSize, page * pageSize).map((row) => (
             <ReviewRow
               key={`${row.raw_value}:${row.kind}`}

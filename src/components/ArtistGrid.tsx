@@ -7,6 +7,7 @@ import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useScrollMemory } from "../hooks/useScrollMemory";
+import { useMeasuredElement } from "../hooks/useMeasuredElement";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -83,19 +84,10 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const staleDays = Number(staleDaysStr) || 30;
   const staleCutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000;
 
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  useLayoutEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    setContainerWidth(el.offsetWidth);
-    const obs = new ResizeObserver(([entry]) => {
-      setContainerWidth(entry!.contentRect.width);
-    });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, []);
+  // The scroller below is rendered only once there are artists, so it has to be measured on
+  // attach rather than from an effect - see useMeasuredElement.
+  const { ref: containerRef, attach: attachContainer, width: containerWidth } =
+    useMeasuredElement<HTMLDivElement>();
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
@@ -167,7 +159,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
 
   return (
     <>
-      <div ref={containerRef} className="album-grid-scroller">
+      <div ref={attachContainer} className="album-grid-scroller">
         <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const rowStart = virtualRow.index * cols;
