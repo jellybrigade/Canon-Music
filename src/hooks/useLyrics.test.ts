@@ -24,9 +24,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { fetchLyrics } from "../lib/lrclib";
 import { fetchLyricsOvh } from "../lib/lyrics-ovh";
-import { getStoredOpenSubsonicExtensions } from "../lib/navidrome";
+import { fetchLyricsBySongId, getStoredOpenSubsonicExtensions } from "../lib/navidrome";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import type { CurrentTrack } from "../store/player";
+import type { ServerWithCredential } from "./useServer";
 import { useLyrics } from "./useLyrics";
 
 const TRACK: CurrentTrack = {
@@ -89,6 +90,30 @@ describe("useLyrics", () => {
 
     expect(vi.mocked(fetchLyrics)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(fetchLyricsOvh)).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a miss recorded while the server's own lyrics support was still unknown", async () => {
+    // The extension probe is written fire-and-forget after a server is added, so a lyrics
+    // tab opened before that lands sees null - "not asked yet", not "asked and declined".
+    vi.mocked(getStoredOpenSubsonicExtensions).mockResolvedValue(null);
+    const server = {
+      server: { id: "srv-a", url: "https://a.example", username: "u", alt_url: null },
+      credential: "c",
+    } as unknown as ServerWithCredential;
+
+    const first = renderHook(() => useLyrics(TRACK, null, server), { wrapper });
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    expect(lyricsRow()?.source).toBe("cleared");
+    first.unmount();
+
+    queryClient.clear();
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.mocked(getStoredOpenSubsonicExtensions).mockResolvedValue(["songLyrics"]);
+    vi.mocked(fetchLyricsBySongId).mockResolvedValue({ plain: "from the server", synced: null });
+
+    const second = renderHook(() => useLyrics(TRACK, null, server), { wrapper });
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+    expect(second.result.current.plain).toBe("from the server");
   });
 
   it("looks the track up again after a refresh cleared the stored lyrics", async () => {

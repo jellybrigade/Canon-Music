@@ -84,12 +84,17 @@ export function useLyrics(
         return { plain: hit.plain, synced: hit.synced };
       }
 
-      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib
+      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib.
+      // A null extension list means the probe has not answered yet, so this stage was not
+      // asked rather than asked and declined; the write below must not then record a
+      // completed lookup, or the server's own .lrc is never consulted for this track again.
+      let serverStageDecided = true;
       if (serverWithCredential) {
         const { server, credential } = serverWithCredential;
         const extensions = await getStoredOpenSubsonicExtensions(server.id);
+        serverStageDecided = extensions !== null;
         const navTrackId = stripServerPrefix(track.id, server.id);
-        const serverLyrics = extensions.includes("songLyrics")
+        const serverLyrics = extensions?.includes("songLyrics")
           ? await fetchLyricsBySongId(server.url, server.username, credential, navTrackId, server.alt_url ?? undefined)
           : null;
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
@@ -128,6 +133,8 @@ export function useLyrics(
         }
       }
 
+      // Only a lookup that asked every source it has may record "found nothing" as final.
+      const storedSource = plain || synced || serverStageDecided ? source : NO_LOOKUP_SOURCE;
       await db.execute(
         `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
          VALUES (?, ?, ?, ?, datetime('now'))
@@ -136,7 +143,7 @@ export function useLyrics(
            synced = excluded.synced,
            source = excluded.source,
            fetched_at = excluded.fetched_at`,
-        [track.id, plain, synced, source]
+        [track.id, plain, synced, storedSource]
       );
 
       return { plain, synced };

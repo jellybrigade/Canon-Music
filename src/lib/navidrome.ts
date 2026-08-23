@@ -805,7 +805,10 @@ export async function fetchAndStoreOpenSubsonicExtensions(
   }
 }
 
-export async function getStoredOpenSubsonicExtensions(serverId: string): Promise<string[]> {
+/** Null means the probe has not stored an answer yet (or could not be read), which is not
+ *  the same as a server that answered and does not offer the extension. A caller deciding
+ *  whether it may cache "found nothing" has to tell those apart. */
+export async function getStoredOpenSubsonicExtensions(serverId: string): Promise<string[] | null> {
   try {
     const { getDb } = await import("../db");
     const db = await getDb();
@@ -813,10 +816,10 @@ export async function getStoredOpenSubsonicExtensions(serverId: string): Promise
       "SELECT value FROM settings WHERE key = ?",
       [`server.opensub_extensions.${serverId}`]
     );
-    if (!rows[0]) return [];
+    if (!rows[0]) return null;
     return JSON.parse(rows[0].value) as string[];
   } catch {
-    return [];
+    return null;
   }
 }
 
