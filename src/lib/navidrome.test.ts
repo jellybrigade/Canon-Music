@@ -56,6 +56,23 @@ function albumPage(n: number, startAt = 0): Response {
   return ok({ status: "ok", albumList2: { album } });
 }
 
+/**
+ * A response whose headers have arrived but whose body never completes, the way a
+ * connection dropped mid-transfer behaves. Aborting the signal errors the stream, which
+ * is what a real fetch does to an in-flight body.
+ */
+function stalledBody(signal: AbortSignal | undefined): Response {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"subsonic-'));
+      signal?.addEventListener("abort", () =>
+        controller.error(new DOMException("aborted", "AbortError"))
+      );
+    },
+  });
+  return new Response(stream, { status: 200 });
+}
+
 /** Bodies of every fetch call so far, parsed. */
 function bodies(): URLSearchParams[] {
   return fetchMock.mock.calls.map((c) => new URLSearchParams((c[1] as RequestInit).body as string));
@@ -154,6 +171,47 @@ describe("apiPost request shape", () => {
     expect((err as Error).message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
   });
 
+  it("aborts a response whose body stalls after the headers arrive", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      Promise.resolve(stalledBody(init.signal as AbortSignal))
+    );
+
+    const err = await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e));
+
+    expect((err as Error).message).toBe(
+      "getStarred2 failed after 3 attempts: timed out after 12000ms"
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the abort armed until the body is read, not just the headers", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      capturedSignal = init.signal as AbortSignal;
+      return Promise.resolve(stalledBody(init.signal as AbortSignal));
+    });
+
+    const promise = fetchStarred2(BASE, "alice", cred).catch((e: Error) => e);
+
+    await vi.advanceTimersByTimeAsync(11_999);
+    expect(capturedSignal!.aborted).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(capturedSignal!.aborted).toBe(true);
+
+    await settle(promise);
+  });
+
+  it("leaves no timer armed once a stalled body has been abandoned", async () => {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      Promise.resolve(stalledBody(init.signal as AbortSignal))
+    );
+
+    await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e));
+
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("clears the timeout timer when the request resolves", async () => {
     fetchMock.mockResolvedValue(ok({ status: "ok", starred2: {} }));
 
@@ -239,7 +297,9 @@ describe("apiPost retry policy", () => {
   });
 
   it("returns a retriable status to the caller once the attempts are spent", async () => {
-    fetchMock.mockResolvedValue(httpStatus(503));
+    // A fresh Response per call, as real fetch gives: a single shared one has its body
+    // consumed by the first attempt and cannot be read by the next.
+    fetchMock.mockImplementation(() => Promise.resolve(httpStatus(503)));
 
     // Not the "failed after 3 attempts" transport error: the last attempt's response is
     // returned, so the caller's own status check is what throws.

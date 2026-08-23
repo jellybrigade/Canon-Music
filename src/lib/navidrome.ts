@@ -121,11 +121,23 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
       signal: controller.signal,
+    });
+    // fetch resolves once the headers land, so the body is still streaming here and the
+    // abort has to stay armed across the read: a connection dying mid-transfer would
+    // otherwise leave the caller's `res.json()` pending forever, with nothing for the
+    // retry loop to catch and no terminal state for the sync above it. Every caller
+    // parses JSON, so buffering the body costs nothing and leaves them unchanged.
+    const text = await res.text();
+    // A null-body status (204/304) rejects a non-null body, and "" is non-null.
+    return new Response(text === "" ? null : text, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
     });
   } finally {
     clearTimeout(timer);

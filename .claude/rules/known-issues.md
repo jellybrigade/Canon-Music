@@ -26,6 +26,10 @@ Fixed unless marked OPEN.
 - **A fire-and-forget command owes an event on every terminal path.** Every gapless bail-out emits `gapless-cancelled`; final `sink.append` also checks `sink.empty()`.
 - **Work scheduled ahead of time must carry what it decided.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
 - **A loading flag from `await invoke()` measures the IPC round trip, not the work.** Separate `isBuffering`, cleared by the `audio-format` event. A command ending in `thread::spawn` can only be honest via an event.
+- **A timeout disarmed when the first phase of a request settles does not bound the phase the caller still awaits.** `fetchWithTimeout` cleared its abort timer in a `finally` wrapped around `fetch` alone, but `fetch` resolves at the response headers, so all 19 `apiPost` consumers read the body (`res.json()`) with no timeout and nothing armed to cancel it. A connection dying mid-transfer - the exact failure the 12s cap exists for - left that read pending forever: `apiPost` never rejected, `syncLibrary` never settled, and `useLibrarySync`'s `.catch` and `.finally` never ran, so `syncingRef.current` stayed true and every later auto-sync tick returned false with the spinner still up. The abort now spans a `res.text()` inside the same `try`, and the buffered text is re-wrapped in a `Response` (null body for 204/304, which reject a non-null one) so callers are unchanged. Ask of any timeout: does it cover every await the caller depends on, or only the call it wraps?
+  ```
+  grep -rn "AbortController" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **"Stream ended" and "stream stopped" are different signals.** `fail()` (reader returns `UnexpectedEof`) vs `finish()`; `fail()` only if `play_id` still matches.
 - **A resource acquired via await escapes the cleanup meant to free it.** `useWakeLock`: `cancelled` flag, resolved sentinel self-releases. Test `!released`, not non-null.
 - **A guard keyed on one error type stands in for the broad condition it was meant to test.** `apiPost` retried non-idempotent writes on the alt url for every error `isTimeout` didn't name; now `if (!retriable) break`. Any branch deciding whether a side effect may repeat must assume unsafe on unrecognised errors.
@@ -47,6 +51,10 @@ Fixed unless marked OPEN.
 - **An accessible-name query is a whole-tree scan (150-300ms/call).** Prefer a class selector, and pair any absence assertion with a positive control.
   ```
   grep -rc "ByRole(" src --include='*.test.tsx' | grep -v ":0$" | sort -t: -k2 -rn
+  ```
+- **A fetch mock handing back one shared `Response` diverges from the real thing the moment the code reads a body twice.** `mockResolvedValue(httpStatus(503))` gave all three retry attempts the same object, so once `apiPost` started reading bodies the second attempt died on "Body is unusable". Real `fetch` builds a fresh `Response` per call; a mock that does not will either hide a body-handling bug or invent one. Use `mockImplementation(() => ...)` wherever the same call is expected more than once.
+  ```
+  grep -rn "mockResolvedValue(" src --include='*.test.ts*' | grep -iE "response|ok\(|httpStatus"
   ```
 - **A fixed sleep costs its ceiling every run; a per-case rebuild pays for it per case.** Use `actUntil()` and `forkTestDb()` (`src/test/sqlite.ts`).
   ```
