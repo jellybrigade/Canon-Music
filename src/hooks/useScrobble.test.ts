@@ -152,6 +152,29 @@ describe("useScrobble", () => {
     expect(queueRows()).toHaveLength(1);
   });
 
+  it("does not queue the play twice when a committed write reports failure", async () => {
+    // A rejection cannot tell "never applied" from "applied, response lost". The retry has to
+    // assume the row may be there, or one play is sent to the server twice.
+    const real = db.execute.bind(db);
+    let poisonNext = true;
+    db.execute = async (sql: string, binds?: unknown[]) => {
+      if (poisonNext && sql.trim().startsWith("INSERT INTO scrobble_queue")) {
+        poisonNext = false;
+        await real(sql, binds);
+        throw new Error("connection lost");
+      }
+      return real(sql, binds);
+    };
+
+    renderHook(() => useScrobble(makeTrack(), SWC));
+
+    await tickTo(120);
+    expect(queueRows()).toHaveLength(1);
+
+    for (const elapsed of [130, 140, 150]) await tickTo(elapsed);
+    expect(queueRows()).toHaveLength(1);
+  });
+
   it("gives up after a bounded number of failed writes instead of retrying every poll", async () => {
     failQueueWrites();
     renderHook(() => useScrobble(makeTrack(), SWC));

@@ -71,9 +71,13 @@ Fixed unless marked OPEN.
   ```
   grep -n "viaAlbums(\"\|DELETE FROM album" src/lib/sync.ts
   ```
-- **A read filtered in the loop body instead of in SQL costs its whole table on every pass, and any count beside it tells a different story.** `useScrobbleFlush` selected all of `scrobble_queue` and `continue`d past rows lacking the current server's id prefix, so a second server's backlog was re-read every 60s forever while being unsendable, and the Diagnostics count (unscoped `COUNT(*)`) reported a backlog no wait could clear. Both now scope on `track_id LIKE ? ESCAPE '\\\\'` via one `ownerPattern` helper, and the count's query key carries the server id. `purgeServerData` was never the gap - it has covered `scrobble_queue` since `d153621`. Ask of any per-row `continue`: could the WHERE clause have said this, and does every count over the same table agree with it?
+- **A read filtered in the loop body instead of in SQL costs its whole table on every pass, and any count beside it tells a different story.** `useScrobbleFlush` selected all of `scrobble_queue` and `continue`d past rows lacking the current server's id prefix, so a second server's backlog was re-read every 60s forever while being unsendable, and the Diagnostics count (unscoped `COUNT(*)`) reported a backlog no wait could clear. Both now scope on `track_id LIKE ? ESCAPE '\\'` via one `ownerPattern` helper, and the count's query key carries the server id. `purgeServerData` was never the gap - it has covered `scrobble_queue` since `d153621`. Ask of any per-row `continue`: could the WHERE clause have said this, and does every count over the same table agree with it?
   ```
   grep -rn "continue;" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A retry armed on a rejected write assumes the write never happened, and half the time it did.** `useScrobble` cleared its stamp on any insert rejection, so a commit whose response was lost queued the same play twice and Navidrome was scrobbled twice; a fresh `Date.now()` per attempt also defeated any `(track_id, timestamp)` dedupe downstream. The timestamp is now stamped once per play and the retry re-reads the row before re-arming, treating "cannot confirm" as sent. Ask of any retry: can the operation be observed, and is it safe if it already applied?
+  ```
+  grep -rn "\.catch(" src/hooks --include='*.ts*' | grep -v '\.test\.' | grep -iE "retry|current = false|current = null"
   ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
