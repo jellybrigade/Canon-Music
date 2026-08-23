@@ -585,21 +585,17 @@ describe("fetchAllAlbums", () => {
   });
 
   it("throws once the walk passes the album ceiling instead of growing without bound", async () => {
-    // Every page is full and distinct, so only the ceiling can stop the walk. The tail is
-    // shared between pages so driving MAX_PAGES of them stays cheap.
-    const tail: NavidromeAlbum[] = Array.from({ length: PAGE_SIZE - 1 }, (_, i) => ({
-      id: `tail-${i}`,
-      name: `Tail ${i}`,
-      artist: "Artist",
-      artistId: "ar-1",
-    }));
+    // Every page is full, and only its first id differs - which is all the repeated-page
+    // guard reads - so the ceiling is the only thing that can stop the walk. Reaching it
+    // means moving 500k albums through the fetch mock, so each one is cut to the single
+    // field the walk reads and the shared tail is built as text once: a page of realistic
+    // album objects spends the whole budget in JSON.parse, which is time this assertion
+    // never reads and enough to time the case out on a loaded machine.
+    const tailJson = Array.from({ length: PAGE_SIZE - 1 }, (_, i) => `{"id":"t${i}"}`).join(",");
     let served = 0;
     fetchMock.mockImplementation(() => {
-      const album = [
-        { id: `head-${served++}`, name: "Head", artist: "Artist", artistId: "ar-1" },
-        ...tail,
-      ];
-      return Promise.resolve(ok({ status: "ok", albumList2: { album } }));
+      const body = `{"subsonic-response":{"status":"ok","albumList2":{"album":[{"id":"h${served++}"},${tailJson}]}}}`;
+      return Promise.resolve(new Response(body, { status: 200 }));
     });
 
     await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(

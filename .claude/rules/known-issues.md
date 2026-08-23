@@ -36,6 +36,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "advanceTimersByTime" src --include='*.ts*' | grep -E "60 \* 1000|3600|\* 60 \*"
   ```
+- **A boundary test has to reach the boundary, so every field on the fixture it moves is paid for a boundary's worth of times.** `fetchAllAlbums`' 500,000-album ceiling means 1000 pages of 500 albums through the fetch mock; realistic album objects put the case at 1.2s alone in `JSON.parse`, which tipped it past the 5s timeout whenever the machine was loaded. Cut to the one field the walk reads and a shared tail built as text once, it is 360ms. Strip a boundary fixture to what the code under test actually looks at.
+  ```
+  grep -rn "Array.from({ length: [0-9_]\{4,\}" src --include='*.test.ts*'
+  ```
 - **An accessible-name query is a whole-tree scan (150-300ms/call).** Prefer a class selector, and pair any absence assertion with a positive control.
   ```
   grep -rc "ByRole(" src --include='*.test.tsx' | grep -v ":0$" | sort -t: -k2 -rn
