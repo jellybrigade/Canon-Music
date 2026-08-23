@@ -543,6 +543,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (get().sleepTimerEndOfTrack) {
       get().clearSleepTimer();
       activeTarget.pause(0);
+      stopElapsedTimer();
       set({ isPlaying: false });
       void persistQueueState();
       return;

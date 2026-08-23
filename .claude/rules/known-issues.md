@@ -19,6 +19,10 @@ Fixed unless marked OPEN.
 - **A handler resuming post-await must check intent, not assert state.** `pauseRequestedDuringLoad`; track-id equality is not intent.
 - **One cancel token shared by several commands cancels intent, not effect.** Separate `pause_pending: AtomicBool` checked before the terminal action. Ask what each task does *after* its loop.
 - **A fast path around the central action skips every guard that action owns.** Gapless advance bypassed `next()`, killing the sleep timer. Guard both ends.
+- **A branch that pauses the sink owes the elapsed ticker the same stop the rest of the pause path gives it.** The gapless track-advanced handler's end-of-track sleep-timer branch called `activeTarget.pause(0)` and returned without `stopElapsedTimer()`, leaving the 200ms `audio_get_pos` poll armed for the track this transition moved away from running forever over a paused sink. Every other pause path in the file (`playTrack`'s early-pause branch, `next`, `stop`) calls both together; this one didn't because it returns early. Grep any `pause(0)` call and check the same scope also stops the ticker, unless a `startElapsedTimer()` never ran on that path to begin with.
+  ```
+  grep -n "activeTarget.pause(0)" src/store/player.ts
+  ```
 - **A fire-and-forget command owes an event on every terminal path.** Every gapless bail-out emits `gapless-cancelled`; final `sink.append` also checks `sink.empty()`.
 - **Work scheduled ahead of time must carry what it decided.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
 - **A loading flag from `await invoke()` measures the IPC round trip, not the work.** Separate `isBuffering`, cleared by the `audio-format` event. A command ending in `thread::spawn` can only be honest via an event.

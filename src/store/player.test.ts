@@ -572,6 +572,13 @@ describe("player store - gapless hand-off", () => {
       expect(state.isPlaying).toBe(false);
       expect(state.sleepTimerEndOfTrack).toBe(false);
       expect(invoke.mock.calls.some((c) => c[0] === "audio_pause")).toBe(true);
+
+      // The elapsed ticker armed for the track this gapless transition moved away from must
+      // not keep polling a sink this branch just paused.
+      const pollsBeforeWait = invoke.mock.calls.filter((c) => c[0] === "audio_get_pos").length;
+      await vi.advanceTimersByTimeAsync(1000);
+      const pollsAfterWait = invoke.mock.calls.filter((c) => c[0] === "audio_get_pos").length;
+      expect(pollsAfterWait).toBe(pollsBeforeWait);
     });
 
     it("never armed: track-advanced completes normally, isPlaying stays true", async () => {
