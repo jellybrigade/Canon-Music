@@ -85,6 +85,10 @@ Fixed unless marked OPEN.
   ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
+- **An effect that bails on a ref the first render did not fill never runs at all, because nothing in its deps says the element arrived.** `useScrollMemory`'s save half depended on `[ref, key]` and returned early on a null `ref.current`; `ArtistGrid` renders its error, skeleton and empty branches *before* the scroller, so on a cold start the element did not exist yet, the scroll listener was never attached, no offset was ever recorded, and the restore could only ever be a no-op. `ready` is now a dep of both halves. Any effect reading a conditionally-rendered ref owes its deps the condition that renders it, or a callback ref (which fires on attach, whenever that is).
+  ```
+  grep -rn -B1 "if (!el) return\|if (!container) return" src/components src/hooks --include='*.ts*' | grep -v '\.test\.' | grep "Ref\.current\|ref\.current"
+  ```
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.
 - **Re-keying a collection to ids means re-keying every cursor, anchor, count and gate.** `TrackTableView` kept a numeric shift-anchor and a raw `.size` after moving to `Set<string>`.
   ```
