@@ -24,6 +24,12 @@ export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 // setting asks for.
 const RETRY_DELAYS_MS = [30_000, 120_000, 300_000];
 
+/** "a", "a and b", "a, b and c". A plain join reads as a chain past two items. */
+function listPhrase(items: readonly string[]): string {
+  if (items.length <= 2) return items.join(" and ");
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
 export function useLibrarySync(server: Server | undefined, queryClient: QueryClient) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
@@ -125,9 +131,9 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           const parts = [];
           if (failedAlbums > 0) parts.push(`${failedAlbums} album${failedAlbums > 1 ? "s" : ""}`);
           if (failedPlaylists > 0) parts.push(`${failedPlaylists} playlist${failedPlaylists > 1 ? "s" : ""}`);
-          if (parts.length > 0) messages.push(`failed to fetch tracks for ${parts.join(" and ")}`);
+          if (parts.length > 0) messages.push(`failed to fetch tracks for ${listPhrase(parts)}`);
           // Skipped stages kept their stored data, so say so rather than implying data loss.
-          if (skippedStages.length > 0) messages.push(`${skippedStages.join(" and ")} unchanged (server unreachable)`);
+          if (skippedStages.length > 0) messages.push(`${listPhrase(skippedStages)} unchanged (server unreachable)`);
           // The album pass is different: it stopped part way, so those albums were
           // not read at all and cannot be described as unchanged.
           if (albumTracksIncomplete) {

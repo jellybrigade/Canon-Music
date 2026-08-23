@@ -504,6 +504,56 @@ describe("useLibrarySync auto-sync interval", () => {
   });
 });
 
+describe("useLibrarySync partial reporting", () => {
+  it("reads as a list, not a chain of ands, past two skipped stages", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { skippedStages: ["loved", "playlists", "artists"] });
+
+    expect(result.current.syncStatus).toBe("partial");
+    expect(result.current.syncError).toBe(
+      "Sync partial: loved, playlists and artists unchanged (server unreachable)."
+    );
+  });
+
+  it.each([
+    [["loved"], "loved unchanged (server unreachable)"],
+    [["loved", "playlists"], "loved and playlists unchanged (server unreachable)"],
+  ])("keeps the short skipped-stage phrasings intact %j", async (stages, phrase) => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { skippedStages: stages });
+
+    expect(result.current.syncError).toBe(`Sync partial: ${phrase}.`);
+  });
+
+  it("names the failed album and playlist counts in one phrase", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { failedAlbums: 2, failedPlaylists: 1 });
+
+    expect(result.current.syncError).toBe(
+      "Sync partial: failed to fetch tracks for 2 albums and 1 playlist."
+    );
+  });
+
+  it("joins every partial reason into one sentence", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, {
+      failedAlbums: 1,
+      skippedStages: ["loved", "playlists", "artists"],
+      albumTracksIncomplete: true,
+    });
+
+    expect(result.current.syncError).toBe(
+      "Sync partial: failed to fetch tracks for 1 album; " +
+        "loved, playlists and artists unchanged (server unreachable); " +
+        "stopped reading album tracks early (server unreachable), the rest follow next sync."
+    );
+  });
+});
+
 describe("useLibrarySync failure reporting", () => {
   it("reports an Error's message and leaves the last-synced stamp alone", async () => {
     const { result } = renderSync(SRV_A);
