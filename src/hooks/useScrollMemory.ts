@@ -59,11 +59,19 @@ export function useScrollMemory(
     const el = ref.current;
     if (!el) return;
     let frame: number | null = null;
+    // Seeded from the element rather than left over from the previous key, so a teardown
+    // that never saw a scroll writes this scroller's own position and not another's.
+    let lastTop = el.scrollTop;
     function onScroll() {
+      if (!el) return;
+      // Read synchronously: by the time the teardown below runs, React has already
+      // detached the node, and a detached element reports scrollTop 0 however far the
+      // user had scrolled. Re-reading the DOM there erased the offset it meant to save.
+      lastTop = el.scrollTop;
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
-        if (el) remember(key, el.scrollTop);
+        remember(key, lastTop);
       });
     }
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -72,7 +80,7 @@ export function useScrollMemory(
       if (frame !== null) cancelAnimationFrame(frame);
       // The rAF may never run if the unmount follows the last scroll event
       // within one frame, which is exactly what a fast click-through does.
-      remember(key, el.scrollTop);
+      remember(key, lastTop);
     };
   }, [ref, key, ready]);
 }

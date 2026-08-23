@@ -44,7 +44,10 @@ function LateScroller({
           let current = scrollTop;
           Object.defineProperty(el, "scrollTop", {
             configurable: true,
-            get: () => current,
+            // A detached element has no layout box, so CSSOM reports 0 no matter how far
+            // it was scrolled while connected. jsdom does not model that on its own, and
+            // without it a teardown that re-reads the DOM looks like it still works.
+            get: () => (el.isConnected ? current : 0),
             set: (v: number) => { writes?.push(v); current = v; },
           });
         }
@@ -77,6 +80,22 @@ describe("useScrollMemory", () => {
     const restored: number[] = [];
     render(<LateScroller memKey="late-1" ready={true} writes={restored} />);
     expect(restored).toEqual([240]);
+  });
+
+  it("keeps the offset it recorded when the scroller leaves the tree mid-mount", async () => {
+    const view = render(<LateScroller memKey="late-3" ready={false} />);
+    view.rerender(<LateScroller memKey="late-3" ready={true} scrollTop={310} />);
+    await act(async () => { scroller().dispatchEvent(new Event("scroll")); });
+    await nextFrame();
+
+    // An empty refetch drops the scroller back to the loading branch; the teardown that
+    // fires must not mistake the detached element's 0 for the user's position.
+    view.rerender(<LateScroller memKey="late-3" ready={false} />);
+    view.unmount();
+
+    const restored: number[] = [];
+    render(<LateScroller memKey="late-3" ready={true} writes={restored} />);
+    expect(restored).toEqual([310]);
   });
 
   it("attaches exactly one scroll listener across a ready flip", async () => {
