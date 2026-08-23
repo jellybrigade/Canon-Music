@@ -19,9 +19,17 @@ Fixed unless marked OPEN.
 - **A handler resuming post-await must check intent, not assert state.** `pauseRequestedDuringLoad`; track-id equality is not intent.
 - **One cancel token shared by several commands cancels intent, not effect.** Separate `pause_pending: AtomicBool` checked before the terminal action. Ask what each task does *after* its loop.
 - **A fast path around the central action skips every guard that action owns.** Gapless advance bypassed `next()`, killing the sleep timer. Guard both ends.
+- **A branch that pauses the sink owes the elapsed ticker the same stop the rest of the pause path gives it.** The gapless track-advanced handler's end-of-track sleep-timer branch called `activeTarget.pause(0)` and returned without `stopElapsedTimer()`, leaving the 200ms `audio_get_pos` poll armed for the track this transition moved away from running forever over a paused sink. Every other pause path in the file (`playTrack`'s early-pause branch, `next`, `stop`) calls both together; this one didn't because it returns early. Grep any `pause(0)` call and check the same scope also stops the ticker, unless a `startElapsedTimer()` never ran on that path to begin with.
+  ```
+  grep -n "activeTarget.pause(0)" src/store/player.ts
+  ```
 - **A fire-and-forget command owes an event on every terminal path.** Every gapless bail-out emits `gapless-cancelled`; final `sink.append` also checks `sink.empty()`.
 - **Work scheduled ahead of time must carry what it decided.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
 - **A loading flag from `await invoke()` measures the IPC round trip, not the work.** Separate `isBuffering`, cleared by the `audio-format` event. A command ending in `thread::spawn` can only be honest via an event.
+- **A timeout disarmed when the first phase of a request settles does not bound the phase the caller still awaits.** `fetchWithTimeout` cleared its abort timer in a `finally` wrapped around `fetch` alone, but `fetch` resolves at the response headers, so all 19 `apiPost` consumers read the body (`res.json()`) with no timeout and nothing armed to cancel it. A connection dying mid-transfer - the exact failure the 12s cap exists for - left that read pending forever: `apiPost` never rejected, `syncLibrary` never settled, and `useLibrarySync`'s `.catch` and `.finally` never ran, so `syncingRef.current` stayed true and every later auto-sync tick returned false with the spinner still up. The abort now spans a `res.text()` inside the same `try`, and the buffered text is re-wrapped in a `Response` (null body for 204/304, which reject a non-null one) so callers are unchanged. Ask of any timeout: does it cover every await the caller depends on, or only the call it wraps?
+  ```
+  grep -rn "AbortController" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **"Stream ended" and "stream stopped" are different signals.** `fail()` (reader returns `UnexpectedEof`) vs `finish()`; `fail()` only if `play_id` still matches.
 - **A resource acquired via await escapes the cleanup meant to free it.** `useWakeLock`: `cancelled` flag, resolved sentinel self-releases. Test `!released`, not non-null.
 - **A guard keyed on one error type stands in for the broad condition it was meant to test.** `apiPost` retried non-idempotent writes on the alt url for every error `isTimeout` didn't name; now `if (!retriable) break`. Any branch deciding whether a side effect may repeat must assume unsafe on unrecognised errors.
@@ -36,9 +44,17 @@ Fixed unless marked OPEN.
   ```
   grep -rn "advanceTimersByTime" src --include='*.ts*' | grep -E "60 \* 1000|3600|\* 60 \*"
   ```
+- **A boundary test has to reach the boundary, so every field on the fixture it moves is paid for a boundary's worth of times.** `fetchAllAlbums`' 500,000-album ceiling means 1000 pages of 500 albums through the fetch mock; realistic album objects put the case at 1.2s alone in `JSON.parse`, which tipped it past the 5s timeout whenever the machine was loaded. Cut to the one field the walk reads and a shared tail built as text once, it is 360ms. Strip a boundary fixture to what the code under test actually looks at.
+  ```
+  grep -rn "Array.from({ length: [0-9_]\{4,\}" src --include='*.test.ts*'
+  ```
 - **An accessible-name query is a whole-tree scan (150-300ms/call).** Prefer a class selector, and pair any absence assertion with a positive control.
   ```
   grep -rc "ByRole(" src --include='*.test.tsx' | grep -v ":0$" | sort -t: -k2 -rn
+  ```
+- **A fetch mock handing back one shared `Response` diverges from the real thing the moment the code reads a body twice.** `mockResolvedValue(httpStatus(503))` gave all three retry attempts the same object, so once `apiPost` started reading bodies the second attempt died on "Body is unusable". Real `fetch` builds a fresh `Response` per call; a mock that does not will either hide a body-handling bug or invent one. Use `mockImplementation(() => ...)` wherever the same call is expected more than once.
+  ```
+  grep -rn "mockResolvedValue(" src --include='*.test.ts*' | grep -iE "response|ok\(|httpStatus"
   ```
 - **A fixed sleep costs its ceiling every run; a per-case rebuild pays for it per case.** Use `actUntil()` and `forkTestDb()` (`src/test/sqlite.ts`).
   ```
@@ -60,6 +76,10 @@ Fixed unless marked OPEN.
   grep -rn "useRef(false)" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **A parallel-array invariant enforced by one writer holds only until another runs.** `shuffleOrder.length === queue.length`; `normalizeShuffleOrder` repairs before splice sites. Grep for a length guard one writer has and others don't.
+- **A parallel-array invariant every writer is supposed to hold is only as good as the one writer that skips it.** `removeFromQueue` and `removeManyFromQueue` indexed `shuffleOrder[position]` directly, though `normalizeShuffleOrder`'s own comment already named them (`moveQueueItem` was fixed, these were not) as writers that could read past a short order. Reachable via `loadSettings`' `queue_state` restore, which writes `saved.shuffleOrder` straight from persisted JSON with no length check against `saved.queue`. A short order made the non-null assertion resolve `undefined`, which `Array.prototype.splice` coerces to index 0 and removed the wrong track. Both now normalize before indexing, like `moveQueueItem` already did.
+  ```
+  grep -rn "shuffleOrder\[.*\]!" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A "safe copy" helper must copy on every path, including the no-op one.** `return [...order]` always, or reference equality kills the re-render.
 - **A restore path writing `currentTrack` without loading the engine is unplayable.** `resume()` treats null `streamUrl` as `error`; server-side restore uses state-only `restoreQueue`.
 - **A sync that only upserts diverges from its source, and the divergence feeds itself.** `syncLibrary` prunes albums/tracks absent from the fetch, refusing an empty or partial one. Same pass: playlist refresh upserts server-owned columns only; loved-stage compare scopes both sides by id prefix; `playlist_tracks.position` compacted via two negative-space passes. Grep `DELETE` against mirrored tables and ask what depends on a row's absence.
@@ -79,13 +99,33 @@ Fixed unless marked OPEN.
   ```
   grep -rn "\.catch(" src/hooks --include='*.ts*' | grep -v '\.test\.' | grep -iE "retry|current = false|current = null"
   ```
+- **A partial delete out of a positionally-ordered table must repair the ordering, and a change detector comparing membership cannot see the damage.** `pruneAlbums`/`deleteTracksByIds` dropped the `playlist_tracks` rows of every pruned track and left the positions around them, so a playlist went 0, 2. The server dropped the same tracks, so its ordered id list matched the stored one and both playlist gates (the server-wide signature and the per-playlist `sameTracks`) said nothing moved. `position` is the `songIndexToRemove` `PlaylistDetail` sends, so the next removal deleted the wrong track server side - the same invariant `library_write.rs::remove_playlist_track` compacts for. A `holedPlaylists` set now feeds both gates. Any delete not scoped to a whole ordered group owes the group a renumber, and any "did it change" test over that group must compare positions, not just membership.
+  ```
+  grep -rn "playlist_tracks" src --include='*.ts*' | grep -v '\.test\.' | grep -v "playlist_id = ?\|playlist_id IN\|INSERT"
+  ```
+- **Two failures that suppress the same write owe the caller the same report.** `syncLibrary`'s playlist stage blocks every playlist write on any fetch failure, but only the *listing* failure pushed `"playlists"` onto `skippedStages`; a per-playlist track fetch failure set `playlistWritesBlocked` and bumped `failedPlaylists` silently. `useLibrarySync` builds its partial-sync message out of `skippedStages` alone, so one flaky playlist blocked every playlist update while the run reported an empty `skippedStages` and `changed.playlists === false` - indistinguishable from "read cleanly, nothing changed", indefinitely. The push now sits with the flag, guarded so several failing playlists report the stage once. Ask of every flag that suppresses a write: does each path that sets it also name the stage the caller reads? Check each `*Blocked`/`*Incomplete` assignment against the reporting pushes beside it.
+  ```
+  grep -n "skippedStages.push\|Blocked = true\|Incomplete = true" src/lib/sync.ts
+  ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
+- **An effect that bails on a ref the first render did not fill never runs at all, because nothing in its deps says the element arrived.** `useScrollMemory`'s save half depended on `[ref, key]` and returned early on a null `ref.current`; `ArtistGrid` renders its error, skeleton and empty branches *before* the scroller, so on a cold start the element did not exist yet, the scroll listener was never attached, no offset was ever recorded, and the restore could only ever be a no-op. `ready` is now a dep of both halves. The same grep found two more, both measuring: `ArtistGrid`'s own `useLayoutEffect(..., [])` never saw its scroller, so `containerWidth` stayed 0 and the whole artists page painted as one 190px column on any cold start; `TagReviewTab` never measured its list and fell back to a fixed page size. Both now use `useMeasuredElement`, whose callback ref has no deps to get wrong. Any effect reading a conditionally-rendered ref owes its deps the condition that renders it, or a callback ref (which fires on attach, whenever that is).
+  ```
+  grep -rn -B1 "if (!el) return\|if (!container) return" src/components src/hooks --include='*.ts*' | grep -v '\.test\.' | grep "Ref\.current\|ref\.current"
+  ```
+- **A query that only reads local SQLite must not gate on the credential fetch that guards network calls.** `CommandPalette` and `DiagnosticsTab`'s scrobble-queue count keyed their `enabled`/query id off `serverWithCredential?.server.id` though neither ever touches the network; while the keychain read is pending or has permanently failed (`retry: false`), the query stays `enabled: false` forever with `isError` still `false`, so the palette showed "Searching..." forever and the backlog count stuck at "-". Both now take a plain `serverId` prop. A query is credential-gated only if its `queryFn` actually needs the token.
+  ```
+  grep -rn "serverWithCred.*\.server\.id\|serverWithCredential?.server.id" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.
 - **Re-keying a collection to ids means re-keying every cursor, anchor, count and gate.** `TrackTableView` kept a numeric shift-anchor and a raw `.size` after moving to `Set<string>`.
   ```
   grep -rn "useRef<number" src --include='*.tsx' | grep -v '\.test\.'
   grep -rn "Ids\.size\s*[<>=]" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A cache-hit test written as "is there a value" never caches the answer "there is none", which is the case that repeats.** `useLyrics` treated a row with null `plain`/`synced` as a miss so `refresh` could force a re-lookup, but the queryFn writes exactly that row when every source comes back empty - so every track with no lyrics anywhere re-ran the OpenSubsonic call, LRClib and lyrics.ovh on every open of the tab, forever. `source` now carries a `"cleared"` sentinel written by `refresh` and by the offset-only insert, and anything else is a completed lookup. Both columns are NOT NULL, so absence could not be the witness. Ask of any cache: what does a successful "nothing found" look like in the table, and does the hit test recognise it?
+  ```
+  grep -rn "if (cached\|if (rows\[0\]\|if (hit\|cached\.length > 0" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
   ```
 - **A prefetch that duplicates a query instead of sharing it warms a key nobody reads.** Key, `queryFn` and `staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in a TS string is `ESCAPE ''` and always throws - write `ESCAPE '\\'`.**
 - **A `LIMIT` without `ORDER BY` silently redefines what the query returns.** FTS queries rank by weighted `bm25` in a `MATERIALIZED` CTE before the cap. Ask if the cut thing was chosen or just late. Also: `useDeferredValue` defers rendering, not fetching.
@@ -96,6 +136,10 @@ Fixed unless marked OPEN.
   grep -rn "LIKE ?" src --include='*.ts*' | grep -v '\.test\.' | grep -v ESCAPE
   ```
 - **A secret written before its owning row outlives the row.** Insert rolls back the keychain write; removal deletes the secret first and aborts loudly. `keychain.get` *rejects* on a missing entry, so callers null-checking the resolved value hold dead code, and that query wants `retry: false`.
+- **A cleanup step that treats "already gone" as a failure makes the mess it was cleaning permanent.** Removing a server deletes the keychain entry before the `servers` row (right ordering, see below) and aborts the whole removal if that step rejects - and `delete_credential` surfaced keyring's `NoEntry`. A server whose secret had been lost (keyring reset, a rolled-back insert, a profile copied between machines) could then never be removed, and its rows and library stayed forever. `ignore_missing_entry` in `lib.rs` now folds `NoEntry` into `Ok`. Ask of every abort-on-failure cleanup: is one of those failures just the desired end state?
+  ```
+  grep -rn "keychain\.delete\|keychain\.get" src --include='*.ts*' | grep -v '\.test\.' | grep -v "catch"
+  ```
 - **A "the thing just finished" test built only from state that restore also produces fires at startup.** `useRadio` needs `hasPlayedRef` as a witness. Side-effect starts belong in handlers, not effects.
   ```
   grep -rn "playFromQueueIndex(\|playTrack(\|playQueue(\|\.resume()" src/hooks src/App.tsx | grep -v "\.test\."

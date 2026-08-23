@@ -119,13 +119,31 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    return await fetch(url, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body,
       signal: controller.signal,
+    });
+    // fetch resolves once the headers land, so the body is still streaming here and the
+    // abort has to stay armed across the read: a connection dying mid-transfer would
+    // otherwise leave the caller's `res.json()` pending forever, with nothing for the
+    // retry loop to catch and no terminal state for the sync above it. Every caller
+    // parses JSON, so buffering the body costs nothing and leaves them unchanged.
+    //
+    // Rearmed rather than left running: the ceiling exists to bound a stall, not the
+    // total size of an answer, and a 500-album page over a slow link can legitimately
+    // take longer to transfer than the handshake left of the original budget.
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const text = await res.text();
+    // A null-body status (204/304) rejects a non-null body, and "" is non-null.
+    return new Response(text === "" ? null : text, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
     });
   } finally {
     clearTimeout(timer);
@@ -787,7 +805,10 @@ export async function fetchAndStoreOpenSubsonicExtensions(
   }
 }
 
-export async function getStoredOpenSubsonicExtensions(serverId: string): Promise<string[]> {
+/** Null means the probe has not stored an answer yet (or could not be read), which is not
+ *  the same as a server that answered and does not offer the extension. A caller deciding
+ *  whether it may cache "found nothing" has to tell those apart. */
+export async function getStoredOpenSubsonicExtensions(serverId: string): Promise<string[] | null> {
   try {
     const { getDb } = await import("../db");
     const db = await getDb();
@@ -795,10 +816,10 @@ export async function getStoredOpenSubsonicExtensions(serverId: string): Promise
       "SELECT value FROM settings WHERE key = ?",
       [`server.opensub_extensions.${serverId}`]
     );
-    if (!rows[0]) return [];
+    if (!rows[0]) return null;
     return JSON.parse(rows[0].value) as string[];
   } catch {
-    return [];
+    return null;
   }
 }
 

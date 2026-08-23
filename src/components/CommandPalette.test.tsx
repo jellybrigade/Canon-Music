@@ -387,4 +387,14 @@ describe("CommandPalette result states", () => {
     expect(onSelectAlbum).toHaveBeenCalledTimes(1);
     expect(onSelectAlbum.mock.calls[0]![0]).toMatchObject({ id: "a1", server_id: "srv-a", name: "Kid A" });
   });
+
+  it("still searches while the credential is pending, using the plain server id", async () => {
+    seedFindableAlbum({ id: "a1", name: "Wilco Album" });
+    // App.tsx/HomeView pass server?.id, not serverWithCredential?.server.id - the credential
+    // query can stay pending or fail (retry: false) indefinitely without blocking search.
+    renderPalette({ serverWithCredential: undefined, serverId: "srv-a" });
+    typeRaw("wilco");
+    await settleDebounce();
+    expect(resultPrimaries()).toEqual(["Wilco Album"]);
+  });
 });

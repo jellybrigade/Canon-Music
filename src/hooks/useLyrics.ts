@@ -9,6 +9,12 @@ import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
 
+// `source` on a row that carries no lyrics is the only thing separating "we asked every
+// source and none of them had this track" from "the row is here for its offset_ms alone".
+// Both columns are NOT NULL, so the distinction has to be a value. Rows written by `refresh`
+// and by `setOffsetMs` carry this; every completed lookup names the service it came from.
+const NO_LOOKUP_SOURCE = "cleared";
+
 export interface LyricsOverride {
   artist: string;
   title: string;
@@ -64,24 +70,31 @@ export function useLyrics(
         }
         return { plain, synced };
       }
-      type CacheRow = { plain: string | null; synced: string | null };
+      type CacheRow = { plain: string | null; synced: string | null; source: string };
       const cached = await db.select<CacheRow[]>(
-        "SELECT plain, synced FROM lyrics WHERE track_id = ?",
+        "SELECT plain, synced, source FROM lyrics WHERE track_id = ?",
         [track.id]
       );
-      // A row with both columns null is an offset-only row left behind by `refresh`, which
-      // clears the lyrics but keeps the timing the user dialled in. Treating its presence as a
-      // cache hit would make the refresh it was written by return "no lyrics" forever.
-      if (cached.length > 0 && (cached[0]!.plain || cached[0]!.synced)) {
-        return { plain: cached[0]!.plain, synced: cached[0]!.synced };
+      // A completed lookup that found nothing is still a cache hit: most of a library has no
+      // lyrics anywhere, and re-asking three services on every open of the tab costs the whole
+      // lookup for the tracks that can never benefit from it. Only a row `refresh` cleared or
+      // `setOffsetMs` created on its own is worth asking about again.
+      const hit = cached[0];
+      if (hit && (hit.plain || hit.synced || hit.source !== NO_LOOKUP_SOURCE)) {
+        return { plain: hit.plain, synced: hit.synced };
       }
 
-      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib
+      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib.
+      // A null extension list means the probe has not answered yet, so this stage was not
+      // asked rather than asked and declined; the write below must not then record a
+      // completed lookup, or the server's own .lrc is never consulted for this track again.
+      let serverStageDecided = true;
       if (serverWithCredential) {
         const { server, credential } = serverWithCredential;
         const extensions = await getStoredOpenSubsonicExtensions(server.id);
+        serverStageDecided = extensions !== null;
         const navTrackId = stripServerPrefix(track.id, server.id);
-        const serverLyrics = extensions.includes("songLyrics")
+        const serverLyrics = extensions?.includes("songLyrics")
           ? await fetchLyricsBySongId(server.url, server.username, credential, navTrackId, server.alt_url ?? undefined)
           : null;
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
@@ -120,6 +133,8 @@ export function useLyrics(
         }
       }
 
+      // Only a lookup that asked every source it has may record "found nothing" as final.
+      const storedSource = plain || synced || serverStageDecided ? source : NO_LOOKUP_SOURCE;
       await db.execute(
         `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
          VALUES (?, ?, ?, ?, datetime('now'))
@@ -128,7 +143,7 @@ export function useLyrics(
            synced = excluded.synced,
            source = excluded.source,
            fetched_at = excluded.fetched_at`,
-        [track.id, plain, synced, source]
+        [track.id, plain, synced, storedSource]
       );
 
       return { plain, synced };
@@ -144,8 +159,8 @@ export function useLyrics(
     // DELETE threw it away every time they re-fetched a badly-timed set of lyrics, which is
     // exactly when they had already spent effort lining it up.
     await db.execute(
-      "UPDATE lyrics SET plain = NULL, synced = NULL WHERE track_id = ?",
-      [track.id]
+      "UPDATE lyrics SET plain = NULL, synced = NULL, source = ? WHERE track_id = ?",
+      [NO_LOOKUP_SOURCE, track.id]
     );
     await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, queryClient]);
@@ -168,9 +183,9 @@ export function useLyrics(
     const db = await getDb();
     await db.execute(
       `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
-       VALUES (?, NULL, NULL, 'manual', datetime('now'), ?)
+       VALUES (?, NULL, NULL, ?, datetime('now'), ?)
        ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
-      [track.id, ms]
+      [track.id, NO_LOOKUP_SOURCE, ms]
     );
   }, [track?.id]);
 

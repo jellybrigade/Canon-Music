@@ -520,3 +520,72 @@ describe("useLibrarySync failure reporting", () => {
     expect(result.current.syncError).toBe("");
   });
 });
+
+describe("useLibrarySync retry countdown", () => {
+  it("stamps when the scheduled retry will land", async () => {
+    intervalSetting = "0";
+    const { result } = renderSync(SRV_A);
+    await tick();
+    const armedAt = Date.now();
+    await failRun(0, new Error("boom"));
+
+    expect(result.current.nextRetryAt).toBe(armedAt + 30 * 1000);
+  });
+
+  it("moves the stamp on to the next backoff step after a second failure", async () => {
+    intervalSetting = "0";
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await failRun(0, new Error("boom"));
+    await tick(30 * 1000);
+
+    const armedAt = Date.now();
+    await failRun(1, new Error("boom"));
+
+    expect(result.current.nextRetryAt).toBe(armedAt + 2 * MINUTE);
+  });
+
+  it("clears the stamp once the backoff is spent, so the banner stops promising a retry", async () => {
+    intervalSetting = "0";
+    const { result } = renderSync(SRV_A);
+    await tick();
+
+    await failRun(0, new Error("permanent"));
+    await tick(30 * 1000);
+    await failRun(1, new Error("permanent"));
+    await tick(2 * MINUTE);
+    await failRun(2, new Error("permanent"));
+    await tick(5 * MINUTE);
+    await failRun(3, new Error("permanent"));
+
+    expect(result.current.syncStatus).toBe("error");
+    expect(result.current.nextRetryAt).toBeNull();
+  });
+
+  it("clears the stamp when the next run starts", async () => {
+    intervalSetting = "0";
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await failRun(0, new Error("boom"));
+    expect(result.current.nextRetryAt).not.toBeNull();
+
+    await tick(30 * 1000);
+
+    expect(result.current.syncStatus).toBe("syncing");
+    expect(result.current.nextRetryAt).toBeNull();
+  });
+
+  it("clears the stamp when the retry fires for a server no longer selected", async () => {
+    intervalSetting = "0";
+    const { result, rerender } = renderSync(SRV_A);
+    await tick();
+    await failRun(0, new Error("boom"));
+    expect(result.current.nextRetryAt).not.toBeNull();
+
+    rerender({ server: undefined });
+    await tick(30 * 1000);
+
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    expect(result.current.nextRetryAt).toBeNull();
+  });
+});

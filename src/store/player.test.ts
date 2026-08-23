@@ -137,6 +137,35 @@ describe("player store - queue/shuffle invariants", () => {
       expect(usePlayerStore.getState().queue).toHaveLength(5);
     });
 
+    // A queue restored from a stale persisted snapshot (loadSettings' queue_state branch
+    // writes saved.shuffleOrder straight from JSON) can start a session with an order
+    // shorter than the queue, same as moveQueueItem's own comment names as a risk.
+    it("holds and removes the intended track after removeFromQueue when shuffleOrder starts shorter than queue", async () => {
+      usePlayerStore.setState({
+        isShuffled: true,
+        queue: makeTracks(4),
+        shuffleOrder: [2, 0],
+        queueIndex: 0,
+        streamUrlFor,
+      });
+      await usePlayerStore.getState().removeFromQueue(3);
+      expect(invariantHolds()).toBe(true);
+      expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["0", "1", "2"]);
+    });
+
+    it("holds and removes the intended tracks after removeManyFromQueue when shuffleOrder starts shorter than queue", async () => {
+      usePlayerStore.setState({
+        isShuffled: true,
+        queue: makeTracks(5),
+        shuffleOrder: [3, 1],
+        queueIndex: 0,
+        streamUrlFor,
+      });
+      await usePlayerStore.getState().removeManyFromQueue([2, 4]);
+      expect(invariantHolds()).toBe(true);
+      expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["1", "2", "3"]);
+    });
+
     it("holds after clearQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
       await usePlayerStore.getState().playQueue(makeTracks(4), streamUrlFor);
@@ -572,6 +601,13 @@ describe("player store - gapless hand-off", () => {
       expect(state.isPlaying).toBe(false);
       expect(state.sleepTimerEndOfTrack).toBe(false);
       expect(invoke.mock.calls.some((c) => c[0] === "audio_pause")).toBe(true);
+
+      // The elapsed ticker armed for the track this gapless transition moved away from must
+      // not keep polling a sink this branch just paused.
+      const pollsBeforeWait = invoke.mock.calls.filter((c) => c[0] === "audio_get_pos").length;
+      await vi.advanceTimersByTimeAsync(1000);
+      const pollsAfterWait = invoke.mock.calls.filter((c) => c[0] === "audio_get_pos").length;
+      expect(pollsAfterWait).toBe(pollsBeforeWait);
     });
 
     it("never armed: track-advanced completes normally, isPlaying stays true", async () => {

@@ -7,6 +7,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { FilterSidebar } from "../components/FilterSidebar";
 import { CanonLockup } from "../components/CanonIcon";
+import { SyncErrorBanner } from "../components/SyncErrorBanner";
 import { getDb } from "../db";
 import type { AlbumRow, AlbumSort, ArtistRow } from "../types/library";
 import type { Server } from "../types/server";
@@ -97,6 +98,7 @@ export interface AppViewProps {
   syncError: SyncApi["syncError"];
   syncProgress: SyncApi["syncProgress"];
   lastSyncedAt: SyncApi["lastSyncedAt"];
+  nextRetryAt: SyncApi["nextRetryAt"];
   runSync: SyncApi["runSync"];
   credError: Error | null;
   credPending: boolean;
@@ -482,6 +484,7 @@ export function AppRoutes(props: AppViewProps) {
     setAlbumsPaginated,
     syncStatus,
     syncError,
+    nextRetryAt,
     syncProgress,
     runSync,
     credError,
@@ -655,15 +658,14 @@ export function AppRoutes(props: AppViewProps) {
                     : "Syncing…"}
                 </span>
               )}
-              {syncStatus === "error" && (
-                <span className="sync-status sync-status--error" title={syncError}>
-                  Sync failed: {syncError}
-                </span>
-              )}
-              {syncStatus === "partial" && (
-                <span className="sync-status sync-status--error" title={syncError ?? undefined}>
-                  {syncError}
-                </span>
+              {server && (syncStatus === "error" || syncStatus === "partial") && (
+                <SyncErrorBanner
+                  variant={syncStatus}
+                  serverName={server.display_name}
+                  detail={syncError}
+                  nextRetryAt={nextRetryAt}
+                  onRetry={() => runSync(server)}
+                />
               )}
               {credError && (
                 <span className="sync-status sync-status--error">

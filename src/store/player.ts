@@ -543,6 +543,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     if (get().sleepTimerEndOfTrack) {
       get().clearSleepTimer();
       activeTarget.pause(0);
+      stopElapsedTimer();
       set({ isPlaying: false });
       void persistQueueState();
       return;
@@ -1767,10 +1768,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       let newQueueIndex: number;
 
       if (isShuffled) {
-        const actualIdx = shuffleOrder[position]!;
+        const order = normalizeShuffleOrder(shuffleOrder, queue.length);
+        const actualIdx = order[position]!;
         newQueue = [...queue];
         newQueue.splice(actualIdx, 1);
-        newShuffleOrder = shuffleOrder
+        newShuffleOrder = order
           .filter((_, i) => i !== position)
           .map((idx) => (idx > actualIdx ? idx - 1 : idx));
         newQueueIndex = position < queueIndex ? queueIndex - 1 : queueIndex;
@@ -1806,7 +1808,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const sorted = [...new Set(positions)].sort((a, b) => b - a);
 
       let newQueue = [...queue];
-      let newShuffleOrder = [...shuffleOrder];
+      let newShuffleOrder = isShuffled ? normalizeShuffleOrder(shuffleOrder, queue.length) : [...shuffleOrder];
       let newQueueIndex = queueIndex;
       let removedCurrentTrack = false;
 

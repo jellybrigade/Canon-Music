@@ -826,6 +826,43 @@ describe("syncLibrary playlist stage", () => {
     ]);
   });
 
+  it("closes the position hole an album prune punched in a playlist", async () => {
+    // The album prune deletes the playlist_tracks rows of every track it drops, but not the
+    // positions of the rows around them. The server drops the same track from the playlist,
+    // so the ordered id lists match on both sides and every change gate here used to say
+    // "nothing moved" - leaving 0, 2 stored where the server has 0, 1. `position` is the
+    // songIndexToRemove PlaylistDetail sends, so the next removal deletes the wrong track.
+    serveLibrary([album("al-1"), album("al-2")], {
+      "al-1": [track("t1", "al-1"), track("t3", "al-1")],
+      "al-2": [track("t2", "al-2")],
+    });
+    mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 3 })]);
+    mPlaylistTracks.mockResolvedValue([
+      track("t1", "al-1"),
+      track("t2", "al-2"),
+      track("t3", "al-1"),
+    ]);
+    await syncLibrary(server());
+    expect(await ids("SELECT track_id AS id FROM playlist_tracks ORDER BY position")).toEqual([
+      `${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`,
+    ]);
+
+    // al-2 is gone server side. Everything the playlist gates compare - name, comment,
+    // cover, the reported song count and the ordered id list - reads identical afterwards.
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t3", "al-1")] });
+    mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 3 })]);
+    mPlaylistTracks.mockResolvedValue([track("t1", "al-1"), track("t3", "al-1")]);
+    await syncLibrary(server());
+
+    const rows = await db().select<{ track_id: string; position: number }[]>(
+      "SELECT track_id, position FROM playlist_tracks ORDER BY position"
+    );
+    expect(rows).toEqual([
+      { track_id: `${SRV}:t1`, position: 0 },
+      { track_id: `${SRV}:t3`, position: 1 },
+    ]);
+  });
+
   it("prunes a playlist the server no longer lists, with its tracks and resume row", async () => {
     await seedPlaylists();
     db().raw.exec(
@@ -860,6 +897,9 @@ describe("syncLibrary playlist stage", () => {
     // An incomplete picture must not reach the prune: pl-2 would be erased outright.
     expect(second.failedPlaylists).toBe(1);
     expect(second.changed.playlists).toBe(false);
+    // The blocked write is the same one the listing failure reports, so it owes the
+    // caller the same stage: otherwise this is indistinguishable from "nothing changed".
+    expect(second.skippedStages).toEqual(["playlists"]);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM playlists ORDER BY id");
     expect(rows.map((r) => r.name)).toEqual(["Playlist pl-1", "Playlist pl-2"]);
   });

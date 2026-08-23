@@ -524,6 +524,18 @@ fn friendly_keyring_error(e: keyring::Error) -> String {
     }
 }
 
+// Deleting a secret that is already gone is the outcome the caller wanted. `ServerTab`
+// removes the keychain entry before the `servers` row so a secret can never outlive its
+// row, and it aborts the whole removal if that fails - so surfacing NoEntry as an error
+// made a server whose entry had been lost (keyring reset, rolled-back insert, a profile
+// copied between machines) impossible to remove for good.
+fn ignore_missing_entry(result: Result<(), keyring::Error>) -> Result<(), String> {
+    match result {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(friendly_keyring_error(e)),
+    }
+}
+
 #[tauri::command]
 fn set_credential(service: &str, account: &str, secret: &str) -> Result<(), String> {
     Entry::new(service, account)
@@ -542,10 +554,8 @@ fn get_credential(service: &str, account: &str) -> Result<String, String> {
 
 #[tauri::command]
 fn delete_credential(service: &str, account: &str) -> Result<(), String> {
-    Entry::new(service, account)
-        .map_err(friendly_keyring_error)?
-        .delete_credential()
-        .map_err(friendly_keyring_error)
+    let entry = Entry::new(service, account).map_err(friendly_keyring_error)?;
+    ignore_missing_entry(entry.delete_credential())
 }
 
 #[tauri::command]
@@ -1826,7 +1836,8 @@ pub fn run() {
 mod tests {
     use super::{
         disk_cache_read, disk_cache_write, evict_disk_cache_if_needed, friendly_keyring_error,
-        percent_decode, sanitize_cache_key, xml_first_tag_text, MAX_DISK_CACHE_ENTRIES,
+        ignore_missing_entry, percent_decode, sanitize_cache_key, xml_first_tag_text,
+        MAX_DISK_CACHE_ENTRIES,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -2106,6 +2117,27 @@ mod tests {
         let msg = friendly_keyring_error(keyring::Error::NoEntry);
         assert_eq!(msg, keyring::Error::NoEntry.to_string());
         assert!(!msg.contains(GUIDANCE));
+    }
+
+    // ── ignore_missing_entry ──────────────────────────────────────────────────
+
+    #[test]
+    fn treats_a_missing_entry_as_a_successful_delete() {
+        assert_eq!(ignore_missing_entry(Err(keyring::Error::NoEntry)), Ok(()));
+    }
+
+    #[test]
+    fn passes_a_real_delete_failure_through() {
+        let err = ignore_missing_entry(Err(keyring::Error::NoStorageAccess(Box::from(
+            "keyring is locked",
+        ))));
+        assert!(err.is_err());
+        assert!(err.unwrap_err().contains("keyring is locked"));
+    }
+
+    #[test]
+    fn leaves_a_successful_delete_alone() {
+        assert_eq!(ignore_missing_entry(Ok(())), Ok(()));
     }
 
     #[test]

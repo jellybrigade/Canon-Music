@@ -25,10 +25,11 @@ function remember(key: string, top: number) {
 /**
  * Remembers `ref`'s scrollTop under `key` and restores it on the next mount.
  *
- * `ready` gates the restore: a virtualized scroller has no scrollable height
- * until its rows exist, and setting scrollTop before then is silently clamped
- * to 0. Pass the condition that means "content has height" (rows.length > 0),
- * not merely "the element is mounted".
+ * `ready` gates both halves: a virtualized scroller has no scrollable height
+ * until its rows exist, so setting scrollTop before then is silently clamped to
+ * 0, and a view that renders its scroller only once it has content has no
+ * element to listen on before then either. Pass the condition that means
+ * "content has height" (rows.length > 0), not merely "the element is mounted".
  */
 export function useScrollMemory(
   ref: RefObject<HTMLElement | null>,
@@ -48,15 +49,29 @@ export function useScrollMemory(
     if (saved) el.scrollTop = saved;
   }, [ref, key, ready]);
 
+  // `ready` gates the save too, and not only as an optimisation: a view that renders a
+  // skeleton or an empty state instead of its scroller has no element on the first pass,
+  // and an effect that bails on a null ref never re-runs unless a dep moves. Without
+  // `ready` in the deps, `ArtistGrid` never attached this listener at all and recorded no
+  // offset for the restore above to find.
   useEffect(() => {
+    if (!ready) return;
     const el = ref.current;
     if (!el) return;
     let frame: number | null = null;
+    // Seeded from the element rather than left over from the previous key, so a teardown
+    // that never saw a scroll writes this scroller's own position and not another's.
+    let lastTop = el.scrollTop;
     function onScroll() {
+      if (!el) return;
+      // Read synchronously: by the time the teardown below runs, React has already
+      // detached the node, and a detached element reports scrollTop 0 however far the
+      // user had scrolled. Re-reading the DOM there erased the offset it meant to save.
+      lastTop = el.scrollTop;
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
         frame = null;
-        if (el) remember(key, el.scrollTop);
+        remember(key, lastTop);
       });
     }
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -65,7 +80,7 @@ export function useScrollMemory(
       if (frame !== null) cancelAnimationFrame(frame);
       // The rAF may never run if the unmount follows the last scroll event
       // within one frame, which is exactly what a fast click-through does.
-      remember(key, el.scrollTop);
+      remember(key, lastTop);
     };
-  }, [ref, key]);
+  }, [ref, key, ready]);
 }

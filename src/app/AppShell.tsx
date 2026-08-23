@@ -193,6 +193,7 @@ export function AppShell(props: AppViewProps) {
         onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }); setCommandPaletteOpen(false); }}
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
+        serverId={server?.id}
       />
       {pendingUpdate && (
         <UpdatePrompt
