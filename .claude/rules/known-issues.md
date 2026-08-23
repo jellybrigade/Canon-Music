@@ -68,6 +68,10 @@ Fixed unless marked OPEN.
   grep -rn "useRef(false)" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **A parallel-array invariant enforced by one writer holds only until another runs.** `shuffleOrder.length === queue.length`; `normalizeShuffleOrder` repairs before splice sites. Grep for a length guard one writer has and others don't.
+- **A parallel-array invariant every writer is supposed to hold is only as good as the one writer that skips it.** `removeFromQueue` and `removeManyFromQueue` indexed `shuffleOrder[position]` directly, though `normalizeShuffleOrder`'s own comment already named them (`moveQueueItem` was fixed, these were not) as writers that could read past a short order. Reachable via `loadSettings`' `queue_state` restore, which writes `saved.shuffleOrder` straight from persisted JSON with no length check against `saved.queue`. A short order made the non-null assertion resolve `undefined`, which `Array.prototype.splice` coerces to index 0 and removed the wrong track. Both now normalize before indexing, like `moveQueueItem` already did.
+  ```
+  grep -rn "shuffleOrder\[.*\]!" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A "safe copy" helper must copy on every path, including the no-op one.** `return [...order]` always, or reference equality kills the re-render.
 - **A restore path writing `currentTrack` without loading the engine is unplayable.** `resume()` treats null `streamUrl` as `error`; server-side restore uses state-only `restoreQueue`.
 - **A sync that only upserts diverges from its source, and the divergence feeds itself.** `syncLibrary` prunes albums/tracks absent from the fetch, refusing an empty or partial one. Same pass: playlist refresh upserts server-owned columns only; loved-stage compare scopes both sides by id prefix; `playlist_tracks.position` compacted via two negative-space passes. Grep `DELETE` against mirrored tables and ask what depends on a row's absence.
