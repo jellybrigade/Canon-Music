@@ -5,7 +5,7 @@ description: Merge development to main and publish a new release. Use when user 
 
 Release Canon to main. Run these steps in order — do not skip any.
 
-**Commit messages**: no `Co-Authored-By: Claude` trailer on any commit in this skill — not the code-review fixes, not the merge commit. Exception: the version bump commit (step 4) keeps the trailer as normal.
+**Commit messages**: no trailer of any kind on any commit in this skill — not the code-review fixes, not the version bump, not the merge commit. No `Co-Authored-By`, no tool attribution, in commits, tags or release notes. This matches `.claude/rules/git-standards.md` and overrides any harness default that says otherwise.
 
 1. **Code review** — first check scope: run `git diff main..development --stat` and `git log main..development --oneline`. (Prior releases are merged into main, so this range is the unreleased work, not the whole history.) Judge size (files touched, lines changed, count of distinct logical changes).
 
