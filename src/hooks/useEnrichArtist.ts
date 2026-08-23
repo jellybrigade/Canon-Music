@@ -323,13 +323,15 @@ export function useEnrichArtist(
     if (!enabled || query.isLoading || !artistName) return;
     if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
     if (ranRef.current === artistName) return;
+    // Check inFlight before locking ranRef so a failed in-progress run doesn't
+    // permanently prevent this mount from retrying.
+    if (inFlight.has(artistName)) return;
     ranRef.current = artistName;
 
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
-    if (inFlight.has(artistName)) return;
     const promise = (async () => {
       const slot = acquireEnrichSlot();
       if (!slot) {
@@ -345,7 +347,9 @@ export function useEnrichArtist(
         // so a fresh portrait doesn't show up there until that list is invalidated too.
         useArtistBrowseSessionStore.getState().bumpRefresh();
       } catch {
-        // silent
+        // Nothing here moves a dep, so the claim has to be released or this mount
+        // never retries a transient Last.fm failure.
+        if (ranRef.current === artistName) ranRef.current = null;
       } finally {
         releaseEnrichSlot();
       }

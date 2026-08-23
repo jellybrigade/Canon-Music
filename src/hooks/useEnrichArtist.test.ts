@@ -86,4 +86,21 @@ describe("useEnrichArtist", () => {
     await waitFor(() => expect(enrichedArtists()).toEqual(["ride", "slowdive"]));
     expect(vi.mocked(fetchArtistInfo)).toHaveBeenCalledTimes(2);
   });
+
+  it("enriches the artist on a later attempt after one fails", async () => {
+    vi.mocked(fetchArtistInfo).mockRejectedValueOnce(new Error("last.fm unreachable"));
+
+    const { rerender } = renderHook(
+      ({ enabled }: { enabled: boolean }) => useEnrichArtist("slowdive", { enabled }),
+      { wrapper, initialProps: { enabled: true } }
+    );
+
+    await waitFor(() => expect(vi.mocked(fetchArtistInfo)).toHaveBeenCalledTimes(1));
+    expect(enrichedArtists()).toEqual([]);
+
+    rerender({ enabled: false });
+    rerender({ enabled: true });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
 });
