@@ -50,7 +50,7 @@ function useMissingArtistImageCount() {
 function useScrobbleQueueCount(serverId: string | undefined) {
   return useQuery({
     queryKey: QK.scrobbleQueueCount(serverId),
-    queryFn: () => getScrobbleQueueCount(serverId as string),
+    queryFn: () => (serverId ? getScrobbleQueueCount(serverId) : Promise.resolve(0)),
     enabled: !!serverId,
     refetchInterval: 5000,
   });
