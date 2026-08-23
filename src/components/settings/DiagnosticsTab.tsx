@@ -15,6 +15,7 @@ interface Props {
   lastSyncedAt: number | null;
   searchQuery: string;
   serverWithCredential: ServerWithCredential | undefined;
+  serverId: string | undefined;
 }
 
 // Rough per-cover size for a 300px JPEG thumbnail; used only to show a ballpark estimate.
@@ -56,10 +57,10 @@ function useScrobbleQueueCount(serverId: string | undefined) {
   });
 }
 
-export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery, serverWithCredential }: Props) {
+export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery, serverWithCredential, serverId }: Props) {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
-  const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverWithCredential?.server.id);
+  const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverId);
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
   const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
   const { data: missingArtistImageCount, refetch: refetchMissingArtistImageCount } = useMissingArtistImageCount();

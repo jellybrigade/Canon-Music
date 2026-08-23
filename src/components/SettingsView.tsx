@@ -47,7 +47,7 @@ export function SettingsView({ server, syncStatus, syncError, lastSyncedAt, serv
           <>
             <AboutTab searchQuery={query} />
             <div className="settings-advanced-divider" />
-            <DiagnosticsTab syncStatus={syncStatus} syncError={syncError} lastSyncedAt={lastSyncedAt} searchQuery={query} serverWithCredential={serverWithCredential} />
+            <DiagnosticsTab syncStatus={syncStatus} syncError={syncError} lastSyncedAt={lastSyncedAt} searchQuery={query} serverWithCredential={serverWithCredential} serverId={server?.id} />
           </>
         );
     }

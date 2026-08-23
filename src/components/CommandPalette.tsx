@@ -66,9 +66,10 @@ interface Props {
   onSelectArtist: (name: string, albumCount: number) => void;
   onPlayTrack: (id: string) => void;
   serverWithCredential?: ServerWithCredential;
+  serverId?: string;
 }
 
-export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential }: Props) {
+export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential, serverId }: Props) {
   const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
   const [deferred, setDeferred] = useState("");
@@ -82,7 +83,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     return () => clearTimeout(t);
   }, [trimmedRaw]);
 
-  const { data: results, isError } = useSearch(deferred, serverWithCredential?.server.id);
+  const { data: results, isError } = useSearch(deferred, serverId ?? serverWithCredential?.server.id);
 
   const searchAlbums: AlbumResult[] = deferred
     ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({ kind: "album" as const, id: a.id, server_id: a.server_id, name: a.name, artist: a.artist, artwork_url: a.artwork_url })) ?? [])

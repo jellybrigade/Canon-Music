@@ -93,6 +93,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn -B1 "if (!el) return\|if (!container) return" src/components src/hooks --include='*.ts*' | grep -v '\.test\.' | grep "Ref\.current\|ref\.current"
   ```
+- **A query that only reads local SQLite must not gate on the credential fetch that guards network calls.** `CommandPalette` and `DiagnosticsTab`'s scrobble-queue count keyed their `enabled`/query id off `serverWithCredential?.server.id` though neither ever touches the network; while the keychain read is pending or has permanently failed (`retry: false`), the query stays `enabled: false` forever with `isError` still `false`, so the palette showed "Searching..." forever and the backlog count stuck at "-". Both now take a plain `serverId` prop. A query is credential-gated only if its `queryFn` actually needs the token.
+  ```
+  grep -rn "serverWithCred.*\.server\.id\|serverWithCredential?.server.id" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.
 - **Re-keying a collection to ids means re-keying every cursor, anchor, count and gate.** `TrackTableView` kept a numeric shift-anchor and a raw `.size` after moving to `Set<string>`.
   ```
