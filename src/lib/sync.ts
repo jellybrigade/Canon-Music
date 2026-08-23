@@ -619,6 +619,11 @@ export async function syncLibrary(
         fetchedByIndex[index] = { pl, tracks };
       } catch (err) {
         console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
+        // Blocks the write for every playlist, not just this one, so it owes the caller
+        // the same stage the listing failure reports. The listing failure cannot also be
+        // in flight here (it returns [], leaving the pool nothing to iterate), but the
+        // stage is pushed once regardless rather than relying on that.
+        if (!playlistWritesBlocked) skippedStages.push("playlists");
         playlistWritesBlocked = true;
         failedPlaylists++;
       }

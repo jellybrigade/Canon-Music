@@ -897,6 +897,9 @@ describe("syncLibrary playlist stage", () => {
     // An incomplete picture must not reach the prune: pl-2 would be erased outright.
     expect(second.failedPlaylists).toBe(1);
     expect(second.changed.playlists).toBe(false);
+    // The blocked write is the same one the listing failure reports, so it owes the
+    // caller the same stage: otherwise this is indistinguishable from "nothing changed".
+    expect(second.skippedStages).toEqual(["playlists"]);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM playlists ORDER BY id");
     expect(rows.map((r) => r.name)).toEqual(["Playlist pl-1", "Playlist pl-2"]);
   });
