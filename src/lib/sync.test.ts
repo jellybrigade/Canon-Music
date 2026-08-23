@@ -40,6 +40,7 @@ import {
   fetchAndStoreOpenSubsonicExtensions,
 } from "./navidrome";
 import { purgeServerData, syncLibrary, syncAlbumTracks } from "./sync";
+import type { SyncProgress } from "./sync";
 import { album, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
@@ -669,6 +670,56 @@ describe("syncLibrary album track failures", () => {
     mAllAlbums.mockResolvedValue(libraryOf(2));
     mAlbumTracks.mockResolvedValue([]);
     await expect(syncLibrary(server())).resolves.toBeDefined();
+  });
+});
+
+
+describe("syncLibrary album progress reporting", () => {
+  function libraryOf(n: number): NavidromeAlbum[] {
+    return Array.from({ length: n }, (_, i) => album(`al-${i}`, { songCount: 1 }));
+  }
+
+  /** Every tick one run emits, in order. */
+  async function ticksFor(albums: NavidromeAlbum[]): Promise<SyncProgress[]> {
+    mAllAlbums.mockResolvedValue(albums);
+    const ticks: SyncProgress[] = [];
+    await syncLibrary(server(), (p) => ticks.push(p));
+    return ticks;
+  }
+
+  it("finishes on the total rather than the last multiple of the notify interval", async () => {
+    mAlbumTracks.mockResolvedValue([]);
+    const ticks = await ticksFor(libraryOf(3));
+    expect(ticks[ticks.length - 1]).toEqual({ done: 3, total: 3 });
+  });
+
+  it("leaves the bar short of the total when the album pass gives up early", async () => {
+    mAlbumTracks.mockRejectedValue(new Error("timeout"));
+    const ticks = await ticksFor(libraryOf(6));
+    // Five attempts then the consecutive-failure break: a bar stuck at 5/6 is the
+    // signal `albumTracksIncomplete` carries, so it must not be rounded up to 6.
+    expect(ticks[ticks.length - 1]).toEqual({ done: 5, total: 6 });
+  });
+
+  it("says the pass has started when the album rows are unchanged and only tracks are missing", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server());
+    await db().execute("DELETE FROM tracks WHERE id = ?", [`${SRV}:t2`]);
+
+    mAlbumTracks.mockResolvedValue([track("t1", "al-1"), track("t2", "al-1")]);
+    const ticks = await ticksFor([album("al-1", { songCount: 2 })]);
+    expect(ticks[0]).toEqual({ done: 0, total: 1 });
+  });
+
+  it("does not repeat the last interval tick when the album count divides evenly", async () => {
+    mAlbumTracks.mockResolvedValue([]);
+    const ticks = await ticksFor(libraryOf(25));
+    // Start, the first fetch, and the 25th: the final report is the 25th itself.
+    expect(ticks).toEqual([
+      { done: 0, total: 25 },
+      { done: 1, total: 25 },
+      { done: 25, total: 25 },
+    ]);
   });
 });
 
