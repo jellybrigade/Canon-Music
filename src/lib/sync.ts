@@ -644,8 +644,8 @@ export async function syncLibrary(
       "SELECT id, name, comment, track_count, cover_art_url FROM playlists WHERE server_id = ? ORDER BY id",
       [server.id]
     ),
-    db.select<{ playlist_id: string; track_id: string }[]>(
-      `SELECT playlist_id, track_id FROM playlist_tracks
+    db.select<{ playlist_id: string; track_id: string; position: number }[]>(
+      `SELECT playlist_id, track_id, position FROM playlist_tracks
        WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)
        ORDER BY playlist_id, position`,
       [server.id]
@@ -653,10 +653,21 @@ export async function syncLibrary(
   ]);
 
   const existingTrackIdsByPlaylist = new Map<string, string[]>();
+  // Playlists whose stored positions are no longer 0..n-1. The album prune deletes the
+  // playlist_tracks rows of the tracks it drops and leaves the positions around them alone,
+  // and the server drops the same tracks from the playlist, so every gate below that compares
+  // the two sides sees an identical name, count and ordered id list. `position` is the
+  // songIndexToRemove PlaylistDetail sends, so a hole makes the next removal delete the wrong
+  // track server side. Rewriting the playlist is what closes it, so the hole has to reach the
+  // gates that decide whether to rewrite.
+  const holedPlaylists = new Set<string>();
   for (const row of existingPlaylistTracks) {
     const list = existingTrackIdsByPlaylist.get(row.playlist_id);
     if (list) list.push(row.track_id);
     else existingTrackIdsByPlaylist.set(row.playlist_id, [row.track_id]);
+    if (row.position !== (existingTrackIdsByPlaylist.get(row.playlist_id)!.length - 1)) {
+      holedPlaylists.add(row.playlist_id);
+    }
   }
 
   function playlistSignature(
@@ -692,7 +703,8 @@ export async function syncLibrary(
     }))
   );
 
-  const playlistsChanged = !playlistWritesBlocked && fetchedSignature !== existingSignature;
+  const playlistsChanged =
+    !playlistWritesBlocked && (fetchedSignature !== existingSignature || holedPlaylists.size > 0);
   if (playlistsChanged) {
     // Upsert the server-owned columns rather than DELETE-all-then-INSERT. is_smart,
     // rules_json and custom_cover_data are local-only and the server knows nothing
@@ -728,7 +740,7 @@ export async function syncLibrary(
       const sameTracks =
         storedTrackIds.length === fetchedTrackIds.length &&
         fetchedTrackIds.every((id, i) => storedTrackIds[i] === id);
-      if (sameTracks) continue;
+      if (sameTracks && !holedPlaylists.has(plDbId)) continue;
 
       await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [plDbId]);
       const trackRows = fetchedTrackIds.map((trackId, position) => [plDbId, trackId, position]);

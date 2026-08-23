@@ -79,6 +79,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "\.catch(" src/hooks --include='*.ts*' | grep -v '\.test\.' | grep -iE "retry|current = false|current = null"
   ```
+- **A partial delete out of a positionally-ordered table must repair the ordering, and a change detector comparing membership cannot see the damage.** `pruneAlbums`/`deleteTracksByIds` dropped the `playlist_tracks` rows of every pruned track and left the positions around them, so a playlist went 0, 2. The server dropped the same tracks, so its ordered id list matched the stored one and both playlist gates (the server-wide signature and the per-playlist `sameTracks`) said nothing moved. `position` is the `songIndexToRemove` `PlaylistDetail` sends, so the next removal deleted the wrong track server side - the same invariant `library_write.rs::remove_playlist_track` compacts for. A `holedPlaylists` set now feeds both gates. Any delete not scoped to a whole ordered group owes the group a renumber, and any "did it change" test over that group must compare positions, not just membership.
+  ```
+  grep -rn "playlist_tracks" src --include='*.ts*' | grep -v '\.test\.' | grep -v "playlist_id = ?\|playlist_id IN\|INSERT"
+  ```
 - **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
 - **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
 - **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.
