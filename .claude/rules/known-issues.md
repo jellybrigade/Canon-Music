@@ -100,6 +100,10 @@ Fixed unless marked OPEN.
   grep -rn "LIKE ?" src --include='*.ts*' | grep -v '\.test\.' | grep -v ESCAPE
   ```
 - **A secret written before its owning row outlives the row.** Insert rolls back the keychain write; removal deletes the secret first and aborts loudly. `keychain.get` *rejects* on a missing entry, so callers null-checking the resolved value hold dead code, and that query wants `retry: false`.
+- **A cleanup step that treats "already gone" as a failure makes the mess it was cleaning permanent.** Removing a server deletes the keychain entry before the `servers` row (right ordering, see below) and aborts the whole removal if that step rejects - and `delete_credential` surfaced keyring's `NoEntry`. A server whose secret had been lost (keyring reset, a rolled-back insert, a profile copied between machines) could then never be removed, and its rows and library stayed forever. `ignore_missing_entry` in `lib.rs` now folds `NoEntry` into `Ok`. Ask of every abort-on-failure cleanup: is one of those failures just the desired end state?
+  ```
+  grep -rn "keychain\.delete\|keychain\.get" src --include='*.ts*' | grep -v '\.test\.' | grep -v "catch"
+  ```
 - **A "the thing just finished" test built only from state that restore also produces fires at startup.** `useRadio` needs `hasPlayedRef` as a witness. Side-effect starts belong in handlers, not effects.
   ```
   grep -rn "playFromQueueIndex(\|playTrack(\|playQueue(\|\.resume()" src/hooks src/App.tsx | grep -v "\.test\."
