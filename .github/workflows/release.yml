@@ -87,8 +87,15 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # better-sqlite3 is a test-only devDependency, and its node-gyp build is the
+      # only thing in this install that needs a C++ toolchain. Skipping every install
+      # script keeps a test fixture from failing the release; esbuild is the one
+      # script the frontend build actually depends on, so it is run back explicitly.
       - name: Install frontend dependencies
-        run: pnpm install
+        run: pnpm install --ignore-scripts
+
+      - name: Build esbuild's platform binary
+        run: pnpm rebuild esbuild
 
       - uses: tauri-apps/tauri-action@v0
         env:

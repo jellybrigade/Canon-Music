@@ -13,6 +13,18 @@ Fixed unless marked OPEN.
 - **Unbounded thread-per-request -> SIGKILL.** Cover proxy: permit acquired before spawn, `spawn_blocking`, cap 16. Tell: `ps -eLf | grep canon | wc -l` climbing.
 - **Opaque "Load failed" after ~25s is systemd-resolved, not Canon.** Check `resolvectl status` and `journalctl -u systemd-resolved` before reading network code. Hardening shipped anyway: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.
 
+## Build / release pipeline
+
+- **A devDependency the release has no use for still gets built by the release's install, and its toolchain is the one that breaks.** `better-sqlite3` exists only for `src/test/sqlite.ts`'s `FakeDatabase`, but `release.yml`'s bare `pnpm install` ran its `node-gyp rebuild` on every runner. When `windows-latest` moved to Visual Studio 18, node-gyp 10.3.1 (bundled inside pnpm 9.15.9) reported `unknown version "undefined" found at "C:\Program Files\Microsoft Visual Studio\18\Enterprise"` and failed the whole job before `tauri-action` ever started; `fail-fast: false` let Linux and macOS publish, so v0.48.0 and v0.48.1 shipped with no Windows asset and a green-looking release page. The install is now `--ignore-scripts` plus an explicit `pnpm rebuild esbuild`, the one script the frontend build needs. Ask of any release install: which of these packages does the shipped artifact contain, and why is the build compiling the rest? Cross-check the allowlist against what production actually imports:
+  ```
+  node -p "require('./package.json').pnpm.onlyBuiltDependencies.join(' ')"
+  grep -rn "better-sqlite3" src --include='*.ts*' | grep -v '/test/\|\.test\.'
+  ```
+- **A green release page is not a complete release.** `fail-fast: false` across a platform matrix means one dead platform is silent. After `/release`, count the assets, not the run's colour.
+  ```
+  gh release view "v$(node -p "require('./src-tauri/tauri.conf.json').version")" --json assets --jq '.assets[].name'
+  ```
+
 ## Async / lifecycle
 
 - **A temp file named after a caller id is single-writer only if TS makes it so.** `waveformInFlight: Set<trackId>` in `player.ts`. Also: a command that `Err`s without emitting strands one-shot `listen()`s.
