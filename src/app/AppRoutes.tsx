@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useMemo } from "react";
 import { Routes, Route, Navigate, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -15,6 +15,9 @@ import type { PlaylistRow, usePlaylists } from "../hooks/usePlaylists";
 import type { useLibrarySync } from "../hooks/useLibrarySync";
 import type { useGenres } from "../hooks/useGenres";
 import type { useAllTracks } from "../hooks/useAllTracks";
+import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import type { SearchResults as SearchResultsData } from "../hooks/useSearch";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { RadioMode, CurrentTrack } from "../store/player";
@@ -26,7 +29,6 @@ const AlbumDetail = lazy(() => import("../components/AlbumDetail").then((m) => (
 const ArtistDetail = lazy(() => import("../components/ArtistDetail").then((m) => ({ default: m.ArtistDetail })));
 const PlaylistDetail = lazy(() => import("../components/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
 const PlaylistList = lazy(() => import("../components/PlaylistList").then((m) => ({ default: m.PlaylistList })));
-const SearchResults = lazy(() => import("../components/SearchResults").then((m) => ({ default: m.SearchResults })));
 const SettingsView = lazy(() => import("../components/SettingsView").then((m) => ({ default: m.SettingsView })));
 const TagsView = lazy(() => import("../components/TagsView").then((m) => ({ default: m.TagsView })));
 const UnidentifiedView = lazy(() => import("../components/UnidentifiedView").then((m) => ({ default: m.UnidentifiedView })));
@@ -57,13 +59,19 @@ export interface AppViewProps {
   server: Server | undefined;
   serverWithCred: ServerWithCredential | null;
   albums: AlbumRow[] | undefined;
+  albumsLoading: boolean;
+  albumsError: string | null;
   visibleAlbums: AlbumRow[];
   artists: ArtistRow[] | undefined;
+  artistsLoading: boolean;
+  artistsError: string | null;
   allTracks: ReturnType<typeof useAllTracks>["data"];
   allTracksLoading: boolean;
+  allTracksError: string | null;
   genres: ReturnType<typeof useGenres>["data"];
   playlists: PlaylistRow[] | undefined;
   searchResults: SearchResultsData | undefined;
+  searchError: boolean;
 
   // Library filters
   canonicalIdFilters: string[];
@@ -87,9 +95,11 @@ export interface AppViewProps {
   // Sync status
   syncStatus: SyncApi["syncStatus"];
   syncError: SyncApi["syncError"];
+  syncProgress: SyncApi["syncProgress"];
   lastSyncedAt: SyncApi["lastSyncedAt"];
   runSync: SyncApi["runSync"];
   credError: Error | null;
+  credPending: boolean;
 
   // Search
   searchOpen: boolean;
@@ -159,8 +169,49 @@ export interface AppViewProps {
   handleSidebarResizeMouseDown: (e: React.MouseEvent) => void;
 }
 
+/**
+ * What a detail route paints while it has no credential yet. All three of them need one before
+ * they can render anything, and `serverWithCred` is null for the whole keychain round-trip as
+ * well as for a read that failed - the same pending-vs-absent collapse the album lookup below
+ * had, one prerequisite earlier. There is no "no server configured" case to express here:
+ * `App` renders the setup wizard when the `servers` table is empty, so the router only mounts
+ * with a server row present. And the credential query is `retry: false`, so a failure is
+ * permanent rather than transient, which is why it gets a message pointing at the fix instead
+ * of sitting on the loading state forever.
+ *
+ * Shared rather than written out three times because the two states have to stay in step; the
+ * per-route copy below drifted for exactly this reason before it was consolidated.
+ */
+function CredentialGate({
+  credError,
+  credPending,
+  queueClass,
+}: {
+  credError: Error | null;
+  credPending: boolean;
+  queueClass: string;
+}) {
+  return (
+    <main className={`library${queueClass}`}>
+      {credError || !credPending ? (
+        <div className="empty-state">
+          <p className="empty-state-title">Canon could not read the saved credential</p>
+          <p className="empty-state-hint">
+            {credError ? credError.message : "The stored credential could not be loaded."}
+          </p>
+          <p className="empty-state-hint">Re-enter your server password in Settings.</p>
+        </div>
+      ) : (
+        <p className="empty-state">Connecting to your server…</p>
+      )}
+    </main>
+  );
+}
+
 function AlbumDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
   onSelectAlbum,
   onSelectArtist,
   onTagFilter,
@@ -168,6 +219,8 @@ function AlbumDetailRoute({
   queueClass,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onTagFilter: (canonicalId: string) => void;
@@ -175,24 +228,45 @@ function AlbumDetailRoute({
   queueClass: string;
 }) {
   const { albumId } = useParams<{ albumId: string }>();
-  const { data: fetchedAlbum } = useQuery<AlbumRow | null>({
+  const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
     queryKey: ["album-by-id", albumId],
     enabled: !!albumId,
     queryFn: async () => {
       const db = await getDb();
       const rows = await db.select<AlbumRow[]>(
         `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums WHERE id = ?`,
-        [decodeURIComponent(albumId!)]
+        // `useParams` has already decoded the segment, so `albumId` is the id `albumPath`
+        // encoded. Decoding again throws on an id holding a literal `%` and silently
+        // rewrites one holding the text `%20` into a space.
+        [albumId!]
       );
       return rows[0] ?? null;
     },
   });
-  const album = fetchedAlbum ?? null;
-  if (!album || !serverWithCred) return null;
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
+  // `data` is undefined while the lookup is in flight as well as when the album is genuinely
+  // absent from the mirror, so the old `fetchedAlbum ?? null` folded both into one bare
+  // `return null` and painted a blank page for each. Same split, and the same copy shape, as
+  // PlaylistDetailRoute below.
+  if (!fetchedAlbum) {
+    return (
+      <main className={`library${queueClass}`}>
+        {albumPending ? (
+          <p className="empty-state">Loading album…</p>
+        ) : (
+          <p className="empty-state">
+            That album is no longer here. It may have been removed from the server.
+          </p>
+        )}
+      </main>
+    );
+  }
   return (
     <main className={`library${queueClass}`}>
       <AlbumDetail
-        album={album}
+        album={fetchedAlbum}
         serverWithCredential={serverWithCred}
         onClose={onClose}
         onSelectAlbum={onSelectAlbum}
@@ -205,25 +279,37 @@ function AlbumDetailRoute({
 
 function ArtistDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
   onSelectAlbum,
   onSelectArtist,
   onClose,
   queueClass,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
   queueClass: string;
 }) {
   const { artistName } = useParams<{ artistName: string }>();
-  const decodedName = artistName ? decodeURIComponent(artistName) : null;
-  const { data: fetchedArtist } = useQuery<ArtistRow | null>({
+  // `useParams` decodes the segment already, so this is the name `artistPath` encoded.
+  // Decoding a second time threw `URIError` on any name holding a literal `%` - in the
+  // render body, so it took the whole tree down, not just this route.
+  const decodedName = artistName ?? null;
+  const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistRow | null>({
     queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
     enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
       const serverId = serverWithCred!.server.id;
+      // Matched case-insensitively because the name in the URL can come from a
+      // Last.fm similar-artist card, whose spelling drifts from the local one
+      // ("Tyler, The Creator" vs "Tyler, the Creator"). `a.name` is selected, so
+      // everything downstream queries with the library's own spelling and finds
+      // the artist's albums and tracks.
       const rows = await db.select<ArtistRow[]>(
         `SELECT a.name, a.album_count,
            (SELECT al.artwork_url FROM albums al
@@ -233,13 +319,21 @@ function ArtistDetailRoute({
            ai.wikidata_image_url
          FROM artists a
          LEFT JOIN artist_identity ai ON ai.artist_name = a.name
-         WHERE a.name = ? AND a.server_id = ?`,
+         WHERE LOWER(TRIM(a.name)) = LOWER(TRIM(?)) AND a.server_id = ?`,
         [decodedName!, serverId]
       );
       return rows[0] ?? null;
     },
   });
-  if (!serverWithCred || !decodedName) return null;
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
+  if (!decodedName) return null;
+  // Held until the lookup settles: `data` is undefined while pending as well as
+  // when the artist is genuinely absent, so rendering the fallback immediately
+  // painted a library artist's hero as "0 albums in library" with no portrait
+  // for the length of the query, then swapped it out.
+  if (artistPending) return <main className={`library${queueClass}`} />;
   // Recommended/similar artists surfaced in an artist view are not in the local
   // `artists` table, so the lookup above misses. Fall back to a minimal row
   // synthesized from the URL name (same shape openArtist(string) builds) so
@@ -270,6 +364,9 @@ function ArtistDetailRoute({
 
 function PlaylistDetailRoute({
   serverWithCred,
+  credError,
+  credPending,
+  playlists,
   onSelectAlbum,
   onSelectArtist,
   onClose,
@@ -281,6 +378,9 @@ function PlaylistDetailRoute({
   updateSmartPlaylistRules,
 }: {
   serverWithCred: ServerWithCredential | null;
+  credError: Error | null;
+  credPending: boolean;
+  playlists: PlaylistRow[] | undefined;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
@@ -293,19 +393,34 @@ function PlaylistDetailRoute({
 }) {
   const { playlistId } = useParams<{ playlistId: string }>();
   const navigate = useNavigate();
-  const { data: playlist } = useQuery<PlaylistRow | null>({
-    queryKey: ["playlist-by-id", playlistId],
-    enabled: !!playlistId,
-    queryFn: async () => {
-      const db = await getDb();
-      const rows = await db.select<PlaylistRow[]>(
-        `SELECT id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json FROM playlists WHERE id = ?`,
-        [decodeURIComponent(playlistId!)]
-      );
-      return rows[0] ?? null;
-    },
-  });
-  if (!playlist || !serverWithCred) return null;
+  // Resolved out of the same list the playlists view renders rather than through a second
+  // query of its own. The previous `["playlist-by-id"]` key was outside `QK` and nothing
+  // invalidated it, while every playlist mutation signals through the playlist session
+  // store instead - so renaming, editing the description, setting a cover or refreshing a
+  // smart playlist from this page left the row this component rendered untouched, and the
+  // edit visibly reverted until the default staleTime lapsed.
+  // Already decoded by `useParams`; see the note in `ArtistDetailRoute`.
+  const decodedId = playlistId ?? null;
+  const playlist = useMemo(
+    () => (decodedId ? playlists?.find((p) => p.id === decodedId) ?? null : null),
+    [playlists, decodedId]
+  );
+  if (!serverWithCred) {
+    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+  }
+  if (!playlist) {
+    return (
+      <main className={`library${queueClass}`}>
+        {playlists === undefined ? (
+          <p className="empty-state">Loading playlist…</p>
+        ) : (
+          <p className="empty-state">
+            That playlist is no longer here. It may have been deleted on the server.
+          </p>
+        )}
+      </main>
+    );
+  }
   return (
     <main className={`library${queueClass}`}>
       <PlaylistDetail
@@ -339,13 +454,17 @@ export function AppRoutes(props: AppViewProps) {
     server,
     serverWithCred,
     albums,
+    albumsLoading,
+    albumsError,
     visibleAlbums,
     artists,
+    artistsLoading,
+    artistsError,
     allTracks,
     allTracksLoading,
+    allTracksError,
     genres,
     playlists,
-    searchResults,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
@@ -363,12 +482,13 @@ export function AppRoutes(props: AppViewProps) {
     setAlbumsPaginated,
     syncStatus,
     syncError,
+    syncProgress,
     runSync,
     credError,
+    credPending,
     searchOpen,
     setSearchOpen,
     searchRaw,
-    searchQuery,
     searchInputRef,
     clearSearch,
     homeSearchRaw,
@@ -402,35 +522,35 @@ export function AppRoutes(props: AppViewProps) {
   } = props;
 
   function renderLibraryContent() {
-    if (!serverWithCred || albums === undefined) {
-      return <p className="empty-state">Loading…</p>;
-    }
-    if (searchQuery && searchResults) {
+    // `albums === undefined` used to render a bare "Loading…" line, which a failed read
+    // also reached (useAlbums left `data` undefined on error) and never left. The grid now
+    // owns all three states, so a failure surfaces with a retry instead of a permanent wait.
+    if (!serverWithCred) {
       return (
-        <SearchResults
-          albums={searchResults.albums}
-          tracks={searchResults.tracks}
-          artists={searchResults.artists}
-          serverWithCredential={serverWithCred}
-          playlists={playlists}
-          onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => { clearSearch(); navigateTo("artists", { artist: { name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null } }); }}
-          onPlayTrack={(id) => { void handlePlayTrack(id); }}
-          onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
-          onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-          onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
-        />
+        <div className="empty-state">
+          <p className="empty-state-title">No server connected</p>
+          <p className="empty-state-hint">Add your Navidrome server in Settings to browse your library.</p>
+        </div>
       );
     }
-    if (searchQuery && !searchResults) {
-      return <p className="empty-state">Searching…</p>;
-    }
+    // No search branch here on purpose: AppShell renders the search overlay in
+    // place of the whole route tree while a search is active, so anything keyed
+    // on searchQuery in this function is unreachable.
     const filtersActive = lovedOnly || canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "";
     const emptyMessage = lovedOnly
-      ? "No loved albums"
+      ? {
+          title: "No loved albums",
+          hint: "Albums you heart show up here. Hover any album's cover and click the heart to add one.",
+        }
       : filtersActive
-        ? "No albums match this filter"
-        : "No albums yet. Syncing…";
+        ? {
+            title: "No albums match this filter",
+            hint: "Widen or clear the genre, year and loved filters in the sidebar to see more.",
+          }
+        : {
+            title: "No albums yet",
+            hint: "Sync your library from Settings and every album on your server fills this grid.",
+          };
     return (
       <AlbumGrid
         albums={visibleAlbums}
@@ -442,6 +562,9 @@ export function AppRoutes(props: AppViewProps) {
         playlists={playlists}
         emptyMessage={emptyMessage}
         sort={sort}
+        isLoading={albumsLoading || albums === undefined}
+        error={albumsError}
+        onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}
       />
     );
   }
@@ -451,6 +574,8 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/album/:albumId" element={
         <AlbumDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
@@ -461,6 +586,8 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/artist/:artistName" element={
         <ArtistDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onClose={goBack}
@@ -470,6 +597,9 @@ export function AppRoutes(props: AppViewProps) {
       <Route path="/playlist/:playlistId" element={
         <PlaylistDetailRoute
           serverWithCred={serverWithCred}
+          credError={credError}
+          credPending={credPending}
+          playlists={playlists}
           onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
           onSelectArtist={openArtist}
           onClose={goBack}
@@ -519,7 +649,11 @@ export function AppRoutes(props: AppViewProps) {
               <CanonLockup height={22} className="library-header-logo" />
               <span className="server-name">{server?.display_name}</span>
               {syncStatus === "syncing" && (
-                <span className="sync-status">Syncing…</span>
+                <span className="sync-status">
+                  {syncProgress && syncProgress.total > 0
+                    ? `Syncing ${syncProgress.done} of ${syncProgress.total} albums…`
+                    : "Syncing…"}
+                </span>
               )}
               {syncStatus === "error" && (
                 <span className="sync-status sync-status--error" title={syncError}>
@@ -567,7 +701,7 @@ export function AppRoutes(props: AppViewProps) {
                 </button>
               )}
               <button
-                className={`loved-filter-btn${albumsPaginated ? " loved-filter-btn--active" : ""}`}
+                className={`header-toggle-btn${albumsPaginated ? " header-toggle-btn--active" : ""}`}
                 onClick={() => void setAlbumsPaginated(!albumsPaginated)}
                 title={albumsPaginated ? "Switch to scroll view" : "Switch to page view"}
               >
@@ -609,9 +743,15 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               onSelect={openArtist}
               onStartRadio={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
+              isLoading={artistsLoading || artists === undefined}
+              error={artistsError}
+              onRetry={() => useArtistBrowseSessionStore.getState().bumpRefresh()}
             />
           ) : (
-            <p className="empty-state">Loading…</p>
+            <div className="empty-state">
+              <p className="empty-state-title">No server connected</p>
+              <p className="empty-state-hint">Add your Navidrome server in Settings to browse artists.</p>
+            </div>
           )}
         </main>
       } />
@@ -648,7 +788,7 @@ export function AppRoutes(props: AppViewProps) {
           </header>
           {serverWithCred ? (
             <PlaylistList
-              playlists={playlists ?? []}
+              playlists={playlists}
               serverWithCredential={serverWithCred}
               onSelect={openPlaylist}
               onCreatePlaylist={createPlaylist}
@@ -670,6 +810,8 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               tracks={allTracks}
               isLoading={allTracksLoading}
+              error={allTracksError}
+              onRetry={() => useAllTracksSessionStore.getState().bumpRefresh()}
               onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
               onSelectArtist={openArtist}
             />

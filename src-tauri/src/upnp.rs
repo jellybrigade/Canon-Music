@@ -225,3 +225,257 @@ fn parse_response(text: &str) -> Option<RawRenderer> {
         server,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── xml_text ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn xml_text_returns_trimmed_content_of_first_matching_tag() {
+        let xml = "<root><friendlyName>  Living Room Speaker \n</friendlyName></root>";
+        assert_eq!(
+            xml_text(xml, "friendlyName"),
+            Some("Living Room Speaker".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_text_reads_past_attributes_on_the_open_tag() {
+        let xml = r#"<friendlyName xml:lang="en">Kitchen</friendlyName>"#;
+        assert_eq!(xml_text(xml, "friendlyName"), Some("Kitchen".to_string()));
+    }
+
+    #[test]
+    fn xml_text_returns_none_when_the_tag_is_absent() {
+        let xml = "<root><otherTag>value</otherTag></root>";
+        assert_eq!(xml_text(xml, "friendlyName"), None);
+    }
+
+    #[test]
+    fn xml_text_returns_none_when_the_tag_is_never_closed() {
+        let xml = "<root><friendlyName>Kitchen</root>";
+        assert_eq!(xml_text(xml, "friendlyName"), None);
+    }
+
+    #[test]
+    fn xml_text_returns_empty_string_for_an_empty_element() {
+        let xml = "<friendlyName></friendlyName>";
+        assert_eq!(xml_text(xml, "friendlyName"), Some(String::new()));
+    }
+
+    #[test]
+    fn xml_text_takes_the_first_occurrence_when_a_tag_repeats() {
+        let xml = "<serviceType>first</serviceType><serviceType>second</serviceType>";
+        assert_eq!(xml_text(xml, "serviceType"), Some("first".to_string()));
+    }
+
+    // ── find_control_url ──────────────────────────────────────────────────────
+
+    fn device_xml(service_type: &str, control_url: &str) -> String {
+        format!(
+            "<root><device><serviceList><service>\
+             <serviceType>{service_type}</serviceType>\
+             <controlURL>{control_url}</controlURL>\
+             </service></serviceList></device></root>"
+        )
+    }
+
+    #[test]
+    fn find_control_url_returns_an_absolute_control_url_unchanged() {
+        let xml = device_xml(
+            "urn:schemas-upnp-org:service:AVTransport:1",
+            "http://10.0.0.5:8080/ctrl/AVT",
+        );
+        assert_eq!(
+            find_control_url(&xml, "AVTransport", "http://10.0.0.5:1400"),
+            Some("http://10.0.0.5:8080/ctrl/AVT".to_string())
+        );
+    }
+
+    #[test]
+    fn find_control_url_joins_a_root_relative_path_to_the_base_without_doubling_the_slash() {
+        let xml = device_xml(
+            "urn:schemas-upnp-org:service:AVTransport:1",
+            "/MediaRenderer/AVTransport/Control",
+        );
+        assert_eq!(
+            find_control_url(&xml, "AVTransport", "http://10.0.0.5:1400"),
+            Some("http://10.0.0.5:1400/MediaRenderer/AVTransport/Control".to_string())
+        );
+    }
+
+    #[test]
+    fn find_control_url_inserts_a_slash_for_a_path_relative_control_url() {
+        let xml = device_xml(
+            "urn:schemas-upnp-org:service:AVTransport:1",
+            "AVTransport/Control",
+        );
+        assert_eq!(
+            find_control_url(&xml, "AVTransport", "http://10.0.0.5:1400"),
+            Some("http://10.0.0.5:1400/AVTransport/Control".to_string())
+        );
+    }
+
+    #[test]
+    fn find_control_url_returns_none_when_no_service_matches_the_requested_type() {
+        let xml = device_xml(
+            "urn:schemas-upnp-org:service:ConnectionManager:1",
+            "/cm/control",
+        );
+        assert_eq!(find_control_url(&xml, "AVTransport", "http://host"), None);
+    }
+
+    #[test]
+    fn find_control_url_returns_none_when_the_document_has_no_services_at_all() {
+        assert_eq!(
+            find_control_url("<root><device/></root>", "AVTransport", "http://host"),
+            None
+        );
+    }
+
+    #[test]
+    fn find_control_url_skips_non_matching_services_to_reach_a_later_match() {
+        let xml = "<root><serviceList>\
+             <service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>\
+             <controlURL>/cm</controlURL></service>\
+             <service><serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>\
+             <controlURL>/rc</controlURL></service>\
+             <service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>\
+             <controlURL>/avt</controlURL></service>\
+             </serviceList></root>";
+        assert_eq!(
+            find_control_url(xml, "AVTransport", "http://host"),
+            Some("http://host/avt".to_string())
+        );
+        assert_eq!(
+            find_control_url(xml, "RenderingControl", "http://host"),
+            Some("http://host/rc".to_string())
+        );
+    }
+
+    #[test]
+    fn find_control_url_returns_none_when_the_matching_service_has_no_control_url() {
+        let xml = "<root><service>\
+             <serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>\
+             </service></root>";
+        assert_eq!(find_control_url(xml, "AVTransport", "http://host"), None);
+    }
+
+    // ── resolve_base ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn resolve_base_prefers_url_base_and_strips_its_trailing_slash() {
+        let xml = "<root><URLBase>http://10.0.0.5:1400/</URLBase></root>";
+        assert_eq!(
+            resolve_base("http://10.0.0.9:2869/desc.xml", xml),
+            "http://10.0.0.5:1400"
+        );
+    }
+
+    #[test]
+    fn resolve_base_falls_back_to_scheme_and_authority_of_the_location() {
+        let xml = "<root><device><friendlyName>X</friendlyName></device></root>";
+        assert_eq!(
+            resolve_base("http://10.0.0.5:1400/xml/device_description.xml", xml),
+            "http://10.0.0.5:1400"
+        );
+    }
+
+    #[test]
+    fn resolve_base_handles_a_location_with_no_path_component() {
+        assert_eq!(
+            resolve_base("http://10.0.0.5:1400", "<root/>"),
+            "http://10.0.0.5:1400"
+        );
+    }
+
+    #[test]
+    fn resolve_base_returns_a_location_without_a_scheme_verbatim() {
+        assert_eq!(
+            resolve_base("10.0.0.5:1400/desc.xml", "<root/>"),
+            "10.0.0.5:1400/desc.xml"
+        );
+    }
+
+    #[test]
+    fn resolve_base_keeps_a_url_base_that_has_no_trailing_slash() {
+        let xml = "<URLBase>https://renderer.local:9000/base</URLBase>";
+        assert_eq!(
+            resolve_base("http://other/desc.xml", xml),
+            "https://renderer.local:9000/base"
+        );
+    }
+
+    // ── parse_response ────────────────────────────────────────────────────────
+
+    const OK_RESPONSE: &str = "HTTP/1.1 200 OK\r\n\
+         CACHE-CONTROL: max-age=1800\r\n\
+         LOCATION: http://10.0.0.5:1400/xml/device_description.xml\r\n\
+         SERVER: Linux UPnP/1.0 Sonos/70.1\r\n\
+         USN: uuid:RINCON_ABC::urn:schemas-upnp-org:device:MediaRenderer:1\r\n\
+         \r\n";
+
+    #[test]
+    fn parse_response_extracts_location_usn_and_server_from_a_200_advertisement() {
+        let r = parse_response(OK_RESPONSE).expect("well-formed 200 response should parse");
+        assert_eq!(
+            r.location,
+            "http://10.0.0.5:1400/xml/device_description.xml"
+        );
+        assert_eq!(
+            r.usn,
+            "uuid:RINCON_ABC::urn:schemas-upnp-org:device:MediaRenderer:1"
+        );
+        assert_eq!(r.server, "Linux UPnP/1.0 Sonos/70.1");
+    }
+
+    #[test]
+    fn parse_response_matches_header_names_case_insensitively() {
+        let text =
+            "HTTP/1.1 200 OK\r\nlocation: http://h/d.xml\r\nUsn: uuid:x\r\nsErVeR: box\r\n\r\n";
+        let r = parse_response(text).expect("lowercase headers should still parse");
+        assert_eq!(r.location, "http://h/d.xml");
+        assert_eq!(r.usn, "uuid:x");
+        assert_eq!(r.server, "box");
+    }
+
+    #[test]
+    fn parse_response_rejects_a_status_line_that_is_not_200() {
+        let text = "HTTP/1.1 404 Not Found\r\nLOCATION: http://h/d.xml\r\n\r\n";
+        assert!(parse_response(text).is_none());
+    }
+
+    #[test]
+    fn parse_response_rejects_a_notify_advertisement_with_no_status_code() {
+        let text = "NOTIFY * HTTP/1.1\r\nLOCATION: http://h/d.xml\r\nNTS: ssdp:alive\r\n\r\n";
+        assert!(parse_response(text).is_none());
+    }
+
+    #[test]
+    fn parse_response_rejects_a_200_response_with_no_location_header() {
+        let text = "HTTP/1.1 200 OK\r\nUSN: uuid:x\r\nSERVER: box\r\n\r\n";
+        assert!(parse_response(text).is_none());
+    }
+
+    #[test]
+    fn parse_response_rejects_empty_input() {
+        assert!(parse_response("").is_none());
+    }
+
+    #[test]
+    fn parse_response_falls_back_to_location_as_the_dedup_key_when_usn_is_missing() {
+        let text = "HTTP/1.1 200 OK\r\nLOCATION: http://h/d.xml\r\n\r\n";
+        let r = parse_response(text).expect("location alone is enough to parse");
+        assert_eq!(r.usn, "http://h/d.xml");
+        assert_eq!(r.server, "");
+    }
+
+    #[test]
+    fn parse_response_ignores_garbage_lines_that_carry_no_colon() {
+        let text = "HTTP/1.1 200 OK\r\nEXT\r\nLOCATION: http://h/d.xml\r\n\r\n";
+        let r = parse_response(text).expect("a valueless EXT line must not abort parsing");
+        assert_eq!(r.location, "http://h/d.xml");
+    }
+}

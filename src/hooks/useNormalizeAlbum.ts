@@ -16,8 +16,9 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   const decrementEnrichmentPending = useTagsStore((s) => s.decrementEnrichmentPending);
   // undefined = not yet seen (first render); null/string = seen value (genres + tags concatenated for change detection)
   const prevMbGenresJsonRef = useRef<string | null | undefined>(undefined);
-  // Guard: only decrement the enrichment counter once per album mount, regardless of re-runs
-  const decrementedRef = useRef(false);
+  // Albums this mount has already decremented for. A set, not the latest id: `AlbumDetail`
+  // has no `key`, so navigating A -> B -> A returns to an id that was already counted.
+  const decrementedRef = useRef<Set<string>>(new Set());
 
   const query = useQuery({
     queryKey: QK.normalizedTags(albumId),
@@ -66,8 +67,8 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
     }).then(() => {
       void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(albumId) });
-      if (!decrementedRef.current) {
-        decrementedRef.current = true;
+      if (!decrementedRef.current.has(albumId)) {
+        decrementedRef.current.add(albumId);
         decrementEnrichmentPending();
       }
     });

@@ -13,10 +13,10 @@ export interface RadioCandidate {
   score: number;
 }
 
-const MOOD_WEIGHT = 0.4;
-const CANDIDATE_LIMIT = 200;
+export const MOOD_WEIGHT = 0.4;
+export const CANDIDATE_LIMIT = 200;
 
-function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
+export function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
   const s = Math.max(0, Math.min(1, scale));
   return {
     tagW:      0.60 - 0.40 * s,
@@ -70,7 +70,7 @@ function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
   };
 }
 
-function buildAncestorWeights(
+export function buildAncestorWeights(
   nodeId: string,
   byId: Map<string, { id: string; parents: string[] }>,
   maxDepth = 4
@@ -119,8 +119,8 @@ async function getCuratedCandidates(
       `SELECT ${TRACK_PROJECTION}
        FROM tracks t JOIN albums a ON t.album_id = a.id
        WHERE t.server_id = ? AND t.id != ?
-       ORDER BY RANDOM() LIMIT 20`,
-      [seed.serverId, seedTrackId]
+       ORDER BY RANDOM() LIMIT ?`,
+      [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
     );
     return fallback.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 0.1));
   }

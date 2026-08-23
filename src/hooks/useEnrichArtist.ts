@@ -297,7 +297,9 @@ export function useEnrichArtist(
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ranRef = useRef(false);
+  // Holds the artist the claim was stamped for: `AlbumDetail` passes `album.artist` and is
+  // rendered without a `key`, so an album swap changes the artist inside one mount.
+  const ranRef = useRef<string | null>(null);
 
   const query = useQuery({
     queryKey: QK.artistEnrichment(artistName),
@@ -320,19 +322,21 @@ export function useEnrichArtist(
   useEffect(() => {
     if (!enabled || query.isLoading || !artistName) return;
     if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
-    if (ranRef.current) return;
-    ranRef.current = true;
+    if (ranRef.current === artistName) return;
+    // Check inFlight before locking ranRef so a failed in-progress run doesn't
+    // permanently prevent this mount from retrying.
+    if (inFlight.has(artistName)) return;
+    ranRef.current = artistName;
 
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
-    if (inFlight.has(artistName)) return;
     const promise = (async () => {
       const slot = acquireEnrichSlot();
       if (!slot) {
         // Queue already saturated: skip for now, isEnrichmentStale will retry next visit.
-        ranRef.current = false;
+        if (ranRef.current === artistName) ranRef.current = null;
         return;
       }
       await slot;
@@ -343,7 +347,9 @@ export function useEnrichArtist(
         // so a fresh portrait doesn't show up there until that list is invalidated too.
         useArtistBrowseSessionStore.getState().bumpRefresh();
       } catch {
-        // silent
+        // Nothing here moves a dep, so the claim has to be released or this mount
+        // never retries a transient Last.fm failure.
+        if (ranRef.current === artistName) ranRef.current = null;
       } finally {
         releaseEnrichSlot();
       }
@@ -355,7 +361,7 @@ export function useEnrichArtist(
     if (isRefreshing || !artistName) return;
     setIsRefreshing(true);
     setError(null);
-    ranRef.current = false;
+    ranRef.current = null;
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);

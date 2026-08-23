@@ -4,8 +4,8 @@ export const QK = {
 
   albums: (sort?: string, canonicalIds?: unknown) => ["albums", sort, canonicalIds] as const,
   albumsListeningStats: () => ["albums", "listening-stats"] as const,
-  albumsFinishThe: () => ["albums", "finish-the-album"] as const,
-  albumsAlmostDone: () => ["albums", "almost-done"] as const,
+  /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
+  albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
   // Partial key for broad invalidation of all album queries
   albumsAll: () => ["albums"] as const,
 
@@ -15,7 +15,7 @@ export const QK = {
 
   genreDisplayMappings: () => ["genre-display-mappings"] as const,
 
-  search: (query: string) => ["search", query] as const,
+  search: (serverId: string, query: string) => ["search", serverId, query] as const,
 
   tagIssues: () => ["tag_issues"] as const,
   tagVocab: () => ["tag-vocab"] as const,
@@ -35,6 +35,9 @@ export const QK = {
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
   artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
+  // Deliberately not artistTopTracks: this is a single-row probe, and writing a
+  // one-element result under the full list's key would starve the artist page.
+  artistSeedTrack: (artistName: string) => ["artist-seed-track", artistName] as const,
   artistAppearsOn: (artistName: string) => ["artist-appears-on", artistName] as const,
   artistGenres: (artistName: string) => ["artist-genres", artistName] as const,
   lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
@@ -92,7 +95,7 @@ export const QK = {
   settingsMbMinFolksonomy: () => ["settings", "musicbrainz.min_folksonomy_count"] as const,
   settingsFanartApiKey: () => ["settings", "fanart.api_key"] as const,
   settingsAll: () => ["settings"] as const,
-  scrobbleQueueCount: () => ["scrobble_queue", "count"] as const,
+  scrobbleQueueCount: (serverId?: string) => ["scrobble_queue", "count", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,

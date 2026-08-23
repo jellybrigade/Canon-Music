@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Heart, X } from "lucide-react";
 import type { GenreRow } from "../hooks/useGenres";
 import "./FilterSidebar.css";
@@ -43,6 +43,10 @@ export function FilterSidebar({
 }: Props) {
   const filtersActive = hasActiveFilters(canonicalIdFilters, yearFromInput, yearToInput, lovedOnly);
   const [genreSearch, setGenreSearch] = useState("");
+  const matchingGenres = useMemo(() => {
+    const needle = genreSearch.trim().toLowerCase();
+    return needle ? genres.filter((g) => g.name.toLowerCase().includes(needle)) : genres;
+  }, [genres, genreSearch]);
 
   function clearAll() {
     clearGenreFilters();
@@ -133,9 +137,12 @@ export function FilterSidebar({
                 onChange={(e) => setGenreSearch(e.target.value)}
               />
               <div className="filter-sidebar-genre-list">
-                {genres
-                  .filter((g) => g.name.toLowerCase().includes(genreSearch.toLowerCase()))
-                  .map((g) => (
+                {matchingGenres.length === 0 ? (
+                  <p className="filter-sidebar-genre-empty">
+                    No genre matches "{genreSearch}".
+                  </p>
+                ) : (
+                  matchingGenres.map((g) => (
                     <button
                       key={g.canonical_id}
                       className={`filter-sidebar-genre-item${canonicalIdFilters.includes(g.canonical_id) ? " filter-sidebar-genre-item--active" : ""}`}
@@ -144,7 +151,8 @@ export function FilterSidebar({
                       <span className="filter-sidebar-genre-name">{g.name}</span>
                       <span className="filter-sidebar-genre-count">{g.album_count}</span>
                     </button>
-                  ))}
+                  ))
+                )}
               </div>
             </div>
           )}

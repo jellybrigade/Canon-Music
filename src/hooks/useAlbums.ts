@@ -27,24 +27,28 @@ export function useAlbums(
   // data paints the previous rows immediately - no loading flash, no re-invoke.
   const [data, setData] = useState<AlbumRow[] | undefined>(() => {
     const s = useAlbumBrowseSessionStore.getState();
-    return s.rows && s.cachedTick === s.refreshTick && s.cachedKey === cacheKey
-      ? (s.rows as AlbumRow[])
-      : undefined;
+    return s.getRows(cacheKey, s.refreshTick) as AlbumRow[] | undefined;
   });
   const [isLoading, setIsLoading] = useState(() => data === undefined);
+  // A failed read leaves `data` undefined, which is indistinguishable from an empty
+  // library. Callers need the difference to avoid rendering "no albums" - or a "Loading…"
+  // line that never resolves - over a failure. Mirrors useAllTracks.ts.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
-    const s = useAlbumBrowseSessionStore.getState();
-    if (s.rows && s.cachedTick === refreshTick && s.cachedKey === cacheKey) {
+    const cached = useAlbumBrowseSessionStore.getState().getRows(cacheKey, refreshTick);
+    if (cached) {
       // Cache hit for this exact (sort, ids, tick) - use it, skip the query.
-      setData(s.rows as AlbumRow[]);
+      setData(cached as AlbumRow[]);
       setIsLoading(false);
+      setError(null);
       return;
     }
     let cancelled = false;
     async function load() {
       setIsLoading(true);
+      setError(null);
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
         // engines share canon.db and this read path has no schema awareness of its own.
@@ -57,7 +61,10 @@ export function useAlbums(
         }
       } catch (err) {
         console.error("useAlbums: failed to load albums", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setIsLoading(false);
+        }
       }
     }
     void load();
@@ -67,5 +74,5 @@ export function useAlbums(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, canonicalIdsKey, refreshTick, enabled]);
 
-  return { data, isLoading };
+  return { data, isLoading, error };
 }

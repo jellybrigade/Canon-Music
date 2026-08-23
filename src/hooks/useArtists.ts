@@ -22,6 +22,10 @@ export function useArtists(enabled: boolean = true) {
     return s.rows && s.cachedTick === s.refreshTick ? (s.rows as ArtistRow[]) : undefined;
   });
   const [isLoading, setIsLoading] = useState(() => data === undefined);
+  // A failed read leaves `data` undefined, which is indistinguishable from an empty
+  // library. Callers need the difference to avoid rendering "no artists, sync first" over
+  // a failure the user cannot fix by syncing. Mirrors useAllTracks.ts.
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -29,11 +33,13 @@ export function useArtists(enabled: boolean = true) {
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as ArtistRow[]);
       setIsLoading(false);
+      setError(null);
       return;
     }
     let cancelled = false;
     async function load() {
       setIsLoading(true);
+      setError(null);
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
         // engines share canon.db and this read path has no schema awareness of its own.
@@ -46,7 +52,10 @@ export function useArtists(enabled: boolean = true) {
         }
       } catch (err) {
         console.error("useArtists: failed to load artists", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : String(err));
+          setIsLoading(false);
+        }
       }
     }
     void load();
@@ -55,5 +64,5 @@ export function useArtists(enabled: boolean = true) {
     };
   }, [refreshTick, enabled]);
 
-  return { data, isLoading };
+  return { data, isLoading, error };
 }

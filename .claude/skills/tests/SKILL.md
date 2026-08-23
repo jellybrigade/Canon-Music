@@ -1,0 +1,138 @@
+---
+name: tests
+description: Pick exactly one manageable scope of unchecked work from instructions/tests.md, understand what it actually needs to test (including edge cases the checklist wording doesn't spell out), write it test-first per CLAUDE.md's TDD rule, and tick it off. Run repeatedly to work through the baseline. Use when user says "tests", "next test", "write tests", "cover the next item", or invokes /tests.
+---
+
+You are invoked in plan mode for Phase 2 (scoping) only - Phase 1 picking happens first, inline. Phase 3 (understanding) is delegated to a subagent. Work the phases in order.
+
+**Path note:** `instructions/tests.md` lives at repo root (`/home/mschachner/Projects/Canon/instructions/tests.md`), not inside this skill's directory.
+
+**One scope per invocation.** Not one function, not the whole section. Run `/tests` again for the next scope.
+
+## Mix: don't forget acceptance tests
+
+Two kinds of test live in this repo and the skill owes both:
+
+- **Developer TDD (DTDD)** - unit-level, test-first against one function/action/hook. Pure fns, store actions, DB paths, Rust fns, waste assertions. This is sections 1, 2, 3, 4, 4.6, 6 and most of 5.
+- **Acceptance TDD (ATDD)** - outside-in, one test per user-visible behavior, mounting `App`/`AppShell` and driving it the way a user does. No mocking of anything inside the app; only the boundary (`invoke`/`fetch`/DB). This is section 4.5, and it is the *only* level that can see a seam.
+
+**This section is a reminder, not a gate.** Left to itself this skill writes unit tests exclusively - that is what it did for its whole first run of invocations, ending at zero acceptance files - because unit scopes are what `instructions/tests.md` is mostly made of and they are easier to size. The point of the ratio below is to make that drift visible each pass, not to hand out a veto.
+
+**Rough target: around 1 in 5 test files acceptance-level.** Files, not assertions - an acceptance test is one broad path and a unit file is thirty narrow ones, so counting assertions would let the target be satisfied on paper by a suite with no acceptance tests at all. Measure before picking a scope:
+
+```bash
+find src -name '*.test.*' | wc -l                       # total test files
+ls src/app/*.test.tsx 2>/dev/null | wc -l               # acceptance files
+```
+
+Say the ratio out loud in Phase 1. Under ~20%, **prefer an acceptance scope this pass** over whatever "Suggested order of work" names next; the order section governs priority *within* each kind, not the balance between them. Prefer, not must - a genuinely urgent unit scope (a regression test owed for a bug that just shipped) still wins, and taking it is a judgement call to state, not a rule to break quietly.
+
+**If section 4.5 has no unchecked bullets left, that is not a blocker and not a reason to stop.** It means the section has run out of *written-down* ideas, not that the app shell is fully covered - 4.5 is a list someone maintained by hand, so it is bounded by what its author had seen. Write the next acceptance bullet yourself and then work it. Good sources, in order: an entry in `.claude/rules/known-issues.md` marked still-open or "same class, not converted" (these are pre-verified and app-shell shaped); a `donow.md` finding that is user-visible and crosses components (its `P1 - Overlay / modal / keyboard stacking` and `P1 - Routes` groups are entirely this shape, and are sorted highest-impact first, so the top of either is a defensible pick without further triage); a pairing the section's own preamble implies but never enumerated. Add the new bullet to 4.5 in the same commit so the next pass inherits it.
+
+Why the mix matters: every bug in `.claude/rules/known-issues.md` that shipped past a green suite - the search overlay swallowing routes, gapless playing a track the queue no longer pointed at, radio auto-starting from restored state, `server_id` rebuilt from the selected server - failed at a seam between units that were each individually correct and individually tested. A suite made only of DTDD is structurally blind to that entire class; adding more of it cannot help. The ~80% ceiling matters in the other direction: acceptance tests are slow, coarse, and diagnose badly, so they are a smoke layer over the units, never a replacement for them.
+
+An ATDD scope is sized by user-visible behavior, not by file: "opening the command palette while a track is loading and jumping to an album" is one scope even though it crosses four files. Write the acceptance test first, watch it fail for the right reason (it can genuinely fail here - it is asserting an integration nobody pinned), then drop to DTDD for whatever it exposes underneath.
+
+Distinct from `/pipeline` (reviews an existing feature end-to-end for bugs) and `/code-review` (reviews a diff). This skill's only job is closing gaps in `instructions/tests.md` - it can fix a bug it finds along the way (a bugfix test must reproduce the bug per CLAUDE.md), but it is not hunting for bugs as its primary mode.
+
+**Never end a turn before `instructions/tests.md` is updated and the work is committed.** Before handing control back to the user for any reason:
+
+1. Every item covered this pass is ticked `[x]` in `instructions/tests.md`, and the "Progress log" section has a new entry naming the test file(s) and what they cover.
+2. Anything found along the way (bug, smell, wider cleanup) is written into `instructions/donow.md`, filed in its priority group, with a half-sentence of provenance - see Phase 6.
+3. `pnpm test:run` (and `cargo test` if Rust was touched) is green.
+4. The `/commit` skill has run.
+
+If the user interrupts, redirects, or you're about to ask them something, record and commit what's done first, then respond. Partial progress within a scope still gets ticked/logged/committed for what's actually covered - don't let an interruption erase finished work from the file.
+
+## Phase 1 - Pick a scope
+
+Run the ratio check from "Mix" first. Under ~20% acceptance files, this phase is normally just picking *which* acceptance scope - from section 4.5's unchecked bullets, or, if it has none left, from a new bullet you write per "Mix". Only skip that when a unit scope is genuinely more urgent, and say why.
+
+Otherwise: `instructions/tests.md` is **not** a flat checklist - the "Baseline is complete when these are green" section near the top and the "Suggested order of work" section at the bottom define priority. Respect that order; don't cherry-pick an easy item out of sequence unless the user names one.
+
+```bash
+grep -n '^\- \[ \]' instructions/tests.md | head -20
+```
+
+Read enough surrounding context (not the whole file) to see which unchecked lines form one coherent unit of work. A scope is:
+
+- **Too small:** a single bullet when its sibling bullets under the same `###`/`####` heading are also unchecked and touch the same file/function family. Don't tick one bullet and leave three siblings in the same file for a separate invocation - that's needless churn (re-reading the same source, re-running the same suite) for no isolation benefit.
+- **Too large:** an entire numbered section (e.g. all of "2. Store logic") in one pass, or multiple unrelated files. `player.ts`'s queue invariants and its gapless hand-off logic are two scopes even though they're both under "Section 2" - they don't share edge cases and a scope that big won't get genuinely understood before code gets written.
+**Section 4.5 (composition and the app shell) is not a unit section and does not size like one.** Its scopes are *pairs* - a navigation source and an overlay, a modal and an Escape handler - and its tests mount `AppShell`/`App` rather than a leaf. One table-driven matrix is a whole scope. Do not fold its items into section 5 because they look like component tests; the split exists because a bug shipped twice past a green suite made entirely of unit tests over units that were each individually correct.
+
+- **Right-sized:** everything unchecked under one `###` subsection (typically one source file's listed functions), or one regression-backlog entry with its test. That was roughly one file, ~10-35 tests, one commit, in past sessions - use that as a calibration point, not a hard rule. A file with heavier state (a store, a sync routine) may need a narrower slice - e.g. just the queue/shuffle invariants, not transport intent too.
+
+State clearly at the start which scope this invocation covers and why it's sized that way.
+
+If nothing is unchecked, say so and stop.
+
+## Phase 2 - Confirm scope with the user
+
+Before reading source in depth, state the chosen scope and enter plan mode only long enough to confirm it isn't a surprise (skip this if the user named the exact item already). This is a scope check, not a design review - keep it short.
+
+## Phase 3 - Understand what actually needs testing
+
+This is the phase most likely to get skipped under time pressure - don't skip it. "Understanding" means having a concrete list of edge cases *before* writing the first test, not discovering them by re-reading the plan's bullet text literally.
+
+Delegate this phase to a research subagent (Explore, or general-purpose if the scope spans store/hook state) run in the foreground - you need its findings before Phase 4 can start, so do not proceed to other work while it runs and do not fabricate its findings. One subagent call per scope, covering every file in the confirmed scope at once.
+
+Brief the subagent with, at minimum:
+- the exact scope (file paths + which functions/bullets from `instructions/tests.md`) confirmed in Phase 2
+- instruction to read the real source file(s) in full, not just the signatures the plan bullet names - the plan's wording ("boundary at exactly staleDays") is a hint of depth expected, not the complete list; actual edge cases live in the code: every early return, every regex alternative, every documented comment explaining *why* something is written the way it is
+- instruction to grep `.claude/rules/known-issues.md` for the file/area being covered, and flag any hit explicitly - every entry there is a bug that shipped once, and if this scope touches code near one, the regression test is mandatory (CLAUDE.md), not optional inventory
+- instruction to list edge cases explicitly, covering at minimum:
+  - every branch/early-return in the function, including ones the plan bullet didn't name
+  - degenerate input (empty string/array, null, zero, one item, boundary value exactly)
+  - anything with a comment explaining non-obvious behavior - that comment exists because someone got it wrong once
+  - adjacent logic in the same file that shares state/helpers with what's being tested (e.g. a private alias table, a shared regex, a module-level cache) even if the plan bullet only named the public function
+  - for anything using string matching against external data (Last.fm, MusicBrainz, server responses): casing, punctuation, unicode
+- instruction to flag, per edge case, whether the pure-function surface gives access to test it directly, or whether it needs the real DB / a mocked network call / fake timers - and if so, name which mock/harness from `src/test/` covers it
+- instruction to report explicitly if the scope reads as genuinely two scopes once the code is in view (not obvious from the checklist wording alone), rather than forcing a false unification
+- report format: one entry per source file, each listing its edge cases with a one-line note on test approach/harness, no code written
+
+Read the subagent's report. Do not accept it uncritically:
+- If it's underspecified (edge cases described vaguely, e.g. "handle empty input" with no concrete example), push back and re-ask rather than writing tests off a vague list.
+- Spot-check at least one non-obvious claim against the actual source yourself before trusting the full list - the subagent's summary describes what it found, not a guarantee it read everything.
+- If it flagged a scope split, honor it: note the split, proceed with the smaller half, leave the rest unchecked.
+
+Do not proceed to Phase 4 until you have this list in hand and have sanity-checked it.
+
+## Phase 4 - Write tests (test-first per CLAUDE.md)
+
+For genuinely new coverage of existing, presumed-correct behavior (the common case in this file): write the test asserting the behavior you just enumerated, run it, confirm it passes for the right reason - not "it passed because I mistyped the assertion." Baseline work doesn't require watching it fail first (there's no code change yet to fail against), but it does require reading the assertion back against the source once more before moving on: does this actually pin the behavior, or just restate that a function returns *something*.
+
+If Phase 3 turned up a real bug (not just an untested edge case - actual wrong behavior): stop, tell the user what's broken, and follow CLAUDE.md's bugfix rule - the test must reproduce the bug against the unfixed code first. Don't silently write a test that documents broken behavior as if it were correct.
+
+Follow existing conventions: colocated `<file>.test.ts` next to source, `retry: false` implicitly (no QueryClient default retry to fight), fake timers for anything time-based, no snapshots, test names state behavior not function name.
+
+## Phase 5 - Verify
+
+```bash
+pnpm test:run
+cd src-tauri && cargo test    # only if Rust touched
+pnpm tsc --noEmit             # confirm you didn't regress typecheck; note pre-existing red separately, don't chase it
+```
+
+All green, including the full suite - not just the new file. A new test file passing in isolation while breaking another (shared mock state, module-level cache bleed) is not done.
+
+## Phase 6 - Record (mandatory, never deferred)
+
+- Tick every `- [ ]` covered this pass to `- [x]` in `instructions/tests.md`.
+- Add one row/entry to the "Progress log" section naming the new test file(s) and, in the same terse style as existing entries, exactly what's covered - specific enough that a future session can tell what's *not* covered without re-reading the test file.
+- Bump the top-of-file test count line (`pnpm test:run` = N tests / M files) to the new totals, and append the acceptance ratio to it (`acceptance N/M files = P%`) so the next invocation reads the ratio off the file instead of recomputing it blind.
+- If Phase 3 found a real bug you fixed: add it to `.claude/rules/known-issues.md` per CLAUDE.md, same commit - with a `**Generalizes:**` line and a grep tell, so the class is findable rather than just the instance.
+- If a scope's tests would have to pin currently-broken output to pass (the cross-cutting CSS rule in section 5 is the live example: 37 violations exist today), do **not** write the test and do **not** tick the box. Say so, and record which review.md item has to land first. A test that codifies a bug as expected behavior is worse than no test.
+- If Phase 3 found a real bug you didn't fix (out of scope call): don't tick the box, write a `Follow-ups this pass created` bullet instead, and tell the user explicitly - don't bury a known bug in a passing-looking commit.
+- **Anything found also goes to `instructions/donow.md`, same pass.** A `Follow-ups this pass created` bullet in `tests.md` is a note to the *next test pass*; `donow.md` is the queue that actually gets worked. A finding recorded only in `tests.md` never gets fixed. Write one `##` section per finding, in donow.md's existing style: what it is, where (`file:line`), the fix shape, and - the part that matters - **half a sentence of provenance**: what you were doing when you tripped over it. "Found while covering `getCoverArtUrl`'s ready branch for `/tests`" tells a future session the finding is a side effect of a test pass, not a triaged bug report, so it still needs its own verification. A finding with no provenance line reads as authoritative and gets acted on blind.
+  - This applies to every finding, not only bugs you declined to fix: a bug you *did* fix that suggests a wider cleanup, a missing abstraction, a duplicated literal, an architectural smell. If it's real and out of this scope, it goes in donow.md.
+  - **File it into the right group, never at the end of the file.** `donow.md` is sorted: `# ` headings are priority-ordered groups (`P0 - Data loss and unrecoverable states`, `P0 - Unescaped LIKE ownership prefixes`, `P1 - Sync…`, `P1 - Routes…`, `P1 - Overlay / modal / keyboard stacking`, `P2 -` per area, `P3 - UI polish` / `test infrastructure` / `features`, `P4 - Architecture initiatives`, `Archive`), and `##` items inside a group run highest-impact first. Read the `# ` headings before writing (`grep -n '^# ' instructions/donow.md`), pick the group by *what the finding touches*, and insert at the position its severity earns - not below the last item, not in a new group of one. Appending is how the file became 900 unsorted lines once already.
+  - **Priority is severity, not effort.** P0 = silent data loss, corruption, or an unrecoverable state (a stranded DB, a permanent startup failure). P1 = wrong behavior a user meets on a normal path (sync that never fires, a route that throws, an overlay that eats a route). P2 = wrong or wasteful behavior in one area, latent or narrow. P3 = polish, missing states, keyboard gaps, test-infra debt. A one-line fix for a P0 is still a P0.
+  - **If the finding is a new instance of a group's class, put it in that group even when the file it lives in belongs elsewhere.** The `LIKE`-without-`ESCAPE` group exists because six sites share one fix; a seventh belongs there, not under its own area. Same for the overlay/stacking group. If a finding creates a *third* instance of a shape that has no group yet, make the group and move the earlier two into it - that is the signal the class is real, and CLAUDE.md's "fix the class, not the instance" applies to the queue too.
+  - **When a finding supersedes an existing item, don't leave both live.** Fixed or subsumed items move to the `Archive` group at the bottom (keep the original writeup under a `RESOLVED <date>:` heading - the context is why the fix is trustworthy), and any item the fix made obsolete goes with it. Two live entries for one thing is how a pass ends up re-deriving a decision already made.
+  - Don't stage `instructions/donow.md` - the whole directory is gitignored. Write it, mention it, move on.
+
+## Phase 7 - Commit (mandatory, never deferred)
+
+Invoke the `/commit` skill. Then stop - the next scope is a separate invocation.
+
+Do not stop at "tests pass". If you're about to end a turn and can't point to a `/commit` invocation in it, go back and run Phases 6 and 7.

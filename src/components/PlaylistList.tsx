@@ -6,7 +6,10 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { ContextMenu } from "./ContextMenu";
-import type { SmartFilters } from "../lib/smartPlaylist";
+import { parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
+import { fileToScaledDataUri } from "../lib/imageDataUri";
+import { useScrollMemory } from "../hooks/useScrollMemory";
+import { CardGridSkeleton } from "./Skeleton";
 import "./PlaylistList.css";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
@@ -18,7 +21,10 @@ const ART_MARGIN = 8;    // --space-xs (art margin-bottom)
 const INFO_HEIGHT = 27 + 4 + 24;
 
 interface Props {
-  playlists: PlaylistRow[];
+  // Undefined while the first read is in flight, distinct from a server that genuinely
+  // has no playlists. Collapsing the two showed the "no playlists" empty state, which
+  // tells the user to create one, before the load had a chance to return any.
+  playlists: PlaylistRow[] | undefined;
   serverWithCredential: ServerWithCredential;
   onSelect: (playlist: PlaylistRow) => void;
   onCreatePlaylist: (name: string, swc: ServerWithCredential) => Promise<void>;
@@ -29,7 +35,9 @@ interface Props {
   onSetCustomCover?: (playlistId: string, dataUri: string | null) => Promise<void>;
 }
 
-export function PlaylistList({ playlists, serverWithCredential, onSelect, onCreatePlaylist, onCreateSmartPlaylist, onDelete, onRename, onUpdateSmartRules, onSetCustomCover }: Props) {
+export function PlaylistList({ playlists: playlistsProp, serverWithCredential, onSelect, onCreatePlaylist, onCreateSmartPlaylist, onDelete, onRename, onUpdateSmartRules, onSetCustomCover }: Props) {
+  const isLoading = playlistsProp === undefined;
+  const playlists = useMemo(() => playlistsProp ?? [], [playlistsProp]);
   const { server, credential } = serverWithCredential;
   const [creating, setCreating] = useState(false);
   const [showSmartModal, setShowSmartModal] = useState(false);
@@ -42,6 +50,12 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [editSmartPlaylist, setEditSmartPlaylist] = useState<PlaylistRow | null>(null);
+  // Parsed outside the render body's JSX: an unparseable `rules_json` used to throw from
+  // inside the element tree, which the ErrorBoundary turns into a blank playlists page.
+  const editSmartRules = useMemo(
+    () => parseSmartFilters(editSmartPlaylist?.rules_json ?? null),
+    [editSmartPlaylist]
+  );
   const renameInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetId = useRef<string | null>(null);
@@ -91,6 +105,8 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
     overscan: 3,
     scrollMargin,
   });
+
+  useScrollMemory(containerRef, "playlists", rows.length > 0);
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}-${scrollMargin}`);
   useLayoutEffect(() => {
@@ -146,13 +162,11 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
   function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     const targetId = coverTargetId.current;
-    if (!file || !onSetCustomCover || !targetId) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      void onSetCustomCover(targetId, reader.result as string);
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file || !onSetCustomCover || !targetId) return;
+    fileToScaledDataUri(file)
+      .then((dataUri) => onSetCustomCover(targetId, dataUri))
+      .catch((err) => console.error("Failed to set playlist cover:", err));
   }
 
   useEffect(() => {
@@ -219,8 +233,24 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
           </button>
         </form>
       )}
-      {playlists.length === 0 && !creating && (
-        <p className="empty-state">No playlists. Create one or Rescan.</p>
+      {isLoading && (
+        <CardGridSkeleton
+          count={12}
+          minWidth={CARD_MIN}
+          gap={GRID_GAP}
+          padding={GRID_PAD_X}
+          captioned
+          label="Loading playlists"
+        />
+      )}
+      {!isLoading && playlists.length === 0 && !creating && (
+        <div className="empty-state">
+          <p className="empty-state-title">No playlists yet</p>
+          <p className="empty-state-hint">
+            Create one with New Playlist above. Playlists already on your server appear here after
+            the next library sync.
+          </p>
+        </div>
       )}
       {playlists.length > 0 && (
         <div ref={gridRef} style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
@@ -338,10 +368,10 @@ export function PlaylistList({ playlists, serverWithCredential, onSelect, onCrea
         style={{ display: "none" }}
         onChange={handleCoverPick}
       />
-      {editSmartPlaylist && onUpdateSmartRules && editSmartPlaylist.rules_json && (
+      {editSmartPlaylist && onUpdateSmartRules && editSmartRules && (
         <SmartPlaylistModal
           title="Edit Smart Playlist"
-          initialFilters={JSON.parse(editSmartPlaylist.rules_json) as SmartFilters}
+          initialFilters={editSmartRules}
           onSave={(filters) => onUpdateSmartRules(editSmartPlaylist, filters, serverWithCredential)}
           onClose={() => setEditSmartPlaylist(null)}
         />

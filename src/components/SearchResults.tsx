@@ -152,12 +152,15 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function toAlbumRow(album: SearchAlbum, serverId: string): AlbumRow {
-  return { id: album.id, server_id: serverId, name: album.name, artist: album.artist, year: null, artwork_url: album.artwork_url };
+// server_id comes off the row itself, never off the currently selected server:
+// stamping the selection onto a row produces something internally consistent
+// that streams from the wrong host (see known-issues.md).
+function toAlbumRow(album: SearchAlbum): AlbumRow {
+  return { id: album.id, server_id: album.server_id, name: album.name, artist: album.artist, year: null, artwork_url: album.artwork_url };
 }
 
-function trackAlbumRow(track: SearchTrack, serverId: string): AlbumRow {
-  return { id: track.album_id, server_id: serverId, name: track.album_name ?? "", artist: track.artist, year: null, artwork_url: null };
+function trackAlbumRow(track: SearchTrack): AlbumRow {
+  return { id: track.album_id, server_id: track.server_id, name: track.album_name ?? "", artist: track.artist, year: null, artwork_url: null };
 }
 
 function toArtistRow(artist: SearchArtist): ArtistRow {
@@ -211,7 +214,14 @@ export function SearchResults({
       artworkRef: track.artwork_url,
       album: track.album_name,
       albumId: track.album_id,
-      replayGain: null,
+      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
+        ? {
+            trackGain: track.replay_gain_track_gain,
+            trackPeak: track.replay_gain_track_peak,
+            albumGain: track.replay_gain_album_gain,
+            albumPeak: track.replay_gain_album_peak,
+          }
+        : null,
     };
   }
 
@@ -224,7 +234,10 @@ export function SearchResults({
   if (isEmpty) {
     return (
       <div className="search-empty">
-        No results
+        <p className="search-empty-title">No matches in your library</p>
+        <p className="search-empty-hint">
+          Search looks at track titles, artists, album names and genres. Try fewer words, or sync the server if the music is new.
+        </p>
       </div>
     );
   }
@@ -284,7 +297,7 @@ export function SearchResults({
               <button
                 key={album.id}
                 className="search-album-row"
-                onClick={() => onSelectAlbum(toAlbumRow(album, server.id))}
+                onClick={() => onSelectAlbum(toAlbumRow(album))}
                 onContextMenu={(e) => { e.preventDefault(); setAlbumMenu({ x: e.clientX, y: e.clientY, album }); }}
               >
                 <div className="search-album-thumb">
@@ -362,18 +375,18 @@ export function SearchResults({
 
       {albumMenu && (
         <ContextMenu x={albumMenu.x} y={albumMenu.y} onClose={() => setAlbumMenu(null)}>
-          <button onClick={() => { onSelectAlbum(toAlbumRow(albumMenu.album, server.id)); setAlbumMenu(null); }}>
+          <button onClick={() => { onSelectAlbum(toAlbumRow(albumMenu.album)); setAlbumMenu(null); }}>
             Open album
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album, server.id), mode); setAlbumMenu(null); }}
+            onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode); setAlbumMenu(null); }}
           />
           {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
             <ContextMenuSubmenu label="Add to Playlist">
               {playlists.map((pl) => (
                 <button
                   key={pl.id}
-                  onClick={() => { onAddAlbumToPlaylist(toAlbumRow(albumMenu.album, server.id), pl); setAlbumMenu(null); }}
+                  onClick={() => { onAddAlbumToPlaylist(toAlbumRow(albumMenu.album), pl); setAlbumMenu(null); }}
                 >
                   {pl.name}
                 </button>
@@ -396,9 +409,9 @@ export function SearchResults({
             Add to Queue
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track, server.id), mode); setTrackMenu(null); }}
+            onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode); setTrackMenu(null); }}
           />
-          <button onClick={() => { onSelectAlbum(trackAlbumRow(trackMenu.track, server.id)); setTrackMenu(null); }}>
+          <button onClick={() => { onSelectAlbum(trackAlbumRow(trackMenu.track)); setTrackMenu(null); }}>
             Go to Album
           </button>
           {trackMenu.track.artist && (

@@ -17,6 +17,40 @@ const BLUR_RADIUS = 24;
 const MAX_CACHE_ENTRIES = 200;
 const blurCache = new Map<string, string>();
 
+// Ceiling on HSL lightness, not a flat brightness multiplier. A flat
+// multiplier darkens shadows and highlights by the same ratio, so a
+// saturated bright red just becomes a dimmer bright red. Clamping lightness
+// instead only pulls down pixels above the ceiling, so a bright red becomes
+// an actual dark red (same hue/saturation, lower lightness) while already-dark
+// pixels are untouched.
+const MAX_LIGHTNESS = 0.15;
+
+function clampLightness(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {
+  const { width, height } = canvas;
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    const r = (data[i] ?? 0) / 255;
+    const g = (data[i + 1] ?? 0) / 255;
+    const b = (data[i + 2] ?? 0) / 255;
+
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    if (l <= MAX_LIGHTNESS) continue;
+
+    // Scaling all three channels by the same factor keeps their ratios (and
+    // therefore hue) intact while pulling lightness down to the ceiling.
+    const scale = MAX_LIGHTNESS / l;
+    data[i] = r * scale * 255;
+    data[i + 1] = g * scale * 255;
+    data[i + 2] = b * scale * 255;
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -43,10 +77,11 @@ function renderBlurredDataUrl(img: HTMLImageElement): string | null {
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.filter = "saturate(1.8) brightness(0.45)";
+  ctx.filter = "saturate(1.8)";
   ctx.drawImage(img, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   ctx.filter = "none";
 
+  clampLightness(canvas, ctx);
   StackBlur.canvasRGB(canvas, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT, BLUR_RADIUS);
   return canvas.toDataURL("image/jpeg", 0.7);
 }

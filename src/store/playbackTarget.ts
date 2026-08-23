@@ -4,7 +4,6 @@ import type { DlnaRenderer } from "../lib/dlna";
 import {
   buildDidlMetadata,
   setAvTransportUri,
-  setNextAvTransportUri,
   avPlay,
   avPause,
   avStop,
@@ -13,6 +12,19 @@ import {
   getTransportInfo,
   setVolume as dlnaSetVolume,
 } from "../lib/dlna";
+
+// How often DlnaTarget re-checks the renderer's transport state once the track is expected to
+// have finished, and how often it checks when the track's duration is unknown so there is no
+// expected finish time to aim at.
+const DLNA_TRACK_END_POLL_MS = 2000;
+const DLNA_UNKNOWN_DURATION_POLL_MS = 5000;
+
+// How many consecutive SOAP failures against the renderer are tolerated before the target
+// gives up and reports an error. One failure is not enough to conclude anything: since
+// upnp_soap started returning Err on SOAP faults, a single transient fault (or a renderer
+// briefly busy mid-transition) reaches here, and treating that as "the track ended" or
+// "the device is gone" would skip a track or drop the session for no reason.
+const DLNA_MAX_CONSECUTIVE_FAILURES = 3;
 
 // ── Interface ──────────────────────────────────────────────────────────────
 
@@ -41,15 +53,15 @@ export class LocalTarget implements PlaybackTarget {
   }
 
   pause(fadeMs = 150): void {
-    void invoke("audio_pause", { fadeMs });
+    void invoke("audio_pause", { fadeMs }).catch(() => {});
   }
 
   resume(fadeMs = 150): void {
-    void invoke("audio_resume", { fadeMs });
+    void invoke("audio_resume", { fadeMs }).catch(() => {});
   }
 
   stop(): void {
-    void invoke("audio_stop");
+    void invoke("audio_stop").catch(() => {});
   }
 
   async seek(seconds: number): Promise<void> {
@@ -70,7 +82,7 @@ export class LocalTarget implements PlaybackTarget {
   }
 
   teardown(): void {
-    void invoke("audio_stop");
+    void invoke("audio_stop").catch(() => {});
   }
 }
 
@@ -78,51 +90,83 @@ export class LocalTarget implements PlaybackTarget {
 
 export class DlnaTarget implements PlaybackTarget {
   readonly supportsVolume: boolean;
-  readonly supportsGapless = true;
+  // The renderer, not Canon, owns the gap between tracks, and Canon cannot see the
+  // renderer cross it: its only end signal is a GetTransportInfo poll, which reads
+  // PLAYING straight through a SetNext-driven transition. Handing the next URI over
+  // therefore leaves the UI a whole track behind and plays that track twice. Every
+  // transition goes through load() instead.
+  readonly supportsGapless = false;
 
   private renderer: DlnaRenderer;
   private castMaxBitrate: number;
-  private failedToSetNext = false;
   private positionSeconds = 0;
   private positionUpdatedAt = 0;
   private currentDuration = 0;
   private reconcileTimer: ReturnType<typeof setTimeout> | null = null;
   private trackEndTimer: ReturnType<typeof setTimeout> | null = null;
   private onTrackEnd: (() => void) | null = null;
+  private onError: ((message: string) => void) | null = null;
+  private consecutiveFailures = 0;
   private playing = false;
 
-  constructor(renderer: DlnaRenderer, onTrackEnd: () => void, castMaxBitrate = 320) {
+  constructor(
+    renderer: DlnaRenderer,
+    onTrackEnd: () => void,
+    castMaxBitrate = 320,
+    onError?: (message: string) => void
+  ) {
     this.renderer = renderer;
     this.supportsVolume = renderer.supportsVolume;
     this.onTrackEnd = onTrackEnd;
     this.castMaxBitrate = castMaxBitrate;
+    this.onError = onError ?? null;
   }
 
   private rewriteUrl(url: string): string {
-    if (this.castMaxBitrate <= 0) return url;
     try {
       const u = new URL(url);
-      u.searchParams.set("maxBitRate", String(this.castMaxBitrate));
+      if (this.castMaxBitrate <= 0) {
+        // "Raw (original)" has to actually be raw. The URL arrives carrying whatever
+        // maxBitRate the local player asked for, and leaving it in place would keep the
+        // server transcoding for the renderer too.
+        u.searchParams.delete("maxBitRate");
+        u.searchParams.delete("format");
+      } else {
+        u.searchParams.set("maxBitRate", String(this.castMaxBitrate));
+      }
       return u.toString();
     } catch {
       return url;
     }
   }
 
+  // A renderer call succeeded: whatever went wrong before was transient.
+  private noteSuccess() {
+    this.consecutiveFailures = 0;
+  }
+
+  // Returns true once the failure run is long enough to call the renderer lost.
+  private noteFailure(context: string, e: unknown): boolean {
+    this.consecutiveFailures++;
+    if (this.consecutiveFailures < DLNA_MAX_CONSECUTIVE_FAILURES) return false;
+    this.onError?.(`${context}: ${e instanceof Error ? e.message : String(e)}`);
+    return true;
+  }
+
   async load(url: string, track: CurrentTrack, coverArtUrl: string | null): Promise<void> {
     this.clearTimers();
     const castUrl = this.rewriteUrl(url);
-    const metadata = buildDidlMetadata(track, castUrl, coverArtUrl);
+    const metadata = buildDidlMetadata(track, castUrl, coverArtUrl, this.castMaxBitrate > 0);
     await setAvTransportUri(this.renderer.avTransportControlUrl, castUrl, metadata);
     await avPlay(this.renderer.avTransportControlUrl);
+    this.noteSuccess();
     this.playing = true;
     this.positionSeconds = 0;
     this.positionUpdatedAt = Date.now();
     this.currentDuration = track.duration ?? 0;
     this.scheduleReconcile(2000);
-    if (track.duration) {
-      this.scheduleTrackEndTimer(track.duration);
-    }
+    // Armed even when duration is unknown; scheduleTrackEndTimer falls back to slow polling.
+    this.scheduleTrackEndTimer(this.currentDuration);
   }
 
   pause(): void {
@@ -140,6 +184,10 @@ export class DlnaTarget implements PlaybackTarget {
     this.playing = true;
     void avPlay(this.renderer.avTransportControlUrl).catch(() => {});
     this.scheduleReconcile(2000);
+    // pause() cleared the track-end timer along with the reconcile timer. Without
+    // rearming it here the track never auto-advances after a pause, and there is no
+    // fallback: the natural-end check in the elapsed ticker is skipped for cast targets.
+    this.scheduleTrackEndTimer(this.currentDuration);
   }
 
   stop(): void {
@@ -150,9 +198,16 @@ export class DlnaTarget implements PlaybackTarget {
 
   async seek(seconds: number): Promise<void> {
     await avSeek(this.renderer.avTransportControlUrl, seconds);
+    this.noteSuccess();
     this.positionSeconds = seconds;
     this.positionUpdatedAt = Date.now();
-    if (this.playing) this.scheduleReconcile(3000);
+    if (this.playing) {
+      this.scheduleReconcile(3000);
+      // The armed end-of-track timer was aimed at the pre-seek position. Seeking forward
+      // leaves it firing far too late (silence until the stale delay expires); seeking
+      // backwards leaves it firing while the track still has minutes to run. Re-aim it.
+      this.scheduleTrackEndTimer(this.currentDuration);
+    }
   }
 
   async setVolume(volume: number): Promise<void> {
@@ -167,29 +222,15 @@ export class DlnaTarget implements PlaybackTarget {
     return this.positionSeconds + elapsed;
   }
 
-  async setNext(url: string | null, track?: CurrentTrack, coverArtUrl?: string | null): Promise<void> {
-    if (this.failedToSetNext || !url || !track) return;
-    const castUrl = this.rewriteUrl(url);
-    const metadata = buildDidlMetadata(track, castUrl, coverArtUrl ?? null);
-    try {
-      await setNextAvTransportUri(this.renderer.avTransportControlUrl, castUrl, metadata);
-      // Mark supported so gapless is used for subsequent tracks too.
-      const r = { ...this.renderer };
-      r.supportsSetNext = true;
-      this.renderer = r;
-    } catch {
-      // Renderer doesn't support SetNextAVTransportURI, fall back to load() on track change.
-      this.failedToSetNext = true;
-      const r = { ...this.renderer };
-      r.supportsSetNext = false;
-      this.renderer = r;
-    }
-  }
+  // Deliberately a no-op: see supportsGapless above. The ticker in player.ts skips this
+  // for cast targets, and the method only stays to satisfy the PlaybackTarget interface.
+  async setNext(): Promise<void> {}
 
   teardown(): void {
     this.playing = false;
     this.clearTimers();
     this.onTrackEnd = null;
+    this.onError = null;
     void avStop(this.renderer.avTransportControlUrl).catch(() => {});
   }
 
@@ -215,38 +256,63 @@ export class DlnaTarget implements PlaybackTarget {
           this.positionSeconds = effective;
           this.positionUpdatedAt = Date.now();
         }
-      } catch {
-        // transient SOAP failure, keep interpolating
+        this.noteSuccess();
+      } catch (e) {
+        // A single SOAP failure is transient, keep interpolating. A run of them means the
+        // renderer is gone, and silently interpolating against a dead device would leave
+        // the UI counting up over silence forever.
+        if (this.noteFailure("Renderer stopped responding", e)) {
+          this.playing = false;
+          this.clearTimers();
+          return;
+        }
       }
       if (this.playing) this.scheduleReconcile(5000);
     }, delayMs);
   }
 
+  // Arms a transport-state poll that keeps checking until the renderer reports it is done.
+  // A duration of 0 (track metadata without a length) still gets polled, just from the start
+  // and at a slower interval, because a cast target has no other end-of-track signal: the
+  // elapsed ticker's position-based fallback in player.ts is skipped for cast devices.
   private scheduleTrackEndTimer(durationSeconds: number) {
     if (this.trackEndTimer) clearTimeout(this.trackEndTimer);
-    const remaining = durationSeconds - this.positionSeconds;
-    const delay = Math.max(0, remaining - 1) * 1000;
-    this.trackEndTimer = setTimeout(async () => {
+    const known = durationSeconds > 0;
+    const delay = known
+      ? Math.max(0, durationSeconds - this.positionSeconds - 1) * 1000
+      : DLNA_UNKNOWN_DURATION_POLL_MS;
+    const retryMs = known ? DLNA_TRACK_END_POLL_MS : DLNA_UNKNOWN_DURATION_POLL_MS;
+    const poll = async () => {
+      this.trackEndTimer = null;
       if (!this.playing) return;
       // Confirm via GetTransportInfo that we're actually done.
+      let state: string;
       try {
-        const state = await getTransportInfo(this.renderer.avTransportControlUrl);
-        if (state === "STOPPED" || state === "NO_MEDIA_PRESENT") {
-          this.onTrackEnd?.();
-        } else {
-          // Not done yet, check again in 2s.
-          this.trackEndTimer = setTimeout(async () => {
-            const s2 = await getTransportInfo(this.renderer.avTransportControlUrl).catch(() => "STOPPED");
-            if (s2 === "STOPPED" || s2 === "NO_MEDIA_PRESENT") {
-              this.onTrackEnd?.();
-            }
-          }, 2000);
+        state = await getTransportInfo(this.renderer.avTransportControlUrl);
+        this.noteSuccess();
+      } catch (e) {
+        // Not reaching the renderer once is not evidence the track ended: a SOAP fault or
+        // a renderer busy mid-transition lands here too, and advancing on it skips a track
+        // that is still playing. Only a sustained run means the device is really gone, and
+        // that is an error to show, not a cue to advance into another failing load().
+        if (this.noteFailure("Lost contact with the renderer", e)) {
+          this.playing = false;
+          this.clearTimers();
+          return;
         }
-      } catch {
-        // If we can't reach the renderer, assume track ended.
-        this.onTrackEnd?.();
+        this.trackEndTimer = setTimeout(() => void poll(), retryMs);
+        return;
       }
-    }, delay);
+      if (state === "STOPPED" || state === "NO_MEDIA_PRESENT") {
+        this.onTrackEnd?.();
+        return;
+      }
+      // Still playing. Keep polling: a single retry left the queue stranded on the finished
+      // track whenever the renderer ran even slightly past our duration estimate.
+      if (!this.playing) return;
+      this.trackEndTimer = setTimeout(() => void poll(), retryMs);
+    };
+    this.trackEndTimer = setTimeout(() => void poll(), delay);
   }
 
   private clearTimers() {

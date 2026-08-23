@@ -901,13 +901,22 @@
   z-index: 2;
 }
 
-.album-carousel:hover .album-carousel__arrow {
+/* Keyboard focus reveals the arrows too: they stay tab-focusable regardless, so
+   without this a keyboard user lands on a control they cannot see. */
+.album-carousel:hover .album-carousel__arrow,
+.album-carousel__arrow:focus-visible {
   opacity: 1;
 }
 
-.album-carousel__arrow:hover {
+.album-carousel__arrow:hover:not(:disabled) {
   background: var(--bg-elevated, #141414);
   border-color: var(--text-secondary, #999);
+}
+
+.album-carousel__arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+  cursor: default;
 }
 
 .album-carousel__arrow--prev { left: -16px; }

@@ -6,9 +6,11 @@ import { getCoverArtUrl, getArtistImageUrl } from "../lib/navidrome";
 import { resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
+import { useScrollMemory } from "../hooks/useScrollMemory";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
+import { CardGridSkeleton } from "./Skeleton";
 import type { RadioMode } from "../store/player";
 import { useSetting } from "../hooks/useSetting";
 
@@ -49,9 +51,14 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   onSelect: (artist: ArtistRow) => void;
   onStartRadio?: (artist: ArtistRow, mode: RadioMode) => void;
+  /** True only while there is nothing to show yet - a refresh over existing rows keeps them. */
+  isLoading?: boolean;
+  /** Set when the read failed. Without it a failure renders as an empty library. */
+  error?: string | null;
+  onRetry?: () => void;
 }
 
-export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio }: Props) {
+export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, isLoading = false, error = null, onRetry }: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
@@ -96,12 +103,20 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const rowHeight = Math.round(cardWidth) + ROW_GAP;
   const rowCount = Math.ceil(artists.length / cols);
 
+  // Padding declared to the virtualizer rather than added to each row's `top` by hand, so
+  // the offsets it computes live in the same coordinate space as the rows the grid paints.
+  // See known-issues, "A layout constant the component applies by hand is invisible to the
+  // library that computes offsets from the same coordinate space".
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => containerRef.current,
     estimateSize: () => rowHeight,
     overscan: 3,
+    paddingStart: PADDING,
+    paddingEnd: PADDING,
   });
+
+  useScrollMemory(containerRef, "artists", rowCount > 0);
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}`);
   useLayoutEffect(() => {
@@ -112,14 +127,48 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     }
   }, [cols, rowHeight, virtualizer]);
 
+  // Error before loading: a failed read leaves the caller's data undefined, so `isLoading`
+  // is still true and a skeleton would otherwise pulse forever over the failure. Before
+  // this, both states fell through to the empty state below, which told the user to sync -
+  // advice that cannot fix a failed local read, and that hid the failure entirely.
+  if (artists.length === 0 && error) {
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">Couldn't load your artists</p>
+        <p className="empty-state-hint">{error}</p>
+        {onRetry && <button className="empty-state-action" onClick={onRetry}>Try again</button>}
+      </div>
+    );
+  }
+
+  if (artists.length === 0 && isLoading) {
+    return (
+      <CardGridSkeleton
+        count={18}
+        minWidth={CARD_MIN}
+        gap={COL_GAP}
+        padding={PADDING}
+        round
+        label="Loading artists"
+      />
+    );
+  }
+
   if (artists.length === 0) {
-    return <p className="empty-state">No artists found. Sync first.</p>;
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">No artists yet</p>
+        <p className="empty-state-hint">
+          Sync your library from Settings and every artist on your server shows up here.
+        </p>
+      </div>
+    );
   }
 
   return (
     <>
       <div ref={containerRef} className="album-grid-scroller">
-        <div style={{ height: `${virtualizer.getTotalSize() + PADDING * 2}px`, position: "relative" }}>
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const rowStart = virtualRow.index * cols;
             const rowArtists = artists.slice(rowStart, rowStart + cols);
@@ -128,7 +177,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
                 key={virtualRow.key}
                 style={{
                   position: "absolute",
-                  top: `${PADDING + virtualRow.start}px`,
+                  top: `${virtualRow.start}px`,
                   left: `${PADDING}px`,
                   right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,

@@ -9,6 +9,13 @@ export interface AlbumStatRow extends AlbumRow {
   last_played: string;
 }
 
+/** A partially-heard album, carrying the counts both "finish the album" and
+ *  "almost done" are derived from. */
+export interface PartialAlbumRow extends AlbumStatRow {
+  heard: number;
+  total: number;
+}
+
 export function useListeningStats() {
   const query = useQuery<AlbumStatRow[]>({
     queryKey: QK.albumsListeningStats(),
@@ -17,7 +24,22 @@ export function useListeningStats() {
       return db.select<AlbumStatRow[]>(
         `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
                 a.play_count + COALESCE(q.pending, 0) AS plays,
-                COALESCE(MAX(sh.scrobbled_at), '') AS last_played
+                -- Local scrobbles only know about plays through Canon, so on a fresh
+                -- install against an established server every album would come back
+                -- with no timestamp at all and "On Repeat" would be permanently empty.
+                -- Fall back to the server's own last-played. scrobbled_at is stored as
+                -- "YYYY-MM-DD HH:MM:SS" and played_at is ISO 8601, so the local side is
+                -- reshaped to match before either is compared lexicographically here or
+                -- against the ISO cutoff below.
+                COALESCE(
+                  MAX(
+                    MAX(
+                      COALESCE(REPLACE(sh.scrobbled_at, ' ', 'T') || 'Z', ''),
+                      COALESCE(a.played_at, '')
+                    )
+                  ),
+                  ''
+                ) AS last_played
          FROM albums a
          LEFT JOIN tracks t ON t.album_id = a.id
          LEFT JOIN scrobble_history sh ON sh.track_id = t.id
@@ -37,44 +59,26 @@ export function useListeningStats() {
     staleTime: 5 * 60 * 1000,
   });
 
-  const finishQuery = useQuery<AlbumStatRow[]>({
-    queryKey: QK.albumsFinishThe(),
+  // "Finish the album" and "Almost done" used to be two queries that scanned the same
+  // albums x tracks x scrobble_history join and differed only in their HAVING clause.
+  // One partially-heard pass serves both: almost-done is the subset where at least half
+  // the tracks have been heard.
+  const partialQuery = useQuery<PartialAlbumRow[]>({
+    queryKey: QK.albumsPartiallyHeard(),
     queryFn: async () => {
       const db = await getDb();
-      return db.select<AlbumStatRow[]>(
+      return db.select<PartialAlbumRow[]>(
         `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
                 a.play_count AS plays,
-                '' AS last_played
+                '' AS last_played,
+                COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) AS heard,
+                COUNT(t.id) AS total
          FROM albums a
          JOIN tracks t ON t.album_id = a.id
          LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
          WHERE a.artwork_url IS NOT NULL
          GROUP BY a.id
-         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) > 0
-            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
-         ORDER BY a.name`,
-        []
-      );
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // Albums where ≥50% of tracks have been played (play_count or scrobble history), but not 100%
-  const almostDoneQuery = useQuery<AlbumStatRow[]>({
-    queryKey: QK.albumsAlmostDone(),
-    queryFn: async () => {
-      const db = await getDb();
-      return db.select<AlbumStatRow[]>(
-        `SELECT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url,
-                a.play_count AS plays,
-                '' AS last_played
-         FROM albums a
-         JOIN tracks t ON t.album_id = a.id
-         LEFT JOIN (SELECT DISTINCT track_id FROM scrobble_history) sh ON sh.track_id = t.id
-         WHERE a.artwork_url IS NOT NULL
-         GROUP BY a.id
-         HAVING COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) * 2 >= COUNT(t.id)
-            AND COUNT(CASE WHEN t.play_count > 0 OR sh.track_id IS NOT NULL THEN 1 END) < COUNT(t.id)
+         HAVING heard > 0 AND heard < total
          ORDER BY a.name`,
         []
       );
@@ -119,12 +123,16 @@ export function useListeningStats() {
   // from queryFn directly to avoid React Query structuralSharing Set-ref bug)
   const playedAlbumIds = useMemo(() => new Set(stats.map(s => s.id)), [stats]);
 
-  const finishTheAlbum = finishQuery.data ?? [];
-  const almostDone = almostDoneQuery.data ?? [];
+  const finishTheAlbum = partialQuery.data ?? [];
+  // Albums where >=50% of tracks have been played, but not 100%
+  const almostDone = useMemo(
+    () => finishTheAlbum.filter(a => a.heard * 2 >= a.total),
+    [finishTheAlbum]
+  );
 
   return {
     ...query,
-    isLoading: query.isLoading || finishQuery.isLoading || almostDoneQuery.isLoading,
+    isLoading: query.isLoading || partialQuery.isLoading,
     stats,
     onRepeat,
     rediscover,

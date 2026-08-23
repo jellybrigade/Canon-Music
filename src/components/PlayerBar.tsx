@@ -4,9 +4,9 @@ import { QK } from "../lib/query-keys";
 import { useClickOutside } from "../hooks/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check,
+  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore, isNextDisabled, repeatModeLabel } from "../store/player";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
 import { useSetting } from "../hooks/useSetting";
@@ -48,16 +48,42 @@ interface Props {
   serverWithCred?: ServerWithCredential;
 }
 
+/**
+ * Wheel-to-adjust on a volume control, attached natively rather than through React's onWheel.
+ * React registers wheel at the root as a passive listener, so preventDefault() from a JSX
+ * handler does nothing except log a console warning, and the page scrolls underneath while the
+ * user is adjusting volume. Reading the volume off the store inside the handler keeps the
+ * listener registered once instead of re-registering on every 0.01 step.
+ */
+function useVolumeWheel() {
+  const ref = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { volume, setVolume } = usePlayerStore.getState();
+      void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001)));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  return ref;
+}
+
 export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
   const isLoading     = usePlayerStore((s) => s.isLoading);
+  const error         = usePlayerStore((s) => s.error);
+  const retryCurrent  = usePlayerStore((s) => s.retryCurrent);
   const volume        = usePlayerStore((s) => s.volume);
   const queue         = usePlayerStore((s) => s.queue);
   const queueIndex    = usePlayerStore((s) => s.queueIndex);
   const repeat        = usePlayerStore((s) => s.repeat);
   const isShuffled    = usePlayerStore((s) => s.isShuffled);
+  const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
 
   const pause         = usePlayerStore((s) => s.pause);
   const resume        = usePlayerStore((s) => s.resume);
@@ -125,6 +151,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
     enabled: !!nativeTrackId,
     staleTime: Infinity,
   });
+
+  const volumeWheelRef = useVolumeWheel();
+  const moreVolumeWheelRef = useVolumeWheel();
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -207,7 +236,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
   function handleStarClick(star: number) {
     if (!currentTrack || !serverWithCred || !nativeTrackId) return;
     const newRating = star === trackRating ? 0 : star;
-    queryClient.setQueryData(["trackRating", nativeTrackId], newRating);
+    queryClient.setQueryData(QK.trackRating(nativeTrackId), newRating);
     const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
@@ -219,9 +248,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
 
   const timerActive = sleepTimerEndsAt !== null || sleepTimerEndOfTrack;
 
-  const repeatLabel =
-    repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
-  const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
+  const repeatLabel = repeatModeLabel(repeat);
+  const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
+  const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
 
   return (
     <>
@@ -293,7 +322,8 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
                   setArtOpen((v) => !v);
                 }
               }}
-              aria-label="Go to album"
+              aria-label={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
+              title={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
             >
               <AlbumArt
                 src={(currentTrack.albumId ? coverMap.get(currentTrack.albumId) : undefined) ?? currentTrack.coverArtUrl ?? null}
@@ -313,19 +343,36 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
           </div>
           <div className="player-track-info">
             <span className="player-title">{currentTrack.title}</span>
-            {currentTrack.artist && (
-              onSelectArtist ? (
+            {error ? (
+              <div className="player-error" role="alert">
+                <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
+                <span className="player-error-msg" title={error}>{error}</span>
+                <button className="player-error-action" onClick={retryCurrent}>Retry</button>
                 <button
-                  className="player-artist player-artist--link"
-                  onClick={() => onSelectArtist(currentTrack.artist!)}
+                  className="player-error-action"
+                  onClick={() => void next()}
+                  disabled={nextDisabled}
                 >
-                  {currentTrack.artist}
+                  Skip
                 </button>
-              ) : (
-                <span className="player-artist">{currentTrack.artist}</span>
-              )
+              </div>
+            ) : (
+              <>
+                {currentTrack.artist && (
+                  onSelectArtist ? (
+                    <button
+                      className="player-artist player-artist--link"
+                      onClick={() => onSelectArtist(currentTrack.artist!)}
+                    >
+                      {currentTrack.artist}
+                    </button>
+                  ) : (
+                    <span className="player-artist">{currentTrack.artist}</span>
+                  )
+                )}
+                <RadioChip />
+              </>
             )}
-            <RadioChip />
           </div>
         </div>
 
@@ -334,8 +381,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             <button
               className={`player-btn player-btn--icon player-btn--hide-narrow${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
-              aria-label="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={20} />
             </button>
@@ -344,6 +392,11 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onPointerDown={handlePrevPointerDown}
               onPointerUp={handlePrevPointerUp}
               onPointerLeave={handlePrevPointerLeave}
+              // Enter and Space on a focused button dispatch click and nothing else: no
+              // pointerdown, no pointerup. With only the pointer handlers above, Previous did
+              // nothing at all for a keyboard user. detail === 0 identifies exactly that case,
+              // so a real pointer click is still handled once, by handlePrevPointerUp.
+              onClick={(e) => { if (e.detail === 0) void prev(); }}
               disabled={queue.length === 0}
               aria-label="Previous"
             >
@@ -374,6 +427,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one"
                 ? <Repeat1 size={20} />
@@ -459,10 +513,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
           >
             <Headphones size={22} />
           </button>
-          <div
-            className="player-volume"
-            onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
-          >
+          <div className="player-volume" ref={volumeWheelRef}>
             <button
               type="button"
               className="player-btn player-btn--icon player-volume-mute-btn"
@@ -500,8 +551,9 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             <button
               className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
-              aria-label="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={18} />
             </button>
@@ -510,6 +562,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>
@@ -558,10 +611,7 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             >
               <Headphones size={18} />
             </button>
-            <div
-              className="player-more-volume"
-              onWheel={(e) => { e.preventDefault(); void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001))); }}
-            >
+            <div className="player-more-volume" ref={moreVolumeWheelRef}>
               <button
                 type="button"
                 className="player-btn player-btn--icon player-volume-mute-btn"

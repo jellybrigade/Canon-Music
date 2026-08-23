@@ -1,32 +1,29 @@
 import { useEffect } from "react";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore, isNextDisabled } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
 import { useLoved } from "./useLoved";
-
-function isInputTarget(e: KeyboardEvent): boolean {
-  const t = e.target as HTMLElement;
-  return (
-    t instanceof HTMLInputElement ||
-    t instanceof HTMLTextAreaElement ||
-    t.isContentEditable
-  );
-}
+import { isTextEntryTarget } from "../lib/keyboard";
 
 export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null | undefined) {
   const { toggleTrackLove } = useLoved();
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
-      if (isInputTarget(e)) return;
+      if (isTextEntryTarget(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       const store = usePlayerStore.getState();
-      const { currentTrack, isPlaying, elapsed, volume, queue, queueIndex, repeat } = store;
+      const { currentTrack, isPlaying, isLoading, elapsed, volume, queue, queueIndex, repeat, radioOnQueueEnd } = store;
 
       switch (e.key) {
         case " ": {
           if (!currentTrack) return;
           e.preventDefault();
+          // Key auto-repeat would toggle at ~30/sec, each toggle starting a fade in the
+          // audio engine. Held space should be one toggle, like the on-screen button.
+          if (e.repeat) return;
+          // Matches the transport buttons, which are disabled while a track loads.
+          if (isLoading) return;
           isPlaying ? store.pause() : store.resume();
           break;
         }
@@ -75,8 +72,7 @@ export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null |
           case "ArrowRight": {
             if (!currentTrack) return;
             e.preventDefault();
-            const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
-            if (!nextDisabled) void store.next();
+            if (!isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd)) void store.next();
             break;
           }
         }

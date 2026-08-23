@@ -16,6 +16,7 @@ export function AppShell(props: AppViewProps) {
     serverWithCred,
     playlists,
     searchResults,
+    searchError,
     searchOpen,
     searchQuery,
     searchRaw,
@@ -87,15 +88,20 @@ export function AppShell(props: AppViewProps) {
               <X size={15} />
             </button>
           </header>
-          {serverWithCred && searchResults && searchQuery ? (
+          {searchQuery && searchError ? (
+            <p className="empty-state">Search failed. The library database could not be read.</p>
+          ) : serverWithCred && searchResults && searchQuery ? (
             <SearchResults
               albums={searchResults.albums}
               tracks={searchResults.tracks}
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
               playlists={playlists}
-              onSelectAlbum={openAlbum}
-              onSelectArtist={(artist) => { openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }); }}
+              // This overlay is rendered instead of AppRoutes whenever a search is
+              // active, so navigating without clearing leaves it covering the route
+              // that was just opened and the click looks like it did nothing.
+              onSelectAlbum={(album) => { clearSearch(); openAlbum(album); }}
+              onSelectArtist={(artist) => { clearSearch(); openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }); }}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}

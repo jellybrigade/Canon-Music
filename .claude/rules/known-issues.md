@@ -1,109 +1,165 @@
 # Known Issues & Platform Gotchas
 
-Bugs + non-obvious behaviors worth remember — not conventions (see `coding-standards.md` for those).
+Bug classes that already shipped once. Heading is the lesson, one line each. Greps kept
+because they are the only part that finds *tomorrow's* instance; forensics are in git.
+Fixed unless marked OPEN.
 
-## WebKitGTK closes left-click-opened menus on their own opening click
+## Platform (Linux / WebKitGTK / audio)
 
-`ContextMenu` (`src/components/ContextMenu.tsx`) closes on outside interaction via document listener added in `useEffect`. On Linux/WebKitGTK, listener can attach fast enough to still catch tail of *same* click that opened menu — closes it instantly, before ever visibly render.
+- **Left-click popup self-closes.** WebKitGTK catches the opening click's tail. `ContextMenu.tsx` defers the listener `setTimeout(...,0)`, uses `mousedown` capture + containment.
+- **Freeze/thaw compositor crash.** Focus loss kills the WebProcess; upstream `wry` bug. Active mitigations, never strip without replacing: `web-process-terminated` -> `.reload()`, `useAppActivityTracking` blur stamp, `webkit2gtk-nvidia-quirk`, `"visible": false` + `window.show()` on page load. Never touch `set_hardware_acceleration_policy` without auditing compositing.
+- **ALSA underrun under load.** rodio 0.19 buffer too small. `PULSE_LATENCY_MSEC=60` set early in `run()`. Real fix needs rodio 0.20+.
+- **Read-only rusqlite can't own WAL `-shm`.** `library_read.rs` opens `READ_WRITE | NO_MUTEX | URI`, no `CREATE`.
+- **Unbounded thread-per-request -> SIGKILL.** Cover proxy: permit acquired before spawn, `spawn_blocking`, cap 16. Tell: `ps -eLf | grep canon | wc -l` climbing.
+- **Opaque "Load failed" after ~25s is systemd-resolved, not Canon.** Check `resolvectl status` and `journalctl -u systemd-resolved` before reading network code. Hardening shipped anyway: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.
 
-Only affects menus opened via `onClick` (left click). Menus opened via `onContextMenu` (right click) unaffected — different event type.
+## Async / lifecycle
 
-**Symptom:** button's `onClick` fires, state update, `ContextMenu` even run render function — but `document.querySelector('.context-menu')` come back empty. Look like "button does nothing."
+- **A temp file named after a caller id is single-writer only if TS makes it so.** `waveformInFlight: Set<trackId>` in `player.ts`. Also: a command that `Err`s without emitting strands one-shot `listen()`s.
+- **A handler resuming post-await must check intent, not assert state.** `pauseRequestedDuringLoad`; track-id equality is not intent.
+- **One cancel token shared by several commands cancels intent, not effect.** Separate `pause_pending: AtomicBool` checked before the terminal action. Ask what each task does *after* its loop.
+- **A fast path around the central action skips every guard that action owns.** Gapless advance bypassed `next()`, killing the sleep timer. Guard both ends.
+- **A fire-and-forget command owes an event on every terminal path.** Every gapless bail-out emits `gapless-cancelled`; final `sink.append` also checks `sink.empty()`.
+- **Work scheduled ahead of time must carry what it decided.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
+- **A loading flag from `await invoke()` measures the IPC round trip, not the work.** Separate `isBuffering`, cleared by the `audio-format` event. A command ending in `thread::spawn` can only be honest via an event.
+- **"Stream ended" and "stream stopped" are different signals.** `fail()` (reader returns `UnexpectedEof`) vs `finish()`; `fail()` only if `play_id` still matches.
+- **A resource acquired via await escapes the cleanup meant to free it.** `useWakeLock`: `cancelled` flag, resolved sentinel self-releases. Test `!released`, not non-null.
+- **A guard keyed on one error type stands in for the broad condition it was meant to test.** `apiPost` retried non-idempotent writes on the alt url for every error `isTimeout` didn't name; now `if (!retriable) break`. Any branch deciding whether a side effect may repeat must assume unsafe on unrecognised errors.
+  ```
+  grep -rn "instanceof DOMException\|AbortError\|instanceof TypeError\|err\.name ===" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 
-**Fix already applied:** outside-close listener deferred with `setTimeout(..., 0)` so can't catch opening click. Listener itself (as of 2026-07-05) uses `mousedown` (capture) + containment check (`!menuRef.current.contains(e.target)`) rather than `click` + unconditional close — ported from ampcast's `PopupMenu.tsx`. Closing only on true outside pointer-down means item selection can't be eaten by a close-before-click race.
+## Test / harness
 
-**If new left-click popover "does nothing":** don't assume fresh bug. Confirm with `console.log` in popover's render body plus `document.querySelectorAll(...)` right after — if render fire but DOM query come back empty, same class of bug.
+- **Time it before theorising.** A timeout landing on a different case each run reads as a race and usually is not. `pnpm test:run --testTimeout=60000 --reporter=verbose` settles it; any case over ~1500ms owes an explanation.
+- **A large fake-time advance costs one iteration per live interval tick.** Set the state the distant timer needs directly instead of starting a poller.
+  ```
+  grep -rn "advanceTimersByTime" src --include='*.ts*' | grep -E "60 \* 1000|3600|\* 60 \*"
+  ```
+- **An accessible-name query is a whole-tree scan (150-300ms/call).** Prefer a class selector, and pair any absence assertion with a positive control.
+  ```
+  grep -rc "ByRole(" src --include='*.test.tsx' | grep -v ":0$" | sort -t: -k2 -rn
+  ```
+- **A fixed sleep costs its ceiling every run; a per-case rebuild pays for it per case.** Use `actUntil()` and `forkTestDb()` (`src/test/sqlite.ts`).
+  ```
+  grep -rn "setTimeout(r\|setTimeout(resolve" src --include='*.test.ts*' | grep -vE "[^0-9](0|[1-9][0-9]?)\)"
+  ```
+- **A state update from a listener the app registered itself is not flushed by `act`.** Absence assertions must `waitFor` the DOM they check; presence is self-correcting.
+  ```
+  grep -rn "toBeNull()" src --include='*.test.tsx' -B 3 | grep -A 3 "await act(async"
+  ```
 
-## WebKitGTK freeze/thaw compositor crash kills whole app on window focus loss/regain
+## Data / state
 
-Dev and prod builds on Linux can crash entirely with:
-```
-Gdk-CRITICAL **: gdk_window_thaw_toplevel_updates: assertion 'window->update_and_descendants_freeze_count > 0' failed
-ERROR: WebKit encountered an internal error. This is a WebKit bug.
-Source/WebKit/WebProcess/Network/WebLoaderStrategy.cpp(641) : void WebKit::WebLoaderStrategy::internallyFailedLoadTimerFired()
-```
-or a JavaScriptCore VM trap (`received NeedDebuggerBreak trap`) on the WebProcess.
+- **A claim stamped when work starts and cleared only on success is permanent after the first failure.** `useLibrarySync` now arms a bounded backoff `[30s, 2min, 5min]` from the settle handler. Every terminal path owes the flag a decision. Third instance, same grep: `useEnrichAlbumTracks` stamped `ranRef` before the run and its `.catch` was a bare silent no-op, so one failed album left every track unenriched for the life of that mount. The clear goes in `.catch` here (unlike `useLibrarySync`, whose settle handler re-enters) because nothing but a dep moving re-runs the effect.
+  ```
+  grep -rn "Ref.current = " src/hooks --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A per-mount claim on work keyed by an argument stands against every later value of that argument.** `useEnrichAlbumTracks`, `useEnrichArtist` and `useNormalizeAlbum` held `useRef(false)`; `AlbumDetail` has no `key`, so navigating between two cached albums swaps `albumId`/`album.artist` inside one mount and the stamp from the first silently suppressed the second. Refs now hold the id (`ranRef.current === albumId`), and every clear checks the id it clears. Each hit below must guard work that cannot change identity within one mount, or hold the id.
+  ```
+  grep -rn "useRef(false)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A parallel-array invariant enforced by one writer holds only until another runs.** `shuffleOrder.length === queue.length`; `normalizeShuffleOrder` repairs before splice sites. Grep for a length guard one writer has and others don't.
+- **A "safe copy" helper must copy on every path, including the no-op one.** `return [...order]` always, or reference equality kills the re-render.
+- **A restore path writing `currentTrack` without loading the engine is unplayable.** `resume()` treats null `streamUrl` as `error`; server-side restore uses state-only `restoreQueue`.
+- **A sync that only upserts diverges from its source, and the divergence feeds itself.** `syncLibrary` prunes albums/tracks absent from the fetch, refusing an empty or partial one. Same pass: playlist refresh upserts server-owned columns only; loved-stage compare scopes both sides by id prefix; `playlist_tracks.position` compacted via two negative-space passes. Grep `DELETE` against mirrored tables and ask what depends on a row's absence.
+- **A paging loop whose only exit is a condition the server controls is not bounded.** `fetchAllAlbums` walked `offset` until a page came back short, so a server ignoring `offset` looped forever and grew the array until the process died, with no error to report. Now a repeated first id throws, and `offset` is capped at 500,000 albums. Any `while (true)` over a remote cursor owes both an advance check and a ceiling.
+  ```
+  grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A cache table exempted from a prune inherits the exemption written for user-authored rows beside it.** `pruneAlbums` deleted `album_genres`/`album_unresolved_genres` but not `album_covers`, whose neighbours (`album_identity`, `album_user_genres`, `album_genre_exclusions`) are kept on purpose; the cache is a base64 `data_url`, so every album that disappears server-side stranded tens to hundreds of KB no read path can reach, forever, and `useAlbumCoverMap`'s keyset scan grew with them. A table is exempt only if *its own* content justifies it. Compare the two delete lists whenever either moves:
+  ```
+  grep -n "viaAlbums(\"\|DELETE FROM album" src/lib/sync.ts
+  ```
+- **A read filtered in the loop body instead of in SQL costs its whole table on every pass, and any count beside it tells a different story.** `useScrobbleFlush` selected all of `scrobble_queue` and `continue`d past rows lacking the current server's id prefix, so a second server's backlog was re-read every 60s forever while being unsendable, and the Diagnostics count (unscoped `COUNT(*)`) reported a backlog no wait could clear. Both now scope on `track_id LIKE ? ESCAPE '\\'` via one `ownerPattern` helper, and the count's query key carries the server id. `purgeServerData` was never the gap - it has covered `scrobble_queue` since `d153621`. Ask of any per-row `continue`: could the WHERE clause have said this, and does every count over the same table agree with it?
+  ```
+  grep -rn "continue;" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A retry armed on a rejected write assumes the write never happened, and half the time it did.** `useScrobble` cleared its stamp on any insert rejection, so a commit whose response was lost queued the same play twice and Navidrome was scrobbled twice; a fresh `Date.now()` per attempt also defeated any `(track_id, timestamp)` dedupe downstream. The timestamp is now stamped once per play and the retry re-reads the row before re-arming, treating "cannot confirm" as sent. Ask of any retry: can the operation be observed, and is it safe if it already applied?
+  ```
+  grep -rn "\.catch(" src/hooks --include='*.ts*' | grep -v '\.test\.' | grep -iE "retry|current = false|current = null"
+  ```
+- **A skip fast-path freezes every column only the skipped path writes.** `tracks.play_count` froze while `albums.play_count` moved. When a sync gains a skip, list what that path solely writes.
+- **A drain loop that breaks on any error blocks on its first permanent failure.** `useScrobbleFlush` drops Subsonic error 70, still breaks on auth 40/41/50; `flushing` flag stops a slow pass overlapping the 60s tick.
+- **A repair effect whose repair invalidates its own trigger can loop forever.** `AlbumDetail` marks the album id attempted *before* repairing. Grep for an effect calling `bumpRefresh()`/`invalidateQueries` on what it depends on.
+- **Re-keying a collection to ids means re-keying every cursor, anchor, count and gate.** `TrackTableView` kept a numeric shift-anchor and a raw `.size` after moving to `Set<string>`.
+  ```
+  grep -rn "useRef<number" src --include='*.tsx' | grep -v '\.test\.'
+  grep -rn "Ids\.size\s*[<>=]" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A prefetch that duplicates a query instead of sharing it warms a key nobody reads.** Key, `queryFn` and `staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in a TS string is `ESCAPE ''` and always throws - write `ESCAPE '\\'`.**
+- **A `LIMIT` without `ORDER BY` silently redefines what the query returns.** FTS queries rank by weighted `bm25` in a `MATERIALIZED` CTE before the cap. Ask if the cut thing was chosen or just late. Also: `useDeferredValue` defers rendering, not fetching.
+- **An identifier borrowed from an external service must not be compared exactly to a local one.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`. Check every hop.
+- **A mirror not scoped by owner depends entirely on its delete path.** `purgeServerData` runs before the `servers` row delete. **Sharper form, found 4x: grep for any object literal assigning `server_id:` from something that isn't the source row.**
+- **A guard that holds only because of what the data happens to look like is not a guard.** Five `LIKE ?` prefix binds had no `ESCAPE`; safe only while ids are UUIDs. One `escapeLike` in `src/lib/sql.ts`, enforced repo-wide by `src/lib/sql-escaping.test.ts`. Literal patterns (`NOT LIKE 'raw:%'`) need no escaping.
+  ```
+  grep -rn "LIKE ?" src --include='*.ts*' | grep -v '\.test\.' | grep -v ESCAPE
+  ```
+- **A secret written before its owning row outlives the row.** Insert rolls back the keychain write; removal deletes the secret first and aborts loudly. `keychain.get` *rejects* on a missing entry, so callers null-checking the resolved value hold dead code, and that query wants `retry: false`.
+- **A "the thing just finished" test built only from state that restore also produces fires at startup.** `useRadio` needs `hasPlayedRef` as a witness. Side-effect starts belong in handlers, not effects.
+  ```
+  grep -rn "playFromQueueIndex(\|playTrack(\|playQueue(\|\.resume()" src/hooks src/App.tsx | grep -v "\.test\."
+  ```
+- **A statement sequence whose intermediate states are invalid is a transaction, whether or not anyone wrote one.** `runMigrations` now wraps each block *and its version row* in `BEGIN`/`COMMIT`, `ROLLBACK` rethrowing the original error; v27's seed gained `OR IGNORE`. Ask per statement: if the process dies here, does the block's first statement still work next launch?
+- **A stored version compared in one direction only answers "what still needs doing", never "is this too new for me".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), rendered by `DatabaseErrorScreen` with no retry button. Any persisted format version wants a ceiling checked at open.
+- **A transaction is real only if the statements reach the same connection.** `tauri-plugin-sql` pools 10 connections with no affinity, so a TS `BEGIN` reachable from a user gesture is a silent no-op *and* a deadlock. `src/db/migrations.ts` is the only legitimate TS `BEGIN` (its awaits are sequential and `getDb()` gates every other caller); multi-write mutations go to `src-tauri/src/library_write.rs`, as `playlist_remove_track` did.
+  ```
+  grep -rn '"BEGIN"\|BEGIN TRANSACTION' src --include='*.ts*' | grep -v '\.test\.'
+  ```
 
-**Trigger:** any window focus-loss-then-regain — i3 workspace switching, WM focus resets, or simply opening/clicking into WebKit devtools and back into the app window. No rapid switching needed, a single toggle reproduces it.
+## UI
 
-**Why:** upstream WebKitGTK/GTK3 bug — the freeze/thaw counter around GPU-accelerated compositing races on unmap/remap, corrupting WebProcess state and killing it (crashed process brings the whole app down since `wry` doesn't handle a WebProcess death gracefully — see `web-process-terminated` hook below). Not caused by anything in Canon's own hide/show logic.
-
-**Only known full workaround:** `settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::Never)` in `src-tauri/src/lib.rs` disables WebKitGTK GPU compositing entirely, avoiding the race at the source — but this also disables trackpad/touchpad wheel scroll app-wide (only scrollbar-drag scroll still works). Currently NOT applied because of that tradeoff. Don't re-enable it without confirming trackpad scroll is acceptable to lose, or without a narrower fix.
-
-**Mitigations applied (2026-07-16, ported from reference project psysonic):** two additive, lower-risk attempts, neither previously tried in Canon (only `Never` was ever tried, reverted in `d86c373` for breaking trackpad scroll — `OnDemand` never appears anywhere in Canon's git history before this):
-- `HardwareAccelerationPolicy::OnDemand` set at webview setup (Linux only, `lib.rs`) instead of leaving policy unset. Psysonic defaults to this specifically because its own code confirms `Never` is what breaks wheel scroll, while `OnDemand` still reduces GPU compositor churn without that cost.
-- `useAppActivityTracking` hook (`src/hooks/useAppActivityTracking.ts`) stamps `data-app-blurred` on `<html>` on window blur/focus; `App.css` pauses all CSS animations (`animation-play-state: paused`) while that attribute is set. Reduces compositor load exactly at focus-loss/regain, the trigger condition above.
-
-Neither is a confirmed fix (upstream race is still there) — they reduce the odds of triggering it. The `web-process-terminated` → `.reload()` mitigation below stays as the safety net regardless.
-
-**Mitigation applied instead:** `lib.rs` `.setup()` connects to `webkit2gtk::WebView`'s `web-process-terminated` signal (via `WebviewWindow::with_webview`, Linux only) and calls `.reload()` on the view instead of letting the process die. This does not fix the underlying race — it just turns a full app crash into a page reload when the WebProcess does die.
-
-**If debugging a Linux-only crash matching this signature:** don't re-diagnose from scratch. This is the root cause, confirmed repeatedly via direct `pnpm tauri dev 2>&1 | tee <file>` terminal capture (journalctl is an unreliable secondary source — it only captures what gets forwarded to it, and timestamps can be misleading if there were multiple recent crashes). Go straight to checking whether a newer WebKitGTK/GTK version has fixed the upstream bug before spending time re-investigating.
-
-**Note (2026-07-07):** this bug was re-reproduced (assertion fired) via i3 stress testing but stayed non-fatal that time (no WebProcess death, no reload fired) — inconclusive whether it's still exploitable on current webkit2gtk, or whether the existing `web-process-terminated` mitigation is masking it. Don't assume every unexplained crash is this one — see the separate thread-storm crash below, which turned out to be the actual cause of a "gets laggier then vanishes" report initially suspected to be this bug.
-
-**2026-07-17: `OnDemand` mitigation reverted — conflicted with `WEBKIT_DISABLE_COMPOSITING_MODE` and crashed on every single launch.** The `OnDemand` mitigation from 2026-07-16 above (never released, sat unmerged on `development`) turned the assertion from an occasional focus-toggle issue into a deterministic startup crash, plus audible ALSA underrun (choppy/robotic audio) right before the process died. Root cause: `lib.rs` already sets `WEBKIT_DISABLE_COMPOSITING_MODE=1` as an env var before the webview is even created (the older, still-active mitigation from `21af58e`/`16a0c07`) — then `.setup()` immediately called `settings.set_hardware_acceleration_policy(HardwareAccelerationPolicy::OnDemand)` on that same webview, flipping compositing back on right as the window became visible. That policy flip, not the hide/show-after-first-paint reveal (`cde9841`, also suspected and also reverted), was the actual trigger. Only `OnDemand` was reverted — the `useAppActivityTracking` blur-pause mitigation stays live (see its entry above), alongside the `web-process-terminated` → `.reload()` safety net. **If re-attempting `OnDemand` (or any explicit `hardware_acceleration_policy` call) in the future: first remove/reconcile the `WEBKIT_DISABLE_COMPOSITING_MODE` env var — don't set both.**
-
-**2026-07-17: show-after-first-paint deliberately re-applied — this is `cde9841` brought back on purpose, do not "re-revert" it.** `tauri.conf.json` sets `"visible": false` on the main window; `.on_page_load()` in `lib.rs` calls `window.show()`, with a 5s fallback thread in `.setup()` in case the frontend never loads (JS bundle error, dead dev server) and `on_page_load` never fires.
-
-Without this, Canon has no `visible` key at all, so WebKitGTK maps an unpainted webview immediately at window creation — a known startup-crash/white-flash trigger and the biggest structural gap against `reference-projects/psysonic`, which sets `"visible": false` and reveals on `PageLoadEvent`.
-
-**Why re-applying a reverted commit is not a mistake here:** the 2026-07-17 entry above establishes that the `OnDemand` policy flip, *not* `cde9841`, was the deterministic-startup-crash trigger. `cde9841` was reverted as collateral in the same sweep while both were suspects, never because it was shown to cause anything. Re-landing it alone, with no `hardware_acceleration_policy` call anywhere (and `WEBKIT_DISABLE_COMPOSITING_MODE=1` left untouched), avoids the collision that actually broke things.
-
-Difference from `cde9841`: the reveal now happens in Rust from `on_page_load` instead of from `src/main.tsx` via a double-`requestAnimationFrame`. Both map the window exactly once and never unmap it — the freeze/thaw race needs an unmap/remap cycle, and neither has one. `on_page_load` re-fires on reload (including the `web-process-terminated` → `.reload()` recovery above), which is harmless: there is deliberately no `hide()` on that path, and `show()` on a visible window is a no-op.
-
-`WEBKIT_DISABLE_COMPOSITING_MODE=1` stays set and unchanged by this — no `hardware_acceleration_policy` call was added, so the collision documented above is still not live.
-
-**2026-07-17 (later): `WEBKIT_DISABLE_COMPOSITING_MODE=1` removed — replaced with targeted `webkit2gtk-nvidia-quirk`.** The blanket env var forced CPU software rendering on *every* Linux machine, making all scrolling/clicking/painting sluggish app-wide — including on Intel/AMD GPUs where WebKitGTK compositing is stable (confirmed by psysonic running the same stack on the same Intel Iris Xe machine with compositing on, no crashes, no lag). Replaced in `lib.rs` with the same approach psysonic uses: `webkit2gtk-nvidia-quirk = "1.3"` applies `WEBKIT_DISABLE_DMABUF_RENDERER` / `__NV_DISABLE_EXPLICIT_SYNC` only when an NVIDIA setup that needs it is detected; no-op elsewhere. `CANON_WEBKIT_GPU_ACCEL=1` skips even the quirk. The `web-process-terminated` → `.reload()` safety net stays. Note the OnDemand-collision warning above is now moot in one direction (env var gone) but still applies in spirit: don't add `hardware_acceleration_policy` calls without checking what else touches compositing. If NVIDIA-machine crash reports come in, the quirk crate is the right place to look first — not re-adding the blanket env var.
-
-## ALSA underrun (choppy/robotic audio) under CPU/compositor load (mitigated 2026-07-17)
-
-`ALSA: underrun occurred` / audible glitching during playback when the machine is under load (heavy git/CPU, a WebProcess spike, a decode+download thread burst). rodio 0.19's `OutputStream::try_default()` (`src-tauri/src/lib.rs`) uses cpal's default ALSA buffer, which is small enough that the realtime audio callback misses its deadline when the CPU is saturated. rodio 0.19 exposes no buffer/period knob through `try_default` (only rodio 0.20+'s `OutputStreamBuilder` does), so this isn't fixable in-engine without a version bump + cpal patch (psysonic runs rodio 0.22 + a patched cpal 0.15.3).
-
-**NOT the same as the OnDemand-compositing ALSA underrun** documented in the 2026-07-17 `OnDemand` entry above — that one was a deterministic startup crash from a compositing-policy collision, already reverted. This one is transient, load-dependent, mid-playback.
-
-**Mitigation applied:** set `PULSE_LATENCY_MSEC=60` early in `run()` (Linux only, only if the user hasn't already set it). Most modern Linux desktops route ALSA through PipeWire/PulseAudio, which honors this to enlarge the client buffer and give the callback more headroom. No-op on a pure-ALSA setup. This reduces the odds under load; it is not a hard fix — the real fix is the rodio version bump + non-blocking source, deferred as too invasive. If underruns persist, the next lever is bumping rodio to get `OutputStreamBuilder` and requesting a larger `BufferSize` explicitly.
-
-## Read-only rusqlite connection can't own WAL `-shm` (fixed 2026-07-17)
-
-`src-tauri/src/library_read.rs` `open_read_conn` opened `canon.db` with `OpenFlags::SQLITE_OPEN_READ_ONLY`. `canon.db` is WAL mode (`src/db/migrations.ts`), and a READ_ONLY connection cannot create or recover the `-wal`/`-shm` shared-memory files — it can only attach to ones a writer already established. Canon runs two engines against one file (the `tauri-plugin-sql`/sqlx writer pool plus this rusqlite reader), so depending on launch ordering the reader could open before the writer pool had created `-shm`, failing every query with `SQLITE_READONLY` or "unable to open database file".
-
-**Fix:** opened `SQLITE_OPEN_READ_WRITE | NO_MUTEX | URI` instead. Still only ever runs SELECTs — READ_WRITE is about being allowed to participate in WAL, not about issuing writes. `SQLITE_OPEN_CREATE` deliberately omitted so a missing or misresolved path errors loudly instead of silently creating an empty db that shadows the real one.
-
-**Note this was never the "silent vanish" crash** — it surfaces as a query error, not a process death. Don't credit it if the vanish stops.
-
-## Unbounded thread-per-request in cover art proxy caused SIGKILL crash
-
-Cover art proxy server (`src-tauri/src/lib.rs`, `cover-server` thread) spawned one new OS thread per incoming HTTP request with no concurrency cap. Rapid sidebar view-switching (artist → library → tracks → tags → artist...) fires a burst of cover-art fetches for every view's album grid, each getting its own thread.
-
-**Symptom:** progressive UI lag during rapid navigation, then the whole app vanishes. No coredump, no Rust panic, no kernel OOM entry, no `systemd-oomd`/cgroup kill logged — looks like nothing happened.
-
-**Root cause, confirmed via `gdb -p <pid>` attach (bypass `ptrace_scope` by launching under `gdb --args` instead of attaching to an already-running process):** `Program terminated with signal SIGKILL, Killed.` — uncatchable, explains the total absence of any trace. Log immediately before death shows dozens of threads spawned/destroyed in rapid succession, timed exactly with the rapid-navigation clicks. Exact external killer was never identified (ruled out kernel OOM, systemd-oomd, cgroup `pids`/`memory` limits, earlyoom-style daemons) — doesn't matter, the unbounded thread-spawn is a confirmed bug independent of whatever finally pulled the trigger.
-
-**Fix applied:** `ThreadSemaphore` (`Mutex<usize>` + `Condvar`, no new deps) caps concurrent cover/artist-image request handling at 16. Permit acquired in the accept loop *before* spawning, so the accept loop backpressures instead of piling up work; `SemaphoreGuard` (RAII, `Drop` releases) moved into each spawned closure so every early `return` in the request handler auto-frees its slot.
-
-**Follow-up (2026-07-14):** per-request handling switched from `std::thread::spawn` to `tauri::async_runtime::spawn_blocking` — same 16-permit cap, but requests now run on tokio's reused blocking-thread pool instead of a freshly created/destroyed OS thread each time. No behavior change, lower per-request overhead.
-
-**If debugging a "gets laggier then vanishes" or unexplained SIGKILL on Linux:** check for thread-storm first (`ps -eLf | grep canon | wc -l` during repro, or watch thread count climb) before assuming it's the WebKitGTK freeze/thaw bug above — different signature, different fix.
-## `fetch()` fails with opaque "Load failed" after exactly ~25s when a stale resolver entry is configured (diagnosed 2026-07-28)
-
-Sync dies with `Error: Load failed` (WebKit's generic `TypeError` for a rejected `fetch()`). Instrumentation showed every in-flight request stalling **exactly ~25s** then failing together, `navigator.onLine === true`, while `curl` did 5 parallel POSTs to the same server in 0.45s.
-
-**Root cause was outside Canon:** `/etc/systemd/resolved.conf.d/vpn-anexia.conf` pinned corporate VPN nameservers (`DNS=10.61.242.1 10.61.242.2`) into systemd-resolved's **global** scope unconditionally. Off VPN those servers are unreachable, so resolved kept flapping its feature set on them (`Using degraded feature set UDP instead of TCP for DNS server 10.61.242.1.` every 5-15s in `journalctl -u systemd-resolved`), and any name not already cached took tens of seconds to resolve. Measured on the affected machine: `getent hosts <server-host>` 10.02s, `getent hosts wpad` 20.02s, while `resolvectl query <same host>` answered in 2.1ms marked `Data from: cache`.
-
-**Why it looked like a Canon bug:**
-- All concurrent requests fail at the same instant because they all block on the *same* host resolution, not on each other. Request concurrency is a red herring; a single sequential request fails identically.
-- `curl` tests always looked fine because they hit resolved's cache (`time_namelookup=0.006`), so they never paid for a resolution.
-- Intermittent by cache TTL: a cold-cache sync fails, a sync a few minutes later completes in 3s.
-- `online=true` throughout, since routing and sockets are fine. Only name lookup is broken.
-
-**Host-side fix:** make the VPN drop-in routing-only (`Domains=~anx.local ~anexia.com`), so the global scope stops being a default route and only corporate suffixes consult those servers. Better still, write/remove the drop-in from the VPN up/down script instead of leaving it permanent.
-
-**If a Linux-only "Load failed" / uniform-timeout network report comes in, check DNS before reading Canon's network code:**
-```bash
-journalctl -u systemd-resolved --since "-1h" | grep -i "degraded\|timed out"
-resolvectl status | head -20              # look for unreachable servers in the Global scope
-sudo resolvectl flush-caches && time getent ahosts <server-host>
-```
-
-**Canon-side hardening applied in the same pass (`src/lib/navidrome.ts`, `src/lib/sync.ts`):** `apiPost` now caps each attempt at 12s via an `AbortController` (not `AbortSignal.timeout`, which is missing on older WebKitGTK), retries up to 3 attempts with exponential backoff, tries the alt URL on every attempt rather than only the first, and throws a named error (`getAlbumList2 failed after 3 attempts: timed out after 12000ms`) instead of propagating an opaque `Load failed`. `syncLibrary` treats the loved (`getStarred2`) and playlist stages as non-fatal, since albums and tracks are already committed by then; a failed fetch there leaves the stored rows untouched, reports the stage via the new `skippedStages` return field, and the album-track pass gives up after 5 consecutive failures rather than burning the retry budget once per remaining album. This does not fix a broken resolver, it just keeps one from destroying a whole sync.
+- **A window-level shortcut that `preventDefault`s owes every branch its own focus guard.** `isTextEntryTarget` (`src/lib/keyboard.ts`) shared by both listeners; Ctrl+K, Ctrl+F and Escape each need a different exemption, so a blanket bail breaks all three. Read options through a ref so keystrokes don't re-register the listener.
+  ```
+  grep -rn "addEventListener(\"keydown\"" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **An overlay's own Escape handler answers "am I open", never "am I on top".** Nothing calls `stopPropagation`, so registration order saves nothing. `useSearchShortcuts` takes `overlayAbove`.
+  ```
+  grep -rn 'e\.key === "Escape"' src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A stacking guard written as a hand-kept list only covers the layers its author could see.** `useModalChrome`'s module-level registry (`useAnyModalOpen()`) replaced the enumeration; menus and dropdowns must *not* register. **OPEN:** `TagDrawer`, `TagTreeTab`'s `NodeModal`, `FeedbackModal`, `UpdatePrompt` still hand-roll their dismissal.
+  ```
+  grep -rln "createPortal" src/components --include='*.tsx' | xargs grep -Ln "useModalChrome"
+  ```
+- **Dismissing a backdrop on `click` dismisses on a gesture that only ended there.** `useOverlayDismiss` arms on `mousedown` at the backdrop and closes only if the release matches; the dialog needs no handler. Target identity, never `stopPropagation`.
+  ```
+  grep -rn "onClick={(e) => e.stopPropagation()}" src --include='*.tsx' | grep -v '\.test\.'
+  ```
+- **`Number(x) || fallback` deletes a legal zero,** and makes any `Math.max` floor beside it dead. Branch on `""` explicitly, then clamp.
+  ```
+  grep -rn "Number(.*)\s*||\|parseInt(.*)\s*||\|parseFloat(.*)\s*||" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **State deciding which subtree renders, but absent from the URL, must be dismissed by navigation itself** - and a mechanism built for one overlay leaves every other on the old per-handler pattern. `useDismissOnNavigate(pathname, dismissOverlays)` in `App.tsx`; add an overlay by composing into that callback. **OPEN:** it fires on a pathname *change*, so a palette item resolving to the current route still strands the search overlay.
+  ```
+  grep -n "useState(false)" src/App.tsx
+  ```
+- **A route that returns `null` for "don't know yet" and for "isn't there" paints the same blank page for both.** `data ?? null` collapses the one distinction `useQuery` gives you. Name the pending state.
+  ```
+  grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
+  ```
+- **A prerequisite gate is a state machine too.** `if (!serverWithCred) return null` was a permanent blank page (`retry: false`). Shared `CredentialGate` in `AppRoutes.tsx`. `isPending` is useless on a gated query (disabled = pending forever); derive `!!server && !serverWithCred && !credError`. **OPEN:** `renderLibraryContent` still says "No server connected" during the keychain read.
+  ```
+  grep -rn "if (!serverWithCred\|if (!credential\|if (!server)\|if (!session" src --include='*.tsx' | grep -v '\.test\.'
+  ```
+- **Decoding a value the framework already decoded is a no-op on almost every input and a crash on the rest.** react-router decodes params once; a second decode threw `URIError` from a render body (unmounting the tree) or silently resolved `%20`. A hand-rolled round-trip test cannot see it - drive a real router (`src/lib/routes.router.test.tsx`). Known limit: a literal `%2F` in a name can't round-trip.
+  ```
+  grep -rn "decodeURIComponent\|unescape(" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A partial opt-out of a global base rule keeps the properties it forgot to name.** `src/App.css:178` gives `input, button` a `border-radius`/`border`/`box-shadow`; `background: none; border: none` keeps the shadow. **OPEN, 37 instances.** Durable fix is scoping the base rule or a shared `.btn-bare`, not chasing hits.
+  ```
+  python3 - <<'PY'
+  import re,glob
+  for f in sorted(glob.glob('src/**/*.css',recursive=True)):
+      t=open(f).read()
+      for m in re.finditer(r'([^{}]+)\{([^{}]*)\}',t):
+          sel,body=m.group(1).strip(),m.group(2)
+          if any(p in sel for p in (':hover',':focus',':active',':disabled','@')): continue
+          if re.search(r'\bbackground(-color)?\s*:\s*(none|transparent)',body) and re.search(r'\bborder\s*:\s*none',body) and 'box-shadow' not in body:
+              print(f"{f}:{t[:m.start()].count(chr(10))+1}  {sel}")
+  PY
+  ```
+- **A geometry constant in TS restating a CSS value drifts silently.** Measure from the DOM. A literal written as a sum (`168 + 14`) is the tell someone hand-copied a box model.
+- **A layout constant the component applies by hand is invisible to the library computing offsets in the same space.** `AlbumGrid` added `PADDING` itself, so `scrollToIndex` parked rows under the top edge. Pass `paddingStart`/`paddingEnd` and keep one writer.
+  ```
+  grep -rn "virtualRow\.start\|virtualItem\.start\|getTotalSize()" src --include='*.tsx' | grep -v '\.test\.' | grep "[+-]"
+  ```

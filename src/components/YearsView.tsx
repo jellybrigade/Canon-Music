@@ -1,5 +1,6 @@
 import { AlbumGrid } from "./AlbumGrid";
 import { useAlbums } from "../hooks/useAlbums";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { RadioMode } from "../store/player";
@@ -12,7 +13,7 @@ interface Props {
 }
 
 export function YearsView({ serverWithCredential, onSelect, onStartRadio, serverDisplayName }: Props) {
-  const { data: albums } = useAlbums("year");
+  const { data: albums, isLoading, error } = useAlbums("year");
 
   return (
     <main className="library">
@@ -25,8 +26,14 @@ export function YearsView({ serverWithCredential, onSelect, onStartRadio, server
         serverWithCredential={serverWithCredential}
         onSelect={onSelect}
         onStartRadio={onStartRadio}
-        emptyMessage="No albums yet. Sync your library first."
+        emptyMessage={{
+          title: "No albums yet",
+          hint: "Sync your library from Settings and this view groups every album by release year.",
+        }}
         sort="year"
+        isLoading={isLoading}
+        error={error}
+        onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}
       />
     </main>
   );

@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw, Heart } from "lucide-react";
 import type { PlaylistRow } from "../hooks/usePlaylists";
 import type { PlaylistTrackRow } from "../types/library";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
-import type { SmartFilters } from "../lib/smartPlaylist";
+import { parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
+import { fileToScaledDataUri } from "../lib/imageDataUri";
 import { usePlaylistTracks } from "../hooks/usePlaylistTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
@@ -18,6 +19,7 @@ import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
 import "./AlbumGrid.css";
+import { RowListSkeleton } from "./Skeleton";
 import "./PlaylistList.css";
 
 const SECONDS_PER_MINUTE = 60;
@@ -110,11 +112,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     setDescValue(playlist.comment ?? "");
   }, [playlist.id, playlist.name, playlist.comment]);
 
+  // Parsed here rather than inline in the JSX below: an unparseable `rules_json` threw
+  // from inside the element tree, blanking the whole page via the ErrorBoundary.
+  const smartRules = useMemo(() => parseSmartFilters(playlist.rules_json), [playlist.rules_json]);
   const [refreshingSmart, setRefreshingSmart] = useState(false);
   const [showEditSmartModal, setShowEditSmartModal] = useState(false);
   const [resumeIndex, setResumeIndex] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
+    // The route does not remount this component when the playlist changes, so a playlist
+    // with no stored resume row would otherwise keep the previous playlist's index and
+    // scroll the new track list to an unrelated position.
+    setResumeIndex(null);
     getDb().then(async (db) => {
       type Row = { last_track_id: string; track_position: number };
       const rows = await db.select<Row[]>(
@@ -133,11 +142,17 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     overscan: 5,
   });
 
+  // Restoring the scroll position is a once-per-playlist courtesy, not a reaction to the
+  // track list. `tracks` is a fresh array after every mutation (remove a track, refresh a
+  // smart playlist), and re-running on it yanked the list back to the resume row each
+  // time, undoing wherever the user had scrolled to.
+  const resumeScrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (resumeIndex !== null && tracks && resumeIndex < tracks.length) {
-      virtualizer.scrollToIndex(resumeIndex, { align: "start" });
-    }
-  }, [resumeIndex, tracks]);
+    if (resumeIndex === null || !tracks || resumeIndex >= tracks.length) return;
+    if (resumeScrolledFor.current === playlist.id) return;
+    resumeScrolledFor.current = playlist.id;
+    virtualizer.scrollToIndex(resumeIndex, { align: "start" });
+  }, [resumeIndex, tracks, playlist.id, virtualizer]);
 
   const gridTemplate = [
     "2.5rem",
@@ -190,7 +205,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id };
   }
 
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
   function handlePlayTrack(track: PlaylistTrackRow) {
     if (!tracks) return;
@@ -204,7 +219,11 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
          ON CONFLICT(playlist_id) DO UPDATE SET last_track_id=excluded.last_track_id, track_position=excluded.track_position, updated_at=excluded.updated_at`,
         [playlist.id, track.id, idx]
       );
-    }).catch(() => {});
+    }).catch((e) => {
+      // Resume position is a convenience, not part of playback: a failed write must not surface
+      // as an error over a track that is already playing fine.
+      console.error("Failed to record playlist resume position:", e);
+    });
   }
 
   function handlePlayAll() {
@@ -243,18 +262,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     }
   }
 
-  const totalSeconds = tracks?.reduce((sum, t) => sum + (t.duration ?? 0), 0) ?? 0;
+  const totalSeconds = useMemo(
+    () => tracks?.reduce((sum, t) => sum + (t.duration ?? 0), 0) ?? 0,
+    [tracks]
+  );
 
   function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file || !onSetCustomCover) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUri = reader.result as string;
-      void onSetCustomCover(playlist.id, dataUri);
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    if (!file || !onSetCustomCover) return;
+    fileToScaledDataUri(file)
+      .then((dataUri) => onSetCustomCover(playlist.id, dataUri))
+      .catch((err) => console.error("Failed to set playlist cover:", err));
   }
 
   const displayCoverUrl = playlist.custom_cover_data
@@ -391,8 +410,9 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   <button
                     className="play-album-btn"
                     onClick={() => setShowEditSmartModal(true)}
+                    disabled={!smartRules}
                     aria-label="Edit smart playlist rules"
-                    title="Edit rules"
+                    title={smartRules ? "Edit rules" : "This playlist's saved rules could not be read"}
                   >
                     <ListMusic size={15} /> Edit Rules
                   </button>
@@ -481,9 +501,18 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
 
       <div className="album-detail-body" ref={scrollRef}>
         {isLoading ? (
-          <p className="empty-state">Loading…</p>
+          <RowListSkeleton count={12} label="Loading tracks" />
         ) : !tracks || tracks.length === 0 ? (
-          <p className="empty-state">Playlist is empty.</p>
+          <div className="empty-state">
+            <p className="empty-state-title">
+              {playlist.is_smart ? "No tracks match these rules" : "Playlist is empty"}
+            </p>
+            <p className="empty-state-hint">
+              {playlist.is_smart
+                ? "Edit the rules to widen them, then Refresh."
+                : "Right-click any album or track and choose Add to Playlist."}
+            </p>
+          </div>
         ) : (
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
@@ -580,10 +609,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           </button>
         </ContextMenu>
       )}
-      {showEditSmartModal && onUpdateSmartRules && playlist.rules_json && (
+      {showEditSmartModal && onUpdateSmartRules && smartRules && (
         <SmartPlaylistModal
           title="Edit Smart Playlist"
-          initialFilters={JSON.parse(playlist.rules_json) as SmartFilters}
+          initialFilters={smartRules}
           onSave={(filters) => onUpdateSmartRules(playlist, filters, serverWithCredential)}
           onClose={() => setShowEditSmartModal(false)}
         />

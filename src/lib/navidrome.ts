@@ -43,6 +43,7 @@ export interface NavidromeAlbum {
   created?: string;
   songCount?: number;
   playCount?: number;
+  played?: string;
   releaseTypes?: string[];
   releaseType?: string;
 }
@@ -156,8 +157,9 @@ async function apiPost(
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
   let lastFailure = "unknown error";
-  // A write that cannot be safely repeated gets exactly one shot per route, and only
-  // moves to the alt route when the first one never reached the server at all.
+  // A write that cannot be safely repeated gets exactly one shot, full stop. Both routes
+  // are the same Navidrome, and fetch cannot say whether a rejected request reached it,
+  // so any rejection has to be treated as "may already have been applied".
   const retriable = isRetriableEndpoint(endpoint);
   const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
 
@@ -172,9 +174,10 @@ async function apiPost(
         return res;
       } catch (err) {
         lastFailure = describeError(err);
-        // A timeout means the request may have been received and applied, so a
-        // non-idempotent endpoint must not be sent anywhere else.
-        if (!retriable && isTimeout(err)) break;
+        // fetch rejects identically whether the request never left the machine or was
+        // applied and lost its response (the common Linux resolver stall surfaces as an
+        // opaque TypeError, not an AbortError), so a non-idempotent write stops here.
+        if (!retriable) break;
       }
     }
     if (attempt < maxAttempts) {
@@ -222,8 +225,12 @@ export async function fetchAllAlbums(
   altUrl?: string
 ): Promise<NavidromeAlbum[]> {
   const PAGE_SIZE = 500;
+  // A server that ignores `offset` answers every request with the same full page, so the
+  // short-page exit never fires. Both guards below turn that hang into a failed sync.
+  const MAX_ALBUMS = 500_000;
   const albums: NavidromeAlbum[] = [];
   let offset = 0;
+  let previousFirstId: string | undefined;
 
   while (true) {
     const params = buildAuthParams(username, credential);
@@ -248,10 +255,18 @@ export async function fetchAllAlbums(
     }
 
     const page = response.albumList2?.album ?? [];
+    const firstId = page[0]?.id;
+    if (firstId !== undefined && firstId === previousFirstId) {
+      throw new Error(`getAlbumList2 ignored the offset: the page at ${offset} repeats the last`);
+    }
+    previousFirstId = firstId;
     albums.push(...page);
 
     if (page.length < PAGE_SIZE) break;
     offset += PAGE_SIZE;
+    if (offset >= MAX_ALBUMS) {
+      throw new Error(`getAlbumList2 exceeded the ${MAX_ALBUMS} album ceiling`);
+    }
   }
 
   return albums;
@@ -419,6 +434,22 @@ export async function fetchStarred2(
   return response.starred2 ?? {};
 }
 
+/**
+ * A rejection the server itself issued, as opposed to a transport failure.
+ * The distinction matters to anything that retries: a transport failure is worth
+ * trying again later, whereas a Subsonic error code means the request was received
+ * and understood and will be refused identically forever (code 70, "not found") or
+ * until something else changes (code 40, bad credentials).
+ */
+export class SubsonicError extends Error {
+  readonly code: number | null;
+  constructor(endpoint: string, code: number | null, message?: string) {
+    super(message ?? `${endpoint} failed${code === null ? "" : ` with code ${code}`}`);
+    this.name = "SubsonicError";
+    this.code = code;
+  }
+}
+
 async function callSubsonicVoid(
   baseUrl: string,
   username: string,
@@ -432,11 +463,11 @@ async function callSubsonicVoid(
   const res = await apiPost(baseUrl, endpoint, params, altUrl);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
   const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { message: string } };
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? `${endpoint} failed`);
+    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message);
   }
 }
 

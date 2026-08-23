@@ -229,21 +229,39 @@ function rememberAlbumDataUrl(albumId: string, dataUrl: string): void {
   }
 }
 
-async function loadAlbumDataUrl(albumId: string): Promise<void> {
+// Misses arrive one .get() per card during a single render pass of the grid, so loading
+// them individually meant one SQLite round trip per visible card and one store bump (=
+// one re-render of every consumer) per cover that landed. Ids requested within the same
+// render are collected here and drained on a microtask: one `IN (...)` query, one bump.
+const pendingAlbumIds = new Set<string>();
+let drainScheduled = false;
+
+function scheduleAlbumLoad(albumId: string): void {
+  pendingAlbumIds.add(albumId);
+  if (drainScheduled) return;
+  drainScheduled = true;
+  void Promise.resolve().then(drainPendingAlbumLoads);
+}
+
+async function drainPendingAlbumLoads(): Promise<void> {
+  drainScheduled = false;
+  const ids = [...pendingAlbumIds];
+  pendingAlbumIds.clear();
+  if (ids.length === 0) return;
   try {
     const db = await getDb();
+    const placeholders = ids.map(() => "?").join(", ");
     const rows = await db.select<CoverRow[]>(
-      `SELECT album_id, data_url FROM album_covers WHERE album_id = ? LIMIT 1`,
-      [albumId],
+      `SELECT album_id, data_url FROM album_covers WHERE album_id IN (${placeholders})`,
+      ids,
     );
-    if (rows[0]) {
-      rememberAlbumDataUrl(albumId, rows[0].data_url);
-      bumpCoverStore();
-    }
+    for (const row of rows) rememberAlbumDataUrl(row.album_id, row.data_url);
+    if (rows.length > 0) bumpCoverStore();
   } catch (err) {
-    console.error(`Cover cache: failed to load data_url for album ${albumId}`, err);
+    console.error(`Cover cache: failed to load data_urls for ${ids.length} album(s)`, err);
   } finally {
-    albumLoadsInFlight.delete(albumId);
+    // Released whether or not a row came back, so a later re-get can retry.
+    for (const id of ids) albumLoadsInFlight.delete(id);
   }
 }
 
@@ -261,7 +279,7 @@ class OnDemandCoverMap {
     // Not warmed yet: kick off a one-time background load only if this id is actually cached.
     if (this.ids.has(albumId) && !albumLoadsInFlight.has(albumId)) {
       albumLoadsInFlight.add(albumId);
-      void loadAlbumDataUrl(albumId);
+      scheduleAlbumLoad(albumId);
     }
     return undefined;
   }
@@ -282,6 +300,9 @@ export function useAlbumCoverMap(): Pick<Map<string, string>, "get"> {
       // fresh on demand instead of serving stale base64.
       dataUrlByAlbum.clear();
       albumLoadsInFlight.clear();
+      // Drop ids queued against the previous keyset too, so a pending drain can't write
+      // pre-invalidation bytes back into the cache we just cleared.
+      pendingAlbumIds.clear();
       const rows = await db.select<{ album_id: string }[]>(`SELECT album_id FROM album_covers`);
       return rows.map((r) => r.album_id);
     },

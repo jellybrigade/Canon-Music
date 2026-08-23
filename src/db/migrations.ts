@@ -3,6 +3,113 @@ export interface Migration {
   sql: string;
 }
 
+/**
+ * The subset of tauri-plugin-sql's `Database` that `runMigrations` needs. Declared here so the
+ * test harness can drive the real runner instead of re-implementing it, which is what let the
+ * two copies drift apart before.
+ */
+export interface MigrationDb {
+  execute(query: string, bindValues?: unknown[]): Promise<unknown>;
+  select<T>(query: string, bindValues?: unknown[]): Promise<T>;
+}
+
+/**
+ * Thrown when the database records a schema version this build does not know about, which means
+ * it was written by a newer Canon and there is no downgrade path.
+ */
+export class SchemaTooNewError extends Error {
+  readonly found: number;
+  readonly supported: number;
+
+  constructor(found: number, supported: number) {
+    super(
+      `This library was created by a newer version of Canon (database schema v${found}, this build understands up to v${supported}). Update Canon to open it.`
+    );
+    this.name = "SchemaTooNewError";
+    this.found = found;
+    this.supported = supported;
+  }
+}
+
+export async function runMigrations(database: MigrationDb): Promise<void> {
+  // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
+  // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
+  // (DELETE mode) db, so concurrent sync/scrobble/enrichment writes can starve UI reads with
+  // "database is locked" errors. WAL is a persistent on-disk setting, but PRAGMA is cheap to re-run.
+  await database.execute("PRAGMA journal_mode=WAL");
+
+  await database.execute(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      version INTEGER PRIMARY KEY
+    )
+  `);
+
+  type Row = { version: number };
+  const rows = await database.select<Row[]>(
+    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
+  );
+  const current = rows[0]?.version ?? 0;
+
+  // A high-water mark answers "what still needs running", never "is this file too new for me".
+  // Without this the loop body simply never executes and the older build then runs its own
+  // queries against a newer schema, failing scattered and late instead of once and clearly.
+  if (current > LATEST_SCHEMA_VERSION) {
+    throw new SchemaTooNewError(current, LATEST_SCHEMA_VERSION);
+  }
+
+  for (const migration of migrations) {
+    if (migration.version > current) {
+      // tauri-plugin-sql only executes one statement per execute() call;
+      // split on ";" and run each non-empty statement individually.
+      const statements = migration.sql
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+
+      // A block has to be all-or-nothing. Several blocks are only correct as a sequence - v25 and
+      // v35 rebuild track_tags as create/copy/drop/rename, so a process that dies between the DROP
+      // and the RENAME leaves every tag in a table the app cannot see, and the replay on the next
+      // launch dies on the CREATE forever. The version row goes inside the same transaction: a
+      // block that ran but was not recorded is replayed against a database it already changed.
+      //
+      // BEGIN / COMMIT only work here because the statements of one block reach the same
+      // connection. tauri-plugin-sql runs every execute() through an sqlx pool with no connection
+      // affinity, but these awaits are strictly sequential and `getDb()` gates every other caller
+      // behind the same promise, so the pool never has cause to open a second connection while a
+      // migration is in flight. Anything that starts issuing queries concurrently with the runner
+      // breaks that, and would need the block moved behind a single Rust-side transaction instead.
+      await database.execute("BEGIN");
+      try {
+        for (const statement of statements) {
+          try {
+            await database.execute(statement);
+          } catch (e) {
+            // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
+            // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
+            // SQLite rolls back the failed statement only, so the surrounding transaction survives.
+            // tauri-plugin-sql rejects with a plain string, not an Error instance, so check both shapes.
+            const message = e instanceof Error ? e.message : String(e);
+            if (!message.includes("duplicate column name")) throw e;
+          }
+        }
+        await database.execute(
+          "INSERT INTO schema_migrations (version) VALUES (?)",
+          [migration.version]
+        );
+        await database.execute("COMMIT");
+      } catch (e) {
+        // A ROLLBACK that fails must not replace the error that says what actually went wrong.
+        try {
+          await database.execute("ROLLBACK");
+        } catch {
+          /* keep the original failure */
+        }
+        throw e;
+      }
+    }
+  }
+}
+
 export const migrations: Migration[] = [
   {
     version: 1,
@@ -431,7 +538,7 @@ export const migrations: Migration[] = [
         PRIMARY KEY (norm_value, kind)
       );
 
-      INSERT INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
+      INSERT OR IGNORE INTO tag_vocab_cache (norm_value, raw_value, kind, album_count, sources)
       SELECT
         LOWER(REPLACE(REPLACE(TRIM(tt.raw_value), '-', ' '), '_', ' ')),
         tt.raw_value,
@@ -605,4 +712,15 @@ export const migrations: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_albums_artist_server_artwork ON albums(artist, server_id) WHERE artwork_url IS NOT NULL;
     `,
   },
+  {
+    // The server's own "last played" timestamp. Without it the listening-stats
+    // carousels only ever know about plays Canon itself scrobbled, so a fresh
+    // install against a long-established server shows an empty "On Repeat" and
+    // sorts "From the Vault" on empty strings.
+    version: 48,
+    sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
+  },
 ];
+
+/** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */
+export const LATEST_SCHEMA_VERSION = Math.max(...migrations.map((m) => m.version));

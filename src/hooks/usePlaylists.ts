@@ -13,7 +13,7 @@ import {
   replaceNavidromePlaylistTracks,
 } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
-import { buildSmartQuery, type SmartFilters } from "../lib/smartPlaylist";
+import { buildSmartQuery, parseSmartFilters, type SmartFilters } from "../lib/smartPlaylist";
 import { executeBatched } from "../lib/db-batch";
 
 async function insertPlaylistTracksBatch(
@@ -208,8 +208,11 @@ export function usePlaylists() {
   }
 
   async function refreshSmartPlaylist(playlist: PlaylistRow, swc: ServerWithCredential): Promise<void> {
-    if (!playlist.is_smart || !playlist.rules_json) return;
-    const filters = JSON.parse(playlist.rules_json) as SmartFilters;
+    if (!playlist.is_smart) return;
+    const filters = parseSmartFilters(playlist.rules_json);
+    if (!filters) {
+      throw new Error("This smart playlist's saved rules could not be read");
+    }
     const { server, credential } = swc;
     const db = await getDb();
     const { sql, params } = buildSmartQuery(filters, server.id);
@@ -230,10 +233,12 @@ export function usePlaylists() {
 
   async function updateSmartPlaylistRules(playlist: PlaylistRow, filters: SmartFilters, swc: ServerWithCredential): Promise<void> {
     const db = await getDb();
-    await db.execute("UPDATE playlists SET name = ?, rules_json = ? WHERE id = ?", [filters.name, JSON.stringify(filters), playlist.id]);
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
+    // Remote first, local second, matching renamePlaylist: a rejected rename used to
+    // leave the local row already carrying a name and rules the server never accepted.
     await updateNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, filters.name, undefined, server.alt_url ?? undefined);
+    await db.execute("UPDATE playlists SET name = ?, rules_json = ? WHERE id = ?", [filters.name, JSON.stringify(filters), playlist.id]);
     usePlaylistSessionStore.getState().bumpPlaylists();
     await refreshSmartPlaylist({ ...playlist, name: filters.name, rules_json: JSON.stringify(filters) }, swc);
   }

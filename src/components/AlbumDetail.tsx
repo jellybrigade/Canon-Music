@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef } fr
 import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../hooks/useAlbumDisplayName";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink } from "lucide-react";
+import { Heart, Play, ChevronRight, Disc, HelpCircle, Pencil, SlidersHorizontal, ExternalLink, Shuffle, ListPlus, ListEnd } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
@@ -33,7 +33,7 @@ import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { extractAccent } from "../lib/artColor";
-import { getBlurredBackdrop } from "../lib/artBlur";
+import { ArtBackdrop } from "./ArtBackdrop";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
@@ -43,6 +43,7 @@ import "./AlbumDetail.css";
 
 const SECONDS_PER_MINUTE = 60;
 const RELATED_SHELF_LIMIT = 6;
+const TRACK_SKELETON_ROWS = 8;
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / SECONDS_PER_MINUTE);
@@ -66,11 +67,13 @@ interface DrawerState {
 
 export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
   const { server, credential } = serverWithCredential;
-  const { data: tracks, isLoading } = useTracks(album.id);
+  const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
+  const addManyToQueue = usePlayerStore((s) => s.addManyToQueue);
+  const playNextMany = usePlayerStore((s) => s.playNextMany);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -153,23 +156,32 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
+  const [tagRefreshError, setTagRefreshError] = useState<string | null>(null);
 
   const doSyncTracks = useCallback(async () => {
     await syncAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
     useTrackListSessionStore.getState().bumpRefresh();
   }, [album.id, serverWithCredential]);
 
-  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration
+  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration.
+  // Guarded to one attempt per album: doSyncTracks bumps the track-list refresh tick,
+  // which makes useTracks hand back a fresh array and re-run this effect. If the server
+  // reports no bitRate for these tracks, the condition is still true on that new array,
+  // so without the guard this re-syncs the album over the network forever.
+  const bitRateSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!tracks || tracks.length === 0) return;
+    if (bitRateSyncedRef.current === album.id) return;
     if (tracks.every((t) => t.bit_rate === null)) {
+      bitRateSyncedRef.current = album.id;
       void doSyncTracks();
     }
-  }, [tracks, doSyncTracks]);
+  }, [tracks, doSyncTracks, album.id]);
 
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
     setIsTagRefreshing(true);
+    setTagRefreshError(null);
     try {
       await doSyncTracks();
       await normalizeAlbum(album.id, album.artist ?? "", album.name, {
@@ -184,8 +196,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
       });
       await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
       await queryClient.invalidateQueries({ queryKey: QK.albumUnmatchedGenres(album.id) });
-    } catch {
-      // silent
+    } catch (err) {
+      console.error("AlbumDetail: tag refresh failed", err);
+      setTagRefreshError("Refresh failed. Check the server connection and try again.");
     } finally {
       setIsTagRefreshing(false);
     }
@@ -316,17 +329,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     return () => { cancelled = true; };
   }, [coverArtUrl, album.accent_color, album.id]);
 
-  const [heroBg, setHeroBg] = useState<string | null>(null);
-  useEffect(() => {
-    setHeroBg(null);
-    if (!coverArtUrl) return;
-    let cancelled = false;
-    void getBlurredBackdrop(coverArtUrl).then((dataUrl) => {
-      if (!cancelled) setHeroBg(dataUrl);
-    });
-    return () => { cancelled = true; };
-  }, [coverArtUrl]);
-
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {
       id: track.id,
@@ -348,7 +350,20 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     };
   }
 
-  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
+
+  // The album button does whatever album.play_action says, so its label and icon have to say so
+  // too. A fixed "Play Album" is a lie for three of the four settings.
+  const playActionLabel =
+    playAction === "queue_last" ? "Add to Queue"
+    : playAction === "queue_next" ? "Play Next"
+    : playAction === "shuffle" ? "Shuffle Album"
+    : "Play Album";
+  const PlayActionIcon =
+    playAction === "queue_last" ? ListEnd
+    : playAction === "queue_next" ? ListPlus
+    : playAction === "shuffle" ? Shuffle
+    : Play;
 
   function handlePlayTrack(track: TrackRow) {
     if (!tracks) return;
@@ -360,9 +375,9 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     if (!tracks || tracks.length === 0) return;
     const trackObjs = tracks.map(buildTrackObj);
     if (playAction === "queue_last") {
-      for (const t of trackObjs) addToQueue(t, streamUrlFor);
+      addManyToQueue(trackObjs, streamUrlFor);
     } else if (playAction === "queue_next") {
-      for (let i = trackObjs.length - 1; i >= 0; i--) playNext(trackObjs[i]!, streamUrlFor);
+      playNextMany(trackObjs, streamUrlFor);
     } else if (playAction === "shuffle") {
       void playQueue(shuffleArray(trackObjs), streamUrlFor, 0);
     } else {
@@ -471,12 +486,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
       style={(accentColor ? { "--album-accent": accentColor } : {}) as React.CSSProperties}
     >
       <div className="album-detail-header">
-        {heroBg && (
-          <div
-            className="album-detail-hero-bg"
-            style={{ backgroundImage: `url("${heroBg}")` }}
-          />
-        )}
+        <ArtBackdrop imageUrl={coverArtUrl} className="album-detail-hero-bg" />
         <button className="album-detail-back" onClick={onClose}>
           ← Back
         </button>
@@ -521,7 +531,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
             )}
             {suffixIsExcluded && detectedSuffix && (
               <button
-                className="album-suffix-add-btn album-suffix-add-btn--undo"
+                className="album-suffix-add-btn"
                 onClick={() => void unexcludeFromSuffix(album.id)}
                 title="Re-apply suffix stripping to this album."
               >
@@ -583,15 +593,18 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
               >
                 {isTagRefreshing ? "Refreshing…" : "Refresh"}
               </button>
+              {tagRefreshError && (
+                <span className="album-meta-refresh-error" role="status">{tagRefreshError}</span>
+              )}
             </div>
             <div className="album-detail-actions">
               <button
                 className="play-album-btn"
                 onClick={handlePlayAlbum}
                 disabled={!tracks || tracks.length === 0}
-                aria-label="Play album"
+                aria-label={playActionLabel}
               >
-                <Play size={16} /> Play Album
+                <PlayActionIcon size={16} /> {playActionLabel}
               </button>
               <button
                 className={`album-identify-btn${lovedAlbumIds.has(album.id) ? " album-identify-btn--loved" : ""}`}
@@ -757,9 +770,33 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
           </div>
         )}
         {isLoading ? (
-          <p className="empty-state">Loading tracks…</p>
+          <div className="album-track-skeleton" aria-label="Loading tracks" aria-busy="true">
+            {Array.from({ length: TRACK_SKELETON_ROWS }, (_, i) => (
+              <div key={i} className="album-track-skeleton-row">
+                <span className="album-track-skeleton-bar album-track-skeleton-bar--num" />
+                <span className="album-track-skeleton-bar" />
+                <span className="album-track-skeleton-bar album-track-skeleton-bar--short" />
+              </div>
+            ))}
+          </div>
+        ) : tracksError ? (
+          <div className="empty-state">
+            <p className="empty-state-title">Couldn't load this album's tracks</p>
+            <p className="empty-state-hint">{tracksError}</p>
+            <button
+              className="empty-state-action"
+              onClick={() => useTrackListSessionStore.getState().bumpRefresh()}
+            >
+              Try again
+            </button>
+          </div>
         ) : !tracks || tracks.length === 0 ? (
-          <p className="empty-state">No tracks synced yet.</p>
+          <div className="empty-state">
+            <p className="empty-state-title">No tracks synced yet</p>
+            <p className="empty-state-hint">
+              Run a library sync and this album's tracks appear here, ready to play.
+            </p>
+          </div>
         ) : (
           <div className="tracklist-wrapper">
             <div className="tracklist-col-picker-anchor" ref={colPickerRef}>

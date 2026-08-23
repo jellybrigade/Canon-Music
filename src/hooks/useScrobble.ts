@@ -7,11 +7,19 @@ import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "./useServer";
 import { useSetting } from "./useSetting";
 
+// A rejected insert clears the stamp so the next position poll retries, which makes the
+// poll the retry clock: unbounded, a database that stays locked would write five failing
+// statements a second for the rest of the track.
+const MAX_QUEUE_WRITE_ATTEMPTS = 3;
+
 export function useScrobble(
   track: CurrentTrack | null,
   serverWithCred: ServerWithCredential | undefined
 ) {
   const scrobbedRef = useRef(false);
+  const writeAttemptsRef = useRef(0);
+  // One timestamp per play, so a retry can ask whether the row it failed to confirm is there.
+  const timestampRef = useRef<number | null>(null);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
@@ -21,6 +29,8 @@ export function useScrobble(
 
   useEffect(() => {
     scrobbedRef.current = false;
+    writeAttemptsRef.current = 0;
+    timestampRef.current = null;
   }, [playStartedAt]);
 
   useEffect(() => {
@@ -44,16 +54,37 @@ export function useScrobble(
     if (!thresholdMet) return;
 
     scrobbedRef.current = true;
-    const timestamp = Math.floor(Date.now() / 1000);
+    writeAttemptsRef.current += 1;
+    const timestamp = timestampRef.current ?? Math.floor(Date.now() / 1000);
+    timestampRef.current = timestamp;
+    const trackId = track.id;
 
     getDb()
       .then((db) =>
         db.execute(
           "INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES (?, ?, ?, ?)",
-          [track.id, track.title, track.artist ?? "", timestamp]
+          [trackId, track.title, track.artist ?? "", timestamp]
         )
       )
-      .catch((e) => console.error("Failed to write scrobble_queue:", e));
+      .catch(async (e) => {
+        console.error("Failed to write scrobble_queue:", e);
+        if (writeAttemptsRef.current >= MAX_QUEUE_WRITE_ATTEMPTS) return;
+        // A rejection cannot say whether the insert committed, so ask. Re-arming blind
+        // sends the same play to the server twice.
+        try {
+          const db = await getDb();
+          const rows = await db.select<{ id: number }[]>(
+            "SELECT id FROM scrobble_queue WHERE track_id = ? AND timestamp = ? LIMIT 1",
+            [trackId, timestamp]
+          );
+          if (rows.length > 0) return;
+        } catch {
+          // Cannot confirm either way, so leave the play queued for the next launch
+          // rather than risk a duplicate.
+          return;
+        }
+        scrobbedRef.current = false;
+      });
   }, [track, elapsed]);
 }
 

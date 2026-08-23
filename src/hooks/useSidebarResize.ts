@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSetting } from "./useSetting";
 
 interface UseSidebarResizeOptions {
@@ -27,6 +27,15 @@ export function useSidebarResize({
   const savedWidth = Math.max(min, Math.min(max, parseInt(rawWidth, 10) || defaultWidth));
   const [liveWidth, setLiveWidth] = useState<number | null>(null);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+  // The drag's document listeners and the body style overrides are installed by
+  // an event handler, not by an effect, so nothing frees them if the handle
+  // unmounts mid-drag (collapsing the sidebar removes it from the tree). That
+  // would leak both listeners and leave the whole app stuck with text selection
+  // disabled and an ew-resize cursor. This ref carries the teardown out to the
+  // unmount cleanup below.
+  const teardownRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => { teardownRef.current?.(); }, []);
 
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -48,15 +57,20 @@ export function useSidebarResize({
       setLiveWidth(computeWidth(ev.clientX));
     }
 
-    function onUp(ev: MouseEvent) {
-      if (!dragRef.current) return;
-      const finalWidth = computeWidth(ev.clientX);
+    function teardown() {
       dragRef.current = null;
-      setLiveWidth(null);
+      teardownRef.current = null;
       document.body.style.userSelect = "";
       document.body.style.cursor = "";
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+    }
+
+    function onUp(ev: MouseEvent) {
+      if (!dragRef.current) return;
+      const finalWidth = computeWidth(ev.clientX);
+      teardown();
+      setLiveWidth(null);
 
       const threshold = saveMin ?? min;
       if (finalWidth < threshold && onCollapse) {
@@ -68,6 +82,7 @@ export function useSidebarResize({
 
     document.addEventListener("mousemove", onMove);
     document.addEventListener("mouseup", onUp);
+    teardownRef.current = teardown;
   }
 
   return { liveWidth, savedWidth, isDragging: liveWidth !== null, handleMouseDown };

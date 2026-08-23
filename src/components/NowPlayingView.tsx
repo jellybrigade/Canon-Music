@@ -3,145 +3,70 @@ import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { WaveformBars } from "./WaveformBars";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw,
+  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX, AlertCircle,
 } from "lucide-react";
-import { usePlayerStore, type CurrentTrack, type RadioMode } from "../store/player";
+import { usePlayerStore, isNextDisabled, repeatModeLabel, type CurrentTrack, type RadioMode } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { getBlurredBackdrop } from "../lib/artBlur";
+import { ArtBackdrop } from "./ArtBackdrop";
 import { RadioChip } from "./RadioChip";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
 import { parseLrc, type LrcLine } from "../lib/lrclib";
-import { fetchSimilarArtists, fetchArtistTopTracks } from "../lib/lastfm";
+import {
+  primaryArtistOf,
+  fetchArtistAlbums,
+  fetchArtistTopTracksForNowPlaying,
+  fetchSuggestedTracksForNowPlaying,
+  NOW_PLAYING_STALE_TIME,
+  SUGGESTED_STALE_TIME,
+  type NowPlayingTrack,
+} from "../lib/now-playing-queries";
 import { fetchBandsintownEvents, type BandsintownEvent } from "../lib/bandsintown";
 import { useBoolSetting } from "../hooks/useSetting";
+import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
 import { TourCard } from "./TourCard";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../lib/query-keys";
-import { getDb } from "../db";
 import { AlbumArt } from "./AlbumArt";
 import "./NowPlayingView.css";
 
-const SECONDS_PER_MINUTE = 60;
-
 type Tab = "up-next" | "about" | "lyrics";
 
-function formatDuration(seconds: number): string {
-  const total = Math.floor(seconds);
-  const m = Math.floor(total / SECONDS_PER_MINUTE);
-  const s = total % SECONDS_PER_MINUTE;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
-
-interface TopTrack {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  album_name: string | null;
-  album_id: string | null;
-  artwork_url: string | null;
-}
-
-interface SuggestedTrack {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-  album_name: string | null;
-  album_id: string | null;
-  artwork_url: string | null;
-}
+type TopTrack = NowPlayingTrack;
+type SuggestedTrack = NowPlayingTrack;
 
 function useArtistAlbums(artistName: string | null) {
   return useQuery({
     queryKey: QK.nowPlayingAlbums(artistName),
-    queryFn: async (): Promise<AlbumRow[]> => {
-      if (!artistName) return [];
-      const db = await getDb();
-      return db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url
-         FROM albums WHERE artist = ?
-         ORDER BY year IS NULL, year DESC, name`,
-        [artistName]
-      );
-    },
+    queryFn: (): Promise<AlbumRow[]> => fetchArtistAlbums(artistName!),
     enabled: !!artistName,
+    // Matches what useNowPlayingPrefetch warms it with. Left at the default, the prefetched
+    // entry was stale the instant it landed and the tab re-ran the query on every open.
+    staleTime: NOW_PLAYING_STALE_TIME,
   });
 }
 
 function useArtistTopTracks(artistName: string | null) {
   return useQuery({
     queryKey: QK.nowPlayingTopTracks(artistName),
-    queryFn: async (): Promise<TopTrack[]> => {
-      if (!artistName) return [];
-      const db = await getDb();
-
-      // Try Last.fm global popularity ranking first
-      const trackNames = await fetchArtistTopTracks(artistName);
-      if (trackNames.length > 0) {
-        const localTracks = await db.select<TopTrack[]>(
-          `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                  t.album_id, a.artwork_url
-           FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-           WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'`,
-          [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
-        );
-        const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
-        const matched: TopTrack[] = [];
-        for (const { name } of trackNames) {
-          const track = byTitle.get(name.toLowerCase());
-          if (track && !matched.some((m) => m.id === track.id)) {
-            matched.push(track);
-            if (matched.length >= 10) break;
-          }
-        }
-        if (matched.length > 0) return matched;
-      }
-
-      // Fallback: local library ordering
-      return db.select<TopTrack[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url
-         FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ? OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\' OR t.artist LIKE ? ESCAPE '\'
-         ORDER BY t.track_number, t.title
-         LIMIT 10`,
-        [artistName, artistName + ' feat.%', artistName + ' ft.%', artistName + ' featuring %']
-      );
-    },
+    queryFn: (): Promise<TopTrack[]> => fetchArtistTopTracksForNowPlaying(artistName!),
     enabled: !!artistName,
-    staleTime: 30 * 60 * 1000,
+    staleTime: NOW_PLAYING_STALE_TIME,
   });
 }
 
 function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
   return useQuery({
     queryKey: QK.suggestedTracks(artistName, currentTrackId),
-    queryFn: async (): Promise<SuggestedTrack[]> => {
-      if (!artistName) return [];
-      const similarArtists = await fetchSimilarArtists(artistName);
-      if (similarArtists.length === 0) return [];
-      const db = await getDb();
-      const placeholders = similarArtists.map(() => "?").join(", ");
-      return db.select<SuggestedTrack[]>(
-        `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url
-         FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist IN (${placeholders})
-           AND t.id != ?
-         ORDER BY random()
-         LIMIT 10`,
-        [...similarArtists, currentTrackId ?? ""]
-      );
-    },
+    queryFn: (): Promise<SuggestedTrack[]> =>
+      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId),
     enabled: !!artistName,
-    staleTime: 5 * 60 * 1000,
+    staleTime: SUGGESTED_STALE_TIME,
   });
 }
 
@@ -154,48 +79,27 @@ interface Props {
 }
 
 function NowPlayingProgress({
-  duration, useWaveform, overlayPeaks, progressBarRef, onProgressClick,
+  duration, useWaveform, overlayPeaks,
 }: {
   duration: number;
   useWaveform: boolean;
   overlayPeaks: number[] | null;
-  progressBarRef: React.RefObject<HTMLDivElement | null>;
-  onProgressClick: (e: React.MouseEvent<HTMLDivElement>) => void;
 }) {
-  const elapsed = usePlayerStore((s) => s.elapsed);
-  const seek = usePlayerStore((s) => s.seek);
-  const progress = duration > 0 ? Math.min(elapsed / duration, 1) : 0;
+  const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
+  const isBuffering = usePlayerStore((s) => s.isBuffering);
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
     [progress, overlayPeaks]
   );
 
-  function handleProgressKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (duration <= 0) return;
-    if (e.key === "ArrowRight" || e.key === "ArrowUp") {
-      e.preventDefault();
-      void seek(Math.min(duration, elapsed + duration * 0.05));
-    } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
-      e.preventDefault();
-      void seek(Math.max(0, elapsed - duration * 0.05));
-    }
-  }
-
   return (
     <div className="now-playing-progress-row">
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
-        ref={progressBarRef}
-        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}`}
-        role="slider"
-        aria-label="Seek"
-        aria-valuenow={Math.round(progress * 100)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        tabIndex={duration > 0 ? 0 : -1}
-        onClick={onProgressClick}
-        onKeyDown={handleProgressKeyDown}
-        style={{ cursor: duration > 0 ? "pointer" : "default" }}
+        ref={barRef}
+        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}${isBuffering ? " now-playing-progress-bar--buffering" : ""}`}
+        aria-busy={isBuffering || undefined}
+        {...sliderProps}
       >
         {useWaveform ? (
           <WaveformBars
@@ -205,7 +109,7 @@ function NowPlayingProgress({
             filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
           />
         ) : (
-          <div className="now-playing-progress-fill" style={{ width: `${progress * 100}%` }} />
+          <div className="now-playing-progress-fill" style={{ transform: `scaleX(${progress})` }} />
         )}
       </div>
       <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
@@ -237,13 +141,10 @@ interface LyricLineProps {
 }
 
 const LyricLine = React.memo(function LyricLine({ index, text, isActive }: LyricLineProps) {
-  const activeLyricRef = useRef<HTMLDivElement>(null);
   return (
     <div
-      ref={isActive ? activeLyricRef : undefined}
       data-lyric-index={index}
       className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-      style={{ cursor: "pointer" }}
     >
       {text || " "}
     </div>
@@ -424,11 +325,14 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
+  const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
   const shuffleOrder = usePlayerStore((s) => s.shuffleOrder);
   const pause = usePlayerStore((s) => s.pause);
   const resume = usePlayerStore((s) => s.resume);
   const next = usePlayerStore((s) => s.next);
+  const error = usePlayerStore((s) => s.error);
+  const retryCurrent = usePlayerStore((s) => s.retryCurrent);
   const prev = usePlayerStore((s) => s.prev);
   const seek = usePlayerStore((s) => s.seek);
   const setVolume = usePlayerStore((s) => s.setVolume);
@@ -440,12 +344,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const playNext = usePlayerStore((s) => s.playNext);
   const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
+  const clearQueue = usePlayerStore((s) => s.clearQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const radioActive = usePlayerStore((s) => s.radioActive);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
-  const progressBarRef = useRef<HTMLDivElement>(null);
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
   const [volumeOpen, setVolumeOpen] = useState(false);
@@ -459,19 +363,22 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
-  const nextDisabled = repeat === "off" && queueIndex >= queue.length - 1;
+  const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
-  const repeatLabel = repeat === "off" ? "Repeat off" : repeat === "repeat-all" ? "Repeat all" : "Repeat one";
+  const repeatLabel = repeatModeLabel(repeat);
+  const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
 
-  const primaryArtist = currentTrack?.artist
-    ? (currentTrack.artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? currentTrack.artist)
-    : null;
-  const { data: artistAlbums } = useArtistAlbums(primaryArtist);
-  const { data: topTracks } = useArtistTopTracks(primaryArtist);
+  const primaryArtist = primaryArtistOf(currentTrack?.artist);
+  const { data: artistAlbums, isPending: albumsPending } = useArtistAlbums(primaryArtist);
+  const { data: topTracks, isPending: topTracksPending } = useArtistTopTracks(primaryArtist);
   const { data: suggestedTracks } = useSuggestedTracks(
     primaryArtist,
     currentTrack?.id ?? null
   );
+  // Both start out `undefined`, which is indistinguishable from "the artist has nothing" unless
+  // the pending flags are consulted. Without them the About tab asserted "No artist info
+  // available." for the whole of the Last.fm round trip, then replaced it with the content.
+  const aboutPending = !!primaryArtist && (albumsPending || topTracksPending);
   const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = useMemo(() => (lyricsSynced ? parseLrc(lyricsSynced) : null), [lyricsSynced]);
   const accent = usePlayerStore((s) => s.accentColor);
@@ -526,22 +433,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
     : currentTrack?.coverArtUrl ?? null;
 
-  const [blurBg, setBlurBg] = useState<string | null>(null);
-  useEffect(() => {
-    setBlurBg(null);
-    if (!blurArtUrl) return;
-    let cancelled = false;
-    void getBlurredBackdrop(blurArtUrl).then((dataUrl) => {
-      if (!cancelled) setBlurBg(dataUrl);
-    });
-    return () => { cancelled = true; };
-  }, [blurArtUrl]);
-
   const orderedTracks = useMemo(
     () => Array.from({ length: queue.length }, (_, pos) => {
       const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-      return { position: pos, track: queue[idx]! };
-    }),
+      return { position: pos, track: queue[idx] };
+    }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
     [queue, isShuffled, shuffleOrder]
   );
 
@@ -557,18 +453,13 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     setLyricsSearchTitle(currentTrack?.title ?? "");
   }, [currentTrack?.id]);
 
+  // Also keyed on queueIndex: with the tab left open, a track advance moved the highlight but
+  // not the scroll position, so the playing row walked off the bottom of a long queue.
   useEffect(() => {
     if (tab !== "up-next" || !upNextRef.current) return;
     const active = upNextRef.current.querySelector(".now-playing-up-next-row--active");
     if (active) active.scrollIntoView({ block: "nearest" });
-  }, [tab]);
-
-  function handleProgressClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!progressBarRef.current || duration <= 0) return;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    void seek(ratio * duration);
-  }
+  }, [tab, queueIndex]);
 
   function buildTrack(t: TopTrack | SuggestedTrack) {
     const navId = stripServerPrefix(t.id, server.id);
@@ -622,10 +513,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     <div
       className="now-playing-view"
       style={{
-        ...(blurBg ? { '--art-bg': `url("${blurBg}")` } : {}),
         ...(accent ? { '--np-dominant': accent } : {}),
       } as React.CSSProperties}
     >
+      <ArtBackdrop imageUrl={blurArtUrl} className="now-playing-backdrop" />
       {onBack && (
         <button className="now-playing-back-btn player-btn player-btn--icon" onClick={onBack} title="Back">
           <ChevronLeft size={22} />
@@ -687,9 +578,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             duration={duration}
             useWaveform={!!useWaveform}
             overlayPeaks={overlayPeaks}
-            progressBarRef={progressBarRef}
-            onProgressClick={handleProgressClick}
           />
+
+          {error && (
+            <div className="now-playing-error" role="alert">
+              <AlertCircle size={15} className="now-playing-error-icon" aria-hidden="true" />
+              <span className="now-playing-error-msg">{error}</span>
+              <button className="player-error-action" onClick={retryCurrent}>Retry</button>
+              <button className="player-error-action" onClick={() => void next()} disabled={nextDisabled}>Skip</button>
+            </div>
+          )}
 
           {radioActive && (
             <div className="now-playing-radio-chip-row">
@@ -712,7 +610,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             <button
               className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
-              title="Shuffle"
+              title={shuffleLabel}
+              aria-label={shuffleLabel}
+              aria-pressed={isShuffled}
             >
               <Shuffle size={18} />
             </button>
@@ -720,6 +620,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn"
               onClick={() => void prev()}
               disabled={queue.length === 0}
+              aria-label="Previous"
             >
               <SkipBack size={26} />
             </button>
@@ -727,6 +628,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn player-btn--play player-btn--play-large"
               onClick={isPlaying ? pause : resume}
               disabled={isLoading}
+              aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading
                 ? <Loader size={24} className="player-spin" />
@@ -738,6 +640,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className="player-btn"
               onClick={() => void next()}
               disabled={nextDisabled}
+              aria-label="Next"
             >
               <SkipForward size={26} />
             </button>
@@ -745,6 +648,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
+              aria-label={repeatLabel}
+              aria-pressed={repeat !== "off"}
             >
               {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
             </button>
@@ -804,6 +709,16 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 {t === "up-next" ? "Up Next" : t === "about" ? "About" : "Lyrics"}
               </button>
             ))}
+            {tab === "up-next" && queue.length > 0 && (
+              <button
+                className="now-playing-tab-refresh-btn"
+                title="Clear queue"
+                aria-label="Clear queue"
+                onClick={() => clearQueue()}
+              >
+                <ListX size={14} />
+              </button>
+            )}
             {tab === "lyrics" && (
               <div className="now-playing-tab-lyric-actions">
                 {lyricsLines && (
@@ -856,7 +771,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             {tab === "up-next" && (
               <>
                 {orderedTracks.length === 0 ? (
-                  <p className="now-playing-empty">Queue is empty.</p>
+                  <p className="now-playing-empty">Nothing queued. Play an album or track, or use "Add to queue" from any track menu.</p>
                 ) : (
                   orderedTracks.map(({ position, track }) => (
                     <button
@@ -918,6 +833,24 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
             {tab === "about" && (
               <>
+                {aboutPending && (
+                  <div className="now-playing-about-skeleton" aria-hidden="true">
+                    <div className="now-playing-about-skeleton-title" />
+                    <div className="now-playing-about-skeleton-chips">
+                      {[0, 1, 2, 3].map((i) => (
+                        <div key={i} className="now-playing-about-skeleton-chip" />
+                      ))}
+                    </div>
+                    <div className="now-playing-about-skeleton-title" />
+                    {[0, 1, 2, 3, 4].map((i) => (
+                      <div key={i} className="now-playing-about-skeleton-row">
+                        <div className="now-playing-about-skeleton-thumb" />
+                        <div className="now-playing-about-skeleton-bar" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {otherAlbums.length > 0 && (
                   <div className="now-playing-more-section">
                     <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
@@ -1044,8 +977,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   </div>
                 )}
 
-                {otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
-                  <p className="now-playing-empty">No artist info available.</p>
+                {!aboutPending && otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
+                  <p className="now-playing-empty">
+                    Nothing else by {primaryArtist ?? "this artist"} in your library yet. Other
+                    albums and top tracks show up here once they are synced.
+                  </p>
                 )}
 
                 {primaryArtist && (

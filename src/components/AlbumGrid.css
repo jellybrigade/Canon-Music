@@ -164,11 +164,10 @@
   text-shadow: 0 1px 4px var(--scrim-4);
 }
 
-.empty-state {
-  padding: var(--space-2xl);
-  text-align: center;
-  color: var(--text-tertiary);
-}
+/* The .empty-state* rules used to live here, but AppShell, AppRoutes, ArtistGrid, HomeView,
+   PlaylistList, PlaylistDetail and TrackTableView all use them without importing this file -
+   they only rendered correctly because the bundler flattens every imported stylesheet into
+   one. Moved to App.css, which every view genuinely shares. */
 
 /* ── Loved / hearts ── */
 .track-heart-cell {
@@ -243,7 +242,12 @@
   color: var(--danger);
 }
 
-.loved-filter-btn {
+/* Library-header toggle (currently the scroll/pages switch). Named for the role,
+   not for one occupant - it was `.loved-filter-btn` back when the loved filter
+   lived in the header, and kept the loved filter's red active state after the
+   filter itself moved into FilterSidebar, which made an active toggle read as an
+   error rather than as a selection. */
+.header-toggle-btn {
   font-size: var(--text-base);
   padding: 0.25em 0.65em;
   box-shadow: none;
@@ -252,10 +256,10 @@
   gap: 0.3em;
 }
 
-.loved-filter-btn--active {
-  background-color: rgba(231, 76, 60, 0.12);
-  color: var(--danger);
-  border-color: rgba(231, 76, 60, 0.3);
+.header-toggle-btn--active {
+  background-color: var(--accent-subtle);
+  color: var(--accent);
+  border-color: var(--accent-border);
 }
 
 

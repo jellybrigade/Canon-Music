@@ -19,9 +19,12 @@ import { useRadio } from "./hooks/useRadio";
 import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useSearchShortcuts } from "./hooks/useSearchShortcuts";
+import { useAnyModalOpen } from "./hooks/useModalChrome";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
+import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
@@ -42,6 +45,7 @@ import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
 import { AppShell } from "./app/AppShell";
+import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import "./styles/tokens.css";
 import "./styles/library.css";
@@ -49,7 +53,6 @@ import "./styles/base.css";
 import "./App.css";
 
 export default function App() {
-  useMediaSession();
   useWakeLock();
   useAppActivityTracking();
   useRadio();
@@ -102,18 +105,26 @@ export default function App() {
   });
 
   const queryClient = useQueryClient();
-  const { data: servers, isLoading: serversLoading } = useServers();
+  const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
+  // Derived rather than read off `isPending` on purpose: that query is `enabled: !!server?.id`,
+  // and a disabled React Query stays `pending` forever, so `isPending` cannot tell "the keychain
+  // read is running" from "there is no server to read one for". Consumers need the distinction
+  // because a falsy `serverWithCred` is otherwise indistinguishable from a permanent failure.
+  const credPending = !!server && !serverWithCred && !credError;
+  // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
+  // so it is mounted here rather than at the top with the other playback hooks.
+  useMediaSession(serverWithCred);
 
-  const { syncStatus, syncError, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
+  const { syncStatus, syncError, syncProgress, lastSyncedAt, runSync } = useLibrarySync(server, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   useGlobalShortcuts(serverWithCred);
   useQueueSync(serverWithCred);
   useScrobbleFlush(serverWithCred);
 
-  const [rawSort, setSort] = useSetting("library_sort", "artist");
+  const [rawSort, setSort, sortLoaded] = useSetting("library_sort", "artist");
   const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
     ? rawSort
     : "artist") as AlbumSort;
@@ -123,9 +134,14 @@ export default function App() {
   // hook keeps its last rows and its session-store seed, so returning to the route
   // still paints immediately. `pathname` not `view`: view folds /album/:id into
   // "library", which would drag the whole album list into every album detail page.
-  const { data: albums } = useAlbums(sort, canonicalIdFilters, pathname === "/library");
-  const { data: artists } = useArtists(pathname === "/artists");
-  const { data: allTracks, isLoading: allTracksLoading } = useAllTracks(pathname === "/tracks");
+  // Also gated on `sortLoaded`: until the stored sort has been read back, `sort` is
+  // only the "artist" default, and firing here would scan the whole library in the
+  // wrong order, paint it, then scan again once the real sort arrived.
+  const { data: albums, isLoading: albumsLoading, error: albumsError } =
+    useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
+  const { data: artists, isLoading: artistsLoading, error: artistsError } =
+    useArtists(pathname === "/artists");
+  const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
   const { data: genres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
@@ -156,7 +172,7 @@ export default function App() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const { data: searchResults } = useSearch(searchQuery);
+  const { data: searchResults, isError: searchError } = useSearch(searchQuery, server?.id);
 
   const [homeSearchRaw, setHomeSearchRaw] = useState("");
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
@@ -166,6 +182,7 @@ export default function App() {
   }, [homeSearchRaw]);
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const anyModalOpen = useAnyModalOpen();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [crashReport, setCrashReport] = useState<string | null>(null);
   useEffect(() => {
@@ -210,34 +227,49 @@ export default function App() {
   }, []);
 
   const clearSearch = useCallback(() => {
+    // Cancel the pending debounce first. Without this, clearing within 200ms of
+    // the last keystroke lets the timer fire afterwards and set searchQuery back,
+    // which re-opens the search view for a query the now-empty input doesn't show.
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
     setSearchRaw("");
     setSearchQuery("");
     setSearchOpen(false);
     searchInputRef.current?.blur();
   }, []);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
-        e.preventDefault();
-        setCommandPaletteOpen((open) => !open);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-        e.preventDefault();
-        setSearchOpen(true);
-        setTimeout(() => {
-          searchInputRef.current?.focus();
-          searchInputRef.current?.select();
-        }, 0);
-      }
-      if (e.key === "Escape" && (searchRaw || searchOpen)) {
-        clearSearch();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [searchRaw, searchOpen, clearSearch]);
+  // Neither overlay is URL-backed: the search overlay renders instead of the router's
+  // content, the command palette paints over it. So anything that navigates while one is up
+  // (player bar, context menu, Alt+Arrow, the mouse thumb buttons) lands behind it and the
+  // click looks inert. Both are dismissed here, at the one place navigation is observed,
+  // rather than at each source - the palette used to rely on the five setCommandPaletteOpen
+  // calls in its own handlers, which by construction could not cover navigation that started
+  // anywhere else.
+  const dismissOverlays = useCallback(() => {
+    clearSearch();
+    setCommandPaletteOpen(false);
+  }, [clearSearch]);
+  useDismissOnNavigate(pathname, dismissOverlays);
+
+  useEffect(() => () => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+  }, []);
+
+  useSearchShortcuts({
+    searchInputRef,
+    searchActive: !!searchRaw || searchOpen,
+    commandPaletteOpen,
+    // The two named overlays plus anything registered through `useModalChrome`. The named
+    // pair cannot be extended to cover a modal opened inside the search overlay itself
+    // (`SearchResults`' identify dialog) - that state never reaches this component - so the
+    // registry answers "is something painted over me" for every modal at once.
+    overlayAbove: commandPaletteOpen || feedbackOpen || anyModalOpen,
+    toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
+    openSearch: useCallback(() => setSearchOpen(true), []),
+    clearSearch,
+  });
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
 
@@ -269,11 +301,14 @@ export default function App() {
     void invoke("tray_set_close_to_tray", { enabled: closeToTray }).catch(() => {});
   }, [closeToTray]);
   useEffect(() => {
+    // Rebuilding the tray menu allocates a fresh Menu and seven items on the Rust side,
+    // so skip the round trip entirely while the icon is hidden (the default).
+    if (!showTrayIcon) return;
     const title = currentTrack
       ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ""}`
       : "";
     void invoke("tray_update", { title, isPlaying }).catch(() => {});
-  }, [currentTrack?.id, isPlaying]);
+  }, [showTrayIcon, currentTrack?.id, isPlaying]);
 
   // Tray actions: play_pause and next forwarded to player store
   useEffect(() => {
@@ -343,26 +378,48 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string };
+    type TrackRow = {
+      id: string; title: string; artist: string | null; duration: number | null; album_id: string;
+      replay_gain_track_gain: number | null; replay_gain_track_peak: number | null;
+      replay_gain_album_gain: number | null; replay_gain_album_peak: number | null;
+      album_name: string | null; artwork_url: string | null;
+    };
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration, album_id FROM tracks WHERE id = ?",
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id,
+              t.replay_gain_track_gain, t.replay_gain_track_peak,
+              t.replay_gain_album_gain, t.replay_gain_album_peak,
+              a.name AS album_name, a.artwork_url
+       FROM tracks t
+       LEFT JOIN albums a ON a.id = t.album_id
+       WHERE t.id = ?`,
       [trackId]
     );
     const t = rows[0];
     if (!t) return;
-    type AlbumMeta = { artwork_url: string | null; name: string };
-    const albumRows = await db.select<AlbumMeta[]>(
-      "SELECT artwork_url, name FROM albums WHERE id = ?",
-      [t.album_id]
-    );
-    const albumData = albumRows[0] ?? null;
-    const artworkUrl = albumData?.artwork_url ?? null;
+    const artworkUrl = t.artwork_url;
     const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = artworkUrl
       ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64)
       : null;
     const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
-    await play({ id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: artworkUrl, album: albumData?.name ?? null, albumId: t.album_id }, streamUrl);
+    await play({
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
+      coverArtUrl,
+      artworkRef: artworkUrl,
+      album: t.album_name,
+      albumId: t.album_id,
+      replayGain: (t.replay_gain_track_gain != null || t.replay_gain_album_gain != null)
+        ? {
+            trackGain: t.replay_gain_track_gain,
+            trackPeak: t.replay_gain_track_peak,
+            albumGain: t.replay_gain_album_gain,
+            albumPeak: t.replay_gain_album_peak,
+          }
+        : null,
+    }, streamUrl);
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -478,6 +535,20 @@ export default function App() {
 
   if (serversLoading) return null;
 
+  // `servers` is undefined for a failed read as well as an empty table, so
+  // falling through to the wizard here would show first-run setup to a fully
+  // configured user. Finishing it would insert a *second* server row, and
+  // `servers?.[0]` orders by created_at, so the app would then keep using the
+  // old row while the user had just entered credentials for the new one.
+  if (serversError) {
+    return (
+      <DatabaseErrorScreen
+        error={serversError}
+        onRetry={() => { void refetchServers(); }}
+      />
+    );
+  }
+
   if (!servers || servers.length === 0) {
     return (
       <Suspense fallback={null}>
@@ -497,13 +568,19 @@ export default function App() {
     server,
     serverWithCred: serverWithCred ?? null,
     albums,
+    albumsLoading,
+    albumsError,
     visibleAlbums,
     artists,
+    artistsLoading,
+    artistsError,
     allTracks,
     allTracksLoading,
+    allTracksError,
     genres,
     playlists,
     searchResults,
+    searchError,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
@@ -521,9 +598,11 @@ export default function App() {
     setAlbumsPaginated,
     syncStatus,
     syncError,
+    syncProgress,
     lastSyncedAt,
     runSync,
     credError: credError ?? null,
+    credPending,
     searchOpen,
     setSearchOpen,
     searchRaw,

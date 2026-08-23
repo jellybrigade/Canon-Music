@@ -5,6 +5,7 @@ import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensio
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import { getDb } from "../../db";
+import { purgeServerData } from "../../lib/sync";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { Server as ServerRow } from "../../types/server";
 
@@ -37,6 +38,8 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
   const [serverSaving, setServerSaving] = useState(false);
   const [serverSaveError, setServerSaveError] = useState("");
   const [removeConfirm, setRemoveConfirm] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState("");
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
@@ -48,7 +51,12 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     setEditUsername(server?.username ?? "");
     setEditPassword("");
     setEditApiKey("");
-    setEditAuthMethod("password");
+    // The servers row does not record which auth method was used, so the stored
+    // credential's own shape is the only source for it. Without this an API-key
+    // user lands on the Password tab every time they open Edit.
+    setEditAuthMethod(
+      serverWithCredential?.credential.type === "apikey" ? "apikey" : "password"
+    );
     setServerTestState("idle");
     setServerTestError("");
     setServerTestedSnapshot(null);
@@ -124,10 +132,17 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           [cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername, id]
         );
       } else {
-        await db.execute(
-          "INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)",
-          [id, cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername]
-        );
+        try {
+          await db.execute(
+            "INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)",
+            [id, cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername]
+          );
+        } catch (err) {
+          // Freshly minted id on this branch, so a failed insert would strand the
+          // credential in the OS keychain under an id nothing references.
+          await keychain.delete(`canon.server.${id}`, "credential").catch(() => {});
+          throw err;
+        }
       }
       void fetchAndStoreOpenSubsonicExtensions(
         cleanUrl,
@@ -148,12 +163,21 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
 
   async function handleRemoveServer() {
     if (!server) return;
-    const db = await getDb();
-    await db.execute("DELETE FROM servers WHERE id=?", [server.id]);
+    setRemoving(true);
+    setRemoveError("");
     try {
+      // The keychain entry goes first. Dropping the row first and then swallowing
+      // a keychain failure leaves the password-derived token in the OS keychain
+      // with nothing left referencing it, so it can never be found or removed.
       await keychain.delete(`canon.server.${server.id}`, "credential");
-    } catch { /* not fatal */ }
-    onRemoveServer();
+      const db = await getDb();
+      await purgeServerData(db, server.id);
+      await db.execute("DELETE FROM servers WHERE id=?", [server.id]);
+      onRemoveServer();
+    } catch (err) {
+      setRemoveError(err instanceof Error ? err.message : String(err));
+      setRemoving(false);
+    }
   }
 
   if (!show("server", "url", "username", "password", "display name", "connection")) return null;
@@ -289,11 +313,25 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
             </button>
           ) : (
             <div className="settings-remove-confirm">
-              <span className="settings-error">Remove server and return to setup?</span>
-              <button className="settings-btn" onClick={() => setRemoveConfirm(false)}>Cancel</button>
-              <button className="settings-btn settings-btn--danger" onClick={() => { void handleRemoveServer(); }}>
-                Remove
+              <span className="settings-error">
+                Remove server and return to setup? Canon's local copy of this library goes
+                with it, including tag work and play history. Your files are untouched.
+              </span>
+              <button
+                className="settings-btn"
+                onClick={() => { setRemoveConfirm(false); setRemoveError(""); }}
+                disabled={removing}
+              >
+                Cancel
               </button>
+              <button
+                className="settings-btn settings-btn--danger"
+                onClick={() => { void handleRemoveServer(); }}
+                disabled={removing}
+              >
+                {removing ? "Removing…" : "Remove"}
+              </button>
+              {removeError && <span className="settings-error">Could not remove server: {removeError}</span>}
             </div>
           )}
         </div>

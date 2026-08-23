@@ -31,3 +31,33 @@ export async function executeBatched(
     await db.execute(buildSql(placeholders), chunk.flat());
   }
 }
+
+/**
+ * Runs one statement per chunk of `ids`, each chunk sized under the same
+ * bound-parameter ceiling. `buildSql` receives the comma-joined "?" list for the
+ * chunk, e.g. ``(ph) => `DELETE FROM tracks WHERE id IN (${ph})` ``.
+ *
+ * Only safe for statements whose chunks are independent, which means IN and not
+ * NOT IN: chunking a NOT IN would make every chunk delete the rows the other
+ * chunks were keeping.
+ */
+export async function executeIdChunks(
+  db: Database,
+  ids: readonly string[],
+  buildSql: (placeholders: string) => string,
+): Promise<void> {
+  if (ids.length === 0) return;
+  let first = true;
+  for (let start = 0; start < ids.length; start += SQLITE_MAX_VARIABLES) {
+    const chunk = ids.slice(start, start + SQLITE_MAX_VARIABLES);
+    const placeholders = chunk.map(() => "?").join(", ");
+    const sql = buildSql(placeholders);
+    if (first) {
+      if (/\bnot\s+in\b/i.test(sql)) {
+        throw new Error("executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep");
+      }
+      first = false;
+    }
+    await db.execute(sql, chunk);
+  }
+}

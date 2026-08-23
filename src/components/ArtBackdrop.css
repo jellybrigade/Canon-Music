@@ -1,0 +1,37 @@
+/* Crossfading blurred-art backdrop. See ArtBackdrop.tsx for why this needs two
+   layers. The pixels are pre-blurred on a tiny canvas (src/lib/artBlur.ts), so
+   these layers only scale an image to cover - a cheap compositor operation -
+   instead of running a `filter: blur()` raster over a viewport-size layer on
+   every repaint, which is what WebKitGTK made unaffordable here. */
+
+.art-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.art-backdrop-layer {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  /* Callers that want a different anchor (album hero art reads better pinned to
+     the top) set --art-backdrop-pos on the container. */
+  background-position: var(--art-backdrop-pos, center);
+  animation: art-backdrop-in var(--duration-long) ease forwards;
+}
+
+@keyframes art-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* The animation is load-bearing, not decorative: its completion is what prunes
+   the outgoing layer. Collapse the duration rather than removing it, so the
+   crossfade becomes an instant swap and onAnimationEnd still fires. */
+@media (prefers-reduced-motion: reduce) {
+  .art-backdrop-layer {
+    animation-duration: 1ms;
+  }
+}

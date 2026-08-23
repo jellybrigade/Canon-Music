@@ -4,6 +4,7 @@ import type { CurrentTrack } from "../store/player";
 import { getRadioCandidates } from "../lib/radio";
 import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../lib/lastfm";
 import { getDb } from "../db";
+import { escapeLike } from "../lib/sql";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
@@ -38,8 +39,8 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   type Row = { track_id: string };
   const cutoff = Math.floor(Date.now() / 1000) - RECENT_PLAYED_WINDOW_S;
   const rows = await db.select<Row[]>(
-    "SELECT track_id FROM scrobble_history WHERE track_id LIKE ? AND timestamp > ?",
-    [`${serverId}:%`, cutoff]
+    "SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?",
+    [`${escapeLike(serverId)}:%`, cutoff]
   );
   return new Set(rows.map((r) => r.track_id));
 }
@@ -64,8 +65,6 @@ export function useRadio() {
   const radioSimilarityScale = usePlayerStore((s) => s.radioSimilarityScale);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const streamUrlFor = usePlayerStore((s) => s.streamUrlFor);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isLoading = usePlayerStore((s) => s.isLoading);
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const fillingRef = useRef(false);
 
@@ -77,6 +76,19 @@ export function useRadio() {
   const albumLastPlayedRef = useRef(new Map<string, number>());
   const playedTrackIdsRef = useRef(new Set<string>());
   const wasRadioActiveRef = useRef(false);
+
+  // "Stopped at the end of the queue" is the auto-advance trigger, but a queue restored at
+  // startup with radio_active=1 satisfies it without anything ever having played: not playing,
+  // not loading, index at the last entry. That made launching the app start a random radio
+  // track. Auto-advance therefore also requires that playback actually happened since mount.
+  // Subscribed rather than selected so play/pause does not re-render the whole radio effect.
+  const hasPlayedRef = useRef(false);
+  useEffect(() => {
+    if (usePlayerStore.getState().isPlaying) hasPlayedRef.current = true;
+    return usePlayerStore.subscribe((s) => {
+      if (s.isPlaying) hasPlayedRef.current = true;
+    });
+  }, []);
 
   useEffect(() => {
     if (radioActive && !wasRadioActiveRef.current) {
@@ -182,9 +194,17 @@ export function useRadio() {
             artworkRef: row2.artwork_url, albumId: row2.album_id, album: row2.album_name, coverArtUrl: null,
           };
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
-          const wasAtEnd2 = !isPlaying && !isLoading && queueIndex === queue.length - 1;
+          // Re-read live state rather than the closure's isPlaying/isLoading/queue/queueIndex:
+          // this callback runs after several awaits (Last.fm calls, DB queries), and none of
+          // those four are in the effect's deps, so the closure can be holding values from
+          // well before the user paused, skipped, or the track naturally ended.
+          const live2 = usePlayerStore.getState();
+          const wasAtEnd2 = hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
-          if (wasAtEnd2) void playFromQueueIndex(queue.length);
+          // Read the length back off the store: an append can trim played entries off the front
+          // to stay under maxQueueSize, so the captured pre-append length is not the new track's
+          // position any more.
+          if (wasAtEnd2) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
           recordPick(track2.artist, track2.albumId, track2.id);
           return;
         }
@@ -240,9 +260,12 @@ export function useRadio() {
           coverArtUrl: null,
         };
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
-        const wasAtEnd = !isPlaying && !isLoading && queueIndex === queue.length - 1;
+        // Same staleness concern as the same-album branch above: read live state, not closure.
+        const live = usePlayerStore.getState();
+        const wasAtEnd = hasPlayedRef.current && !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
-        if (wasAtEnd) void playFromQueueIndex(queue.length);
+        // See the note above: the append may have trimmed the front of the queue.
+        if (wasAtEnd) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);
         recordPick(track.artist, track.albumId, track.id);
       } catch (err) {
         console.error("Radio fill failed:", err);
