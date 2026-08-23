@@ -471,7 +471,7 @@ describe("useLibrarySync auto-sync interval", () => {
     expect(syncLibrary).toHaveBeenCalledTimes(1);
   });
 
-  it("still runs the settle fan-out for a sync that outlives its hook", async () => {
+  it("drops the settle fan-out for a sync that outlives its hook", async () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
     const { unmount } = renderSync(SRV_A, client);
@@ -480,8 +480,27 @@ describe("useLibrarySync auto-sync interval", () => {
     unmount();
     await settle(0, { changed: { albums: true } });
 
-    // Current behavior: there is no abort path, so an unmounted hook still invalidates.
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("cancels the staggered fan-out when the hook goes away mid-stagger", async () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
+    const { unmount } = renderSync(SRV_A, client);
+    await tick();
+
+    // Settles far enough for the 300/600/1000ms timers to be armed, then unmounts
+    // before the last of them, which is the one that reaches the query cache.
+    openRun(0).resolve({ changed: { albums: true } });
+    await tick(0);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    unmount();
+    await tick(FANOUT_MS);
+
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

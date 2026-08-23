@@ -43,6 +43,10 @@ Fixed unless marked OPEN.
   grep -rn "AbortController" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **"Stream ended" and "stream stopped" are different signals.** `fail()` (reader returns `UnexpectedEof`) vs `finish()`; `fail()` only if `play_id` still matches.
+- **A promise nobody can abort still owns every handler hung off it, and the cleanup that stops the timers cannot stop the code that arms them.** `useLibrarySync` hung `.then`/`.catch`/`.finally` on `syncLibrary` with no mounted guard, so a run outliving its hook set state on a dead hook, bumped six session stores and armed the 300/600/1000ms fan-out, the last of which invalidated a query cache the unmounted tree no longer read. The two existing `useEffect` cleanups cleared the retry timer and the auto-sync interval - neither could touch a timer the settle handler had not created yet. Fixed with a `mountedRef` gating all three handlers plus a held list of fan-out timer handles cleared on unmount. The flag is re-armed in the effect *body*: StrictMode's mount/unmount/mount would otherwise leave it false forever and disarm every later run. Ask of any un-abortable await: what does its settle handler touch, and does a cleanup exist that can reach all of it?
+  ```
+  grep -rn "^\s*\.then(\|^\s*\.finally(" src/hooks --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A resource acquired via await escapes the cleanup meant to free it.** `useWakeLock`: `cancelled` flag, resolved sentinel self-releases. Test `!released`, not non-null.
 - **A guard keyed on one error type stands in for the broad condition it was meant to test.** `apiPost` retried non-idempotent writes on the alt url for every error `isTimeout` didn't name; now `if (!retriable) break`. Any branch deciding whether a side effect may repeat must assume unsafe on unrecognised errors.
   ```

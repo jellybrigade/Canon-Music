@@ -41,11 +41,24 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<{ id: string; attempts: number } | null>(null);
+  // Nothing aborts an in-flight syncLibrary, so its settle handler can land after
+  // the hook is gone. Everything the handler does then is either dead or wrong.
+  const mountedRef = useRef(true);
+  const fanoutTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   function clearRetryTimer() {
     if (retryTimerRef.current === null) return;
     clearTimeout(retryTimerRef.current);
     retryTimerRef.current = null;
+  }
+
+  function scheduleFanout(step: () => void, delay: number) {
+    fanoutTimersRef.current.push(setTimeout(step, delay));
+  }
+
+  function clearFanoutTimers() {
+    for (const id of fanoutTimersRef.current) clearTimeout(id);
+    fanoutTimersRef.current = [];
   }
 
   function scheduleRetry(s: Server) {
@@ -101,6 +114,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       useAlbumBrowseSessionStore.getState().bumpRefresh();
     })
       .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
+        if (!mountedRef.current) return;
         const hasPartialFailure =
           failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0 || albumTracksIncomplete;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
@@ -129,14 +143,14 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           useAlbumBrowseSessionStore.getState().bumpRefresh();
           invalidateGenreTreeCache();
         }
-        setTimeout(() => {
+        scheduleFanout(() => {
           if (changed.artists) useArtistBrowseSessionStore.getState().bumpRefresh();
           if (libraryChanged) {
             useGenresSessionStore.getState().bumpRefresh();
             useAllTracksSessionStore.getState().bumpRefresh();
           }
         }, 300);
-        setTimeout(() => {
+        scheduleFanout(() => {
           if (changed.loved) useLovedSessionStore.getState().bumpRefresh();
           if (changed.playlists) {
             // changed.playlists covers ordered track ids too, and the sync
@@ -147,18 +161,20 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           }
         }, 600);
         if (libraryChanged) {
-          setTimeout(() => {
+          scheduleFanout(() => {
             void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
           }, 1000);
         }
       })
       .catch((err: unknown) => {
         failed = true;
+        console.error("Sync failed:", err);
+        if (!mountedRef.current) return;
         setSyncStatus("error");
         setSyncError(err instanceof Error ? err.message : String(err));
-        console.error("Sync failed:", err);
       })
       .finally(() => {
+        if (!mountedRef.current) return;
         syncingRef.current = false;
         setSyncProgress(null);
         // The user may have switched servers while this run was in flight, in
@@ -193,8 +209,17 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   }, [server]);
 
   // Only touches refs, so the identity it captures on mount behaves like any later one.
+  // The flag is re-armed in the body because StrictMode's mount/unmount/mount would
+  // otherwise leave every later run's settle handler permanently disarmed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => clearRetryTimer, []);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearRetryTimer();
+      clearFanoutTimers();
+    };
+  }, []);
 
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);
