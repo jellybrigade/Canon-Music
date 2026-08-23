@@ -91,6 +91,10 @@ Fixed unless marked OPEN.
   grep -rn "useRef<number" src --include='*.tsx' | grep -v '\.test\.'
   grep -rn "Ids\.size\s*[<>=]" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A cache-hit test written as "is there a value" never caches the answer "there is none", which is the case that repeats.** `useLyrics` treated a row with null `plain`/`synced` as a miss so `refresh` could force a re-lookup, but the queryFn writes exactly that row when every source comes back empty - so every track with no lyrics anywhere re-ran the OpenSubsonic call, LRClib and lyrics.ovh on every open of the tab, forever. `source` now carries a `"cleared"` sentinel written by `refresh` and by the offset-only insert, and anything else is a completed lookup. Both columns are NOT NULL, so absence could not be the witness. Ask of any cache: what does a successful "nothing found" look like in the table, and does the hit test recognise it?
+  ```
+  grep -rn "if (cached\|if (rows\[0\]\|if (hit\|cached\.length > 0" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A prefetch that duplicates a query instead of sharing it warms a key nobody reads.** Key, `queryFn` and `staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in a TS string is `ESCAPE ''` and always throws - write `ESCAPE '\\'`.**
 - **A `LIMIT` without `ORDER BY` silently redefines what the query returns.** FTS queries rank by weighted `bm25` in a `MATERIALIZED` CTE before the cap. Ask if the cut thing was chosen or just late. Also: `useDeferredValue` defers rendering, not fetching.
 - **An identifier borrowed from an external service must not be compared exactly to a local one.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`. Check every hop.
