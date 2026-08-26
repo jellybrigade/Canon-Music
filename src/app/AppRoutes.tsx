@@ -231,16 +231,20 @@ function AlbumDetailRoute({
 }) {
   const { albumId } = useParams<{ albumId: string }>();
   const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
-    queryKey: ["album-by-id", albumId],
-    enabled: !!albumId,
+    queryKey: ["album-by-id", albumId, serverWithCred?.server.id],
+    enabled: !!albumId && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
+      // Scoped by server because everything below builds its cover and stream URLs from the
+      // *selected* server's credential: an unscoped lookup happily resolved another server's
+      // row and then pointed every request at the wrong host.
       const rows = await db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums WHERE id = ?`,
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color
+         FROM albums WHERE id = ? AND server_id = ?`,
         // `useParams` has already decoded the segment, so `albumId` is the id `albumPath`
         // encoded. Decoding again throws on an id holding a literal `%` and silently
         // rewrites one holding the text `%20` into a space.
-        [albumId!]
+        [albumId!, serverWithCred!.server.id]
       );
       return rows[0] ?? null;
     },

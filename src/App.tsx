@@ -514,8 +514,12 @@ export default function App() {
   // Resolve an album id to a full row, then open it. Used where callers only
   // hold an id (playlist/track rows, the player bar) rather than an AlbumRow.
   async function openAlbumById(albumId: string) {
+    if (!server) return;
     const db = await getDb();
-    const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ?", [albumId]);
+    const rows = await db.select<AlbumRow[]>(
+      "SELECT * FROM albums WHERE id = ? AND server_id = ?",
+      [albumId, server.id]
+    );
     if (rows[0]) openAlbum(rows[0]);
   }
 
