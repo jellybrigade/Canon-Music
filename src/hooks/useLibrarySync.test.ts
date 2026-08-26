@@ -12,7 +12,9 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import type { SyncProgress } from "../lib/sync";
+import type { NavidromeCredential } from "../lib/navidrome";
 import type { Server } from "../types/server";
+import type { ServerWithCredential } from "./useServer";
 import { useLibrarySync } from "./useLibrarySync";
 
 /** Read by the mocked `useSetting` above; assign before rendering. */
@@ -33,8 +35,10 @@ const CLEAN: SyncResult = {
   changed: { albums: false, tracks: false, artists: false, loved: false, playlists: false },
 };
 
-function makeServer(id: string): Server {
-  return {
+const CRED: NavidromeCredential = { type: "apikey", apiKey: "k" };
+
+function makeServer(id: string): ServerWithCredential {
+  const server: Server = {
     id,
     type: "navidrome",
     url: `https://${id}.example`,
@@ -43,6 +47,7 @@ function makeServer(id: string): Server {
     username: "u",
     created_at: "2026-01-01",
   };
+  return { server, credential: CRED };
 }
 
 const SRV_A = makeServer("a");
@@ -64,7 +69,7 @@ interface Run {
 let runs: Run[] = [];
 
 function armSyncLibrary() {
-  vi.mocked(syncLibrary).mockImplementation((server, onAlbumBatch) => {
+  vi.mocked(syncLibrary).mockImplementation((server, _credential, onAlbumBatch) => {
     return new Promise<SyncResult>((res, rej) => {
       runs.push({
         server,
@@ -103,8 +108,8 @@ async function failRun(index: number, e: unknown) {
   await tick(FANOUT_MS);
 }
 
-function renderSync(server: Server | undefined, client = new QueryClient()) {
-  return renderHook(({ server }: { server: Server | undefined }) => useLibrarySync(server, client), {
+function renderSync(server: ServerWithCredential | undefined, client = new QueryClient()) {
+  return renderHook(({ server }: { server: ServerWithCredential | undefined }) => useLibrarySync(server, client), {
     initialProps: { server },
   });
 }
@@ -176,6 +181,20 @@ describe("useLibrarySync in-flight guard", () => {
     await settle(0);
     await tick(5 * MINUTE);
     expect(syncLibrary).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useLibrarySync credential gate", () => {
+  it("waits for the credential rather than reading one of its own", async () => {
+    const { rerender } = renderSync(undefined);
+    await tick();
+    expect(syncLibrary).not.toHaveBeenCalled();
+
+    rerender({ server: SRV_A });
+    await tick();
+
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[1]).toBe(CRED);
   });
 });
 

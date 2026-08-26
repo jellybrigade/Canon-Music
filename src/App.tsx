@@ -117,7 +117,7 @@ export default function App() {
   // so it is mounted here rather than at the top with the other playback hooks.
   useMediaSession(serverWithCred);
 
-  const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(server, queryClient);
+  const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   useGlobalShortcuts(serverWithCred);

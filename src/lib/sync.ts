@@ -1,6 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
-import { keychain } from "../keychain";
 import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
 import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
@@ -254,6 +253,7 @@ export interface SyncProgress {
 
 export async function syncLibrary(
   server: Server,
+  credential: NavidromeCredential,
   onAlbumBatch?: (progress: SyncProgress) => void,
 ): Promise<{
   failedAlbums: number;
@@ -270,21 +270,6 @@ export async function syncLibrary(
   skippedStages: string[];
   changed: SyncChanges;
 }> {
-  const credJson = await keychain.get(`canon.server.${server.id}`, "credential");
-  if (!credJson) throw new Error(`No credentials found for server ${server.id}`);
-  let credential: NavidromeCredential;
-  try {
-    const parsed = JSON.parse(credJson) as Record<string, unknown>;
-    // Migrate legacy credentials stored without a type field
-    if (!parsed.type && typeof parsed.token === "string" && typeof parsed.salt === "string") {
-      credential = { type: "md5", token: parsed.token, salt: parsed.salt };
-    } else {
-      credential = parsed as NavidromeCredential;
-    }
-  } catch {
-    throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
-  }
-
   const altUrl = server.alt_url ?? undefined;
   const skippedStages: string[] = [];
   // Deliberately not awaited: extension discovery is advisory. It still needs its own

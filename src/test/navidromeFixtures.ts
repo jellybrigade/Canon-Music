@@ -1,8 +1,10 @@
-import type { NavidromeAlbum, NavidromeTrack } from "../lib/navidrome";
+import type { NavidromeAlbum, NavidromeCredential, NavidromeTrack } from "../lib/navidrome";
 import type { Server } from "../types/server";
 
 export const SRV = "srv-a";
 export const OTHER = "srv-b";
+
+export const CRED: NavidromeCredential = { type: "apikey", apiKey: "k" };
 
 export function server(id = SRV, overrides: Partial<Server> = {}): Server {
   return {

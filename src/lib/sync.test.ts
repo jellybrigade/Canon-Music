@@ -14,7 +14,8 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { resetTauriMocks } from "../test/mocks/tauri";
+import { invokeCount } from "../test/perf";
 import type { NavidromeAlbum, NavidromePlaylist, NavidromeStarred, NavidromeTrack } from "./navidrome";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
@@ -41,7 +42,7 @@ import {
 } from "./navidrome";
 import { purgeServerData, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
-import { album, OTHER, server, SRV, track } from "../test/navidromeFixtures";
+import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -84,7 +85,6 @@ beforeEach(async () => {
   resetTauriMocks();
   vi.clearAllMocks();
   holder.db = await createMigratedTestDb();
-  onInvoke("get_credential", () => JSON.stringify({ type: "apikey", apiKey: "k" }));
   mStarred.mockResolvedValue({} as NavidromeStarred);
   mPlaylists.mockResolvedValue([]);
   mPlaylistTracks.mockResolvedValue([]);
@@ -234,7 +234,7 @@ describe("syncLibrary initial sync", () => {
     mPlaylists.mockResolvedValue([{ id: "pl-1", name: "Mix", songCount: 1 } as NavidromePlaylist]);
     mPlaylistTracks.mockResolvedValue([track("t1", "al-1")]);
 
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
 
     expect(await ids("SELECT id FROM albums ORDER BY id")).toEqual([`${SRV}:al-1`, `${SRV}:al-2`]);
     expect(await count("tracks")).toBe(3);
@@ -256,7 +256,7 @@ describe("syncLibrary initial sync", () => {
     serveLibrary([album("al-1")], {
       "al-1": [track("t1", "al-1", { genre: "Rock" }), track("t2", "al-1", { genre: "" })],
     });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     const tags = await db().select<{ track_id: string }[]>("SELECT track_id FROM track_tags");
     expect(tags.map((r) => r.track_id)).toEqual([`${SRV}:t1`]);
   });
@@ -270,7 +270,7 @@ describe("syncLibrary initial sync", () => {
       ],
       {}
     );
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     const rows = await db().select<{ id: string; release_type: string | null }[]>(
       "SELECT id, release_type FROM albums ORDER BY id"
     );
@@ -279,27 +279,21 @@ describe("syncLibrary initial sync", () => {
 
   it("passes a null alt_url to the fetches as undefined, not null", async () => {
     serveLibrary([album("al-1")], { "al-1": [] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(mAllAlbums.mock.calls[0]?.[3]).toBeUndefined();
   });
 
-  it("migrates a legacy credential stored without a type field", async () => {
-    onInvoke("get_credential", () => JSON.stringify({ token: "tok", salt: "sal" }));
+  it("uses the credential it was handed rather than reading one", async () => {
     serveLibrary([album("al-1")], { "al-1": [] });
-    await syncLibrary(server());
+    await syncLibrary(server(), { type: "md5", token: "tok", salt: "sal" });
     expect(mAllAlbums.mock.calls[0]?.[2]).toEqual({ type: "md5", token: "tok", salt: "sal" });
-  });
-
-  it("refuses to fetch anything when the stored credential is not valid JSON", async () => {
-    onInvoke("get_credential", () => "{not json");
-    await expect(syncLibrary(server())).rejects.toThrow(/Corrupt credentials/);
-    expect(mAllAlbums).not.toHaveBeenCalled();
+    expect(invokeCount("get_credential")).toBe(0);
   });
 
   it("does not fail the sync when extension discovery rejects", async () => {
     mExtensions.mockRejectedValue(new Error("offline"));
     serveLibrary([album("al-1")], { "al-1": [] });
-    await expect(syncLibrary(server())).resolves.toBeDefined();
+    await expect(syncLibrary(server(), CRED)).resolves.toBeDefined();
   });
 });
 
@@ -313,9 +307,9 @@ describe("syncLibrary idempotence", () => {
     mPlaylistTracks.mockResolvedValue([track("t1", "al-1")]);
     mStarred.mockResolvedValue({ song: [{ id: "t1" }], album: [{ id: "al-1" }] });
 
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     db().executeCount = 0;
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
 
     // Zero executes also proves scanForIssues and rebuildTagVocabCache stayed out: both are
     // whole-table sweeps gated on albumsChanged || tracksChanged.
@@ -325,28 +319,28 @@ describe("syncLibrary idempotence", () => {
 
   it("treats a SQLite integer year and an API string year as the same value", async () => {
     serveLibrary([album("al-1", { year: 2020 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { year: "2020" as unknown as number })], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
     });
     db().executeCount = 0;
-    expect((await syncLibrary(server())).changed.albums).toBe(false);
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(false);
     expect(db().executeCount).toBe(0);
   });
 
   it("treats a stored null artist and an empty-string artist as the same value", async () => {
     serveLibrary([album("al-1", { artist: "" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     db().raw.exec(`UPDATE albums SET artist = NULL WHERE id = '${SRV}:al-1'`);
     db().executeCount = 0;
-    expect((await syncLibrary(server())).changed.albums).toBe(false);
+    expect((await syncLibrary(server(), CRED)).changed.albums).toBe(false);
   });
 
   it("rewrites the album row when a compared column really moved", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { name: "Renamed" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.changed.albums).toBe(true);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM albums");
     expect(rows[0]?.name).toBe("Renamed");
@@ -354,10 +348,10 @@ describe("syncLibrary idempotence", () => {
 
   it("rebuilds the FTS row for a renamed album even when no track was fetched", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { name: "Renamed" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     mAlbumTracks.mockClear();
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     // The skip heuristic held (no track fetch), but the FTS row carries the album name.
     expect(mAlbumTracks).not.toHaveBeenCalled();
     const fts = await db().select<{ album: string }[]>("SELECT album FROM tracks_fts LIMIT 1");
@@ -366,9 +360,9 @@ describe("syncLibrary idempotence", () => {
 
   it("does not rebuild the artists table when only a non-artist column changed", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { name: "Renamed" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.changed.artists).toBe(false);
   });
 });
@@ -379,7 +373,7 @@ describe("syncLibrary album prune", () => {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
       "al-2": [track("t3", "al-2"), track("t4", "al-2")],
     });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
   }
 
   it("deletes an album the server no longer lists, with its tracks and derived rows", async () => {
@@ -395,7 +389,7 @@ describe("syncLibrary album prune", () => {
     `);
 
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
 
     expect(result.prunedAlbums).toBe(1);
     expect(await ids("SELECT id FROM albums")).toEqual([`${SRV}:al-1`]);
@@ -425,7 +419,7 @@ describe("syncLibrary album prune", () => {
       INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${SRV}:t3', 1);
     `);
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     for (const table of ["album_identity", "album_user_genres", "album_genre_exclusions", "scrobble_queue", "scrobble_history"]) {
       expect({ table, rows: await count(table) }).toEqual({ table, rows: 1 });
     }
@@ -434,7 +428,7 @@ describe("syncLibrary album prune", () => {
   it("refuses to prune when the server returns an empty album list", async () => {
     await seedTwoAlbums();
     serveLibrary([], {});
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(result.prunedAlbums).toBe(0);
     expect(await count("albums")).toBe(2);
     expect(await count("tracks")).toBe(4);
@@ -447,7 +441,7 @@ describe("syncLibrary album prune", () => {
     // partial list can never be handed to the prune. The prune's safety depends on that.
     mAllAlbums.mockRejectedValue(new Error("getAlbumList2 returned 500"));
     db().executeCount = 0;
-    await expect(syncLibrary(server())).rejects.toThrow(/500/);
+    await expect(syncLibrary(server(), CRED)).rejects.toThrow(/500/);
     expect(db().executeCount).toBe(0);
     expect(await count("albums")).toBe(2);
   });
@@ -461,7 +455,7 @@ describe("syncLibrary album prune", () => {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
       "al-2": [track("t3", "al-2"), track("t4", "al-2")],
     });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(result.prunedAlbums).toBe(0);
     expect(await count("albums", "WHERE server_id = ?", [OTHER])).toBe(1);
   });
@@ -471,13 +465,13 @@ describe("syncLibrary album prune", () => {
       `INSERT INTO artists (id, server_id, server_type, name, album_count) VALUES ('x', '${OTHER}', 'navidrome', 'Other Artist', 4)`
     );
     serveLibrary([album("al-1")], { "al-1": [] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(await count("artists", "WHERE server_id = ?", [OTHER])).toBe(1);
   });
 
   it("excludes albums with no artist from the derived artists table", async () => {
     serveLibrary([album("al-1", { artist: "" }), album("al-2", { artist: "Real" })], {});
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM artists");
     expect(rows.map((r) => r.name)).toEqual(["Real"]);
   });
@@ -488,7 +482,7 @@ describe("syncLibrary per-album track prune", () => {
     serveLibrary([album("al-1", { songCount: trackIds.length })], {
       "al-1": trackIds.map((id) => track(id, "al-1")),
     });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
   }
 
   it("removes tracks the album no longer contains, with their derived rows", async () => {
@@ -498,7 +492,7 @@ describe("syncLibrary per-album track prune", () => {
     serveLibrary([album("al-1", { songCount: 2, created: "2026-02-02T00:00:00Z" })], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
     });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
 
     expect(result.prunedTracks).toBe(1);
     expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:t1`, `${SRV}:t2`]);
@@ -511,7 +505,7 @@ describe("syncLibrary per-album track prune", () => {
     // An album that returned no tracks is far more likely a server hiccup than a genuinely
     // empty album, and `NOT IN ()` cannot be expressed anyway.
     serveLibrary([album("al-1", { songCount: 0, created: "2026-02-02T00:00:00Z" })], { "al-1": [] });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(result.prunedTracks).toBe(0);
     expect(await count("tracks")).toBe(3);
   });
@@ -529,7 +523,7 @@ describe("syncLibrary per-album track prune", () => {
     }) as FakeDatabase["select"];
 
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     // First sync: nothing to prune, so the round trip would be wasted once per album.
     expect(seen.filter((s) => /NOT IN/.test(s))).toHaveLength(0);
 
@@ -537,7 +531,7 @@ describe("syncLibrary per-album track prune", () => {
     serveLibrary([album("al-1", { created: "2026-02-02T00:00:00Z" })], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
     });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(seen.filter((s) => /NOT IN/.test(s))).toHaveLength(1);
   });
 });
@@ -545,19 +539,19 @@ describe("syncLibrary per-album track prune", () => {
 describe("syncLibrary track-skip heuristic", () => {
   it("skips an album whose created stamp and track count both match", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     mAlbumTracks.mockClear();
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).not.toHaveBeenCalled();
     expect(second.skippedAlbums).toBe(1);
   });
 
   it("re-fetches when the stored track count is one short of songCount", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     db().raw.exec(`DELETE FROM tracks WHERE id = '${SRV}:t2'`);
     mAlbumTracks.mockClear();
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).toHaveBeenCalledTimes(1);
     expect(second.skippedAlbums).toBe(0);
   });
@@ -569,33 +563,33 @@ describe("syncLibrary track-skip heuristic", () => {
     serveLibrary([album("al-1", { songCount: 3 })], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1"), track("t3", "al-1")],
     });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     const shrunk = album("al-1", { songCount: 2, created: "2026-02-02T00:00:00Z" });
     serveLibrary([shrunk], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.prunedTracks).toBe(1);
 
     mAlbumTracks.mockClear();
-    const third = await syncLibrary(server());
+    const third = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).not.toHaveBeenCalled();
     expect(third.skippedAlbums).toBe(1);
   });
 
   it("never skips an album whose stored created stamp is null", async () => {
     serveLibrary([album("al-1", { created: undefined })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     mAlbumTracks.mockClear();
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(mAlbumTracks).toHaveBeenCalledTimes(1);
   });
 
   it("skips on the created stamp alone when the server omits songCount", async () => {
     serveLibrary([album("al-1", { songCount: undefined })], { "al-1": [track("t1", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     db().raw.exec(`DELETE FROM tracks WHERE id = '${SRV}:t1'`);
     mAlbumTracks.mockClear();
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     // No songCount means no count comparison is possible, so a track deletion goes unnoticed
     // until the album's `created` stamp moves.
     expect(mAlbumTracks).not.toHaveBeenCalled();
@@ -611,7 +605,7 @@ describe("syncLibrary album track failures", () => {
   it("gives up on the album pass after five consecutive failures", async () => {
     mAllAlbums.mockResolvedValue(libraryOf(10));
     mAlbumTracks.mockRejectedValue(new Error("timeout"));
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).toHaveBeenCalledTimes(5);
     expect(result.failedAlbums).toBe(5);
     expect(result.albumTracksIncomplete).toBe(true);
@@ -625,7 +619,7 @@ describe("syncLibrary album track failures", () => {
       if (call <= 4) throw new Error("timeout");
       return [track(`t${call}`, `al-${call}`)];
     });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).toHaveBeenCalledTimes(10);
     expect(result.failedAlbums).toBe(4);
     expect(result.albumTracksIncomplete).toBe(false);
@@ -640,7 +634,7 @@ describe("syncLibrary album track failures", () => {
       if (!ok) throw new Error("timeout");
       return [track(`t${call}`, `al-${call}`)];
     });
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     // Six failures total, never five in a row: a naive `failedAlbums >= 5` breaks here.
     expect(result.failedAlbums).toBe(6);
     expect(result.albumTracksIncomplete).toBe(false);
@@ -649,10 +643,10 @@ describe("syncLibrary album track failures", () => {
 
   it("leaves an album's existing tracks alone when its fetch fails", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { songCount: 2, created: "2026-02-02T00:00:00Z" })], {});
     mAlbumTracks.mockRejectedValue(new Error("timeout"));
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.failedAlbums).toBe(1);
     expect(await count("tracks")).toBe(2);
   });
@@ -661,7 +655,7 @@ describe("syncLibrary album track failures", () => {
     mAllAlbums.mockResolvedValue(libraryOf(3));
     mAlbumTracks.mockResolvedValue([]);
     const progress: { done: number; total: number }[] = [];
-    await syncLibrary(server(), (p) => progress.push(p));
+    await syncLibrary(server(), CRED, (p) => progress.push(p));
     expect(progress[0]).toEqual({ done: 0, total: 3 });
     expect(progress[1]).toEqual({ done: 1, total: 3 });
   });
@@ -669,7 +663,7 @@ describe("syncLibrary album track failures", () => {
   it("runs without a progress callback", async () => {
     mAllAlbums.mockResolvedValue(libraryOf(2));
     mAlbumTracks.mockResolvedValue([]);
-    await expect(syncLibrary(server())).resolves.toBeDefined();
+    await expect(syncLibrary(server(), CRED)).resolves.toBeDefined();
   });
 });
 
@@ -683,7 +677,7 @@ describe("syncLibrary album progress reporting", () => {
   async function ticksFor(albums: NavidromeAlbum[]): Promise<SyncProgress[]> {
     mAllAlbums.mockResolvedValue(albums);
     const ticks: SyncProgress[] = [];
-    await syncLibrary(server(), (p) => ticks.push(p));
+    await syncLibrary(server(), CRED, (p) => ticks.push(p));
     return ticks;
   }
 
@@ -703,7 +697,7 @@ describe("syncLibrary album progress reporting", () => {
 
   it("says the pass has started when the album rows are unchanged and only tracks are missing", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     await db().execute("DELETE FROM tracks WHERE id = ?", [`${SRV}:t2`]);
 
     mAlbumTracks.mockResolvedValue([track("t1", "al-1"), track("t2", "al-1")]);
@@ -730,13 +724,13 @@ describe("syncLibrary loved stage", () => {
     // were rewritten on every 5-minute tick forever.
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }, { id: "gone" }], album: [] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(await count("loved_tracks")).toBe(2);
 
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.changed.loved).toBe(false);
     db().executeCount = 0;
-    const third = await syncLibrary(server());
+    const third = await syncLibrary(server(), CRED);
     expect(third.changed.loved).toBe(false);
     expect(db().executeCount).toBe(0);
   });
@@ -744,9 +738,9 @@ describe("syncLibrary loved stage", () => {
   it("rewrites loved state when the server's starred set really moved", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     mStarred.mockResolvedValue({ song: [{ id: "t2" }] });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.changed.loved).toBe(true);
     expect(await ids("SELECT track_id AS id FROM loved_tracks")).toEqual([`${SRV}:t2`]);
   });
@@ -754,9 +748,9 @@ describe("syncLibrary loved stage", () => {
   it("detects an equal-sized but disjoint starred set", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     mStarred.mockResolvedValue({ album: [{ id: "al-1" }] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     mStarred.mockResolvedValue({ album: [{ id: "al-9" }] });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.changed.loved).toBe(true);
     expect(await ids("SELECT album_id AS id FROM loved_albums")).toEqual([`${SRV}:al-9`]);
   });
@@ -765,7 +759,7 @@ describe("syncLibrary loved stage", () => {
     db().raw.exec(`INSERT INTO loved_tracks (track_id) VALUES ('${OTHER}:t9')`);
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(await count("loved_tracks", "WHERE track_id = ?", [`${OTHER}:t9`])).toBe(1);
   });
 
@@ -779,7 +773,7 @@ describe("syncLibrary loved stage", () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }], album: [] });
 
-    await syncLibrary(server(WILD));
+    await syncLibrary(server(WILD), CRED);
 
     expect(await count("loved_tracks", "WHERE track_id = ?", ["srv-a:t9"])).toBe(1);
     expect(await count("loved_albums", "WHERE album_id = ?", ["srv-a:al-9"])).toBe(1);
@@ -791,10 +785,10 @@ describe("syncLibrary loved stage", () => {
   it("keeps stored loved state and reports the stage when the starred fetch fails", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     mStarred.mockResolvedValue({ song: [{ id: "t1" }] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     mStarred.mockRejectedValue(new Error("offline"));
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.skippedStages).toContain("loved");
     expect(second.changed.loved).toBe(false);
     expect(await count("loved_tracks")).toBe(1);
@@ -815,7 +809,7 @@ describe("syncLibrary playlist stage", () => {
     mPlaylistTracks.mockImplementation(async (_u, _n, _c, id) =>
       id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1")]
     );
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
   }
 
   it("keeps Canon-owned playlist columns across a refresh that changed the name", async () => {
@@ -826,7 +820,7 @@ describe("syncLibrary playlist stage", () => {
       `UPDATE playlists SET is_smart = 1, rules_json = '{"r":1}', custom_cover_data = 'data:png' WHERE id = '${SRV}:pl-1'`
     );
     mPlaylists.mockResolvedValue([pl("pl-1", { name: "Renamed" }), pl("pl-2")]);
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
 
     expect(second.changed.playlists).toBe(true);
     const rows = await db().select<{ name: string; is_smart: number; rules_json: string | null; custom_cover_data: string | null }[]>(
@@ -849,7 +843,7 @@ describe("syncLibrary playlist stage", () => {
       id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1"), track("t1", "al-1")]
     );
     mPlaylists.mockResolvedValue([pl("pl-1"), pl("pl-2", { songCount: 2 })]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     expect(deletes).toEqual([`${SRV}:pl-2`]);
   });
@@ -860,11 +854,11 @@ describe("syncLibrary playlist stage", () => {
     });
     mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 3 })]);
     mPlaylistTracks.mockResolvedValue([track("t1", "al-1"), track("t2", "al-1"), track("t3", "al-1")]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 2 })]);
     mPlaylistTracks.mockResolvedValue([track("t1", "al-1"), track("t3", "al-1")]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     // `position` doubles as the remote Subsonic index, so a hole makes the next removal
     // delete the wrong remote track.
@@ -893,7 +887,7 @@ describe("syncLibrary playlist stage", () => {
       track("t2", "al-2"),
       track("t3", "al-1"),
     ]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(await ids("SELECT track_id AS id FROM playlist_tracks ORDER BY position")).toEqual([
       `${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`,
     ]);
@@ -903,7 +897,7 @@ describe("syncLibrary playlist stage", () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t3", "al-1")] });
     mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 3 })]);
     mPlaylistTracks.mockResolvedValue([track("t1", "al-1"), track("t3", "al-1")]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
 
     const rows = await db().select<{ track_id: string; position: number }[]>(
       "SELECT track_id, position FROM playlist_tracks ORDER BY position"
@@ -920,7 +914,7 @@ describe("syncLibrary playlist stage", () => {
       `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position) VALUES ('${SRV}:pl-2', '${SRV}:t2', 1)`
     );
     mPlaylists.mockResolvedValue([pl("pl-1")]);
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     expect(await ids("SELECT id FROM playlists")).toEqual([`${SRV}:pl-1`]);
     expect(await count("playlist_tracks", "WHERE playlist_id = ?", [`${SRV}:pl-2`])).toBe(0);
     expect(await count("playlist_resume")).toBe(0);
@@ -929,7 +923,7 @@ describe("syncLibrary playlist stage", () => {
   it("keeps stored playlists and reports the stage when the listing fetch fails", async () => {
     await seedPlaylists();
     mPlaylists.mockRejectedValue(new Error("offline"));
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
     expect(second.skippedStages).toContain("playlists");
     expect(second.changed.playlists).toBe(false);
     expect(await count("playlists")).toBe(2);
@@ -943,7 +937,7 @@ describe("syncLibrary playlist stage", () => {
       if (id === "pl-2") throw new Error("offline");
       return [track("t1", "al-1")];
     });
-    const second = await syncLibrary(server());
+    const second = await syncLibrary(server(), CRED);
 
     // An incomplete picture must not reach the prune: pl-2 would be erased outright.
     expect(second.failedPlaylists).toBe(1);
@@ -969,7 +963,7 @@ describe("syncLibrary playlist stage", () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     mStarred.mockRejectedValue(new Error("offline"));
     mPlaylists.mockRejectedValue(new Error("offline"));
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
     expect(result.skippedStages).toEqual(["loved", "playlists"]);
   });
 });
@@ -983,7 +977,7 @@ describe("syncAlbumTracks", () => {
 
   it("writes the fetched tracks without pruning what the album no longer has", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
-    await syncLibrary(server());
+    await syncLibrary(server(), CRED);
     mAlbumTracks.mockResolvedValue([track("t1", "al-1")]);
     await syncAlbumTracks(server(), { type: "apikey", apiKey: "k" }, `${SRV}:al-1`);
     // The manual per-album refresh only upserts, so a removed track survives until the next

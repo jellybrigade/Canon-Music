@@ -4,7 +4,7 @@ import { syncLibrary } from "../lib/sync";
 import type { SyncProgress } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
 import { useSetting } from "./useSetting";
-import type { Server } from "../types/server";
+import type { ServerWithCredential } from "./useServer";
 import { QK } from "../lib/query-keys";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
@@ -30,7 +30,7 @@ function listPhrase(items: readonly string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-export function useLibrarySync(server: Server | undefined, queryClient: QueryClient) {
+export function useLibrarySync(target: ServerWithCredential | undefined, queryClient: QueryClient) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -42,8 +42,8 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   const syncedRef = useRef<string | null>(null);
   // Lets the settle handler below see which server is selected now, not which
   // one this run started for.
-  const serverRef = useRef<Server | undefined>(server);
-  serverRef.current = server;
+  const serverRef = useRef<ServerWithCredential | undefined>(target);
+  serverRef.current = target;
   const [autoSyncIntervalMin] = useSetting("library.auto_sync_interval_min", "5");
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryRef = useRef<{ id: string; attempts: number } | null>(null);
@@ -67,14 +67,15 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     fanoutTimersRef.current = [];
   }
 
-  function scheduleRetry(s: Server) {
-    const attempts = retryRef.current?.id === s.id ? retryRef.current.attempts : 0;
+  function scheduleRetry(s: ServerWithCredential) {
+    const id = s.server.id;
+    const attempts = retryRef.current?.id === id ? retryRef.current.attempts : 0;
     const delay = RETRY_DELAYS_MS[attempts];
     if (delay === undefined) {
       setNextRetryAt(null);
       return;
     }
-    retryRef.current = { id: s.id, attempts: attempts + 1 };
+    retryRef.current = { id, attempts: attempts + 1 };
     clearRetryTimer();
     setNextRetryAt(Date.now() + delay);
     retryTimerRef.current = setTimeout(() => {
@@ -83,16 +84,16 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
       // bail-outs below leave nothing to count down to.
       setNextRetryAt(null);
       const latest = serverRef.current;
-      if (!latest || latest.id !== s.id) return;
+      if (!latest || latest.server.id !== id) return;
       // The claim is the only thing stopping this server being synced again, so
       // it has to go before syncIfNeeded can do anything.
-      if (syncedRef.current === s.id) syncedRef.current = null;
+      if (syncedRef.current === id) syncedRef.current = null;
       syncIfNeeded(latest);
     }, delay);
   }
 
   /** Returns whether a run actually started. */
-  function runSync(s: Server): boolean {
+  function runSync(s: ServerWithCredential): boolean {
     if (syncingRef.current) return false;
     syncingRef.current = true;
     clearRetryTimer();
@@ -109,7 +110,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
     let lastInvalidate = 0;
-    syncLibrary(s, (progress) => {
+    syncLibrary(s.server, s.credential, (progress) => {
       // Progress state is cheap to set and is the only thing telling the user a
       // long first sync is moving rather than hung, so it updates every tick.
       // Only the store bump, which forces a full album re-read, is debounced.
@@ -125,7 +126,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
           failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0 || albumTracksIncomplete;
         setSyncStatus(hasPartialFailure ? "partial" : "done");
         setLastSyncedAt(Date.now());
-        if (retryRef.current?.id === s.id) retryRef.current = null;
+        if (retryRef.current?.id === s.server.id) retryRef.current = null;
         if (hasPartialFailure) {
           const messages = [];
           const parts = [];
@@ -190,7 +191,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
         // A failure leaves the server claimed, so syncIfNeeded would do nothing
         // here; the backoff is what gets it retried. A server switched to while
         // this run was failing is a different server and syncs straight away.
-        if (failed && latest.id === s.id) {
+        if (failed && latest.server.id === s.server.id) {
           scheduleRetry(s);
           return;
         }
@@ -203,16 +204,16 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
   // and calling runSync second lost the sync entirely when one was already in
   // flight: runSync is a no-op then, but the server counted as done and nothing
   // retried until the next auto-sync tick, or never when the interval is off.
-  function syncIfNeeded(s: Server) {
-    if (syncedRef.current === s.id) return;
-    if (runSync(s)) syncedRef.current = s.id;
+  function syncIfNeeded(s: ServerWithCredential) {
+    if (syncedRef.current === s.server.id) return;
+    if (runSync(s)) syncedRef.current = s.server.id;
   }
 
   useEffect(() => {
-    if (!server) return;
-    syncIfNeeded(server);
+    if (!target) return;
+    syncIfNeeded(target);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server]);
+  }, [target]);
 
   // Only touches refs, so the identity it captures on mount behaves like any later one.
   // The flag is re-armed in the body because StrictMode's mount/unmount/mount would
@@ -229,7 +230,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
 
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);
-    if (!server || isNaN(intervalMin) || intervalMin <= 0) return;
+    if (!target || isNaN(intervalMin) || intervalMin <= 0) return;
     // Keyed on the id, not the object: `App.tsx` derives the server from a query result, so an
     // equal-but-new object arrives on any refetch or remount, and re-arming on each one would
     // reset the countdown before a tick could land. The tick reads the live server for the
@@ -240,7 +241,7 @@ export function useLibrarySync(server: Server | undefined, queryClient: QueryCli
     }, intervalMin * 60 * 1000);
     return () => clearInterval(id);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [server?.id, autoSyncIntervalMin]);
+  }, [target?.server.id, autoSyncIntervalMin]);
 
   return { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync };
 }

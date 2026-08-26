@@ -658,13 +658,13 @@ export function AppRoutes(props: AppViewProps) {
                     : "Syncing…"}
                 </span>
               )}
-              {server && (syncStatus === "error" || syncStatus === "partial") && (
+              {serverWithCred && (syncStatus === "error" || syncStatus === "partial") && (
                 <SyncErrorBanner
                   variant={syncStatus}
-                  serverName={server.display_name}
+                  serverName={serverWithCred.server.display_name}
                   detail={syncError}
                   nextRetryAt={nextRetryAt}
-                  onRetry={() => runSync(server)}
+                  onRetry={() => runSync(serverWithCred)}
                 />
               )}
               {credError && (
@@ -693,10 +693,10 @@ export function AppRoutes(props: AppViewProps) {
                 <Search size={15} />
                 Search…
               </button>
-              {server && (
+              {serverWithCred && (
                 <button
                   className="rescan-btn"
-                  onClick={() => runSync(server)}
+                  onClick={() => runSync(serverWithCred)}
                   disabled={syncStatus === "syncing"}
                 >
                   Rescan
