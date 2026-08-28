@@ -43,16 +43,16 @@ let db: FakeDatabase;
 // Mirrors src/hooks/useSearch.test.ts: tracks_fts has no trigger, sync.ts writes it
 // explicitly, so seeding `tracks` alone leaves the index empty and every search returns
 // nothing.
-function seedAlbum(opts: { id: string; name: string; artist?: string | null }) {
+function seedAlbum(opts: { id: string; name: string; artist?: string | null; serverId?: string }) {
   db.raw
-    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, ?)`)
-    .run(opts.id, opts.name, opts.artist ?? null);
+    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, ?)`)
+    .run(opts.id, opts.serverId ?? "srv-a", opts.name, opts.artist ?? null);
 }
 
-function seedTrack(opts: { id: string; title: string; artist?: string | null; albumId: string | null }) {
+function seedTrack(opts: { id: string; title: string; artist?: string | null; albumId: string | null; serverId?: string }) {
   db.raw
-    .prepare(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, 'srv-a', 'navidrome', ?, ?, ?)`)
-    .run(opts.id, opts.title, opts.artist ?? null, opts.albumId);
+    .prepare(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, ?, ?)`)
+    .run(opts.id, opts.serverId ?? "srv-a", opts.title, opts.artist ?? null, opts.albumId);
   const albumName = opts.albumId
     ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as { name: string } | undefined)?.name ?? "")
     : "";
@@ -67,9 +67,9 @@ function seedTrack(opts: { id: string; title: string; artist?: string | null; al
  * name is. The filler track carries a null artist and a title that matches nothing, so
  * the album is the only row that scores.
  */
-function seedFindableAlbum(opts: { id: string; name: string }) {
-  seedAlbum({ id: opts.id, name: opts.name });
-  seedTrack({ id: `${opts.id}-trk`, title: "Filler Song", artist: null, albumId: opts.id });
+function seedFindableAlbum(opts: { id: string; name: string; serverId?: string }) {
+  seedAlbum({ id: opts.id, name: opts.name, serverId: opts.serverId });
+  seedTrack({ id: `${opts.id}-trk`, title: "Filler Song", artist: null, albumId: opts.id, serverId: opts.serverId });
 }
 
 const onClose = vi.fn();
@@ -276,6 +276,55 @@ describe("CommandPalette keyboard navigation", () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith("artists");
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves Enter on the first result when an arrow key lands before the results do", async () => {
+    // The debounce settles before the select resolves, so there is a window where the query
+    // is live and the list is empty. An arrow key there used to move a numeric cursor off the
+    // end of a zero-length list, and nothing put it back once the rows arrived: no row was
+    // highlighted and Enter did nothing until the user pressed ArrowUp.
+    seedAlbum({ id: "a1", name: "Yankee Hotel" });
+    seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
+    renderPalette();
+    typeRaw("jesus");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(resultPrimaries()).toEqual([]);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
+    expect(focusedLabel()).toBe("Jesus, Etc.");
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onPlayTrack).toHaveBeenCalledTimes(1);
+    expect(onPlayTrack).toHaveBeenCalledWith("t1");
+  });
+
+  it("falls back to the first row rather than holding the ordinal when the rows are replaced", async () => {
+    // Switching server re-keys the search without touching the typed query, so a new set of
+    // rows arrives under a focus the user placed on the old set. Holding position 3 would
+    // silently move the highlight onto a stranger's row and Enter would open it.
+    seedFindableAlbum({ id: "a:one", name: "Zebra One" });
+    seedFindableAlbum({ id: "a:two", name: "Zebra Two" });
+    seedFindableAlbum({ id: "a:three", name: "Zebra Three" });
+    seedFindableAlbum({ id: "b:alpha", name: "Zebra Alpha", serverId: "srv-b" });
+    seedFindableAlbum({ id: "b:beta", name: "Zebra Beta", serverId: "srv-b" });
+    seedFindableAlbum({ id: "b:gamma", name: "Zebra Gamma", serverId: "srv-b" });
+    const { rerenderWith } = renderPalette({ serverId: "srv-a" });
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(resultPrimaries()).toHaveLength(3);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    const heldRow = focusedLabel();
+    rerenderWith({ serverId: "srv-b" });
+    await settleDebounce();
+    const newRows = resultPrimaries();
+    expect(newRows).toHaveLength(3);
+    expect(newRows).not.toContain(heldRow);
+    expect(focusedLabel()).toBe(newRows[0]);
   });
 
   it("does nothing on Enter when the search has zero results", async () => {
