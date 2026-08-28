@@ -170,14 +170,17 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     function onKeyDown(e: KeyboardEvent) {
       const { items, focusedIdx, activate, onClose } = keysRef.current;
       if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowDown") {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        const next = items[Math.min(focusedIdx + 1, items.length - 1)];
-        if (next) setFocusedKey(itemKey(next));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        const prev = items[Math.max(focusedIdx - 1, 0)];
-        if (prev) setFocusedKey(itemKey(prev));
+        const delta = e.key === "ArrowDown" ? 1 : -1;
+        // Derived from the previous key rather than the render-time index: this is a native
+        // listener, so two presses arriving in one task are batched and both would read the
+        // same snapshot and move a single row between them.
+        setFocusedKey((current) => {
+          const from = Math.max(0, items.findIndex((item) => itemKey(item) === current));
+          const to = items[Math.min(Math.max(from + delta, 0), items.length - 1)];
+          return to ? itemKey(to) : current;
+        });
       } else if (e.key === "Enter") {
         e.preventDefault();
         const item = items[focusedIdx];

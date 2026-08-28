@@ -321,6 +321,21 @@ describe("CommandPalette listener churn", () => {
 });
 
 describe("CommandPalette keyboard navigation", () => {
+  it("accumulates two arrow presses delivered in one task rather than collapsing them", () => {
+    // The handler is on a native window listener, so its state updates are batched into a
+    // microtask rather than flushed synchronously. Reading the focused row off a render-time
+    // snapshot makes two presses in one task both start from the same row and move only once.
+    // Real key repeat puts a task boundary between presses, so only an updater derived from
+    // the previous value pins the property.
+    renderPalette();
+    expect(focusedLabel()).toBe("Home");
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    });
+    expect(focusedLabel()).toBe("Artists");
+  });
+
   it("clamps ArrowDown at the last item and ArrowUp at the first", () => {
     renderPalette();
     expect(focusedLabel()).toBe("Home");
