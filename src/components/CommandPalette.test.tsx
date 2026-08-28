@@ -257,6 +257,69 @@ describe("CommandPalette debounce", () => {
   });
 });
 
+/**
+ * The window keydown listener is armed once for as long as the palette is open. Its handler
+ * reads the result list, the focused row and the activate callback through a ref, so the rows
+ * arriving and the user arrowing through them cannot re-arm it. Same shape as the fix already
+ * pinned for `useSearchShortcuts` in `App.keyboard.test.tsx`.
+ */
+describe("CommandPalette listener churn", () => {
+  const spies: { mockRestore: () => void }[] = [];
+  afterEach(() => {
+    for (const spy of spies.splice(0)) spy.mockRestore();
+  });
+
+  function countKeydownListeners() {
+    const added: string[] = [];
+    const removed: string[] = [];
+    const realAdd = window.addEventListener.bind(window);
+    const realRemove = window.removeEventListener.bind(window);
+    spies.push(vi.spyOn(window, "addEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      opts?: boolean | AddEventListenerOptions
+    ) => {
+      if (type === "keydown") added.push(type);
+      realAdd(type, listener, opts);
+    }) as typeof window.addEventListener));
+    spies.push(vi.spyOn(window, "removeEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      opts?: boolean | EventListenerOptions
+    ) => {
+      if (type === "keydown") removed.push(type);
+      realRemove(type, listener, opts);
+    }) as typeof window.removeEventListener));
+    return { added, removed };
+  }
+
+  it("arms the keydown listener once across a full type, settle and arrow session", async () => {
+    seedFindableAlbum({ id: "a:one", name: "Zebra One" });
+    seedFindableAlbum({ id: "a:two", name: "Zebra Two" });
+    const { added, removed } = countKeydownListeners();
+    const { unmount } = renderPalette();
+    expect(added.length).toBe(1);
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(resultPrimaries()).toHaveLength(2);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(added.length).toBe(1);
+    expect(removed.length).toBe(0);
+    unmount();
+    expect(removed.length).toBe(1);
+  });
+
+  it("does not re-arm the listener when the server credential object is replaced", () => {
+    const { added } = countKeydownListeners();
+    const { rerenderWith } = renderPalette();
+    expect(added.length).toBe(1);
+    rerenderWith({ serverWithCredential: { ...SRV } });
+    expect(added.length).toBe(1);
+  });
+});
+
 describe("CommandPalette keyboard navigation", () => {
   it("clamps ArrowDown at the last item and ArrowUp at the first", () => {
     renderPalette();

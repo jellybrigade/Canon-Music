@@ -136,7 +136,9 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
       onSelectArtist(item.name, item.album_count);
     }
     onClose();
-  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose, serverWithCredential]);
+    // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
+    // replaced server object would only churn this callback's identity.
+  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose]);
 
   useEffect(() => {
     if (open) {
@@ -157,9 +159,16 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     focusedRef.current?.scrollIntoView({ block: "nearest" });
   }, [focusedIdx]);
 
+  // Read through a ref, so the listener is armed once per open rather than torn down and
+  // re-added for every keystroke, every arrow press and every result set that arrives - all of
+  // which rebuild `items`. Same pattern as useSearchShortcuts.
+  const keysRef = useRef({ items, focusedIdx, activate, onClose });
+  keysRef.current = { items, focusedIdx, activate, onClose };
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
+      const { items, focusedIdx, activate, onClose } = keysRef.current;
       if (e.key === "Escape") { onClose(); return; }
       if (e.key === "ArrowDown") {
         e.preventDefault();
@@ -177,7 +186,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, items, focusedIdx, activate, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
