@@ -218,6 +218,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "useNavigate()" src --include='*.ts*' | grep -v '\.test\.' | grep -v useAppNavigation
   ```
+- **A dismissal scheduled at the same priority as the navigation it accompanies cannot land before that navigation does.** The fix above ran `dismissOverlays` inside `startTransition`, on the reasoning that React Router commits its own location update as a transition and matching the priority puts both in one commit. Every route is `React.lazy` under the already-mounted `<Suspense fallback={null}>` in `AppShell` that also contains the search overlay, and React keeps a boundary's *committed* content rather than showing its fallback while a transition suspends - so on the first visit to any route the chunk had not been imported yet, both lanes waited on the dynamic import, and the overlay stayed painted over the click for as long as the download took. That is the same "the click reads as inert" symptom the dismissal exists to remove, reintroduced by the mechanism meant to tidy it. Urgent, the dismissal renders on its own: the router has not moved yet, so the route the user came from is what stays painted for the frame or two until the transition lands, and nothing is ever blank. Ask of any `startTransition` around a *response* to a user gesture: is it sharing a Suspense boundary with the work it is waiting on, and what does the user see meanwhile?
+  ```
+  grep -rn "startTransition" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A route that returns `null` for "don't know yet" and for "isn't there" paints the same blank page for both.** `data ?? null` collapses the one distinction `useQuery` gives you. Name the pending state.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'

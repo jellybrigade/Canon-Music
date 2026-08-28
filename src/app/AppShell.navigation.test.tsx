@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import { MemoryRouter, useNavigate } from "react-router-dom";
 import { useState, useCallback } from "react";
 import { AppShell } from "./AppShell";
@@ -23,9 +23,30 @@ import { useDismissOnNavigate } from "../hooks/useDismissOnNavigate";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 
+// Every route in the real AppRoutes is `lazy`, under the same already-mounted Suspense
+// boundary that wraps the search overlay. `suspendControl` lets one test hold the
+// destination route unresolved so the dismissal can be observed while it is still loading.
+const suspendControl = vi.hoisted(() => ({
+  pathname: null as string | null,
+  pending: null as Promise<void> | null,
+  release: null as (() => void) | null,
+}));
+
 vi.mock("./AppRoutes", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  AppRoutes: (props: any) => <div data-testid="route-content">{props.pathnameForTest}</div>,
+  AppRoutes: (props: any) => {
+    if (suspendControl.pathname !== null && props.pathnameForTest === suspendControl.pathname) {
+      suspendControl.pending ??= new Promise<void>((resolve) => {
+        suspendControl.release = () => {
+          suspendControl.pathname = null;
+          suspendControl.pending = null;
+          resolve();
+        };
+      });
+      throw suspendControl.pending;
+    }
+    return <div data-testid="route-content">{props.pathnameForTest}</div>;
+  },
 }));
 
 vi.mock("../components/PlayerBar", () => ({
@@ -63,7 +84,12 @@ vi.mock("../components/SearchResults", () => ({
 
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  suspendControl.pathname = null;
+  suspendControl.pending = null;
+  suspendControl.release = null;
+});
 
 // AppShell's Suspense boundary wraps CommandPalette/SearchResults (both lazy),
 // so the very first render of the whole suite paints the fallback (null) until
@@ -379,5 +405,30 @@ describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
     fireEvent.click(screen.getByTestId("raw-navigate"));
     expectOverlayDismissed();
     expect(screen.getByTestId("route-content")).toHaveTextContent("/playlists");
+  });
+});
+
+describe("AppShell: dismissal does not wait on the destination route", () => {
+  it("dismisses the overlay while the destination route is still loading", async () => {
+    // Both the overlay and the routes sit under one already-mounted Suspense boundary, and
+    // React keeps a boundary's committed content rather than showing its fallback while a
+    // transition suspends. A dismissal scheduled in a transition lane therefore lands only
+    // once the destination chunk resolves, leaving the overlay painted over the click the
+    // user just made - the exact "the click reads as inert" symptom the dismissal exists for.
+    renderHarness({ entries: ["/library"] });
+    expectOverlayOpen();
+
+    suspendControl.pathname = "/home";
+    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+
+    expect(screen.queryByRole("heading", { name: "Search" })).not.toBeInTheDocument();
+    // The router has not moved yet, so the route the user came from is what stays painted.
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/library");
+
+    await act(async () => {
+      suspendControl.release?.();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByTestId("route-content")).toHaveTextContent("/home"));
   });
 });

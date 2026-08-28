@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlayerStore } from "../store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
@@ -30,10 +30,12 @@ const VIEW_TO_PATH: Record<AppView, string> = {
  * rather than at each source is what stops a navigation added later from missing it; see
  * known-issues.md, "State deciding which subtree renders, but absent from the URL".
  *
- * It runs inside `startTransition`, after the navigate. React Router 7 commits its own location
- * update as a transition, so an urgent dismissal beside it is the higher priority of the two and
- * lands a render early: the overlay goes while the old route is still painted. Matching the
- * priority puts both in one commit.
+ * The dismissal is urgent, not a transition, though React Router 7 commits its own location
+ * update as one. Routes are `lazy` under the same already-mounted Suspense boundary the overlay
+ * renders in, and React keeps a boundary's committed content while a transition suspends, so a
+ * matched priority holds the dismissal until the destination chunk resolves - the overlay stays
+ * over the click that asked for it. Urgent, the overlay goes at once and the route the user came
+ * from stays painted for the frame or two until the transition lands.
  */
 export function useAppNavigation(dismissOverlays: () => void) {
   const navigate = useNavigate();
@@ -42,7 +44,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
   // below must not be torn down and re-armed for it.
   const dismissRef = useRef(dismissOverlays);
   dismissRef.current = dismissOverlays;
-  const dismiss = useCallback(() => startTransition(() => dismissRef.current()), []);
+  const dismiss = useCallback(() => dismissRef.current(), []);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
