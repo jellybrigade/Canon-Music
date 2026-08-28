@@ -16,7 +16,7 @@ describe("QK", () => {
   });
 
   it("distinguishes different arguments", () => {
-    expect(QK.artistTopTracks("Ye")).not.toEqual(QK.artistTopTracks("Yes"));
+    expect(QK.artistTopTracks("Ye", "srv")).not.toEqual(QK.artistTopTracks("Yes", "srv"));
     expect(QK.search("srv-1", "q")).not.toEqual(QK.search("srv-2", "q"));
   });
 
@@ -51,7 +51,21 @@ describe("QK", () => {
 
   it("keeps the single-row artist probe out of the artist top-tracks list key", () => {
     // Writing a one-element result under the full list's key starves the artist page.
-    expect(QK.artistSeedTrack("Ye")[0]).not.toBe(QK.artistTopTracks("Ye")[0]);
+    expect(QK.artistSeedTrack("Ye", "srv")[0]).not.toBe(QK.artistTopTracks("Ye", "srv")[0]);
+  });
+
+  // known-issues.md, the name-keyed wrong-owner class: these queries read a mirrored table by an
+  // artist name, which carries no server prefix, so a key that omits the server serves one server's
+  // rows to the other after a switch - with covers and stream URLs built for the wrong host.
+  it("separates the artist-name reads of the mirror by server", () => {
+    expect(QK.artistTopTracks("Ye", "srv-1")).not.toEqual(QK.artistTopTracks("Ye", "srv-2"));
+    expect(QK.artistSeedTrack("Ye", "srv-1")).not.toEqual(QK.artistSeedTrack("Ye", "srv-2"));
+    expect(QK.artistGenres("Ye", "srv-1")).not.toEqual(QK.artistGenres("Ye", "srv-2"));
+    expect(QK.artistAppearsOn("Ye", "srv-1")).not.toEqual(QK.artistAppearsOn("Ye", "srv-2"));
+    expect(QK.similarArtistAlbums(["Ye"], "srv-1")).not.toEqual(QK.similarArtistAlbums(["Ye"], "srv-2"));
+    expect(QK.nowPlayingAlbums("Ye", "srv-1")).not.toEqual(QK.nowPlayingAlbums("Ye", "srv-2"));
+    expect(QK.nowPlayingTopTracks("Ye", "srv-1")).not.toEqual(QK.nowPlayingTopTracks("Ye", "srv-2"));
+    expect(QK.suggestedTracks("Ye", "t-1", "srv-1")).not.toEqual(QK.suggestedTracks("Ye", "t-1", "srv-2"));
   });
 
   it("treats an undefined argument as its own key, not as the argument's absence", () => {

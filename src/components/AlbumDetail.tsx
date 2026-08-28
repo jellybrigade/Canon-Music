@@ -98,7 +98,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const [skipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
 
   const isVariousArtists = (album.artist ?? "").trim().toLowerCase() === "various artists";
-  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "");
+  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "", server.id);
   const moreFromArtistAlbums = useMemo(
     () => (moreFromArtist ?? []).filter((a) => a.id !== album.id).slice(0, RELATED_SHELF_LIMIT),
     [moreFromArtist, album.id]
@@ -113,7 +113,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
     [similarArtistNames, similarInLibrarySet]
   );
-  const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary);
+  const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary, server.id);
   const fansAlsoLikeAlbums = useMemo(
     () => fansAlsoLikeAlbumsRaw.slice(0, RELATED_SHELF_LIMIT),
     [fansAlsoLikeAlbumsRaw]

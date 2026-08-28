@@ -40,13 +40,13 @@ export function primaryArtistOf(artist: string | null | undefined): string | nul
   return artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? artist;
 }
 
-export async function fetchArtistAlbums(artistName: string): Promise<AlbumRow[]> {
+export async function fetchArtistAlbums(artistName: string, serverId: string): Promise<AlbumRow[]> {
   const db = await getDb();
   return db.select<AlbumRow[]>(
     `SELECT id, server_id, name, artist, year, artwork_url
-     FROM albums WHERE artist = ?
+     FROM albums WHERE server_id = ? AND artist = ?
      ORDER BY year IS NULL, year DESC, name`,
-    [artistName]
+    [serverId, artistName]
   );
 }
 
@@ -54,14 +54,20 @@ export async function fetchArtistAlbums(artistName: string): Promise<AlbumRow[]>
  * Last.fm's global popularity ranking, intersected with what the library actually holds.
  * Falls back to local track order when Last.fm has nothing or none of it matches.
  */
-export async function fetchArtistTopTracksForNowPlaying(artistName: string): Promise<NowPlayingTrack[]> {
+export async function fetchArtistTopTracksForNowPlaying(
+  artistName: string,
+  serverId: string
+): Promise<NowPlayingTrack[]> {
   const db = await getDb();
   const like = escapeLike(artistName);
-  const featParams = [artistName, `${like} feat.%`, `${like} ft.%`, `${like} featuring %`];
-  const artistMatch = `t.artist = ?
+  const featParams = [serverId, artistName, `${like} feat.%`, `${like} ft.%`, `${like} featuring %`];
+  // The name match is an OR group, so the server scope has to bracket it or the first
+  // alternative alone carries the AND and the three feat. variants stay library-wide.
+  const artistMatch = `t.server_id = ?
+       AND (t.artist = ?
        OR t.artist LIKE ? ESCAPE '\\'
        OR t.artist LIKE ? ESCAPE '\\'
-       OR t.artist LIKE ? ESCAPE '\\'`;
+       OR t.artist LIKE ? ESCAPE '\\')`;
 
   const trackNames = await fetchArtistTopTracks(artistName).catch(() => []);
   if (trackNames.length > 0) {
@@ -97,7 +103,8 @@ export async function fetchArtistTopTracksForNowPlaying(artistName: string): Pro
 
 export async function fetchSuggestedTracksForNowPlaying(
   artistName: string,
-  currentTrackId: string | null
+  currentTrackId: string | null,
+  serverId: string
 ): Promise<NowPlayingTrack[]> {
   const similarArtists = await fetchSimilarArtists(artistName).catch(() => []);
   if (similarArtists.length === 0) return [];
@@ -106,10 +113,11 @@ export async function fetchSuggestedTracksForNowPlaying(
   return db.select<NowPlayingTrack[]>(
     `SELECT ${TRACK_COLUMNS}
      FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-     WHERE t.artist IN (${placeholders})
+     WHERE t.server_id = ?
+       AND t.artist IN (${placeholders})
        AND t.id != ?
      ORDER BY random()
      LIMIT 10`,
-    [...similarArtists, currentTrackId ?? ""]
+    [serverId, ...similarArtists, currentTrackId ?? ""]
   );
 }

@@ -159,6 +159,19 @@ Fixed unless marked OPEN.
   ```
   grep -rln "serverWithCred\|ServerWithCredential" src --include='*.ts*' | grep -v '\.test\.' | xargs grep -n "FROM albums WHERE id\|FROM tracks WHERE id\|FROM artists WHERE\|FROM playlists WHERE id" | grep -v server_id
   ```
+- **An artist name is not an owner, and a read keyed on one returns every server's rows.** The id-keyed form of this (the `album-by-id` entry above) could only ever return the *wrong owner* of an unambiguous row; a name carries no server prefix, so the name-keyed form returns the wrong *rows*. Eight reads of `albums`/`tracks` filtered on an artist column had no `server_id` bind: all three now-playing About-tab queries, `useArtistAlbums` (the artist page's discography and `AlbumDetail`'s "More from Artist"), `useSimilarArtistAlbums` ("Fans Also Like"), `ArtistDetail`'s top-tracks, seed-track, genre-count and appears-on queries, and the radio seed pick in `handleStartRadioFromArtist`. Every consumer builds its cover and stream URLs from the *selected* `serverWithCredential`, so with two servers configured each strip padded itself with albums whose art 404s against a host that has never heard of the id, and the artist radio could seed on a track that cannot play. Three of them combined the name match with aliases or feat. variants as an OR group, so the scope has to bracket the group - an `AND` next to the first alternative silently leaves the rest library-wide. The query keys took only the name, so a server switch also served the previous server's cached rows. `useAlbumIdentity` and `useEnrichArtist` stay library-wide on purpose: they resolve a global MusicBrainz identity, and no row of theirs reaches a URL. Enforced repo-wide by `src/lib/server-scoping.test.ts`, which also fails if an exemption stops being needed. Ask of any name-keyed read: does the key itself prove ownership, or only the row's own column?
+  ```
+  python3 - <<'PY'
+  import re, glob
+  read = re.compile(r'`([^`]*\bSELECT\b[^`]*\b(?:FROM|JOIN)\s+(?:albums|tracks)\b[^`]*)`', re.S)
+  for f in sorted(glob.glob('src/**/*.ts', recursive=True) + glob.glob('src/**/*.tsx', recursive=True)):
+      if '.test.' in f: continue
+      for m in read.finditer(open(f).read()):
+          sql = m.group(1)
+          if re.search(r'\b\w*\.?artist\s*(?:=\s*\?|IN\s*\(|LIKE\s*\?)', sql) and not re.search(r'\bserver_id\s*=\s*\?', sql):
+              print(f, ' '.join(sql.split())[:90])
+  PY
+  ```
 - **A guard that holds only because of what the data happens to look like is not a guard.** Five `LIKE ?` prefix binds had no `ESCAPE`; safe only while ids are UUIDs. One `escapeLike` in `src/lib/sql.ts`, enforced repo-wide by `src/lib/sql-escaping.test.ts`. Literal patterns (`NOT LIKE 'raw:%'`) need no escaping.
   ```
   grep -rn "LIKE ?" src --include='*.ts*' | grep -v '\.test\.' | grep -v ESCAPE

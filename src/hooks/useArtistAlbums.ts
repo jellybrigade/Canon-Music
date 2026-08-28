@@ -3,23 +3,26 @@ import { getDb } from "../db";
 import type { AlbumRow } from "../types/library";
 import { useArtistAlbumsSessionStore } from "../store/artistAlbumsSessionStore";
 
-export function useArtistAlbums(artistName: string) {
+export function useArtistAlbums(artistName: string, serverId: string) {
   const refreshTick = useArtistAlbumsSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<AlbumRow[] | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(!!artistName);
-  const prevArtistNameRef = useRef<string | null>(null);
+  // Carries the server as well as the name: switching servers under one mount changes which
+  // rows are correct, so the previous server's list has to be dropped like a stale artist's.
+  const prevKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!artistName) {
+    if (!artistName || !serverId) {
       setData(undefined);
       setIsLoading(false);
-      prevArtistNameRef.current = null;
+      prevKeyRef.current = null;
       return;
     }
-    if (prevArtistNameRef.current !== artistName) {
+    const key = `${serverId}\u0000${artistName}`;
+    if (prevKeyRef.current !== key) {
       setData(undefined);
     }
-    prevArtistNameRef.current = artistName;
+    prevKeyRef.current = key;
     let cancelled = false;
     setIsLoading(true);
     (async () => {
@@ -28,10 +31,11 @@ export function useArtistAlbums(artistName: string) {
         const rows = await db.select<AlbumRow[]>(
           `SELECT id, server_id, name, artist, year, artwork_url, release_type
            FROM albums
-           WHERE artist = ?
-              OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+           WHERE server_id = ?
+             AND (artist = ?
+              OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
            ORDER BY year IS NULL, year DESC, name`,
-          [artistName, artistName]
+          [serverId, artistName, artistName]
         );
         if (!cancelled) {
           setData(rows);
@@ -45,7 +49,7 @@ export function useArtistAlbums(artistName: string) {
     return () => {
       cancelled = true;
     };
-  }, [artistName, refreshTick]);
+  }, [artistName, serverId, refreshTick]);
 
   return { data, isLoading };
 }

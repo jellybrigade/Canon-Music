@@ -57,7 +57,6 @@ export default function App() {
   useAppActivityTracking();
   useRadio();
   useBackgroundNormalizer();
-  useNowPlayingPrefetch();
 
   const loadSettings = usePlayerStore((s) => s.loadSettings);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -116,6 +115,9 @@ export default function App() {
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
   useMediaSession(serverWithCred);
+  // Below the server read rather than up with the playback hooks: its queries are scoped by
+  // server id, and a warm keyed on a different id than the tab reads is a warm nobody reads.
+  useNowPlayingPrefetch(server?.id ?? null);
 
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
@@ -496,9 +498,10 @@ export default function App() {
     const rows = await db.select<TrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
-       WHERE t.artist = ? OR a.artist = ?
+       WHERE t.server_id = ?
+         AND (t.artist = ? OR a.artist = ?)
        ORDER BY random() LIMIT 1`,
-      [artist.name, artist.name]
+      [srv.id, artist.name, artist.name]
     );
     const t = rows[0];
     if (!t) return;

@@ -8,9 +8,14 @@ vi.mock("./lastfm", () => ({
 }));
 
 import { getDb } from "../db";
-import { fetchArtistTopTracks } from "./lastfm";
+import { fetchArtistTopTracks, fetchSimilarArtists } from "./lastfm";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { fetchArtistTopTracksForNowPlaying, primaryArtistOf } from "./now-playing-queries";
+import {
+  fetchArtistAlbums,
+  fetchArtistTopTracksForNowPlaying,
+  fetchSuggestedTracksForNowPlaying,
+  primaryArtistOf,
+} from "./now-playing-queries";
 
 describe("primaryArtistOf", () => {
   it("returns null for null, undefined, and empty string", () => {
@@ -82,7 +87,7 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
   }
 
   async function artistsFor(name: string): Promise<string[]> {
-    const rows = await fetchArtistTopTracksForNowPlaying(name);
+    const rows = await fetchArtistTopTracksForNowPlaying(name, "srv");
     return rows.map((r) => r.artist ?? "");
   }
 
@@ -179,5 +184,89 @@ describe("regression: prefetch/consumer key parity", () => {
         expect(value).toMatch(/^(NOW_PLAYING_STALE_TIME|SUGGESTED_STALE_TIME)$/);
       }
     }
+  });
+});
+
+// known-issues.md: "A row looked up by an id the URL supplied is not a row the selected server
+// owns" - the name-keyed form of the same class. An artist name carries no server prefix, so an
+// unscoped read genuinely returns another server's rows, and every consumer builds its cover and
+// stream URLs from the *selected* server's credential.
+describe("server scoping", () => {
+  let db: FakeDatabase;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    db = await createMigratedTestDb();
+    vi.mocked(getDb).mockResolvedValue(db as never);
+    vi.mocked(fetchArtistTopTracks).mockResolvedValue([]);
+    vi.mocked(fetchSimilarArtists).mockResolvedValue([]);
+  });
+
+  function seedAlbum(serverId: string, suffix: string, artist: string): void {
+    db.raw
+      .prepare(
+        `INSERT INTO albums (id, server_id, server_type, name, artist, year)
+         VALUES (?, ?, 'navidrome', ?, ?, 2000)`
+      )
+      .run(`${serverId}:al${suffix}`, serverId, `Album ${suffix}`, artist);
+  }
+
+  function seedTrack(serverId: string, suffix: string, artist: string): void {
+    db.raw
+      .prepare(
+        `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, track_number)
+         VALUES (?, ?, 'navidrome', ?, ?, ?, 1)`
+      )
+      .run(`${serverId}:t${suffix}`, serverId, `Title ${suffix}`, artist, `${serverId}:al${suffix}`);
+  }
+
+  it("returns only the selected server's albums for an artist both servers hold", async () => {
+    seedAlbum("alpha", "1", "Burial");
+    seedAlbum("beta", "2", "Burial");
+    const rows = await fetchArtistAlbums("Burial", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:al1"]);
+  });
+
+  it("returns only the selected server's top tracks when Last.fm has no ranking", async () => {
+    seedTrack("alpha", "1", "Burial");
+    seedTrack("beta", "2", "Burial");
+    seedTrack("beta", "3", "Burial feat. Four Tet");
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t1"]);
+  });
+
+  it("returns only the selected server's top tracks when Last.fm ranks them", async () => {
+    seedTrack("alpha", "1", "Burial");
+    seedTrack("beta", "2", "Burial");
+    vi.mocked(fetchArtistTopTracks).mockResolvedValue([
+      { name: "Title 2", playcount: 10 },
+      { name: "Title 1", playcount: 5 },
+    ] as never);
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t1"]);
+  });
+
+  it("keeps the feat.-variant match inside the server scope rather than widening it", async () => {
+    seedTrack("alpha", "1", "Burial");
+    seedTrack("alpha", "2", "Burial feat. Four Tet");
+    seedTrack("beta", "3", "Burial feat. Four Tet");
+    const rows = await fetchArtistTopTracksForNowPlaying("Burial", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t1", "alpha:t2"]);
+  });
+
+  it("returns only the selected server's suggested tracks", async () => {
+    seedTrack("alpha", "1", "Four Tet");
+    seedTrack("beta", "2", "Four Tet");
+    vi.mocked(fetchSimilarArtists).mockResolvedValue(["Four Tet"]);
+    const rows = await fetchSuggestedTracksForNowPlaying("Burial", null, "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t1"]);
+  });
+
+  it("still excludes the current track inside the server scope", async () => {
+    seedTrack("alpha", "1", "Four Tet");
+    seedTrack("alpha", "2", "Four Tet");
+    vi.mocked(fetchSimilarArtists).mockResolvedValue(["Four Tet"]);
+    const rows = await fetchSuggestedTracksForNowPlaying("Burial", "alpha:t1", "alpha");
+    expect(rows.map((r) => r.id)).toEqual(["alpha:t2"]);
   });
 });

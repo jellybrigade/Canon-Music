@@ -34,15 +34,20 @@ export const QK = {
   spotlightGenres: (albumId: string) => ["spotlight-genres", albumId] as const,
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 
-  artistTopTracks: (artistName: string) => ["artist-top-tracks", artistName] as const,
+  artistTopTracks: (artistName: string, serverId: string) =>
+    ["artist-top-tracks", artistName, serverId] as const,
   // Deliberately not artistTopTracks: this is a single-row probe, and writing a
   // one-element result under the full list's key would starve the artist page.
-  artistSeedTrack: (artistName: string) => ["artist-seed-track", artistName] as const,
-  artistAppearsOn: (artistName: string) => ["artist-appears-on", artistName] as const,
-  artistGenres: (artistName: string) => ["artist-genres", artistName] as const,
+  artistSeedTrack: (artistName: string, serverId: string) =>
+    ["artist-seed-track", artistName, serverId] as const,
+  artistAppearsOn: (artistName: string, serverId: string) =>
+    ["artist-appears-on", artistName, serverId] as const,
+  artistGenres: (artistName: string, serverId: string) =>
+    ["artist-genres", artistName, serverId] as const,
   lastfmArtistTopAlbums: (artistName: string) => ["lastfm-artist-top-albums", artistName] as const,
   similarInLibrary: (names: string[]) => ["similar-in-library", names] as const,
-  similarArtistAlbums: (names: string[]) => ["similar-artist-albums", names] as const,
+  similarArtistAlbums: (names: string[], serverId: string) =>
+    ["similar-artist-albums", names, serverId] as const,
 
   trackRawTags: (trackId: string | undefined) => ["track-raw-tags", trackId] as const,
   albumRawGenreMap: (albumId: string) => ["album-raw-genre-map", albumId] as const,
@@ -82,10 +87,12 @@ export const QK = {
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,
 
-  nowPlayingAlbums: (artistName: string | null) => ["nowplaying-albums", artistName] as const,
-  nowPlayingTopTracks: (artistName: string | null) => ["nowplaying-top-tracks", artistName] as const,
-  suggestedTracks: (artistName: string | null, trackId: string | null) =>
-    ["suggested-tracks", artistName, trackId] as const,
+  nowPlayingAlbums: (artistName: string | null, serverId: string | null) =>
+    ["nowplaying-albums", artistName, serverId] as const,
+  nowPlayingTopTracks: (artistName: string | null, serverId: string | null) =>
+    ["nowplaying-top-tracks", artistName, serverId] as const,
+  suggestedTracks: (artistName: string | null, trackId: string | null, serverId: string | null) =>
+    ["suggested-tracks", artistName, trackId, serverId] as const,
 
   userTreeNodes: () => ["user-tree-nodes"] as const,
   userTreeChangelog: () => ["user-tree-changelog"] as const,
