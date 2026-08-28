@@ -4,6 +4,9 @@
 // consumer builds its cover and stream URLs from the *selected* server's credential, so the foreign
 // rows paint broken art and cannot play. A per-query test cannot see the next one someone writes, so
 // this file sweeps every SQL literal in `src/` and pins the reads allowed to stay unscoped.
+// Known limit: SQL built by pushing conditions onto an array (`buildSmartQuery`) never exists as
+// one string in the source, so no literal-based sweep can see it. Such a builder owes its own unit
+// test that the server scope is among the conditions it always emits.
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -32,6 +35,38 @@ const FILES = sourceFiles(SRC_DIR).map((path) => ({
 const MIRROR_READ = /`([^`]*\bSELECT\b[^`]*\b(?:FROM|JOIN)\s+(?:albums|tracks)\b[^`]*)`/gs;
 const ARTIST_FILTER = /\b\w*\.?artist\s*(?:=\s*\?|IN\s*\(|LIKE\s*\?)/;
 const SERVER_SCOPE = /\bserver_id\s*=\s*\?/;
+const FRAGMENT = /\bconst\s+(\w+)\s*=\s*`([^`]*)`/g;
+
+// A read assembled from named pieces (`WHERE ${artistMatch}`) shows neither its artist filter nor
+// its server scope in the literal holding the SELECT, so without this it leaves the sweep
+// entirely - which is where three of the reads this guard was written for actually live.
+function resolveFragments(sql: string, text: string): string {
+  const fragments = new Map<string, string>();
+  for (const match of text.matchAll(FRAGMENT)) fragments.set(match[1] ?? "", match[2] ?? "");
+  return sql.replace(/\$\{(\w+)\}/g, (whole, name: string) => fragments.get(name) ?? whole);
+}
+
+// `WHERE server_id = ? AND artist = ? OR artist LIKE ?` binds the scope to the first alternative
+// only and leaves the rest library-wide, so a bare "does `server_id = ?` appear" test passes it.
+// An OR belonging to a name-match group is written inside parentheses; one at the top level of the
+// statement is the failure known-issues.md names.
+function hasUnbracketedOr(sql: string): boolean {
+  let depth = 0;
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    if (char === "(") depth++;
+    else if (char === ")") depth--;
+    else if (
+      depth === 0 &&
+      /^or$/i.test(sql.slice(i, i + 2)) &&
+      !/\w/.test(sql[i - 1] ?? " ") &&
+      !/\w/.test(sql[i + 2] ?? " ")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 
 export interface UnscopedRead {
   path: string;
@@ -42,8 +77,9 @@ export interface UnscopedRead {
 export function unscopedArtistReads(path: string, text: string): UnscopedRead[] {
   const out: UnscopedRead[] = [];
   for (const match of text.matchAll(MIRROR_READ)) {
-    const sql = match[1] ?? "";
-    if (!ARTIST_FILTER.test(sql) || SERVER_SCOPE.test(sql)) continue;
+    const sql = resolveFragments(match[1] ?? "", text);
+    if (!ARTIST_FILTER.test(sql)) continue;
+    if (SERVER_SCOPE.test(sql) && !hasUnbracketedOr(sql)) continue;
     out.push({ path, line: text.slice(0, match.index).split("\n").length, sql });
   }
   return out;
@@ -71,6 +107,43 @@ describe("artist-name reads of the mirror are scoped to one server", () => {
     const scoped = "const q = `SELECT id FROM albums WHERE server_id = ? AND artist = ?`;";
     expect(unscopedArtistReads("x.ts", unscoped)).toHaveLength(1);
     expect(unscopedArtistReads("x.ts", scoped)).toEqual([]);
+  });
+
+  it("flags a scope bound to the first alternative of a name-match group", () => {
+    const leaky =
+      "const q = `SELECT id FROM tracks WHERE server_id = ? AND artist = ? OR artist LIKE ?`;";
+    const bracketed =
+      "const q = `SELECT id FROM tracks WHERE server_id = ? AND (artist = ? OR artist LIKE ?)`;";
+    expect(unscopedArtistReads("x.ts", leaky)).toHaveLength(1);
+    expect(unscopedArtistReads("x.ts", bracketed)).toEqual([]);
+  });
+
+  it("sees a read whose filter and scope live in a separate fragment", () => {
+    const composed = [
+      "const match = `t.server_id = ? AND t.artist = ?`;",
+      "const q = `SELECT t.id FROM tracks t WHERE ${match}`;",
+    ].join("\n");
+    const composedUnscoped = [
+      "const match = `t.artist = ?`;",
+      "const q = `SELECT t.id FROM tracks t WHERE ${match}`;",
+    ].join("\n");
+    expect(unscopedArtistReads("x.ts", composed)).toEqual([]);
+    expect(unscopedArtistReads("x.ts", composedUnscoped)).toHaveLength(1);
+  });
+
+  it("keeps the fragment-composed now-playing reads inside the sweep", () => {
+    // The two top-tracks reads hold their whole WHERE clause in a named fragment, so a sweep
+    // reading whole literals only saw no artist filter and reported them clean while covering
+    // neither. Counted as "visible only after resolution" so the number moves if either stops
+    // being composed rather than tracking every read in the file.
+    const file = FILES.find((f) => f.path === "lib/now-playing-queries.ts");
+    expect(file).toBeDefined();
+    const text = file?.text ?? "";
+    const composed = [...text.matchAll(MIRROR_READ)].filter(
+      (m) => !ARTIST_FILTER.test(m[1] ?? "") && ARTIST_FILTER.test(resolveFragments(m[1] ?? "", text))
+    );
+    expect(composed.length).toBe(2);
+    expect(unscopedArtistReads("lib/now-playing-queries.ts", text)).toEqual([]);
   });
 
   it("every non-exempt artist-name read carries its server scope", () => {
