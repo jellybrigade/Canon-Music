@@ -82,6 +82,38 @@ export default function App() {
   const setYearFromInput = useLibraryFiltersStore((s) => s.setYearFromInput);
   const setYearToInput = useLibraryFiltersStore((s) => s.setYearToInput);
 
+  const [searchRaw, setSearchRaw] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const clearSearch = useCallback(() => {
+    // Cancel the pending debounce first. Without this, clearing within 200ms of
+    // the last keystroke lets the timer fire afterwards and set searchQuery back,
+    // which re-opens the search view for a query the now-empty input doesn't show.
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    setSearchRaw("");
+    setSearchQuery("");
+    setSearchOpen(false);
+    searchInputRef.current?.blur();
+  }, []);
+
+  // Neither overlay is URL-backed: the search overlay renders instead of the router's
+  // content, the command palette paints over it. So anything that navigates while one is up
+  // lands behind it and the click looks inert. Both are dismissed inside useAppNavigation,
+  // at the one place every navigation the app offers is expressed, rather than at each
+  // source - the palette used to rely on the five setCommandPaletteOpen calls in its own
+  // handlers, which by construction could not cover navigation that started anywhere else.
+  const dismissOverlays = useCallback(() => {
+    clearSearch();
+    setCommandPaletteOpen(false);
+  }, [clearSearch]);
+
   const {
     view,
     pathname,
@@ -90,7 +122,7 @@ export default function App() {
     openArtist,
     openPlaylist,
     goBack,
-  } = useAppNavigation();
+  } = useAppNavigation(dismissOverlays);
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
   const { liveWidth: sidebarLiveWidth, savedWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useSidebarResize({
@@ -169,11 +201,6 @@ export default function App() {
 
   const [filterSidebarOpen, setFilterSidebarOpen] = useBoolSetting("filter_sidebar_open", true);
 
-  const [searchRaw, setSearchRaw] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { data: searchResults, isError: searchError } = useSearch(searchQuery, server?.id);
 
   const [homeSearchRaw, setHomeSearchRaw] = useState("");
@@ -183,7 +210,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [homeSearchRaw]);
 
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const anyModalOpen = useAnyModalOpen();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [crashReport, setCrashReport] = useState<string | null>(null);
@@ -228,31 +254,9 @@ export default function App() {
     searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 200);
   }, []);
 
-  const clearSearch = useCallback(() => {
-    // Cancel the pending debounce first. Without this, clearing within 200ms of
-    // the last keystroke lets the timer fire afterwards and set searchQuery back,
-    // which re-opens the search view for a query the now-empty input doesn't show.
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = null;
-    }
-    setSearchRaw("");
-    setSearchQuery("");
-    setSearchOpen(false);
-    searchInputRef.current?.blur();
-  }, []);
-
-  // Neither overlay is URL-backed: the search overlay renders instead of the router's
-  // content, the command palette paints over it. So anything that navigates while one is up
-  // (player bar, context menu, Alt+Arrow, the mouse thumb buttons) lands behind it and the
-  // click looks inert. Both are dismissed here, at the one place navigation is observed,
-  // rather than at each source - the palette used to rely on the five setCommandPaletteOpen
-  // calls in its own handlers, which by construction could not cover navigation that started
-  // anywhere else.
-  const dismissOverlays = useCallback(() => {
-    clearSearch();
-    setCommandPaletteOpen(false);
-  }, [clearSearch]);
+  // Covers the one navigation that never passes through useAppNavigation, and so cannot be
+  // dismissed on intent: a route sending the user elsewhere itself, as AppRoutes does after
+  // deleting a playlist.
   useDismissOnNavigate(pathname, dismissOverlays);
 
   useEffect(() => () => {

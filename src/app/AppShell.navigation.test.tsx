@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { useState, useCallback } from "react";
 import { AppShell } from "./AppShell";
 import type { AppViewProps } from "./AppRoutes";
@@ -97,14 +97,15 @@ async function mockLookupAlbum(id: string) {
 }
 
 function Inner({ startSearchOpen }: { startSearchOpen?: boolean }) {
-  const { view, pathname, navigateTo, openAlbum, openArtist } = useAppNavigation();
   const [searchOpen, setSearchOpen] = useState(Boolean(startSearchOpen));
   const [searchQuery, setSearchQuery] = useState(startSearchOpen ? "test" : "");
   const clearSearch = useCallback(() => {
     setSearchQuery("");
     setSearchOpen(false);
   }, []);
+  const { view, pathname, navigateTo, openAlbum, openArtist } = useAppNavigation(clearSearch);
   useDismissOnNavigate(pathname, clearSearch);
+  const rawNavigate = useNavigate();
 
   async function openAlbumById(albumId: string) {
     const row = await mockLookupAlbum(albumId);
@@ -160,7 +161,14 @@ function Inner({ startSearchOpen }: { startSearchOpen?: boolean }) {
     pathnameForTest: pathname,
   };
 
-  return <AppShell {...(props as AppViewProps)} />;
+  return (
+    <>
+      {/* A route-owned navigation, the one kind that never passes through
+          useAppNavigation. AppRoutes does this after deleting a playlist. */}
+      <button data-testid="raw-navigate" onClick={() => rawNavigate("/playlists")}>raw</button>
+      <AppShell {...(props as AppViewProps)} />
+    </>
+  );
 }
 
 function renderHarness(opts: { entries: string[]; index?: number; startSearchOpen?: boolean }) {
@@ -284,36 +292,71 @@ describe("AppShell: search overlay dismissed by every navigation source", () => 
     expect(screen.getByTestId("route-content")).toHaveTextContent("/artists");
   });
 
-  it("re-selecting the current route leaves the overlay open (no pathname change, hook cannot fire)", () => {
+  it("command palette onNavigate to the route already open dismisses the overlay", () => {
     renderHarness({ entries: ["/library"] });
     fireEvent.click(screen.getByTestId("cp-navigate-library"));
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/library");
+  });
+
+  it("command palette onSelectAlbum for the album already open dismisses the overlay", () => {
+    renderHarness({ entries: ["/album/srv%3Aalb1"] });
+    fireEvent.click(screen.getByTestId("cp-select-album"));
+    expectOverlayDismissed();
+  });
+
+  it("sidebar item for the already-active view dismisses the overlay", () => {
+    renderHarness({ entries: ["/library"] });
+    fireEvent.click(screen.getByRole("button", { name: "Library" }));
+    expectOverlayDismissed();
+  });
+
+  it("Alt+ArrowLeft at the first history entry dismisses the overlay even though nothing moves", () => {
+    renderHarness({ entries: ["/library"], index: 0 });
     expectOverlayOpen();
+    fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    expectOverlayDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/library");
+  });
+
+  it("Alt+ArrowRight at the last history entry dismisses the overlay even though nothing moves", () => {
+    renderHarness({ entries: ["/library"], index: 0 });
+    fireEvent.keyDown(window, { key: "ArrowRight", altKey: true });
+    expectOverlayDismissed();
+  });
+
+  it("mouse thumb button at the first history entry dismisses the overlay even though nothing moves", () => {
+    renderHarness({ entries: ["/library"], index: 0 });
+    fireEvent.mouseUp(window, { button: 3 });
+    expectOverlayDismissed();
   });
 });
 
 /**
  * Two mechanisms dismiss the overlay and they cover different cases:
  *
- *   1. useDismissOnNavigate, which fires on a pathname *change*.
- *   2. The per-call-site clearSearch() wrapped around SearchResults'
- *      onSelectAlbum / onSelectArtist in AppShell.renderContent.
+ *   1. useAppNavigation itself, which dismisses on the *intent* to go
+ *      somewhere - every navigation function it exposes, plus its own
+ *      window-level Alt+Arrow and thumb-button handlers.
+ *   2. useDismissOnNavigate, which fires on a pathname *change*.
  *
- * (2) looks redundant next to (1) and is exactly the kind of thing a later
- * cleanup deletes. It is not redundant: selecting the row for the album or
- * artist whose route is already open navigates to an identical pathname
- * string, so the hook's `lastPathname.current === pathname` guard
- * short-circuits and (1) never runs. Without (2) the overlay would stay
- * painted over the route the user just asked for, which is the whole bug
- * known-issues.md records under "State deciding which subtree renders, but
- * absent from the URL".
+ * (2) looks redundant next to (1) now that (1) covers every source AppShell
+ * hands out, and it is exactly the kind of thing a later cleanup deletes. It
+ * is not redundant: a route can navigate on its own (AppRoutes sends the user
+ * back to /playlists after deleting one), which never passes through
+ * useAppNavigation at all.
+ *
+ * (1) is not redundant either, and that is the whole point of this pass:
+ * navigating to the pathname already open - re-selecting the active sidebar
+ * item, picking the album whose page is showing, Alt+ArrowLeft at the first
+ * history entry - moves the router nowhere, so (2) cannot fire.
  *
  * These tests pin each mechanism against the case only it can handle, so
  * deleting either one turns this block red.
  */
 describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
-  it("search results album click dismisses the overlay when that album's route is already open", () => {
+  it("dismisses on intent when the album picked is the one already open", () => {
     // Same pathname before and after, so useDismissOnNavigate cannot fire.
-    // Only AppShell's own clearSearch() in the onSelectAlbum wrapper can do this.
     renderHarness({ entries: ["/album/srv%3Aalb3"] });
     expectOverlayOpen();
     fireEvent.click(screen.getByTestId("sr-select-album"));
@@ -321,7 +364,7 @@ describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
     expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb3");
   });
 
-  it("search results artist click dismisses the overlay when that artist's route is already open", () => {
+  it("dismisses on intent when the artist picked is the one already open", () => {
     renderHarness({ entries: ["/artist/Artist%20Z"] });
     expectOverlayOpen();
     fireEvent.click(screen.getByTestId("sr-select-artist"));
@@ -329,25 +372,12 @@ describe("AppShell: both overlay-dismissal mechanisms are load-bearing", () => {
     expect(screen.getByTestId("route-content")).toHaveTextContent("/artist/Artist%20Z");
   });
 
-  it("a source with no clearSearch of its own still dismisses when the pathname changes", () => {
-    // The command palette's handlers do not call clearSearch. Mechanism (1)
-    // is the only thing dismissing the overlay here, which is why deleting
-    // the hook cannot be covered by the two tests above.
+  it("dismisses on a pathname change driven by a route's own navigate, which no intent can see", () => {
+    // The only navigation that does not pass through useAppNavigation.
     renderHarness({ entries: ["/library"] });
-    fireEvent.click(screen.getByTestId("cp-select-album"));
-    expectOverlayDismissed();
-    expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb1");
-  });
-
-  it("sidebar item for the already-active view still changes the pathname from a detail route", () => {
-    // useAppNavigation folds /album/* into the "library" view, so the Library
-    // sidebar item is rendered active while an album is open. Clicking it is
-    // a real pathname change, so the hook covers it and the gap where no
-    // mechanism applies is narrower than "the active sidebar item".
-    renderHarness({ entries: ["/album/srv%3Aalb1"] });
     expectOverlayOpen();
-    fireEvent.click(screen.getByRole("button", { name: "Library" }));
+    fireEvent.click(screen.getByTestId("raw-navigate"));
     expectOverlayDismissed();
-    expect(screen.getByTestId("route-content")).toHaveTextContent("/library");
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/playlists");
   });
 });

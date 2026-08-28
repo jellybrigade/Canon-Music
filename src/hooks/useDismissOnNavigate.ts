@@ -9,13 +9,11 @@ import { useEffect, useRef } from "react";
  * is up lands on the new route with the overlay still covering it, and the click reads as having
  * done nothing.
  *
- * Navigation is the one signal that always means "show me somewhere else", so the dismissal
- * belongs here rather than being repeated at each call site. That distinction is load-bearing:
- * the palette originally had no mechanism at all, only a hand-written setCommandPaletteOpen(false)
- * in each of the five handlers it owns, so the four window-level navigation sources in
- * useAppNavigation (Alt+Arrow, mouse thumb buttons) - which reach the app straight through the
- * palette's backdrop - left it stranded over the new route. See known-issues.md, "A stacking
- * guard written as a hand-kept list only covers the layers its author could see".
+ * This is the *second* of the two mechanisms that dismiss them, and the narrower one.
+ * `useAppNavigation` dismisses on the intent to navigate, which covers every navigation the app
+ * offers the user, including the ones that move the router nowhere and so cannot be seen here.
+ * What is left for this hook is a route navigating on its own - AppRoutes sending the user back
+ * to /playlists after deleting one - which never passes through that hook at all.
  *
  * Takes one `dismiss` callback rather than a list of overlays: a new overlay is added by
  * composing it into that callback at the single site where the overlays' state already lives,

@@ -97,11 +97,8 @@ export function AppShell(props: AppViewProps) {
               artists={searchResults.artists}
               serverWithCredential={serverWithCred}
               playlists={playlists}
-              // This overlay is rendered instead of AppRoutes whenever a search is
-              // active, so navigating without clearing leaves it covering the route
-              // that was just opened and the click looks like it did nothing.
-              onSelectAlbum={(album) => { clearSearch(); openAlbum(album); }}
-              onSelectArtist={(artist) => { clearSearch(); openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }); }}
+              onSelectAlbum={openAlbum}
+              onSelectArtist={(artist) => openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null })}
               onPlayTrack={(id) => { void handlePlayTrack(id); }}
               onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
@@ -188,9 +185,11 @@ export function AppShell(props: AppViewProps) {
       <CommandPalette
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
-        onNavigate={(v) => { navigateTo(v); setCommandPaletteOpen(false); }}
-        onSelectAlbum={(album) => { openAlbum(album); setCommandPaletteOpen(false); }}
-        onSelectArtist={(name, albumCount) => { openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null }); setCommandPaletteOpen(false); }}
+        onNavigate={navigateTo}
+        onSelectAlbum={openAlbum}
+        onSelectArtist={(name, albumCount) => openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null })}
+        // The only handler here that does not navigate, so the only one still
+        // closing the palette itself.
         onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
