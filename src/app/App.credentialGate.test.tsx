@@ -8,9 +8,9 @@
 //
 // The "no server configured" case is deliberately absent: `App` renders the setup wizard when
 // the `servers` table is empty, so a detail route only ever mounts with a server row present.
-// A falsy `serverWithCred` there means the credential query is pending or has rejected - and
-// because that query is `retry: false`, a rejection is permanent, so the blank page was
-// forever rather than transient.
+// A falsy `serverWithCred` there means the credential query is pending or has rejected - and it
+// retries only a secret store that is not up yet, and only for 31s, so a rejection that reaches
+// the gate stays, and the blank page was forever rather than transient.
 //
 // Only boundaries are mocked: Tauri `invoke`/`listen`, the SQLite handle, the keychain, the
 // updater and the remote-notice fetch. The three detail subtrees and `PlayerBar` are stubbed
@@ -37,7 +37,7 @@ vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="p
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
+import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import App from "../App";
@@ -167,11 +167,28 @@ describe("a detail route when the credential cannot be read", () => {
     expect(screen.getByText(/the keyring is locked/i)).toBeInTheDocument();
   });
 
-  // The credential query is `retry: false`, so the failure is terminal: nothing re-reads the
-  // keyring on its own and the route must not drift back to a loading state that will never
-  // resolve. Asserted as a settled state rather than as a call count, because `lib/sync.ts`
-  // reads the same keychain entry with the same arguments and the two callers are
-  // indistinguishable through this harness (recorded in donow.md).
+  it("offers a retry that re-reads the keyring and opens the gate", async () => {
+    // A per-entry failure is not retried on its own, and the credential is otherwise re-read only
+    // by a Settings round trip - so without a control here a keyring the user has since unlocked
+    // still leaves the app with no credential until it is restarted.
+    let unlocked = false;
+    vi.mocked(keychain.get).mockImplementation(async () => {
+      if (!unlocked) throw new Error("the keyring is locked");
+      return GOOD_CRED;
+    });
+    mountAt("/album/srv-a%3Aalb1");
+
+    await screen.findByText(CRED_ERROR_COPY);
+    unlocked = true;
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+
+    expect(await screen.findByTestId("album-detail")).toBeInTheDocument();
+    expect(screen.queryByText(CRED_ERROR_COPY)).not.toBeInTheDocument();
+  });
+
+  // A per-entry keyring failure is not retried, so it is terminal until the user acts: nothing
+  // re-reads the keyring on its own and the route must not drift back to a loading state that
+  // will never resolve.
   it("keeps the failure on screen instead of drifting back to a loading state", async () => {
     vi.mocked(keychain.get).mockRejectedValue(new Error("No matching entry found"));
     mountAt("/artist/Artist%20Name");

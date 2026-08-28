@@ -508,6 +508,13 @@ fn tray_set_close_to_tray(state: tauri::State<'_, TrayState>, enabled: bool) {
     state.close_to_tray.store(enabled, Ordering::Relaxed);
 }
 
+// Marks the two variants meaning "the OS secret store itself is unreachable" so the TS side can
+// retry them. Canon can autostart before gnome-keyring/kwallet is up, or while the collection is
+// still locked, and that failure clears on its own within seconds - unlike NoEntry/BadEncoding,
+// which are per-entry and stay broken until the user re-enters the password. The prefix is
+// stripped before display (see `useServerWithCredential`), so it never reaches the user.
+pub const SECRET_STORE_UNAVAILABLE: &str = "secret-store-unavailable: ";
+
 // keyring's Display already includes the platform error detail; this only adds
 // actionable guidance for the two variants that mean "the OS secret store itself
 // is unreachable" (as opposed to NoEntry/BadEncoding/etc., which are per-entry).
@@ -516,9 +523,9 @@ fn tray_set_close_to_tray(state: tauri::State<'_, TrayState>, enabled: bool) {
 fn friendly_keyring_error(e: keyring::Error) -> String {
     match e {
         keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_) => format!(
-            "{e}. On Linux, make sure a Secret Service provider (e.g. gnome-keyring or KWallet) \
-             is running; on macOS/Windows, check that Keychain Access / Credential Manager isn't \
-             locked or blocked by a permission prompt."
+            "{SECRET_STORE_UNAVAILABLE}{e}. On Linux, make sure a Secret Service provider (e.g. \
+             gnome-keyring or KWallet) is running; on macOS/Windows, check that Keychain Access / \
+             Credential Manager isn't locked or blocked by a permission prompt."
         ),
         other => other.to_string(),
     }
@@ -1837,7 +1844,7 @@ mod tests {
     use super::{
         disk_cache_read, disk_cache_write, evict_disk_cache_if_needed, friendly_keyring_error,
         ignore_missing_entry, percent_decode, sanitize_cache_key, xml_first_tag_text,
-        MAX_DISK_CACHE_ENTRIES,
+        MAX_DISK_CACHE_ENTRIES, SECRET_STORE_UNAVAILABLE,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -2110,6 +2117,36 @@ mod tests {
             msg.contains("keyring is locked"),
             "detail must be preserved: {msg}"
         );
+    }
+
+    // The prefix is the whole reason a keyring that is not up yet can be retried instead of
+    // stranding the session, so it is pinned by name rather than only through the classifier.
+    #[test]
+    fn an_unreachable_secret_store_is_marked_retriable() {
+        for e in [
+            keyring::Error::PlatformFailure(Box::from("dbus connection refused")),
+            keyring::Error::NoStorageAccess(Box::from("keyring is locked")),
+        ] {
+            let msg = friendly_keyring_error(e);
+            assert!(
+                msg.starts_with(SECRET_STORE_UNAVAILABLE),
+                "expected the retriable marker, got: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_per_entry_failure_is_not_marked_retriable() {
+        for e in [
+            keyring::Error::NoEntry,
+            keyring::Error::BadEncoding(vec![0xff, 0xfe]),
+        ] {
+            let msg = friendly_keyring_error(e);
+            assert!(
+                !msg.starts_with(SECRET_STORE_UNAVAILABLE),
+                "a per-entry failure must not be retried: {msg}"
+            );
+        }
     }
 
     #[test]

@@ -138,7 +138,7 @@ export default function App() {
   const queryClient = useQueryClient();
   const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
-  const { data: serverWithCred, error: credError } = useServerWithCredential(server?.id);
+  const { data: serverWithCred, error: credError, refetch: refetchCredential } = useServerWithCredential(server?.id);
   // Derived rather than read off `isPending` on purpose: that query is `enabled: !!server?.id`,
   // and a disabled React Query stays `pending` forever, so `isPending` cannot tell "the keychain
   // read is running" from "there is no server to read one for". Consumers need the distinction
@@ -615,6 +615,7 @@ export default function App() {
     runSync,
     credError: credError ?? null,
     credPending,
+    retryCredential: () => { void refetchCredential(); },
     searchOpen,
     setSearchOpen,
     searchRaw,

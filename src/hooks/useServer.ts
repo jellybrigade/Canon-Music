@@ -11,6 +11,35 @@ export interface ServerWithCredential {
   credential: NavidromeCredential;
 }
 
+/**
+ * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/lib.rs`, the one machine-readable part of a
+ * keyring error. It marks the failures that clear without the user doing anything - the secret
+ * store not up yet, or its collection still locked - and is stripped before display.
+ */
+export const SECRET_STORE_UNAVAILABLE = "secret-store-unavailable: ";
+
+/** A keyring read that failed for a reason expected to clear on its own. */
+export class CredentialStoreUnavailableError extends Error {}
+
+// Five retries on the ladder below span 31s, which outlasts a secret store that comes up a few
+// seconds into the login session. React Query counts failures from zero.
+const MAX_CREDENTIAL_RETRIES = 5;
+
+export function credentialReadError(detail: string): Error {
+  const message = `Could not read the stored credential: ${detail.startsWith(SECRET_STORE_UNAVAILABLE) ? detail.slice(SECRET_STORE_UNAVAILABLE.length) : detail}`;
+  return detail.startsWith(SECRET_STORE_UNAVAILABLE)
+    ? new CredentialStoreUnavailableError(message)
+    : new Error(message);
+}
+
+export function shouldRetryCredentialRead(failureCount: number, error: Error): boolean {
+  return error instanceof CredentialStoreUnavailableError && failureCount < MAX_CREDENTIAL_RETRIES;
+}
+
+export function credentialRetryDelay(attempt: number): number {
+  return Math.min(1000 * 2 ** attempt, 30_000);
+}
+
 export function useServers() {
   return useQuery({
     queryKey: QK.servers(),
@@ -29,12 +58,15 @@ export function useServerWithCredential(serverId: string | undefined) {
   return useQuery({
     queryKey: QK.serverCredential(serverId),
     enabled: !!serverId,
-    // A missing keychain entry, a locked keyring and a corrupt payload are all
-    // permanent until the user acts, so retrying only delays the message telling
-    // them to. And the credential is written in exactly one place, which
-    // invalidates this key itself, so refetching it re-round-trips to the OS
-    // Secret Service over D-Bus for a value that cannot have changed.
-    retry: false,
+    // A missing entry and a corrupt payload are permanent until the user acts, so retrying only
+    // delays the message telling them to. A secret store that is not up yet is not: Canon can
+    // autostart before gnome-keyring/kwallet, and nothing else invalidates this key, so one such
+    // failure would otherwise leave the whole session without a credential - no sync, and the
+    // backoff ladder in useLibrarySync never arms because no run ever starts.
+    retry: shouldRetryCredentialRead,
+    retryDelay: credentialRetryDelay,
+    // Written in exactly one place, which invalidates this key itself, so refetching on success
+    // re-round-trips to the OS Secret Service over D-Bus for a value that cannot have changed.
     staleTime: Infinity,
     gcTime: Infinity,
     queryFn: async (): Promise<ServerWithCredential> => {
@@ -53,8 +85,7 @@ export function useServerWithCredential(serverId: string | undefined) {
       try {
         credJson = await keychain.get(`canon.server.${server.id}`, "credential");
       } catch (err) {
-        const detail = err instanceof Error ? err.message : String(err);
-        throw new Error(`Could not read the stored credential: ${detail}`);
+        throw credentialReadError(err instanceof Error ? err.message : String(err));
       }
       if (!credJson) {
         throw new Error(`No credentials found for server ${server.id}. Re-enter in Settings.`);
