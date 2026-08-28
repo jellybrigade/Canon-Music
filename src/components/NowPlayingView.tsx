@@ -40,10 +40,10 @@ type Tab = "up-next" | "about" | "lyrics";
 type TopTrack = NowPlayingTrack;
 type SuggestedTrack = NowPlayingTrack;
 
-function useArtistAlbums(artistName: string | null) {
+function useArtistAlbums(artistName: string | null, serverId: string) {
   return useQuery({
-    queryKey: QK.nowPlayingAlbums(artistName),
-    queryFn: (): Promise<AlbumRow[]> => fetchArtistAlbums(artistName!),
+    queryKey: QK.nowPlayingAlbums(artistName, serverId),
+    queryFn: (): Promise<AlbumRow[]> => fetchArtistAlbums(artistName!, serverId),
     enabled: !!artistName,
     // Matches what useNowPlayingPrefetch warms it with. Left at the default, the prefetched
     // entry was stale the instant it landed and the tab re-ran the query on every open.
@@ -51,20 +51,20 @@ function useArtistAlbums(artistName: string | null) {
   });
 }
 
-function useArtistTopTracks(artistName: string | null) {
+function useArtistTopTracks(artistName: string | null, serverId: string) {
   return useQuery({
-    queryKey: QK.nowPlayingTopTracks(artistName),
-    queryFn: (): Promise<TopTrack[]> => fetchArtistTopTracksForNowPlaying(artistName!),
+    queryKey: QK.nowPlayingTopTracks(artistName, serverId),
+    queryFn: (): Promise<TopTrack[]> => fetchArtistTopTracksForNowPlaying(artistName!, serverId),
     enabled: !!artistName,
     staleTime: NOW_PLAYING_STALE_TIME,
   });
 }
 
-function useSuggestedTracks(artistName: string | null, currentTrackId: string | null) {
+function useSuggestedTracks(artistName: string | null, currentTrackId: string | null, serverId: string) {
   return useQuery({
-    queryKey: QK.suggestedTracks(artistName, currentTrackId),
+    queryKey: QK.suggestedTracks(artistName, currentTrackId, serverId),
     queryFn: (): Promise<SuggestedTrack[]> =>
-      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId),
+      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId, serverId),
     enabled: !!artistName,
     staleTime: SUGGESTED_STALE_TIME,
   });
@@ -369,11 +369,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
 
   const primaryArtist = primaryArtistOf(currentTrack?.artist);
-  const { data: artistAlbums, isPending: albumsPending } = useArtistAlbums(primaryArtist);
-  const { data: topTracks, isPending: topTracksPending } = useArtistTopTracks(primaryArtist);
+  const { data: artistAlbums, isPending: albumsPending } = useArtistAlbums(primaryArtist, server.id);
+  const { data: topTracks, isPending: topTracksPending } = useArtistTopTracks(primaryArtist, server.id);
   const { data: suggestedTracks } = useSuggestedTracks(
     primaryArtist,
-    currentTrack?.id ?? null
+    currentTrack?.id ?? null,
+    server.id
   );
   // Both start out `undefined`, which is indistinguishable from "the artist has nothing" unless
   // the pending flags are consulted. Without them the About tab asserted "No artist info

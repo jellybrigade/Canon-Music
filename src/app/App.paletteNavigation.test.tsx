@@ -192,21 +192,22 @@ describe("command palette dismissed by navigation it did not originate", () => {
     expectPaletteOpen();
   });
 
-  it("leaves the palette open when Alt+ArrowLeft is clamped at the first history entry", async () => {
+  it("closes the palette when Alt+ArrowLeft is clamped at the first history entry", async () => {
     // react-router's memory history clamps `go(-1)` at index 0 and still notifies with the
-    // *same* location, so no navigation occurred and the palette is still the thing the user
-    // is looking at. Dismissing here would close the palette on a keystroke that did nothing.
+    // *same* location, so the pathname never changes. The dismissal keys on the keystroke
+    // rather than on the pathname precisely so this case is covered: pressing back is the
+    // user asking to be somewhere else, and an overlay that survives it is the bug.
     await mountApp(["/library"], 0);
     await openPalette();
     await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }); });
     expect(pathname()).toBe("/library");
-    expectPaletteOpen();
+    await expectPaletteClosed();
   });
 
   it("still closes the palette from its own handlers", async () => {
-    // The five hand-written `setCommandPaletteOpen(false)` calls in `AppShell` are what the new
-    // mechanism is meant to make unnecessary at the *navigation* sources; the palette's own
-    // dismissal must keep working regardless of whether the route actually changes.
+    // The hand-written `setCommandPaletteOpen(false)` calls in `AppShell` are what the
+    // navigation-intent dismissal made unnecessary at the *navigation* sources; the palette's
+    // own dismissal must keep working regardless of whether the route actually changes.
     await mountApp(["/library"], 0);
     await openPalette();
     await act(async () => { press("Escape", { target: paletteInput()! }); });

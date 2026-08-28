@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { usePlayerStore } from "../store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
@@ -21,9 +21,30 @@ const VIEW_TO_PATH: Record<AppView, string> = {
   settings: "/settings",
 };
 
-export function useAppNavigation() {
+/**
+ * `dismissOverlays` runs on the *intent* to go somewhere, not on the pathname landing
+ * somewhere new. The overlays it dismisses (search, command palette) are not URL-backed, so
+ * asking for the route already open - the active sidebar item, the album whose page is
+ * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves
+ * them painted over the answer, which reads as the click doing nothing. Dismissing here
+ * rather than at each source is what stops a navigation added later from missing it; see
+ * known-issues.md, "State deciding which subtree renders, but absent from the URL".
+ *
+ * The dismissal is urgent, not a transition, though React Router 7 commits its own location
+ * update as one. Routes are `lazy` under the same already-mounted Suspense boundary the overlay
+ * renders in, and React keeps a boundary's committed content while a transition suspends, so a
+ * matched priority holds the dismissal until the destination chunk resolves - the overlay stays
+ * over the click that asked for it. Urgent, the overlay goes at once and the route the user came
+ * from stays painted for the frame or two until the transition lands.
+ */
+export function useAppNavigation(dismissOverlays: () => void) {
   const navigate = useNavigate();
   const location = useLocation();
+  // Read through a ref: callers pass a fresh closure per render, and the window listeners
+  // below must not be torn down and re-armed for it.
+  const dismissRef = useRef(dismissOverlays);
+  dismissRef.current = dismissOverlays;
+  const dismiss = useCallback(() => dismissRef.current(), []);
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
@@ -51,23 +72,28 @@ export function useAppNavigation() {
     } else {
       navigate(VIEW_TO_PATH[v]);
     }
+    dismiss();
   }
 
   function openAlbum(album: AlbumRow) {
     navigate(albumPath(album.id));
+    dismiss();
   }
 
   function openArtist(artist: ArtistRow | string) {
     const name = typeof artist === "string" ? artist : artist.name;
     navigate(artistPath(name));
+    dismiss();
   }
 
   function openPlaylist(playlist: PlaylistRow) {
     navigate(playlistPath(playlist.id));
+    dismiss();
   }
 
   function goBack() {
     navigate(-1);
+    dismiss();
   }
 
   // Back and forward for the whole app. The only other way to go back is the
@@ -78,22 +104,16 @@ export function useAppNavigation() {
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        navigate(-1);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        navigate(1);
-      }
+      if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      navigate(e.key === "ArrowLeft" ? -1 : 1);
+      dismiss();
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.button === 3) {
-        e.preventDefault();
-        navigate(-1);
-      } else if (e.button === 4) {
-        e.preventDefault();
-        navigate(1);
-      }
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      navigate(e.button === 3 ? -1 : 1);
+      dismiss();
     }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("mouseup", onMouseUp);
@@ -101,7 +121,7 @@ export function useAppNavigation() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [navigate]);
+  }, [navigate, dismiss]);
 
   return {
     view,

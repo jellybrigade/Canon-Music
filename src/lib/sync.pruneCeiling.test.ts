@@ -11,8 +11,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
-import { album, server, SRV, track } from "../test/navidromeFixtures";
+import { resetTauriMocks } from "../test/mocks/tauri";
+import { album, CRED, server, SRV, track } from "../test/navidromeFixtures";
 import type { NavidromeStarred } from "./navidrome";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
@@ -75,14 +75,13 @@ beforeEach(async () => {
   resetTauriMocks();
   vi.clearAllMocks();
   holder.db = await createMigratedTestDb();
-  onInvoke("get_credential", () => JSON.stringify({ type: "apikey", apiKey: "k" }));
   vi.mocked(fetchStarred2).mockResolvedValue({} as NavidromeStarred);
   vi.mocked(fetchPlaylists).mockResolvedValue([]);
   vi.mocked(fetchPlaylistTracks).mockResolvedValue([]);
   vi.mocked(fetchAndStoreOpenSubsonicExtensions).mockResolvedValue(undefined as never);
 
   serveAlbum([track("t1", "al-1"), track("t2", "al-1")]);
-  await syncLibrary(server());
+  await syncLibrary(server(), CRED);
 });
 
 /** A replacement track list of `n` ids none of which the seeded album already holds. */
@@ -95,7 +94,7 @@ describe("syncLibrary per-album track prune at the bound-parameter ceiling", () 
     const many = replacement(CEILING - 1);
     serveAlbum(many, { created: "2026-02-02T00:00:00Z" });
 
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
 
     expect(result.prunedTracks).toBe(0);
     // Positive control: the sync itself ran and wrote the new list, so the zero above is the
@@ -108,7 +107,7 @@ describe("syncLibrary per-album track prune at the bound-parameter ceiling", () 
     const many = replacement(CEILING - 2);
     serveAlbum(many, { created: "2026-02-02T00:00:00Z" });
 
-    const result = await syncLibrary(server());
+    const result = await syncLibrary(server(), CRED);
 
     expect(result.prunedTracks).toBe(2);
     expect(await count("WHERE id = ?", [`${SRV}:big0`])).toBe(1);

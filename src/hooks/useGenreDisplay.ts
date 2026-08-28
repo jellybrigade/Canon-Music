@@ -32,9 +32,14 @@ export function useGenreMappings(): Map<string, string | null> {
   const [nodeById, setNodeById] = useState<Map<string, TreeNode>>(new Map());
 
   useEffect(() => {
+    let cancelled = false;
     getCanonTree()
-      .then((tree) => setNodeById(new Map(tree.nodes.map((n) => [n.id, n]))))
+      .then((tree) => {
+        if (cancelled) return;
+        setNodeById(new Map(tree.nodes.map((n) => [n.id, n])));
+      })
       .catch(console.error);
+    return () => { cancelled = true; };
   }, []);
 
   return useMemo(() => {

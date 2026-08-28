@@ -52,9 +52,20 @@ const LOADING_COPY = /loading album/i;
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
+  // `created_at` is explicit because `useServer` orders by it and the column's default has
+  // one-second resolution, so the second server below would otherwise tie with this one and
+  // leave which server is selected up to the storage order.
   await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
+    "INSERT INTO servers (id, type, url, display_name, username, created_at) VALUES (?, 'navidrome', ?, ?, ?, ?)",
+    ["srv-a", "https://example.test", "Test", "u", "2020-01-01 00:00:00"],
+  );
+}
+
+/** A second, later-added server. `useServer` orders by `created_at`, so `srv-a` stays selected. */
+async function seedOtherServer() {
+  await testDb.execute(
+    "INSERT INTO servers (id, type, url, display_name, username, created_at) VALUES (?, 'navidrome', ?, ?, ?, ?)",
+    ["srv-b", "https://other.test", "Other", "u2", "2021-01-01 00:00:00"],
   );
 }
 
@@ -172,6 +183,28 @@ describe("the album route when the id resolves", () => {
     mountAt("/album/srv-a%3Aempty");
 
     expect(await screen.findByTestId("album-detail")).toBeInTheDocument();
+    expect(screen.queryByText(MISSING_COPY)).not.toBeInTheDocument();
+  });
+});
+
+describe("the album route with two servers configured", () => {
+  it("refuses an album belonging to a server other than the selected one", async () => {
+    await seedOtherServer();
+    await seedAlbum("srv-b:alb1", "srv-b");
+    mountAt("/album/srv-b%3Aalb1");
+
+    expect(await screen.findByText(MISSING_COPY)).toBeInTheDocument();
+    expect(screen.queryByTestId("album-detail")).not.toBeInTheDocument();
+  });
+
+  it("still resolves the selected server's own album", async () => {
+    await seedOtherServer();
+    await seedAlbum("srv-a:alb1");
+    await seedAlbum("srv-b:alb1", "srv-b");
+    mountAt("/album/srv-a%3Aalb1");
+
+    const detail = await screen.findByTestId("album-detail");
+    expect(detail).toHaveAttribute("data-server-id", "srv-a");
     expect(screen.queryByText(MISSING_COPY)).not.toBeInTheDocument();
   });
 });

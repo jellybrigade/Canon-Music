@@ -12,7 +12,9 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import type { SyncProgress } from "../lib/sync";
+import type { NavidromeCredential } from "../lib/navidrome";
 import type { Server } from "../types/server";
+import type { ServerWithCredential } from "./useServer";
 import { useLibrarySync } from "./useLibrarySync";
 
 /** Read by the mocked `useSetting` above; assign before rendering. */
@@ -33,8 +35,10 @@ const CLEAN: SyncResult = {
   changed: { albums: false, tracks: false, artists: false, loved: false, playlists: false },
 };
 
-function makeServer(id: string): Server {
-  return {
+const CRED: NavidromeCredential = { type: "apikey", apiKey: "k" };
+
+function makeServer(id: string): ServerWithCredential {
+  const server: Server = {
     id,
     type: "navidrome",
     url: `https://${id}.example`,
@@ -43,6 +47,7 @@ function makeServer(id: string): Server {
     username: "u",
     created_at: "2026-01-01",
   };
+  return { server, credential: CRED };
 }
 
 const SRV_A = makeServer("a");
@@ -64,7 +69,7 @@ interface Run {
 let runs: Run[] = [];
 
 function armSyncLibrary() {
-  vi.mocked(syncLibrary).mockImplementation((server, onAlbumBatch) => {
+  vi.mocked(syncLibrary).mockImplementation((server, _credential, onAlbumBatch) => {
     return new Promise<SyncResult>((res, rej) => {
       runs.push({
         server,
@@ -103,8 +108,8 @@ async function failRun(index: number, e: unknown) {
   await tick(FANOUT_MS);
 }
 
-function renderSync(server: Server | undefined, client = new QueryClient()) {
-  return renderHook(({ server }: { server: Server | undefined }) => useLibrarySync(server, client), {
+function renderSync(server: ServerWithCredential | undefined, client = new QueryClient()) {
+  return renderHook(({ server }: { server: ServerWithCredential | undefined }) => useLibrarySync(server, client), {
     initialProps: { server },
   });
 }
@@ -176,6 +181,20 @@ describe("useLibrarySync in-flight guard", () => {
     await settle(0);
     await tick(5 * MINUTE);
     expect(syncLibrary).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useLibrarySync credential gate", () => {
+  it("waits for the credential rather than reading one of its own", async () => {
+    const { rerender } = renderSync(undefined);
+    await tick();
+    expect(syncLibrary).not.toHaveBeenCalled();
+
+    rerender({ server: SRV_A });
+    await tick();
+
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[1]).toBe(CRED);
   });
 });
 
@@ -471,7 +490,7 @@ describe("useLibrarySync auto-sync interval", () => {
     expect(syncLibrary).toHaveBeenCalledTimes(1);
   });
 
-  it("still runs the settle fan-out for a sync that outlives its hook", async () => {
+  it("drops the settle fan-out for a sync that outlives its hook", async () => {
     const client = new QueryClient();
     const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
     const { unmount } = renderSync(SRV_A, client);
@@ -480,8 +499,77 @@ describe("useLibrarySync auto-sync interval", () => {
     unmount();
     await settle(0, { changed: { albums: true } });
 
-    // Current behavior: there is no abort path, so an unmounted hook still invalidates.
-    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("cancels the staggered fan-out when the hook goes away mid-stagger", async () => {
+    const client = new QueryClient();
+    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
+    const { unmount } = renderSync(SRV_A, client);
+    await tick();
+
+    // Settles far enough for the 300/600/1000ms timers to be armed, then unmounts
+    // before the last of them, which is the one that reaches the query cache.
+    openRun(0).resolve({ changed: { albums: true } });
+    await tick(0);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    unmount();
+    await tick(FANOUT_MS);
+
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("useLibrarySync partial reporting", () => {
+  it("reads as a list, not a chain of ands, past two skipped stages", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { skippedStages: ["loved", "playlists", "artists"] });
+
+    expect(result.current.syncStatus).toBe("partial");
+    expect(result.current.syncError).toBe(
+      "Sync partial: loved, playlists and artists unchanged (server unreachable)."
+    );
+  });
+
+  it.each([
+    [["loved"], "loved unchanged (server unreachable)"],
+    [["loved", "playlists"], "loved and playlists unchanged (server unreachable)"],
+  ])("keeps the short skipped-stage phrasings intact %j", async (stages, phrase) => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { skippedStages: stages });
+
+    expect(result.current.syncError).toBe(`Sync partial: ${phrase}.`);
+  });
+
+  it("names the failed album and playlist counts in one phrase", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, { failedAlbums: 2, failedPlaylists: 1 });
+
+    expect(result.current.syncError).toBe(
+      "Sync partial: failed to fetch tracks for 2 albums and 1 playlist."
+    );
+  });
+
+  it("joins every partial reason into one sentence", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    await settle(0, {
+      failedAlbums: 1,
+      skippedStages: ["loved", "playlists", "artists"],
+      albumTracksIncomplete: true,
+    });
+
+    expect(result.current.syncError).toBe(
+      "Sync partial: failed to fetch tracks for 1 album; " +
+        "loved, playlists and artists unchanged (server unreachable); " +
+        "stopped reading album tracks early (server unreachable), the rest follow next sync."
+    );
   });
 });
 

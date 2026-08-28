@@ -43,6 +43,10 @@ interface ArtistResult {
 
 type Item = NavCommand | AlbumResult | TrackResult | ArtistResult;
 
+// Ids are unique inside a kind but not across them, and an album and a track can carry the
+// same native id on some servers.
+const itemKey = (item: Item) => `${item.kind}:${item.id}`;
+
 const NAV_COMMANDS: NavCommand[] = [
   { kind: "nav", id: "nav-home",      label: "Home",      icon: <House size={16} />,     view: "home" },
   { kind: "nav", id: "nav-library",   label: "Library",   icon: <Music size={16} />,     view: "library" },
@@ -75,7 +79,11 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   const [deferred, setDeferred] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const focusedRef = useRef<HTMLButtonElement>(null);
-  const [focusedIdx, setFocusedIdx] = useState(0);
+  // The focused row is held by identity, not by position. `items` is rebuilt whenever results
+  // arrive - later than the query that asked for them, and again on a server switch that never
+  // touches the typed query - so a stored index means the highlight silently lands on whatever
+  // row inherited that ordinal, and Enter opens it.
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const trimmedRaw = raw.trim();
   useEffect(() => {
@@ -98,6 +106,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   const items: Item[] = deferred
     ? [...searchArtists, ...searchAlbums, ...searchTracks]
     : NAV_COMMANDS;
+
+  // Nothing focused, or a row that has since gone: the first row, which is what a freshly
+  // arrived result set should offer Enter.
+  const focusedIdx = Math.max(0, items.findIndex((item) => itemKey(item) === focusedKey));
 
   const artistOffset = 0;
   const albumOffset = searchArtists.length;
@@ -124,7 +136,9 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
       onSelectArtist(item.name, item.album_count);
     }
     onClose();
-  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose, serverWithCredential]);
+    // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
+    // replaced server object would only churn this callback's identity.
+  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose]);
 
   useEffect(() => {
     if (open) {
@@ -132,12 +146,12 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
       // Reset the debounced value too, or the palette re-opens showing the
       // previous session's results for the 150ms until the timer catches up.
       setDeferred("");
-      setFocusedIdx(0);
+      setFocusedKey(null);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
 
-  useEffect(() => { setFocusedIdx(0); }, [deferred]);
+  useEffect(() => { setFocusedKey(null); }, [deferred]);
 
   // .cp-results is a 420px scroller and there can be 15 result rows, so arrowing
   // down past the fold otherwise moves a selection the user can't see.
@@ -145,16 +159,28 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     focusedRef.current?.scrollIntoView({ block: "nearest" });
   }, [focusedIdx]);
 
+  // Read through a ref, so the listener is armed once per open rather than torn down and
+  // re-added for every keystroke, every arrow press and every result set that arrives - all of
+  // which rebuild `items`. Same pattern as useSearchShortcuts.
+  const keysRef = useRef({ items, focusedIdx, activate, onClose });
+  keysRef.current = { items, focusedIdx, activate, onClose };
+
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
+      const { items, focusedIdx, activate, onClose } = keysRef.current;
       if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowDown") {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        setFocusedIdx((i) => Math.min(i + 1, items.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setFocusedIdx((i) => Math.max(i - 1, 0));
+        const delta = e.key === "ArrowDown" ? 1 : -1;
+        // Derived from the previous key rather than the render-time index: this is a native
+        // listener, so two presses arriving in one task are batched and both would read the
+        // same snapshot and move a single row between them.
+        setFocusedKey((current) => {
+          const from = Math.max(0, items.findIndex((item) => itemKey(item) === current));
+          const to = items[Math.min(Math.max(from + delta, 0), items.length - 1)];
+          return to ? itemKey(to) : current;
+        });
       } else if (e.key === "Enter") {
         e.preventDefault();
         const item = items[focusedIdx];
@@ -163,7 +189,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [open, items, focusedIdx, activate, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -198,7 +224,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     key={cmd.id}
                     ref={i === focusedIdx ? focusedRef : null}
                     className={`cp-nav-item${i === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedIdx(i)}
+                    onMouseEnter={() => setFocusedKey(itemKey(cmd))}
                     onMouseDown={(e) => { e.preventDefault(); activate(cmd); }}
                   >
                     <span className="cp-nav-icon">{cmd.icon}</span>
@@ -231,7 +257,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     key={artist.name}
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedIdx(idx)}
+                    onMouseEnter={() => setFocusedKey(itemKey(artist))}
                     onMouseDown={(e) => { e.preventDefault(); activate(artist); }}
                   >
                     <div className="cp-track-icon"><User size={14} /></div>
@@ -256,7 +282,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     key={album.id}
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedIdx(idx)}
+                    onMouseEnter={() => setFocusedKey(itemKey(album))}
                     onMouseDown={(e) => { e.preventDefault(); activate(album); }}
                   >
                     {artUrl
@@ -280,7 +306,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     key={track.id}
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedIdx(idx)}
+                    onMouseEnter={() => setFocusedKey(itemKey(track))}
                     onMouseDown={(e) => { e.preventDefault(); activate(track); }}
                   >
                     <div className="cp-track-icon"><Play size={14} /></div>

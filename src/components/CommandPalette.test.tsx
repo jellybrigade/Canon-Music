@@ -43,16 +43,16 @@ let db: FakeDatabase;
 // Mirrors src/hooks/useSearch.test.ts: tracks_fts has no trigger, sync.ts writes it
 // explicitly, so seeding `tracks` alone leaves the index empty and every search returns
 // nothing.
-function seedAlbum(opts: { id: string; name: string; artist?: string | null }) {
+function seedAlbum(opts: { id: string; name: string; artist?: string | null; serverId?: string }) {
   db.raw
-    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, ?)`)
-    .run(opts.id, opts.name, opts.artist ?? null);
+    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, ?)`)
+    .run(opts.id, opts.serverId ?? "srv-a", opts.name, opts.artist ?? null);
 }
 
-function seedTrack(opts: { id: string; title: string; artist?: string | null; albumId: string | null }) {
+function seedTrack(opts: { id: string; title: string; artist?: string | null; albumId: string | null; serverId?: string }) {
   db.raw
-    .prepare(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, 'srv-a', 'navidrome', ?, ?, ?)`)
-    .run(opts.id, opts.title, opts.artist ?? null, opts.albumId);
+    .prepare(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, ?, ?)`)
+    .run(opts.id, opts.serverId ?? "srv-a", opts.title, opts.artist ?? null, opts.albumId);
   const albumName = opts.albumId
     ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as { name: string } | undefined)?.name ?? "")
     : "";
@@ -67,9 +67,9 @@ function seedTrack(opts: { id: string; title: string; artist?: string | null; al
  * name is. The filler track carries a null artist and a title that matches nothing, so
  * the album is the only row that scores.
  */
-function seedFindableAlbum(opts: { id: string; name: string }) {
-  seedAlbum({ id: opts.id, name: opts.name });
-  seedTrack({ id: `${opts.id}-trk`, title: "Filler Song", artist: null, albumId: opts.id });
+function seedFindableAlbum(opts: { id: string; name: string; serverId?: string }) {
+  seedAlbum({ id: opts.id, name: opts.name, serverId: opts.serverId });
+  seedTrack({ id: `${opts.id}-trk`, title: "Filler Song", artist: null, albumId: opts.id, serverId: opts.serverId });
 }
 
 const onClose = vi.fn();
@@ -257,7 +257,85 @@ describe("CommandPalette debounce", () => {
   });
 });
 
+/**
+ * The window keydown listener is armed once for as long as the palette is open. Its handler
+ * reads the result list, the focused row and the activate callback through a ref, so the rows
+ * arriving and the user arrowing through them cannot re-arm it. Same shape as the fix already
+ * pinned for `useSearchShortcuts` in `App.keyboard.test.tsx`.
+ */
+describe("CommandPalette listener churn", () => {
+  const spies: { mockRestore: () => void }[] = [];
+  afterEach(() => {
+    for (const spy of spies.splice(0)) spy.mockRestore();
+  });
+
+  function countKeydownListeners() {
+    const added: string[] = [];
+    const removed: string[] = [];
+    const realAdd = window.addEventListener.bind(window);
+    const realRemove = window.removeEventListener.bind(window);
+    spies.push(vi.spyOn(window, "addEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      opts?: boolean | AddEventListenerOptions
+    ) => {
+      if (type === "keydown") added.push(type);
+      realAdd(type, listener, opts);
+    }) as typeof window.addEventListener));
+    spies.push(vi.spyOn(window, "removeEventListener").mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      opts?: boolean | EventListenerOptions
+    ) => {
+      if (type === "keydown") removed.push(type);
+      realRemove(type, listener, opts);
+    }) as typeof window.removeEventListener));
+    return { added, removed };
+  }
+
+  it("arms the keydown listener once across a full type, settle and arrow session", async () => {
+    seedFindableAlbum({ id: "a:one", name: "Zebra One" });
+    seedFindableAlbum({ id: "a:two", name: "Zebra Two" });
+    const { added, removed } = countKeydownListeners();
+    const { unmount } = renderPalette();
+    expect(added.length).toBe(1);
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(resultPrimaries()).toHaveLength(2);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(added.length).toBe(1);
+    expect(removed.length).toBe(0);
+    unmount();
+    expect(removed.length).toBe(1);
+  });
+
+  it("does not re-arm the listener when the server credential object is replaced", () => {
+    const { added } = countKeydownListeners();
+    const { rerenderWith } = renderPalette();
+    expect(added.length).toBe(1);
+    rerenderWith({ serverWithCredential: { ...SRV } });
+    expect(added.length).toBe(1);
+  });
+});
+
 describe("CommandPalette keyboard navigation", () => {
+  it("accumulates two arrow presses delivered in one task rather than collapsing them", () => {
+    // The handler is on a native window listener, so its state updates are batched into a
+    // microtask rather than flushed synchronously. Reading the focused row off a render-time
+    // snapshot makes two presses in one task both start from the same row and move only once.
+    // Real key repeat puts a task boundary between presses, so only an updater derived from
+    // the previous value pins the property.
+    renderPalette();
+    expect(focusedLabel()).toBe("Home");
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+    });
+    expect(focusedLabel()).toBe("Artists");
+  });
+
   it("clamps ArrowDown at the last item and ArrowUp at the first", () => {
     renderPalette();
     expect(focusedLabel()).toBe("Home");
@@ -276,6 +354,55 @@ describe("CommandPalette keyboard navigation", () => {
     expect(onNavigate).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith("artists");
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves Enter on the first result when an arrow key lands before the results do", async () => {
+    // The debounce settles before the select resolves, so there is a window where the query
+    // is live and the list is empty. An arrow key there used to move a numeric cursor off the
+    // end of a zero-length list, and nothing put it back once the rows arrived: no row was
+    // highlighted and Enter did nothing until the user pressed ArrowUp.
+    seedAlbum({ id: "a1", name: "Yankee Hotel" });
+    seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
+    renderPalette();
+    typeRaw("jesus");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(resultPrimaries()).toEqual([]);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
+    expect(focusedLabel()).toBe("Jesus, Etc.");
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onPlayTrack).toHaveBeenCalledTimes(1);
+    expect(onPlayTrack).toHaveBeenCalledWith("t1");
+  });
+
+  it("falls back to the first row rather than holding the ordinal when the rows are replaced", async () => {
+    // Switching server re-keys the search without touching the typed query, so a new set of
+    // rows arrives under a focus the user placed on the old set. Holding position 3 would
+    // silently move the highlight onto a stranger's row and Enter would open it.
+    seedFindableAlbum({ id: "a:one", name: "Zebra One" });
+    seedFindableAlbum({ id: "a:two", name: "Zebra Two" });
+    seedFindableAlbum({ id: "a:three", name: "Zebra Three" });
+    seedFindableAlbum({ id: "b:alpha", name: "Zebra Alpha", serverId: "srv-b" });
+    seedFindableAlbum({ id: "b:beta", name: "Zebra Beta", serverId: "srv-b" });
+    seedFindableAlbum({ id: "b:gamma", name: "Zebra Gamma", serverId: "srv-b" });
+    const { rerenderWith } = renderPalette({ serverId: "srv-a" });
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(resultPrimaries()).toHaveLength(3);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    const heldRow = focusedLabel();
+    rerenderWith({ serverId: "srv-b" });
+    await settleDebounce();
+    const newRows = resultPrimaries();
+    expect(newRows).toHaveLength(3);
+    expect(newRows).not.toContain(heldRow);
+    expect(focusedLabel()).toBe(newRows[0]);
   });
 
   it("does nothing on Enter when the search has zero results", async () => {

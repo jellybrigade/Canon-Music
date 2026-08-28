@@ -1,6 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
-import { keychain } from "../keychain";
 import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
 import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
@@ -254,6 +253,7 @@ export interface SyncProgress {
 
 export async function syncLibrary(
   server: Server,
+  credential: NavidromeCredential,
   onAlbumBatch?: (progress: SyncProgress) => void,
 ): Promise<{
   failedAlbums: number;
@@ -270,21 +270,6 @@ export async function syncLibrary(
   skippedStages: string[];
   changed: SyncChanges;
 }> {
-  const credJson = await keychain.get(`canon.server.${server.id}`, "credential");
-  if (!credJson) throw new Error(`No credentials found for server ${server.id}`);
-  let credential: NavidromeCredential;
-  try {
-    const parsed = JSON.parse(credJson) as Record<string, unknown>;
-    // Migrate legacy credentials stored without a type field
-    if (!parsed.type && typeof parsed.token === "string" && typeof parsed.salt === "string") {
-      credential = { type: "md5", token: parsed.token, salt: parsed.salt };
-    } else {
-      credential = parsed as NavidromeCredential;
-    }
-  } catch {
-    throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
-  }
-
   const altUrl = server.alt_url ?? undefined;
   const skippedStages: string[] = [];
   // Deliberately not awaited: extension discovery is advisory. It still needs its own
@@ -301,7 +286,6 @@ export async function syncLibrary(
   const db = await getDb();
   let failedAlbums = 0;
   let skippedAlbums = 0;
-  let processedCount = 0;
 
   // Incremental sync: bulk-prefetch existing album state once instead of a
   // per-album SELECT round trip, so the skip-tracks decision is pure JS.
@@ -417,8 +401,6 @@ export async function syncLibrary(
          release_type = excluded.release_type`
   );
 
-  processedCount = albumUpsertParams.length;
-
   // Drop what the server no longer has. `fetchAllAlbums` throws on any failed
   // page rather than returning a short list, so a returned list is complete and
   // a missing album is a real deletion, not a partial read. An empty list
@@ -437,9 +419,18 @@ export async function syncLibrary(
     artistsDirty = true;
   }
 
-  if (onAlbumBatch && (processedCount > 0 || prunedAlbums > 0)) {
-    onAlbumBatch({ done: 0, total: albumsNeedingTracks.length });
+  // `done` counts attempts, not successes: a bar that stalls short of the total
+  // whenever an album fetch fails cannot be told apart from a hung sync, and the
+  // failures are already reported as `failedAlbums`. Gated on the work outstanding
+  // rather than on what the album upsert did, because an album whose row is
+  // unchanged but whose tracks were pruned still has a whole track pass to run.
+  let reportedDone = 0;
+  function reportProgress(done: number) {
+    if (!onAlbumBatch || albumsNeedingTracks.length === 0) return;
+    reportedDone = done;
+    onAlbumBatch({ done, total: albumsNeedingTracks.length });
   }
+  reportProgress(0);
 
   let fetchedCount = 0;
   // Each fetch already retries with its own timeout, so a server that went away mid-sync
@@ -481,10 +472,16 @@ export async function syncLibrary(
     }
     fetchedCount++;
     ftsDirtyAlbumIds.add(albumDbId);
-    if (onAlbumBatch && (fetchedCount === 1 || fetchedCount % BATCH_NOTIFY_INTERVAL === 0)) {
-      onAlbumBatch({ done: attemptedCount, total: albumsNeedingTracks.length });
+    if (fetchedCount === 1 || fetchedCount % BATCH_NOTIFY_INTERVAL === 0) {
+      reportProgress(attemptedCount);
     }
   }
+
+  // The interval only lands on multiples of BATCH_NOTIFY_INTERVAL, so without this
+  // the last report is up to an interval short of where the pass got. On the
+  // early-break path the shortfall is the point: the bar stays under the total,
+  // which is what `albumTracksIncomplete` is telling the user.
+  if (attemptedCount !== reportedDone) reportProgress(attemptedCount);
 
   // Rebuild artists table from albums, only when an album was added or had its
   // artist changed - otherwise the DELETE + re-INSERT rewrites ~2000 identical

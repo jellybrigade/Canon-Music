@@ -102,6 +102,7 @@ export interface AppViewProps {
   runSync: SyncApi["runSync"];
   credError: Error | null;
   credPending: boolean;
+  retryCredential: () => void;
 
   // Search
   searchOpen: boolean;
@@ -177,9 +178,10 @@ export interface AppViewProps {
  * well as for a read that failed - the same pending-vs-absent collapse the album lookup below
  * had, one prerequisite earlier. There is no "no server configured" case to express here:
  * `App` renders the setup wizard when the `servers` table is empty, so the router only mounts
- * with a server row present. And the credential query is `retry: false`, so a failure is
- * permanent rather than transient, which is why it gets a message pointing at the fix instead
- * of sitting on the loading state forever.
+ * with a server row present. The credential query retries only a secret store that is not up
+ * yet, and only for 31s, so anything reaching this branch has stopped resolving itself - which
+ * is why it gets a message pointing at the fix, plus a retry, instead of sitting on the loading
+ * state forever.
  *
  * Shared rather than written out three times because the two states have to stay in step; the
  * per-route copy below drifted for exactly this reason before it was consolidated.
@@ -187,10 +189,12 @@ export interface AppViewProps {
 function CredentialGate({
   credError,
   credPending,
+  retryCredential,
   queueClass,
 }: {
   credError: Error | null;
   credPending: boolean;
+  retryCredential: () => void;
   queueClass: string;
 }) {
   return (
@@ -201,7 +205,11 @@ function CredentialGate({
           <p className="empty-state-hint">
             {credError ? credError.message : "The stored credential could not be loaded."}
           </p>
-          <p className="empty-state-hint">Re-enter your server password in Settings.</p>
+          <p className="empty-state-hint">
+            A locked or not-yet-started keyring clears on its own; otherwise re-enter your server
+            password in Settings.
+          </p>
+          <button className="empty-state-action" onClick={retryCredential}>Try again</button>
         </div>
       ) : (
         <p className="empty-state">Connecting to your server…</p>
@@ -214,6 +222,7 @@ function AlbumDetailRoute({
   serverWithCred,
   credError,
   credPending,
+  retryCredential,
   onSelectAlbum,
   onSelectArtist,
   onTagFilter,
@@ -223,6 +232,7 @@ function AlbumDetailRoute({
   serverWithCred: ServerWithCredential | null;
   credError: Error | null;
   credPending: boolean;
+  retryCredential: () => void;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onTagFilter: (canonicalId: string) => void;
@@ -231,22 +241,26 @@ function AlbumDetailRoute({
 }) {
   const { albumId } = useParams<{ albumId: string }>();
   const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
-    queryKey: ["album-by-id", albumId],
-    enabled: !!albumId,
+    queryKey: ["album-by-id", albumId, serverWithCred?.server.id],
+    enabled: !!albumId && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
+      // Scoped by server because everything below builds its cover and stream URLs from the
+      // *selected* server's credential: an unscoped lookup happily resolved another server's
+      // row and then pointed every request at the wrong host.
       const rows = await db.select<AlbumRow[]>(
-        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color FROM albums WHERE id = ?`,
+        `SELECT id, server_id, name, artist, year, artwork_url, release_type, accent_color
+         FROM albums WHERE id = ? AND server_id = ?`,
         // `useParams` has already decoded the segment, so `albumId` is the id `albumPath`
         // encoded. Decoding again throws on an id holding a literal `%` and silently
         // rewrites one holding the text `%20` into a space.
-        [albumId!]
+        [albumId!, serverWithCred!.server.id]
       );
       return rows[0] ?? null;
     },
   });
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
   }
   // `data` is undefined while the lookup is in flight as well as when the album is genuinely
   // absent from the mirror, so the old `fetchedAlbum ?? null` folded both into one bare
@@ -283,6 +297,7 @@ function ArtistDetailRoute({
   serverWithCred,
   credError,
   credPending,
+  retryCredential,
   onSelectAlbum,
   onSelectArtist,
   onClose,
@@ -291,6 +306,7 @@ function ArtistDetailRoute({
   serverWithCred: ServerWithCredential | null;
   credError: Error | null;
   credPending: boolean;
+  retryCredential: () => void;
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string) => void;
   onClose: () => void;
@@ -328,7 +344,7 @@ function ArtistDetailRoute({
     },
   });
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
   }
   if (!decodedName) return null;
   // Held until the lookup settles: `data` is undefined while pending as well as
@@ -368,6 +384,7 @@ function PlaylistDetailRoute({
   serverWithCred,
   credError,
   credPending,
+  retryCredential,
   playlists,
   onSelectAlbum,
   onSelectArtist,
@@ -382,6 +399,7 @@ function PlaylistDetailRoute({
   serverWithCred: ServerWithCredential | null;
   credError: Error | null;
   credPending: boolean;
+  retryCredential: () => void;
   playlists: PlaylistRow[] | undefined;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (name: string) => void;
@@ -408,7 +426,7 @@ function PlaylistDetailRoute({
     [playlists, decodedId]
   );
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} queueClass={queueClass} />;
+    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
   }
   if (!playlist) {
     return (
@@ -489,6 +507,7 @@ export function AppRoutes(props: AppViewProps) {
     runSync,
     credError,
     credPending,
+    retryCredential,
     searchOpen,
     setSearchOpen,
     searchRaw,
@@ -579,6 +598,7 @@ export function AppRoutes(props: AppViewProps) {
           serverWithCred={serverWithCred}
           credError={credError}
           credPending={credPending}
+          retryCredential={retryCredential}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onTagFilter={(canonicalId) => { setCanonicalIdFilters([canonicalId]); navigateTo("library"); }}
@@ -591,6 +611,7 @@ export function AppRoutes(props: AppViewProps) {
           serverWithCred={serverWithCred}
           credError={credError}
           credPending={credPending}
+          retryCredential={retryCredential}
           onSelectAlbum={openAlbum}
           onSelectArtist={openArtist}
           onClose={goBack}
@@ -602,6 +623,7 @@ export function AppRoutes(props: AppViewProps) {
           serverWithCred={serverWithCred}
           credError={credError}
           credPending={credPending}
+          retryCredential={retryCredential}
           playlists={playlists}
           onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
           onSelectArtist={openArtist}
@@ -658,18 +680,19 @@ export function AppRoutes(props: AppViewProps) {
                     : "Syncing…"}
                 </span>
               )}
-              {server && (syncStatus === "error" || syncStatus === "partial") && (
+              {serverWithCred && (syncStatus === "error" || syncStatus === "partial") && (
                 <SyncErrorBanner
                   variant={syncStatus}
-                  serverName={server.display_name}
+                  serverName={serverWithCred.server.display_name}
                   detail={syncError}
                   nextRetryAt={nextRetryAt}
-                  onRetry={() => runSync(server)}
+                  onRetry={() => runSync(serverWithCred)}
                 />
               )}
               {credError && (
                 <span className="sync-status sync-status--error">
                   Credential error: {credError instanceof Error ? credError.message : String(credError)}
+                  <button className="sync-retry-btn" onClick={retryCredential}>Try again</button>
                 </span>
               )}
             </div>
@@ -693,10 +716,10 @@ export function AppRoutes(props: AppViewProps) {
                 <Search size={15} />
                 Search…
               </button>
-              {server && (
+              {serverWithCred && (
                 <button
                   className="rescan-btn"
-                  onClick={() => runSync(server)}
+                  onClick={() => runSync(serverWithCred)}
                   disabled={syncStatus === "syncing"}
                 >
                   Rescan

@@ -54,9 +54,9 @@ interface TopTrack {
   lastfmCombined?: boolean;
 }
 
-function useArtistTopTracks(artistName: string, options?: { enabled?: boolean }) {
+function useArtistTopTracks(artistName: string, serverId: string, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: QK.artistTopTracks(artistName),
+    queryKey: QK.artistTopTracks(artistName, serverId),
     enabled: options?.enabled,
     queryFn: async (): Promise<TopTrack[]> => {
       const db = await getDb();
@@ -65,10 +65,11 @@ function useArtistTopTracks(artistName: string, options?: { enabled?: boolean })
                 t.album_id, a.artwork_url, t.play_count
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ?
-            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+         WHERE t.server_id = ?
+           AND (t.artist = ?
+            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
          ORDER BY t.track_number, t.title`,
-        [artistName, artistName]
+        [serverId, artistName, artistName]
       );
     },
   });
@@ -78,9 +79,9 @@ function useArtistTopTracks(artistName: string, options?: { enabled?: boolean })
  * useArtistTopTracks because that query selects every track the artist has, and a
  * strip of similar artists is entirely on screen at once - twelve whole-table
  * scans to read twelve first rows. */
-function useArtistSeedTrack(artistName: string, options?: { enabled?: boolean }) {
+function useArtistSeedTrack(artistName: string, serverId: string, options?: { enabled?: boolean }) {
   return useQuery({
-    queryKey: QK.artistSeedTrack(artistName),
+    queryKey: QK.artistSeedTrack(artistName, serverId),
     enabled: options?.enabled,
     queryFn: async (): Promise<TopTrack | null> => {
       const db = await getDb();
@@ -89,33 +90,35 @@ function useArtistSeedTrack(artistName: string, options?: { enabled?: boolean })
                 t.album_id, a.artwork_url, t.play_count
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
-         WHERE t.artist = ?
-            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
+         WHERE t.server_id = ?
+           AND (t.artist = ?
+            OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
          ORDER BY t.play_count DESC, t.track_number, t.title
          LIMIT 1`,
-        [artistName, artistName]
+        [serverId, artistName, artistName]
       );
       return rows[0] ?? null;
     },
   });
 }
 
-function useArtistGenres(artistName: string) {
+function useArtistGenres(artistName: string, serverId: string) {
   return useQuery({
-    queryKey: QK.artistGenres(artistName),
+    queryKey: QK.artistGenres(artistName, serverId),
     queryFn: async (): Promise<string[]> => {
       const db = await getDb();
       const rows = await db.select<{ name: string }[]>(
         `SELECT ag.name, COUNT(DISTINCT ag.album_id) AS n
          FROM album_genres ag
          JOIN albums a ON a.id = ag.album_id
-         WHERE (a.artist = ? OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
+         WHERE a.server_id = ?
+           AND (a.artist = ? OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
            AND ag.relation = 'direct'
            AND ag.canonical_id NOT LIKE 'raw:%'
          GROUP BY ag.canonical_id
          ORDER BY n DESC
          LIMIT 5`,
-        [artistName, artistName]
+        [serverId, artistName, artistName]
       );
       return rows.map((r) => r.name);
     },
@@ -123,22 +126,23 @@ function useArtistGenres(artistName: string) {
   });
 }
 
-function useAppearsOnAlbums(artistName: string) {
+function useAppearsOnAlbums(artistName: string, serverId: string) {
   return useQuery({
-    queryKey: QK.artistAppearsOn(artistName),
+    queryKey: QK.artistAppearsOn(artistName, serverId),
     queryFn: async (): Promise<AlbumRow[]> => {
       const db = await getDb();
       return db.select<AlbumRow[]>(
         `SELECT DISTINCT a.id, a.server_id, a.name, a.artist, a.year, a.artwork_url, a.release_type
          FROM tracks t
          JOIN albums a ON t.album_id = a.id
-         WHERE (t.artist = ? OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
+         WHERE t.server_id = ?
+           AND (t.artist = ? OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
            AND a.artist IS NOT NULL
            AND a.artist != ?
            AND a.artist NOT IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
          ORDER BY a.year IS NULL, a.year DESC, a.name
          LIMIT 24`,
-        [artistName, artistName, artistName, artistName]
+        [serverId, artistName, artistName, artistName, artistName]
       );
     },
     enabled: !!artistName,
@@ -434,7 +438,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
 
-  const { data: seedTrack } = useArtistSeedTrack(name, { enabled: inView });
+  const { data: seedTrack } = useArtistSeedTrack(name, server.id, { enabled: inView });
   const playQueue = usePlayerStore((s) => s.playQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
@@ -491,10 +495,10 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
 
 export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAlbum, onSelectArtist }: Props) {
   const { server, credential } = serverWithCredential;
-  const { data: albums } = useArtistAlbums(artist.name);
-  const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name);
-  const { data: canonGenres = [] } = useArtistGenres(artist.name);
-  const { data: rawTracks } = useArtistTopTracks(artist.name);
+  const { data: albums } = useArtistAlbums(artist.name, server.id);
+  const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name, server.id);
+  const { data: canonGenres = [] } = useArtistGenres(artist.name, server.id);
+  const { data: rawTracks } = useArtistTopTracks(artist.name, server.id);
   const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name, { serverWithCredential });
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);

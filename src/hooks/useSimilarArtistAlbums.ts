@@ -7,9 +7,9 @@ import type { AlbumRow } from "../types/library";
 // ordered to match the caller's artistNames ranking (Last.fm similarity),
 // not alphabetically, callers may truncate the result and expect the
 // most-similar artists to survive the cut.
-export function useSimilarArtistAlbums(artistNames: string[]) {
+export function useSimilarArtistAlbums(artistNames: string[], serverId: string) {
   return useQuery({
-    queryKey: QK.similarArtistAlbums(artistNames),
+    queryKey: QK.similarArtistAlbums(artistNames, serverId),
     queryFn: async (): Promise<AlbumRow[]> => {
       const db = await getDb();
       const placeholders = artistNames.map(() => "?").join(",");
@@ -18,10 +18,11 @@ export function useSimilarArtistAlbums(artistNames: string[]) {
                 COALESCE(al.canonical_name, a.artist) AS match_name
          FROM albums a
          LEFT JOIN artist_aliases al ON al.alias_name = a.artist
-         WHERE a.artist IN (${placeholders})
-            OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name IN (${placeholders}))
+         WHERE a.server_id = ?
+           AND (a.artist IN (${placeholders})
+            OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name IN (${placeholders})))
          ORDER BY a.artist, a.year IS NULL, a.year DESC`,
-        [...artistNames, ...artistNames]
+        [serverId, ...artistNames, ...artistNames]
       );
       const rank = new Map(artistNames.map((name, i) => [name, i]));
       const seenArtists = new Set<string>();
