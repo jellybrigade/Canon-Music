@@ -14,7 +14,7 @@ export const WaveformBars = memo(function WaveformBars({ peaks, filledCount, bar
         <div
           key={i}
           className={i < filledCount ? filledClass : barClass}
-          style={{ "--peak": peak } as React.CSSProperties}
+          style={{ "--peak": peak, "--bar-phase": i / peaks.length } as React.CSSProperties}
         />
       ))}
     </>

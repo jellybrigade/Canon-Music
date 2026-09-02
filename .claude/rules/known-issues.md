@@ -251,6 +251,10 @@ Fixed unless marked OPEN.
               print(f"{f}:{t[:m.start()].count(chr(10))+1}  {sel}")
   PY
   ```
+- **An overlay sized to its container is a shape only while the container is the shape, and a variant that changes the container's height keeps the rule that assumed the old one.** The buffering sweep on the progress track is a `::after` with `inset: 0` carrying a `transparent -> accent -> transparent` gradient. On the plain track that element is `height: 3px`, so the overlay *is* the line and reads correctly by coincidence. The waveform variant is `height: 28px` (48px in Now Playing) and draws 200 sibling bars of varying height inside it, so the same overlay painted a full-height glowing rectangle over the bars, the 1px gaps between them and the dead space above every short bar, while the bars underneath kept their own `--progress-track`/`--tint-5` fill and never lit at all. The variant also sets the track background to `transparent`, so the box had nothing to belong to and read as a shapeless smear. Fixed by cancelling the `::after` for the waveform variant and animating the bars themselves (`bufferBarSweep`, offset per bar by the `--bar-phase` `WaveformBars` writes), which follows the waveform's real silhouette; the reduced-motion fallback tints the run statically, since the global `animation-iteration-count: 1` rule would otherwise freeze every bar on its dark keyframe. Ask of any decorative overlay pinned with `inset: 0`: does every variant of that container have the same box, and are there children inside it that the overlay should be lighting rather than covering?
+  ```
+  grep -rn -B6 "inset: 0" src --include='*.css' | grep -E "::(after|before)|--waveform|height:"
+  ```
 - **A geometry constant in TS restating a CSS value drifts silently.** Measure from the DOM. A literal written as a sum (`168 + 14`) is the tell someone hand-copied a box model.
 - **A layout constant the component applies by hand is invisible to the library computing offsets in the same space.** `AlbumGrid` added `PADDING` itself, so `scrollToIndex` parked rows under the top edge. Pass `paddingStart`/`paddingEnd` and keep one writer.
   ```
