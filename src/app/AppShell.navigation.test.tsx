@@ -265,7 +265,13 @@ describe("AppShell: search overlay dismissed by every navigation source", () => 
     renderHarness({ entries: ["/library"] });
     fireEvent.click(screen.getByTestId("pb-select-album-by-id"));
     await waitFor(() => expectOverlayDismissed());
-    expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2");
+    // The two settle at different times on purpose: the dismissal renders urgently so the click
+    // never reads as inert, while the router commits the location as a transition. So the route
+    // is still painting the path this navigation came *from* when the dismissal lands, and the
+    // destination has to be waited for rather than read off the same tick.
+    await waitFor(() =>
+      expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2")
+    );
   });
 
   it("search results' own onSelectAlbum handler still self-clears (regression: fixed once already)", () => {
