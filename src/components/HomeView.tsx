@@ -28,7 +28,7 @@ import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { usePlaylists } from "../hooks/usePlaylists";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
-import { extractAccent } from "../lib/artColor";
+import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import "../styles/home.css";
 import "../styles/genres.css";
 
@@ -266,29 +266,7 @@ function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAl
       ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, primary ? 400 : 200)
       : null);
 
-  const [accentColor, setAccentColor] = useState<string | null>(pick.album.accent_color ?? null);
-  useEffect(() => {
-    if (pick.album.accent_color) {
-      setAccentColor(pick.album.accent_color);
-      return;
-    }
-    setAccentColor(null);
-    if (!artUrl) return;
-    let cancelled = false;
-    void extractAccent(artUrl).then(async (color) => {
-      if (cancelled) return;
-      setAccentColor(color);
-      if (color) {
-        const db = await getDb();
-        await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, pick.album.id]);
-      }
-    }).catch(err => {
-      // Cosmetic only: the card renders without an accent tint and the next
-      // mount retries. Swallowing this silently would hide a failing db handle.
-      console.error(`Spotlight: accent extraction failed for ${pick.album.id}`, err);
-    });
-    return () => { cancelled = true; };
-  }, [artUrl, pick.album.accent_color, pick.album.id]);
+  const accentColor = useAlbumAccent(pick.album.id, pick.album.accent_color, artUrl, server.id);
 
   return (
     <section

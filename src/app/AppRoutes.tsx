@@ -19,6 +19,7 @@ import type { useAllTracks } from "../hooks/useAllTracks";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
+import { QK } from "../lib/query-keys";
 import type { SearchResults as SearchResultsData } from "../hooks/useSearch";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { RadioMode, CurrentTrack } from "../store/player";
@@ -241,7 +242,7 @@ function AlbumDetailRoute({
 }) {
   const { albumId } = useParams<{ albumId: string }>();
   const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
-    queryKey: ["album-by-id", albumId, serverWithCred?.server.id],
+    queryKey: QK.albumById(albumId, serverWithCred?.server.id),
     enabled: !!albumId && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();
@@ -318,7 +319,7 @@ function ArtistDetailRoute({
   // render body, so it took the whole tree down, not just this route.
   const decodedName = artistName ?? null;
   const { data: fetchedArtist, isPending: artistPending } = useQuery<ArtistRow | null>({
-    queryKey: ["artist-by-name", artistName, serverWithCred?.server.id],
+    queryKey: QK.artistByName(artistName, serverWithCred?.server.id),
     enabled: !!artistName && !!serverWithCred,
     queryFn: async () => {
       const db = await getDb();

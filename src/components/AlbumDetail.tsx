@@ -32,7 +32,7 @@ import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
-import { extractAccent } from "../lib/artColor";
+import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { ArtBackdrop } from "./ArtBackdrop";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
@@ -308,26 +308,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
     : null;
 
-  const [accentColor, setAccentColor] = useState<string | null>(album.accent_color ?? null);
-  useEffect(() => {
-    if (album.accent_color) {
-      setAccentColor(album.accent_color);
-      return;
-    }
-    // Clear immediately so a stale color from a previous album doesn't show during async extraction.
-    setAccentColor(null);
-    if (!coverArtUrl) { return; }
-    let cancelled = false;
-    void extractAccent(coverArtUrl).then(async (color) => {
-      if (cancelled) return;
-      setAccentColor(color);
-      if (color) {
-        const db = await getDb();
-        await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, album.id]);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [coverArtUrl, album.accent_color, album.id]);
+  const accentColor = useAlbumAccent(album.id, album.accent_color, coverArtUrl, server.id);
 
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {
