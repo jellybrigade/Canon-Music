@@ -174,19 +174,48 @@ export interface AppViewProps {
 }
 
 /**
- * What a detail route paints while it has no credential yet. All three of them need one before
- * they can render anything, and `serverWithCred` is null for the whole keychain round-trip as
- * well as for a read that failed - the same pending-vs-absent collapse the album lookup below
- * had, one prerequisite earlier. There is no "no server configured" case to express here:
- * `App` renders the setup wizard when the `servers` table is empty, so the router only mounts
- * with a server row present. The credential query retries only a secret store that is not up
- * yet, and only for 31s, so anything reaching this branch has stopped resolving itself - which
- * is why it gets a message pointing at the fix, plus a retry, instead of sitting on the loading
- * state forever.
+ * What a route paints while it has no credential yet. Every route below needs one before it can
+ * render anything, and `serverWithCred` is null for the whole keychain round-trip as well as for
+ * a read that failed - the same pending-vs-absent collapse the album lookup below had, one
+ * prerequisite earlier. There is no "no server configured" case to express here: `App` renders
+ * the setup wizard when the `servers` table is empty, so the router only mounts with a server row
+ * present. The credential query retries only a secret store that is not up yet, and only for 31s,
+ * so anything reaching the error branch has stopped resolving itself - which is why it gets a
+ * message pointing at the fix, plus a retry, instead of sitting on the loading state forever.
  *
- * Shared rather than written out three times because the two states have to stay in step; the
- * per-route copy below drifted for exactly this reason before it was consolidated.
+ * Shared rather than written out per route because the two states have to stay in step; the
+ * per-route copy drifted for exactly this reason before it was consolidated, and the browse
+ * routes drifted further still - two of them told a configured user to go add the server they
+ * already had, and one sat on a "Loading…" a failed read never left.
  */
+function CredentialNotice({
+  credError,
+  credPending,
+  retryCredential,
+}: {
+  credError: Error | null;
+  credPending: boolean;
+  retryCredential: () => void;
+}) {
+  if (credError || !credPending) {
+    return (
+      <div className="empty-state">
+        <p className="empty-state-title">Canon could not read the saved credential</p>
+        <p className="empty-state-hint">
+          {credError ? credError.message : "The stored credential could not be loaded."}
+        </p>
+        <p className="empty-state-hint">
+          A locked or not-yet-started keyring clears on its own; otherwise re-enter your server
+          password in Settings.
+        </p>
+        <button className="empty-state-action" onClick={retryCredential}>Try again</button>
+      </div>
+    );
+  }
+  return <p className="empty-state">Connecting to your server…</p>;
+}
+
+/** The notice plus the page chrome a detail route would otherwise have rendered around it. */
 function CredentialGate({
   credError,
   credPending,
@@ -200,21 +229,7 @@ function CredentialGate({
 }) {
   return (
     <main className={`library${queueClass}`}>
-      {credError || !credPending ? (
-        <div className="empty-state">
-          <p className="empty-state-title">Canon could not read the saved credential</p>
-          <p className="empty-state-hint">
-            {credError ? credError.message : "The stored credential could not be loaded."}
-          </p>
-          <p className="empty-state-hint">
-            A locked or not-yet-started keyring clears on its own; otherwise re-enter your server
-            password in Settings.
-          </p>
-          <button className="empty-state-action" onClick={retryCredential}>Try again</button>
-        </div>
-      ) : (
-        <p className="empty-state">Connecting to your server…</p>
-      )}
+      <CredentialNotice credError={credError} credPending={credPending} retryCredential={retryCredential} />
     </main>
   );
 }
@@ -544,18 +559,17 @@ export function AppRoutes(props: AppViewProps) {
     setCommandPaletteOpen,
   } = props;
 
+  // Every browse route below gates on the same value and so owes the same three states. Built
+  // once because eight copies of four props is how the detail routes' copy drifted apart.
+  const credentialNotice = (
+    <CredentialNotice credError={credError} credPending={credPending} retryCredential={retryCredential} />
+  );
+
   function renderLibraryContent() {
     // `albums === undefined` used to render a bare "Loading…" line, which a failed read
     // also reached (useAlbums left `data` undefined on error) and never left. The grid now
     // owns all three states, so a failure surfaces with a retry instead of a permanent wait.
-    if (!serverWithCred) {
-      return (
-        <div className="empty-state">
-          <p className="empty-state-title">No server connected</p>
-          <p className="empty-state-hint">Add your Navidrome server in Settings to browse your library.</p>
-        </div>
-      );
-    }
+    if (!serverWithCred) return credentialNotice;
     // No search branch here on purpose: AppShell renders the search overlay in
     // place of the whole route tree while a search is active, so anything keyed
     // on searchQuery in this function is unreachable.
@@ -652,7 +666,7 @@ export function AppRoutes(props: AppViewProps) {
               homeSearchQuery={homeSearchQuery}
               onHomeSearchRawChange={setHomeSearchRaw}
             />
-          ) : <main className="content-main" />}
+          ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
       } />
       <Route path="/nowplaying" element={
@@ -665,7 +679,7 @@ export function AppRoutes(props: AppViewProps) {
               onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               onBack={goBack}
             />
-          ) : <main className="content-main" />}
+          ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
       } />
       <Route path="/library" element={
@@ -689,12 +703,6 @@ export function AppRoutes(props: AppViewProps) {
                   nextRetryAt={nextRetryAt}
                   onRetry={() => runSync(serverWithCred)}
                 />
-              )}
-              {credError && (
-                <span className="sync-status sync-status--error">
-                  Credential error: {credError instanceof Error ? credError.message : String(credError)}
-                  <button className="sync-retry-btn" onClick={retryCredential}>Try again</button>
-                </span>
               )}
             </div>
             <div className="sort-bar">
@@ -773,12 +781,7 @@ export function AppRoutes(props: AppViewProps) {
               error={artistsError}
               onRetry={() => useArtistBrowseSessionStore.getState().bumpRefresh()}
             />
-          ) : (
-            <div className="empty-state">
-              <p className="empty-state-title">No server connected</p>
-              <p className="empty-state-hint">Add your Navidrome server in Settings to browse artists.</p>
-            </div>
-          )}
+          ) : credentialNotice}
         </main>
       } />
       <Route path="/genres" element={
@@ -803,7 +806,7 @@ export function AppRoutes(props: AppViewProps) {
               onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
               serverDisplayName={server?.display_name}
             />
-          ) : <main className="content-main" />}
+          ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
       } />
       <Route path="/playlists" element={
@@ -824,9 +827,7 @@ export function AppRoutes(props: AppViewProps) {
               onUpdateSmartRules={updateSmartPlaylistRules}
               onSetCustomCover={setCustomCover}
             />
-          ) : (
-            <p className="empty-state">Loading…</p>
-          )}
+          ) : credentialNotice}
         </main>
       } />
       <Route path="/tracks" element={
@@ -841,7 +842,7 @@ export function AppRoutes(props: AppViewProps) {
               onSelectAlbum={(albumId) => { void openAlbumById(albumId); }}
               onSelectArtist={openArtist}
             />
-          ) : <main className="content-main" />}
+          ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
       } />
       <Route path="/tags" element={
@@ -856,7 +857,7 @@ export function AppRoutes(props: AppViewProps) {
               serverWithCredential={serverWithCred}
               onSelectAlbum={openAlbum}
             />
-          ) : <main className="content-main" />}
+          ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
       } />
       <Route path="/settings" element={

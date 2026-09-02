@@ -200,3 +200,58 @@ describe("a detail route when the credential cannot be read", () => {
     expect(screen.queryByText(CRED_LOADING_COPY)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * The browse routes reach the same gate. They did not paint a blank page like the detail routes
+ * did - they painted something worse: `/library` and `/artists` told a user with a server row in
+ * SQLite that no server was connected and pointed them at Settings to add the one they already
+ * have, and `/playlists` sat on a bare "Loading…" that a failed read never left. The rest
+ * rendered an empty `<main>`. All of them collapse "the keychain read is in flight" into "there
+ * is nothing here", and the wrong-message form is the more convincing one.
+ *
+ * Each case mounts the whole `App`, so the two states are asserted one mount each rather than
+ * one mount per assertion - eight routes is already sixteen mounts.
+ */
+const LIBRARY_ROUTES = [
+  { name: "library", path: "/library" },
+  { name: "home", path: "/home" },
+  { name: "now playing", path: "/nowplaying" },
+  { name: "artists", path: "/artists" },
+  { name: "years", path: "/years" },
+  { name: "playlists", path: "/playlists" },
+  { name: "tracks", path: "/tracks" },
+  { name: "unidentified", path: "/unidentified" },
+] as const;
+
+const NO_SERVER_COPY = /no server connected/i;
+
+describe("a browse route while the credential round-trip is in flight", () => {
+  it.each(LIBRARY_ROUTES)(
+    "the $name route says it is connecting instead of claiming the server is missing",
+    async ({ path }) => {
+      deferKeychain();
+      mountAt(path);
+
+      expect(await screen.findByText(CRED_LOADING_COPY)).toBeInTheDocument();
+      expect(screen.queryByText(NO_SERVER_COPY)).not.toBeInTheDocument();
+      expect(screen.queryByText(CRED_ERROR_COPY)).not.toBeInTheDocument();
+    },
+  );
+});
+
+describe("a browse route when the credential cannot be read", () => {
+  it.each(LIBRARY_ROUTES)(
+    "the $name route explains the failure and offers the retry the ladder no longer gives",
+    async ({ path }) => {
+      vi.mocked(keychain.get).mockRejectedValue(new Error("No matching entry found"));
+      mountAt(path);
+
+      expect(await screen.findByText(CRED_ERROR_COPY)).toBeInTheDocument();
+      expect(screen.queryByText(CRED_LOADING_COPY)).not.toBeInTheDocument();
+      expect(screen.queryByText(NO_SERVER_COPY)).not.toBeInTheDocument();
+      // The library header carried its own credential-error line with its own Try again, driven
+      // by the same value as the gate - so once the gate landed the page would say it twice.
+      expect(screen.getAllByRole("button", { name: /try again/i })).toHaveLength(1);
+    },
+  );
+});
