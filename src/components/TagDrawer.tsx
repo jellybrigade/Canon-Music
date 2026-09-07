@@ -13,6 +13,7 @@ import type { NormalizedTag } from "../lib/tag-normalize";
 import type { MbGenre } from "../lib/musicbrainz";
 import { CanonCombobox, ACCEPTED, IGNORED } from "./TagsViewHelpers";
 import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useModalChrome } from "../hooks/useModalChrome";
 import "./TagDrawer.css";
 import "./TagsView.css";
 
@@ -263,6 +264,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
   const { saveMapping } = useTagMappings();
   const queryClient = useQueryClient();
   const dismiss = useOverlayDismiss(onClose);
+  const chrome = useModalChrome(onClose);
 
   async function handleIgnoreUnmappedGenre(rawName: string) {
     try {
@@ -290,17 +292,9 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
     void queryClient.invalidateQueries({ queryKey: QK.albumRawGenreMap(albumId) });
   }
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   return createPortal(
     <div className="tag-drawer-overlay" {...dismiss}>
-      <div className="tag-drawer">
+      <div className="tag-drawer" {...chrome}>
         <div className="tag-drawer-header">
           <h2 className="tag-drawer-title">
             {trackId ? "Track Tags" : "Album Tags"}

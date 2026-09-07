@@ -213,7 +213,11 @@ Fixed unless marked OPEN.
   ```
   grep -rn 'e\.key === "Escape"' src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **A stacking guard written as a hand-kept list only covers the layers its author could see.** `useModalChrome`'s module-level registry (`useAnyModalOpen()`) replaced the enumeration; menus and dropdowns must *not* register. **OPEN:** `TagDrawer`, `TagTreeTab`'s `NodeModal`, `FeedbackModal`, `UpdatePrompt` still hand-roll their dismissal.
+- **A stacking guard written as a hand-kept list only covers the layers its author could see.** `useModalChrome`'s module-level registry (`useAnyModalOpen()`) replaced the enumeration; menus and dropdowns must *not* register. The four modals left hand-rolling their dismissal are converted: `TagDrawer` and `FeedbackModal` had a `document` keydown apiece, which fires for every open modal at once rather than the topmost; `TagTreeTab`'s `NodeModal` had Escape on the name `<input>`'s `onKeyDown` alone, so Escape from its Type buttons or parent combobox did nothing; `UpdatePrompt` had no keyboard dismissal at all and now takes `closable: !installing`, making Escape the keyboard route to the Later button and standing it down exactly when that button is disabled. Both greps below are exemption lists now, not to-do lists: the first must return only `CanonCombobox` and `ContextMenu` (a dropdown and a menu, neither of which may register), and a new hit on the second is a backdrop dismissing on a gesture that merely ended there.
+  ```
+  grep -rln "createPortal" src/components --include='*.tsx' | grep -v '\.test\.' | xargs grep -Ln "useModalChrome"
+  grep -rn "backdrop\|overlay" src/components --include='*.tsx' | grep -v '\.test\.' | grep "onClick={(e)\|onMouseDown={(e)"
+  ```
   ```
   grep -rln "createPortal" src/components --include='*.tsx' | xargs grep -Ln "useModalChrome"
   ```

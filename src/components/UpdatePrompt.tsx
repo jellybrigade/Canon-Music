@@ -3,6 +3,7 @@ import { Download } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { installAndRestart, type DownloadProgress } from "../lib/updater";
+import { useModalChrome } from "../hooks/useModalChrome";
 import "./UpdatePrompt.css";
 
 interface ChangelogSection {
@@ -127,11 +128,15 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
       ? Math.round((progress.downloaded / progress.total) * 100)
       : null;
 
+  // No backdrop dismissal: the two actions are the point of the prompt. Escape is the
+  // keyboard route to Later, so it stands down with the button, mid-install.
+  const chrome = useModalChrome(onDismiss, { closable: !installing });
+
   const multiVersion = changelogs && changelogs.length > 1;
 
   return (
     <div className="update-prompt-backdrop">
-      <div className="update-prompt">
+      <div className="update-prompt" {...chrome}>
         <div className="update-prompt-header">
           <Download size={18} className="update-prompt-icon" />
           <span className="update-prompt-title">Canon {update.version} is ready</span>

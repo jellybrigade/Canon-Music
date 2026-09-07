@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { logger } from "../lib/logger";
+import { useModalChrome } from "../hooks/useModalChrome";
+import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
 import "./FeedbackModal.css";
 
 const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
@@ -63,11 +65,8 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
     void getVersion().then(setAppVersion);
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const chrome = useModalChrome(onClose);
+  const dismiss = useOverlayDismiss(onClose);
 
   async function submit() {
     if (status === "sending") return;
@@ -129,11 +128,8 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
   }
 
   return (
-    <div
-      className="feedback-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="feedback-modal">
+    <div className="feedback-overlay" {...dismiss}>
+      <div className="feedback-modal" {...chrome}>
         <div className="feedback-header">
           <span className="feedback-title">Send Feedback</span>
           <button className="feedback-close" onClick={onClose} aria-label="Close">

@@ -2,6 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { useClickOutside } from "../hooks/useClickOutside";
+import { useModalChrome } from "../hooks/useModalChrome";
+import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
 import {
   useUserNodes,
   useUserTreeChangelog,
@@ -72,14 +74,14 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
 
   useClickOutside(parentWrapRef, () => { setParentOpen(false); setParentQuery(""); }, parentOpen);
 
+  const chrome = useModalChrome(onCancel);
+  const dismiss = useOverlayDismiss(onCancel);
+
   const previewKey = canonicalKey(name);
 
   return createPortal(
-    <div
-      className="node-modal-backdrop"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
-    >
-      <div className="node-modal">
+    <div className="node-modal-backdrop" {...dismiss}>
+      <div className="node-modal" {...chrome}>
         <h3 className="node-modal-title">{editingNode ? "Edit node" : "Create new node"}</h3>
 
         <label className="node-modal-label">
@@ -91,7 +93,6 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); onSave({ name: name.trim(), type, parentId }); }
-              if (e.key === "Escape") onCancel();
             }}
           />
           {name.trim() && <span className="node-modal-key-preview">key: {previewKey}</span>}
