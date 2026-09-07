@@ -40,6 +40,7 @@ import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
 const RELATED_SHELF_LIMIT = 6;
@@ -271,14 +272,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     localStorage.setItem("canon-album-track-cols", JSON.stringify(trackCols));
   }, [trackCols]);
 
-  useEffect(() => {
-    if (!showColPicker) return;
-    const close = (e: MouseEvent) => {
-      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [showColPicker]);
+  useClickOutside(colPickerRef, () => setShowColPicker(false), showColPicker);
 
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);

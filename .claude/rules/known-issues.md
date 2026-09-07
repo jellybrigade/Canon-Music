@@ -6,7 +6,10 @@ Fixed unless marked OPEN.
 
 ## Platform (Linux / WebKitGTK / audio)
 
-- **Left-click popup self-closes.** WebKitGTK catches the opening click's tail. `ContextMenu.tsx` defers the listener `setTimeout(...,0)`, uses `mousedown` capture + containment.
+- **Left-click popup self-closes.** WebKitGTK catches the opening click's tail, so a listener attached synchronously by the effect that opens a popover can close it on its own opening gesture. `ContextMenu` was hardened for this and the hardening never reached `useClickOutside`, which sits behind 7 left-click-opened popovers and had neither the deferral nor the capture phase; three column pickers (`TrackTableView`, `AlbumDetail`, `PlaylistDetail`) each held a fourth, byte-identical, unhardened copy inline. One implementation owns it now: `useClickOutside` defers the attach `setTimeout(...,0)`, uses `mousedown` with `capture: true` plus a containment check, and cancels the pending attach on unmount. `ContextMenu` consumes it and keeps only its own Escape and scroll listeners, which attach synchronously because no opening gesture can produce either. jsdom's dispatch order cannot show the symptom either way, so the tests pin the mechanism - deferral, capture, and balanced teardown - rather than the crash. Any hit below other than the hook itself is a second implementation of this concern and wants the hook instead.
+  ```
+  grep -rn 'addEventListener("mousedown"' src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Freeze/thaw compositor crash.** Focus loss kills the WebProcess; upstream `wry` bug. Active mitigations, never strip without replacing: `web-process-terminated` -> `.reload()`, `useAppActivityTracking` blur stamp, `webkit2gtk-nvidia-quirk`, `"visible": false` + `window.show()` on page load. Never touch `set_hardware_acceleration_policy` without auditing compositing.
 - **ALSA underrun under load.** rodio 0.19 buffer too small. `PULSE_LATENCY_MSEC=60` set early in `run()`. Real fix needs rodio 0.20+.
 - **Read-only rusqlite can't own WAL `-shm`.** `library_read.rs` opens `READ_WRITE | NO_MUTEX | URI`, no `CREATE`.

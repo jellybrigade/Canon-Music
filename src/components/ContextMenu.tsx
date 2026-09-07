@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useClickOutside } from "../hooks/useClickOutside";
 import "./ContextMenu.css";
 
 interface Props {
@@ -72,33 +73,17 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
     });
   }, [x, y]);
 
+  useClickOutside(menuRef, onClose);
+
   useEffect(() => {
-    // mousedown + containment check (not click + stopPropagation): closing only
-    // when the pointer-down target is outside the menu means item selection is
-    // unaffected regardless of mousedown/click dispatch order or event-timing
-    // quirks (WebKitGTK in particular can deliver a stray click before this
-    // listener attaches).
-    const onPointerDown = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        onCloseRef.current();
-      }
-    };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
     // The menu is positioned once at open time (fixed x/y) and never re-anchored,
     // so if the page underneath scrolls, close instead of leaving it floating
     // detached from whatever opened it.
     const onScroll = () => onCloseRef.current();
-    // Defer attaching: the same mousedown that opened this menu is still
-    // propagating to document when this effect runs, which would close the
-    // menu immediately.
-    const timer = setTimeout(() => {
-      document.addEventListener("mousedown", onPointerDown, { capture: true });
-      document.addEventListener("keydown", onKey);
-      document.addEventListener("scroll", onScroll, { capture: true, passive: true });
-    }, 0);
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     return () => {
-      clearTimeout(timer);
-      document.removeEventListener("mousedown", onPointerDown, { capture: true });
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("scroll", onScroll, { capture: true });
     };
