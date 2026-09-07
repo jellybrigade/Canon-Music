@@ -101,6 +101,12 @@ export function useAppNavigation(dismissOverlays: () => void) {
   // Alt+Arrow is the desktop convention and is free here: useGlobalShortcuts
   // bails on altKey, so its left/right seek bindings can't collide. Mouse
   // buttons 3 and 4 are the thumb buttons; WebKit does not act on them itself.
+  //
+  // Deliberately has no `isTextEntryTarget` guard, unlike every other window-level shortcut
+  // that preventDefaults. Alt+Arrow is browser-conventional back/forward and browsers honour
+  // it inside text fields; GTK entries bind word-wise motion to Ctrl+Arrow, not Alt+Arrow, so
+  // the keystroke is not being taken from the field. Adding the guard here would make Canon
+  // the odd one out, not safer.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;

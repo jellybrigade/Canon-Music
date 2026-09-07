@@ -1,14 +1,29 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { usePlayerStore, isNextDisabled } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
 import { useLoved } from "./useLoved";
 import { isTextEntryTarget } from "../lib/keyboard";
 
-export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null | undefined) {
+/**
+ * `suspended` stands the transport keys down while an overlay that owns the keyboard is
+ * painted over the app. `isTextEntryTarget` is not enough on its own: the command palette
+ * navigates with the arrow keys, and clicking blank space inside its results blurs its input
+ * to `<body>`, after which arrowing the list also moved the volume. Being scoped to an open
+ * overlay is not the same as owning the key.
+ */
+export function useGlobalShortcuts(
+  serverWithCred: ServerWithCredential | null | undefined,
+  suspended: boolean,
+) {
   const { toggleTrackLove } = useLoved();
+
+  // Read through a ref so opening an overlay does not tear down and re-register the listener.
+  const suspendedRef = useRef(suspended);
+  suspendedRef.current = suspended;
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (suspendedRef.current) return;
       if (isTextEntryTarget(e)) return;
       if (e.ctrlKey || e.metaKey || e.altKey) return;
 

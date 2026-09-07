@@ -205,7 +205,10 @@ Fixed unless marked OPEN.
 
 ## UI
 
-- **A window-level shortcut that `preventDefault`s owes every branch its own focus guard.** `isTextEntryTarget` (`src/lib/keyboard.ts`) shared by both listeners; Ctrl+K, Ctrl+F and Escape each need a different exemption, so a blanket bail breaks all three. Read options through a ref so keystrokes don't re-register the listener.
+- **A window-level shortcut that `preventDefault`s owes every branch its own focus guard, and "scoped to an open overlay" is not the same as owning the key.** `isTextEntryTarget` (`src/lib/keyboard.ts`) shared by both listeners; Ctrl+K, Ctrl+F and Escape each need a different exemption, so a blanket bail breaks all three. Read options through a ref so keystrokes don't re-register the listener. The focus test alone was not enough for `useGlobalShortcuts`' arrow keys: the command palette navigates its list with them, and its result rows `preventDefault` their own mousedown while their wrappers do not, so clicking blank space inside the results blurred the input to `<body>` and arrowing the list moved the volume too. It now takes a `suspended` flag, and `App.tsx` computes that signal once as `overlayAbove = commandPaletteOpen || anyModalOpen` for both this hook and `useSearchShortcuts` - one signal, not a per-consumer boolean, which is also what let `feedbackOpen` drop out of the expression once the feedback modal joined the registry. The one deliberate exemption is `useAppNavigation`'s Alt+Arrow, which carries a comment saying why: browsers honour Alt+Arrow for back/forward inside text fields, and GTK entries bind word-wise motion to Ctrl+Arrow, so nothing is being taken from the field. Every other hit below needs a guard or a comment of its own.
+  ```
+  grep -rn "addEventListener(\"keydown\"" src --include='*.ts*' | grep -v '\.test\.'
+  ```
   ```
   grep -rn "addEventListener(\"keydown\"" src --include='*.ts*' | grep -v '\.test\.'
   ```

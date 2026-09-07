@@ -31,7 +31,7 @@ vi.mock("./AppRoutes", () => ({
 vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
@@ -39,6 +39,7 @@ import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+import { usePlayerStore } from "../store/player";
 
 allowSlowAppMounts();
 
@@ -76,6 +77,15 @@ function press(key: string, opts: { ctrlKey?: boolean; target?: Element } = {}) 
 
 const paletteInput = () => document.querySelector(".cp-input") as HTMLInputElement | null;
 const searchInput = () => document.querySelector(".search-bar-input") as HTMLInputElement | null;
+
+beforeAll(() => {
+  // The palette scrolls its focused row into view, and jsdom does not implement
+  // scrollIntoView at all - without this the arrow-key cases throw instead of asserting.
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: () => {},
+  });
+});
 
 beforeEach(async () => {
   resetTauriMocks();
@@ -165,6 +175,33 @@ describe("App keyboard shortcuts", () => {
     stray.remove();
 
     expect(searchInput()?.value).toBe("abba");
+  });
+
+  it("changes the volume on ArrowDown with nothing open", async () => {
+    // Positive control for the case below: without it, an ArrowDown that silently stopped
+    // reaching the player for any reason would make that assertion pass for free.
+    await mountApp();
+    const before = usePlayerStore.getState().volume;
+
+    await act(async () => { press("ArrowDown", { target: document.body }); });
+
+    expect(usePlayerStore.getState().volume).toBeCloseTo(before - 0.05);
+  });
+
+  it("does not change the volume on ArrowDown while the command palette is open", async () => {
+    // Result rows preventDefault their own mousedown but their wrappers do not, so clicking
+    // blank space inside the results blurs the palette input to <body>. Arrowing the list
+    // then moved the volume as well: being scoped to an open overlay is not the same as
+    // owning the key.
+    await mountApp();
+    await act(async () => { press("k", { ctrlKey: true }); });
+    expect(paletteInput()).not.toBeNull();
+    paletteInput()!.blur();
+    const before = usePlayerStore.getState().volume;
+
+    await act(async () => { press("ArrowDown", { target: document.body }); });
+
+    expect(usePlayerStore.getState().volume).toBe(before);
   });
 
   it("registers exactly one window keydown listener for the shortcuts and drops it on unmount", async () => {

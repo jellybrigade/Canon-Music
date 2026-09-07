@@ -154,7 +154,13 @@ export default function App() {
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred, queryClient);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
-  useGlobalShortcuts(serverWithCred);
+  // One signal for "an overlay above the app owns the keyboard", read by both the search
+  // shortcuts and the transport keys. `feedbackOpen` used to be a third term here; the
+  // feedback modal registers itself now, which is the point of the registry.
+  const anyModalOpen = useAnyModalOpen();
+  const overlayAbove = commandPaletteOpen || anyModalOpen;
+
+  useGlobalShortcuts(serverWithCred, overlayAbove);
   useQueueSync(serverWithCred);
   useScrobbleFlush(serverWithCred);
 
@@ -210,7 +216,6 @@ export default function App() {
     return () => clearTimeout(t);
   }, [homeSearchRaw]);
 
-  const anyModalOpen = useAnyModalOpen();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [crashReport, setCrashReport] = useState<string | null>(null);
   useEffect(() => {
@@ -271,7 +276,7 @@ export default function App() {
     // pair cannot be extended to cover a modal opened inside the search overlay itself
     // (`SearchResults`' identify dialog) - that state never reaches this component - so the
     // registry answers "is something painted over me" for every modal at once.
-    overlayAbove: commandPaletteOpen || feedbackOpen || anyModalOpen,
+    overlayAbove,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
     openSearch: useCallback(() => setSearchOpen(true), []),
     clearSearch,
