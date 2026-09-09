@@ -103,6 +103,7 @@ Fixed unless marked OPEN.
 - Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.
 - Decoding an already-decoded value = no-op or crash.
 - Partial opt-out of global base rule keeps properties it forgot. **OPEN, 37 instances.**
+- Hit-area halo grown toward a neighbour steals its clicks.
 - Overlay sized to its container breaks when the container's shape varies.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

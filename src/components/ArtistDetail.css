@@ -147,10 +147,12 @@
   align-items: center;
 }
 
+/* Horizontal reach stops at half the 4px chip gap: at -10px this destructive control's halo
+   crossed into the next chip, so a click aimed at alias B removed alias A. */
 .artist-alias-remove::before {
   content: "";
   position: absolute;
-  inset: -10px;
+  inset: -10px -2px;
 }
 
 .artist-alias-remove:hover {
@@ -212,10 +214,12 @@
   transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
 }
 
+/* Half the 8px row gap horizontally, so two neighbouring halos meet without overlapping - at
+   -6px each they both claimed the middle 4px and the later sibling took the click. */
 .artist-icon-btn::before {
   content: "";
   position: absolute;
-  inset: -6px;
+  inset: -6px -4px;
 }
 
 .artist-icon-btn:hover {

@@ -81,6 +81,10 @@ Fixed unless marked OPEN.
               print(f"{f}:{t[:m.start()].count(chr(10))+1}  {sel}")
   PY
   ```
+- **Hit-area halo grown toward a neighbour steals its clicks.** Search clear button `inset: -10px` reached across the bar's 4px gap into the input, so clicking the tail of the query to place a caret wiped it. **Found 3x:** alias remove crossed into the next chip (removed the wrong alias), and two `artist-icon-btn` halos both claimed the middle of their 8px gap, where the later sibling won. Rule: grow away from a neighbour outright, else no further than half the gap. Every hit below owes that arithmetic against its container's `gap` and `padding`.
+  ```
+  grep -rn "inset: -" src --include='*.css'
+  ```
 - **Overlay sized to its container breaks when the container's shape varies.** Buffering-sweep `::after` `inset: 0` correct on thin progress track, shapeless glow over tall waveform bars. Fix: animate bars directly, drop overlay box.
   ```
   grep -rn -B6 "inset: 0" src --include='*.css' | grep -E "::(after|before)|--waveform|height:"
