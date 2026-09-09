@@ -25,7 +25,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Suspense } from "react";
 import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { SearchView } from "./SearchView";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -71,6 +71,15 @@ function seedAbba() {
     .run("trk-1", "Dancing Queen", "ABBA", "Arrival");
 }
 
+let navigateFromOutside: ((to: string) => void) | null = null;
+
+/** Stands in for every navigation the rest of the app can aim at /search while it stays mounted. */
+function NavigateProbe() {
+  const navigate = useNavigate();
+  navigateFromOutside = (to) => navigate(to);
+  return null;
+}
+
 function LocationProbe() {
   const { pathname, search } = useLocation();
   return <div data-testid="url">{pathname + search}</div>;
@@ -113,6 +122,7 @@ function mount(
           ) : null}
         </Suspense>
         <LocationProbe />
+        <NavigateProbe />
       </MemoryRouter>
     </QueryClientProvider>
   );
@@ -227,6 +237,43 @@ describe("SearchView", () => {
     await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
 
     expect(input()).toBeNull();
+    expect(url()).toBe("/search");
+  });
+
+  it("empties the box when the query leaves the URL under it", async () => {
+    // The sidebar Search item aims at /search with no ?q, and the route stays mounted through
+    // it. The box used to keep the old term, clear button and all, beside a body that had gone
+    // back to inviting a query.
+    seedAbba();
+    mount("/search?q=abba");
+    expect(input()!.value).toBe("abba");
+
+    await act(async () => { navigateFromOutside!("/search"); });
+
+    expect(input()!.value).toBe("");
+    expect(document.querySelector(".search-bar-clear")).toBeNull();
+    expect(emptyState()).toBe("Start typing to search");
+  });
+
+  it("refills the box when the URL arrives with a different query", async () => {
+    seedAbba();
+    mount("/search?q=abba");
+
+    await act(async () => { navigateFromOutside!("/search?q=beatles"); });
+
+    expect(input()!.value).toBe("beatles");
+  });
+
+  it("leaves whitespace-only typing in the box though it writes no ?q", async () => {
+    // The resync above must lose to the keystrokes it mirrors: "  " writes no param, so the
+    // URL says "" while the box legitimately holds two spaces the user is typing around.
+    seedAbba();
+    mount();
+
+    fireEvent.change(input()!, { target: { value: "  " } });
+    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+
+    expect(input()!.value).toBe("  ");
     expect(url()).toBe("/search");
   });
 

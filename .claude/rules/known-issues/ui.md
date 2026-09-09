@@ -51,6 +51,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "location\.key\|useNavigationType" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Router value copied into `useState` never resyncs while the route stays mounted.** `SearchView`'s box kept the old term, clear button and all, when a navigation aimed at `/search` with a different `?q` or none. Fix: resync during render against what this view itself last wrote (`lastWrittenRef`), never against the param, or in-flight keystrokes get clobbered.
+  ```
+  grep -rnE "useState\((searchParams|params|query|pathname)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
