@@ -1,0 +1,18 @@
+#!/bin/sh
+# Rejects commit bodies and attribution trailers (Co-Authored-By etc).
+# Canon commits are subject-only, no trailers of any kind. See git-standards.md.
+
+msg_file="$1"
+
+if grep -qiE '^(Co-Authored-By|Claude-Session|Signed-off-by):' "$msg_file"; then
+  echo "commit-msg: trailer found (Co-Authored-By / Claude-Session / Signed-off-by). Not allowed - say everything in the subject." >&2
+  exit 1
+fi
+
+non_blank_lines=$(grep -cve '^[[:space:]]*$' "$msg_file")
+if [ "$non_blank_lines" -gt 1 ]; then
+  echo "commit-msg: commit has a body. Subject only - tighten the subject or split the commit." >&2
+  exit 1
+fi
+
+exit 0
