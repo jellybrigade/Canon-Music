@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
@@ -44,6 +44,7 @@ const VIEW_TO_PATH: Record<AppView, string> = {
 export function useAppNavigation(dismissOverlays: () => void) {
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   // Read through a ref: callers pass a fresh closure per render, and the window listeners
   // below must not be torn down and re-armed for it.
   const dismissRef = useRef(dismissOverlays);
@@ -71,32 +72,38 @@ export function useAppNavigation(dismissOverlays: () => void) {
     return "library";
   })();
 
-  function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
-    if (v === "nowplaying" && isQueueOpen) toggleQueue();
-    if (select?.album) {
-      navigate(albumPath(select.album.id));
-    } else if (select?.artist) {
-      navigate(artistPath(select.artist.name));
-    } else {
-      navigate(VIEW_TO_PATH[v]);
-    }
+  // Asking for the page already showing must not push a second copy of its entry: Back from
+  // there returns to the same page, which reads as Back doing nothing. Worst on /search, where
+  // `leaveSearch` is `navigate(-1)` - the sidebar item stranded the user in search. Compared on
+  // pathname alone, so the sidebar Search item keeps the query already in the box. `dismiss`
+  // runs either way: the click meant something even when the router stays put.
+  function goTo(to: string) {
+    if (to !== pathname) navigate(to);
     dismiss();
   }
 
+  function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
+    if (v === "nowplaying" && isQueueOpen) toggleQueue();
+    if (select?.album) {
+      goTo(albumPath(select.album.id));
+    } else if (select?.artist) {
+      goTo(artistPath(select.artist.name));
+    } else {
+      goTo(VIEW_TO_PATH[v]);
+    }
+  }
+
   function openAlbum(album: AlbumRow) {
-    navigate(albumPath(album.id));
-    dismiss();
+    goTo(albumPath(album.id));
   }
 
   function openArtist(artist: ArtistRow | string) {
     const name = typeof artist === "string" ? artist : artist.name;
-    navigate(artistPath(name));
-    dismiss();
+    goTo(artistPath(name));
   }
 
   function openPlaylist(playlist: PlaylistRow) {
-    navigate(playlistPath(playlist.id));
-    dismiss();
+    goTo(playlistPath(playlist.id));
   }
 
   function goBack() {
@@ -104,16 +111,29 @@ export function useAppNavigation(dismissOverlays: () => void) {
     dismiss();
   }
 
+  // Whether the first history entry - the one with nothing behind it - is the entry showing.
+  // `"default"` is react-router's key for it, but a `replace` mints a fresh key and /search
+  // writes its own `?q` with `replace`, so one keystroke erased the marker. Followed instead:
+  // a push leaves that entry, a replace stays on it (carry the key over), and a pop is back on
+  // it exactly when the key matches the one it was last seen under.
+  const firstEntryKey = useRef("default");
+  const onFirstEntry = useRef(location.key === "default");
+  useEffect(() => {
+    if (navigationType === "PUSH") onFirstEntry.current = false;
+    else if (navigationType === "REPLACE") {
+      if (onFirstEntry.current) firstEntryKey.current = location.key;
+    } else onFirstEntry.current = location.key === firstEntryKey.current;
+  }, [location.key, navigationType]);
+
   // `navigate(-1)` over a remembered pathname on purpose: it is symmetric with the push that
   // opened search, so it restores the history index and scroll position, where a remembered
   // pathname would push a *new* entry - Back from there would return to /search, an
   // inescapable ping-pong - and is exactly the non-URL navigation state this hook exists to
-  // avoid. `location.key === "default"` is react-router's marker for the entry the router
-  // mounted on, never set on a pushed entry; it catches /search as the very first entry,
-  // reachable via the web-process-terminated -> reload() recovery in lib.rs. `replace` there so
-  // the dead-end /search is not left behind for Forward.
+  // avoid. Nothing to go back to on the first entry, which catches /search as a cold mount,
+  // reachable via the web-process-terminated -> reload() recovery in lib.rs. `replace`
+  // there so the dead-end /search is not left behind for Forward.
   function leaveSearch() {
-    if (location.key === "default") navigate("/home", { replace: true });
+    if (onFirstEntry.current) navigate("/home", { replace: true });
     else navigate(-1);
     dismiss();
   }

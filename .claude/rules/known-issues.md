@@ -96,6 +96,8 @@ Fixed unless marked OPEN.
 - `Number(x) || fallback` deletes a legal zero.
 - Non-URL render state must be dismissed by navigation intent, not pathname change.
 - Dismissal at same priority as its navigation can't land first.
+- Navigating to the page already showing pushes a duplicate history entry.
+- `location.key === "default"` stops marking the first entry once that entry is replaced.
 - `null` for "don't know yet" and "isn't there" paints the same blank page.
 - Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.
 - Decoding an already-decoded value = no-op or crash.

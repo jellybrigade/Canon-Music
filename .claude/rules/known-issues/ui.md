@@ -43,6 +43,14 @@ Fixed unless marked OPEN.
   ```
   grep -rn "startTransition" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Navigating to the page already showing pushes a duplicate history entry.** Sidebar item, album/artist/playlist already open: Back then landed on the same page. On `/search` it was worse - `leaveSearch` is `navigate(-1)`, so Escape and the header Back button returned into search. Fix: one private `goTo(path)` in `useAppNavigation` skips `navigate` when the target equals `pathname`, dismisses either way. Compared on pathname alone, so the query in the box survives.
+  ```
+  grep -rn "navigate(" src --include='*.ts*' | grep -v '\.test\.' | grep -vE "navigate\((-?1|\+1)\)"
+  ```
+- **`location.key === "default"` stops marking the first history entry once that entry is replaced.** `SearchView` writes `?q` with `replace`, minting a fresh key, so one keystroke on a cold-mounted `/search` (the `web-process-terminated -> reload()` recovery) left `leaveSearch` running `navigate(-1)` with nothing behind it: Escape and Back both did nothing. Fix: track it off `useNavigationType()` - push leaves the entry, replace stays on it and carries the key over, pop is back on it when the key matches.
+  ```
+  grep -rn "location\.key\|useNavigationType" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
