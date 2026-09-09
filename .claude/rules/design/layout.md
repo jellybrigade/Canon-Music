@@ -1,3 +1,12 @@
+---
+description: Layout, spacing and grid rules for components and styles
+globs:
+  - "src/components/**"
+  - "src/styles/**"
+  - "src/app/**"
+  - "src/**/*.css"
+---
+
 Space is the most underused tool. Fix structure (monotone spacing, weak hierarchy, identical card grids), not surface.
 
 Canon is **product register**: predictable grids, consistent density, familiar nav. Responsive behavior is structural (collapse sidebar, responsive table), not fluid type. Consistency IS affordance. `clamp()` fluid spacing is for marketing surfaces only, so not here.

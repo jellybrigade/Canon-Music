@@ -55,7 +55,7 @@ Harness: `src/test/perf.ts` (`trackRenders`, `invokeCount`, `invokeArgs`), `Fake
 
 ### Regression
 
-Every `.claude/rules/known-issues.md` entry is a bug that shipped. Touching code near one → add the regression test if missing. New bug → new known-issues entry **and** test, same commit.
+Every `.claude/rules/known-issues/` entry is a bug that shipped. Touching code near one → add the regression test if missing. New bug → new known-issues entry **and** test, same commit.
 
 **Fix the class, not the instance.** Phrase the cause without naming the file, turn it into a grep, run it, fix every hit. Write that grep into the known-issues entry. Two bugs shipped twice here for want of this. Can't phrase the grep → haven't found the class.
 
@@ -80,4 +80,4 @@ Every `.claude/rules/known-issues.md` entry is a bug that shipped. Touching code
 
 ## Always-loaded rules
 
-`.claude/rules/`: `coding-standards.md`, `git-standards.md`, `known-issues.md`, `design-guidelines.md`, `design/layout.md`, `design/typeset.md`. Deeper design docs in `.claude/design-docs/` are read on demand.
+`.claude/rules/`: `coding-standards.md`, `git-standards.md`, `known-issues.md` (lesson-heading index only). Glob-scoped, load automatically when matching code is touched: `known-issues/<area>.md` (full entries + greps), `design-guidelines.md`, `design/layout.md`, `design/typeset.md`. Deeper design docs in `.claude/design-docs/` are read on demand.
