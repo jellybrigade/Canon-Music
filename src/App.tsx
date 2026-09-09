@@ -151,7 +151,7 @@ export default function App() {
   // server id, and a warm keyed on a different id than the tab reads is a warm nobody reads.
   useNowPlayingPrefetch(server?.id ?? null);
 
-  const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred, queryClient);
+  const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   // One signal for "an overlay above the app owns the keyboard", read by both the search

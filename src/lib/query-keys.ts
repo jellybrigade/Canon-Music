@@ -27,7 +27,6 @@ export const QK = {
 
   search: (serverId: string, query: string) => ["search", serverId, query] as const,
 
-  tagIssues: () => ["tag_issues"] as const,
   tagVocab: () => ["tag-vocab"] as const,
   tagMappings: () => ["tag_mappings"] as const,
   tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,

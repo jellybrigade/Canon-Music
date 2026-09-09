@@ -9,13 +9,14 @@ vi.mock("./useGenreTree", () => ({ invalidateGenreTreeCache: vi.fn() }));
 vi.mock("./useSetting", () => ({ useSetting: vi.fn(() => [intervalSetting, vi.fn(), true]) }));
 
 import { renderHook, act } from "@testing-library/react";
-import { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import type { SyncProgress } from "../lib/sync";
 import type { NavidromeCredential } from "../lib/navidrome";
 import type { Server } from "../types/server";
 import type { ServerWithCredential } from "./useServer";
 import { useLibrarySync } from "./useLibrarySync";
+import { useGenresSessionStore } from "../store/genresSessionStore";
+import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 
 /** Read by the mocked `useSetting` above; assign before rendering. */
 let intervalSetting = "5";
@@ -88,8 +89,16 @@ async function tick(ms = 0) {
   });
 }
 
+/** The two staggered fan-out steps' witnesses: the 300ms tick and the 600ms one. */
+function fanoutTicks() {
+  return {
+    genres: useGenresSessionStore.getState().refreshTick,
+    playlists: usePlaylistSessionStore.getState().playlistsTick,
+  };
+}
+
 /** How long `settle`/`failRun` advance the clock to drain the staggered fan-out. */
-const FANOUT_MS = 1000;
+const FANOUT_MS = 600;
 
 function openRun(index: number): Run {
   const run = runs[index];
@@ -97,7 +106,7 @@ function openRun(index: number): Run {
   return run;
 }
 
-/** Settles a run and drains its staggered 0/300/600/1000ms fan-out. */
+/** Settles a run and drains its staggered 0/300/600ms fan-out. */
 async function settle(index: number, r?: PartialSyncResult) {
   openRun(index).resolve(r);
   await tick(FANOUT_MS);
@@ -108,8 +117,8 @@ async function failRun(index: number, e: unknown) {
   await tick(FANOUT_MS);
 }
 
-function renderSync(server: ServerWithCredential | undefined, client = new QueryClient()) {
-  return renderHook(({ server }: { server: ServerWithCredential | undefined }) => useLibrarySync(server, client), {
+function renderSync(server: ServerWithCredential | undefined) {
+  return renderHook(({ server }: { server: ServerWithCredential | undefined }) => useLibrarySync(server), {
     initialProps: { server },
   });
 }
@@ -490,35 +499,43 @@ describe("useLibrarySync auto-sync interval", () => {
     expect(syncLibrary).toHaveBeenCalledTimes(1);
   });
 
-  it("drops the settle fan-out for a sync that outlives its hook", async () => {
-    const client = new QueryClient();
-    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
-    const { unmount } = renderSync(SRV_A, client);
+  it("bumps both staggered steps for a run that settles while mounted", async () => {
+    renderSync(SRV_A);
     await tick();
+    const before = fanoutTicks();
+
+    await settle(0, { changed: { albums: true, playlists: true } });
+
+    expect(fanoutTicks()).toEqual({ genres: before.genres + 1, playlists: before.playlists + 1 });
+  });
+
+  it("drops the settle fan-out for a sync that outlives its hook", async () => {
+    const { unmount } = renderSync(SRV_A);
+    await tick();
+    const before = fanoutTicks();
 
     unmount();
-    await settle(0, { changed: { albums: true } });
+    await settle(0, { changed: { albums: true, playlists: true } });
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(fanoutTicks()).toEqual(before);
     expect(vi.getTimerCount()).toBe(0);
   });
 
   it("cancels the staggered fan-out when the hook goes away mid-stagger", async () => {
-    const client = new QueryClient();
-    const invalidate = vi.spyOn(client, "invalidateQueries").mockResolvedValue(undefined);
-    const { unmount } = renderSync(SRV_A, client);
+    const { unmount } = renderSync(SRV_A);
     await tick();
 
-    // Settles far enough for the 300/600/1000ms timers to be armed, then unmounts
-    // before the last of them, which is the one that reaches the query cache.
-    openRun(0).resolve({ changed: { albums: true } });
+    // Settles far enough for the 300/600ms timers to be armed, then unmounts
+    // before either of them fires.
+    openRun(0).resolve({ changed: { albums: true, playlists: true } });
     await tick(0);
     expect(vi.getTimerCount()).toBeGreaterThan(0);
+    const before = fanoutTicks();
 
     unmount();
     await tick(FANOUT_MS);
 
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(fanoutTicks()).toEqual(before);
     expect(vi.getTimerCount()).toBe(0);
   });
 });

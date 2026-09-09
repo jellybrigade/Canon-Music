@@ -6,7 +6,7 @@ Canon automatically flags tracks with problematic metadata — missing genre, mi
 
 ## Status: backend-only, not user-visible yet
 
-**This feature has no UI.** Detection, storage, and dismiss logic are fully implemented, but nothing in the app displays the results. `CLAUDE.md` currently lists "Tag issue detection... + `TagIssuesView` w/ dismiss + sidebar badge" under shipped v0.6.x work — that line is inaccurate as of this writing. There is no `TagIssuesView` component, and the "Tags" sidebar badge shows the *unmapped-tag* count (`unmappedCount` in `src/App.tsx:291`), not the tag-issue count. `useTagIssues()` (`src/hooks/useTagIssues.ts:17`) is exported but never imported anywhere outside its own file.
+**This feature has no UI and no read path.** Detection and storage run on every sync; nothing in the app reads the results. `CLAUDE.md` currently lists "Tag issue detection... + `TagIssuesView` w/ dismiss + sidebar badge" under shipped v0.6.x work - that line is inaccurate as of this writing. There is no `TagIssuesView` component, and the "Tags" sidebar badge shows the *unmapped-tag* count (`unmappedCount` in `src/App.tsx:291`), not the tag-issue count. `useTagIssues()` existed as an orphan for months and was deleted in the 2026-09-09 dead-code sweep, along with `QK.tagIssues()` and the post-sync invalidation of that key; a view has to bring its own read back.
 
 Until a view is built, issues silently accumulate in the `tag_issues` table with no way for a user to see or dismiss them from the UI (the settings toggle described below controls a badge that isn't wired to this data).
 
@@ -33,19 +33,13 @@ Until a view is built, issues silently accumulate in the `tag_issues` table with
 
 Table `tag_issues`, created in schema migration v8 (`src/db/migrations.ts:176-183`), `dismissed_at` column added in v10 (`src/db/migrations.ts:232`). Columns: `id`, `track_id`, `issue_type`, `details`, `detected_at`, `dismissed_at`, with `UNIQUE(track_id, issue_type)` preventing duplicate rows per track/issue pair.
 
-### Data access hook
+### Data access
 
-`useTagIssues()` (`src/hooks/useTagIssues.ts:17-69`):
-- `query` — selects all non-dismissed issues joined to track/album for display (`track_title`, `track_artist`, `album_name`, `album_id`), keyed `QK.tagIssues()`.
-- `dismissIssue(id)` mutation — sets `dismissed_at = now()` on one row, invalidates the query.
-- `dismissAll()` mutation — dismisses every non-dismissed row.
-- Returns `{ data, isLoading, dismissIssue, dismissAll, issueCount }`.
-
-`useLibrarySync.ts:50` invalidates `QK.tagIssues()` after sync completes, so the hook's data would refresh live once something consumes it.
+None. The deleted `useTagIssues()` read non-dismissed issues joined to track/album (`track_title`, `track_artist`, `album_name`, `album_id`) and carried `dismissIssue(id)` / `dismissAll()` mutations writing `dismissed_at`; see it in git history at `src/hooks/useTagIssues.ts` before the 2026-09-09 sweep. Rows reach nothing today, so a view starts from the table.
 
 ### Existing but unrelated settings toggle
 
-Settings → Metadata & Tags tab has a checkbox labeled **"Hide tag issues badge"** ("Suppresses the badge counter on the Tags sidebar item.", `src/components/settings/TagsTab.tsx:369-370`, state `hideTagBadge`). This toggle currently only suppresses the *unmapped-tag* badge (`src/App.tsx:582`) — it does not affect tag-issue data in any way, since nothing reads `useTagIssues()`. The toggle's copy implies it controls tag-issue visibility; it doesn't yet.
+Settings → Metadata & Tags tab has a checkbox labeled **"Hide tag issues badge"** ("Suppresses the badge counter on the Tags sidebar item.", `src/components/settings/TagsTab.tsx:369-370`, state `hideTagBadge`). This toggle currently only suppresses the *unmapped-tag* badge (`src/App.tsx:582`) - it does not affect tag-issue data in any way, since nothing reads the table. The toggle's copy implies it controls tag-issue visibility; it doesn't yet.
 
 ## Edge cases / gotchas
 
@@ -58,9 +52,6 @@ Settings → Metadata & Tags tab has a checkbox labeled **"Hide tag issues badge
 - Detection: `src/lib/tagIssues.ts:3-71`
 - Sync trigger: `src/lib/sync.ts:265` (import at `src/lib/sync.ts:6`)
 - Schema: `src/db/migrations.ts:176-183` (v8), `:232` (v10, `dismissed_at`)
-- Hook: `src/hooks/useTagIssues.ts:1-69`
-- Query key: `QK.tagIssues()` in `src/lib/query-keys.ts`
-- Post-sync invalidation: `src/hooks/useLibrarySync.ts:50`
 - Misleading settings toggle: `src/components/settings/TagsTab.tsx:369-375`
 - Actual sidebar badge (unrelated data): `src/App.tsx:291`, `:582`
 

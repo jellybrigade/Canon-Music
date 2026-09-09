@@ -1,11 +1,9 @@
 import { useRef, useState, useEffect } from "react";
-import type { QueryClient } from "@tanstack/react-query";
 import { syncLibrary } from "../lib/sync";
 import type { SyncProgress } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
 import { useSetting } from "./useSetting";
 import type { ServerWithCredential } from "./useServer";
-import { QK } from "../lib/query-keys";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import { useLovedSessionStore } from "../store/lovedSessionStore";
@@ -30,7 +28,7 @@ function listPhrase(items: readonly string[]): string {
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
-export function useLibrarySync(target: ServerWithCredential | undefined, queryClient: QueryClient) {
+export function useLibrarySync(target: ServerWithCredential | undefined) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -167,11 +165,6 @@ export function useLibrarySync(target: ServerWithCredential | undefined, queryCl
             usePlaylistSessionStore.getState().bumpPlaylistTracks();
           }
         }, 600);
-        if (libraryChanged) {
-          scheduleFanout(() => {
-            void queryClient.invalidateQueries({ queryKey: QK.tagIssues() });
-          }, 1000);
-        }
       })
       .catch((err: unknown) => {
         failed = true;
