@@ -230,7 +230,10 @@ describe("command palette stacked over the search overlay", () => {
   it("closes only the palette when its backdrop is clicked over the search overlay", async () => {
     await stackPaletteOverSearch();
 
-    await act(async () => { fireEvent.mouseDown(paletteBackdrop()!); });
+    await act(async () => {
+      fireEvent.mouseDown(paletteBackdrop()!);
+      fireEvent.click(paletteBackdrop()!);
+    });
 
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
@@ -240,7 +243,7 @@ describe("command palette stacked over the search overlay", () => {
 
   it("keeps the palette open when a drag starts inside it and releases on the backdrop", async () => {
     // Regression for known-issues' "Dismissing a backdrop on `click` dismisses on a gesture
-    // that only ended there". The palette dismisses on `mousedown` + target identity, so
+    // that only ended there". The palette needs press *and* release on the backdrop, so
     // selecting text in its input and releasing outside must not close it - and must certainly
     // not collapse to the search overlay behind it.
     await stackPaletteOverSearch();
@@ -255,12 +258,24 @@ describe("command palette stacked over the search overlay", () => {
     expect(searchInput()).not.toBeNull();
   });
 
+  it("keeps the palette open when a press on its backdrop releases inside it", async () => {
+    // The other half of the same gesture class: pressing past the edge of the palette and
+    // releasing on its input is one drag, not a dismissal.
+    await stackPaletteOverSearch();
+
+    await act(async () => {
+      fireEvent.mouseDown(paletteBackdrop()!);
+      fireEvent.click(paletteModal()!);
+    });
+
+    expect(paletteInput()).not.toBeNull();
+  });
+
   it("closes only the feedback modal on Escape while the search overlay is open", async () => {
-    // The palette is not the only thing that stacks over search, and the feedback modal is the
-    // *harder* instance: its Escape listener is on `document`, so it fires before the window
-    // listener rather than after it. A fix that only named the command palette would leave
-    // this one collapsing both layers, which is why the guard asks "is anything above me"
-    // rather than "is the palette open".
+    // The palette is not the only thing that stacks over search. The feedback modal used to be
+    // the *harder* instance, with its own `document` Escape listener firing ahead of the window
+    // one; it goes through the open-modal registry now, which is what makes the guard ask "is
+    // anything above me" rather than "is the palette open".
     await mountApp();
     await act(async () => { press("f", { ctrlKey: true }); });
     await waitFor(() => expect(searchInput()).not.toBeNull());

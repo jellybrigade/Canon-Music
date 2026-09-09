@@ -15,8 +15,17 @@ export function useClickOutside(
       if (arr.some((r) => r.current?.contains(e.target as Node))) return;
       handlerRef.current();
     }
-    document.addEventListener("mousedown", onMouseDown);
-    return () => document.removeEventListener("mousedown", onMouseDown);
+    // Deferred attach and capture phase are both load-bearing, see known-issues.md
+    // "Left-click popup self-closes": on WebKitGTK the tail of the left-click that opened
+    // the popover is still dispatching when this effect runs, and capture keeps a subtree
+    // that swallows bubbling from holding the popover open.
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", onMouseDown, { capture: true });
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", onMouseDown, { capture: true });
+    };
     // refs are stable (created once per component lifetime)
   }, [enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 }

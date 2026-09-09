@@ -6,6 +6,7 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
+import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
 
@@ -162,6 +163,8 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   // Read through a ref, so the listener is armed once per open rather than torn down and
   // re-added for every keystroke, every arrow press and every result set that arrives - all of
   // which rebuild `items`. Same pattern as useSearchShortcuts.
+  const dismiss = useOverlayDismiss(onClose);
+
   const keysRef = useRef({ items, focusedIdx, activate, onClose });
   keysRef.current = { items, focusedIdx, activate, onClose };
 
@@ -199,7 +202,7 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   const isEmpty = deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
 
   return (
-    <div className="cp-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="cp-backdrop" {...dismiss}>
       <div className="cp-modal" role="dialog" aria-modal="true" aria-label="Command palette">
         <div className="cp-input-row">
           <input

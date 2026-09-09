@@ -14,6 +14,7 @@ import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import "./AlbumDetail.css";
 import "./AlbumGrid.css";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 const ROW_HEIGHT = 40;
 const SKELETON_ROWS = 14;
@@ -193,14 +194,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
     localStorage.setItem("canon-track-table-cols", JSON.stringify(cols));
   }, [cols]);
 
-  useEffect(() => {
-    if (!showColPicker) return;
-    const close = (e: MouseEvent) => {
-      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [showColPicker]);
+  useClickOutside(colPickerRef, () => setShowColPicker(false), showColPicker);
 
   // Keyed by track id, not row index: a background refresh (or a re-sort) reorders the
   // rows, and an index-keyed selection would silently come to mean different tracks.

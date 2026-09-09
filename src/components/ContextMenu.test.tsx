@@ -160,18 +160,29 @@ describe("ContextMenu", () => {
       </ContextMenu>
     );
 
+    const removeSpy = vi.spyOn(document, "removeEventListener");
+
     // Unmount inside the setTimeout(0) window. Cleanup has already run its
     // removeEventListener calls, so if clearTimeout does not cancel the pending
-    // attach, the listeners go on document after cleanup and stay there forever.
-    // Asserting on onClose cannot see this: React nulls menuRef.current on
-    // unmount, so the leaked handler's containment guard swallows the call.
+    // attach, the outside-click listener goes on document after cleanup and stays
+    // there forever. Asserting on onClose cannot see this: React nulls menuRef.current
+    // on unmount, so the leaked handler's containment guard swallows the call.
     unmount();
     vi.advanceTimersByTime(0);
 
-    const events = addSpy.mock.calls.map((c) => c[0]);
-    expect(events).not.toContain("mousedown");
-    expect(events).not.toContain("keydown");
-    expect(events).not.toContain("scroll");
+    const count = (spy: typeof addSpy, type: string) =>
+      spy.mock.calls.filter((c) => c[0] === type).length;
+
+    // The outside-click attach is the deferred one, so cancelling it means it never
+    // happens at all.
+    expect(count(addSpy, "mousedown")).toBe(0);
+    // Escape and scroll attach synchronously - no opening gesture produces either - so
+    // for those the invariant is balance rather than absence.
+    expect(count(addSpy, "keydown")).toBe(1);
+    expect(count(removeSpy, "keydown")).toBe(1);
+    expect(count(addSpy, "scroll")).toBe(1);
+    expect(count(removeSpy, "scroll")).toBe(1);
     addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 });

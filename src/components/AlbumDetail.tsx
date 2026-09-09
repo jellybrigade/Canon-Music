@@ -32,7 +32,7 @@ import { useBoolSetting, useSetting } from "../hooks/useSetting";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { getDb } from "../db";
 import { getCoverArtUrl } from "../lib/navidrome";
-import { extractAccent } from "../lib/artColor";
+import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { ArtBackdrop } from "./ArtBackdrop";
 import { syncAlbumTracks } from "../lib/sync";
 import { makeStreamUrlBuilder } from "../lib/track";
@@ -40,6 +40,7 @@ import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
 const RELATED_SHELF_LIMIT = 6;
@@ -271,14 +272,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     localStorage.setItem("canon-album-track-cols", JSON.stringify(trackCols));
   }, [trackCols]);
 
-  useEffect(() => {
-    if (!showColPicker) return;
-    const close = (e: MouseEvent) => {
-      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [showColPicker]);
+  useClickOutside(colPickerRef, () => setShowColPicker(false), showColPicker);
 
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -308,26 +302,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
     : null;
 
-  const [accentColor, setAccentColor] = useState<string | null>(album.accent_color ?? null);
-  useEffect(() => {
-    if (album.accent_color) {
-      setAccentColor(album.accent_color);
-      return;
-    }
-    // Clear immediately so a stale color from a previous album doesn't show during async extraction.
-    setAccentColor(null);
-    if (!coverArtUrl) { return; }
-    let cancelled = false;
-    void extractAccent(coverArtUrl).then(async (color) => {
-      if (cancelled) return;
-      setAccentColor(color);
-      if (color) {
-        const db = await getDb();
-        await db.execute(`UPDATE albums SET accent_color = ? WHERE id = ?`, [color, album.id]);
-      }
-    });
-    return () => { cancelled = true; };
-  }, [coverArtUrl, album.accent_color, album.id]);
+  const accentColor = useAlbumAccent(album.id, album.accent_color, coverArtUrl, server.id);
 
   function buildTrackObj(track: TrackRow): CurrentTrack {
     return {

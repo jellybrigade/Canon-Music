@@ -6,18 +6,27 @@ export const QK = {
   albumsListeningStats: () => ["albums", "listening-stats"] as const,
   /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
   albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
+  /**
+   * One album row, for the detail route. Nested under `albums` so a broad
+   * `albumsAll()` invalidation reaches it; scoped by server because the row it
+   * resolves is only unambiguous, not necessarily the selected server's.
+   */
+  albumById: (albumId: string | undefined, serverId: string | undefined) =>
+    ["albums", "by-id", albumId, serverId] as const,
   // Partial key for broad invalidation of all album queries
   albumsAll: () => ["albums"] as const,
 
   carousel: (type: string, serverId?: string) => ["carousel", type, serverId] as const,
 
   artists: () => ["artists"] as const,
+  /** One artist row, for the detail route. Nested under `artists`, scoped by server. */
+  artistByName: (artistName: string | undefined, serverId: string | undefined) =>
+    ["artists", "by-name", artistName, serverId] as const,
 
   genreDisplayMappings: () => ["genre-display-mappings"] as const,
 
   search: (serverId: string, query: string) => ["search", serverId, query] as const,
 
-  tagIssues: () => ["tag_issues"] as const,
   tagVocab: () => ["tag-vocab"] as const,
   tagMappings: () => ["tag_mappings"] as const,
   tagAlbums: (rawValue: string, kind: string) => ["tag-albums", rawValue, kind] as const,

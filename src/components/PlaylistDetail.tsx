@@ -21,6 +21,7 @@ import "./AlbumDetail.css";
 import "./AlbumGrid.css";
 import { RowListSkeleton } from "./Skeleton";
 import "./PlaylistList.css";
+import { useClickOutside } from "../hooks/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -82,14 +83,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     localStorage.setItem("canon-playlist-cols", JSON.stringify(playlistCols));
   }, [playlistCols]);
 
-  useEffect(() => {
-    if (!showColPicker) return;
-    const close = (e: MouseEvent) => {
-      if (colPickerRef.current && !colPickerRef.current.contains(e.target as Node)) setShowColPicker(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [showColPicker]);
+  useClickOutside(colPickerRef, () => setShowColPicker(false), showColPicker);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);

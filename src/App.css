@@ -304,6 +304,46 @@ html[data-app-blurred] * {
   to   { background-position: 150% 0; }
 }
 
+/* The waveform variant of the buffering track can't use that overlay: it is 28px (48px in
+   Now Playing) tall, so one full-bleed gradient box paints over the bars, the gaps between
+   them and the dead space above every short bar, and the bars keep their own colour
+   underneath. The band travels through the bars instead, each one running the same keyframe
+   offset by its position in the run, so what lights up is the waveform's actual shape.
+   Both components' bars share these rules because they are one effect with two class names. */
+.player-progress-bar--waveform.player-progress-bar--buffering::after,
+.now-playing-progress-bar--waveform.now-playing-progress-bar--buffering::after {
+  content: none;
+}
+
+/* --bar-rest rather than a literal: the transport's bars idle at --progress-track and Now
+   Playing's at --tint-5, so a hardcoded trough would recolour one of them on every cycle. */
+@keyframes bufferBarSweep {
+  0%, 100% { background-color: var(--bar-rest); }
+  50%      { background-color: var(--accent); }
+}
+
+.player-progress-bar--buffering .waveform-bar { --bar-rest: var(--progress-track); }
+.now-playing-progress-bar--buffering .now-playing-waveform-bar { --bar-rest: var(--tint-5); }
+
+.player-progress-bar--buffering .waveform-bar,
+.now-playing-progress-bar--buffering .now-playing-waveform-bar {
+  animation: bufferBarSweep 1.2s ease-in-out infinite;
+  /* Negative, so every bar is already mid-cycle on the first frame; inverted, so the lit
+     band runs left to right rather than back towards the start of the track. */
+  animation-delay: calc((1 - var(--bar-phase, 0)) * -1.2s);
+}
+
+/* The global reduce rule stops the sweep on its dark keyframe, which would leave a buffering
+   waveform indistinguishable from a playing one. Hold the whole run dimly lit instead. */
+@media (prefers-reduced-motion: reduce) {
+  .player-progress-bar--buffering .waveform-bar,
+  .now-playing-progress-bar--buffering .now-playing-waveform-bar {
+    animation: none !important;
+    background-color: var(--accent);
+    opacity: var(--opacity-40);
+  }
+}
+
 @keyframes playingPulse {
   0%, 100% { opacity: 1; }
   50%       { opacity: 0.3; }

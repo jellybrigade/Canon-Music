@@ -454,11 +454,15 @@ describe("CommandPalette mouse interaction", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("closes on a backdrop mousedown but not on a mousedown inside the modal", () => {
+  it("closes on a backdrop press and release, not on either half alone", () => {
     renderPalette();
+    const backdrop = () => document.querySelector(".cp-backdrop")!;
     fireEvent.mouseDown(document.querySelector(".cp-modal")!);
+    fireEvent.click(backdrop());
     expect(onClose).not.toHaveBeenCalled();
-    fireEvent.mouseDown(document.querySelector(".cp-backdrop")!);
+    fireEvent.mouseDown(backdrop());
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(backdrop());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
