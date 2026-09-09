@@ -18,6 +18,7 @@ Fixed unless marked OPEN.
 
 - Test-only devDependency breaks the release build.
 - `commit-msg` runs before git's own message cleanup.
+- Message-shape hook must exempt the release merge commit.
 - Green release page != complete release.
 
 ## Async / lifecycle - `known-issues/async.md`

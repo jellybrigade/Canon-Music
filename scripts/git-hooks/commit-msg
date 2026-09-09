@@ -22,6 +22,15 @@ if printf '%s\n' "$message" | grep -qiE '^(Co-Authored-By|Claude-Session|Signed-
   exit 1
 fi
 
+# Release notes are the one legitimate body: `/release` writes them on the merge commit, and
+# `main` carries nothing else. Trailers stay banned there.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  exit 0
+fi
+if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ]; then
+  exit 0
+fi
+
 non_blank_lines=$(printf '%s\n' "$message" | grep -cve '^[[:space:]]*$')
 if [ "$non_blank_lines" -gt 1 ]; then
   echo "commit-msg: commit has a body. Subject only - tighten the subject or split the commit." >&2
