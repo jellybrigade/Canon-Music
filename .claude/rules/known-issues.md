@@ -17,6 +17,7 @@ Fixed unless marked OPEN.
 ## Build / release pipeline - `known-issues/build.md`
 
 - Test-only devDependency breaks the release build.
+- `commit-msg` runs before git's own message cleanup.
 - Green release page != complete release.
 
 ## Async / lifecycle - `known-issues/async.md`

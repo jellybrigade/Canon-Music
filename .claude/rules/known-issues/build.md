@@ -21,3 +21,7 @@ Fixed unless marked OPEN.
   ```
   gh release view "v$(node -p "require('./src-tauri/tauri.conf.json').version")" --json assets --jq '.assets[].name'
   ```
+- **`commit-msg` runs before git's own message cleanup.** The editor's `# Please enter the commit message` template and `commit -v`'s scissors diff are still in the file, so the body check counted them and rejected every commit not made with `-m`. Fix: strip `core.commentChar` lines and everything from the `>8` scissors line before counting.
+  ```
+  sh -c 'd=$(mktemp -d); git -C "$d" init -q .; mkdir -p "$d/h"; cp scripts/git-hooks/commit-msg "$d/h/"; git -C "$d" config core.hooksPath h; git -C "$d" config user.email t@t; git -C "$d" config user.name t; git -C "$d" commit -q --allow-empty -m x && GIT_EDITOR="sh -c \"echo subject only > \$1\" --" git -C "$d" commit -q --allow-empty && echo hook-ok; rm -rf "$d"'
+  ```
