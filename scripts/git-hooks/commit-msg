@@ -1,0 +1,40 @@
+#!/bin/sh
+# Rejects commit bodies and attribution trailers (Co-Authored-By etc).
+# Canon commits are subject-only, no trailers of any kind. See git-standards.md.
+
+msg_file="$1"
+
+comment_char=$(git config --get core.commentChar 2>/dev/null)
+case "$comment_char" in
+  ""|auto) comment_char='#' ;;
+esac
+
+# This hook runs before git's own cleanup, so the editor template comments and
+# the `commit -v` scissors diff are still in the file and would count as a body.
+message=$(awk -v c="$comment_char" '
+  index($0, c) == 1 && index($0, ">8") { exit }
+  index($0, c) == 1 { next }
+  { print }
+' "$msg_file")
+
+if printf '%s\n' "$message" | grep -qiE '^(Co-Authored-By|Claude-Session|Signed-off-by):'; then
+  echo "commit-msg: trailer found (Co-Authored-By / Claude-Session / Signed-off-by). Not allowed - say everything in the subject." >&2
+  exit 1
+fi
+
+# Release notes are the one legitimate body: `/release` writes them on the merge commit, and
+# `main` carries nothing else. Trailers stay banned there.
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+  exit 0
+fi
+if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ]; then
+  exit 0
+fi
+
+non_blank_lines=$(printf '%s\n' "$message" | grep -cve '^[[:space:]]*$')
+if [ "$non_blank_lines" -gt 1 ]; then
+  echo "commit-msg: commit has a body. Subject only - tighten the subject or split the commit." >&2
+  exit 1
+fi
+
+exit 0

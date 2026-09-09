@@ -1,0 +1,132 @@
+---
+description: Known data/state bugs already shipped once - full detail
+globs:
+  - "src/lib/**"
+  - "src/db/**"
+  - "src/hooks/**"
+  - "src/store/**"
+  - "src/app/**"
+  - "src/components/**"
+---
+
+# Data / state
+
+Bug classes that already shipped once. Heading = lesson. Greps kept, forensics in git.
+Fixed unless marked OPEN.
+
+- **Claim stamped on start, cleared only on success = stuck after first failure.** `useLibrarySync`: bounded backoff `[30s, 2min, 5min]`. `useEnrichAlbumTracks`: clear ref in `.catch`. Every terminal path decides the flag.
+  ```
+  grep -rn "Ref.current = " src/hooks --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Per-mount claim keyed by arg breaks on arg change within mount.** `useRef(false)` in unkeyed components (e.g. `AlbumDetail`) suppressed re-runs across cached-item navigation. Fix: ref holds id (`ranRef.current === albumId`).
+  ```
+  grep -rn "useRef(false)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Parallel-array invariant enforced by one writer breaks under others.** `shuffleOrder.length === queue.length`; `normalizeShuffleOrder` repairs before splice sites.
+- **Parallel-array invariant skipped by one writer = broken by that writer.** `removeFromQueue`/`removeManyFromQueue` indexed `shuffleOrder[position]` without normalizing; short restored order removed wrong track. Fix: normalize before index.
+  ```
+  grep -rn "shuffleOrder\[.*\]!" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **"Safe copy" helper must copy every path, including no-op.** `return [...order]` always, else reference equality kills re-render.
+- **Restore path writing `currentTrack` without loading engine = unplayable.** `resume()` treats null `streamUrl` as error; server restore uses state-only `restoreQueue`.
+- **Upsert-only sync diverges from source, feeds itself.** `syncLibrary` prunes rows absent from fetch, refuses empty/partial fetch.
+- **Paging loop bounded only by server-controlled exit = unbounded.** `fetchAllAlbums` looped forever on `offset`-ignoring server. Fix: repeated first id throws, offset capped 500,000.
+  ```
+  grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Cache table inherits prune-exemption meant for user rows beside it.** `pruneAlbums` skipped `album_covers` (base64 cache) alongside genuinely-kept identity tables, stranding bytes forever. Exempt only if own content justifies it.
+  ```
+  grep -n "viaAlbums(\"\|DELETE FROM album" src/lib/sync.ts
+  ```
+- **Loop-body filter instead of SQL costs whole table per pass.** `useScrobbleFlush` selected all `scrobble_queue`, `continue`d past other-server rows forever. Fix: scope read + count on `track_id LIKE ? ESCAPE '\\'`.
+  ```
+  grep -rn "continue;" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Retry on rejected write assumes it never landed.** `useScrobble` re-queued on any rejection, double-scrobbled when only response was lost. Fix: timestamp once per play, retry re-reads row first.
+  ```
+  grep -rn "\.catch(" src/hooks --include='*.ts*' | grep -v '\.test\.' | grep -iE "retry|current = false|current = null"
+  ```
+- **Partial delete from ordered table needs renumber; membership-diff can't see holes.** Pruned tracks left `playlist_tracks.position` gaps invisible to membership checks; next removal deleted wrong track. Fix: `holedPlaylists` set feeds both gates.
+  ```
+  grep -rn "playlist_tracks" src --include='*.ts*' | grep -v '\.test\.' | grep -v "playlist_id = ?\|playlist_id IN\|INSERT"
+  ```
+- **Two failures suppressing same write need the same report.** Only listing-failure pushed `skippedStages`; per-playlist fetch failure blocked writes silently. Fix: push sits with the blocking flag.
+  ```
+  grep -n "skippedStages.push\|Blocked = true\|Incomplete = true" src/lib/sync.ts
+  ```
+- **Interval-only progress never lands on end; wrong-quantity gate never lands on start.** `onAlbumBatch` fired every 25th, nothing after loop; opening tick gated on upsert writes, missed track-only runs. Fix: one `reportProgress` gated on actual work queue.
+  ```
+  grep -rn "% BATCH_NOTIFY_INTERVAL\|% NOTIFY_INTERVAL\|Count % " src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Cache-forever value worthless if a second caller re-fetches it.** `useServerWithCredential` cached keychain forever; `syncLibrary` opened same entry itself, doubling D-Bus calls at launch. Fix: credential passed as param.
+  ```
+  grep -rn "keychain\.get\|invoke(\"get_credential\"" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **`retry: false` for permanent failures also kills self-healing ones.** Locked-but-not-yet-running secret store (autostart race) treated as permanent, stranding app since query cached forever. Fix: transient keyring failures told apart at source, 31s retry ladder, **Try again** backstop.
+  ```
+  grep -rn "retry: false" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Skip fast-path freezes columns only that path writes.** `tracks.play_count` froze while `albums.play_count` moved. New skip -> list what it solely writes.
+- **Drain loop breaking on any error blocks on first permanent failure.** `useScrobbleFlush` drops error 70, still breaks 40/41/50; `flushing` flag prevents overlap.
+- **Effect bailing on unfilled ref never runs.** Deps `[ref, key]` + early return on null `ref.current` = dead if target renders conditionally after error/skeleton. Fix: readiness as dep, or callback ref (`useMeasuredElement`).
+  ```
+  grep -rn -B1 "if (!el) return\|if (!container) return" src/components src/hooks --include='*.ts*' | grep -v '\.test\.' | grep "Ref\.current\|ref\.current"
+  ```
+- **Local-only query must not gate on network credential.** `CommandPalette` / Diagnostics count keyed `enabled` off `serverWithCredential?.server.id` despite no network use; hung on keychain failure. Gate only if `queryFn` needs the token.
+  ```
+  grep -rn "serverWithCred.*\.server\.id\|serverWithCredential?.server.id" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Repair effect invalidating its own trigger loops forever.** `AlbumDetail` marks album id attempted *before* repairing.
+- **Re-keying collection to ids means re-keying every cursor/anchor/count/gate.** `TrackTableView` kept numeric shift-anchor + raw `.size` after `Set<string>` move.
+  ```
+  grep -rn "useRef<number" src --include='*.tsx' | grep -v '\.test\.'
+  grep -rn "Ids\.size\s*[<>=]" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **"Is there a value" cache-hit test can't cache "there is none".** `useLyrics` treated null row as miss, re-ran every lookup for no-lyrics tracks forever. Fix: `"cleared"` sentinel marks completed empty lookup.
+  ```
+  grep -rn "if (cached\|if (rows\[0\]\|if (hit\|cached\.length > 0" src/hooks src/lib --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Inline `queryKey` = nothing else can invalidate it.** Album/artist detail routes' inline keys survived background `UPDATE`s stale for whole `staleTime`. Fix: shared nested `QK.*` constants.
+  ```
+  grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
+  ```
+- **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
+- **`LIMIT` without `ORDER BY` silently redefines results.** FTS ranks by weighted `bm25` in `MATERIALIZED` CTE before cap. Also: `useDeferredValue` defers rendering, not fetching.
+- **External identifier != local one on exact compare.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`.
+- **Unscoped mirror depends entirely on its delete path.** `purgeServerData` runs before `servers` row delete. **Found 4x: grep any `server_id:` literal not from the source row.**
+- **Globally-unique id lookup hides wrong-server rows.** `AlbumDetailRoute`'s `FROM albums WHERE id = ?` never wrong-row (ids unique) but could be right-row-wrong-server, painting foreign cover/stream URLs. Fix: WHERE + query key both carry `server_id`.
+  ```
+  grep -rln "serverWithCred\|ServerWithCredential" src --include='*.ts*' | grep -v '\.test\.' | xargs grep -n "FROM albums WHERE id\|FROM tracks WHERE id\|FROM artists WHERE\|FROM playlists WHERE id" | grep -v server_id
+  ```
+- **Artist name isn't an owner; name-keyed read returns every server's rows.** 8 unscoped `albums`/`tracks` artist-column reads leaked cross-server (wrong art, unplayable radio seeds). Enforced by `src/lib/server-scoping.test.ts`.
+  ```
+  python3 - <<'PY'
+  import re, glob
+  read = re.compile(r'`([^`]*\bSELECT\b[^`]*\b(?:FROM|JOIN)\s+(?:albums|tracks)\b[^`]*)`', re.S)
+  for f in sorted(glob.glob('src/**/*.ts', recursive=True) + glob.glob('src/**/*.tsx', recursive=True)):
+      if '.test.' in f: continue
+      for m in read.finditer(open(f).read()):
+          sql = m.group(1)
+          if re.search(r'\b\w*\.?artist\s*(?:=\s*\?|IN\s*\(|LIKE\s*\?)', sql) and not re.search(r'\bserver_id\s*=\s*\?', sql):
+              print(f, ' '.join(sql.split())[:90])
+  PY
+  ```
+- **Guard holding only because of data shape isn't a guard.** 5 `LIKE ?` binds no `ESCAPE`, safe only while ids are UUIDs. Fix: `escapeLike` in `src/lib/sql.ts`, enforced by `src/lib/sql-escaping.test.ts`.
+  ```
+  grep -rn "LIKE ?" src --include='*.ts*' | grep -v '\.test\.' | grep -v ESCAPE
+  ```
+- **Secret written before owning row outlives the row.** Insert rolls back keychain write; removal deletes secret first, aborts loudly. `keychain.get` rejects on missing entry - null-check callers are dead code; query wants `retry: false`.
+- **Cleanup treating "already gone" as failure = permanent mess.** Server removal aborted on keychain-delete rejection, stranding servers with already-lost secrets forever. Fix: `ignore_missing_entry` folds keyring `NoEntry` into `Ok`.
+  ```
+  grep -rn "keychain\.delete\|keychain\.get" src --include='*.ts*' | grep -v '\.test\.' | grep -v "catch"
+  ```
+- **"Just finished" test built from restore-shared state fires at startup too.** `useRadio` needs `hasPlayedRef` witness. Side-effect starts belong in handlers, not effects.
+  ```
+  grep -rn "playFromQueueIndex(\|playTrack(\|playQueue(\|\.resume()" src/hooks src/App.tsx | grep -v "\.test\."
+  ```
+- **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
+- **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
+- **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.
+  ```
+  grep -rn '"BEGIN"\|BEGIN TRANSACTION' src --include='*.ts*' | grep -v '\.test\.'
+  ```

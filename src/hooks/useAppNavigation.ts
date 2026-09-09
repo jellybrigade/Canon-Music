@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import type { PlaylistRow } from "./usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings";
+export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings" | "search";
 
 const VIEW_TO_PATH: Record<AppView, string> = {
   home: "/home",
@@ -19,16 +19,20 @@ const VIEW_TO_PATH: Record<AppView, string> = {
   tags: "/tags",
   unidentified: "/unidentified",
   settings: "/settings",
+  search: "/search",
 };
 
 /**
  * `dismissOverlays` runs on the *intent* to go somewhere, not on the pathname landing
- * somewhere new. The overlays it dismisses (search, command palette) are not URL-backed, so
+ * somewhere new. The one overlay it dismisses now (the command palette) is not URL-backed, so
  * asking for the route already open - the active sidebar item, the album whose page is
- * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves
- * them painted over the answer, which reads as the click doing nothing. Dismissing here
- * rather than at each source is what stops a navigation added later from missing it; see
- * known-issues.md, "State deciding which subtree renders, but absent from the URL".
+ * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves it
+ * painted over the answer, which reads as the click doing nothing. Dismissing here rather than
+ * at each source is what stops a navigation added later from missing it; see known-issues.md,
+ * "State deciding which subtree renders, but absent from the URL". Search used to be the other
+ * name on that list; it left the class by becoming the `/search` route below, so `goBack`,
+ * Alt+Arrow and the thumb buttons now do one thing (move the router) instead of two (also
+ * clearing search state out from under the page the router moved to).
  *
  * The dismissal is urgent, not a transition, though React Router 7 commits its own location
  * update as one. Routes are `lazy` under the same already-mounted Suspense boundary the overlay
@@ -40,11 +44,16 @@ const VIEW_TO_PATH: Record<AppView, string> = {
 export function useAppNavigation(dismissOverlays: () => void) {
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   // Read through a ref: callers pass a fresh closure per render, and the window listeners
   // below must not be torn down and re-armed for it.
   const dismissRef = useRef(dismissOverlays);
   dismissRef.current = dismissOverlays;
   const dismiss = useCallback(() => dismissRef.current(), []);
+  // Same reason, for `navigate`: react-router hands back a fresh function on every location
+  // change, so naming it in the deps below re-arms the listeners once per navigation.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
@@ -63,36 +72,69 @@ export function useAppNavigation(dismissOverlays: () => void) {
     return "library";
   })();
 
-  function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
-    if (v === "nowplaying" && isQueueOpen) toggleQueue();
-    if (select?.album) {
-      navigate(albumPath(select.album.id));
-    } else if (select?.artist) {
-      navigate(artistPath(select.artist.name));
-    } else {
-      navigate(VIEW_TO_PATH[v]);
-    }
+  // Asking for the page already showing must not push a second copy of its entry: Back from
+  // there returns to the same page, which reads as Back doing nothing. Worst on /search, where
+  // `leaveSearch` is `navigate(-1)` - the sidebar item stranded the user in search. Compared on
+  // pathname alone, so the sidebar Search item keeps the query already in the box. `dismiss`
+  // runs either way: the click meant something even when the router stays put.
+  function goTo(to: string) {
+    if (to !== pathname) navigate(to);
     dismiss();
   }
 
+  function navigateTo(v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) {
+    if (v === "nowplaying" && isQueueOpen) toggleQueue();
+    if (select?.album) {
+      goTo(albumPath(select.album.id));
+    } else if (select?.artist) {
+      goTo(artistPath(select.artist.name));
+    } else {
+      goTo(VIEW_TO_PATH[v]);
+    }
+  }
+
   function openAlbum(album: AlbumRow) {
-    navigate(albumPath(album.id));
-    dismiss();
+    goTo(albumPath(album.id));
   }
 
   function openArtist(artist: ArtistRow | string) {
     const name = typeof artist === "string" ? artist : artist.name;
-    navigate(artistPath(name));
-    dismiss();
+    goTo(artistPath(name));
   }
 
   function openPlaylist(playlist: PlaylistRow) {
-    navigate(playlistPath(playlist.id));
-    dismiss();
+    goTo(playlistPath(playlist.id));
   }
 
   function goBack() {
     navigate(-1);
+    dismiss();
+  }
+
+  // Whether the first history entry - the one with nothing behind it - is the entry showing.
+  // `"default"` is react-router's key for it, but a `replace` mints a fresh key and /search
+  // writes its own `?q` with `replace`, so one keystroke erased the marker. Followed instead:
+  // a push leaves that entry, a replace stays on it (carry the key over), and a pop is back on
+  // it exactly when the key matches the one it was last seen under.
+  const firstEntryKey = useRef("default");
+  const onFirstEntry = useRef(location.key === "default");
+  useEffect(() => {
+    if (navigationType === "PUSH") onFirstEntry.current = false;
+    else if (navigationType === "REPLACE") {
+      if (onFirstEntry.current) firstEntryKey.current = location.key;
+    } else onFirstEntry.current = location.key === firstEntryKey.current;
+  }, [location.key, navigationType]);
+
+  // `navigate(-1)` over a remembered pathname on purpose: it is symmetric with the push that
+  // opened search, so it restores the history index and scroll position, where a remembered
+  // pathname would push a *new* entry - Back from there would return to /search, an
+  // inescapable ping-pong - and is exactly the non-URL navigation state this hook exists to
+  // avoid. Nothing to go back to on the first entry, which catches /search as a cold mount,
+  // reachable via the web-process-terminated -> reload() recovery in lib.rs. `replace`
+  // there so the dead-end /search is not left behind for Forward.
+  function leaveSearch() {
+    if (onFirstEntry.current) navigate("/home", { replace: true });
+    else navigate(-1);
     dismiss();
   }
 
@@ -112,13 +154,13 @@ export function useAppNavigation(dismissOverlays: () => void) {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
-      navigate(e.key === "ArrowLeft" ? -1 : 1);
+      navigateRef.current(e.key === "ArrowLeft" ? -1 : 1);
       dismiss();
     }
     function onMouseUp(e: MouseEvent) {
       if (e.button !== 3 && e.button !== 4) return;
       e.preventDefault();
-      navigate(e.button === 3 ? -1 : 1);
+      navigateRef.current(e.button === 3 ? -1 : 1);
       dismiss();
     }
     window.addEventListener("keydown", onKeyDown);
@@ -127,7 +169,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [navigate, dismiss]);
+  }, [dismiss]);
 
   return {
     view,
@@ -140,5 +182,6 @@ export function useAppNavigation(dismissOverlays: () => void) {
     openArtist,
     openPlaylist,
     goBack,
+    leaveSearch,
   };
 }

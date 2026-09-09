@@ -1,3 +1,12 @@
+---
+description: Typography scale, readability and accessibility rules for components and styles
+globs:
+  - "src/components/**"
+  - "src/styles/**"
+  - "src/app/**"
+  - "src/**/*.css"
+---
+
 Typography carries most of the information on a page.
 
 Canon is **product register**: one well-tuned familiar sans carries the whole UI (headings, labels, buttons, data). Fixed `rem` scale, 1.125-1.2 ratio, closer-spaced steps. No fluid `clamp()` (kills the spatial predictability dense layouts need), no display/body pairing, no second family. System stacks (`-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui`) are legitimate here.

@@ -4,13 +4,13 @@ import { renderHook } from "@testing-library/react";
 import { useDismissOnNavigate } from "./useDismissOnNavigate";
 
 describe("useDismissOnNavigate", () => {
-  it("leaves the search overlay alone on the first render", () => {
+  it("leaves the command palette alone on the first render", () => {
     const clear = vi.fn();
     renderHook(() => useDismissOnNavigate("/home", clear));
     expect(clear).not.toHaveBeenCalled();
   });
 
-  it("clears the search overlay when the route changes under it", () => {
+  it("clears the command palette when the route changes under it", () => {
     const clear = vi.fn();
     const { rerender } = renderHook(({ path }) => useDismissOnNavigate(path, clear), {
       initialProps: { path: "/home" },
@@ -27,6 +27,22 @@ describe("useDismissOnNavigate", () => {
     rerender({ path: "/album/abc" });
     rerender({ path: "/album/abc" });
     expect(clear).toHaveBeenCalledTimes(1);
+  });
+
+  // Load-bearing now that /search is a route: the hook is keyed on the caller's `pathname`
+  // argument, never the whole location, precisely so a `?q` change while staying on /search
+  // cannot fire this and close the command palette on every keystroke. Passing the same
+  // pathname string on every rerender, as App.tsx does regardless of the search params, is
+  // this case; if a later "improvement" swapped the argument for `location.pathname + search`
+  // this would go red.
+  it("does not clear when only the query string would have changed, pathname held fixed", () => {
+    const clear = vi.fn();
+    const { rerender } = renderHook(({ path }) => useDismissOnNavigate(path, clear), {
+      initialProps: { path: "/search" },
+    });
+    rerender({ path: "/search" });
+    rerender({ path: "/search" });
+    expect(clear).not.toHaveBeenCalled();
   });
 
   it("clears again on each further navigation", () => {

@@ -207,6 +207,25 @@
   background: var(--bg-hover);
 }
 
+.search-back-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  transition: color var(--motion-fast);
+}
+
+.search-back-btn:hover {
+  color: var(--text-primary);
+}
+
 .search-trigger-btn {
   display: flex;
   align-items: center;
@@ -270,6 +289,7 @@
 }
 
 .search-bar-clear {
+  position: relative;
   background: none;
   border: none;
   box-shadow: none;
@@ -280,6 +300,15 @@
   align-items: center;
   flex-shrink: 0;
   transition: color var(--duration-moderate);
+}
+
+/* Grown away from the input only, and no further right than the bar's own padding: a halo on
+   the left reached across the 4px gap into the text field, so clicking the tail of the query to
+   place a caret wiped it instead. */
+.search-bar-clear::before {
+  content: '';
+  position: absolute;
+  inset: -10px -8px -10px 0;
 }
 
 .search-bar-clear:hover {

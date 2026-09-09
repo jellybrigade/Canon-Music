@@ -25,8 +25,10 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("./AppRoutes", () => ({
-  AppRoutes: () => <div data-testid="route-content" />,
+// The real search UI moved from AppShell's own overlay branch to a route (`/search`) that
+// AppRoutes owns, so the stub has to keep rendering the real SearchView on that one path.
+vi.mock("./AppRoutes", async () => ({
+  AppRoutes: (await import("../test/appRoutesStub")).AppRoutesSearchStub,
 }));
 vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
@@ -145,10 +147,11 @@ describe("App keyboard shortcuts", () => {
     expect(paletteInput()).toBeNull();
   });
 
-  it("still clears the search bar on Escape while the search input has focus", async () => {
+  it("still leaves search on Escape while the search input has focus", async () => {
     // The other half of the guard: Ctrl+F deliberately focuses the search input, and Escape
-    // to dismiss it is pressed from inside that very input. A blanket "bail on any input"
-    // guard would strand the overlay open.
+    // to leave is pressed from inside that very input. A blanket "bail on any input" guard
+    // would strand the user on /search. Escape now navigates back rather than blanking the
+    // field in place, so the input is gone, not empty.
     await mountApp();
     await act(async () => { press("f", { ctrlKey: true }); });
     await waitFor(() => expect(searchInput()).not.toBeNull());
@@ -158,10 +161,11 @@ describe("App keyboard shortcuts", () => {
 
     await act(async () => { press("Escape", { target: input }); });
 
-    expect(searchInput()?.value ?? "").toBe("");
+    await waitFor(() => expect(searchInput()).toBeNull());
+    expect(screen.getByTestId("route-content")).toBeTruthy();
   });
 
-  it("does not clear the search bar on Escape pressed from an unrelated text input", async () => {
+  it("does not leave search on Escape pressed from an unrelated text input", async () => {
     // Escape inside another field (a rename box, a modal form) belongs to that field.
     await mountApp();
     await act(async () => { press("f", { ctrlKey: true }); });
@@ -204,9 +208,12 @@ describe("App keyboard shortcuts", () => {
     expect(usePlayerStore.getState().volume).toBe(before);
   });
 
-  it("registers exactly one window keydown listener for the shortcuts and drops it on unmount", async () => {
-    // The effect used to list `[searchRaw, searchOpen, clearSearch]`, so every keystroke in
-    // the search box tore the listener down and re-registered it.
+  it("keeps its window keydown listener count across a navigation and N keystrokes", async () => {
+    // Two listeners, armed once each: `useSearchShortcuts` and `useAppNavigation`'s Alt+Arrow.
+    // `useSearchShortcuts`' effect used to list `[searchRaw, searchOpen, clearSearch]`, so
+    // every keystroke in the search box tore it down and re-registered it. `useAppNavigation`
+    // listed `navigate`, which react-router replaces on every location change - harmless while
+    // search was an overlay, one extra arm per navigation now that Ctrl+F is one.
     const added: string[] = [];
     const removed: string[] = [];
     const realAdd = window.addEventListener.bind(window);

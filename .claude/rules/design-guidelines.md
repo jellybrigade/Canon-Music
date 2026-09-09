@@ -1,3 +1,12 @@
+---
+description: Design guidelines for components and styles - production-grade UI, tokens, color, motion, bans
+globs:
+  - "src/components/**"
+  - "src/styles/**"
+  - "src/app/**"
+  - "src/**/*.css"
+---
+
 # Design Guidelines
 
 Applies to `src/components/**`, `src/styles/**`. Ship production-grade: no unfinished states, no "good enough" spacing or contrast.

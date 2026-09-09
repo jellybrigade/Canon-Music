@@ -13,6 +13,7 @@ export const ROUTES = {
   TAGS: "/tags",
   UNIDENTIFIED: "/unidentified",
   SETTINGS: "/settings",
+  SEARCH: "/search",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
