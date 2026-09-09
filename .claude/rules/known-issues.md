@@ -33,6 +33,7 @@ Fixed unless marked OPEN.
 - "Stream ended" vs "stream stopped" = different signals.
 - Un-abortable promise: cleanup can't reach handlers it didn't create yet.
 - Resource acquired via await must escape its own cleanup.
+- Router-owned callback in a deps array re-arms the listener it is named in.
 - Guard keyed on one error type != the broad condition.
 
 ## Test / harness - `known-issues/testing.md`

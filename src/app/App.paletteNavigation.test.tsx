@@ -6,10 +6,12 @@
 // The palette's open state (`commandPaletteOpen`, `App.tsx`) is not URL-backed and the palette
 // paints over whatever the router renders, so it is the same "second invisible router" shape
 // `known-issues.md` records under "State deciding which subtree renders, but absent from the
-// URL, must be dismissed by navigation itself" - except the search overlay got a mechanism
-// (`useDismissOnNavigate`) and the palette never did. Its only dismissals were the five
-// hand-written `setCommandPaletteOpen(false)` calls in `AppShell`, one per handler the palette
-// itself owns, which is exactly the hand-kept list that entry warns about.
+// URL, must be dismissed by navigation itself". Search used to sit beside it on that list and
+// got a mechanism (`useDismissOnNavigate`); the palette never did, and search has since left
+// the class altogether by becoming a route, so the palette is the last name on it. Its only
+// dismissals were the five hand-written `setCommandPaletteOpen(false)` calls in `AppShell`, one
+// per handler the palette itself owns, which is exactly the hand-kept list that entry warns
+// about.
 //
 // Alt+Arrow and the mouse thumb buttons are `window`-level (`useAppNavigation`), so they reach
 // the app straight through the palette's full-viewport backdrop. That is what makes this a live
@@ -19,8 +21,8 @@
 // cannot reach them.
 //
 // Same boundary mocks as `App.overlayStacking.test.tsx`, for the same reasons: `AppRoutes` and
-// `PlayerBar` are stubs (large subtrees this file never asserts on), while `AppShell`, its
-// search bar and `CommandPalette` are real, because they are the pairing under test.
+// `PlayerBar` are stubs (large subtrees this file never asserts on), while `AppShell`,
+// `SearchView` and `CommandPalette` are real, because they are the pairing under test.
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
@@ -35,8 +37,8 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("./AppRoutes", () => ({
-  AppRoutes: () => <div data-testid="route-content" />,
+vi.mock("./AppRoutes", async () => ({
+  AppRoutes: (await import("../test/appRoutesStub")).AppRoutesSearchStub,
 }));
 vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
@@ -164,9 +166,11 @@ describe("command palette dismissed by navigation it did not originate", () => {
     });
   }
 
-  it("navigating with both overlays up dismisses the palette and the search overlay together", async () => {
-    // The search overlay renders *instead of* the router and the palette paints *over* it, so
-    // a single navigation has to take both down or the user still sees no route.
+  it("takes one Alt+ArrowLeft to leave search with the palette on top of it", async () => {
+    // The whole point of making search a route. Opening it pushes one entry, so Back lands on
+    // the page the user opened search *from* (/artists), not on whatever was behind that
+    // (/library) - which is what a single press used to cost while search was an overlay the
+    // router could not see. The palette is stacked on to prove one press still collapses both.
     await mountApp(["/library", "/artists"], 1);
     await act(async () => { press("f", { ctrlKey: true }); });
     await waitFor(() => expect(searchInput()).not.toBeNull());
@@ -176,9 +180,9 @@ describe("command palette dismissed by navigation it did not originate", () => {
 
     await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }); });
 
-    await waitFor(() => expect(pathname()).toBe("/library"));
+    await waitFor(() => expect(pathname()).toBe("/artists"));
     await expectPaletteClosed();
-    await waitFor(() => expect(searchInput()).toBeNull());
+    expect(searchInput()).toBeNull();
     expect(screen.getByTestId("route-content")).not.toBeNull();
   });
 

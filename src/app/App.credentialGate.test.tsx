@@ -221,6 +221,7 @@ const LIBRARY_ROUTES = [
   { name: "playlists", path: "/playlists" },
   { name: "tracks", path: "/tracks" },
   { name: "unidentified", path: "/unidentified" },
+  { name: "search", path: "/search?q=abba" },
 ] as const;
 
 const NO_SERVER_COPY = /no server connected/i;

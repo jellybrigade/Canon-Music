@@ -35,9 +35,9 @@ Fixed unless marked OPEN.
   ```
   grep -rn "Number(.*)\s*||\|parseInt(.*)\s*||\|parseFloat(.*)\s*||" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **Non-URL render state must be dismissed by navigation intent, not pathname change.** Overlays-as-state stayed painted when target route == current pathname. Fix: `useAppNavigation` runs `dismissOverlays` top of every nav call via ref.
+- **Non-URL render state must be dismissed by navigation intent, not pathname change.** Overlays-as-state stayed painted when target route == current pathname. Fix: `useAppNavigation` runs `dismissOverlays` top of every nav call via ref. **Now the command palette alone.** Search was the other name on this list and left the class outright (2026-09-09): it is the `/search` route, so Back leaves it by doing nothing special and `goBack` does one thing instead of two. The lesson for the next candidate is that leaving beats a third dismissal mechanism. One exemption: `SearchView`'s `?q` write is a `replace` that never changes the pathname, so it can strand nothing - and it takes `leaveSearch` from props rather than calling `useNavigate` itself.
   ```
-  grep -rn "useNavigate()" src --include='*.ts*' | grep -v '\.test\.' | grep -v useAppNavigation
+  grep -rn "useNavigate()\|useSearchParams()" src --include='*.ts*' | grep -v '\.test\.' | grep -v useAppNavigation
   ```
 - **Dismissal at same priority as its navigation can't land first.** `dismissOverlays` in `startTransition` shared Suspense boundary with route's lazy import - overlay stayed painted during chunk download. Fix: keep dismissal urgent.
   ```

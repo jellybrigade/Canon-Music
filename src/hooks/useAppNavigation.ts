@@ -5,7 +5,7 @@ import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import type { PlaylistRow } from "./usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings";
+export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings" | "search";
 
 const VIEW_TO_PATH: Record<AppView, string> = {
   home: "/home",
@@ -19,16 +19,20 @@ const VIEW_TO_PATH: Record<AppView, string> = {
   tags: "/tags",
   unidentified: "/unidentified",
   settings: "/settings",
+  search: "/search",
 };
 
 /**
  * `dismissOverlays` runs on the *intent* to go somewhere, not on the pathname landing
- * somewhere new. The overlays it dismisses (search, command palette) are not URL-backed, so
+ * somewhere new. The one overlay it dismisses now (the command palette) is not URL-backed, so
  * asking for the route already open - the active sidebar item, the album whose page is
- * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves
- * them painted over the answer, which reads as the click doing nothing. Dismissing here
- * rather than at each source is what stops a navigation added later from missing it; see
- * known-issues.md, "State deciding which subtree renders, but absent from the URL".
+ * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves it
+ * painted over the answer, which reads as the click doing nothing. Dismissing here rather than
+ * at each source is what stops a navigation added later from missing it; see known-issues.md,
+ * "State deciding which subtree renders, but absent from the URL". Search used to be the other
+ * name on that list; it left the class by becoming the `/search` route below, so `goBack`,
+ * Alt+Arrow and the thumb buttons now do one thing (move the router) instead of two (also
+ * clearing search state out from under the page the router moved to).
  *
  * The dismissal is urgent, not a transition, though React Router 7 commits its own location
  * update as one. Routes are `lazy` under the same already-mounted Suspense boundary the overlay
@@ -45,6 +49,10 @@ export function useAppNavigation(dismissOverlays: () => void) {
   const dismissRef = useRef(dismissOverlays);
   dismissRef.current = dismissOverlays;
   const dismiss = useCallback(() => dismissRef.current(), []);
+  // Same reason, for `navigate`: react-router hands back a fresh function on every location
+  // change, so naming it in the deps below re-arms the listeners once per navigation.
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const isQueueOpen = usePlayerStore((s) => s.isQueueOpen);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
 
@@ -96,6 +104,20 @@ export function useAppNavigation(dismissOverlays: () => void) {
     dismiss();
   }
 
+  // `navigate(-1)` over a remembered pathname on purpose: it is symmetric with the push that
+  // opened search, so it restores the history index and scroll position, where a remembered
+  // pathname would push a *new* entry - Back from there would return to /search, an
+  // inescapable ping-pong - and is exactly the non-URL navigation state this hook exists to
+  // avoid. `location.key === "default"` is react-router's marker for the entry the router
+  // mounted on, never set on a pushed entry; it catches /search as the very first entry,
+  // reachable via the web-process-terminated -> reload() recovery in lib.rs. `replace` there so
+  // the dead-end /search is not left behind for Forward.
+  function leaveSearch() {
+    if (location.key === "default") navigate("/home", { replace: true });
+    else navigate(-1);
+    dismiss();
+  }
+
   // Back and forward for the whole app. The only other way to go back is the
   // per-detail-page back button, and there was no way to go forward at all.
   // Alt+Arrow is the desktop convention and is free here: useGlobalShortcuts
@@ -112,13 +134,13 @@ export function useAppNavigation(dismissOverlays: () => void) {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
       e.preventDefault();
-      navigate(e.key === "ArrowLeft" ? -1 : 1);
+      navigateRef.current(e.key === "ArrowLeft" ? -1 : 1);
       dismiss();
     }
     function onMouseUp(e: MouseEvent) {
       if (e.button !== 3 && e.button !== 4) return;
       e.preventDefault();
-      navigate(e.button === 3 ? -1 : 1);
+      navigateRef.current(e.button === 3 ? -1 : 1);
       dismiss();
     }
     window.addEventListener("keydown", onKeyDown);
@@ -127,7 +149,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [navigate, dismiss]);
+  }, [dismiss]);
 
   return {
     view,
@@ -140,5 +162,6 @@ export function useAppNavigation(dismissOverlays: () => void) {
     openArtist,
     openPlaylist,
     goBack,
+    leaveSearch,
   };
 }

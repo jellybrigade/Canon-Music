@@ -1,5 +1,5 @@
 import { Suspense, lazy, type CSSProperties } from "react";
-import { Search, X, ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
 import { PlayerBar } from "../components/PlayerBar";
 import { ScrobbleTracker } from "../hooks/useScrobble";
 import { UpdatePrompt } from "../components/UpdatePrompt";
@@ -7,22 +7,12 @@ import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { FeedbackModal } from "../components/FeedbackModal";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
-const SearchResults = lazy(() => import("../components/SearchResults").then((m) => ({ default: m.SearchResults })));
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
 
 export function AppShell(props: AppViewProps) {
   const {
     server,
     serverWithCred,
-    playlists,
-    searchResults,
-    searchError,
-    searchOpen,
-    searchQuery,
-    searchRaw,
-    searchInputRef,
-    handleSearchChange,
-    clearSearch,
     view,
     navItems,
     navigateTo,
@@ -30,11 +20,7 @@ export function AppShell(props: AppViewProps) {
     openArtist,
     openAlbumById,
     handlePlayTrack,
-    handleStartRadioFromAlbum,
-    handleStartRadioFromArtist,
-    addAlbumToPlaylist,
     setCanonicalIdFilters,
-    queueClass,
     currentTrack,
     metaBarVisible,
     sidebarExpanded,
@@ -55,61 +41,7 @@ export function AppShell(props: AppViewProps) {
     setLastSeenNoticeId,
   } = props;
 
-  function renderSearchBar() {
-    return (
-      <div className="search-bar">
-        <Search size={15} className="search-bar-icon" />
-        <input
-          ref={searchInputRef}
-          type="text"
-          className="search-bar-input"
-          placeholder="Search…"
-          value={searchRaw}
-          onChange={(e) => handleSearchChange(e.target.value)}
-        />
-        {searchRaw && (
-          <button className="search-bar-clear" onClick={clearSearch} title="Clear search">
-            <X size={14} />
-          </button>
-        )}
-      </div>
-    );
-  }
-
   function renderContent() {
-    if (searchOpen || searchQuery) {
-      return (
-        <main className={`library${queueClass}`}>
-          <header className="library-header">
-            <h1>Search</h1>
-            <span className="server-name">{server?.display_name}</span>
-            {renderSearchBar()}
-            <button className="search-bar-clear" onClick={clearSearch} title="Close search" style={{ marginLeft: "auto" }}>
-              <X size={15} />
-            </button>
-          </header>
-          {searchQuery && searchError ? (
-            <p className="empty-state">Search failed. The library database could not be read.</p>
-          ) : serverWithCred && searchResults && searchQuery ? (
-            <SearchResults
-              albums={searchResults.albums}
-              tracks={searchResults.tracks}
-              artists={searchResults.artists}
-              serverWithCredential={serverWithCred}
-              playlists={playlists}
-              onSelectAlbum={openAlbum}
-              onSelectArtist={(artist) => openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null })}
-              onPlayTrack={(id) => { void handlePlayTrack(id); }}
-              onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
-              onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-              onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
-            />
-          ) : (
-            <p className="empty-state">{searchQuery ? "Searching…" : "Start typing to search"}</p>
-          )}
-        </main>
-      );
-    }
     return <AppRoutes {...props} />;
   }
 

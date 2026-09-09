@@ -33,6 +33,10 @@ Fixed unless marked OPEN.
   grep -rn "^\s*\.then(\|^\s*\.finally(" src/hooks --include='*.ts*' | grep -v '\.test\.'
   ```
 - **Resource acquired via await must escape its own cleanup.** `useWakeLock`: `cancelled` flag, resolved sentinel self-releases. Test `!released`, not non-null.
+- **Router-owned callback in a deps array re-arms the listener it is named in.** react-router replaces `navigate` on every location change, so `useAppNavigation`'s Alt+Arrow/thumb-button effect listed `[navigate, dismiss]` and armed one extra window listener per navigation - invisible while search was an overlay, one per keypress once Ctrl+F became a route. Fix: `navigateRef`, deps `[dismiss]`. Same shape as the `dismissOverlays` ref beside it. Each hit below: fine for a handler, a defect if it arms a listener, timer or subscription.
+  ```
+  grep -rnE "^\s*\}, \[[^]]*(navigate|setSearchParams|searchParams|location)[^]]*\]\)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Guard keyed on one error type != the broad condition.** `apiPost` retried non-idempotent writes on unnamed errors; now `if (!retriable) break`. Unrecognised = unsafe.
   ```
   grep -rn "instanceof DOMException\|AbortError\|instanceof TypeError\|err\.name ===" src --include='*.ts*' | grep -v '\.test\.'

@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, ListMusic, Headphones, House, Layers, Calendar, LayoutList, CircleHelp } from "lucide-react";
+import { Music, Users, Tag, Settings, ListMusic, Headphones, House, Layers, Calendar, LayoutList, CircleHelp, Search } from "lucide-react";
 const Wizard = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
 import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
@@ -9,7 +9,6 @@ import { useArtists } from "./hooks/useArtists";
 import { useAllTracks } from "./hooks/useAllTracks";
 import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
-import { useSearch } from "./hooks/useSearch";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
 import { usePlaylists } from "./hooks/usePlaylists";
 import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
@@ -20,6 +19,7 @@ import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
 import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useSearchShortcuts } from "./hooks/useSearchShortcuts";
+import { ROUTES } from "./lib/routes";
 import { useAnyModalOpen } from "./hooks/useModalChrome";
 import { useQueueSync } from "./hooks/useQueueSync";
 import { useWakeLock } from "./hooks/useWakeLock";
@@ -82,37 +82,18 @@ export default function App() {
   const setYearFromInput = useLibraryFiltersStore((s) => s.setYearFromInput);
   const setYearToInput = useLibraryFiltersStore((s) => s.setYearToInput);
 
-  const [searchRaw, setSearchRaw] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  const clearSearch = useCallback(() => {
-    // Cancel the pending debounce first. Without this, clearing within 200ms of
-    // the last keystroke lets the timer fire afterwards and set searchQuery back,
-    // which re-opens the search view for a query the now-empty input doesn't show.
-    if (searchDebounceRef.current) {
-      clearTimeout(searchDebounceRef.current);
-      searchDebounceRef.current = null;
-    }
-    setSearchRaw("");
-    setSearchQuery("");
-    setSearchOpen(false);
-    searchInputRef.current?.blur();
-  }, []);
-
-  // Neither overlay is URL-backed: the search overlay renders instead of the router's
-  // content, the command palette paints over it. So anything that navigates while one is up
-  // lands behind it and the click looks inert. Both are dismissed inside useAppNavigation,
-  // at the one place every navigation the app offers is expressed, rather than at each
-  // source - the palette used to rely on the five setCommandPaletteOpen calls in its own
-  // handlers, which by construction could not cover navigation that started anywhere else.
+  // The command palette is the one remaining overlay that is not URL-backed - it paints over
+  // whatever route is showing. So anything that navigates while it is up lands behind it and
+  // the click looks inert. It is dismissed inside useAppNavigation, at the one place every
+  // navigation the app offers is expressed, rather than at each source - the palette used to
+  // rely on the five setCommandPaletteOpen calls in its own handlers, which by construction
+  // could not cover navigation that started anywhere else.
   const dismissOverlays = useCallback(() => {
-    clearSearch();
     setCommandPaletteOpen(false);
-  }, [clearSearch]);
+  }, []);
 
   const {
     view,
@@ -122,6 +103,7 @@ export default function App() {
     openArtist,
     openPlaylist,
     goBack,
+    leaveSearch,
   } = useAppNavigation(dismissOverlays);
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
@@ -207,8 +189,6 @@ export default function App() {
 
   const [filterSidebarOpen, setFilterSidebarOpen] = useBoolSetting("filter_sidebar_open", true);
 
-  const { data: searchResults, isError: searchError } = useSearch(searchQuery, server?.id);
-
   const [homeSearchRaw, setHomeSearchRaw] = useState("");
   const [homeSearchQuery, setHomeSearchQuery] = useState("");
   useEffect(() => {
@@ -253,33 +233,24 @@ export default function App() {
     return () => clearInterval(id);
   }, [autoCheckUpdates, autoCheckIntervalMin]);
 
-  const handleSearchChange = useCallback((value: string) => {
-    setSearchRaw(value);
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = setTimeout(() => setSearchQuery(value), 200);
-  }, []);
-
   // Covers the one navigation that never passes through useAppNavigation, and so cannot be
   // dismissed on intent: a route sending the user elsewhere itself, as AppRoutes does after
-  // deleting a playlist.
+  // deleting a playlist. Keyed on pathname alone, not the whole location - a `?q` change while
+  // staying on /search must not close the command palette on every keystroke.
   useDismissOnNavigate(pathname, dismissOverlays);
-
-  useEffect(() => () => {
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-  }, []);
 
   useSearchShortcuts({
     searchInputRef,
-    searchActive: !!searchRaw || searchOpen,
+    searchActive: pathname === ROUTES.SEARCH,
     commandPaletteOpen,
-    // The two named overlays plus anything registered through `useModalChrome`. The named
-    // pair cannot be extended to cover a modal opened inside the search overlay itself
-    // (`SearchResults`' identify dialog) - that state never reaches this component - so the
-    // registry answers "is something painted over me" for every modal at once.
+    // The named overlay plus anything registered through `useModalChrome`. Cannot be extended
+    // to cover a modal opened inside /search itself (`SearchResults`' identify dialog) - that
+    // state never reaches this component - so the registry answers "is something painted over
+    // me" for every modal at once.
     overlayAbove,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
-    openSearch: useCallback(() => setSearchOpen(true), []),
-    clearSearch,
+    openSearch: useCallback(() => navigateTo("search"), [navigateTo]),
+    leaveSearch,
   });
 
   useEffect(() => { void loadSettings(); }, [loadSettings]);
@@ -537,6 +508,7 @@ export default function App() {
 
   const navItems: NavItem[] = [
     { id: "home", label: "Home", icon: <House size={24} /> },
+    { id: "search", label: "Search", icon: <Search size={24} /> },
     { id: "nowplaying", label: "Now Playing", icon: <Headphones size={24} /> },
     { id: "library", label: "Library", icon: <Music size={24} /> },
     { id: "artists", label: "Artists", icon: <Users size={24} /> },
@@ -595,8 +567,6 @@ export default function App() {
     allTracksError,
     genres,
     playlists,
-    searchResults,
-    searchError,
     canonicalIdFilters,
     lovedOnly,
     yearFromInput,
@@ -621,13 +591,7 @@ export default function App() {
     credError: credError ?? null,
     credPending,
     retryCredential: () => { void refetchCredential(); },
-    searchOpen,
-    setSearchOpen,
-    searchRaw,
-    searchQuery,
     searchInputRef,
-    handleSearchChange,
-    clearSearch,
     homeSearchRaw,
     homeSearchQuery,
     setHomeSearchRaw,
@@ -638,6 +602,7 @@ export default function App() {
     openPlaylist,
     openAlbumById,
     goBack,
+    leaveSearch,
     handlePlayTrack,
     handleStartRadioFromAlbum,
     handleStartRadioFromArtist,

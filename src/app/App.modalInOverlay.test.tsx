@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 //
-// Acceptance-level: a portal modal opened from *inside* the search overlay.
+// Acceptance-level: a portal modal opened from *inside* the `/search` route.
 //
-// The search overlay renders instead of `<AppRoutes>` (`AppShell.renderContent`) and is not
-// URL-backed, so everything it contains dies with it. `SearchResults` opens
+// Everything the route renders dies when Escape navigates away from it. `SearchResults` opens
 // `AlbumIdentifyDialog` from its album context menu, and that dialog is mounted inside the
-// overlay's subtree - but it registers no Escape handler of its own, so Escape reaches
+// route's subtree - but it registers no Escape handler of its own, so Escape reaches
 // `useSearchShortcuts`' app-lifetime window listener, which knows only about the two overlays
 // `App.tsx` names in `overlayAbove` (the command palette and the feedback modal). A dialog
-// three levels down is not in that list, so one press clears the search and takes the
-// half-filled dialog with it.
+// three levels down is not in that list, so one press left search and took the half-filled
+// dialog with it.
 //
 // This is the same class as known-issues' "An overlay's own Escape handler answers 'am I open',
 // never 'am I on top'", but the previous fix enumerated the two stacking overlays by hand in
@@ -38,8 +37,8 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("./AppRoutes", () => ({
-  AppRoutes: () => <div data-testid="route-content" />,
+vi.mock("./AppRoutes", async () => ({
+  AppRoutes: (await import("../test/appRoutesStub")).AppRoutesSearchStub,
 }));
 vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
@@ -105,11 +104,11 @@ function press(key: string, opts: { ctrlKey?: boolean; target?: Element } = {}) 
 
 const searchInput = () => document.querySelector(".search-bar-input") as HTMLInputElement | null;
 const identifyDialog = () => document.querySelector(".identify-dialog") as HTMLElement | null;
-/** The search overlay renders instead of the router, so the route stub is its absence. */
+/** The stub renders `SearchView` on `/search`, so the placeholder's absence is "still on it". */
 const routeContent = () => screen.queryByTestId("route-content");
-const searchOverlay = () => document.querySelector(".search-results") as HTMLElement | null;
+const searchResults = () => document.querySelector(".search-results") as HTMLElement | null;
 
-/** Open the search overlay with a query that hits, and wait for the album card to render. */
+/** Go to `/search` with a query that hits, and wait for the album card to render. */
 async function openSearchWithResults(query = "abba") {
   await mountApp();
   await act(async () => { press("f", { ctrlKey: true }); });
@@ -119,7 +118,7 @@ async function openSearchWithResults(query = "abba") {
 }
 
 /**
- * `handleSearchChange` debounces 200ms before `searchQuery` moves, and the FTS round trip
+ * `SearchView` debounces 200ms before the `?q` param moves, and the FTS round trip
  * through the real migrated DB lands after that. The wait has to be inside `act` rather than
  * left to `waitFor`: the round trip resolves off React's watch, and only an act-scoped flush
  * commits the result. Polled rather than slept through, so a case costs what the debounce and
@@ -176,8 +175,8 @@ afterEach(() => {
 
 // The real migrated DB plus the 200ms search debounce puts every case here over
 // vitest's 5s default, so the whole suite gets a wider timeout.
-describe("a modal opened inside the search overlay", { timeout: 20000 }, () => {
-  it("closes only itself on Escape, leaving the search overlay and its query standing", async () => {
+describe("a modal opened inside the search route", { timeout: 20000 }, () => {
+  it("closes only itself on Escape, leaving the search route and its query standing", async () => {
     await openIdentifyDialogFromSearch();
     // Focus is on `body`: `ContextMenu` unmounted the item that was clicked, so nothing in the
     // dialog holds focus (neither `IdentifyDialog` variant autofocuses anything). This is the
@@ -186,7 +185,7 @@ describe("a modal opened inside the search overlay", { timeout: 20000 }, () => {
     await act(async () => { press("Escape", { target: document.body }); });
 
     expect(identifyDialog()).toBeNull();
-    expect(searchOverlay()).not.toBeNull();
+    expect(searchResults()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
     expect(routeContent()).toBeNull();
   });
@@ -199,31 +198,31 @@ describe("a modal opened inside the search overlay", { timeout: 20000 }, () => {
 
     // These are form fields with no Escape semantics of their own, unlike the rename inputs in
     // `PlaylistDetail`/`TagTreeTab` which own Escape to revert. The dialog closes, and the
-    // overlay underneath it does not.
+    // route underneath it stays.
     expect(identifyDialog()).toBeNull();
-    expect(searchOverlay()).not.toBeNull();
+    expect(searchResults()).not.toBeNull();
     expect(searchInput()!.value).toBe("abba");
   });
 
-  it("hands Escape back to the search overlay once the modal is gone", async () => {
+  it("hands Escape back to the search route once the modal is gone", async () => {
     await openIdentifyDialogFromSearch();
     await act(async () => { press("Escape", { target: document.body }); });
     expect(identifyDialog()).toBeNull();
 
     await act(async () => { press("Escape", { target: document.body }); });
 
-    // The registry has to be empty again, or the search overlay is permanently undismissable
-    // after any modal has ever been opened over it.
-    expect(searchOverlay()).toBeNull();
+    // The registry has to be empty again, or the search route is permanently unleavable by
+    // keyboard after any modal has ever been opened over it.
+    expect(searchResults()).toBeNull();
     expect(routeContent()).not.toBeNull();
   });
 
-  it("still dismisses the search overlay on Escape when no modal is open", async () => {
+  it("still leaves the search route on Escape when no modal is open", async () => {
     // Positive control against a fix that over-broadens `overlayAbove` into always-true.
     await openSearchWithResults();
     await act(async () => { press("Escape", { target: document.body }); });
 
-    expect(searchOverlay()).toBeNull();
+    expect(searchResults()).toBeNull();
     expect(routeContent()).not.toBeNull();
   });
 });

@@ -207,6 +207,25 @@
   background: var(--bg-hover);
 }
 
+.search-back-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  padding: var(--space-2xs) var(--space-xs);
+  border-radius: var(--radius-base);
+  cursor: pointer;
+  transition: color var(--motion-fast);
+}
+
+.search-back-btn:hover {
+  color: var(--text-primary);
+}
+
 .search-trigger-btn {
   display: flex;
   align-items: center;
@@ -270,6 +289,7 @@
 }
 
 .search-bar-clear {
+  position: relative;
   background: none;
   border: none;
   box-shadow: none;
@@ -280,6 +300,12 @@
   align-items: center;
   flex-shrink: 0;
   transition: color var(--duration-moderate);
+}
+
+.search-bar-clear::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
 }
 
 .search-bar-clear:hover {

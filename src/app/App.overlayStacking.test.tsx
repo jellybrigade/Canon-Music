@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
 //
-// Acceptance-level: mounts the real `App` and stacks the command palette over the search
-// overlay, the way a user reaches it. Both are `useState` in `App.tsx`, neither is URL-backed,
-// and they are drawn by two different mechanisms - the search overlay renders *instead of*
-// `<AppRoutes>` (`AppShell.renderContent`), while `CommandPalette` is an always-mounted sibling
-// painting over whichever of the two is underneath. So "which overlay owns Escape" is a
-// composition question that no test over either unit can see.
+// Acceptance-level: mounts the real `App` and stacks the command palette over the `/search`
+// route, the way a user reaches it. They are drawn by two different mechanisms - search is a
+// route the router renders, while `CommandPalette` is an always-mounted sibling painting over
+// whichever route is underneath - and only the palette is `useState` in `App.tsx`. So "which
+// layer owns Escape" is a composition question that no test over either unit can see.
 //
 // Reaching the stack takes a blur: `useSearchShortcuts`' Ctrl+K branch bails while a text field
 // has focus unless the palette is already open, and Ctrl+F focuses the search input. So the
 // order is always Ctrl+F, blur, Ctrl+K. That awkwardness is itself pinned below, because if a
-// guard change ever makes Ctrl+K unreachable from the overlay entirely, every test here would
+// guard change ever makes Ctrl+K unreachable from search entirely, every test here would
 // otherwise go quietly vacuous.
 //
 // Same boundary mocks as `App.keyboard.test.tsx`, and for the same reasons: `AppRoutes` and
 // `PlayerBar` are stubs (not boundaries, just large subtrees this file never asserts on), while
-// `AppShell`, its search bar and `CommandPalette` are all real, because they are the pairing
+// `AppShell`, `SearchView` and `CommandPalette` are all real, because they are the pairing
 // under test.
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
@@ -31,8 +30,8 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("./AppRoutes", () => ({
-  AppRoutes: () => <div data-testid="route-content" />,
+vi.mock("./AppRoutes", async () => ({
+  AppRoutes: (await import("../test/appRoutesStub")).AppRoutesSearchStub,
 }));
 vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
@@ -86,7 +85,8 @@ const paletteInput = () => document.querySelector(".cp-input") as HTMLInputEleme
 const paletteBackdrop = () => document.querySelector(".cp-backdrop") as HTMLElement | null;
 const paletteModal = () => document.querySelector(".cp-modal") as HTMLElement | null;
 const searchInput = () => document.querySelector(".search-bar-input") as HTMLInputElement | null;
-/** The search overlay renders instead of the router, so the route stub is its absence. */
+/** The stub renders `SearchView` on `/search` and this placeholder everywhere else, so the
+ *  placeholder's absence is "the router is on `/search`". */
 const routeContent = () => screen.queryByTestId("route-content");
 
 /**
@@ -100,7 +100,7 @@ const routeContent = () => screen.queryByTestId("route-content");
 const expectGone = (get: () => Element | null) => waitFor(() => expect(get()).toBeNull());
 
 /**
- * Open the search overlay with text in it, then stack the palette on top.
+ * Go to `/search` with text in the box, then stack the palette on top.
  * Leaves focus in the palette's input, which is where the app itself puts it.
  */
 async function stackPaletteOverSearch(query = "abba") {
@@ -109,7 +109,7 @@ async function stackPaletteOverSearch(query = "abba") {
   await waitFor(() => expect(searchInput()).not.toBeNull());
   fireEvent.change(searchInput()!, { target: { value: query } });
   // Ctrl+K is guarded against firing from a text field, so the user has to leave the search
-  // input first - clicking any blank part of the overlay does it.
+  // input first - clicking any blank part of the page does it.
   searchInput()!.blur();
   await act(async () => { press("k", { ctrlKey: true }); });
   await waitFor(() => expect(paletteInput()).not.toBeNull());
@@ -126,11 +126,11 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("command palette stacked over the search overlay", () => {
-  it("renders both overlays at once, with the route still swapped out", async () => {
+describe("command palette stacked over the search route", () => {
+  it("renders the palette over the search route", async () => {
     // The setup step for everything below, asserted on its own so a guard change that makes
-    // the palette unreachable from the overlay fails here rather than silently emptying the
-    // rest of the file.
+    // the palette unreachable from search fails here rather than silently emptying the rest
+    // of the file.
     await stackPaletteOverSearch();
 
     expect(searchInput()).not.toBeNull();
@@ -152,8 +152,8 @@ describe("command palette stacked over the search overlay", () => {
     // Reachable: result rows preventDefault their mousedown, but the surrounding `.cp-results`
     // and `.cp-section` wrappers do not, so clicking blank space inside the palette blurs to
     // `body`. `useSearchShortcuts`' Escape guard short-circuits on `typing`, so with no text
-    // field focused it ran `clearSearch()` and the palette's own listener then closed the
-    // palette - one keypress collapsing the whole stack.
+    // field focused it left `/search` and the palette's own listener then closed the palette -
+    // one keypress collapsing the whole stack.
     await stackPaletteOverSearch();
     paletteInput()!.blur();
 
@@ -166,7 +166,7 @@ describe("command palette stacked over the search overlay", () => {
 
   it("closes only the palette on Escape pressed from the search input underneath it", async () => {
     // The sharpest case, and the one the existing focus guard actively causes: Escape exempts
-    // the search input by ref identity (so Escape can dismiss search from the field it lives
+    // the search input by ref identity (so Escape can leave search from the field it lives
     // in), and that exemption is exactly what lets the keypress through while the palette is
     // painted over the top.
     //
@@ -185,7 +185,7 @@ describe("command palette stacked over the search overlay", () => {
     expect(searchInput()!.value).toBe("abba");
   });
 
-  it("clears the search overlay on the second Escape, once the palette is gone", async () => {
+  it("leaves the search route on the second Escape, once the palette is gone", async () => {
     // "Topmost only" means nothing unless the next press reaches the next layer down.
     await stackPaletteOverSearch();
 
@@ -200,7 +200,7 @@ describe("command palette stacked over the search overlay", () => {
     expect(paletteInput()).toBeNull();
   });
 
-  it("still closes the palette on Escape when no search overlay is under it", async () => {
+  it("still closes the palette on Escape when search is not under it", async () => {
     // Guards against a fix that makes the palette's dismissal conditional on the layer below.
     await mountApp();
     await act(async () => { press("k", { ctrlKey: true }); });
@@ -212,9 +212,9 @@ describe("command palette stacked over the search overlay", () => {
     expect(routeContent()).not.toBeNull();
   });
 
-  it("does not clear the search overlay when Escape closes the palette from a stray field", async () => {
+  it("does not leave the search route when Escape closes the palette from a stray field", async () => {
     // The palette's own listener has no focus guard at all, so Escape from an unrelated input
-    // closes it. Whatever that is worth, it must not also take the search overlay down.
+    // closes it. Whatever that is worth, it must not also navigate out of search.
     await stackPaletteOverSearch();
     const stray = document.createElement("input");
     document.body.appendChild(stray);
@@ -227,7 +227,7 @@ describe("command palette stacked over the search overlay", () => {
     expect(searchInput()!.value).toBe("abba");
   });
 
-  it("closes only the palette when its backdrop is clicked over the search overlay", async () => {
+  it("closes only the palette when its backdrop is clicked over the search route", async () => {
     await stackPaletteOverSearch();
 
     await act(async () => {
@@ -245,7 +245,7 @@ describe("command palette stacked over the search overlay", () => {
     // Regression for known-issues' "Dismissing a backdrop on `click` dismisses on a gesture
     // that only ended there". The palette needs press *and* release on the backdrop, so
     // selecting text in its input and releasing outside must not close it - and must certainly
-    // not collapse to the search overlay behind it.
+    // not collapse to the search route behind it.
     await stackPaletteOverSearch();
 
     await act(async () => {
@@ -271,7 +271,7 @@ describe("command palette stacked over the search overlay", () => {
     expect(paletteInput()).not.toBeNull();
   });
 
-  it("closes only the feedback modal on Escape while the search overlay is open", async () => {
+  it("closes only the feedback modal on Escape while the search route is showing", async () => {
     // The palette is not the only thing that stacks over search. The feedback modal used to be
     // the *harder* instance, with its own `document` Escape listener firing ahead of the window
     // one; it goes through the open-modal registry now, which is what makes the guard ask "is
@@ -294,7 +294,7 @@ describe("command palette stacked over the search overlay", () => {
     expect(searchInput()!.value).toBe("abba");
   });
 
-  it("leaves the search overlay standing when Ctrl+K toggles the palette shut", async () => {
+  it("stays on the search route when Ctrl+K toggles the palette shut", async () => {
     // The toggle half of the Ctrl+K guard, asserted for what it must *not* touch.
     await stackPaletteOverSearch();
 
