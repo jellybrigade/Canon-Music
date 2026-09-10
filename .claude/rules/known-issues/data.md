@@ -91,6 +91,11 @@ Fixed unless marked OPEN.
   grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
   ```
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
+- **A bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.** `query_artists` took `artwork_url` bare from its per-artist group, so a tile's portrait changed after unrelated writes; `query_recent_genres`' fallback ordered by `album_count` alone, so the 18th/19th genre swapped between refreshes. Fix: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY navidrome_created DESC, year DESC, id)` and a `name COLLATE NOCASE` tiebreaker. Ask of any aggregate: which row is this, and would two runs agree?
+  ```
+  grep -n "GROUP BY" src-tauri/src/*.rs | grep -v "COUNT(\|MIN(\|MAX(\|SUM("
+  grep -rn "LIMIT" src-tauri/src/*.rs src --include='*.ts*' | grep -v '\.test\.' | grep -v "ORDER BY"
+  ```
 - **Cap check that runs before the write evicts for a write that adds nothing.** `cappedSet` compared `size >= maxEntries` without asking whether the key was already held, so the cover and artist caches dropped a live entry on every plain overwrite and ran permanently at one entry under their own workload. Fix: `!cache.has(key) &&` in front of the check. Insertion order, not LRU, is the documented semantics.
   ```
   grep -rn "\.size >= \|\.size > " src --include='*.ts*' | grep -v '\.test\.'

@@ -270,10 +270,15 @@ fn query_artists(conn: &Connection) -> Result<Vec<ArtistRowDto>, String> {
         FROM artists a
         LEFT JOIN artist_identity ai ON ai.artist_name = a.name
         LEFT JOIN (
-            SELECT artist, server_id, artwork_url
-            FROM albums
-            WHERE artwork_url IS NOT NULL
-            GROUP BY artist, server_id
+            SELECT artist, server_id, artwork_url FROM (
+                SELECT artist, server_id, artwork_url,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY artist, server_id
+                           ORDER BY navidrome_created DESC, year DESC, id
+                       ) AS rn
+                FROM albums
+                WHERE artwork_url IS NOT NULL
+            ) WHERE rn = 1
         ) art ON art.artist = a.name AND art.server_id = a.server_id
         WHERE a.name NOT IN (SELECT alias_name FROM artist_aliases)
         ORDER BY a.name COLLATE NOCASE";
@@ -471,7 +476,7 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
          WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
          GROUP BY canonical_id
          HAVING COUNT(DISTINCT album_id) >= 5
-         ORDER BY album_count DESC
+         ORDER BY album_count DESC, name COLLATE NOCASE
          LIMIT 18";
     let mut stmt = conn.prepare(fallback_sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -1053,6 +1058,54 @@ mod tests {
         assert_eq!(rows[1].name, "Shared");
     }
 
+    #[test]
+    fn artist_artwork_comes_from_the_newest_album_not_an_arbitrary_row() {
+        // A bare column under GROUP BY picks whichever row the scan happened to keep, so
+        // the tile's artwork changed after unrelated writes reshuffled the table.
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO artists (id, server_id, name, album_count) VALUES ('a1','s1','Solo',2);
+             INSERT INTO albums (id, server_id, name, artist, artwork_url, navidrome_created) VALUES
+               ('s1:old', 's1', 'Debut',  'Solo', 'cover://old', '2020-01-01'),
+               ('s1:new', 's1', 'Latest', 'Solo', 'cover://new', '2024-01-01')",
+        )
+        .expect("seed");
+
+        let rows = query_artists(&conn).expect("query");
+        assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://new"));
+    }
+
+    #[test]
+    fn artist_artwork_falls_back_to_year_then_id_when_no_album_carries_a_created_date() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO artists (id, server_id, name, album_count) VALUES ('a1','s1','Solo',3);
+             INSERT INTO albums (id, server_id, name, artist, artwork_url, year) VALUES
+               ('s1:c', 's1', 'C', 'Solo', 'cover://1999', 1999),
+               ('s1:a', 's1', 'A', 'Solo', 'cover://2010a', 2010),
+               ('s1:b', 's1', 'B', 'Solo', 'cover://2010b', 2010)",
+        )
+        .expect("seed");
+
+        let rows = query_artists(&conn).expect("query");
+        assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://2010a"));
+    }
+
+    #[test]
+    fn an_album_with_a_created_date_outranks_one_without() {
+        let conn = fixture_conn();
+        conn.execute_batch(
+            "INSERT INTO artists (id, server_id, name, album_count) VALUES ('a1','s1','Solo',2);
+             INSERT INTO albums (id, server_id, name, artist, artwork_url, navidrome_created) VALUES
+               ('s1:a', 's1', 'A', 'Solo', 'cover://undated', NULL),
+               ('s1:b', 's1', 'B', 'Solo', 'cover://dated', '2001-01-01')",
+        )
+        .expect("seed");
+
+        let rows = query_artists(&conn).expect("query");
+        assert_eq!(rows[0].artwork_url.as_deref(), Some("cover://dated"));
+    }
+
     // ── query_all_tracks / query_tracks ───────────────────────────────────────
 
     /// Distinct sentinel per column, so swapping two same-typed adjacent columns
@@ -1336,6 +1389,47 @@ mod tests {
         assert!(
             !genre_ids(&rows).contains(&"g0"),
             "the smallest qualifying genre is the one dropped"
+        );
+    }
+
+    /// Genre `g{i:02}` under an explicit display name, with `fillers` extra albums so it
+    /// clears the library-wide threshold.
+    fn seed_named_genre(conn: &Connection, i: usize, name: &str, fillers: usize) {
+        let canonical = format!("g{i:02}");
+        for f in 0..=fillers {
+            conn.execute(
+                "INSERT INTO album_genres (album_id, canonical_id, relation, name)
+                 VALUES (?, ?, 'direct', ?)",
+                [&format!("a{i}-{f}"), &canonical, &name.to_string()],
+            )
+            .expect("insert album_genre");
+        }
+    }
+
+    #[test]
+    fn the_fallback_breaks_an_album_count_tie_by_name_so_the_cut_cannot_reshuffle() {
+        // album_count is not unique, so with 19 genres tied on it the 18-row cut is
+        // decided by nothing at all and the last row swapped between refreshes. Names are
+        // deliberately uncorrelated with canonical_id, so grouping order cannot pass this.
+        let conn = fixture_conn();
+        let names = [
+            "m", "q", "a", "z", "c", "x", "b", "y", "d", "w", "e", "v", "f", "u", "g", "t", "h",
+            "s", "i",
+        ];
+        for (i, name) in names.iter().enumerate() {
+            seed_named_genre(&conn, i, name, 4);
+        }
+
+        let rows = query_recent_genres(&conn).expect("query");
+        let mut expected: Vec<&str> = names.to_vec();
+        expected.sort_unstable();
+        expected.truncate(18);
+
+        assert_eq!(rows.len(), 18);
+        assert_eq!(
+            rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            expected,
+            "ties order by name, so the same 18 survive every refresh"
         );
     }
 

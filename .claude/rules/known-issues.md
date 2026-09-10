@@ -77,6 +77,7 @@ Fixed unless marked OPEN.
 - "Is there a value" cache-hit test can't cache "there is none".
 - Inline `queryKey` = nothing else can invalidate it.
 - Duplicated prefetch warms a key nobody reads.
+- Bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.
 - Cap check that runs before the write evicts for a write that adds nothing.
 - A computed number reaching a URL is a cache key; clamp it at the one writer.
 - `!` on an optional id ships the string "undefined" to the server, and caches it.
