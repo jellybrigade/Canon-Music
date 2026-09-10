@@ -645,7 +645,9 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
 
       <div className="foryou-v2-grid" role="tabpanel">
         {activeTabGroup.albums.map(album => {
-          const artUrl = coverMap.get(album.id) ?? getCoverArtUrl(server.url, server.username, credential, album.artwork_url!, 300);
+          const artUrl = coverMap.get(album.id) ?? (album.artwork_url
+            ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
+            : null);
           return (
             <div
               key={album.id}
@@ -657,7 +659,9 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
               onContextMenu={e => onCardContextMenu(e, album)}
             >
               <div className="foryou-v2-tile__art-wrap">
-                <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                {artUrl
+                  ? <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                  : <div className="foryou-v2-tile__art" />}
                 <button
                   className="foryou-v2-tile__play"
                   onClick={e => { e.stopPropagation(); playAlbum(album); }}

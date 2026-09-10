@@ -77,6 +77,8 @@ Fixed unless marked OPEN.
 - Inline `queryKey` = nothing else can invalidate it.
 - Duplicated prefetch warms a key nobody reads.
 - Cap check that runs before the write evicts for a write that adds nothing.
+- A computed number reaching a URL is a cache key; clamp it at the one writer.
+- `!` on an optional id ships the string "undefined" to the server, and caches it.
 - `LIMIT` without `ORDER BY` silently redefines results.
 - External identifier != local one on exact compare.
 - Unscoped mirror depends entirely on its delete path.

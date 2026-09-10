@@ -217,12 +217,16 @@ export function getCoverArtUrl(
   coverArtId: string,
   size = 300
 ): string {
+  // Rust falls back to 300 for a size it cannot parse, but caches under `{id}:{size}`
+  // with the string it was handed, so a fractional or negative size fragments the disk
+  // cache and every memo key built from the URL. Callers compute sizes (`size * 2`).
+  const px = Number.isFinite(size) ? Math.max(1, Math.round(size)) : 300;
   if (_coverServerReady) {
-    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
+    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${px}`;
   }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
-  params.set("size", String(size));
+  params.set("size", String(px));
   return `${normalizeUrl(baseUrl)}/rest/getCoverArt?${params.toString()}`;
 }
 

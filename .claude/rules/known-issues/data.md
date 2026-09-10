@@ -95,6 +95,14 @@ Fixed unless marked OPEN.
   ```
   grep -rn "\.size >= \|\.size > " src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A computed number reaching a URL is a cache key; clamp it at the one writer.** `getCoverArtUrl` interpolated `size` raw, so `NaN`/fractional/negative values (`size * 2` at one call site) reached the URL. Rust falls back to 300 but caches under `{id}:{size}` with the bogus string, fragmenting the disk cache and every memo key built from the URL. Fix: `Number.isFinite(size) ? Math.max(1, Math.round(size)) : 300`.
+  ```
+  grep -rn "?size=\${\|params.set(\"size\"" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **`!` on an optional id ships the string "undefined" to the server, and caches it.** `HomeView`'s For-You tile was the one unguarded `!` of 30 `getCoverArtUrl` call sites: `encodeURIComponent(undefined)` requested a cover named `"undefined"`, cached forever under `"undefined:300"`, once per artless album. Enforced repo-wide by `src/lib/cover-art-guard.test.ts`, which sweeps the call sites rather than trusting the next one written.
+  ```
+  grep -rn "getCoverArtUrl(" src --include='*.tsx' | grep '!'
+  ```
 - **`LIMIT` without `ORDER BY` silently redefines results.** FTS ranks by weighted `bm25` in `MATERIALIZED` CTE before cap. Also: `useDeferredValue` defers rendering, not fetching.
 - **External identifier != local one on exact compare.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`.
 - **Unscoped mirror depends entirely on its delete path.** `purgeServerData` runs before `servers` row delete. **Found 4x: grep any `server_id:` literal not from the source row.**

@@ -186,9 +186,17 @@ describe("getCoverArtUrl before the cover server is ready", () => {
     expect(p.has("t")).toBe(false);
   });
 
-  it("emits size=0 rather than omitting it, unlike maxBitRate", () => {
+  it("emits size unconditionally, unlike maxBitRate, but never below 1", () => {
     // size is set unconditionally; maxBitRate is guarded by > 0. The asymmetry is the point.
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 0)).get("size")).toBe("0");
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 0)).get("size")).toBe("1");
+  });
+
+  it("clamps the direct URL branch by the same rule as the cover:// one", () => {
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -4)).get("size")).toBe("1");
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).get("size")).toBe("150");
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).get("size")).toBe(
+      "300"
+    );
   });
 
   it("passes a large size through unclamped", () => {
@@ -270,14 +278,24 @@ describe("getCoverArtUrl once the cover server is ready", () => {
     );
   });
 
-  it("interpolates size raw, so a non-integer size reaches the URL verbatim", () => {
-    // Rust parses size as u32 and silently falls back to 300, but the JS-side string
-    // (and therefore every React memo key derived from it) keeps the bogus value.
+  it("rounds and floors the size, so no bogus value reaches the URL", () => {
+    // Rust parses size as u32 and silently falls back to 300, but it caches under
+    // `{id}:{size}` with whatever string arrived, so an unclamped value fragments the
+    // disk cache and every React memo key derived from the URL.
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -1)).toBe(
-      "cover://localhost/cover/al-1?size=-1"
+      "cover://localhost/cover/al-1?size=1"
     );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).toBe(
+      "cover://localhost/cover/al-1?size=150"
+    );
+  });
+
+  it("falls back to 300, the Rust handler's own default, for a size that is not a number", () => {
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).toBe(
-      "cover://localhost/cover/al-1?size=NaN"
+      "cover://localhost/cover/al-1?size=300"
+    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.POSITIVE_INFINITY)).toBe(
+      "cover://localhost/cover/al-1?size=300"
     );
   });
 });
