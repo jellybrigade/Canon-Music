@@ -106,6 +106,7 @@ Fixed unless marked OPEN.
 - Router value copied into `useState` never resyncs while the route stays mounted.
 - `null` for "don't know yet" and "isn't there" paints the same blank page.
 - Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.
+- An error path that builds its own value can fail before delivering the message.
 - Decoding an already-decoded value = no-op or crash.
 - Partial opt-out of global base rule keeps properties it forgot. **OPEN, 37 instances.**
 - Hit-area halo grown toward a neighbour steals its clicks.

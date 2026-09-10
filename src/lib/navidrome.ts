@@ -884,6 +884,13 @@ export async function fetchLyricsBySongId(
   }
 }
 
+// The URL apiPost actually contacted, not its origin: a subpath install would otherwise
+// be told to check an address nothing ever asked for, and `new URL` on a typo'd host threw
+// its own TypeError over the message written for exactly that user.
+function pingFailureMessage(baseUrl: string, status: number): string {
+  return `Server returned ${status}. Check URL (tried: ${normalizeUrl(baseUrl)}/rest/ping.view)`;
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,
@@ -895,8 +902,7 @@ export async function authenticate(
 
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
-    const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(pingFailureMessage(baseUrl, res.status));
   }
 
   const data = (await res.json()) as {
@@ -981,8 +987,7 @@ export async function authenticateWithApiKey(
   const params = new URLSearchParams({ u: username, apiKey, v: "1.16.1", c: "canon", f: "json" });
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
-    const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(pingFailureMessage(baseUrl, res.status));
   }
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { code: number; message: string } };

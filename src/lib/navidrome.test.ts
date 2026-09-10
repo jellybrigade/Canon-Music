@@ -14,6 +14,8 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 import {
   SubsonicError,
   addTrackToNavidromePlaylist,
+  authenticate,
+  authenticateWithApiKey,
   fetchAlbumListByType,
   fetchAllAlbums,
   fetchStarred2,
@@ -714,5 +716,50 @@ describe("fetchAllAlbums", () => {
       "http://music.example/rest/getAlbumList2",
       "http://192.168.1.5:4533/rest/getAlbumList2",
     ]);
+  });
+});
+
+describe("authenticate / authenticateWithApiKey", () => {
+  it("names the exact ping URL it tried, subpath included, when the server rejects it", async () => {
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticate(`${BASE}/music`, "alice", "pw"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: http://music.example/music/rest/ping.view)"
+    );
+    expect(urls()[0]).toBe("http://music.example/music/rest/ping.view");
+  });
+
+  it("reports the same URL for the api-key path", async () => {
+    fetchMock.mockResolvedValue(httpStatus(401));
+
+    await expect(settle(authenticateWithApiKey(`${BASE}/music`, "alice", "key-1"))).rejects.toThrow(
+      "Server returned 401. Check URL (tried: http://music.example/music/rest/ping.view)"
+    );
+  });
+
+  it("still reports the status for a base URL that is not a parsable URL", async () => {
+    // The error path is exactly the one a typo'd host lands in, so it must not throw its
+    // own TypeError on the way to the message written for that user.
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticate("music.example", "alice", "pw"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+    );
+  });
+
+  it("reports the api-key status for an unparsable base URL too", async () => {
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticateWithApiKey("music.example", "alice", "key-1"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+    );
+  });
+
+  it("passes the server's own message through when the ping is 200 but the login fails", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow(
+      "Wrong username or password"
+    );
   });
 });
