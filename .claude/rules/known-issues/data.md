@@ -91,6 +91,10 @@ Fixed unless marked OPEN.
   grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
   ```
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
+- **Cap check that runs before the write evicts for a write that adds nothing.** `cappedSet` compared `size >= maxEntries` without asking whether the key was already held, so the cover and artist caches dropped a live entry on every plain overwrite and ran permanently at one entry under their own workload. Fix: `!cache.has(key) &&` in front of the check. Insertion order, not LRU, is the documented semantics.
+  ```
+  grep -rn "\.size >= \|\.size > " src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **`LIMIT` without `ORDER BY` silently redefines results.** FTS ranks by weighted `bm25` in `MATERIALIZED` CTE before cap. Also: `useDeferredValue` defers rendering, not fetching.
 - **External identifier != local one on exact compare.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`.
 - **Unscoped mirror depends entirely on its delete path.** `purgeServerData` runs before `servers` row delete. **Found 4x: grep any `server_id:` literal not from the source row.**

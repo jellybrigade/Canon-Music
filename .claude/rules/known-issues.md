@@ -76,6 +76,7 @@ Fixed unless marked OPEN.
 - "Is there a value" cache-hit test can't cache "there is none".
 - Inline `queryKey` = nothing else can invalidate it.
 - Duplicated prefetch warms a key nobody reads.
+- Cap check that runs before the write evicts for a write that adds nothing.
 - `LIMIT` without `ORDER BY` silently redefines results.
 - External identifier != local one on exact compare.
 - Unscoped mirror depends entirely on its delete path.

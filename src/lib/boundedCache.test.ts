@@ -33,15 +33,41 @@ describe("cappedSet", () => {
     expect(cache.size).toBe(1);
   });
 
-  it("evicts the oldest entry even when re-writing a key it already holds", () => {
-    // The size check runs before the set, so at the cap a plain overwrite still costs one
-    // eviction. Callers that re-write hot keys therefore hold fewer than `maxEntries` live
-    // entries; documented here rather than discovered as a mystery cache miss.
+  it("evicts nothing when re-writing a key it already holds at the cap", () => {
     const cache = new Map<string, number>();
     cappedSet(cache, "a", 1, 2);
     cappedSet(cache, "b", 2, 2);
     cappedSet(cache, "b", 9, 2);
-    expect([...cache.entries()]).toEqual([["b", 9]]);
+    expect([...cache.entries()]).toEqual([
+      ["a", 1],
+      ["b", 9],
+    ]);
+  });
+
+  it("stays at the cap under a workload that only re-writes its own keys", () => {
+    // The cover and artist caches do exactly this: same ids, new values. Before the
+    // has() check they ran permanently at one entry, evicting a live one per write.
+    const cache = new Map<string, number>();
+    cappedSet(cache, "a", 0, 2);
+    cappedSet(cache, "b", 0, 2);
+    for (let i = 1; i <= 50; i++) {
+      cappedSet(cache, "a", i, 2);
+      cappedSet(cache, "b", i, 2);
+    }
+    expect(cache.size).toBe(2);
+    expect(cache.get("a")).toBe(50);
+    expect(cache.get("b")).toBe(50);
+  });
+
+  it("keeps insertion order on overwrite, so the oldest key stays the eviction target", () => {
+    // Insertion order, not LRU: re-writing a key does not make it younger, because
+    // Map.set on an existing key leaves its position alone.
+    const cache = new Map<string, number>();
+    cappedSet(cache, "a", 1, 2);
+    cappedSet(cache, "b", 2, 2);
+    cappedSet(cache, "a", 9, 2);
+    cappedSet(cache, "c", 3, 2);
+    expect([...cache.keys()]).toEqual(["b", "c"]);
   });
 
   it("stores nothing durably when the cap is zero", () => {
