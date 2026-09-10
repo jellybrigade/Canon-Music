@@ -40,6 +40,7 @@ Fixed unless marked OPEN.
 
 ## Test / harness - `known-issues/testing.md`
 
+- Library `afterEach` hooks only self-register under `globals: true`.
 - Time it before theorising.
 - Large fake-time advance = one iteration per live tick.
 - Boundary test pays fixture cost per boundary unit.
