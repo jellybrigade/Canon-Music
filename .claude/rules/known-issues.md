@@ -14,6 +14,8 @@ Fixed unless marked OPEN.
 - Unbounded thread-per-request -> SIGKILL.
 - Webview honours PAC, Rust does not; a dead PAC stalls only half of Canon.
 - "Load failed" ~25s = systemd-resolved, not Canon.
+- Two HTTP stacks also means two certificate stores.
+- "Something answered" is not "the right thing answered".
 
 ## Build / release pipeline - `known-issues/build.md`
 
@@ -93,6 +95,8 @@ Fixed unless marked OPEN.
 - "Just finished" test built from restore-shared state fires at startup too.
 - Statement sequence with invalid intermediate states is a transaction.
 - One-direction version compare can't say "too new".
+- A counter fed by every request of one burst counts one event many times.
+- Process-wide state for a per-server fact answers for servers it never saw.
 - Transaction real only if statements share a connection.
 
 ## UI - `known-issues/ui.md`

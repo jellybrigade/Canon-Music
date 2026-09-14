@@ -120,6 +120,13 @@ function isRetriableEndpoint(endpoint: string): boolean {
   return !NON_IDEMPOTENT_ENDPOINTS.has(endpoint.replace(/\.view$/, ""));
 }
 
+/** The one endpoint a user runs on purpose to ask whether a server is up. Refusing it
+ *  while the breaker is open would take away the only way to find out that a fixed
+ *  network is fixed, so it always gets its ladder. */
+function isLivenessCheck(endpoint: string): boolean {
+  return endpoint.replace(/\.view$/, "") === "ping";
+}
+
 async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
@@ -174,14 +181,17 @@ async function apiPost(
   altUrl?: string
 ): Promise<Response> {
   const body = params.toString();
-  const urls = [`${normalizeUrl(baseUrl)}/rest/${endpoint}`];
+  const server = normalizeUrl(baseUrl);
+  const urls = [`${server}/rest/${endpoint}`];
   // The alt URL (typically a LAN address for the same server) is tried within every
   // attempt, not only on the first, since either route can be the one that is stalling.
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
   // Every request stalls identically when the fault is this machine's HTTP layer rather
   // than the server, so the ladder below would spend 37s per call for as long as it lasts.
-  const stalled = transportStallNotice();
+  // Health is per server: one stalled server must not speak for another, least of all
+  // in a message that names an address the caller never asked about.
+  const stalled = isLivenessCheck(endpoint) ? null : transportStallNotice(server);
   if (stalled) throw new Error(`${endpoint} not attempted: ${stalled}`);
 
   let lastFailure = "unknown error";
@@ -196,7 +206,7 @@ async function apiPost(
     for (const url of urls) {
       try {
         const res = await fetchWithTimeout(url, body);
-        recordTransportSuccess();
+        recordTransportSuccess(server);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
           continue;
@@ -219,7 +229,10 @@ async function apiPost(
   // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
   // and the attempt count that were actually burned. A ladder spent entirely on timeouts
   // also feeds the breaker, which answers with a cause once it has seen enough to say one.
-  const cause = lastWasTimeout ? await noteTransportTimeout(normalizeUrl(baseUrl)) : null;
+  // Only a full ladder is the ~75s of evidence the threshold is written around. A
+  // single-shot write times out after 12s, and the scrobble queue drains in bursts of
+  // them, so letting those open the breaker would trip it on a third of the evidence.
+  const cause = lastWasTimeout && retriable ? await noteTransportTimeout(server) : null;
   throw new Error(
     `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
       (cause ? `. ${cause}` : "")

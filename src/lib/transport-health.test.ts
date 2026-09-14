@@ -18,6 +18,7 @@ import {
 } from "./transport-health";
 
 const URL_ = "https://music.example";
+const OTHER = "https://other.example";
 
 /** The Rust probe answering "I reached it fine", which is the interesting case. */
 function probeReachable(ms = 120): void {
@@ -42,30 +43,30 @@ afterEach(() => {
 describe("breaker", () => {
   it("stays quiet after a single timed-out ladder", async () => {
     expect(await noteTransportTimeout(URL_)).toBeNull();
-    expect(transportStallNotice()).toBeNull();
+    expect(transportStallNotice(URL_)).toBeNull();
   });
 
   it("opens on the second consecutive timed-out ladder", async () => {
     await noteTransportTimeout(URL_);
     const notice = await noteTransportTimeout(URL_);
     expect(notice).not.toBeNull();
-    expect(transportStallNotice()).toBe(notice);
+    expect(transportStallNotice(URL_)).toBe(notice);
   });
 
   it("clears the count on any successful request", async () => {
     await noteTransportTimeout(URL_);
-    recordTransportSuccess();
+    recordTransportSuccess(URL_);
     expect(await noteTransportTimeout(URL_)).toBeNull();
-    expect(transportStallNotice()).toBeNull();
+    expect(transportStallNotice(URL_)).toBeNull();
   });
 
   it("stops blocking once the cooldown expires, so a healed network is retried", async () => {
     await noteTransportTimeout(URL_);
     await noteTransportTimeout(URL_);
     vi.advanceTimersByTime(14_999);
-    expect(transportStallNotice()).not.toBeNull();
+    expect(transportStallNotice(URL_)).not.toBeNull();
     vi.advanceTimersByTime(2);
-    expect(transportStallNotice()).toBeNull();
+    expect(transportStallNotice(URL_)).toBeNull();
   });
 
   it("re-opens on a single timeout once it has opened before", async () => {
@@ -73,7 +74,7 @@ describe("breaker", () => {
     await noteTransportTimeout(URL_);
     vi.advanceTimersByTime(15_001);
     expect(await noteTransportTimeout(URL_)).not.toBeNull();
-    expect(transportStallNotice()).not.toBeNull();
+    expect(transportStallNotice(URL_)).not.toBeNull();
   });
 
   it("lengthens the cooldown on each reopening instead of probing every 15s forever", async () => {
@@ -82,16 +83,16 @@ describe("breaker", () => {
     vi.advanceTimersByTime(15_001);
     await noteTransportTimeout(URL_);
     vi.advanceTimersByTime(59_000);
-    expect(transportStallNotice()).not.toBeNull();
+    expect(transportStallNotice(URL_)).not.toBeNull();
     vi.advanceTimersByTime(2_000);
-    expect(transportStallNotice()).toBeNull();
+    expect(transportStallNotice(URL_)).toBeNull();
   });
 
   it("closes again after a success that follows a reopening", async () => {
     await noteTransportTimeout(URL_);
     await noteTransportTimeout(URL_);
-    recordTransportSuccess();
-    expect(transportStallNotice()).toBeNull();
+    recordTransportSuccess(URL_);
+    expect(transportStallNotice(URL_)).toBeNull();
     expect(await noteTransportTimeout(URL_)).toBeNull();
   });
 });
@@ -127,8 +128,8 @@ describe("diagnosis", () => {
   it("probes the native stack exactly once per opening", async () => {
     await noteTransportTimeout(URL_);
     await noteTransportTimeout(URL_);
-    transportStallNotice();
-    transportStallNotice();
+    transportStallNotice(URL_);
+    transportStallNotice(URL_);
     expect(invokeCount("probe_server")).toBe(1);
   });
 
@@ -169,5 +170,134 @@ describe("describeStall", () => {
     const msg = describeStall(URL_, { reachable: false, status: null, elapsedMs: 5000, error: null });
     expect(msg).toContain(URL_);
     expect(msg.length).toBeGreaterThan(20);
+  });
+});
+
+describe("a burst of requests stalling together", () => {
+  it("counts as the one opening they share, not one each", async () => {
+    await noteTransportTimeout(URL_);
+    await Promise.all([
+      noteTransportTimeout(URL_),
+      noteTransportTimeout(URL_),
+      noteTransportTimeout(URL_),
+      noteTransportTimeout(URL_),
+    ]);
+
+    expect(invokeCount("probe_server")).toBe(1);
+    // Still on the first rung of the ladder: four re-openings would have put it on 300s.
+    vi.advanceTimersByTime(15_001);
+    expect(transportStallNotice(URL_)).toBeNull();
+  });
+
+  it("still answers every one of them with the notice", async () => {
+    await noteTransportTimeout(URL_);
+    const notices = await Promise.all([
+      noteTransportTimeout(URL_),
+      noteTransportTimeout(URL_),
+    ]);
+
+    expect(notices.every((n) => n !== null)).toBe(true);
+  });
+});
+
+describe("per server", () => {
+  it("keeps one server's stall from speaking for another", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+
+    expect(transportStallNotice(URL_)).not.toBeNull();
+    expect(transportStallNotice(OTHER)).toBeNull();
+    expect(await noteTransportTimeout(OTHER)).toBeNull();
+  });
+
+  it("names the server the notice is about", async () => {
+    await noteTransportTimeout(OTHER);
+    await noteTransportTimeout(OTHER);
+
+    expect(transportStallNotice(OTHER)).toContain(OTHER);
+    expect(transportStallNotice(OTHER)).not.toContain(URL_);
+  });
+
+  it("clears only the server that got through", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(OTHER);
+    await noteTransportTimeout(OTHER);
+
+    recordTransportSuccess(OTHER);
+
+    expect(transportStallNotice(OTHER)).toBeNull();
+    expect(transportStallNotice(URL_)).not.toBeNull();
+  });
+});
+
+describe("while the probe is still running", () => {
+  /** A probe that answers only when the test says so, the way an 8s one behaves. */
+  function heldProbe(): () => void {
+    let release = (): void => {};
+    onInvoke(
+      "probe_server",
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ reachable: true, status: 200, elapsedMs: 7, error: null });
+        })
+    );
+    return () => release();
+  }
+
+  it("fails fast on a plain stall message rather than letting requests through", async () => {
+    const release = heldProbe();
+    await noteTransportTimeout(URL_);
+    const opening = noteTransportTimeout(URL_);
+
+    const early = transportStallNotice(URL_);
+    expect(early).not.toBeNull();
+    expect(early).toContain("timing out");
+    expect(early).not.toContain("proxy");
+
+    release();
+    await opening;
+    expect(transportStallNotice(URL_)).toContain("proxy");
+  });
+
+  it("does not serve the previous opening's diagnosis", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    expect(transportStallNotice(URL_)).toContain("proxy");
+
+    vi.advanceTimersByTime(15_001);
+    const release = heldProbe();
+    const reopening = noteTransportTimeout(URL_);
+
+    expect(transportStallNotice(URL_)).not.toContain("proxy");
+
+    release();
+    await reopening;
+  });
+});
+
+describe("describeStall on a reply that is not Navidrome", () => {
+  it("does not call the server up when the direct check got a 404", () => {
+    const msg = describeStall(URL_, { reachable: true, status: 404, elapsedMs: 40, error: null });
+    expect(msg).toContain("404");
+    expect(msg).not.toContain("the server is up");
+    expect(msg).not.toContain("Network Proxy");
+  });
+
+  it("points at the address and its proxy when a gateway answers 502", () => {
+    const msg = describeStall(URL_, { reachable: true, status: 502, elapsedMs: 40, error: null });
+    expect(msg).toContain("502");
+    expect(msg).toContain("server URL");
+  });
+
+  it("stays vague when the reply carried no status at all", () => {
+    const msg = describeStall(URL_, { reachable: true, status: null, elapsedMs: 40, error: null });
+    expect(msg).toContain("unexpected reply");
+    expect(msg).not.toContain("the server is up");
+  });
+
+  it("still blames the local HTTP stack on a 204, which is a real answer", () => {
+    const msg = describeStall(URL_, { reachable: true, status: 204, elapsedMs: 40, error: null });
+    expect(msg).toContain("Network Proxy");
   });
 });

@@ -843,7 +843,9 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   });
 
   it("does not trip on a server that answers, however unhappily", async () => {
-    fetchMock.mockResolvedValue(httpStatus(503));
+    // A shared Response would be consumed by the first body read and reject the rest with
+    // "Body is unusable", which is not a timeout and would pass this test for free.
+    fetchMock.mockImplementation(() => httpStatus(503));
 
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -879,5 +881,61 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
 
     expect(fetchMock).toHaveBeenCalledTimes(attemptsWhileOpen + 1);
+  });
+});
+
+describe("what the transport breaker refuses to speak for", () => {
+  const LADDER_MS = 38_000;
+  const OTHER_SERVER = "http://other.example";
+
+  function neverAnswers(): void {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError"))
+        );
+      })
+    );
+  }
+
+  /** Two full ladders against BASE, which is what opens the breaker. */
+  async function stallBase(): Promise<void> {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+  }
+
+  it("leaves a different server alone", async () => {
+    await stallBase();
+    fetchMock.mockImplementation(() => ok({ status: "ok", starred2: {} }));
+    const before = fetchMock.mock.calls.length;
+
+    await settle(fetchStarred2(OTHER_SERVER, "alice", cred), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+    expect(urls()[before]).toContain(OTHER_SERVER);
+  });
+
+  it("still lets the user re-test the stalled server itself", async () => {
+    await stallBase();
+    fetchMock.mockImplementation(() => ok({ status: "ok" }));
+    const before = fetchMock.mock.calls.length;
+
+    await expect(settle(authenticate(BASE, "alice", "pw"), LADDER_MS)).resolves.toMatchObject({
+      type: "md5",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+  });
+
+  it("is not opened by single-shot writes, which spend a third of the evidence", async () => {
+    neverAnswers();
+    await settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch(() => undefined), 13_000);
+    await settle(scrobbleTrack(BASE, "alice", cred, "tr-2", 2000).catch(() => undefined), 13_000);
+
+    const before = fetchMock.mock.calls.length;
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(before + 3);
+    expect(invokeCount("probe_server")).toBe(0);
   });
 });

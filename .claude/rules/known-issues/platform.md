@@ -24,4 +24,12 @@ Fixed unless marked OPEN.
   dconf read /system/proxy/mode   # 'auto' with no reachable PAC stalls every webview fetch
   grep -rn "timed out after\|Load failed" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Two HTTP stacks also means two certificate stores.** reqwest was built on `rustls-tls` (bundled webpki roots) while WebKitGTK uses the system store, so a Navidrome behind a private CA failed TLS in the probe alone and `describeStall` told the user "the server or the connection is down" - the exact opposite of the truth, in the one message written to be believed. Fix: `rustls-tls-native-roots`. Any client that seconds the webview's opinion has to trust what the webview trusts.
+  ```
+  grep -n "rustls-tls\|native-tls" src-tauri/Cargo.toml
+  ```
+- **"Something answered" is not "the right thing answered".** `probe_server` sets `reachable` for any HTTP response, so a 404 from a wrong URL, a 502 from a proxy in front of a dead server and a 407 from an intercepting proxy all reported "the server is up, check your proxy settings". The `status` was collected and never read. Fix: only 2xx earns the up verdict; anything else names the code and points at the address. A boolean built from "no error" answers a narrower question than its name.
+  ```
+  grep -rn "reachable" src src-tauri/src | grep -v '\.test\.'
+  ```
 - **"Load failed" ~25s = systemd-resolved, not Canon.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.
