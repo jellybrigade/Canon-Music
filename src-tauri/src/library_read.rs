@@ -406,7 +406,7 @@ pub fn get_genres(
 }
 
 fn query_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
-    let sql = "SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
+    let sql = "SELECT canonical_id, MIN(name) AS name, COUNT(DISTINCT album_id) AS album_count
          FROM album_genres
          WHERE relation = 'direct'
            AND canonical_id NOT LIKE 'raw:%'
@@ -450,7 +450,7 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
             ORDER BY last_played DESC
             LIMIT 10
         )
-        SELECT ag.canonical_id, ag.name, COUNT(DISTINCT ag.album_id) AS album_count
+        SELECT ag.canonical_id, MIN(ag.name) AS name, COUNT(DISTINCT ag.album_id) AS album_count
         FROM recent_albums ra
         JOIN album_genres ag ON ag.album_id = ra.album_id
         WHERE ag.relation = 'direct'
@@ -460,7 +460,7 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
           SELECT COUNT(DISTINCT ag2.album_id) FROM album_genres ag2
           WHERE ag2.canonical_id = ag.canonical_id AND ag2.relation = 'direct'
         ) >= 5
-        ORDER BY MAX(ra.last_played) DESC";
+        ORDER BY MAX(ra.last_played) DESC, name COLLATE NOCASE";
     let mut stmt = conn.prepare(recent_sql).map_err(|e| e.to_string())?;
     let recent = stmt
         .query_map([], map_genre_row)
@@ -471,7 +471,8 @@ fn query_recent_genres(conn: &Connection) -> Result<Vec<GenreRowDto>, String> {
         return Ok(recent);
     }
 
-    let fallback_sql = "SELECT canonical_id, name, COUNT(DISTINCT album_id) AS album_count
+    let fallback_sql =
+        "SELECT canonical_id, MIN(name) AS name, COUNT(DISTINCT album_id) AS album_count
          FROM album_genres
          WHERE relation = 'direct' AND canonical_id NOT LIKE 'raw:%'
          GROUP BY canonical_id
@@ -1430,6 +1431,75 @@ mod tests {
             rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
             expected,
             "ties order by name, so the same 18 survive every refresh"
+        );
+    }
+
+    #[test]
+    fn the_recent_branch_breaks_a_last_played_tie_by_name_so_the_rail_cannot_reshuffle() {
+        // One album carries several genres, so every one of its rows shares the same
+        // MAX(last_played). Without a tiebreak the rail's order is decided by nothing and
+        // swaps between refreshes. Names are uncorrelated with canonical_id on purpose.
+        let conn = fixture_conn();
+        let names = ["m", "a", "z", "c", "b"];
+        for (i, name) in names.iter().enumerate() {
+            seed_named_genre(&conn, i, name, 4);
+            // Tag the one played album with every genre, tying them all on last_played.
+            conn.execute(
+                "INSERT INTO album_genres (album_id, canonical_id, relation, name)
+                 VALUES ('played', ?, 'direct', ?)",
+                [&format!("g{i:02}"), &name.to_string()],
+            )
+            .expect("insert album_genre");
+        }
+        conn.execute(
+            "INSERT INTO tracks (id, server_id, title, album_id)
+             VALUES ('t', 's1', 'T', 'played')",
+            [],
+        )
+        .expect("track");
+        conn.execute(
+            "INSERT INTO scrobble_history (track_id, timestamp, scrobbled_at)
+             VALUES ('t', 1, '2026-01-01')",
+            [],
+        )
+        .expect("scrobble");
+
+        let rows = query_recent_genres(&conn).expect("query");
+        let mut expected: Vec<&str> = names.to_vec();
+        expected.sort_unstable();
+        assert_eq!(
+            rows.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            expected,
+            "ties on last_played order by name, so the rail is stable across refreshes"
+        );
+    }
+
+    #[test]
+    fn a_genre_carrying_two_display_names_resolves_to_one_deterministic_label() {
+        // Renaming a genre in the tree re-normalizes albums incrementally, so
+        // album_genres holds both the old and new name under one canonical_id until the
+        // last album is reprocessed. A bare column under GROUP BY picks arbitrarily.
+        let conn = fixture_conn();
+        for (album, name) in [
+            ("a0", "Zydeco"),
+            ("a1", "Alt Zydeco"),
+            ("a2", "Zydeco"),
+            ("a3", "Alt Zydeco"),
+            ("a4", "Zydeco"),
+        ] {
+            conn.execute(
+                "INSERT INTO album_genres (album_id, canonical_id, relation, name)
+                 VALUES (?, 'zydeco', 'direct', ?)",
+                [album, name],
+            )
+            .expect("insert album_genre");
+        }
+
+        assert_eq!(query_genres(&conn).expect("query")[0].name, "Alt Zydeco");
+        assert_eq!(
+            query_recent_genres(&conn).expect("query")[0].name,
+            "Alt Zydeco",
+            "the fallback branch agrees with the full listing"
         );
     }
 
