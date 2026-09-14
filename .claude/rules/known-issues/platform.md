@@ -19,4 +19,17 @@ Fixed unless marked OPEN.
 - **ALSA underrun under load.** rodio 0.19 buffer too small. `PULSE_LATENCY_MSEC=60` in `run()`. Real fix: rodio 0.20+.
 - **Read-only rusqlite can't own WAL `-shm`.** `library_read.rs`: `READ_WRITE | NO_MUTEX | URI`, no `CREATE`.
 - **Unbounded thread-per-request -> SIGKILL.** Cover proxy: permit before spawn, `spawn_blocking`, cap 16. Tell: `ps -eLf | grep canon | wc -l` climbing.
+- **Two HTTP stacks means two proxy configurations, and only the webview honours PAC.** Canon reaches the API through the webview (libsoup, so the desktop's `GProxyResolver`) and covers through Rust reqwest (env proxy only, no PAC). A desktop left on `/system/proxy/mode` = `auto` with no working PAC/WPAD made every `fetch` hang on a 25s D-Bus call to `org.gtk.GLib.PACRunner`, so Canon's 12s abort fired first, three attempts per call, and the library was unusable - while cover art loaded fine, `curl` answered in 100ms and Chrome (own WPAD, own fallback) was untroubled. It reads as "Canon is broken" and logs as a bare `timed out after 12000ms`. Fix: `net_probe.rs::probe_server` reaches the server over the stack that is *not* stalling, so the message names the machine's HTTP configuration instead of the server; `transport-health.ts` stops the ladder after two lost to timeouts. User-side cure is `dconf write /system/proxy/mode "'none'"`. Ask of any transport failure: which of Canon's two HTTP clients saw it, and would the other agree?
+  ```
+  dconf read /system/proxy/mode   # 'auto' with no reachable PAC stalls every webview fetch
+  grep -rn "timed out after\|Load failed" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Two HTTP stacks also means two certificate stores.** reqwest was built on `rustls-tls` (bundled webpki roots) while WebKitGTK uses the system store, so a Navidrome behind a private CA failed TLS in the probe alone and `describeStall` told the user "the server or the connection is down" - the exact opposite of the truth, in the one message written to be believed. Fix: `rustls-tls-native-roots`. Any client that seconds the webview's opinion has to trust what the webview trusts.
+  ```
+  grep -n "rustls-tls\|native-tls" src-tauri/Cargo.toml
+  ```
+- **"Something answered" is not "the right thing answered".** `probe_server` sets `reachable` for any HTTP response, so a 404 from a wrong URL, a 502 from a proxy in front of a dead server and a 407 from an intercepting proxy all reported "the server is up, check your proxy settings". The `status` was collected and never read. Fix: only 2xx earns the up verdict; anything else names the code and points at the address. A boolean built from "no error" answers a narrower question than its name.
+  ```
+  grep -rn "reachable" src src-tauri/src | grep -v '\.test\.'
+  ```
 - **"Load failed" ~25s = systemd-resolved, not Canon.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.

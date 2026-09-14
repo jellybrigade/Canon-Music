@@ -12,7 +12,10 @@ Fixed unless marked OPEN.
 - ALSA underrun under load.
 - Read-only rusqlite can't own WAL `-shm`.
 - Unbounded thread-per-request -> SIGKILL.
+- Webview honours PAC, Rust does not; a dead PAC stalls only half of Canon.
 - "Load failed" ~25s = systemd-resolved, not Canon.
+- Two HTTP stacks also means two certificate stores.
+- "Something answered" is not "the right thing answered".
 
 ## Build / release pipeline - `known-issues/build.md`
 
@@ -36,10 +39,12 @@ Fixed unless marked OPEN.
 - Un-abortable promise: cleanup can't reach handlers it didn't create yet.
 - Resource acquired via await must escape its own cleanup.
 - Router-owned callback in a deps array re-arms the listener it is named in.
+- Module-scoped promise memo assigned only on the success side stays poisoned.
 - Guard keyed on one error type != the broad condition.
 
 ## Test / harness - `known-issues/testing.md`
 
+- Library `afterEach` hooks only self-register under `globals: true`.
 - Time it before theorising.
 - Large fake-time advance = one iteration per live tick.
 - Boundary test pays fixture cost per boundary unit.
@@ -75,6 +80,10 @@ Fixed unless marked OPEN.
 - "Is there a value" cache-hit test can't cache "there is none".
 - Inline `queryKey` = nothing else can invalidate it.
 - Duplicated prefetch warms a key nobody reads.
+- Bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.
+- Cap check that runs before the write evicts for a write that adds nothing.
+- A computed number reaching a URL is a cache key; clamp it at the one writer.
+- `!` on an optional id ships the string "undefined" to the server, and caches it.
 - `LIMIT` without `ORDER BY` silently redefines results.
 - External identifier != local one on exact compare.
 - Unscoped mirror depends entirely on its delete path.
@@ -86,6 +95,8 @@ Fixed unless marked OPEN.
 - "Just finished" test built from restore-shared state fires at startup too.
 - Statement sequence with invalid intermediate states is a transaction.
 - One-direction version compare can't say "too new".
+- A counter fed by every request of one burst counts one event many times.
+- Process-wide state for a per-server fact answers for servers it never saw.
 - Transaction real only if statements share a connection.
 
 ## UI - `known-issues/ui.md`
@@ -102,6 +113,7 @@ Fixed unless marked OPEN.
 - Router value copied into `useState` never resyncs while the route stays mounted.
 - `null` for "don't know yet" and "isn't there" paints the same blank page.
 - Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.
+- An error path that builds its own value can fail before delivering the message.
 - Decoding an already-decoded value = no-op or crash.
 - Partial opt-out of global base rule keeps properties it forgot. **OPEN, 37 instances.**
 - Hit-area halo grown toward a neighbour steals its clicks.

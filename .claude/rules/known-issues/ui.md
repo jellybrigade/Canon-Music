@@ -64,6 +64,10 @@ Fixed unless marked OPEN.
   grep -rn "if (!serverWithCred\|if (!credential\|if (!server)\|if (!session" src --include='*.tsx' | grep -v '\.test\.'
   grep -rn "serverWithCred ?" src --include='*.tsx' | grep -v '\.test\.'
   ```
+- **An error path that builds its own value can fail before delivering the message.** Both `authenticate` paths reported `new URL(baseUrl).origin`, which drops a subpath install's path (the user was told to check an address nothing contacted) and throws `TypeError: Invalid URL` on a typo'd host - inside the branch written for exactly that user. Fix: one `pingFailureMessage` helper reporting the URL `apiPost` actually used. An error path owes the same "cannot itself fail" scrutiny as a cleanup path.
+  ```
+  grep -rn "new URL(" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Decoding an already-decoded value = no-op or crash.** react-router decodes params once; second decode threw `URIError` or silently mangled `%20`. Test via real router (`src/lib/routes.router.test.tsx`). Known limit: literal `%2F` in name can't round-trip.
   ```
   grep -rn "decodeURIComponent\|unescape(" src --include='*.ts*' | grep -v '\.test\.'

@@ -37,6 +37,10 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^\s*\}, \[[^]]*(navigate|setSearchParams|searchParams|location)[^]]*\]\)" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Module-scoped promise memo assigned only on the success side stays poisoned.** `manual-mappings.ts` cleared `inFlight` inside the resolved branch, so one rejected read handed the same rejection to every later caller and manual genre mappings silently stopped applying for the life of the process - reading as a mapping bug, not a db one. Fix: `try`/`catch` around the whole body, clearing under the same generation check the success path uses, then rethrow. `src/db/index.ts`'s `dbPromise` is the deliberate exception: a failed migration must not silently retry, and it surfaces on `DatabaseErrorScreen`.
+  ```
+  grep -rn "^let .*: Promise<\|^let .*Promise<.*> | null" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Guard keyed on one error type != the broad condition.** `apiPost` retried non-idempotent writes on unnamed errors; now `if (!retriable) break`. Unrecognised = unsafe.
   ```
   grep -rn "instanceof DOMException\|AbortError\|instanceof TypeError\|err\.name ===" src --include='*.ts*' | grep -v '\.test\.'

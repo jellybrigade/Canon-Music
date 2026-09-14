@@ -11,6 +11,10 @@ globs:
 Bug classes that already shipped once. Heading = lesson. Greps kept, forensics in git.
 Fixed unless marked OPEN.
 
+- **Library `afterEach` hooks only self-register under `globals: true`.** RTL's `cleanup` never ran, so every `render`/`renderHook` stayed mounted for the rest of its file - timers ticking, listeners armed, effects hitting a closed DB - and any exact-count waste assertion could be measuring an earlier test. Fix: `src/test/setup.ts` registers it explicitly, node-env guarded; `src/test/cleanup.test.tsx` pins it. Ask of any test library: what does it assume about globals?
+  ```
+  grep -n "globals" vitest.config.ts || grep -rn "afterEach(cleanup)\|cleanup()" src/test/setup.ts
+  ```
 - **Time it before theorising.** Flaky-looking timeout != race, usually. `pnpm test:run --testTimeout=60000 --reporter=verbose`; >1500ms owes explanation.
 - **Large fake-time advance = one iteration per live tick.** Set distant-timer state directly, don't run the poller.
   ```
@@ -24,7 +28,7 @@ Fixed unless marked OPEN.
   ```
   grep -rc "ByRole(" src --include='*.test.tsx' | grep -v ":0$" | sort -t: -k2 -rn
   ```
-- **Shared mock `Response` breaks on double body read.** Real `fetch` = fresh `Response` per call. Use `mockImplementation(() => ...)` for repeat calls.
+- **Shared mock `Response` breaks on double body read.** Real `fetch` = fresh `Response` per call. Use `mockImplementation(() => ...)` for repeat calls. **Found again:** a `mockResolvedValue(httpStatus(503))` retry-ladder test passed while every call after the first rejected with "Body is unusable", so the property it named (a server that answers does not trip the transport breaker) was never exercised. A green test whose subject cannot have run is worse than a missing one.
   ```
   grep -rn "mockResolvedValue(" src --include='*.test.ts*' | grep -iE "response|ok\(|httpStatus"
   ```

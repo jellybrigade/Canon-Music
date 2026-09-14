@@ -134,21 +134,54 @@ describe("getManualGenreMappings", () => {
     });
   });
 
-  it("a rejected db.select permanently rejects inFlight - no retry without explicit invalidation", async () => {
-    const select = vi.fn(async (): Promise<{ raw_value: string; canonical_id: string }[]> => {
-      throw new Error("db unreachable");
-    });
+  it("retries on the next call after a failed read, instead of staying poisoned", async () => {
+    // A module-scoped promise memo assigned only on the success side keeps handing the
+    // rejection to every later caller, so one failed read stops manual genre mappings
+    // from applying for the life of the process, and reads as a mapping bug.
+    const select = vi
+      .fn<() => Promise<{ raw_value: string; canonical_id: string }[]>>()
+      .mockRejectedValueOnce(new Error("db unreachable"))
+      .mockResolvedValue([{ raw_value: "Rock", canonical_id: "rk" }]);
+    const { getManualGenreMappings } = await freshModule(select);
+
+    await expect(getManualGenreMappings()).rejects.toThrow("db unreachable");
+    const map = await getManualGenreMappings();
+
+    expect(select).toHaveBeenCalledTimes(2);
+    expect(map.size).toBe(1);
+  });
+
+  it("still de-dupes concurrent callers of a read that ends up failing", async () => {
+    const gate = deferred<{ raw_value: string; canonical_id: string }[]>();
+    const select = vi.fn(() => gate.promise);
+    const { getManualGenreMappings } = await freshModule(select);
+
+    const first = getManualGenreMappings();
+    const second = getManualGenreMappings();
+    gate.reject(new Error("db unreachable"));
+
+    await expect(first).rejects.toThrow("db unreachable");
+    await expect(second).rejects.toThrow("db unreachable");
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not clear a newer read armed by an invalidation while the failing one was in flight", async () => {
+    const failing = deferred<{ raw_value: string; canonical_id: string }[]>();
+    const select = vi
+      .fn<() => Promise<{ raw_value: string; canonical_id: string }[]>>()
+      .mockImplementationOnce(() => failing.promise)
+      .mockResolvedValue([{ raw_value: "Rock", canonical_id: "rk" }]);
     const { getManualGenreMappings, invalidateManualMappings } = await freshModule(select);
 
-    await expect(getManualGenreMappings()).rejects.toThrow("db unreachable");
-    // second call reuses the same rejected inFlight promise - select is not called again
-    await expect(getManualGenreMappings()).rejects.toThrow("db unreachable");
-    expect(select).toHaveBeenCalledTimes(1);
-
-    // only escape hatch is an explicit invalidation
+    const doomed = getManualGenreMappings();
     invalidateManualMappings();
-    select.mockImplementationOnce(async () => []);
-    await expect(getManualGenreMappings()).resolves.toBeInstanceOf(Map);
+    const fresh = getManualGenreMappings();
+    failing.reject(new Error("db unreachable"));
+
+    await expect(doomed).rejects.toThrow("db unreachable");
+    await expect(fresh).resolves.toBeInstanceOf(Map);
+    // The cache the second read wrote survives the first read's late failure.
+    expect((await getManualGenreMappings()).size).toBe(1);
     expect(select).toHaveBeenCalledTimes(2);
   });
 });

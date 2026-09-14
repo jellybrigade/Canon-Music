@@ -91,6 +91,23 @@ Fixed unless marked OPEN.
   grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
   ```
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `now-playing-queries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
+- **A bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.** `query_artists` took `artwork_url` bare from its per-artist group, so a tile's portrait changed after unrelated writes; `query_recent_genres`' fallback ordered by `album_count` alone, so the 18th/19th genre swapped between refreshes. Fix: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY navidrome_created DESC, year DESC, id)` and a `name COLLATE NOCASE` tiebreaker. Ask of any aggregate: which row is this, and would two runs agree? **Found again in the branch beside it:** the first fix landed only on the fallback, which runs for a user with no scrobble history, while the branch that actually runs ordered by `MAX(last_played)` alone - and one played album contributes several genres, all tied on it, so ties were the normal case rather than an edge. Fix a tiebreak on every branch of the query, not the one the test reached, and prefer `MIN(name)` over a bare `name` even where the name looks functionally dependent on the group key (a genre rename re-normalizes albums incrementally, so two names share one `canonical_id` until the last album is reprocessed).
+  ```
+  grep -n "GROUP BY" src-tauri/src/*.rs | grep -v "COUNT(\|MIN(\|MAX(\|SUM("
+  grep -rn "LIMIT" src-tauri/src/*.rs src --include='*.ts*' | grep -v '\.test\.' | grep -v "ORDER BY"
+  ```
+- **Cap check that runs before the write evicts for a write that adds nothing.** `cappedSet` compared `size >= maxEntries` without asking whether the key was already held, so the cover and artist caches dropped a live entry on every plain overwrite and ran permanently at one entry under their own workload. Fix: `!cache.has(key) &&` in front of the check. Insertion order, not LRU, is the documented semantics. **Found 3x:** `artColor.ts` and `artBlur.ts` hand-rolled the same pre-write check, reachable because neither dedups in-flight work, so two components mounting on one cover URL both miss and both write. Now enforced repo-wide by `src/lib/capped-cache-guard.test.ts`. The comparison tells the two spellings apart: a cap checked *before* the write is `>= MAX` and needs the `has` guard, one checked *after* a delete-then-set write is `> MAX` and is already safe.
+  ```
+  grep -rn "\.size >= \|\.size > " src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A computed number reaching a URL is a cache key; clamp it at the one writer.** `getCoverArtUrl` interpolated `size` raw, so `NaN`/fractional/negative values (`size * 2` at one call site) reached the URL. Rust falls back to 300 but caches under `{id}:{size}` with the bogus string, fragmenting the disk cache and every memo key built from the URL. Fix: `Number.isFinite(size) ? Math.max(1, Math.round(size)) : 300`.
+  ```
+  grep -rn "?size=\${\|params.set(\"size\"" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **`!` on an optional id ships the string "undefined" to the server, and caches it.** `HomeView`'s For-You tile was the one unguarded `!` of 30 `getCoverArtUrl` call sites: `encodeURIComponent(undefined)` requested a cover named `"undefined"`, cached forever under `"undefined:300"`, once per artless album. Enforced repo-wide by `src/lib/cover-art-guard.test.ts`, which sweeps the call sites rather than trusting the next one written. **A sweep owes its own reach a test:** the first version matched `!` only at the end of the argument (missing it inside a ternary or before `??`) and split arguments on bracket depth alone, so one comma inside a string, template or comment shifted every later argument and the cover id stopped being `args[3]` - blind in exactly the call nobody looked at.
+  ```
+  grep -rn "getCoverArtUrl(" src --include='*.tsx' | grep '!'
+  ```
 - **`LIMIT` without `ORDER BY` silently redefines results.** FTS ranks by weighted `bm25` in `MATERIALIZED` CTE before cap. Also: `useDeferredValue` defers rendering, not fetching.
 - **External identifier != local one on exact compare.** Last.fm artist names: both sides `LOWER(TRIM(...))`, ownership unions `artist_aliases`.
 - **Unscoped mirror depends entirely on its delete path.** `purgeServerData` runs before `servers` row delete. **Found 4x: grep any `server_id:` literal not from the source row.**
@@ -123,6 +140,14 @@ Fixed unless marked OPEN.
 - **"Just finished" test built from restore-shared state fires at startup too.** `useRadio` needs `hasPlayedRef` witness. Side-effect starts belong in handlers, not effects.
   ```
   grep -rn "playFromQueueIndex(\|playTrack(\|playQueue(\|\.resume()" src/hooks src/App.tsx | grep -v "\.test\."
+  ```
+- **A counter fed by every request of one burst counts one event many times.** The transport breaker treated each of N requests stalling together as separate evidence: the first opened it, and every other in-flight ladder then re-opened it, walking the 15s/60s/300s cooldown to its top in one burst and spending one `probe_server` per request. Shared module state has to ask whether the thing it is counting already happened; here the breaker being open *is* that answer, so a re-open inside its own cooldown is ignored. Ask of any counter behind a slow operation: how many callers are inside it right now?
+  ```
+  grep -rnE "^(let|const) \w+ = (0|new Map|new Set)" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Process-wide state for a per-server fact answers for servers it never saw.** The breaker was one global set of counters, so a stall against one Navidrome failed requests to a different one, and did it with a message naming an address that caller never asked about. Same shape as the `server_id` scoping rule one row up, applied to memory instead of SQL: state about a server is keyed by that server. Its self-healing path also needs an exemption, so `ping.view` always gets its ladder and Settings can re-test.
+  ```
+  grep -rnE "^(let|const) \w+(: [^=]+)? = " src/lib --include='*.ts*' | grep -v '\.test\.' | grep -vE "=>|function|\[\]|\bnew (RegExp|URL)\b"
   ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.

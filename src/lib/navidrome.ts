@@ -1,5 +1,10 @@
 import { md5 } from "js-md5";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  noteTransportTimeout,
+  recordTransportSuccess,
+  transportStallNotice,
+} from "./transport-health";
 
 let _streamMaxBitrate = 0;
 let _coverServerReady = false;
@@ -115,6 +120,13 @@ function isRetriableEndpoint(endpoint: string): boolean {
   return !NON_IDEMPOTENT_ENDPOINTS.has(endpoint.replace(/\.view$/, ""));
 }
 
+/** The one endpoint a user runs on purpose to ask whether a server is up. Refusing it
+ *  while the breaker is open would take away the only way to find out that a fixed
+ *  network is fixed, so it always gets its ladder. */
+function isLivenessCheck(endpoint: string): boolean {
+  return endpoint.replace(/\.view$/, "") === "ping";
+}
+
 async function fetchWithTimeout(url: string, body: string): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
@@ -169,12 +181,21 @@ async function apiPost(
   altUrl?: string
 ): Promise<Response> {
   const body = params.toString();
-  const urls = [`${normalizeUrl(baseUrl)}/rest/${endpoint}`];
+  const server = normalizeUrl(baseUrl);
+  const urls = [`${server}/rest/${endpoint}`];
   // The alt URL (typically a LAN address for the same server) is tried within every
   // attempt, not only on the first, since either route can be the one that is stalling.
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
+  // Every request stalls identically when the fault is this machine's HTTP layer rather
+  // than the server, so the ladder below would spend 37s per call for as long as it lasts.
+  // Health is per server: one stalled server must not speak for another, least of all
+  // in a message that names an address the caller never asked about.
+  const stalled = isLivenessCheck(endpoint) ? null : transportStallNotice(server);
+  if (stalled) throw new Error(`${endpoint} not attempted: ${stalled}`);
+
   let lastFailure = "unknown error";
+  let lastWasTimeout = false;
   // A write that cannot be safely repeated gets exactly one shot, full stop. Both routes
   // are the same Navidrome, and fetch cannot say whether a rejected request reached it,
   // so any rejection has to be treated as "may already have been applied".
@@ -185,6 +206,7 @@ async function apiPost(
     for (const url of urls) {
       try {
         const res = await fetchWithTimeout(url, body);
+        recordTransportSuccess(server);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
           continue;
@@ -192,6 +214,7 @@ async function apiPost(
         return res;
       } catch (err) {
         lastFailure = describeError(err);
+        lastWasTimeout = isTimeout(err);
         // fetch rejects identically whether the request never left the machine or was
         // applied and lost its response (the common Linux resolver stall surfaces as an
         // opaque TypeError, not an AbortError), so a non-idempotent write stops here.
@@ -204,9 +227,15 @@ async function apiPost(
   }
 
   // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
-  // and the attempt count that were actually burned.
+  // and the attempt count that were actually burned. A ladder spent entirely on timeouts
+  // also feeds the breaker, which answers with a cause once it has seen enough to say one.
+  // Only a full ladder is the ~75s of evidence the threshold is written around. A
+  // single-shot write times out after 12s, and the scrobble queue drains in bursts of
+  // them, so letting those open the breaker would trip it on a third of the evidence.
+  const cause = lastWasTimeout && retriable ? await noteTransportTimeout(server) : null;
   throw new Error(
-    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}`
+    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
+      (cause ? `. ${cause}` : "")
   );
 }
 
@@ -217,12 +246,16 @@ export function getCoverArtUrl(
   coverArtId: string,
   size = 300
 ): string {
+  // Rust falls back to 300 for a size it cannot parse, but caches under `{id}:{size}`
+  // with the string it was handed, so a fractional or negative size fragments the disk
+  // cache and every memo key built from the URL. Callers compute sizes (`size * 2`).
+  const px = Number.isFinite(size) ? Math.max(1, Math.round(size)) : 300;
   if (_coverServerReady) {
-    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${size}`;
+    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${px}`;
   }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
-  params.set("size", String(size));
+  params.set("size", String(px));
   return `${normalizeUrl(baseUrl)}/rest/getCoverArt?${params.toString()}`;
 }
 
@@ -880,6 +913,13 @@ export async function fetchLyricsBySongId(
   }
 }
 
+// The URL apiPost actually contacted, not its origin: a subpath install would otherwise
+// be told to check an address nothing ever asked for, and `new URL` on a typo'd host threw
+// its own TypeError over the message written for exactly that user.
+function pingFailureMessage(baseUrl: string, status: number): string {
+  return `Server returned ${status}. Check URL (tried: ${normalizeUrl(baseUrl)}/rest/ping.view)`;
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,
@@ -891,8 +931,7 @@ export async function authenticate(
 
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
-    const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(pingFailureMessage(baseUrl, res.status));
   }
 
   const data = (await res.json()) as {
@@ -977,8 +1016,7 @@ export async function authenticateWithApiKey(
   const params = new URLSearchParams({ u: username, apiKey, v: "1.16.1", c: "canon", f: "json" });
   const res = await apiPost(baseUrl, "ping.view", params);
   if (!res.ok) {
-    const origin = new URL(normalizeUrl(baseUrl)).origin;
-    throw new Error(`Server returned ${res.status}. Check URL (tried: ${origin}/rest/ping.view)`);
+    throw new Error(pingFailureMessage(baseUrl, res.status));
   }
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { code: number; message: string } };

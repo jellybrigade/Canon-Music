@@ -1,5 +1,6 @@
 mod library_read;
 mod library_write;
+mod net_probe;
 mod streaming;
 mod upnp;
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -1823,6 +1824,7 @@ pub fn run() {
             tray_set_visible,
             tray_set_close_to_tray,
             set_cover_proxy_config,
+            net_probe::probe_server,
             take_crash_report,
             library_read::get_albums,
             library_read::get_artists,

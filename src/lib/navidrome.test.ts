@@ -11,9 +11,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 
+import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { invokeCount } from "../test/perf";
+import { resetTransportHealth } from "./transport-health";
 import {
   SubsonicError,
   addTrackToNavidromePlaylist,
+  authenticate,
+  authenticateWithApiKey,
   fetchAlbumListByType,
   fetchAllAlbums,
   fetchStarred2,
@@ -91,12 +96,12 @@ function urls(): string[] {
  * Run `promise` to settlement while draining the retry backoff timers. Real fetches are
  * already resolved by the mock, so a generous virtual advance costs nothing.
  */
-async function settle<T>(promise: Promise<T>): Promise<T> {
+async function settle<T>(promise: Promise<T>, advanceMs = 60_000): Promise<T> {
   const raced = promise.then(
     (v) => ({ ok: true as const, v }),
     (e) => ({ ok: false as const, e })
   );
-  await vi.advanceTimersByTimeAsync(60_000);
+  await vi.advanceTimersByTimeAsync(advanceMs);
   const r = await raced;
   if (r.ok) return r.v;
   throw r.e;
@@ -106,6 +111,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
+  resetTauriMocks();
+  resetTransportHealth();
+  onInvoke("probe_server", () => ({ reachable: true, status: 200, elapsedMs: 90, error: null }));
 });
 
 afterEach(() => {
@@ -714,5 +722,220 @@ describe("fetchAllAlbums", () => {
       "http://music.example/rest/getAlbumList2",
       "http://192.168.1.5:4533/rest/getAlbumList2",
     ]);
+  });
+});
+
+describe("authenticate / authenticateWithApiKey", () => {
+  it("names the exact ping URL it tried, subpath included, when the server rejects it", async () => {
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticate(`${BASE}/music`, "alice", "pw"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: http://music.example/music/rest/ping.view)"
+    );
+    expect(urls()[0]).toBe("http://music.example/music/rest/ping.view");
+  });
+
+  it("reports the same URL for the api-key path", async () => {
+    fetchMock.mockResolvedValue(httpStatus(401));
+
+    await expect(settle(authenticateWithApiKey(`${BASE}/music`, "alice", "key-1"))).rejects.toThrow(
+      "Server returned 401. Check URL (tried: http://music.example/music/rest/ping.view)"
+    );
+  });
+
+  it("still reports the status for a base URL that is not a parsable URL", async () => {
+    // The error path is exactly the one a typo'd host lands in, so it must not throw its
+    // own TypeError on the way to the message written for that user.
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticate("music.example", "alice", "pw"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+    );
+  });
+
+  it("reports the api-key status for an unparsable base URL too", async () => {
+    fetchMock.mockResolvedValue(httpStatus(404));
+
+    await expect(settle(authenticateWithApiKey("music.example", "alice", "key-1"))).rejects.toThrow(
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+    );
+  });
+
+  it("passes the server's own message through when the ping is 200 but the login fails", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow(
+      "Wrong username or password"
+    );
+  });
+});
+
+describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms backoffs, and nothing beyond: advancing past
+   *  that would expire the breaker's own cooldown inside the call that armed it. */
+  const LADDER_MS = 38_000;
+
+
+  /** A fetch that never answers, which is what a stalled HTTP layer does to every request. */
+  function neverAnswers(): void {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError"))
+        );
+      })
+    );
+  }
+
+  it("stops spending 12s ladders once two in a row have timed out", async () => {
+    neverAnswers();
+
+    await expect(settle(fetchStarred2(BASE, "alice", cred), LADDER_MS)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    await expect(settle(fetchStarred2(BASE, "alice", cred), LADDER_MS)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+
+    await expect(fetchStarred2(BASE, "alice", cred)).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("names the likely cause instead of a bare millisecond count", async () => {
+    neverAnswers();
+
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    const err = (await settle(
+      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
+      LADDER_MS
+    )) as Error;
+
+    expect(err.message).toContain("Network Proxy");
+    expect(err.message).toContain("90ms");
+  });
+
+  it("names the endpoint it refused to attempt while the transport is stalled", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+
+    const err = (await fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)) as Error;
+
+    expect(err.message).toContain("getStarred2");
+  });
+
+  it("probes the native stack once, not once per failed attempt", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await fetchStarred2(BASE, "alice", cred).catch(() => undefined);
+
+    expect(invokeCount("probe_server")).toBe(1);
+  });
+
+  it("leaves the first failure's message alone, since one stall is not evidence", async () => {
+    neverAnswers();
+
+    const err = (await settle(
+      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
+      LADDER_MS
+    )) as Error;
+
+    expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
+    expect(invokeCount("probe_server")).toBe(0);
+  });
+
+  it("does not trip on a server that answers, however unhappily", async () => {
+    // A shared Response would be consumed by the first body read and reject the rest with
+    // "Body is unusable", which is not a timeout and would pass this test for free.
+    fetchMock.mockImplementation(() => httpStatus(503));
+
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(9);
+    expect(invokeCount("probe_server")).toBe(0);
+  });
+
+  it("forgets a stall the moment a request gets through", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    fetchMock.mockResolvedValue(ok({ status: "ok", starred2: {} }));
+    await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
+
+    neverAnswers();
+    const err = (await settle(
+      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
+      LADDER_MS
+    )) as Error;
+
+    expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
+  });
+
+  it("lets a healed transport back in once the cooldown passes", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    const attemptsWhileOpen = fetchMock.mock.calls.length;
+
+    vi.setSystemTime(Date.now() + 15_001);
+    fetchMock.mockResolvedValue(ok({ status: "ok", starred2: {} }));
+    await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(attemptsWhileOpen + 1);
+  });
+});
+
+describe("what the transport breaker refuses to speak for", () => {
+  const LADDER_MS = 38_000;
+  const OTHER_SERVER = "http://other.example";
+
+  function neverAnswers(): void {
+    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError"))
+        );
+      })
+    );
+  }
+
+  /** Two full ladders against BASE, which is what opens the breaker. */
+  async function stallBase(): Promise<void> {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+  }
+
+  it("leaves a different server alone", async () => {
+    await stallBase();
+    fetchMock.mockImplementation(() => ok({ status: "ok", starred2: {} }));
+    const before = fetchMock.mock.calls.length;
+
+    await settle(fetchStarred2(OTHER_SERVER, "alice", cred), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+    expect(urls()[before]).toContain(OTHER_SERVER);
+  });
+
+  it("still lets the user re-test the stalled server itself", async () => {
+    await stallBase();
+    fetchMock.mockImplementation(() => ok({ status: "ok" }));
+    const before = fetchMock.mock.calls.length;
+
+    await expect(settle(authenticate(BASE, "alice", "pw"), LADDER_MS)).resolves.toMatchObject({
+      type: "md5",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(before + 1);
+  });
+
+  it("is not opened by single-shot writes, which spend a third of the evidence", async () => {
+    neverAnswers();
+    await settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch(() => undefined), 13_000);
+    await settle(scrobbleTrack(BASE, "alice", cred, "tr-2", 2000).catch(() => undefined), 13_000);
+
+    const before = fetchMock.mock.calls.length;
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(before + 3);
+    expect(invokeCount("probe_server")).toBe(0);
   });
 });

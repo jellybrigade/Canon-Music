@@ -6,6 +6,7 @@
 // (Wikidata/Fanart/TheAudioDB portrait CDNs) rarely send CORS headers.
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { cappedSet } from "./boundedCache";
 
 const CANVAS_SIZE = 32;
 // Small values (a color string or null) but keyed per distinct album/artist artwork
@@ -179,11 +180,7 @@ export async function extractAccent(imageUrl: string): Promise<string | null> {
     color = await extractViaProxyFetch(imageUrl);
   }
 
-  if (accentCache.size >= MAX_ACCENT_CACHE_ENTRIES) {
-    const oldestKey = accentCache.keys().next().value;
-    if (oldestKey !== undefined) accentCache.delete(oldestKey);
-  }
-  accentCache.set(imageUrl, color);
+  cappedSet(accentCache, imageUrl, color, MAX_ACCENT_CACHE_ENTRIES);
   return color;
 }
 
