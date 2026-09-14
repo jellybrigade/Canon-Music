@@ -12,6 +12,7 @@ Fixed unless marked OPEN.
 - ALSA underrun under load.
 - Read-only rusqlite can't own WAL `-shm`.
 - Unbounded thread-per-request -> SIGKILL.
+- Webview honours PAC, Rust does not; a dead PAC stalls only half of Canon.
 - "Load failed" ~25s = systemd-resolved, not Canon.
 
 ## Build / release pipeline - `known-issues/build.md`

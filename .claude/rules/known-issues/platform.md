@@ -19,4 +19,9 @@ Fixed unless marked OPEN.
 - **ALSA underrun under load.** rodio 0.19 buffer too small. `PULSE_LATENCY_MSEC=60` in `run()`. Real fix: rodio 0.20+.
 - **Read-only rusqlite can't own WAL `-shm`.** `library_read.rs`: `READ_WRITE | NO_MUTEX | URI`, no `CREATE`.
 - **Unbounded thread-per-request -> SIGKILL.** Cover proxy: permit before spawn, `spawn_blocking`, cap 16. Tell: `ps -eLf | grep canon | wc -l` climbing.
+- **Two HTTP stacks means two proxy configurations, and only the webview honours PAC.** Canon reaches the API through the webview (libsoup, so the desktop's `GProxyResolver`) and covers through Rust reqwest (env proxy only, no PAC). A desktop left on `/system/proxy/mode` = `auto` with no working PAC/WPAD made every `fetch` hang on a 25s D-Bus call to `org.gtk.GLib.PACRunner`, so Canon's 12s abort fired first, three attempts per call, and the library was unusable - while cover art loaded fine, `curl` answered in 100ms and Chrome (own WPAD, own fallback) was untroubled. It reads as "Canon is broken" and logs as a bare `timed out after 12000ms`. Fix: `net_probe.rs::probe_server` reaches the server over the stack that is *not* stalling, so the message names the machine's HTTP configuration instead of the server; `transport-health.ts` stops the ladder after two lost to timeouts. User-side cure is `dconf write /system/proxy/mode "'none'"`. Ask of any transport failure: which of Canon's two HTTP clients saw it, and would the other agree?
+  ```
+  dconf read /system/proxy/mode   # 'auto' with no reachable PAC stalls every webview fetch
+  grep -rn "timed out after\|Load failed" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **"Load failed" ~25s = systemd-resolved, not Canon.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.

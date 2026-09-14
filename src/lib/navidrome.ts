@@ -1,5 +1,10 @@
 import { md5 } from "js-md5";
 import { invoke } from "@tauri-apps/api/core";
+import {
+  noteTransportTimeout,
+  recordTransportSuccess,
+  transportStallNotice,
+} from "./transport-health";
 
 let _streamMaxBitrate = 0;
 let _coverServerReady = false;
@@ -174,7 +179,13 @@ async function apiPost(
   // attempt, not only on the first, since either route can be the one that is stalling.
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
+  // Every request stalls identically when the fault is this machine's HTTP layer rather
+  // than the server, so the ladder below would spend 37s per call for as long as it lasts.
+  const stalled = transportStallNotice();
+  if (stalled) throw new Error(`${endpoint} not attempted: ${stalled}`);
+
   let lastFailure = "unknown error";
+  let lastWasTimeout = false;
   // A write that cannot be safely repeated gets exactly one shot, full stop. Both routes
   // are the same Navidrome, and fetch cannot say whether a rejected request reached it,
   // so any rejection has to be treated as "may already have been applied".
@@ -185,6 +196,7 @@ async function apiPost(
     for (const url of urls) {
       try {
         const res = await fetchWithTimeout(url, body);
+        recordTransportSuccess();
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
           continue;
@@ -192,6 +204,7 @@ async function apiPost(
         return res;
       } catch (err) {
         lastFailure = describeError(err);
+        lastWasTimeout = isTimeout(err);
         // fetch rejects identically whether the request never left the machine or was
         // applied and lost its response (the common Linux resolver stall surfaces as an
         // opaque TypeError, not an AbortError), so a non-idempotent write stops here.
@@ -204,9 +217,12 @@ async function apiPost(
   }
 
   // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
-  // and the attempt count that were actually burned.
+  // and the attempt count that were actually burned. A ladder spent entirely on timeouts
+  // also feeds the breaker, which answers with a cause once it has seen enough to say one.
+  const cause = lastWasTimeout ? await noteTransportTimeout(normalizeUrl(baseUrl)) : null;
   throw new Error(
-    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}`
+    `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
+      (cause ? `. ${cause}` : "")
   );
 }
 
