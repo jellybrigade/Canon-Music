@@ -7,6 +7,7 @@
 
 import * as StackBlur from "stackblur-canvas";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { cappedSet } from "./boundedCache";
 
 // Small enough that StackBlur runs in well under a millisecond, large enough
 // that the result doesn't look pixelated once CSS scales it up to fill the view.
@@ -122,12 +123,6 @@ export async function getBlurredBackdrop(imageUrl: string): Promise<string | nul
     result = await renderViaProxyFetch(imageUrl);
   }
 
-  if (result) {
-    if (blurCache.size >= MAX_CACHE_ENTRIES) {
-      const oldestKey = blurCache.keys().next().value;
-      if (oldestKey !== undefined) blurCache.delete(oldestKey);
-    }
-    blurCache.set(imageUrl, result);
-  }
+  if (result) cappedSet(blurCache, imageUrl, result, MAX_CACHE_ENTRIES);
   return result;
 }
