@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
+import { useReplayGainCoverage } from "../../hooks/useReplayGainCoverage";
+import { describeReplayGainCoverage } from "../../lib/replaygain-coverage";
 import { usePlayerStore } from "../../store/player";
 import { SettingRow } from "./SettingRow";
 import { SegToggle } from "../TagsViewHelpers";
@@ -15,9 +17,10 @@ const RADIO_SIMILARITY_STEPS = [
 
 interface Props {
   searchQuery: string;
+  serverId: string | undefined;
 }
 
-export function PlaybackTab({ searchQuery }: Props) {
+export function PlaybackTab({ searchQuery, serverId }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", true);
   const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
@@ -53,6 +56,11 @@ export function PlaybackTab({ searchQuery }: Props) {
   const setReplayGainPreAmp = usePlayerStore((s) => s.setReplayGainPreAmp);
   const replayGainFallbackGain = usePlayerStore((s) => s.replayGainFallbackGain);
   const setReplayGainFallbackGain = usePlayerStore((s) => s.setReplayGainFallbackGain);
+
+  const { coverage } = useReplayGainCoverage(serverId);
+  const replayGainSummary = coverage
+    ? describeReplayGainCoverage(coverage, replayGainMode, replayGainFallbackGain)
+    : null;
 
   const [showTrayIcon, setShowTrayIcon] = useBoolSetting("tray.show_icon", false);
   const [closeToTray, setCloseToTray] = useBoolSetting("tray.close_to_tray", false);
@@ -231,6 +239,14 @@ export function PlaybackTab({ searchQuery }: Props) {
           <SettingRow
             title="ReplayGain mode"
             description="Adjusts playback volume based on ReplayGain tags so tracks play at a consistent loudness. Requires a library sync to pull gain data from the server."
+            note={
+              replayGainSummary && (
+                <p className="settings-coverage">
+                  <span className="settings-coverage-headline">{replayGainSummary.headline}</span>
+                  {replayGainSummary.detail && ` ${replayGainSummary.detail}`}
+                </p>
+              )
+            }
           >
             <select
               value={replayGainMode}

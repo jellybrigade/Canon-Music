@@ -42,7 +42,7 @@ export function SettingsView({ server, syncStatus, runSync, syncError, lastSynce
       case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":
-        return <PlaybackTab searchQuery={query} />;
+        return <PlaybackTab searchQuery={query} serverId={server?.id} />;
       case "advanced":
         return (
           <>

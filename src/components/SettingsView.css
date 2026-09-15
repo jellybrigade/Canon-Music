@@ -527,3 +527,14 @@
 .settings-diag-value--ok {
   color: var(--success-b);
 }
+
+.settings-coverage {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  line-height: 1.45;
+  margin: var(--space-2xs) 0 0;
+}
+
+.settings-coverage-headline {
+  color: var(--text-secondary);
+}

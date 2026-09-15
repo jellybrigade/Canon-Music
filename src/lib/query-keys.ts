@@ -112,6 +112,8 @@ export const QK = {
   settingsFanartApiKey: () => ["settings", "fanart.api_key"] as const,
   settingsAll: () => ["settings"] as const,
   scrobbleQueueCount: (serverId?: string) => ["scrobble_queue", "count", serverId] as const,
+  replayGainCoverage: (serverId: string | undefined) =>
+    ["replay-gain-coverage", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
