@@ -8,6 +8,7 @@ import { escapeLike } from "./sql";
 import { rebuildTagVocabCache } from "./tag-normalize";
 import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batch";
 import { runPool } from "./async-pool";
+import { prunedTrackIdTables, purgedTrackIdTables } from "../db/track-id-tables";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -63,25 +64,21 @@ function watermarkMoved(stored: ServerWatermark | undefined, status: NavidromeSc
   );
 }
 
-// Tables that mirror server content, keyed by track id. A track the server no
-// longer has leaves rows here that still show up in the grid, in search and in
-// radio candidates, and 404 when played.
+// A track the server no longer has leaves rows behind that still show up in the
+// grid, in search and in radio candidates, and 404 when played. Which tables
+// those are, and why the user's own rows are spared, is db/track-id-tables.ts.
 //
-// Deliberately NOT listed: scrobble_queue and scrobble_history (the user's
-// listening history, not the server's data), pending_edits and edit_history
-// (inert legacy schema). Album-keyed album_identity and album_user_genres are
-// left alone for the same reason: they are user-authored or user-corrected and
+// Album-keyed album_identity and album_user_genres are left alone for the same
+// reason the user's track rows are: they are user-authored or user-corrected and
 // cost nothing to keep if the album comes back.
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
-    (ph: string) => `DELETE FROM tracks_fts WHERE id IN (${ph})`,
-    (ph: string) => `DELETE FROM track_tags WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM loved_tracks WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM playlist_tracks WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM tag_issues WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM lyrics WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM waveform_cache WHERE track_id IN (${ph})`,
+    ...prunedTrackIdTables().map(
+      ({ table, column }) =>
+        (ph: string) =>
+          `DELETE FROM ${table} WHERE ${column} IN (${ph})`
+    ),
     (ph: string) => `DELETE FROM tracks WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -97,19 +94,14 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
 // stranded row is tens to hundreds of KB no read path can reach. album_identity,
 // album_user_genres and album_genre_exclusions stay for the reason given above
 // deleteTracksByIds: they are user-authored or user-corrected, and the album ids
-// survive a re-add of the same server.
+// survive a re-add of the same server. The track-keyed tables come from
+// db/track-id-tables.ts.
 async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
-  const viaTracks = (table: string, column: string) => (ph: string) =>
+  const viaTracks = ({ table, column }: { table: string; column: string }) => (ph: string) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
   const statements = [
-    viaTracks("tracks_fts", "id"),
-    viaTracks("track_tags", "track_id"),
-    viaTracks("loved_tracks", "track_id"),
-    viaTracks("playlist_tracks", "track_id"),
-    viaTracks("tag_issues", "track_id"),
-    viaTracks("lyrics", "track_id"),
-    viaTracks("waveform_cache", "track_id"),
+    ...prunedTrackIdTables().map(viaTracks),
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
@@ -133,30 +125,23 @@ async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<v
 // `pruneAlbumTracks` above to bail out rather than split. Dependents go first so
 // the subselects can still resolve the rows they are keyed to.
 //
-// Purged here but deliberately kept by the sync prune above: scrobble_queue and
-// scrobble_history (queued plays can never be delivered once the server is gone,
-// and the history is dedupe state keyed to track ids that no longer exist),
-// album_identity and album_user_genres (a re-added server mints a fresh UUID, so
-// every id is rewritten and these rows could never be matched again anyway).
+// Purged here but deliberately kept by the sync prune above: the user's own
+// track-keyed rows (db/track-id-tables.ts names them - queued plays can never be
+// delivered once the server is gone, and the history is dedupe state keyed to
+// track ids that no longer exist), album_identity and album_user_genres (a
+// re-added server mints a fresh UUID, so every id is rewritten and these rows
+// could never be matched again anyway).
 //
 // Deliberately NOT purged: artist_identity, artist_covers, artist_aliases,
 // radio_signal_cache, tag_mappings, user_tree_nodes. Those are keyed by artist
 // name or are global user data, so they stay correct across servers.
 export async function purgeServerData(db: Database, serverId: string): Promise<void> {
-  const viaTracks = (table: string, column: string) =>
+  const viaTracks = ({ table, column }: { table: string; column: string }) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE server_id = ?)`;
   const viaAlbums = (table: string, column: string) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM albums WHERE server_id = ?)`;
   const statements = [
-    viaTracks("tracks_fts", "id"),
-    viaTracks("track_tags", "track_id"),
-    viaTracks("loved_tracks", "track_id"),
-    viaTracks("playlist_tracks", "track_id"),
-    viaTracks("tag_issues", "track_id"),
-    viaTracks("lyrics", "track_id"),
-    viaTracks("waveform_cache", "track_id"),
-    viaTracks("scrobble_queue", "track_id"),
-    viaTracks("scrobble_history", "track_id"),
+    ...purgedTrackIdTables().map(viaTracks),
     "DELETE FROM tracks WHERE server_id = ?",
     viaAlbums("loved_albums", "album_id"),
     viaAlbums("album_genres", "album_id"),
