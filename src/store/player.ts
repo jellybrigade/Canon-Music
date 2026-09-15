@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { getDb } from "../db";
 import { LocalTarget, DlnaTarget, type PlaybackTarget } from "./playbackTarget";
 import { discoverRenderers, type DlnaRenderer } from "../lib/dlna";
+import { SUBSONIC_NOT_FOUND } from "../lib/navidrome";
 
 export interface CurrentTrack {
   id: string;
@@ -20,6 +21,21 @@ export interface CurrentTrack {
     albumGain?: number | null;
     albumPeak?: number | null;
   } | null;
+}
+
+/**
+ * A playback failure the UI can offer a specific action for. Carried on the error itself
+ * rather than beside it, so a writer that names a message cannot leave a stale cause behind.
+ */
+export type PlaybackErrorCause = "stale-track-id";
+
+export interface PlaybackError {
+  message: string;
+  cause: PlaybackErrorCause | null;
+}
+
+function plainError(message: string): PlaybackError {
+  return { message, cause: null };
 }
 
 export type ReplayGainMode = "off" | "track" | "album";
@@ -284,7 +300,7 @@ interface PlayerState {
   // connect, first bytes, format probing. Cleared by the audio-format event (emitted the instant
   // the sink is appended) or by the position ticker seeing the position move off zero.
   isBuffering: boolean;
-  error: string | null;
+  error: PlaybackError | null;
   elapsed: number;
   volume: number;
   repeat: RepeatMode;
@@ -420,7 +436,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: false,
         isLoading: false,
         isBuffering: false,
-        error: "The track never started playing. The server may be unreachable or overloaded",
+        error: plainError("The track never started playing. The server may be unreachable or overloaded"),
       });
     }, BUFFER_DEADLINE_MS);
   }
@@ -874,7 +890,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const retryDelays = [2000, 4000, 8000, 16000];
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean }>("audio-error", (event) => {
+    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean; subsonicCode?: number | null }>("audio-error", (event) => {
       if (event.payload.url !== url) return;
       if (get().streamUrl !== url) return;
 
@@ -905,7 +921,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (event.payload.detail) console.error("Playback failed:", event.payload.detail);
         clearBufferDeadline();
         stopElapsedTimer();
-        set({ isPlaying: false, isLoading: false, isBuffering: false, error: event.payload.message });
+        set({
+          isPlaying: false,
+          isLoading: false,
+          isBuffering: false,
+          error: {
+            message: event.payload.message,
+            cause: event.payload.subsonicCode === SUBSONIC_NOT_FOUND ? "stale-track-id" : null,
+          },
+        });
       }
     });
 
@@ -961,7 +985,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // preloadWaveforms is deliberately not called here, see the elapsed ticker.
       } catch (e) {
         if (get().currentTrack?.id !== track.id) return;
-        set({ isPlaying: false, isLoading: false, isBuffering: false, error: e instanceof Error ? e.message : String(e) });
+        set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(e instanceof Error ? e.message : String(e)) });
       }
     };
 
@@ -1146,7 +1170,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             // returned but nothing has been fetched yet. audio-format or the ticker clears this.
             set({ isPlaying, isLoading: false, isBuffering: isPlaying });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
           }
         }
       } else {
@@ -1164,7 +1188,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         }, castBitrate, (message) => {
           // The renderer stopped answering. Nothing else on the cast path surfaces this:
           // there is no audio-error event, and the target has stopped its own timers.
-          set({ error: message, isPlaying: false, isBuffering: false });
+          set({ error: plainError(message), isPlaying: false, isBuffering: false });
           stopElapsedTimer();
         });
         set({ castDevice: renderer });
@@ -1180,7 +1204,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (!isPlaying) activeTarget.pause(0);
             set({ isPlaying, isLoading: false, isBuffering: false });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
           }
         }
       }
@@ -2015,7 +2039,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
                 () => { void get().next(true); },
                 savedBitrate,
                 (message) => {
-                  set({ error: message, isPlaying: false, isBuffering: false });
+                  set({ error: plainError(message), isPlaying: false, isBuffering: false });
                   stopElapsedTimer();
                 }
               );

@@ -109,6 +109,7 @@ export function AppShell(props: AppViewProps) {
       {view !== "nowplaying" && (
         <PlayerBar
           onNowPlaying={() => navigateTo("nowplaying")}
+          onOpenResync={() => navigateTo("settings")}
           onSelectArtist={openArtist}
           onSelectAlbumById={async (albumId: string) => { await openAlbumById(albumId); }}
           serverWithCred={serverWithCred ?? undefined}

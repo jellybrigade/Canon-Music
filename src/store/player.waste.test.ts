@@ -14,7 +14,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { resetTauriMocks, onInvoke } from "../test/mocks/tauri";
+import { resetTauriMocks, onInvoke, emitTauriEvent } from "../test/mocks/tauri";
 import { trackRenders, invokeCount } from "../test/perf";
 import { getDb } from "../db";
 import { usePlayerStore, type CurrentTrack } from "./player";
@@ -110,6 +110,34 @@ describe("player store - waste", () => {
     // 200ms interval over 1000ms. An exact count, because "more than zero" would pass just
     // as happily on a duplicated interval writing the same value twice per tick.
     expect(probe.renders - atMount).toBe(5);
+    probe.unmount();
+  });
+
+  it("a playback error renders its subscriber once, and not again as unrelated state moves", async () => {
+    await usePlayerStore.getState().playQueue([makeTrack("a")], streamUrlFor, 0);
+    await vi.advanceTimersByTimeAsync(0);
+
+    const probe = trackRenders(() => usePlayerStore((s) => s.error));
+    const atMount = probe.renders;
+
+    emitTauriEvent("audio-error", {
+      url: "http://test/a",
+      message: "The server does not have this track",
+      retryable: false,
+      subsonicCode: 70,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(probe.value?.cause).toBe("stale-track-id");
+    expect(probe.renders - atMount).toBe(1);
+
+    // The error is an object now, so a writer rebuilding it on an unrelated `set` would wake
+    // both error rows for state they do not read. Five volume steps, no further render.
+    for (const v of [0.9, 0.8, 0.7, 0.6, 0.5]) await usePlayerStore.getState().setVolume(v);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(usePlayerStore.getState().volume).toBe(0.5);
+    expect(probe.renders - atMount).toBe(1);
     probe.unmount();
   });
 

@@ -623,6 +623,7 @@ export function AppRoutes(props: AppViewProps) {
               onSelectAlbum={(album) => openAlbum(album)}
               onSelectArtist={openArtist}
               onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
+              onOpenResync={() => navigateTo("settings")}
               onBack={goBack}
             />
           ) : <main className="content-main">{credentialNotice}</main>}

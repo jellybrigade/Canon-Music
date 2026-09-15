@@ -907,7 +907,7 @@ describe("player store - buffering vs loading", () => {
     const state = usePlayerStore.getState();
     expect(state.isBuffering).toBe(false);
     expect(state.isPlaying).toBe(false);
-    expect(state.error).toMatch(/never started playing/);
+    expect(state.error?.message).toMatch(/never started playing/);
   });
 
   it("buffer deadline does not fire if audio-format already cleared it", async () => {
@@ -967,7 +967,51 @@ describe("player store - buffering vs loading", () => {
     const state = usePlayerStore.getState();
     expect(state.isBuffering).toBe(false);
     expect(state.isLoading).toBe(false);
-    expect(state.error).toBe("404 not found");
+    expect(state.error?.message).toBe("404 not found");
+  });
+
+  it("names a stale track id as the cause when the stream failed with Subsonic error 70", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-error", {
+      url: "http://test/a",
+      message: "The server does not have this track",
+      retryable: false,
+      subsonicCode: 70,
+    });
+
+    expect(usePlayerStore.getState().error).toEqual({
+      message: "The server does not have this track",
+      cause: "stale-track-id",
+    });
+  });
+
+  it("leaves the cause unnamed for a stream failure that is not a stale id", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-error", {
+      url: "http://test/a",
+      message: "Wrong username or password",
+      retryable: false,
+      subsonicCode: 40,
+    });
+
+    expect(usePlayerStore.getState().error?.cause).toBeNull();
+  });
+
+  it("drops a named cause when the next track starts", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(makeTrack("a"), "http://test/a");
+    emitTauriEvent("audio-error", { url: "http://test/a", message: "gone", retryable: false, subsonicCode: 70 });
+    expect(usePlayerStore.getState().error?.cause).toBe("stale-track-id");
+
+    await usePlayerStore.getState().play(makeTrack("b"), "http://test/b");
+
+    expect(usePlayerStore.getState().error).toBeNull();
   });
 });
 

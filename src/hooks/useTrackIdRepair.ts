@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import { SUBSONIC_NOT_FOUND } from "../lib/navidrome";
 import { repairAlbumTrackIds } from "../lib/sync";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "./useServer";
@@ -23,7 +24,7 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
   useEffect(() => {
     let cancelled = false;
     const pending = listen<{ url: string; subsonicCode?: number | null }>("audio-error", (event) => {
-      if (event.payload.subsonicCode !== 70) return;
+      if (event.payload.subsonicCode !== SUBSONIC_NOT_FOUND) return;
       const target = serverRef.current;
       if (!target) return;
       const { currentTrack, streamUrl } = usePlayerStore.getState();

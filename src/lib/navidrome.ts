@@ -527,6 +527,13 @@ export async function fetchScanStatus(
 }
 
 /**
+ * "The requested data was not found." After a server-side id migration this is true of most
+ * of the library at once, which is why several callers need to tell it from every other
+ * rejection rather than treating any failure the same.
+ */
+export const SUBSONIC_NOT_FOUND = 70;
+
+/**
  * Whether the server still knows a track id, for the sync's skip probe.
  *
  * Only a Subsonic error 70 counts as "gone": every other failure is the transport or the
@@ -549,7 +556,7 @@ export async function songExists(
     };
     const response = data["subsonic-response"];
     if (response.status === "ok") return response.song?.id !== undefined;
-    return response.error?.code === 70 ? false : null;
+    return response.error?.code === SUBSONIC_NOT_FOUND ? false : null;
   } catch {
     return null;
   }
