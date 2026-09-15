@@ -36,6 +36,24 @@ Fixed unless marked OPEN.
   ```
   grep -rn "setTimeout(r\|setTimeout(resolve" src --include='*.test.ts*' | grep -vE "[^0-9](0|[1-9][0-9]?)\)"
   ```
+- **A timeout ceiling set against an idle machine is measured against a busy one.** vitest's 5s
+  default failed `migrations.test.ts > reaches the same schema from every intermediate version` at
+  5164ms inside `scripts/run-local-checks.sh`, which runs the whole suite beside `cargo test` and
+  clippy; alone the same test takes 0.8-2.4s and passes. Not a race and not a slow test to delete:
+  it replays every migration block from every rung, so its cost is quadratic in the block count and
+  grows with each migration added. The protection already existed but only covered the family its
+  author had in front of them - `allowSlowAppMounts()` raises `testTimeout` to 30s for the 8 `App`
+  suites, leaving every other suite on the default, and the two heaviest non-App tests (3.9s and
+  2.1s idle) were one scheduling accident from the ceiling. Fix: `testTimeout: 15000` in
+  `vitest.config.ts`, one writer, rather than an annotation per slow test that the next slow test
+  has to remember to add. Testing Library's `findBy*` window stays short, since that is the one
+  that must fail fast. Reproduce a load-dependent failure before believing a fix: saturate every
+  core (`for i in $(seq 1 $(nproc)); do timeout 400 sh -c 'while :; do :; done' & done`) and run
+  the whole suite, not the one file.
+  ```
+  grep -n "testTimeout" vitest.config.ts src/test/appMount.ts
+  pnpm test:run --reporter=verbose 2>&1 | grep -oE "[0-9]{4,}ms$" | sort -rn | head
+  ```
 - **Self-registered listener state update isn't flushed by `act`.** Absence assertions need `waitFor`; presence self-corrects.
   ```
   grep -rn "toBeNull()" src --include='*.test.tsx' -B 3 | grep -A 3 "await act(async"

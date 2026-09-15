@@ -51,6 +51,7 @@ Fixed unless marked OPEN.
 - Accessible-name query = whole-tree scan, 150-300ms/call.
 - Shared mock `Response` breaks on double body read.
 - Fixed sleep pays ceiling every run; per-case rebuild pays per case.
+- A timeout ceiling set against an idle machine is measured against a busy one.
 - Self-registered listener state update isn't flushed by `act`.
 
 ## Data / state - `known-issues/data.md`
