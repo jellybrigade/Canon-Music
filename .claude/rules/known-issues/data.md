@@ -169,6 +169,20 @@ Fixed unless marked OPEN.
   ```
   grep -rn "Decoder::new\|::load_from_memory\|image::load" src-tauri/src | grep -v '#\[cfg(test)\]'
   ```
+- **A stand-in for a missing measurement must not be the value that binds the limit.** ReplayGain
+  peak is optional in the tags, and `computeReplayGainLinear` substituted `1.0` for an absent one
+  before clamping `linear` to `1.0 / peak` - so "no peak" meant a full-scale peak, the cap bound at
+  unity gain, and every positive pre-amp or fallback gain was silently thrown away. Measured on the
+  real mirror: 16,521 of 17,678 tracks carry no ReplayGain at all, so this was the normal path, not
+  an edge - the pre-amp slider did nothing for 93% of the library while reading as applied. Fix: an
+  absent or non-positive peak means there is nothing to clip against, so no cap is applied at all
+  (`nokkvi/data/src/audio/normalization.rs:88` is the same shape). The same pass made the gain
+  fallback symmetric: album mode already fell through to track gain, track mode dropped straight
+  past an available album gain to the constant. Ask of any default filling in for absent evidence:
+  is it neutral, or is it the extreme that decides the outcome?
+  ```
+  grep -rnE "Math\.(min|max)\([^)]*\?\?" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

@@ -1230,6 +1230,39 @@ describe("player store - replay gain", () => {
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
+  it("mode 'track' falls through to albumGain when trackGain is null, not straight to the fallback", async () => {
+    usePlayerStore.setState({
+      currentTrack: trackWith({ trackGain: null, albumGain: -3, albumPeak: 1 }),
+      volume: 1,
+      replayGainFallbackGain: -6,
+    });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    const expectedLinear = Math.pow(10, -3 / 20);
+    expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
+  });
+
+  it("applies a positive pre-amp to a track carrying no peak tag", async () => {
+    // No tags at all is the normal case, not the edge one: most of a real library carries
+    // neither gain nor peak, so a peak assumed full-scale would cancel the pre-amp outright.
+    usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: 0 });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    await usePlayerStore.getState().setReplayGainPreAmp(6);
+    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 6 / 20), 5);
+  });
+
+  it("applies a positive fallback gain to a track carrying no peak tag", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainPreAmp: 0 });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    await usePlayerStore.getState().setReplayGainFallbackGain(4);
+    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 4 / 20), 5);
+  });
+
+  it("clips against the other scope's peak when the preferred scope has none", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith({ albumGain: 10, trackPeak: 0.5 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    expect(last(volumeCalls())).toBeCloseTo(2.0, 5);
+  });
+
   it("falls back to replayGainFallbackGain only when both album and track gain are missing", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: -6 });
     await usePlayerStore.getState().setReplayGainMode("track");

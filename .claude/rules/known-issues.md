@@ -103,6 +103,7 @@ Fixed unless marked OPEN.
 - Watermark upstream identity, not only per-row timestamps.
 - A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
+- A stand-in for a missing measurement must not be the value that binds the limit.
 
 ## UI - `known-issues/ui.md`
 
