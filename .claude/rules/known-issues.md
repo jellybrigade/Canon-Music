@@ -97,6 +97,9 @@ Fixed unless marked OPEN.
 - One-direction version compare can't say "too new".
 - A counter fed by every request of one burst counts one event many times.
 - Process-wide state for a per-server fact answers for servers it never saw.
+- A skip fast-path is only as good as a probe of the thing it skips.
+- Watermark upstream identity, not only per-row timestamps.
+- A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
 
 ## UI - `known-issues/ui.md`

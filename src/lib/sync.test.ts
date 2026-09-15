@@ -30,6 +30,8 @@ vi.mock("./navidrome", () => ({
   fetchPlaylists: vi.fn(),
   fetchPlaylistTracks: vi.fn(),
   fetchAndStoreOpenSubsonicExtensions: vi.fn(),
+  fetchScanStatus: vi.fn(),
+  songExists: vi.fn(),
 }));
 
 import {
@@ -39,6 +41,8 @@ import {
   fetchPlaylists,
   fetchPlaylistTracks,
   fetchAndStoreOpenSubsonicExtensions,
+  fetchScanStatus,
+  songExists,
 } from "./navidrome";
 import { purgeServerData, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
@@ -50,6 +54,8 @@ const mStarred = vi.mocked(fetchStarred2);
 const mPlaylists = vi.mocked(fetchPlaylists);
 const mPlaylistTracks = vi.mocked(fetchPlaylistTracks);
 const mExtensions = vi.mocked(fetchAndStoreOpenSubsonicExtensions);
+const mScanStatus = vi.mocked(fetchScanStatus);
+const mSongExists = vi.mocked(songExists);
 
 // `db-batch.ts`'s and `sync.ts`'s signatures only ask for the execute/select surface the
 // plugin's Database provides, which FakeDatabase already implements.
@@ -89,6 +95,10 @@ beforeEach(async () => {
   mPlaylists.mockResolvedValue([]);
   mPlaylistTracks.mockResolvedValue([]);
   mExtensions.mockResolvedValue(undefined as never);
+  // Most tests are about what the sync writes, not about how it decides to skip: an
+  // unreadable scan status plus ids that still resolve is the "nothing to see here" setup.
+  mScanStatus.mockRejectedValue(new Error("not an admin"));
+  mSongExists.mockResolvedValue(true);
   serveLibrary([], {});
 });
 
@@ -648,6 +658,182 @@ describe("syncLibrary track-skip heuristic", () => {
     // until the album's `created` stamp moves.
     expect(mAlbumTracks).not.toHaveBeenCalled();
     expect(second.skippedAlbums).toBe(1);
+  });
+});
+
+describe("syncLibrary skip evidence", () => {
+  /** The `servers` row every real sync has, and the watermark columns hang off. */
+  function seedServerRow(): void {
+    db().raw.exec(
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://music.local', 'Music', 'user')`
+    );
+  }
+
+  async function storedWatermark(): Promise<{
+    last_scan_at: string | null;
+    server_version: string | null;
+    song_count: number | null;
+  } | undefined> {
+    const rows = await db().select<
+      { last_scan_at: string | null; server_version: string | null; song_count: number | null }[]
+    >("SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?", [SRV]);
+    return rows[0];
+  }
+
+  const STATUS = { lastScan: "2026-09-13T03:00:26Z", songCount: 2, serverVersion: "0.64.0" };
+
+  it("checks three mirrored ids against the server before trusting the skip", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    mSongExists.mockClear();
+    mAlbumTracks.mockClear();
+    db().executeCount = 0;
+    const second = await syncLibrary(server(), CRED);
+
+    // Two tracks in the mirror, so the sample is short of the three it asked for.
+    expect(mSongExists).toHaveBeenCalledTimes(2);
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+    expect(second.skippedAlbums).toBe(1);
+    // The probe is three reads and no writes: an idle sync stays at zero.
+    expect(db().executeCount).toBe(0);
+  });
+
+  it("samples no more than three ids however large the mirror is", async () => {
+    serveLibrary([album("al-1", { songCount: 5 })], {
+      "al-1": ["t1", "t2", "t3", "t4", "t5"].map((id) => track(id, "al-1")),
+    });
+    await syncLibrary(server(), CRED);
+    mSongExists.mockClear();
+    await syncLibrary(server(), CRED);
+    expect(mSongExists).toHaveBeenCalledTimes(3);
+  });
+
+  it("runs every album's track pass when one sampled id is gone from the server", async () => {
+    // Navidrome 0.64 rewrote track ids while leaving album rows byte-identical, so the
+    // per-album skip matched for the whole library and the mirror could never heal.
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    mSongExists.mockResolvedValueOnce(false);
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [track("new1", "al-1"), track("new2", "al-1")],
+    });
+    mAlbumTracks.mockClear();
+    const second = await syncLibrary(server(), CRED);
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+    expect(second.skippedAlbums).toBe(0);
+    expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:new1`, `${SRV}:new2`]);
+  });
+
+  it("keeps skipping when the probe itself could not reach the server", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    // A transport failure says nothing about the id. Reading it as a miss would turn every
+    // offline moment into a full pass over the whole library.
+    mSongExists.mockResolvedValue(null);
+    mAlbumTracks.mockClear();
+    const second = await syncLibrary(server(), CRED);
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+    expect(second.skippedAlbums).toBe(1);
+  });
+
+  it("probes nothing on a first sync, when there is no mirrored id to probe", async () => {
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    expect(mSongExists).not.toHaveBeenCalled();
+  });
+
+  it("writes nothing on an idle sync whose scan status is unchanged", async () => {
+    seedServerRow();
+    mScanStatus.mockResolvedValue(STATUS);
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+    expect(await storedWatermark()).toEqual({
+      last_scan_at: STATUS.lastScan,
+      server_version: STATUS.serverVersion,
+      song_count: STATUS.songCount,
+    });
+
+    db().executeCount = 0;
+    const second = await syncLibrary(server(), CRED);
+    expect(db().executeCount).toBe(0);
+    expect(second.skippedAlbums).toBe(1);
+  });
+
+  it("runs every track pass on a server version bump, with album rows byte-identical", async () => {
+    seedServerRow();
+    mScanStatus.mockResolvedValue(STATUS);
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    mScanStatus.mockResolvedValue({ ...STATUS, serverVersion: "0.65.0" });
+    mAlbumTracks.mockClear();
+    mSongExists.mockClear();
+    const second = await syncLibrary(server(), CRED);
+
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+    expect(second.skippedAlbums).toBe(0);
+    // A pass that is already forced has nothing left to learn from the probe.
+    expect(mSongExists).not.toHaveBeenCalled();
+    expect((await storedWatermark())?.server_version).toBe("0.65.0");
+  });
+
+  it("runs every track pass when the scan stamp moved and the album rows did not", async () => {
+    seedServerRow();
+    mScanStatus.mockResolvedValue(STATUS);
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    mScanStatus.mockResolvedValue({ ...STATUS, lastScan: "2026-09-14T03:00:00Z" });
+    mAlbumTracks.mockClear();
+    expect((await syncLibrary(server(), CRED)).skippedAlbums).toBe(0);
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it("forces a track pass for a library mirrored before the watermark existed", async () => {
+    // The upgrade path: rows written by an older build carry no watermark at all, which is
+    // the state every install hit by the id migration is in.
+    seedServerRow();
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+    expect((await storedWatermark())?.server_version).toBeNull();
+
+    mScanStatus.mockResolvedValue(STATUS);
+    mAlbumTracks.mockClear();
+    expect((await syncLibrary(server(), CRED)).skippedAlbums).toBe(0);
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the stored watermark when the scan status cannot be read", async () => {
+    seedServerRow();
+    mScanStatus.mockResolvedValue(STATUS);
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    mScanStatus.mockRejectedValue(new Error("not an admin"));
+    await syncLibrary(server(), CRED);
+    expect(await storedWatermark()).toEqual({
+      last_scan_at: STATUS.lastScan,
+      server_version: STATUS.serverVersion,
+      song_count: STATUS.songCount,
+    });
+  });
+
+  it("does not move the watermark on a pass that lost an album to a failure", async () => {
+    seedServerRow();
+    serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    // Storing it here would tell the next sync this album was read when it was not, and the
+    // evidence that it still needs reading is exactly what the watermark would have erased.
+    mScanStatus.mockResolvedValue(STATUS);
+    mAlbumTracks.mockRejectedValue(new Error("offline"));
+    const second = await syncLibrary(server(), CRED);
+    expect(second.failedAlbums).toBe(1);
+    expect((await storedWatermark())?.server_version).toBeNull();
   });
 });
 

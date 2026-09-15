@@ -149,6 +149,14 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^(let|const) \w+(: [^=]+)? = " src/lib --include='*.ts*' | grep -v '\.test\.' | grep -vE "=>|function|\[\]|\bnew (RegExp|URL)\b"
   ```
+- **A skip fast-path is only as good as a probe of the thing it skips.** `syncLibrary`'s `skipTracks` was keyed on `navidrome_created` + `songCount`, both album columns. Navidrome 0.64 rewrote ~87% of track ids and left every album row byte-identical, so the track pass was skipped for all 1512 albums and the mirror could never heal, on any number of syncs. Fix: three mirrored track ids drawn at random go through `songExists` before the album loop, and one Subsonic 70 disables the skip for the whole run. Only a 70 counts - a transport failure or a rejected credential says nothing about the id, and reading it as a miss turns every offline moment into a full pass. Ask of any skip gate: what evidence do I have about the rows I am *not* reading?
+  ```
+  grep -rn "skip\|unchanged" src/lib/sync.ts | grep -v '^\s*//'
+  ```
+- **Watermark upstream identity, not only per-row timestamps.** Per-row mtimes cannot see a migration that rewrote the rows' keys, because the rows they sit on did not move. `servers.server_version` / `last_scan_at` / `song_count` (v49) come from `getScanStatus` at the top of every sync and any of the three moving forces a full track pass. Two halves that are easy to get wrong: `getScanStatus` is admin-only on some deployments, so a failure is "no evidence" and falls through to the probe rather than counting as "unchanged"; and the new watermark is stored only after a pass that completed, since storing it after an early break tells the next sync those albums were read and erases the evidence that they were not.
+  ```
+  grep -rn "getScanStatus\|last_scan_at\|server_version" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **A 2xx body is not the type you asked for.** Subsonic rides its errors on HTTP 200 with `content-type: application/json`, so `audio_play`'s status check passed and `{"error":{"code":70}}` went into `Decoder::new`, which reported "This file could not be decoded" - blaming the file for a track id Navidrome 0.64 had rewritten. Every mirrored track in the library was unplayable and the message named the wrong cause. Fix: `stream_classify.rs::classify_stream_response` reads the head of the body first and names the real error; the prefetch cache and the gapless path run it too, or a poisoned cache entry walks straight past the live path's guard. Conservative by design: only a parsed envelope, an empty body or plainly-textual bytes are refused, since the decoder knows more containers than the classifier does. Any consumer of a binary body (stream, cover art, waveform source) owes the same check.
   ```
   grep -rn "Decoder::new\|::load_from_memory\|image::load" src-tauri/src | grep -v '#\[cfg(test)\]'

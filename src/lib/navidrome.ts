@@ -485,6 +485,76 @@ export async function fetchStarred2(
   return response.starred2 ?? {};
 }
 
+/** The server's own identity, as far as the sync's skip fast-path is concerned. */
+export interface NavidromeScanStatus {
+  lastScan: string | null;
+  songCount: number | null;
+  serverVersion: string | null;
+}
+
+/**
+ * `getScanStatus`, the cheapest evidence that the server's own ids may have moved.
+ *
+ * Some deployments restrict it to admins, so a failure means "no evidence" and the caller
+ * has to fall back to probing ids directly - never to assuming nothing changed.
+ */
+export async function fetchScanStatus(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  altUrl?: string
+): Promise<NavidromeScanStatus> {
+  const params = buildAuthParams(username, credential);
+  const res = await apiPost(baseUrl, "getScanStatus", params, altUrl);
+  if (!res.ok) throw new Error(`getScanStatus returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": {
+      status: string;
+      error?: { message: string };
+      serverVersion?: string;
+      scanStatus?: { lastScan?: string; count?: number };
+    };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "getScanStatus failed");
+  }
+  return {
+    lastScan: response.scanStatus?.lastScan ?? null,
+    songCount: response.scanStatus?.count ?? null,
+    serverVersion: response.serverVersion ?? null,
+  };
+}
+
+/**
+ * Whether the server still knows a track id, for the sync's skip probe.
+ *
+ * Only a Subsonic error 70 counts as "gone": every other failure is the transport or the
+ * account, which says nothing about the id and must not be read as evidence either way.
+ */
+export async function songExists(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativeTrackId: string,
+  altUrl?: string
+): Promise<boolean | null> {
+  const params = buildAuthParams(username, credential);
+  params.set("id", nativeTrackId);
+  try {
+    const res = await apiPost(baseUrl, "getSong", params, altUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": { status: string; error?: { code?: number }; song?: { id?: string } };
+    };
+    const response = data["subsonic-response"];
+    if (response.status === "ok") return response.song?.id !== undefined;
+    return response.error?.code === 70 ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A rejection the server itself issued, as opposed to a transport failure.
  * The distinction matters to anything that retries: a transport failure is worth

@@ -1,8 +1,8 @@
 import Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../db";
 import type { Server } from "../types/server";
-import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
-import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
+import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "./navidrome";
+import type { NavidromeCredential, NavidromeScanStatus, NavidromeTrack } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 import { escapeLike } from "./sql";
 import { rebuildTagVocabCache } from "./tag-normalize";
@@ -10,6 +10,58 @@ import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batc
 import { runPool } from "./async-pool";
 
 const BATCH_NOTIFY_INTERVAL = 25;
+
+// How many mirrored track ids the skip fast-path checks against the server per sync.
+const TRACK_ID_PROBE_COUNT = 3;
+
+/** The server identity stored after the last sync that completed its track pass. */
+interface ServerWatermark {
+  last_scan_at: string | null;
+  server_version: string | null;
+  song_count: number | null;
+}
+
+/**
+ * Whether the mirrored track ids are still ids the server answers to.
+ *
+ * Album metadata is evidence about albums. Navidrome 0.64 rewrote ~87% of track ids while
+ * leaving every album row byte-identical, so the per-album skip below matched for all 1512
+ * albums and the mirror could never heal, on any number of syncs. A few ids drawn at random
+ * are cheap and answer the question the skip is actually asking.
+ *
+ * Only a Subsonic "not found" counts against the mirror: a transport failure or a rejected
+ * credential says nothing about the id, and treating it as a miss would turn every offline
+ * moment into a 1500-request full pass.
+ */
+async function mirroredTrackIdsStillResolve(
+  db: Database,
+  server: Server,
+  credential: NavidromeCredential,
+  altUrl: string | undefined,
+): Promise<boolean> {
+  const sampled = await db.select<{ id: string }[]>(
+    "SELECT id FROM tracks WHERE server_id = ? ORDER BY RANDOM() LIMIT ?",
+    [server.id, TRACK_ID_PROBE_COUNT]
+  );
+  if (sampled.length === 0) return true;
+  const verdicts = await Promise.all(
+    sampled.map((row) =>
+      songExists(server.url, server.username, credential, row.id.slice(server.id.length + 1), altUrl)
+    )
+  );
+  return !verdicts.includes(false);
+}
+
+/** Whether the server's own identity moved since the last completed track pass. */
+function watermarkMoved(stored: ServerWatermark | undefined, status: NavidromeScanStatus | null): boolean {
+  if (status === null) return false;
+  if (stored === undefined) return true;
+  return (
+    !sameValue(stored.server_version, status.serverVersion) ||
+    !sameValue(stored.last_scan_at, status.lastScan) ||
+    !sameValue(stored.song_count, status.songCount)
+  );
+}
 
 // Tables that mirror server content, keyed by track id. A track the server no
 // longer has leaves rows here that still show up in the grid, in search and in
@@ -304,10 +356,33 @@ export async function syncLibrary(
     }
   );
 
-  // Fatal by design: without the album list there is no sync to run.
-  const albums = await fetchAllAlbums(server.url, server.username, credential, altUrl);
+  // Fatal by design: without the album list there is no sync to run. The scan status
+  // rides alongside it because it is one request and its failure is survivable: some
+  // deployments restrict getScanStatus to admins, and "no evidence" must fall through to
+  // the id probe below rather than read as "nothing changed".
+  const [albums, scanStatus] = await Promise.all([
+    fetchAllAlbums(server.url, server.username, credential, altUrl),
+    fetchScanStatus(server.url, server.username, credential, altUrl).catch((err: unknown) => {
+      console.error("sync: failed to read the server scan status, falling back to the id probe:", err);
+      return null;
+    }),
+  ]);
 
   const db = await getDb();
+
+  // Decide once, before the album loop, whether anything may be skipped at all. A server
+  // version bump is exactly when a migration rewrites ids, and a scan stamp or song count
+  // that moved means rows were rewritten under album metadata that can look unchanged.
+  const storedWatermark = (
+    await db.select<ServerWatermark[]>(
+      "SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?",
+      [server.id]
+    )
+  )[0];
+  const serverIdentityMoved = watermarkMoved(storedWatermark, scanStatus);
+  // Short-circuit deliberate: a forced full pass has nothing left to learn from the probe.
+  const forceTrackPass =
+    serverIdentityMoved || !(await mirroredTrackIdsStillResolve(db, server, credential, altUrl));
   let failedAlbums = 0;
   let skippedAlbums = 0;
 
@@ -361,6 +436,7 @@ export async function syncLibrary(
     const existingCreated = existing?.navidrome_created ?? null;
     const existingTrackCount = trackCountByAlbumId.get(albumDbId) ?? 0;
     const skipTracks =
+      !forceTrackPass &&
       existing !== undefined &&
       existingCreated !== null &&
       existingCreated === (album.created ?? null) &&
@@ -778,6 +854,16 @@ export async function syncLibrary(
         (placeholders) => `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`
       );
     }
+  }
+
+  // Only a pass that actually finished may move the watermark: storing it after a run that
+  // broke early or lost albums to failures would tell the next sync those albums were read
+  // when they were not, and the evidence that they need re-reading is gone.
+  if (scanStatus !== null && serverIdentityMoved && !albumTracksIncomplete && failedAlbums === 0) {
+    await db.execute(
+      "UPDATE servers SET last_scan_at = ?, server_version = ?, song_count = ? WHERE id = ?",
+      [scanStatus.lastScan, scanStatus.serverVersion, scanStatus.songCount, server.id]
+    );
   }
 
   const albumsChanged = albumUpsertParams.length > 0 || prunedAlbums > 0;

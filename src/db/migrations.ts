@@ -720,6 +720,19 @@ export const migrations: Migration[] = [
     version: 48,
     sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
   },
+  {
+    // The server's own identity as of the last completed sync. Album rows survived
+    // Navidrome 0.64's id migration byte for byte, so nothing in the mirror could tell
+    // that ~87% of the track ids under them had been rewritten, and the track pass was
+    // skipped for every album forever. A version, a scan stamp and a song count are the
+    // three things upstream moves when that can happen.
+    version: 49,
+    sql: `
+      ALTER TABLE servers ADD COLUMN last_scan_at TEXT;
+      ALTER TABLE servers ADD COLUMN server_version TEXT;
+      ALTER TABLE servers ADD COLUMN song_count INTEGER;
+    `,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

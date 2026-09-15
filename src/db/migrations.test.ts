@@ -392,6 +392,9 @@ describe("post-migration schema", () => {
         "file_size",
       ])
     );
+    expect(columnsOf(db, "servers")).toEqual(
+      expect.arrayContaining(["alt_url", "last_scan_at", "server_version", "song_count"])
+    );
     expect(columnsOf(db, "artist_identity")).toEqual(
       expect.arrayContaining(["navidrome_image_url", "wikidata_image_url"])
     );
