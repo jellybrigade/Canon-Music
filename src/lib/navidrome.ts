@@ -369,6 +369,7 @@ export interface NavidromeTrack {
   starred?: string;
   path?: string;
   playCount?: number;
+  played?: string;
   bitRate?: number;
   suffix?: string;
   size?: number;

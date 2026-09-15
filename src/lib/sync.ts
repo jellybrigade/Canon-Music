@@ -246,6 +246,7 @@ async function insertTracksBatch(
     track.duration ?? null,
     track.path ?? null,
     track.playCount ?? 0,
+    track.played ?? null,
     track.bitRate ?? null,
     track.suffix ?? null,
     track.size ?? null,
@@ -257,14 +258,14 @@ async function insertTracksBatch(
   await executeBatched(
     db,
     trackRows,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    20,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    21,
     // Named-column upsert, not INSERT OR REPLACE: a replace deletes the row and
     // reinserts it, so every column this statement does not list falls back to its
     // default. `tags_enriched_at` is one of them, and clearing it makes the next
     // enrichment pass re-fetch the whole album from Last.fm for nothing.
     (placeholders) => `INSERT INTO tracks
-         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, played_at, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -279,6 +280,7 @@ async function insertTracksBatch(
          duration = excluded.duration,
          file_path = excluded.file_path,
          play_count = excluded.play_count,
+         played_at = excluded.played_at,
          bit_rate = excluded.bit_rate,
          suffix = excluded.suffix,
          file_size = excluded.file_size,

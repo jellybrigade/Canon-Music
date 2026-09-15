@@ -384,6 +384,7 @@ describe("post-migration schema", () => {
     expect(columnsOf(db, "tracks")).toEqual(
       expect.arrayContaining([
         "play_count",
+        "played_at",
         "tags_enriched_at",
         "replay_gain_track_gain",
         "replay_gain_album_gain",

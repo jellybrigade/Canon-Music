@@ -733,6 +733,14 @@ export const migrations: Migration[] = [
       ALTER TABLE servers ADD COLUMN song_count INTEGER;
     `,
   },
+  {
+    // The same stamp v48 gave albums, one level down. `scrobble_history` only records
+    // what Canon itself sent, so a track played on the phone or in the web UI reads as
+    // never played here and Auto-DJ serves it again an hour later. Navidrome carries
+    // the annotation on the song entity, counting every client.
+    version: 50,
+    sql: `ALTER TABLE tracks ADD COLUMN played_at TEXT;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

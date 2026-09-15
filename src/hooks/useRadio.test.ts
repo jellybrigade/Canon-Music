@@ -310,7 +310,7 @@ describe("useRadio auto-advance", () => {
       expect(candidateArgs().excludeIds.has("srv:recent")).toBe(true);
     });
 
-    it("scopes the recent-play lookup to the seed track's server and the last hour", async () => {
+    it("scopes both play records to the seed track's server and the last hour", async () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-08-10T12:00:00Z"));
       const db = mockDb();
@@ -318,9 +318,15 @@ describe("useRadio auto-advance", () => {
         renderHook(() => useRadio());
         await vi.waitFor(() => expect(candidatesMock().mock.calls.length).toBeGreaterThan(0));
 
-        const call = db.select.mock.calls.find((c) => String(c[0]).includes("scrobble_history"))!;
-        const nowS = Math.floor(new Date("2026-08-10T12:00:00Z").getTime() / 1000);
-        expect(call[1]).toEqual(["srv:%", nowS - 3600]);
+        // A play from the phone or the web UI never reaches scrobble_history; the mirrored
+        // stamp is the only record of it.
+        const call = db.select.mock.calls.find((c) => String(c[0]).includes("played_at"))!;
+        expect(call[1]).toEqual([
+          "srv:%",
+          Math.floor(new Date("2026-08-10T12:00:00Z").getTime() / 1000) - 3600,
+          "srv",
+          "2026-08-10T11:00:00.000Z",
+        ]);
       } finally {
         vi.useRealTimers();
       }

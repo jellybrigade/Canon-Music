@@ -37,10 +37,15 @@ const UNCAPPED_MODES = new Set(["same-artist", "same-album"]);
 async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
   const db = await getDb();
   type Row = { track_id: string };
-  const cutoff = Math.floor(Date.now() / 1000) - RECENT_PLAYED_WINDOW_S;
+  const cutoffS = Math.floor(Date.now() / 1000) - RECENT_PLAYED_WINDOW_S;
+  // scrobble_history only holds what Canon itself sent, so a track played on the phone
+  // or in the web UI an hour ago is invisible to it. tracks.played_at is the server's own
+  // stamp and counts every client; it is ISO 8601, hence the second cutoff.
   const rows = await db.select<Row[]>(
-    "SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?",
-    [`${escapeLike(serverId)}:%`, cutoff]
+    `SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?
+     UNION
+     SELECT id AS track_id FROM tracks WHERE server_id = ? AND played_at > ?`,
+    [`${escapeLike(serverId)}:%`, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()]
   );
   return new Set(rows.map((r) => r.track_id));
 }

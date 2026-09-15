@@ -831,6 +831,24 @@ describe("syncLibrary track upsert", () => {
     );
     expect(rows[0]).toEqual({ title: "New", play_count: 7 });
   });
+
+  it("mirrors the server's last-played stamp, which counts plays from every client", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [
+        track("t1", "al-1", { played: "2026-09-09T08:59:52Z", playCount: 4 }),
+        track("t2", "al-1"),
+      ],
+    });
+    await syncLibrary(server(), CRED);
+
+    const rows = await db().select<{ id: string; played_at: string | null }[]>(
+      "SELECT id, played_at FROM tracks ORDER BY id"
+    );
+    expect(rows).toEqual([
+      { id: `${SRV}:t1`, played_at: "2026-09-09T08:59:52Z" },
+      { id: `${SRV}:t2`, played_at: null },
+    ]);
+  });
 });
 
 describe("syncLibrary track-skip heuristic", () => {
