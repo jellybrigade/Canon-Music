@@ -45,7 +45,7 @@ import {
   fetchScanStatus,
   songExists,
 } from "./navidrome";
-import { purgeServerData, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
+import { clearSyncWatermark, purgeServerData, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
@@ -669,6 +669,47 @@ describe("syncLibrary track id remap", () => {
     expect(result.remappedTracks).toBe(0);
     expect(result.prunedTracks).toBe(1);
     expect(await ids("SELECT id FROM tracks")).toEqual([`${SRV}:t1-rewritten`]);
+  });
+});
+
+describe("clearSyncWatermark", () => {
+  function seedServerRow(serverId: string): void {
+    db().raw.exec(
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${serverId}', 'navidrome', 'http://music.local', 'Music', 'user')`
+    );
+  }
+
+  it("forgets the server identity, so the next sync reads every album's tracks", async () => {
+    seedServerRow(SRV);
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { path: "/m/1.flac" })] });
+    mScanStatus.mockResolvedValue({ serverVersion: "0.64.0", lastScan: "2026-09-01T00:00:00Z", songCount: 1 });
+    await syncLibrary(server(), CRED);
+    expect(
+      (await db().select<{ server_version: string | null }[]>("SELECT server_version FROM servers WHERE id = ?", [SRV]))[0]
+        ?.server_version
+    ).toBe("0.64.0");
+
+    await clearSyncWatermark(asDb(db()), SRV);
+
+    const [row] = await db().select<{ last_scan_at: string | null; server_version: string | null; song_count: number | null }[]>(
+      "SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?",
+      [SRV]
+    );
+    expect(row).toEqual({ last_scan_at: null, server_version: null, song_count: null });
+  });
+
+  it("leaves another server's watermark alone", async () => {
+    seedServerRow(SRV);
+    seedServerRow(OTHER);
+    db().raw.exec(`UPDATE servers SET server_version = '0.63.0' WHERE id = '${OTHER}'`);
+
+    await clearSyncWatermark(asDb(db()), SRV);
+
+    const [row] = await db().select<{ server_version: string | null }[]>(
+      "SELECT server_version FROM servers WHERE id = ?",
+      [OTHER]
+    );
+    expect(row?.server_version).toBe("0.63.0");
   });
 });
 

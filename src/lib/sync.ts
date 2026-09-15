@@ -309,6 +309,21 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
 }
 
 /**
+ * Forget what the server looked like at the last completed sync, so the next one reads every
+ * album's tracks instead of trusting the per-album skip.
+ *
+ * The user-facing escape hatch for a mirror that is wrong in a way no probe caught: expensive
+ * (one track request per album, 1500+ on a real library), which is why nothing calls it on its
+ * own. See `watermarkMoved`.
+ */
+export async function clearSyncWatermark(db: Database, serverId: string): Promise<void> {
+  await db.execute(
+    "UPDATE servers SET last_scan_at = NULL, server_version = NULL, song_count = NULL WHERE id = ?",
+    [serverId]
+  );
+}
+
+/**
  * Re-resolve one album's tracks against the server, carrying the local-only rows of any track
  * whose id was rewritten and dropping the ones it really lost. Returns the pairs it carried.
  *

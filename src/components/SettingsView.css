@@ -456,6 +456,20 @@
   margin-bottom: var(--space-sm);
 }
 
+.settings-resync {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-top: var(--space-md);
+}
+
+.settings-resync-confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
 .settings-remove-server {
   margin-top: var(--space-xs);
 }

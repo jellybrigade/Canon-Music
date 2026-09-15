@@ -15,6 +15,7 @@ type NavId = "server" | "metadata" | "playback" | "advanced";
 interface Props {
   server: ServerRow | undefined;
   syncStatus: SyncStatus;
+  runSync: (s: ServerWithCredential) => boolean;
   syncError: string;
   lastSyncedAt: number | null;
   serverWithCredential: ServerWithCredential | undefined;
@@ -30,14 +31,14 @@ const NAV_ITEMS: { id: NavId; label: string; icon: React.ReactNode }[] = [
   { id: "advanced", label: "Advanced", icon: <Activity size={15} /> },
 ];
 
-export function SettingsView({ server, syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
+export function SettingsView({ server, syncStatus, runSync, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("server");
   const [search, setSearch] = useState("");
 
   const panelContent = (nav: NavId, query: string) => {
     switch (nav) {
       case "server":
-        return <ServerTab server={server} serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} />;
+        return <ServerTab server={server} serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} syncStatus={syncStatus} runSync={runSync} />;
       case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":

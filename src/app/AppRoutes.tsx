@@ -830,6 +830,7 @@ export function AppRoutes(props: AppViewProps) {
           <SettingsView
             server={server}
             syncStatus={syncStatus}
+            runSync={runSync}
             syncError={syncError}
             lastSyncedAt={lastSyncedAt}
             serverWithCredential={serverWithCred ?? undefined}
