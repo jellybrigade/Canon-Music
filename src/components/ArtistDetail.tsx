@@ -21,6 +21,7 @@ import { makeStreamUrlBuilder } from "../lib/track";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle, resolvePortraitUrl } from "../lib/lastfm";
 import { useArtistImageMap, resolveArtistImageUrl } from "../hooks/useArtistImageCache";
 import { shuffleArray } from "../lib/shuffle";
+import { mostPlayedHere } from "../lib/artist-ranking";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../lib/lastfm";
 import { useEnrichArtist } from "../hooks/useEnrichArtist";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
@@ -49,6 +50,7 @@ interface TopTrack {
   album_id: string | null;
   artwork_url: string | null;
   play_count: number | null;
+  played_at: string | null;
   lastfmRank?: number;
   lastfmPlaycount?: number;
   lastfmCombined?: boolean;
@@ -62,7 +64,7 @@ function useArtistTopTracks(artistName: string, serverId: string, options?: { en
       const db = await getDb();
       return db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count
+                t.album_id, a.artwork_url, t.play_count, t.played_at
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -87,7 +89,7 @@ function useArtistSeedTrack(artistName: string, serverId: string, options?: { en
       const db = await getDb();
       const rows = await db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count
+                t.album_id, a.artwork_url, t.play_count, t.played_at
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -563,6 +565,13 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     () => topTracks.filter((t) => lovedTrackIds.has(t.id)),
     [topTracks, lovedTrackIds]
   );
+  // Popular is Last.fm's ranking, which is what the world plays. This is what this
+  // server has played, from every client, and the two answer different questions - so
+  // it is a second list rather than a fallback or a rename.
+  const mostPlayedTracks = useMemo(
+    () => mostPlayedHere(rawTracks ?? [], POPULAR_TRACKS_MIN),
+    [rawTracks]
+  );
   const lfmOnlyTracks = useMemo(
     () => (rawTracks && lastfmTitles ? lastfmOnlyTracks(rawTracks, lastfmTitles) : []),
     [rawTracks, lastfmTitles]
@@ -789,7 +798,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
       <div className="artist-body">
         {topTracks.length > 0 && (
           <section className="artist-section">
-            <div className={`artist-popfav-grid${lovedTracks.length > 0 ? "" : " artist-popfav-grid--solo"}`}>
+            <div className="artist-popfav-grid">
               <div className="artist-popfav-col">
                 <h2 className="artist-section-title">Popular</h2>
                 <div className="artist-top-tracks">
@@ -817,6 +826,28 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                   </button>
                 )}
               </div>
+
+              {mostPlayedTracks.length > 0 && (
+                <div className="artist-popfav-col">
+                  <h2 className="artist-section-title">Most played here</h2>
+                  <div className="artist-top-tracks">
+                    {mostPlayedTracks.map((track, i) => (
+                      <TrackRow
+                        key={track.id}
+                        track={track}
+                        rank={i}
+                        currentTrack={currentTrack}
+                        isPlaying={isPlaying}
+                        server={server}
+                        credential={credential}
+                        onPlay={handlePlayTrack}
+                        onAlbumClick={handleAlbumClick}
+                        onContextMenu={handleTrackContextMenu}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {lovedTracks.length > 0 && (
                 <div className="artist-popfav-col">

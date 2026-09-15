@@ -255,12 +255,11 @@
 /* ── Popular / Favorites two-column layout ── */
 .artist-popfav-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 var(--space-xl);
-}
-
-.artist-popfav-grid--solo {
-  grid-template-columns: 1fr;
+  /* One to three lists depending on what this artist has: a Last.fm ranking, this
+     server's own plays, and loved tracks. auto-fit keeps each readable instead of
+     splitting a narrow window three ways. */
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-lg) var(--space-xl);
 }
 
 .artist-popfav-col {
