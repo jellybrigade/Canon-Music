@@ -1341,3 +1341,74 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     expect(usePlayerStore.getState().replayGainMode).toBe("track");
   });
 });
+
+describe("applyTrackIdRemap", () => {
+  it("moves the queue and the current track onto the ids the server rewrote", () => {
+    const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
+    usePlayerStore.setState({ queue, currentTrack: queue[1]!, queueIndex: 1 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+
+    expect(moved).toBe(true);
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("srv:b2");
+  });
+
+  it("reports the current track unmoved when only other queue entries were renamed", () => {
+    const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+
+    expect(moved).toBe(false);
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
+  });
+
+  it("keeps everything else about a renamed track, so the row still renders", () => {
+    const queue = [{ ...makeTrack("srv:a"), album: "Album", albumId: "srv:al", duration: 210 }];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:a", newId: "srv:a2" }]);
+
+    expect(usePlayerStore.getState().queue[0]).toMatchObject({
+      id: "srv:a2",
+      album: "Album",
+      albumId: "srv:al",
+      duration: 210,
+    });
+  });
+
+  it("carries the radio seed too, which outlives the queue it started", () => {
+    usePlayerStore.setState({ queue: [], currentTrack: null, radioSeed: makeTrack("srv:seed") });
+
+    usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:seed", newId: "srv:seed2" }]);
+
+    expect(usePlayerStore.getState().radioSeed?.id).toBe("srv:seed2");
+  });
+
+  it("leaves the queue array identical when no id it holds moved", () => {
+    const queue = [makeTrack("srv:a")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:zzz", newId: "srv:zzz2" }]);
+
+    expect(moved).toBe(false);
+    // Reference equality, not contents: a new array here re-renders every queue consumer for
+    // a repair that changed nothing.
+    expect(usePlayerStore.getState().queue).toBe(queue);
+  });
+
+  it("does nothing with an empty list", () => {
+    const queue = [makeTrack("srv:a")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    expect(usePlayerStore.getState().applyTrackIdRemap([])).toBe(false);
+    expect(usePlayerStore.getState().queue).toBe(queue);
+  });
+});

@@ -341,6 +341,7 @@ interface PlayerState {
   stop: () => void;
   // Re-runs the current track from the start after a playback failure, with a fresh retry budget.
   retryCurrent: () => void;
+  applyTrackIdRemap: (remaps: readonly { oldId: string; newId: string }[]) => boolean;
   setVolume: (volume: number) => Promise<void>;
   toggleMute: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
@@ -1482,6 +1483,29 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       activeTarget.resume(pauseFadeMs);
       startElapsedTimer();
       set({ isPlaying: true });
+    },
+
+    // Rewrite the ids of tracks the server renamed under us, so the queue the user is looking
+    // at keeps playing instead of every entry 404ing. Returns whether the current track is one
+    // of them, which is the caller's cue to restart playback against the new id.
+    applyTrackIdRemap: (remaps) => {
+      if (remaps.length === 0) return false;
+      const byOldId = new Map(remaps.map((remap) => [remap.oldId, remap.newId]));
+      const rename = (track: CurrentTrack): CurrentTrack => {
+        const newId = byOldId.get(track.id);
+        return newId === undefined ? track : { ...track, id: newId };
+      };
+      const { queue, currentTrack, radioSeed } = get();
+      const newQueue = queue.map(rename);
+      // Reference equality decides the re-render for every queue consumer, so a repair that
+      // touched nothing this queue holds must leave the array alone.
+      const queueChanged = newQueue.some((track, index) => track !== queue[index]);
+      const newCurrent = currentTrack ? rename(currentTrack) : null;
+      const newSeed = radioSeed ? rename(radioSeed) : null;
+      if (queueChanged) set({ queue: newQueue });
+      if (newCurrent !== currentTrack) set({ currentTrack: newCurrent });
+      if (newSeed !== radioSeed) set({ radioSeed: newSeed });
+      return newCurrent !== currentTrack;
     },
 
     retryCurrent: () => {

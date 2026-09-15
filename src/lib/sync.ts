@@ -11,6 +11,7 @@ import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batc
 import { runPool } from "./async-pool";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../db/track-id-tables";
 import { planTrackIdRemap } from "./track-remap";
+import type { TrackIdRemap } from "./track-remap";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -166,27 +167,28 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   ]);
 }
 
-// Carry the rows of tracks whose id the server rewrote onto the new id, before the
-// upsert writes it and the prune deletes everything still under the old one.
-//
-// Runs before insertTracksBatch on purpose: once the new row exists, the carry has
-// nowhere to land and every table would keep the stale id instead. One `invoke` per
-// album that actually has renamed tracks, none at all otherwise.
-async function carryRenamedTracks(
+// Which of an album's mirrored tracks the server merely renamed. Read before the
+// upsert writes the new rows: once it has, the old and new ids both exist locally and
+// nothing can tell a rename from a genuine add.
+async function planRenamedTracks(
   db: Database,
   serverId: string,
   albumDbId: string,
   tracks: readonly NavidromeTrack[],
-): Promise<number> {
-  if (tracks.length === 0) return 0;
+): Promise<TrackIdRemap[]> {
   const existing = await db.select<{ id: string; file_path: string | null }[]>(
     "SELECT id, file_path FROM tracks WHERE album_id = ? AND server_id = ?",
     [albumDbId, serverId]
   );
-  const remaps = planTrackIdRemap(
+  return planTrackIdRemap(
     existing,
     tracks.map((track) => ({ id: `${serverId}:${track.id}`, path: track.path ?? null }))
   );
+}
+
+// Move the local-only rows onto the new ids, before the prune deletes everything still
+// under the old ones. One `invoke` per album that has renamed tracks, none otherwise.
+async function carryRenamedTracks(albumDbId: string, remaps: readonly TrackIdRemap[]): Promise<number> {
   if (remaps.length === 0) return 0;
   // Non-fatal: a failed carry costs the local-only rows of these tracks, which the prune
   // was going to take anyway. Failing the whole sync over it would cost the library.
@@ -304,6 +306,38 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
     1,
     (placeholders) => `INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`
   );
+}
+
+/**
+ * Re-resolve one album's tracks against the server, carrying the local-only rows of any track
+ * whose id was rewritten and dropping the ones it really lost. Returns the pairs it carried.
+ *
+ * The play-time answer to Subsonic error 70: the server does not know the id Canon just asked
+ * for, which after an id migration is true of most of the library at once. Repairing the one
+ * album the user is trying to play beats a full 1500-request resync they did not ask for.
+ */
+export async function repairAlbumTrackIds(
+  server: Server,
+  credential: NavidromeCredential,
+  dbAlbumId: string,
+): Promise<TrackIdRemap[]> {
+  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
+  const tracks = await fetchAlbumTracks(
+    server.url,
+    server.username,
+    credential,
+    navidromeAlbumId,
+    server.alt_url ?? undefined
+  );
+  // Same reasoning as pruneAlbumTracks: an album that returned nothing is a server hiccup far
+  // more often than an emptied album, and acting on it would delete the rows being repaired.
+  if (tracks.length === 0) return [];
+  const db = await getDb();
+  const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
+  await carryRenamedTracks(dbAlbumId, remaps);
+  await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  await pruneAlbumTracks(db, dbAlbumId, tracks.map((track) => `${server.id}:${track.id}`));
+  return remaps;
 }
 
 export async function syncAlbumTracks(
@@ -583,7 +617,10 @@ export async function syncLibrary(
     // Only worth a query for an album that already had rows: on a first sync
     // there is nothing to carry or prune and this would be wasted round trips per album.
     if (existingTrackCount > 0) {
-      remappedTracks += await carryRenamedTracks(db, server.id, albumDbId, tracks);
+      remappedTracks += await carryRenamedTracks(
+        albumDbId,
+        await planRenamedTracks(db, server.id, albumDbId, tracks)
+      );
     }
     await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     if (existingTrackCount > 0) {

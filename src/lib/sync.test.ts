@@ -45,7 +45,7 @@ import {
   fetchScanStatus,
   songExists,
 } from "./navidrome";
-import { purgeServerData, syncLibrary, syncAlbumTracks } from "./sync";
+import { purgeServerData, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
@@ -669,6 +669,72 @@ describe("syncLibrary track id remap", () => {
     expect(result.remappedTracks).toBe(0);
     expect(result.prunedTracks).toBe(1);
     expect(await ids("SELECT id FROM tracks")).toEqual([`${SRV}:t1-rewritten`]);
+  });
+});
+
+describe("repairAlbumTrackIds", () => {
+  function applyNativeRemap(remaps: { oldId: string; newId: string }[]): number {
+    let moved = 0;
+    for (const { oldId, newId } of remaps) {
+      for (const { table, column } of remappedTrackIdTables()) {
+        db().raw.prepare(`UPDATE OR IGNORE ${table} SET ${column} = ? WHERE ${column} = ?`).run(newId, oldId);
+      }
+      moved += db().raw.prepare("UPDATE OR IGNORE tracks SET id = ? WHERE id = ?").run(newId, oldId).changes;
+    }
+    return moved;
+  }
+
+  async function seedAlbum(): Promise<void> {
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [track("t1", "al-1", { path: "/m/1.flac" }), track("t2", "al-1", { path: "/m/2.flac" })],
+    });
+    await syncLibrary(server(), CRED);
+    onInvoke("remap_track_ids", (args) => applyNativeRemap((args as { remaps: { oldId: string; newId: string }[] }).remaps));
+  }
+
+  it("re-resolves the album and reports which ids moved", async () => {
+    await seedAlbum();
+    db().raw.exec(`INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t1', 'la', 'lrclib', '2026-01-01')`);
+    mAlbumTracks.mockResolvedValue([
+      track("t1-new", "al-1", { path: "/m/1.flac" }),
+      track("t2", "al-1", { path: "/m/2.flac" }),
+    ]);
+
+    const remaps = await repairAlbumTrackIds(server(), CRED, `${SRV}:al-1`);
+
+    expect(remaps).toEqual([{ oldId: `${SRV}:t1`, newId: `${SRV}:t1-new` }]);
+    expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
+    expect(await count("lyrics", "WHERE track_id = ?", [`${SRV}:t1-new`])).toBe(1);
+  });
+
+  it("drops a track the album really lost, rather than leaving it unplayable", async () => {
+    await seedAlbum();
+    mAlbumTracks.mockResolvedValue([track("t2", "al-1", { path: "/m/2.flac" })]);
+
+    const remaps = await repairAlbumTrackIds(server(), CRED, `${SRV}:al-1`);
+
+    expect(remaps).toEqual([]);
+    expect(await ids("SELECT id FROM tracks")).toEqual([`${SRV}:t2`]);
+  });
+
+  it("reports nothing and writes no remap when the album is already right", async () => {
+    await seedAlbum();
+    const before = invokeCount("remap_track_ids");
+    mAlbumTracks.mockResolvedValue([
+      track("t1", "al-1", { path: "/m/1.flac" }),
+      track("t2", "al-1", { path: "/m/2.flac" }),
+    ]);
+
+    expect(await repairAlbumTrackIds(server(), CRED, `${SRV}:al-1`)).toEqual([]);
+    expect(invokeCount("remap_track_ids")).toBe(before);
+  });
+
+  it("refuses to prune when the album fetch comes back empty", async () => {
+    await seedAlbum();
+    mAlbumTracks.mockResolvedValue([]);
+
+    expect(await repairAlbumTrackIds(server(), CRED, `${SRV}:al-1`)).toEqual([]);
+    expect(await count("tracks")).toBe(2);
   });
 });
 
