@@ -536,6 +536,60 @@ describe("syncLibrary per-album track prune", () => {
   });
 });
 
+describe("syncLibrary track upsert", () => {
+  it("keeps the enrichment stamp on a track the track pass rewrites", async () => {
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`UPDATE tracks SET tags_enriched_at = 1700 WHERE id = '${SRV}:t1'`);
+
+    serveLibrary([album("al-1", { songCount: 1, created: "2026-02-02T00:00:00Z" })], {
+      "al-1": [track("t1", "al-1")],
+    });
+    await syncLibrary(server(), CRED);
+
+    const rows = await db().select<{ tags_enriched_at: number | null }[]>(
+      "SELECT tags_enriched_at FROM tracks WHERE id = ?",
+      [`${SRV}:t1`]
+    );
+    expect(rows[0]?.tags_enriched_at).toBe(1700);
+  });
+
+  it("leaves no track needing enrichment after a second track pass over unchanged tracks", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [track("t1", "al-1"), track("t2", "al-1")],
+    });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`UPDATE tracks SET tags_enriched_at = 1700 WHERE album_id = '${SRV}:al-1'`);
+
+    // Every later sync that touches this album re-runs the track pass; each one that
+    // clears the stamp costs a full Last.fm enrichment round for the whole album.
+    for (const created of ["2026-02-02T00:00:00Z", "2026-03-03T00:00:00Z"]) {
+      serveLibrary([album("al-1", { songCount: 2, created })], {
+        "al-1": [track("t1", "al-1"), track("t2", "al-1")],
+      });
+      await syncLibrary(server(), CRED);
+    }
+
+    expect(await count("tracks", "WHERE tags_enriched_at IS NULL")).toBe(0);
+  });
+
+  it("still writes the server-owned columns the track pass fetched", async () => {
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { title: "Old" })] });
+    await syncLibrary(server(), CRED);
+
+    serveLibrary([album("al-1", { songCount: 1, created: "2026-02-02T00:00:00Z" })], {
+      "al-1": [track("t1", "al-1", { title: "New", playCount: 7 })],
+    });
+    await syncLibrary(server(), CRED);
+
+    const rows = await db().select<{ title: string; play_count: number }[]>(
+      "SELECT title, play_count FROM tracks WHERE id = ?",
+      [`${SRV}:t1`]
+    );
+    expect(rows[0]).toEqual({ title: "New", play_count: 7 });
+  });
+});
+
 describe("syncLibrary track-skip heuristic", () => {
   it("skips an album whose created stamp and track count both match", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });

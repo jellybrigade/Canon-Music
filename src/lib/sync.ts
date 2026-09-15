@@ -188,9 +188,33 @@ async function insertTracksBatch(
     trackRows,
     "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     20,
-    (placeholders) => `INSERT OR REPLACE INTO tracks
+    // Named-column upsert, not INSERT OR REPLACE: a replace deletes the row and
+    // reinserts it, so every column this statement does not list falls back to its
+    // default. `tags_enriched_at` is one of them, and clearing it makes the next
+    // enrichment pass re-fetch the whole album from Last.fm for nothing.
+    (placeholders) => `INSERT INTO tracks
          (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
-       VALUES ${placeholders}`
+       VALUES ${placeholders}
+       ON CONFLICT(id) DO UPDATE SET
+         server_id = excluded.server_id,
+         server_type = excluded.server_type,
+         title = excluded.title,
+         artist = excluded.artist,
+         album_id = excluded.album_id,
+         genre = excluded.genre,
+         track_number = excluded.track_number,
+         disc_number = excluded.disc_number,
+         year = excluded.year,
+         duration = excluded.duration,
+         file_path = excluded.file_path,
+         play_count = excluded.play_count,
+         bit_rate = excluded.bit_rate,
+         suffix = excluded.suffix,
+         file_size = excluded.file_size,
+         replay_gain_track_gain = excluded.replay_gain_track_gain,
+         replay_gain_track_peak = excluded.replay_gain_track_peak,
+         replay_gain_album_gain = excluded.replay_gain_album_gain,
+         replay_gain_album_peak = excluded.replay_gain_album_peak`
   );
 
   const genreRows = tracks.filter((t) => t.genre).map((t) => [`${serverId}:${t.id}`, t.genre]);
