@@ -98,6 +98,8 @@ Fixed unless marked OPEN.
 - A counter fed by every request of one burst counts one event many times.
 - Process-wide state for a per-server fact answers for servers it never saw.
 - A skip fast-path is only as good as a probe of the thing it skips.
+- A server-assigned id is a cache, not an identity.
+- A hand-kept list of the tables one id reaches is a list that goes stale.
 - Watermark upstream identity, not only per-row timestamps.
 - A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.

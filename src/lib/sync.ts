@@ -1,4 +1,5 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import type { Server } from "../types/server";
 import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "./navidrome";
@@ -9,6 +10,7 @@ import { rebuildTagVocabCache } from "./tag-normalize";
 import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batch";
 import { runPool } from "./async-pool";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../db/track-id-tables";
+import { planTrackIdRemap } from "./track-remap";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -162,6 +164,36 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   await db.execute("DELETE FROM settings WHERE key = ?", [
     `server.opensub_extensions.${serverId}`,
   ]);
+}
+
+// Carry the rows of tracks whose id the server rewrote onto the new id, before the
+// upsert writes it and the prune deletes everything still under the old one.
+//
+// Runs before insertTracksBatch on purpose: once the new row exists, the carry has
+// nowhere to land and every table would keep the stale id instead. One `invoke` per
+// album that actually has renamed tracks, none at all otherwise.
+async function carryRenamedTracks(
+  db: Database,
+  serverId: string,
+  albumDbId: string,
+  tracks: readonly NavidromeTrack[],
+): Promise<number> {
+  if (tracks.length === 0) return 0;
+  const existing = await db.select<{ id: string; file_path: string | null }[]>(
+    "SELECT id, file_path FROM tracks WHERE album_id = ? AND server_id = ?",
+    [albumDbId, serverId]
+  );
+  const remaps = planTrackIdRemap(
+    existing,
+    tracks.map((track) => ({ id: `${serverId}:${track.id}`, path: track.path ?? null }))
+  );
+  if (remaps.length === 0) return 0;
+  // Non-fatal: a failed carry costs the local-only rows of these tracks, which the prune
+  // was going to take anyway. Failing the whole sync over it would cost the library.
+  return await invoke<number>("remap_track_ids", { remaps }).catch((err: unknown) => {
+    console.error(`sync: failed to carry renamed tracks for album ${albumDbId}:`, err);
+    return 0;
+  });
 }
 
 // Drop tracks the album no longer contains. Without this a track deleted on the
@@ -323,6 +355,8 @@ export async function syncLibrary(
   /** Albums and tracks dropped because the server no longer has them. */
   prunedAlbums: number;
   prunedTracks: number;
+  /** Tracks whose id the server rewrote, carried onto the new id instead of pruned. */
+  remappedTracks: number;
   /** True when the album track pass gave up early on a run of failures, so some
    *  albums still hold stale or missing tracks until the next sync. */
   albumTracksIncomplete: boolean;
@@ -496,6 +530,7 @@ export async function syncLibrary(
   const staleAlbumIds = existingAlbumRows.map((r) => r.id).filter((id) => !fetchedAlbumIds.has(id));
   let prunedAlbums = 0;
   let prunedTracks = 0;
+  let remappedTracks = 0;
   if (albums.length > 0 && staleAlbumIds.length > 0) {
     await pruneAlbums(db, staleAlbumIds);
     prunedAlbums = staleAlbumIds.length;
@@ -545,9 +580,12 @@ export async function syncLibrary(
       }
       continue;
     }
-    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     // Only worth a query for an album that already had rows: on a first sync
-    // there is nothing to prune and this would be one wasted round trip per album.
+    // there is nothing to carry or prune and this would be wasted round trips per album.
+    if (existingTrackCount > 0) {
+      remappedTracks += await carryRenamedTracks(db, server.id, albumDbId, tracks);
+    }
+    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
         db,
@@ -869,6 +907,7 @@ export async function syncLibrary(
     skippedAlbums,
     prunedAlbums,
     prunedTracks,
+    remappedTracks,
     albumTracksIncomplete,
     skippedStages,
     changed: {

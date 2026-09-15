@@ -153,6 +153,14 @@ Fixed unless marked OPEN.
   ```
   grep -rn "skip\|unchanged" src/lib/sync.ts | grep -v '^\s*//'
   ```
+- **A server-assigned id is a cache, not an identity.** Navidrome 0.64 re-encoded ~87% of its track ids without touching a file, so to Canon's prune every one of those tracks looked deleted and re-added: loved state, lyrics, waveforms, queued scrobbles and resume positions all died with the row, and no number of syncs brought them back. Fix: `planTrackIdRemap` (`src/lib/track-remap.ts`) pairs a mirrored row whose id the server stopped using with the fetched track holding the same `file_path`, and `remap_track_ids` (`library_write.rs`) carries every track-keyed row onto the new id in one transaction, before the upsert writes the new row and before the prune runs. Exact match on the path, since it is the server's own bytes; any ambiguity (no path, a path claimed twice on either side, a destination id the mirror already holds) means no evidence and the row goes to the prune. Store the natural key beside the assigned one, or the next id migration is a data loss.
+  ```
+  grep -rn "file_path" src/lib/sync.ts src/lib/track-remap.ts
+  ```
+- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/track-id-tables.ts` holds the list with per-table policy, `track-id-tables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains.
+  ```
+  grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/track-id-tables.ts src-tauri/src/library_write.rs
+  ```
 - **Watermark upstream identity, not only per-row timestamps.** Per-row mtimes cannot see a migration that rewrote the rows' keys, because the rows they sit on did not move. `servers.server_version` / `last_scan_at` / `song_count` (v49) come from `getScanStatus` at the top of every sync and any of the three moving forces a full track pass. Two halves that are easy to get wrong: `getScanStatus` is admin-only on some deployments, so a failure is "no evidence" and falls through to the probe rather than counting as "unchanged"; and the new watermark is stored only after a pass that completed, since storing it after an early break tells the next sync those albums were read and erases the evidence that they were not.
   ```
   grep -rn "getScanStatus\|last_scan_at\|server_version" src --include='*.ts*' | grep -v '\.test\.'

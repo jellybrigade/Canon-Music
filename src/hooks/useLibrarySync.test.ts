@@ -31,6 +31,7 @@ const CLEAN: SyncResult = {
   skippedAlbums: 0,
   prunedAlbums: 0,
   prunedTracks: 0,
+  remappedTracks: 0,
   albumTracksIncomplete: false,
   skippedStages: [],
   changed: { albums: false, tracks: false, artists: false, loved: false, playlists: false },

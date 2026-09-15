@@ -14,7 +14,8 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { resetTauriMocks } from "../test/mocks/tauri";
+import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { remappedTrackIdTables } from "../db/track-id-tables";
 import { invokeCount } from "../test/perf";
 import type { NavidromeAlbum, NavidromePlaylist, NavidromeStarred, NavidromeTrack } from "./navidrome";
 
@@ -543,6 +544,131 @@ describe("syncLibrary per-album track prune", () => {
     });
     await syncLibrary(server(), CRED);
     expect(seen.filter((s) => /NOT IN/.test(s))).toHaveLength(1);
+  });
+});
+
+
+describe("syncLibrary track id remap", () => {
+  /**
+   * Stands in for the `remap_track_ids` Rust command. A reimplementation, not the real
+   * statements: `src-tauri/src/library_write.rs` owns those and its own tests pin the table
+   * state, including the rollback this double cannot model. It exists so these tests can read
+   * back a mirror that actually carried the rows.
+   */
+  function applyNativeRemap(remaps: { oldId: string; newId: string }[]): number {
+    let moved = 0;
+    for (const { oldId, newId } of remaps) {
+      for (const { table, column } of remappedTrackIdTables()) {
+        db().raw.prepare(`UPDATE OR IGNORE ${table} SET ${column} = ? WHERE ${column} = ?`).run(newId, oldId);
+      }
+      moved += db().raw.prepare("UPDATE OR IGNORE tracks SET id = ? WHERE id = ?").run(newId, oldId).changes;
+    }
+    return moved;
+  }
+
+  function armRemap(): { calls: { oldId: string; newId: string }[][] } {
+    const calls: { oldId: string; newId: string }[][] = [];
+    onInvoke("remap_track_ids", (args) => {
+      const { remaps } = args as { remaps: { oldId: string; newId: string }[] };
+      calls.push(remaps);
+      return applyNativeRemap(remaps);
+    });
+    return { calls };
+  }
+
+  async function seedOneTrack(): Promise<void> {
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { path: "/m/1.flac" })] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`
+      INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t1', 'la', 'lrclib', '2026-01-01');
+      INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${SRV}:t1', 1);
+      INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t1', '[]', 1);
+    `);
+  }
+
+  /** The album row is byte-identical across an id rewrite, so only `created` moves the skip. */
+  function serveRenamed(newTrackId: string, path = "/m/1.flac"): void {
+    serveLibrary([album("al-1", { songCount: 1, created: "2026-02-02T00:00:00Z" })], {
+      "al-1": [track(newTrackId, "al-1", { path })],
+    });
+  }
+
+  it("carries the user's rows onto a track id the server rewrote", async () => {
+    await seedOneTrack();
+    armRemap();
+
+    serveRenamed("t1-rewritten");
+    const result = await syncLibrary(server(), CRED);
+
+    expect(result.remappedTracks).toBe(1);
+    expect(await ids("SELECT id FROM tracks")).toEqual([`${SRV}:t1-rewritten`]);
+    for (const table of ["lyrics", "scrobble_history", "waveform_cache"]) {
+      expect({ table, rows: await count(table, "WHERE track_id = ?", [`${SRV}:t1-rewritten`]) }).toEqual({
+        table,
+        rows: 1,
+      });
+    }
+    // The old row was carried, not deleted and rewritten, so the prune finds nothing stale.
+    expect(result.prunedTracks).toBe(0);
+  });
+
+  it("asks the native side once, with every renamed track of the album", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [track("t1", "al-1", { path: "/m/1.flac" }), track("t2", "al-1", { path: "/m/2.flac" })],
+    });
+    await syncLibrary(server(), CRED);
+    const { calls } = armRemap();
+
+    serveLibrary([album("al-1", { songCount: 2, created: "2026-02-02T00:00:00Z" })], {
+      "al-1": [track("t1-new", "al-1", { path: "/m/1.flac" }), track("t2-new", "al-1", { path: "/m/2.flac" })],
+    });
+    await syncLibrary(server(), CRED);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toEqual([
+      { oldId: `${SRV}:t1`, newId: `${SRV}:t1-new` },
+      { oldId: `${SRV}:t2`, newId: `${SRV}:t2-new` },
+    ]);
+  });
+
+  it("never asks when every mirrored id still resolves", async () => {
+    await seedOneTrack();
+    const { calls } = armRemap();
+
+    serveLibrary([album("al-1", { songCount: 1, created: "2026-02-02T00:00:00Z" })], {
+      "al-1": [track("t1", "al-1", { path: "/m/1.flac" })],
+    });
+    await syncLibrary(server(), CRED);
+
+    expect(calls).toHaveLength(0);
+    expect(invokeCount("remap_track_ids")).toBe(0);
+  });
+
+  it("leaves a genuinely deleted track to the prune", async () => {
+    await seedOneTrack();
+    const { calls } = armRemap();
+
+    serveRenamed("t9", "/m/9.flac");
+    const result = await syncLibrary(server(), CRED);
+
+    expect(calls).toHaveLength(0);
+    expect(result.remappedTracks).toBe(0);
+    expect(result.prunedTracks).toBe(1);
+    expect(await count("lyrics")).toBe(0);
+  });
+
+  it("keeps syncing when the native carry fails, leaving the rows to the prune", async () => {
+    await seedOneTrack();
+    onInvoke("remap_track_ids", () => {
+      throw new Error("db locked");
+    });
+
+    serveRenamed("t1-rewritten");
+    const result = await syncLibrary(server(), CRED);
+
+    expect(result.remappedTracks).toBe(0);
+    expect(result.prunedTracks).toBe(1);
+    expect(await ids("SELECT id FROM tracks")).toEqual([`${SRV}:t1-rewritten`]);
   });
 });
 
