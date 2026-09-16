@@ -251,6 +251,34 @@ Fixed unless marked OPEN.
   grep -rn "useSetting(\"" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "ids|track|album|queue"
   grep -n "SELECT id FROM servers" src/store/player.ts
   ```
+- **Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.**
+  After a server was removed and re-added through the wizard, the live library still held
+  6672 `tracks` rows, all 257 `loved_tracks` and a queued scrobble under the old server id,
+  while that server's `albums`, `artists` and `playlists` were gone - the exact inverse of
+  `purgeServerData`'s statement order, so the purge did not run to completion. It cannot
+  self-heal: every read is scoped by `server_id`, every prune subselects the server's own
+  albums, and a server with no `servers` row never triggers a sync, so the rows are
+  permanently invisible *and* permanently undeletable. Orphans are not merely wasted bytes -
+  `useSearch` caps its pool before joining `tracks`, so they take slots from real matches.
+  Fix: `purgeStrandedServers` (`src/lib/sync.ts`), run once from `main.tsx` after the DB
+  opens, diffs the `server_id`s in the mirrored tables against `servers` and purges each one
+  left over. A delete path that has to finish is a delete path that needs a sweep behind it.
+  ```
+  grep -rn "purgeStrandedServers" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **An empty read and a broken button look the same to the user.** Every whole-album play
+  path (`usePlayAlbum`, `useAddAlbumToQueue`, and two open-coded copies in `App.tsx`) read
+  the album's tracks and did `if (tracks.length === 0) return;`. A sync that stopped at its
+  consecutive-failure break leaves most albums with no track rows at all - 1248 of 1517 on
+  the reported install - so clicking play did nothing, with no message, no error and no way
+  to tell it from a dead control. The album page did say something, but what it said was to
+  run a library sync, which is the thing that had already failed. Fix: one
+  `loadAlbumTracks` (`src/lib/albumTracks.ts`) fetches the album on a miss, so opening or
+  playing an album repairs it. Ask of any silent `return` on an empty list: what did the
+  user just click, and how do they find out nothing happened?
+  ```
+  grep -rn "length === 0) return" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.
