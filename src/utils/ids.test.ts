@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripServerPrefix } from "./ids";
+import { isOwnedByServer, stripServerPrefix } from "./ids";
 
 describe("stripServerPrefix", () => {
   it("strips the server prefix", () => {
@@ -26,5 +26,32 @@ describe("stripServerPrefix", () => {
 
   it("returns an empty native id for a bare prefix", () => {
     expect(stripServerPrefix("srv-1:", "srv-1")).toBe("");
+  });
+});
+
+describe("isOwnedByServer", () => {
+  it("accepts an id prefixed by one of the known servers", () => {
+    expect(isOwnedByServer("srv-2:track-9", ["srv-1", "srv-2"])).toBe(true);
+  });
+
+  it("rejects an id whose server is gone", () => {
+    expect(isOwnedByServer("srv-3:track-9", ["srv-1", "srv-2"])).toBe(false);
+  });
+
+  it("rejects everything when no server is left", () => {
+    expect(isOwnedByServer("srv-1:track-9", [])).toBe(false);
+  });
+
+  it("rejects an unprefixed id", () => {
+    expect(isOwnedByServer("track-9", ["srv-1"])).toBe(false);
+  });
+
+  it("rejects a server id that only appears mid-string", () => {
+    expect(isOwnedByServer("other:srv-1:track-9", ["srv-1"])).toBe(false);
+  });
+
+  it("rejects an id that merely starts with the server id without the separator", () => {
+    // A UUID is not a prefix of another UUID, but the check must not depend on that.
+    expect(isOwnedByServer("srv-10:track-9", ["srv-1"])).toBe(false);
   });
 });

@@ -229,6 +229,28 @@ Fixed unless marked OPEN.
   ```
   grep -rn "OR IGNORE\|ON CONFLICT DO NOTHING" src-tauri/src src --include='*.rs' --include='*.ts' | grep -v '\.test\.'
   ```
+- **Global state holding server-scoped ids outlives the server that issued them.** Removing a
+  server purges every `server_id`-owned table, but `queue_state` and `radio_seed` are single
+  global `settings` rows whose values are full track objects carrying `{serverId}:{nativeId}`
+  ids. Deleting the server and re-adding it through the wizard mints a fresh UUID, so
+  `loadSettings` restored a queue and a current track belonging to a server that no longer
+  existed, and the first consumer to reach for a stream URL threw `id "<old>:..." missing
+  expected server prefix "<new>:"` in the user's face on a freshly set-up install - with
+  nothing playable and no way back. The purge could not fix it: the row is not scoped to one
+  server, so on a two-server library blanket-deleting it would throw away the other server's
+  queue. The reader is the only place that can decide, so `loadSettings` reads
+  `SELECT id FROM servers` once (only when one of those two rows is non-empty) and drops the
+  whole snapshot unless every id in it, `currentTrack` included - a partial restore leaves
+  `queueIndex` and `shuffleOrder` pointing at the holes. A stranded seed also clears
+  `radioActive`/`radioLabel`, decided after the loop because those are separate rows arriving
+  in any order. Audited beside them: `display.album_suffix_excluded_ids` holds album ids too,
+  but only ever `.includes()`-compares them, so a stranded id is inert. Ask of any global
+  state: whose ids are in it, and what happens when that owner is deleted?
+  ```
+  grep -rn "INTO settings (key, value) VALUES ('" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "queue|radio|ids|track|album"
+  grep -rn "useSetting(\"" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "ids|track|album|queue"
+  grep -n "SELECT id FROM servers" src/store/player.ts
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

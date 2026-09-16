@@ -108,6 +108,7 @@ Fixed unless marked OPEN.
 - A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.
 - A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.
 - Per-statement conflict handling decides per statement, not per record.
+- Global state holding server-scoped ids outlives the server that issued them.
 
 ## UI - `known-issues/ui.md`
 
