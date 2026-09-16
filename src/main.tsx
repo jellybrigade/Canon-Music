@@ -5,8 +5,16 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initLogger } from "./lib/logger";
+import { getDb } from "./db";
+import { purgeStrandedServers } from "./lib/sync";
 
 initLogger();
+
+// Fire and forget, outside getDb's memo: a failed repair must not poison the database
+// promise the whole app waits on, and there is nothing the user could do about it anyway.
+void getDb()
+  .then((db) => purgeStrandedServers(db))
+  .catch((err: unknown) => console.error("startup: failed to purge removed servers:", err));
 
 // Suppress WebKit's default context menu on non-input elements, custom menus are attached per-component.
 document.addEventListener("contextmenu", (e) => {
