@@ -132,5 +132,6 @@ Fixed unless marked OPEN.
 - Partial opt-out of global base rule keeps properties it forgot. **OPEN, 37 instances.**
 - Hit-area halo grown toward a neighbour steals its clicks.
 - Overlay sized to its container breaks when the container's shape varies.
+- A grid cell that can render `null` hands its column to the next sibling.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

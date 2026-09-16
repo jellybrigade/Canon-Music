@@ -93,6 +93,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn -B6 "inset: 0" src --include='*.css' | grep -E "::(after|before)|--waveform|height:"
   ```
+- **A grid cell that can render `null` hands its column to the next sibling.** The tag review row lays its cells straight into a subgrid through a `display: contents` wrapper, and `AlbumArtStrip` returns `null` with no drawable cover (no mirrored tracks for the album, or its query still loading). Every later cell shifted one track left: the count landed in the 200px art column and the actions in the 36px count column, hiding the "Map to genre" input. `TagSourceDots` did the same for a tag with no recorded source. Fix: the row owns a wrapper per column, so a child's `null` empties its cell instead of deleting it. Pinned by `TagReviewTab.test.tsx`. Ask of any fixed-column grid row: which of its direct children can render nothing?
+  ```
+  grep -rn "display: contents\|subgrid" src --include='*.css'
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```
