@@ -4,6 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
+import { useEffect } from "react";
 import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
 import { useTracks } from "./useTracks";
@@ -58,6 +59,26 @@ describe("useTracks", () => {
     rerender({ albumId: "a2" });
     expect(result.current.data).toBeUndefined();
     expect(result.current.isLoading).toBe(true);
+  });
+
+  it("never hands an effect the previous album's tracks under the new album id", async () => {
+    onInvoke("get_tracks", (args) => {
+      const { albumId } = args as { albumId: string };
+      return albumId === "a1" ? [] : new Promise(() => {});
+    });
+    const seen: Array<{ albumId: string; data: TrackRow[] | undefined; isLoading: boolean }> = [];
+    const { result, rerender } = renderHook(({ albumId }) => {
+      const tracks = useTracks(albumId);
+      useEffect(() => {
+        seen.push({ albumId, data: tracks.data, isLoading: tracks.isLoading });
+      });
+      return tracks;
+    }, { initialProps: { albumId: "a1" } });
+    await waitFor(() => expect(result.current.data).toEqual([]));
+
+    seen.length = 0;
+    rerender({ albumId: "a2" });
+    expect(seen.filter((s) => s.data !== undefined || !s.isLoading)).toEqual([]);
   });
 
   it("is loading synchronously on mount when an albumId is provided", () => {
