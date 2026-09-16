@@ -109,7 +109,8 @@ fn remove_playlist_track(
 /// Mirrors `remappedTrackIdTables()` in src/db/track-id-tables.ts, which is the source of truth;
 /// src/db/track-id-tables.test.ts sweeps this list against it so the two cannot drift. `tracks`
 /// itself is rewritten last, below, and `tracks_fts` is deliberately absent: the sync rebuilds it
-/// from `tracks` for every album it touched.
+/// from `tracks` for every album it touched, and deletes the row left under the old id while it
+/// is there.
 const REMAPPED_TRACK_ID_TABLES: &[(&str, &str)] = &[
     ("track_tags", "track_id"),
     ("loved_tracks", "track_id"),

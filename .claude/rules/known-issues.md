@@ -105,6 +105,7 @@ Fixed unless marked OPEN.
 - A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
 - A stand-in for a missing measurement must not be the value that binds the limit.
+- A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.
 
 ## UI - `known-issues/ui.md`
 

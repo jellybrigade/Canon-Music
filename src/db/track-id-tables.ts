@@ -48,8 +48,10 @@ export function purgedTrackIdTables(): readonly TrackIdTable[] {
 
 /**
  * Tables carried onto the new id when the server rewrites its own track ids (Navidrome 0.64 did,
- * for ~87% of them). `tracks_fts` is not among them: the sync rebuilds its rows from `tracks` for
- * every album it touched, so carrying them would be work that is immediately overwritten.
+ * for ~87% of them). `tracks_fts` is not among them: `rebuildTracksFts` in src/lib/sync.ts rewrites
+ * its rows from `tracks` for every album the pass touched, so carrying them would be work that is
+ * immediately overwritten. It is that rebuild, and only it, that also deletes the row under the old
+ * id - a renamed track keeps its `tracks` row, so the prune never reaches the id it left behind.
  */
 export function remappedTrackIdTables(): readonly TrackIdTable[] {
   return TRACK_ID_TABLES.filter((entry) => entry.remapped);

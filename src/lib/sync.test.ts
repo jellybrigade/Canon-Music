@@ -657,6 +657,18 @@ describe("syncLibrary track id remap", () => {
     expect(await count("lyrics")).toBe(0);
   });
 
+  it("leaves no search row behind under the id the server stopped using", async () => {
+    await seedOneTrack();
+    armRemap();
+
+    serveRenamed("t1-rewritten");
+    await syncLibrary(server(), CRED);
+
+    // The track row was renamed, not deleted, so nothing else can ever reach the old FTS
+    // row again: a search pool full of orphans joins back to no track at all.
+    expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1-rewritten`]);
+  });
+
   it("keeps syncing when the native carry fails, leaving the rows to the prune", async () => {
     await seedOneTrack();
     onInvoke("remap_track_ids", () => {
@@ -746,6 +758,18 @@ describe("repairAlbumTrackIds", () => {
     expect(remaps).toEqual([{ oldId: `${SRV}:t1`, newId: `${SRV}:t1-new` }]);
     expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
     expect(await count("lyrics", "WHERE track_id = ?", [`${SRV}:t1-new`])).toBe(1);
+  });
+
+  it("keeps the repaired album searchable under its new ids", async () => {
+    await seedAlbum();
+    mAlbumTracks.mockResolvedValue([
+      track("t1-new", "al-1", { path: "/m/1.flac" }),
+      track("t2", "al-1", { path: "/m/2.flac" }),
+    ]);
+
+    await repairAlbumTrackIds(server(), CRED, `${SRV}:al-1`);
+
+    expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
   });
 
   it("drops a track the album really lost, rather than leaving it unplayable", async () => {

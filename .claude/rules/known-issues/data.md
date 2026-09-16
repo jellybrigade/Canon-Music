@@ -183,6 +183,21 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "Math\.(min|max)\([^)]*\?\?" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.**
+  `remap_track_ids` rewrites `tracks.id` instead of deleting the row, which is the whole point -
+  but `tracks_fts` was left out of the carry on the grounds that the sync rebuilds it, and the
+  rebuild deletes `WHERE id IN (SELECT id FROM tracks WHERE album_id IN (...))`, i.e. by the *new*
+  ids. Nothing could reach the old id again: not the rebuild, not `pruneAlbums`, not
+  `purgeServerData`, all of which subselect `tracks`. On a Navidrome 0.64 migration that is ~15k
+  dead rows in a 17.6k-track library, and they are not merely stale - `useSearch` ranks and caps
+  its pool at 2000 rows *before* joining `tracks`, so orphans take slots from real matches and a
+  broad query returns a fraction of them. Fix: one writer, `rebuildTracksFts(db, albumIds,
+  staleTrackIds)`, deleting by explicit old id as well as by album, called by the sync, the
+  play-time repair and `syncAlbumTracks` alike. Ask of any id rewrite: which tables did I decide
+  not to carry, and what deletes their old row now that the prune cannot see it?
+  ```
+  grep -rn "SET id = \|SET track_id = " src src-tauri/src | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

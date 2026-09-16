@@ -170,6 +170,41 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
 // Which of an album's mirrored tracks the server merely renamed. Read before the
 // upsert writes the new rows: once it has, the old and new ids both exist locally and
 // nothing can tell a rename from a genuine add.
+/**
+ * Bring the FTS mirror back in line with `tracks` for the albums that moved.
+ *
+ * One writer, because the delete has two halves and a caller doing only the obvious one
+ * leaves rows nothing can ever reach again: a renamed track keeps its row (the remap
+ * rewrites `tracks.id` rather than deleting it), so the prune never sees the old id and
+ * the album subselect below only finds the new one. An orphan is not merely stale - the
+ * search ranks and caps its pool before joining `tracks`, so orphans take slots from real
+ * matches and return nothing.
+ */
+async function rebuildTracksFts(
+  db: Database,
+  albumDbIds: readonly string[],
+  staleTrackIds: readonly string[],
+): Promise<void> {
+  if (staleTrackIds.length > 0) {
+    await executeIdChunks(db, [...staleTrackIds], (ph) => `DELETE FROM tracks_fts WHERE id IN (${ph})`);
+  }
+  if (albumDbIds.length === 0) return;
+  const albumIds = [...albumDbIds];
+  await executeIdChunks(
+    db,
+    albumIds,
+    (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`
+  );
+  await executeIdChunks(
+    db,
+    albumIds,
+    (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
+       SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
+       FROM tracks t JOIN albums a ON t.album_id = a.id
+       WHERE t.album_id IN (${ph})`
+  );
+}
+
 async function planRenamedTracks(
   db: Database,
   serverId: string,
@@ -354,6 +389,7 @@ export async function repairAlbumTrackIds(
   await carryRenamedTracks(dbAlbumId, remaps);
   await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
   await pruneAlbumTracks(db, dbAlbumId, tracks.map((track) => `${server.id}:${track.id}`));
+  await rebuildTracksFts(db, [dbAlbumId], remaps.map((remap) => remap.oldId));
   return remaps;
 }
 
@@ -367,6 +403,7 @@ export async function syncAlbumTracks(
   const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
   const db = await getDb();
   await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  await rebuildTracksFts(db, [dbAlbumId], []);
 }
 
 // Which domains a sync actually wrote to. Callers use this to bump only the
@@ -499,6 +536,7 @@ export async function syncLibrary(
   // rebuilt per album rather than per server, so collect which albums moved.
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
+  const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
@@ -634,10 +672,12 @@ export async function syncLibrary(
     // Only worth a query for an album that already had rows: on a first sync
     // there is nothing to carry or prune and this would be wasted round trips per album.
     if (existingTrackCount > 0) {
-      remappedTracks += await carryRenamedTracks(
-        albumDbId,
-        await planRenamedTracks(db, server.id, albumDbId, tracks)
-      );
+      const remaps = await planRenamedTracks(db, server.id, albumDbId, tracks);
+      // Collected whatever the carry reported: an id the carry declined keeps its own track
+      // row, which the prune then takes along with its FTS row, so clearing it here early is
+      // at worst a no-op and never leaves one behind.
+      for (const remap of remaps) renamedTrackIds.push(remap.oldId);
+      remappedTracks += await carryRenamedTracks(albumDbId, remaps);
     }
     await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     if (existingTrackCount > 0) {
@@ -678,22 +718,7 @@ export async function syncLibrary(
   // moved. Sweeping the whole server rewrote every FTS row in the library for a
   // single changed album. Album ids are server-prefixed, so scoping by album_id
   // is already scoped by server.
-  if (ftsDirtyAlbumIds.size > 0) {
-    const dirtyIds = [...ftsDirtyAlbumIds];
-    await executeIdChunks(
-      db,
-      dirtyIds,
-      (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`
-    );
-    await executeIdChunks(
-      db,
-      dirtyIds,
-      (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
-       SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
-       FROM tracks t JOIN albums a ON t.album_id = a.id
-       WHERE t.album_id IN (${ph})`
-    );
-  }
+  await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
 
   // Sync loved state via getStarred2, independent of incremental skip logic.
   // Compared against what is already stored so an unchanged starred list writes
