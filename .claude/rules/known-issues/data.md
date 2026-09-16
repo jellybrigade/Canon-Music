@@ -210,6 +210,17 @@ Fixed unless marked OPEN.
   ```
   grep -rn "clearSyncWatermark\|forceTrackPass" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Per-statement conflict handling decides per statement, not per record.** The id remap ran
+  `UPDATE OR IGNORE` over nine tables and let each decide the collision for itself, but `OR IGNORE`
+  only declines where a uniqueness constraint exists: `scrobble_queue` (plain `track_id`) and
+  `playlist_resume` (keyed by `playlist_id`) have none, so when the destination id already held a
+  row, the user's queued scrobbles and resume position moved onto a track that kept its own id
+  while `tracks` correctly refused. The test that named the case asserted on `tracks` alone and
+  passed throughout. Fix: one `SELECT EXISTS` on the destination per track, before any table is
+  touched. A record-level decision belongs above the statements, not inside each of them.
+  ```
+  grep -rn "OR IGNORE\|ON CONFLICT DO NOTHING" src-tauri/src src --include='*.rs' --include='*.ts' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

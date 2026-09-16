@@ -107,6 +107,7 @@ Fixed unless marked OPEN.
 - A stand-in for a missing measurement must not be the value that binds the limit.
 - A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.
 - A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.
+- Per-statement conflict handling decides per statement, not per record.
 
 ## UI - `known-issues/ui.md`
 

@@ -145,9 +145,12 @@ pub fn remap_track_ids(
 /// two tables leaves the lyrics under the new id and the loved flag under the old one, and the
 /// next sync prunes whichever half still carries the dead id. Returns how many track rows moved.
 ///
-/// Every statement is OR IGNORE. A destination id that somehow already holds a row is a
-/// collision this cannot resolve - keeping both is impossible, and dropping the live one to make
-/// room is worse than leaving the stale row for the prune to clear.
+/// A destination id that somehow already holds a row is a collision this cannot resolve - keeping
+/// both is impossible, and dropping the live one to make room is worse than leaving the stale row
+/// for the prune to clear. That refusal is decided per track, before any table is touched:
+/// `UPDATE OR IGNORE` declines only where a uniqueness constraint exists, and scrobble_queue and
+/// playlist_resume have none on the track id, so leaving it to the statements would move the
+/// user's listening history onto a track that kept its own id.
 fn remap_track_ids_in(conn: &mut Connection, remaps: &[TrackIdRemap]) -> Result<u32, String> {
     if remaps.is_empty() {
         return Ok(0);
@@ -155,6 +158,16 @@ fn remap_track_ids_in(conn: &mut Connection, remaps: &[TrackIdRemap]) -> Result<
     let tx = conn.transaction().map_err(|e| e.to_string())?;
     let mut moved = 0u32;
     for remap in remaps {
+        let destination_taken: bool = tx
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM tracks WHERE id = ?1)",
+                rusqlite::params![remap.new_id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?;
+        if destination_taken {
+            continue;
+        }
         for (table, column) in REMAPPED_TRACK_ID_TABLES {
             tx.execute(
                 &format!("UPDATE OR IGNORE {table} SET {column} = ?2 WHERE {column} = ?1"),
@@ -301,6 +314,45 @@ mod tests {
             )
             .expect("count");
         assert_eq!(old_still_there, 1);
+    }
+
+    #[test]
+    fn refuses_a_collision_for_every_table_at_once() {
+        // `UPDATE OR IGNORE` only declines where a uniqueness constraint exists, so a table
+        // that has none would hand the user's queued scrobble and resume position to whichever
+        // track kept the id - a collision has to be all or nothing.
+        let mut conn = remap_fixture_conn();
+        seed_track(&conn, "srv:old");
+        seed_track(&conn, "srv:new");
+
+        remap_track_ids_in(&mut conn, &[remap("srv:old", "srv:new")]).expect("remap");
+
+        for (table, column) in [
+            ("scrobble_queue", "track_id"),
+            ("scrobble_history", "track_id"),
+            ("playlist_resume", "last_track_id"),
+            ("track_tags", "track_id"),
+        ] {
+            let on_new: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE {column} = ?"),
+                    ["srv:new"],
+                    |r| r.get(0),
+                )
+                .expect("count");
+            assert_eq!(on_new, 1, "{table} kept only the destination's own row");
+            let on_old: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM {table} WHERE {column} = ?"),
+                    ["srv:old"],
+                    |r| r.get(0),
+                )
+                .expect("count");
+            assert_eq!(
+                on_old, 1,
+                "{table} left the stale row where the prune finds it"
+            );
+        }
     }
 
     #[test]
