@@ -310,6 +310,25 @@ describe("usePlaylistTracks load effect", () => {
     expect(result.current.data![0]!.id).toBe("srv-a:b");
   });
 
+  it("never renders the previous playlist's rows or settled state under the new id", async () => {
+    const plA = seedPlaylist("pl1");
+    const plB = seedPlaylist("pl2");
+    seedTrack("a");
+    seedPlaylistTracks(plA, ["a"]);
+
+    const seen: Array<{ id: string | null; firstRow: string | undefined; isLoading: boolean }> = [];
+    const { result, rerender } = renderHook(({ id }: { id: string | null }) => {
+      const r = usePlaylistTracks(id);
+      seen.push({ id, firstRow: r.data?.[0]?.id, isLoading: r.isLoading });
+      return r;
+    }, { initialProps: { id: plA as string | null } });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+
+    seen.length = 0;
+    rerender({ id: plB });
+    expect(seen[0]).toEqual({ id: plB, firstRow: undefined, isLoading: true });
+  });
+
   it("does not blank the list when only the refresh tick changes", async () => {
     const pl = seedPlaylist("pl1");
     seedTrack("a");

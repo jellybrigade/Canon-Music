@@ -20,6 +20,8 @@ import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
 import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { stripServerPrefix } from "../utils/ids";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { AlbumTracksNotice } from "./AlbumTracksNotice";
+import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 import "./PlayerBar.css";
 
 interface LoveButtonProps {
@@ -186,6 +188,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   };
 
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
+  const albumTracksNotice = useAlbumTracksNoticeStore((s) => s.notice);
 
   useEffect(() => {
     return () => {
@@ -196,9 +199,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--normalizing-bar-height",
-      (pullProgress || enrichmentPending) ? "24px" : "0px"
+      (pullProgress || enrichmentPending || albumTracksNotice) ? "24px" : "0px"
     );
-  }, [pullProgress, enrichmentPending]);
+  }, [pullProgress, enrichmentPending, albumTracksNotice]);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -256,7 +259,8 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   return (
     <>
-      {enrichmentPending && !pullProgress && (
+      {albumTracksNotice && <AlbumTracksNotice abovePlayer={currentTrack !== null} />}
+      {enrichmentPending && !pullProgress && !albumTracksNotice && (
         <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
           Metadata not fetched for {enrichmentPending} albums
           <button
@@ -304,7 +308,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
           )}
         </div>
       )}
-      {pullProgress && (
+      {pullProgress && !albumTracksNotice && (
         <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
           Fetching metadata… {pullProgress.done} / {pullProgress.total}
         </div>

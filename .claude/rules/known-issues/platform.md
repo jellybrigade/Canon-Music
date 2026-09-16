@@ -32,4 +32,8 @@ Fixed unless marked OPEN.
   ```
   grep -rn "reachable" src src-tauri/src | grep -v '\.test\.'
   ```
+- **WebKit's `err.stack` carries no message line, so logging the stack alone loses the error.** `logger.ts` stored `v.stack ?? v.message`, which on V8 opens with `Error: <message>` and on WebKitGTK - every shipped Canon build - is frames only. All 500 rows of `app_logs` read `Cn@tauri://localhost/assets/index-DO98X4Wg.js:430:23778` and nothing else, so a real user report of failing syncs could not be diagnosed from the logs at all, only from the surrounding message the call site happened to pass. Fix: `formatLogValue` puts `name: message` in front unless the stack already starts with it. Any place a browser API's output is stored rather than shown owes the question: is this the same string on the engine we actually ship?
+  ```
+  grep -rn "\.stack" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **"Load failed" ~25s = systemd-resolved, not Canon.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.

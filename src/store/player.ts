@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { LocalTarget, DlnaTarget, type PlaybackTarget } from "./playbackTarget";
 import { discoverRenderers, type DlnaRenderer } from "../lib/dlna";
 import { SUBSONIC_NOT_FOUND } from "../lib/navidrome";
+import { isOwnedByServer } from "../utils/ids";
 
 export interface CurrentTrack {
   id: string;
@@ -1938,6 +1939,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         let showWaveform = true;
+        // The queue snapshot and the radio seed are global settings rows carrying
+        // server-scoped track ids, so removing a server strands ids the mirror no longer
+        // holds and every stripServerPrefix consumer throws the moment one is restored.
+        // Only these two keys carry ids, so nothing else pays for the read.
+        const carriesTrackIds = rows.some(
+          (r) => (r.key === "queue_state" || r.key === "radio_seed") && r.value
+        );
+        const serverIds = carriesTrackIds
+          ? (await db.select<{ id: string }[]>("SELECT id FROM servers", [])).map((r) => r.id)
+          : [];
+        let radioSeedStranded = false;
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
@@ -1960,7 +1972,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           } else if (row.key === "queue_state" && restoreQueue) {
             try {
               const saved = JSON.parse(row.value) as QueueSnapshot;
-              if (Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
+              // All or nothing: a queue restored past the stranded entries leaves queueIndex
+              // and shuffleOrder pointing at the holes they left.
+              const owned = [...(saved.queue ?? []), ...(saved.currentTrack ? [saved.currentTrack] : [])]
+                .every((t) => isOwnedByServer(t.id, serverIds));
+              if (owned && Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
                 set({
                   queue: saved.queue,
                   queueIndex: saved.queueIndex ?? 0,
@@ -1978,7 +1994,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (row.value) {
               try {
                 const seed = JSON.parse(row.value) as CurrentTrack;
-                set({ radioSeed: seed });
+                if (isOwnedByServer(seed.id, serverIds)) set({ radioSeed: seed });
+                else radioSeedStranded = true;
               } catch {
                 // malformed seed, ignore
               }
@@ -2043,6 +2060,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             } catch { /* malformed, ignore */ }
           }
         }
+        // Decided after the loop: `radio_active` and `radio_label` are separate rows and
+        // arrive in whatever order the read returns them, so a seed rejected mid-loop would
+        // otherwise be followed by the row that turns radio back on without one.
+        if (radioSeedStranded) set({ radioSeed: null, radioActive: false, radioLabel: null });
         // Load waveform from cache for the restored track, fetchWaveform is only
         // called from playTrack, so a session-restored track would show nothing until
         // the user navigated away and back.

@@ -29,9 +29,10 @@ function ReviewRow({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: 
   return (
     <div className="review-row">
       <div className="rr-info">
-        <TagSourceDots sources={row.sources} />
+        {/* Each child is a subgrid cell; wrappers hold the column when the child renders null. */}
+        <div className="rr-sources"><TagSourceDots sources={row.sources} /></div>
         <span className="rr-name">{row.raw_value}</span>
-        <AlbumArtStrip rawValue={row.raw_value} kind={row.kind} size={30} max={6} />
+        <div className="rr-art"><AlbumArtStrip rawValue={row.raw_value} kind={row.kind} size={30} max={6} /></div>
         <span className="rr-albums">{row.album_count}</span>
       </div>
       <div className="rr-actions">

@@ -28,6 +28,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
+import { loadAlbumTracksForPlay } from "./lib/albumTracks";
 import { useTrackIdRepair } from "./hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
@@ -409,11 +410,14 @@ export default function App() {
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
+    // Fetches the album on a miss; the seed is picked by play count, which the shared
+    // loader does not order by, so the rows are read again once they are there.
+    if ((await loadAlbumTracksForPlay(srv, credential, album)).length === 0) return;
     const db = await getDb();
     type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY COALESCE(play_count, 0) DESC, track_number ASC",
-      [album.id]
+      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? AND server_id = ? ORDER BY COALESCE(play_count, 0) DESC, track_number ASC",
+      [album.id, srv.id]
     );
     if (rows.length === 0) return;
     const topHalf = rows.slice(0, Math.max(1, Math.ceil(rows.length / 2)));
@@ -430,12 +434,7 @@ export default function App() {
   async function handleAddAlbumToQueue(album: AlbumRow) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
-    const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
-    const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? ORDER BY disc_number ASC, track_number ASC",
-      [album.id]
-    );
+    const rows = await loadAlbumTracksForPlay(srv, credential, album);
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;

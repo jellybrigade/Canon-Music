@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import { getDb } from "../db";
@@ -10,44 +10,39 @@ export type { TrackRow } from "../types/library";
 // dedicated read-only connection instead of tauri-plugin-sql's sqlx pool.
 export function useTracks(albumId: string | null) {
   const refreshTick = useTrackListSessionStore((s) => s.refreshTick);
-  const [data, setData] = useState<TrackRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(albumId !== null);
-  // A failed read leaves `data` undefined, which is indistinguishable from an album that
-  // genuinely has no tracks yet. Callers need the difference to avoid rendering an empty
-  // state that claims the album is empty when the read simply failed.
-  const [error, setError] = useState<string | null>(null);
-  const prevAlbumIdRef = useRef<string | null>(null);
+  // Keyed by the album it was read for, so the render that switches albums never reports the
+  // previous album's rows (or its settled `isLoading: false`) under the new id: an effect in
+  // the same commit would otherwise act on another album's tracks.
+  const [result, setResult] = useState<{
+    albumId: string;
+    rows: TrackRow[] | undefined;
+    // A failed read leaves `rows` undefined, which is indistinguishable from an album that
+    // genuinely has no tracks yet. Callers need the difference to avoid rendering an empty
+    // state that claims the album is empty when the read simply failed.
+    error: string | null;
+    isLoading: boolean;
+  } | null>(null);
 
   useEffect(() => {
-    if (albumId === null) {
-      setData(undefined);
-      setIsLoading(false);
-      setError(null);
-      prevAlbumIdRef.current = null;
-      return;
-    }
-    if (prevAlbumIdRef.current !== albumId) {
-      setData(undefined);
-    }
-    prevAlbumIdRef.current = albumId;
+    if (albumId === null) return;
     let cancelled = false;
-    setIsLoading(true);
-    setError(null);
+    setResult((prev) => ({
+      albumId,
+      rows: prev?.albumId === albumId ? prev.rows : undefined,
+      error: null,
+      isLoading: true,
+    }));
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
         // engines share canon.db and this read path has no schema awareness of its own.
         await getDb();
         const rows = await invoke<TrackRow[]>("get_tracks", { albumId });
-        if (!cancelled) {
-          setData(rows);
-          setIsLoading(false);
-        }
+        if (!cancelled) setResult({ albumId, rows, error: null, isLoading: false });
       } catch (err) {
         console.error("useTracks: failed to load tracks", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
-          setIsLoading(false);
+          setResult({ albumId, rows: undefined, error: err instanceof Error ? err.message : String(err), isLoading: false });
         }
       }
     })();
@@ -56,5 +51,10 @@ export function useTracks(albumId: string | null) {
     };
   }, [albumId, refreshTick]);
 
-  return { data, isLoading, error };
+  const current = albumId !== null && result?.albumId === albumId ? result : null;
+  return {
+    data: current?.rows,
+    isLoading: albumId !== null && (current?.isLoading ?? true),
+    error: current?.error ?? null,
+  };
 }

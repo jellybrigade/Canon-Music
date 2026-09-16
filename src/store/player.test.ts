@@ -1318,35 +1318,158 @@ describe("player store - replay gain", () => {
 });
 
 describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
+  const SRV = "srv-1";
+
   function settingsRows(rows: Record<string, string>) {
     return Object.entries(rows).map(([key, value]) => ({ key, value }));
   }
 
-  it("restores queue_state when restore_on_startup is 'true' and no track is current", async () => {
-    mockDb({
-      select: () =>
+  /** Settings reads answer from `rows`; the ownership read answers with `serverIds`. */
+  function mockSettingsDb(rows: Record<string, string>, serverIds: string[] = [SRV]) {
+    return mockDb({
+      select: (sql: string) =>
         Promise.resolve(
-          settingsRows({
-            "queue.restore_on_startup": "true",
-            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0, currentTrack: makeTrack("saved") }),
-          })
+          sql.includes("FROM servers") ? serverIds.map((id) => ({ id })) : settingsRows(rows)
         ),
+    });
+  }
+
+  it("restores queue_state when restore_on_startup is 'true' and no track is current", async () => {
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: [makeTrack(`${SRV}:saved`)],
+        queueIndex: 0,
+        currentTrack: makeTrack(`${SRV}:saved`),
+      }),
     });
 
     await usePlayerStore.getState().loadSettings();
 
-    expect(usePlayerStore.getState().currentTrack?.id).toBe("saved");
+    expect(usePlayerStore.getState().currentTrack?.id).toBe(`${SRV}:saved`);
+  });
+
+  it("does not restore a queue left by a server that has since been removed", async () => {
+    // Deleting a server purges its mirrored rows but the snapshot is a global settings
+    // row, so its ids outlive it. Restoring them puts a track the new server never had
+    // in front of every stripServerPrefix call site, which throws on sight.
+    mockSettingsDb(
+      {
+        "queue.restore_on_startup": "true",
+        queue_state: JSON.stringify({
+          queue: [makeTrack("srv-old:saved")],
+          queueIndex: 0,
+          currentTrack: makeTrack("srv-old:saved"),
+        }),
+      },
+      [SRV]
+    );
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().currentTrack).toBeNull();
+    expect(usePlayerStore.getState().queue).toEqual([]);
+  });
+
+  it("does not restore a queue mixing a known server's tracks with a removed one's", async () => {
+    // A partial restore would leave queueIndex and shuffleOrder pointing past the holes.
+    mockSettingsDb(
+      {
+        "queue.restore_on_startup": "true",
+        queue_state: JSON.stringify({
+          queue: [makeTrack(`${SRV}:a`), makeTrack("srv-old:b")],
+          queueIndex: 0,
+          currentTrack: makeTrack(`${SRV}:a`),
+        }),
+      },
+      [SRV]
+    );
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().queue).toEqual([]);
+  });
+
+  it("does not restore a queue when no server is left at all", async () => {
+    mockSettingsDb(
+      {
+        "queue.restore_on_startup": "true",
+        queue_state: JSON.stringify({ queue: [makeTrack(`${SRV}:saved`)], queueIndex: 0 }),
+      },
+      []
+    );
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().queue).toEqual([]);
+  });
+
+  it("reads the server list once however many stored ids it checks", async () => {
+    const db = mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({
+        queue: makeTracks(40).map((t) => makeTrack(`${SRV}:${t.id}`)),
+        queueIndex: 0,
+      }),
+      radio_seed: JSON.stringify(makeTrack(`${SRV}:seed`)),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const serverReads = db.select.mock.calls.filter((c) => String(c[0]).includes("FROM servers"));
+    expect(serverReads.length).toBe(1);
+  });
+
+  it("skips the server read entirely when nothing stored carries an id", async () => {
+    const db = mockSettingsDb({ "queue.restore_on_startup": "true", volume: "0.5" });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const serverReads = db.select.mock.calls.filter((c) => String(c[0]).includes("FROM servers"));
+    expect(serverReads.length).toBe(0);
+  });
+
+  it("drops a radio seed left by a removed server and leaves radio off", async () => {
+    mockSettingsDb(
+      {
+        radio_active: "1",
+        radio_label: "Like ye",
+        radio_seed: JSON.stringify(makeTrack("srv-old:seed")),
+      },
+      [SRV]
+    );
+
+    await usePlayerStore.getState().loadSettings();
+
+    const state = usePlayerStore.getState();
+    expect({ active: state.radioActive, seed: state.radioSeed, label: state.radioLabel }).toEqual({
+      active: false,
+      seed: null,
+      label: null,
+    });
+  });
+
+  it("keeps a radio seed that still belongs to a known server", async () => {
+    mockSettingsDb({
+      radio_active: "1",
+      radio_label: "Like ye",
+      radio_seed: JSON.stringify(makeTrack(`${SRV}:seed`)),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    const state = usePlayerStore.getState();
+    expect({ active: state.radioActive, seed: state.radioSeed?.id, label: state.radioLabel }).toEqual({
+      active: true,
+      seed: `${SRV}:seed`,
+      label: "Like ye",
+    });
   });
 
   it("does not restore queue_state when restore_on_startup is not 'true'", async () => {
-    mockDb({
-      select: () =>
-        Promise.resolve(
-          settingsRows({
-            "queue.restore_on_startup": "false",
-            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0 }),
-          })
-        ),
+    mockSettingsDb({
+      "queue.restore_on_startup": "false",
+      queue_state: JSON.stringify({ queue: [makeTrack(`${SRV}:saved`)], queueIndex: 0 }),
     });
 
     await usePlayerStore.getState().loadSettings();
@@ -1355,14 +1478,9 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
   });
 
   it("does not clobber a track already playing when settings load resolves late", async () => {
-    mockDb({
-      select: () =>
-        Promise.resolve(
-          settingsRows({
-            "queue.restore_on_startup": "true",
-            queue_state: JSON.stringify({ queue: [makeTrack("saved")], queueIndex: 0 }),
-          })
-        ),
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({ queue: [makeTrack(`${SRV}:saved`)], queueIndex: 0 }),
     });
     usePlayerStore.setState({ currentTrack: makeTrack("already-playing") });
 
@@ -1372,21 +1490,16 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
   });
 
   it("malformed queue_state JSON is ignored rather than throwing", async () => {
-    mockDb({
-      select: () =>
-        Promise.resolve(settingsRows({ "queue.restore_on_startup": "true", queue_state: "{not json" })),
-    });
+    mockSettingsDb({ "queue.restore_on_startup": "true", queue_state: "{not json" });
 
     await expect(usePlayerStore.getState().loadSettings()).resolves.toBeUndefined();
     expect(usePlayerStore.getState().currentTrack).toBeNull();
   });
 
   it("an empty saved queue is not restored even when restore_on_startup is true", async () => {
-    mockDb({
-      select: () =>
-        Promise.resolve(
-          settingsRows({ "queue.restore_on_startup": "true", queue_state: JSON.stringify({ queue: [], queueIndex: 0 }) })
-        ),
+    mockSettingsDb({
+      "queue.restore_on_startup": "true",
+      queue_state: JSON.stringify({ queue: [], queueIndex: 0 }),
     });
 
     await usePlayerStore.getState().loadSettings();
@@ -1395,12 +1508,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
   });
 
   it("restores replay gain settings clamped to [-15, 15] even if the stored value is out of range", async () => {
-    mockDb({
-      select: () =>
-        Promise.resolve(
-          settingsRows({ "player.replay_gain_pre_amp": "50", "player.replay_gain_fallback_gain": "-50" })
-        ),
-    });
+    mockSettingsDb({ "player.replay_gain_pre_amp": "50", "player.replay_gain_fallback_gain": "-50" });
 
     await usePlayerStore.getState().loadSettings();
 
@@ -1411,7 +1519,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
 
   it("ignores an invalid replay_gain_mode value, leaving the mode unchanged", async () => {
     usePlayerStore.setState({ replayGainMode: "track" });
-    mockDb({ select: () => Promise.resolve(settingsRows({ "player.replay_gain_mode": "bogus" })) });
+    mockSettingsDb({ "player.replay_gain_mode": "bogus" });
 
     await usePlayerStore.getState().loadSettings();
 

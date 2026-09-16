@@ -13,6 +13,7 @@ Fixed unless marked OPEN.
 - Read-only rusqlite can't own WAL `-shm`.
 - Unbounded thread-per-request -> SIGKILL.
 - Webview honours PAC, Rust does not; a dead PAC stalls only half of Canon.
+- WebKit's `err.stack` carries no message line, so logging the stack alone loses the error.
 - "Load failed" ~25s = systemd-resolved, not Canon.
 - Two HTTP stacks also means two certificate stores.
 - "Something answered" is not "the right thing answered".
@@ -41,6 +42,8 @@ Fixed unless marked OPEN.
 - Router-owned callback in a deps array re-arms the listener it is named in.
 - Module-scoped promise memo assigned only on the success side stays poisoned.
 - Guard keyed on one error type != the broad condition.
+- A result from the previous key is still visible to the commit that switches the key.
+- A mounted flag cleared only in cleanup is false for good under StrictMode.
 
 ## Test / harness - `known-issues/testing.md`
 
@@ -108,6 +111,9 @@ Fixed unless marked OPEN.
 - A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.
 - A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.
 - Per-statement conflict handling decides per statement, not per record.
+- Global state holding server-scoped ids outlives the server that issued them.
+- Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.
+- An empty read and a broken button look the same to the user.
 
 ## UI - `known-issues/ui.md`
 
@@ -128,5 +134,6 @@ Fixed unless marked OPEN.
 - Partial opt-out of global base rule keeps properties it forgot. **OPEN, 37 instances.**
 - Hit-area halo grown toward a neighbour steals its clicks.
 - Overlay sized to its container breaks when the container's shape varies.
+- A grid cell that can render `null` hands its column to the next sibling.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

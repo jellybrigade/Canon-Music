@@ -167,6 +167,28 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   ]);
 }
 
+// Rows whose server is gone are unreachable, not merely stale: every read is scoped by
+// server_id and every prune subselects the server's own albums, so nothing left over from a
+// purge that did not finish - or from a `servers` row lost any other way - can ever be
+// deleted, searched or played again. Run once at startup, since a stranded server by
+// definition never triggers a sync of its own.
+export async function purgeStrandedServers(db: Database): Promise<string[]> {
+  const rows = await db.select<{ server_id: string }[]>(
+    `SELECT server_id FROM albums
+     UNION SELECT server_id FROM tracks
+     UNION SELECT server_id FROM artists
+     UNION SELECT server_id FROM playlists`
+    + ` EXCEPT SELECT id FROM servers`,
+    []
+  );
+  const stranded = rows.map((r) => r.server_id).filter((id): id is string => id !== null);
+  for (const serverId of stranded) {
+    console.warn(`sync: purging rows left behind by removed server ${serverId}`);
+    await purgeServerData(db, serverId);
+  }
+  return stranded;
+}
+
 // Which of an album's mirrored tracks the server merely renamed. Read before the
 // upsert writes the new rows: once it has, the old and new ids both exist locally and
 // nothing can tell a rename from a genuine add.

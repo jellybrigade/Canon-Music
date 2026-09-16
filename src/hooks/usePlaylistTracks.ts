@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
@@ -8,25 +8,29 @@ import { usePlaylistSessionStore } from "../store/playlistSessionStore";
 import type { PlaylistTrackRow } from "../types/library";
 export type { PlaylistTrackRow } from "../types/library";
 
+const NO_ROWS: PlaylistTrackRow[] = [];
+
 export function usePlaylistTracks(playlistId: string | null) {
   const refreshTick = usePlaylistSessionStore((s) => s.playlistTracksTick);
-  const [data, setData] = useState<PlaylistTrackRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(!!playlistId);
-  const prevPlaylistIdRef = useRef<string | null>(null);
+  // Keyed by the playlist it was read for, so the render that switches playlists never shows
+  // (or lets a removal act on) the previous playlist's rows under the new header.
+  const [result, setResult] = useState<{
+    playlistId: string;
+    rows: PlaylistTrackRow[] | undefined;
+    isLoading: boolean;
+  } | null>(null);
 
   useEffect(() => {
     if (!playlistId) {
-      setData([]);
-      setIsLoading(false);
-      prevPlaylistIdRef.current = null;
+      setResult(null);
       return;
     }
-    if (prevPlaylistIdRef.current !== playlistId) {
-      setData(undefined);
-    }
-    prevPlaylistIdRef.current = playlistId;
     let cancelled = false;
-    setIsLoading(true);
+    setResult((prev) => ({
+      playlistId,
+      rows: prev?.playlistId === playlistId ? prev.rows : undefined,
+      isLoading: true,
+    }));
     (async () => {
       try {
         const db = await getDb();
@@ -45,19 +49,26 @@ export function usePlaylistTracks(playlistId: string | null) {
            ORDER BY pt.position ASC`,
           [playlistId]
         );
-        if (!cancelled) {
-          setData(rows);
-          setIsLoading(false);
-        }
+        if (!cancelled) setResult({ playlistId, rows, isLoading: false });
       } catch (err) {
         console.error("usePlaylistTracks: failed to load tracks", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setResult((prev) => ({
+            playlistId,
+            rows: prev?.playlistId === playlistId ? prev.rows : undefined,
+            isLoading: false,
+          }));
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [playlistId, refreshTick]);
+
+  const current = playlistId && result?.playlistId === playlistId ? result : null;
+  const data = playlistId ? current?.rows : NO_ROWS;
+  const isLoading = !!playlistId && (current?.isLoading ?? true);
 
   async function removeTrack(
     position: number,

@@ -35,6 +35,8 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { ArtBackdrop } from "./ArtBackdrop";
 import { syncAlbumTracks } from "../lib/sync";
+import { fetchAlbumTracks } from "../lib/albumTracks";
+import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
@@ -178,6 +180,18 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
       void doSyncTracks();
     }
   }, [tracks, doSyncTracks, album.id]);
+
+  const fetchMissingTracks = useCallback(async () => {
+    await fetchAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
+    useTrackListSessionStore.getState().bumpRefresh();
+  }, [album.id, serverWithCredential]);
+  const missingTracks = useMissingTracksRepair({
+    albumId: album.id,
+    tracks,
+    isLoading,
+    error: tracksError,
+    fetchTracks: fetchMissingTracks,
+  });
 
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
@@ -766,12 +780,24 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
             </button>
           </div>
         ) : !tracks || tracks.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-state-title">No tracks synced yet</p>
-            <p className="empty-state-hint">
-              Run a library sync and this album's tracks appear here, ready to play.
-            </p>
-          </div>
+          missingTracks.isFetching ? (
+            <div className="empty-state">
+              <p className="empty-state-title">Getting this album's tracks</p>
+              <p className="empty-state-hint">One moment, they will appear here ready to play.</p>
+            </div>
+          ) : missingTracks.error ? (
+            <div className="empty-state">
+              <p className="empty-state-title">Couldn't get this album's tracks</p>
+              <p className="empty-state-hint">{missingTracks.error}</p>
+              <button className="empty-state-action" onClick={missingTracks.retry}>Try again</button>
+            </div>
+          ) : (
+            <div className="empty-state">
+              <p className="empty-state-title">No tracks in this album</p>
+              <p className="empty-state-hint">The server lists no tracks for it.</p>
+              <button className="empty-state-action" onClick={missingTracks.retry}>Check again</button>
+            </div>
+          )
         ) : (
           <div className="tracklist-wrapper">
             <div className="tracklist-col-picker-anchor" ref={colPickerRef}>

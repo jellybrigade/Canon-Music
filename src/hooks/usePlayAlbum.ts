@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { getDb } from "../db";
 import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../store/player";
@@ -8,13 +7,7 @@ import { useSetting } from "./useSetting";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { stripServerPrefix } from "../utils/ids";
 import { shuffleArray } from "../lib/shuffle";
-
-interface MinTrack {
-  id: string;
-  title: string;
-  artist: string | null;
-  duration: number | null;
-}
+import { loadAlbumTracksForPlay } from "../lib/albumTracks";
 
 /** Always appends the album's tracks to the end of the queue (no setting override). */
 export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
@@ -22,13 +15,7 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
   const addToQueue = usePlayerStore(s => s.addToQueue);
 
   return useCallback(async (album: AlbumRow) => {
-    const db = await getDb();
-    const tracks = await db.select<MinTrack[]>(
-      `SELECT id, title, artist, duration
-       FROM tracks WHERE album_id = ?
-       ORDER BY disc_number, track_number`,
-      [album.id]
-    );
+    const tracks = await loadAlbumTracksForPlay(server, credential, album);
     if (tracks.length === 0) return;
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
@@ -52,13 +39,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential) {
   const [playAction] = useSetting("album.play_action", "replace");
 
   return useCallback(async (album: AlbumRow) => {
-    const db = await getDb();
-    const tracks = await db.select<MinTrack[]>(
-      `SELECT id, title, artist, duration
-       FROM tracks WHERE album_id = ?
-       ORDER BY disc_number, track_number`,
-      [album.id]
-    );
+    const tracks = await loadAlbumTracksForPlay(server, credential, album);
     if (tracks.length === 0) return;
 
     const coverArtUrl = album.artwork_url

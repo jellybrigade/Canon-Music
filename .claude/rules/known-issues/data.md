@@ -229,6 +229,60 @@ Fixed unless marked OPEN.
   ```
   grep -rn "OR IGNORE\|ON CONFLICT DO NOTHING" src-tauri/src src --include='*.rs' --include='*.ts' | grep -v '\.test\.'
   ```
+- **Global state holding server-scoped ids outlives the server that issued them.** Removing a
+  server purges every `server_id`-owned table, but `queue_state` and `radio_seed` are single
+  global `settings` rows whose values are full track objects carrying `{serverId}:{nativeId}`
+  ids. Deleting the server and re-adding it through the wizard mints a fresh UUID, so
+  `loadSettings` restored a queue and a current track belonging to a server that no longer
+  existed, and the first consumer to reach for a stream URL threw `id "<old>:..." missing
+  expected server prefix "<new>:"` in the user's face on a freshly set-up install - with
+  nothing playable and no way back. The purge could not fix it: the row is not scoped to one
+  server, so on a two-server library blanket-deleting it would throw away the other server's
+  queue. The reader is the only place that can decide, so `loadSettings` reads
+  `SELECT id FROM servers` once (only when one of those two rows is non-empty) and drops the
+  whole snapshot unless every id in it, `currentTrack` included - a partial restore leaves
+  `queueIndex` and `shuffleOrder` pointing at the holes. A stranded seed also clears
+  `radioActive`/`radioLabel`, decided after the loop because those are separate rows arriving
+  in any order. Audited beside them: `display.album_suffix_excluded_ids` holds album ids too,
+  but only ever `.includes()`-compares them, so a stranded id is inert. Ask of any global
+  state: whose ids are in it, and what happens when that owner is deleted?
+  ```
+  grep -rn "INTO settings (key, value) VALUES ('" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "queue|radio|ids|track|album"
+  grep -rn "useSetting(\"" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "ids|track|album|queue"
+  grep -n "SELECT id FROM servers" src/store/player.ts
+  ```
+- **Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.**
+  After a server was removed and re-added through the wizard, the live library still held
+  6672 `tracks` rows, all 257 `loved_tracks` and a queued scrobble under the old server id,
+  while that server's `albums`, `artists` and `playlists` were gone - the exact inverse of
+  `purgeServerData`'s statement order, so the purge did not run to completion. It cannot
+  self-heal: every read is scoped by `server_id`, every prune subselects the server's own
+  albums, and a server with no `servers` row never triggers a sync, so the rows are
+  permanently invisible *and* permanently undeletable. Orphans are not merely wasted bytes -
+  `useSearch` caps its pool before joining `tracks`, so they take slots from real matches.
+  Fix: `purgeStrandedServers` (`src/lib/sync.ts`), run once from `main.tsx` after the DB
+  opens, diffs the `server_id`s in the mirrored tables against `servers` and purges each one
+  left over. A delete path that has to finish is a delete path that needs a sweep behind it.
+  ```
+  grep -rn "purgeStrandedServers" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **An empty read and a broken button look the same to the user.** Every whole-album play
+  path (`usePlayAlbum`, `useAddAlbumToQueue`, and two open-coded copies in `App.tsx`) read
+  the album's tracks and did `if (tracks.length === 0) return;`. A sync that stopped at its
+  consecutive-failure break leaves most albums with no track rows at all - 1248 of 1517 on
+  the reported install - so clicking play did nothing, with no message, no error and no way
+  to tell it from a dead control. The album page did say something, but what it said was to
+  run a library sync, which is the thing that had already failed. Fix: one
+  `loadAlbumTracks` (`src/lib/albumTracks.ts`) fetches the album on a miss, so opening or
+  playing an album repairs it. **Found again in the fix:** the fetch could now reject, and
+  every caller discarded the promise with `void`, so offline the click still did nothing.
+  Play paths go through `loadAlbumTracksForPlay`, which reports both a failed fetch and a
+  server-empty album on the bar above the player. Ask of any silent `return` on an empty
+  list, and of any `void` on a promise that can reject: what did the user just click, and
+  how do they find out nothing happened?
+  ```
+  grep -rn "length === 0) return" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

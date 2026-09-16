@@ -45,7 +45,7 @@ import {
   fetchScanStatus,
   songExists,
 } from "./navidrome";
-import { clearSyncWatermark, purgeServerData, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
+import { clearSyncWatermark, purgeServerData, purgeStrandedServers, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
 
@@ -234,6 +234,65 @@ describe("purgeServerData", () => {
 
 // ---------------------------------------------------------------------------
 // syncLibrary
+describe("purgeStrandedServers", () => {
+  it("takes every row of a server the servers table no longer lists", async () => {
+    seedServerRows(db(), SRV);
+    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${OTHER}', 'navidrome', 'http://b', 'B', 'u')`);
+    seedServerRows(db(), OTHER);
+    const stranded = await purgeStrandedServers(asDb(db()));
+    expect(stranded).toEqual([SRV]);
+    for (const table of OWNED_TABLES) {
+      expect({ table, rows: await count(table) }).toEqual({ table, rows: 1 });
+    }
+  });
+
+  it("finds a server stranded in tracks alone, after its albums already went", async () => {
+    // The shape the bug shipped as: albums, artists and playlists gone, the track rows and
+    // everything keyed to them left behind with no servers row to reach them from.
+    seedServerRows(db(), SRV);
+    db().raw.exec(`DELETE FROM albums; DELETE FROM artists; DELETE FROM playlists;`);
+    await purgeStrandedServers(asDb(db()));
+    expect(await count("tracks")).toBe(0);
+    expect(await count("loved_tracks")).toBe(0);
+    expect(await count("scrobble_queue")).toBe(0);
+  });
+
+  it("keeps every row while the server is still registered", async () => {
+    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`);
+    seedServerRows(db(), SRV);
+    const before = await Promise.all(OWNED_TABLES.map((t) => count(t)));
+    expect(await purgeStrandedServers(asDb(db()))).toEqual([]);
+    expect(await Promise.all(OWNED_TABLES.map((t) => count(t)))).toEqual(before);
+  });
+
+  it("writes nothing and reads once when there is nothing stranded", async () => {
+    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`);
+    seedServerRows(db(), SRV);
+    db().executeCount = 0;
+    db().selectCount = 0;
+    await purgeStrandedServers(asDb(db()));
+    expect(db().executeCount).toBe(0);
+    expect(db().selectCount).toBe(1);
+  });
+
+  it("runs clean on an empty database", async () => {
+    await expect(purgeStrandedServers(asDb(db()))).resolves.toEqual([]);
+  });
+
+  it("purges a library left behind when no server is registered at all", async () => {
+    seedServerRows(db(), SRV);
+    expect(await purgeStrandedServers(asDb(db()))).toEqual([SRV]);
+    expect(await count("tracks")).toBe(0);
+  });
+
+  it("takes both of two stranded servers", async () => {
+    seedServerRows(db(), SRV);
+    seedServerRows(db(), OTHER);
+    expect((await purgeStrandedServers(asDb(db()))).sort()).toEqual([SRV, OTHER].sort());
+    expect(await count("albums")).toBe(0);
+  });
+});
+
 // ---------------------------------------------------------------------------
 
 describe("syncLibrary initial sync", () => {

@@ -17,18 +17,24 @@ let dirty = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 function push(level: string, args: unknown[]): void {
-  const message = args
-    .map((a) => (typeof a === "string" ? a : safeStringify(a)))
-    .join(" ");
+  const message = args.map(formatLogValue).join(" ");
   buffer.push({ ts: Date.now(), level, message });
   if (buffer.length > MAX_LINES) buffer.splice(0, buffer.length - MAX_LINES);
   dirty = true;
 }
 
-function safeStringify(v: unknown): string {
-  if (v instanceof Error) return v.stack ?? v.message;
+// WebKit builds a stack out of frames alone, so logging `err.stack` on Linux drops the
+// one line saying what went wrong and every entry reads as an anonymous bundle offset.
+// V8 opens its stack with the message already, hence the prefix check.
+export function formatLogValue(v: unknown): string {
+  if (v instanceof Error) {
+    const head = v.message ? `${v.name}: ${v.message}` : v.name;
+    if (!v.stack) return head;
+    return v.stack.startsWith(head) ? v.stack : `${head}\n${v.stack}`;
+  }
+  if (typeof v === "string") return v;
   try {
-    return JSON.stringify(v);
+    return JSON.stringify(v) ?? String(v);
   } catch {
     return String(v);
   }
