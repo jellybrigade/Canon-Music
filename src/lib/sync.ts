@@ -1,35 +1,87 @@
 import Database from "@tauri-apps/plugin-sql";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import type { Server } from "../types/server";
-import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions } from "./navidrome";
-import type { NavidromeCredential, NavidromeTrack } from "./navidrome";
+import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchPlaylists, fetchPlaylistTracks, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "./navidrome";
+import type { NavidromeCredential, NavidromeScanStatus, NavidromeTrack } from "./navidrome";
 import { scanForIssues } from "./tagIssues";
 import { escapeLike } from "./sql";
 import { rebuildTagVocabCache } from "./tag-normalize";
 import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./db-batch";
 import { runPool } from "./async-pool";
+import { prunedTrackIdTables, purgedTrackIdTables } from "../db/track-id-tables";
+import { planTrackIdRemap } from "./track-remap";
+import type { TrackIdRemap } from "./track-remap";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
-// Tables that mirror server content, keyed by track id. A track the server no
-// longer has leaves rows here that still show up in the grid, in search and in
-// radio candidates, and 404 when played.
+// How many mirrored track ids the skip fast-path checks against the server per sync.
+const TRACK_ID_PROBE_COUNT = 3;
+
+/** The server identity stored after the last sync that completed its track pass. */
+interface ServerWatermark {
+  last_scan_at: string | null;
+  server_version: string | null;
+  song_count: number | null;
+}
+
+/**
+ * Whether the mirrored track ids are still ids the server answers to.
+ *
+ * Album metadata is evidence about albums. Navidrome 0.64 rewrote ~87% of track ids while
+ * leaving every album row byte-identical, so the per-album skip below matched for all 1512
+ * albums and the mirror could never heal, on any number of syncs. A few ids drawn at random
+ * are cheap and answer the question the skip is actually asking.
+ *
+ * Only a Subsonic "not found" counts against the mirror: a transport failure or a rejected
+ * credential says nothing about the id, and treating it as a miss would turn every offline
+ * moment into a 1500-request full pass.
+ */
+async function mirroredTrackIdsStillResolve(
+  db: Database,
+  server: Server,
+  credential: NavidromeCredential,
+  altUrl: string | undefined,
+): Promise<boolean> {
+  const sampled = await db.select<{ id: string }[]>(
+    "SELECT id FROM tracks WHERE server_id = ? ORDER BY RANDOM() LIMIT ?",
+    [server.id, TRACK_ID_PROBE_COUNT]
+  );
+  if (sampled.length === 0) return true;
+  const verdicts = await Promise.all(
+    sampled.map((row) =>
+      songExists(server.url, server.username, credential, row.id.slice(server.id.length + 1), altUrl)
+    )
+  );
+  return !verdicts.includes(false);
+}
+
+/** Whether the server's own identity moved since the last completed track pass. */
+function watermarkMoved(stored: ServerWatermark | undefined, status: NavidromeScanStatus | null): boolean {
+  if (status === null) return false;
+  if (stored === undefined) return true;
+  return (
+    !sameValue(stored.server_version, status.serverVersion) ||
+    !sameValue(stored.last_scan_at, status.lastScan) ||
+    !sameValue(stored.song_count, status.songCount)
+  );
+}
+
+// A track the server no longer has leaves rows behind that still show up in the
+// grid, in search and in radio candidates, and 404 when played. Which tables
+// those are, and why the user's own rows are spared, is db/track-id-tables.ts.
 //
-// Deliberately NOT listed: scrobble_queue and scrobble_history (the user's
-// listening history, not the server's data), pending_edits and edit_history
-// (inert legacy schema). Album-keyed album_identity and album_user_genres are
-// left alone for the same reason: they are user-authored or user-corrected and
+// Album-keyed album_identity and album_user_genres are left alone for the same
+// reason the user's track rows are: they are user-authored or user-corrected and
 // cost nothing to keep if the album comes back.
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
-    (ph: string) => `DELETE FROM tracks_fts WHERE id IN (${ph})`,
-    (ph: string) => `DELETE FROM track_tags WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM loved_tracks WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM playlist_tracks WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM tag_issues WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM lyrics WHERE track_id IN (${ph})`,
-    (ph: string) => `DELETE FROM waveform_cache WHERE track_id IN (${ph})`,
+    ...prunedTrackIdTables().map(
+      ({ table, column }) =>
+        (ph: string) =>
+          `DELETE FROM ${table} WHERE ${column} IN (${ph})`
+    ),
     (ph: string) => `DELETE FROM tracks WHERE id IN (${ph})`,
   ];
   for (const build of statements) {
@@ -45,19 +97,14 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
 // stranded row is tens to hundreds of KB no read path can reach. album_identity,
 // album_user_genres and album_genre_exclusions stay for the reason given above
 // deleteTracksByIds: they are user-authored or user-corrected, and the album ids
-// survive a re-add of the same server.
+// survive a re-add of the same server. The track-keyed tables come from
+// db/track-id-tables.ts.
 async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
-  const viaTracks = (table: string, column: string) => (ph: string) =>
+  const viaTracks = ({ table, column }: { table: string; column: string }) => (ph: string) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
   const statements = [
-    viaTracks("tracks_fts", "id"),
-    viaTracks("track_tags", "track_id"),
-    viaTracks("loved_tracks", "track_id"),
-    viaTracks("playlist_tracks", "track_id"),
-    viaTracks("tag_issues", "track_id"),
-    viaTracks("lyrics", "track_id"),
-    viaTracks("waveform_cache", "track_id"),
+    ...prunedTrackIdTables().map(viaTracks),
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
@@ -81,30 +128,23 @@ async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<v
 // `pruneAlbumTracks` above to bail out rather than split. Dependents go first so
 // the subselects can still resolve the rows they are keyed to.
 //
-// Purged here but deliberately kept by the sync prune above: scrobble_queue and
-// scrobble_history (queued plays can never be delivered once the server is gone,
-// and the history is dedupe state keyed to track ids that no longer exist),
-// album_identity and album_user_genres (a re-added server mints a fresh UUID, so
-// every id is rewritten and these rows could never be matched again anyway).
+// Purged here but deliberately kept by the sync prune above: the user's own
+// track-keyed rows (db/track-id-tables.ts names them - queued plays can never be
+// delivered once the server is gone, and the history is dedupe state keyed to
+// track ids that no longer exist), album_identity and album_user_genres (a
+// re-added server mints a fresh UUID, so every id is rewritten and these rows
+// could never be matched again anyway).
 //
 // Deliberately NOT purged: artist_identity, artist_covers, artist_aliases,
 // radio_signal_cache, tag_mappings, user_tree_nodes. Those are keyed by artist
 // name or are global user data, so they stay correct across servers.
 export async function purgeServerData(db: Database, serverId: string): Promise<void> {
-  const viaTracks = (table: string, column: string) =>
+  const viaTracks = ({ table, column }: { table: string; column: string }) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE server_id = ?)`;
   const viaAlbums = (table: string, column: string) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM albums WHERE server_id = ?)`;
   const statements = [
-    viaTracks("tracks_fts", "id"),
-    viaTracks("track_tags", "track_id"),
-    viaTracks("loved_tracks", "track_id"),
-    viaTracks("playlist_tracks", "track_id"),
-    viaTracks("tag_issues", "track_id"),
-    viaTracks("lyrics", "track_id"),
-    viaTracks("waveform_cache", "track_id"),
-    viaTracks("scrobble_queue", "track_id"),
-    viaTracks("scrobble_history", "track_id"),
+    ...purgedTrackIdTables().map(viaTracks),
     "DELETE FROM tracks WHERE server_id = ?",
     viaAlbums("loved_albums", "album_id"),
     viaAlbums("album_genres", "album_id"),
@@ -125,6 +165,72 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   await db.execute("DELETE FROM settings WHERE key = ?", [
     `server.opensub_extensions.${serverId}`,
   ]);
+}
+
+// Which of an album's mirrored tracks the server merely renamed. Read before the
+// upsert writes the new rows: once it has, the old and new ids both exist locally and
+// nothing can tell a rename from a genuine add.
+/**
+ * Bring the FTS mirror back in line with `tracks` for the albums that moved.
+ *
+ * One writer, because the delete has two halves and a caller doing only the obvious one
+ * leaves rows nothing can ever reach again: a renamed track keeps its row (the remap
+ * rewrites `tracks.id` rather than deleting it), so the prune never sees the old id and
+ * the album subselect below only finds the new one. An orphan is not merely stale - the
+ * search ranks and caps its pool before joining `tracks`, so orphans take slots from real
+ * matches and return nothing.
+ */
+async function rebuildTracksFts(
+  db: Database,
+  albumDbIds: readonly string[],
+  staleTrackIds: readonly string[],
+): Promise<void> {
+  if (staleTrackIds.length > 0) {
+    await executeIdChunks(db, [...staleTrackIds], (ph) => `DELETE FROM tracks_fts WHERE id IN (${ph})`);
+  }
+  if (albumDbIds.length === 0) return;
+  const albumIds = [...albumDbIds];
+  await executeIdChunks(
+    db,
+    albumIds,
+    (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`
+  );
+  await executeIdChunks(
+    db,
+    albumIds,
+    (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
+       SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
+       FROM tracks t JOIN albums a ON t.album_id = a.id
+       WHERE t.album_id IN (${ph})`
+  );
+}
+
+async function planRenamedTracks(
+  db: Database,
+  serverId: string,
+  albumDbId: string,
+  tracks: readonly NavidromeTrack[],
+): Promise<TrackIdRemap[]> {
+  const existing = await db.select<{ id: string; file_path: string | null }[]>(
+    "SELECT id, file_path FROM tracks WHERE album_id = ? AND server_id = ?",
+    [albumDbId, serverId]
+  );
+  return planTrackIdRemap(
+    existing,
+    tracks.map((track) => ({ id: `${serverId}:${track.id}`, path: track.path ?? null }))
+  );
+}
+
+// Move the local-only rows onto the new ids, before the prune deletes everything still
+// under the old ones. One `invoke` per album that has renamed tracks, none otherwise.
+async function carryRenamedTracks(albumDbId: string, remaps: readonly TrackIdRemap[]): Promise<number> {
+  if (remaps.length === 0) return 0;
+  // Non-fatal: a failed carry costs the local-only rows of these tracks, which the prune
+  // was going to take anyway. Failing the whole sync over it would cost the library.
+  return await invoke<number>("remap_track_ids", { remaps }).catch((err: unknown) => {
+    console.error(`sync: failed to carry renamed tracks for album ${albumDbId}:`, err);
+    return 0;
+  });
 }
 
 // Drop tracks the album no longer contains. Without this a track deleted on the
@@ -175,6 +281,7 @@ async function insertTracksBatch(
     track.duration ?? null,
     track.path ?? null,
     track.playCount ?? 0,
+    track.played ?? null,
     track.bitRate ?? null,
     track.suffix ?? null,
     track.size ?? null,
@@ -186,11 +293,36 @@ async function insertTracksBatch(
   await executeBatched(
     db,
     trackRows,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    20,
-    (placeholders) => `INSERT OR REPLACE INTO tracks
-         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
-       VALUES ${placeholders}`
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    21,
+    // Named-column upsert, not INSERT OR REPLACE: a replace deletes the row and
+    // reinserts it, so every column this statement does not list falls back to its
+    // default. `tags_enriched_at` is one of them, and clearing it makes the next
+    // enrichment pass re-fetch the whole album from Last.fm for nothing.
+    (placeholders) => `INSERT INTO tracks
+         (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, played_at, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
+       VALUES ${placeholders}
+       ON CONFLICT(id) DO UPDATE SET
+         server_id = excluded.server_id,
+         server_type = excluded.server_type,
+         title = excluded.title,
+         artist = excluded.artist,
+         album_id = excluded.album_id,
+         genre = excluded.genre,
+         track_number = excluded.track_number,
+         disc_number = excluded.disc_number,
+         year = excluded.year,
+         duration = excluded.duration,
+         file_path = excluded.file_path,
+         play_count = excluded.play_count,
+         played_at = excluded.played_at,
+         bit_rate = excluded.bit_rate,
+         suffix = excluded.suffix,
+         file_size = excluded.file_size,
+         replay_gain_track_gain = excluded.replay_gain_track_gain,
+         replay_gain_track_peak = excluded.replay_gain_track_peak,
+         replay_gain_album_gain = excluded.replay_gain_album_gain,
+         replay_gain_album_peak = excluded.replay_gain_album_peak`
   );
 
   const genreRows = tracks.filter((t) => t.genre).map((t) => [`${serverId}:${t.id}`, t.genre]);
@@ -213,6 +345,54 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
   );
 }
 
+/**
+ * Forget what the server looked like at the last completed sync, so the next one reads every
+ * album's tracks instead of trusting the per-album skip.
+ *
+ * The user-facing escape hatch for a mirror that is wrong in a way no probe caught: expensive
+ * (one track request per album, 1500+ on a real library), which is why nothing calls it on its
+ * own. See `watermarkMoved`.
+ */
+export async function clearSyncWatermark(db: Database, serverId: string): Promise<void> {
+  await db.execute(
+    "UPDATE servers SET last_scan_at = NULL, server_version = NULL, song_count = NULL WHERE id = ?",
+    [serverId]
+  );
+}
+
+/**
+ * Re-resolve one album's tracks against the server, carrying the local-only rows of any track
+ * whose id was rewritten and dropping the ones it really lost. Returns the pairs it carried.
+ *
+ * The play-time answer to Subsonic error 70: the server does not know the id Canon just asked
+ * for, which after an id migration is true of most of the library at once. Repairing the one
+ * album the user is trying to play beats a full 1500-request resync they did not ask for.
+ */
+export async function repairAlbumTrackIds(
+  server: Server,
+  credential: NavidromeCredential,
+  dbAlbumId: string,
+): Promise<TrackIdRemap[]> {
+  const navidromeAlbumId = dbAlbumId.slice(server.id.length + 1);
+  const tracks = await fetchAlbumTracks(
+    server.url,
+    server.username,
+    credential,
+    navidromeAlbumId,
+    server.alt_url ?? undefined
+  );
+  // Same reasoning as pruneAlbumTracks: an album that returned nothing is a server hiccup far
+  // more often than an emptied album, and acting on it would delete the rows being repaired.
+  if (tracks.length === 0) return [];
+  const db = await getDb();
+  const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
+  await carryRenamedTracks(dbAlbumId, remaps);
+  await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  await pruneAlbumTracks(db, dbAlbumId, tracks.map((track) => `${server.id}:${track.id}`));
+  await rebuildTracksFts(db, [dbAlbumId], remaps.map((remap) => remap.oldId));
+  return remaps;
+}
+
 export async function syncAlbumTracks(
   server: Server,
   credential: NavidromeCredential,
@@ -223,6 +403,7 @@ export async function syncAlbumTracks(
   const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
   const db = await getDb();
   await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  await rebuildTracksFts(db, [dbAlbumId], []);
 }
 
 // Which domains a sync actually wrote to. Callers use this to bump only the
@@ -251,10 +432,17 @@ export interface SyncProgress {
   total: number;
 }
 
+/** What the caller knows that the sync's own evidence cannot tell it. */
+export interface SyncOptions {
+  /** Read every album's tracks whatever the watermark and the probe say. */
+  forceTrackPass?: boolean;
+}
+
 export async function syncLibrary(
   server: Server,
   credential: NavidromeCredential,
   onAlbumBatch?: (progress: SyncProgress) => void,
+  options?: SyncOptions,
 ): Promise<{
   failedAlbums: number;
   failedPlaylists: number;
@@ -262,6 +450,8 @@ export async function syncLibrary(
   /** Albums and tracks dropped because the server no longer has them. */
   prunedAlbums: number;
   prunedTracks: number;
+  /** Tracks whose id the server rewrote, carried onto the new id instead of pruned. */
+  remappedTracks: number;
   /** True when the album track pass gave up early on a run of failures, so some
    *  albums still hold stale or missing tracks until the next sync. */
   albumTracksIncomplete: boolean;
@@ -280,10 +470,38 @@ export async function syncLibrary(
     }
   );
 
-  // Fatal by design: without the album list there is no sync to run.
-  const albums = await fetchAllAlbums(server.url, server.username, credential, altUrl);
+  // Fatal by design: without the album list there is no sync to run. The scan status
+  // rides alongside it because it is one request and its failure is survivable: some
+  // deployments restrict getScanStatus to admins, and "no evidence" must fall through to
+  // the id probe below rather than read as "nothing changed".
+  const [albums, scanStatus] = await Promise.all([
+    fetchAllAlbums(server.url, server.username, credential, altUrl),
+    fetchScanStatus(server.url, server.username, credential, altUrl).catch((err: unknown) => {
+      console.error("sync: failed to read the server scan status, falling back to the id probe:", err);
+      return null;
+    }),
+  ]);
 
   const db = await getDb();
+
+  // Decide once, before the album loop, whether anything may be skipped at all. A server
+  // version bump is exactly when a migration rewrites ids, and a scan stamp or song count
+  // that moved means rows were rewritten under album metadata that can look unchanged.
+  const storedWatermark = (
+    await db.select<ServerWatermark[]>(
+      "SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?",
+      [server.id]
+    )
+  )[0];
+  const serverIdentityMoved = watermarkMoved(storedWatermark, scanStatus);
+  // The caller's flag comes first, and not as a cleared watermark: `watermarkMoved` reads
+  // "no scan status" as "no evidence", which on a deployment that restricts getScanStatus to
+  // admins flattens a user asking for a resync into the same skipped sync they already had.
+  // Short-circuit deliberate: a forced full pass has nothing left to learn from the probe.
+  const forceTrackPass =
+    options?.forceTrackPass === true ||
+    serverIdentityMoved ||
+    !(await mirroredTrackIdsStillResolve(db, server, credential, altUrl));
   let failedAlbums = 0;
   let skippedAlbums = 0;
 
@@ -330,6 +548,7 @@ export async function syncLibrary(
   // rebuilt per album rather than per server, so collect which albums moved.
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
+  const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
     const albumDbId = `${server.id}:${album.id}`;
@@ -337,6 +556,7 @@ export async function syncLibrary(
     const existingCreated = existing?.navidrome_created ?? null;
     const existingTrackCount = trackCountByAlbumId.get(albumDbId) ?? 0;
     const skipTracks =
+      !forceTrackPass &&
       existing !== undefined &&
       existingCreated !== null &&
       existingCreated === (album.created ?? null) &&
@@ -411,6 +631,7 @@ export async function syncLibrary(
   const staleAlbumIds = existingAlbumRows.map((r) => r.id).filter((id) => !fetchedAlbumIds.has(id));
   let prunedAlbums = 0;
   let prunedTracks = 0;
+  let remappedTracks = 0;
   if (albums.length > 0 && staleAlbumIds.length > 0) {
     await pruneAlbums(db, staleAlbumIds);
     prunedAlbums = staleAlbumIds.length;
@@ -460,9 +681,17 @@ export async function syncLibrary(
       }
       continue;
     }
-    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     // Only worth a query for an album that already had rows: on a first sync
-    // there is nothing to prune and this would be one wasted round trip per album.
+    // there is nothing to carry or prune and this would be wasted round trips per album.
+    if (existingTrackCount > 0) {
+      const remaps = await planRenamedTracks(db, server.id, albumDbId, tracks);
+      // Collected whatever the carry reported: an id the carry declined keeps its own track
+      // row, which the prune then takes along with its FTS row, so clearing it here early is
+      // at worst a no-op and never leaves one behind.
+      for (const remap of remaps) renamedTrackIds.push(remap.oldId);
+      remappedTracks += await carryRenamedTracks(albumDbId, remaps);
+    }
+    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
         db,
@@ -501,22 +730,7 @@ export async function syncLibrary(
   // moved. Sweeping the whole server rewrote every FTS row in the library for a
   // single changed album. Album ids are server-prefixed, so scoping by album_id
   // is already scoped by server.
-  if (ftsDirtyAlbumIds.size > 0) {
-    const dirtyIds = [...ftsDirtyAlbumIds];
-    await executeIdChunks(
-      db,
-      dirtyIds,
-      (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`
-    );
-    await executeIdChunks(
-      db,
-      dirtyIds,
-      (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
-       SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
-       FROM tracks t JOIN albums a ON t.album_id = a.id
-       WHERE t.album_id IN (${ph})`
-    );
-  }
+  await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
 
   // Sync loved state via getStarred2, independent of incremental skip logic.
   // Compared against what is already stored so an unchanged starred list writes
@@ -756,6 +970,16 @@ export async function syncLibrary(
     }
   }
 
+  // Only a pass that actually finished may move the watermark: storing it after a run that
+  // broke early or lost albums to failures would tell the next sync those albums were read
+  // when they were not, and the evidence that they need re-reading is gone.
+  if (scanStatus !== null && serverIdentityMoved && !albumTracksIncomplete && failedAlbums === 0) {
+    await db.execute(
+      "UPDATE servers SET last_scan_at = ?, server_version = ?, song_count = ? WHERE id = ?",
+      [scanStatus.lastScan, scanStatus.serverVersion, scanStatus.songCount, server.id]
+    );
+  }
+
   const albumsChanged = albumUpsertParams.length > 0 || prunedAlbums > 0;
   const tracksChanged = fetchedCount > 0 || prunedAlbums > 0 || prunedTracks > 0;
 
@@ -774,6 +998,7 @@ export async function syncLibrary(
     skippedAlbums,
     prunedAlbums,
     prunedTracks,
+    remappedTracks,
     albumTracksIncomplete,
     skippedStages,
     changed: {

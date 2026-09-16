@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from "react";
 import { syncLibrary } from "../lib/sync";
-import type { SyncProgress } from "../lib/sync";
+import type { SyncOptions, SyncProgress } from "../lib/sync";
 import { invalidateGenreTreeCache } from "./useGenreTree";
 import { useSetting } from "./useSetting";
 import type { ServerWithCredential } from "./useServer";
@@ -91,7 +91,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   }
 
   /** Returns whether a run actually started. */
-  function runSync(s: ServerWithCredential): boolean {
+  function runSync(s: ServerWithCredential, options?: SyncOptions): boolean {
     if (syncingRef.current) return false;
     syncingRef.current = true;
     clearRetryTimer();
@@ -108,16 +108,21 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
     // For You rail) isn't reshuffling multiple times a second.
     let lastInvalidate = 0;
-    syncLibrary(s.server, s.credential, (progress) => {
-      // Progress state is cheap to set and is the only thing telling the user a
-      // long first sync is moving rather than hung, so it updates every tick.
-      // Only the store bump, which forces a full album re-read, is debounced.
-      setSyncProgress(progress);
-      const now = Date.now();
-      if (now - lastInvalidate < 1500) return;
-      lastInvalidate = now;
-      useAlbumBrowseSessionStore.getState().bumpRefresh();
-    })
+    syncLibrary(
+      s.server,
+      s.credential,
+      (progress) => {
+        // Progress state is cheap to set and is the only thing telling the user a
+        // long first sync is moving rather than hung, so it updates every tick.
+        // Only the store bump, which forces a full album re-read, is debounced.
+        setSyncProgress(progress);
+        const now = Date.now();
+        if (now - lastInvalidate < 1500) return;
+        lastInvalidate = now;
+        useAlbumBrowseSessionStore.getState().bumpRefresh();
+      },
+      options
+    )
       .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
         if (!mountedRef.current) return;
         const hasPartialFailure =

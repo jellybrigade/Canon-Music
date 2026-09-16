@@ -7,6 +7,7 @@ import {
   Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
 import { usePlayerStore, isNextDisabled, repeatModeLabel } from "../store/player";
+import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { useTagsStore } from "../store/tags";
 import { useLoved } from "../hooks/useLoved";
 import { useSetting } from "../hooks/useSetting";
@@ -43,6 +44,7 @@ function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
 
 interface Props {
   onNowPlaying: () => void;
+  onOpenResync: () => void;
   onSelectArtist?: (name: string) => void;
   onSelectAlbumById?: (albumId: string) => Promise<void>;
   serverWithCred?: ServerWithCredential;
@@ -71,7 +73,7 @@ function useVolumeWheel() {
   return ref;
 }
 
-export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
+export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
   const isPlaying     = usePlayerStore((s) => s.isPlaying);
@@ -346,15 +348,14 @@ export function PlayerBar({ onNowPlaying, onSelectArtist, onSelectAlbumById, ser
             {error ? (
               <div className="player-error" role="alert">
                 <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
-                <span className="player-error-msg" title={error}>{error}</span>
-                <button className="player-error-action" onClick={retryCurrent}>Retry</button>
-                <button
-                  className="player-error-action"
-                  onClick={() => void next()}
-                  disabled={nextDisabled}
-                >
-                  Skip
-                </button>
+                <span className="player-error-msg" title={error.message}>{error.message}</span>
+                <PlaybackErrorActions
+                  cause={error.cause}
+                  onRetry={retryCurrent}
+                  onSkip={() => void next()}
+                  skipDisabled={nextDisabled}
+                  onOpenResync={onOpenResync}
+                />
               </div>
             ) : (
               <>

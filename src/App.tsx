@@ -28,6 +28,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
+import { useTrackIdRepair } from "./hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
 import { usePlayerStore } from "./store/player";
@@ -129,6 +130,7 @@ export default function App() {
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
   useMediaSession(serverWithCred);
+  useTrackIdRepair(serverWithCred);
   // Below the server read rather than up with the playback hooks: its queries are scoped by
   // server id, and a warm keyed on a different id than the tab reads is a warm nobody reads.
   useNowPlayingPrefetch(server?.id ?? null);

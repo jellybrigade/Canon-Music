@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Server, Tag, Play, ChevronRight, Activity } from "lucide-react";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { Server as ServerRow } from "../types/server";
+import type { SyncOptions } from "../lib/sync";
 import { ServerTab } from "./settings/ServerTab";
 import { TagsTab } from "./settings/TagsTab";
 import { PlaybackTab } from "./settings/PlaybackTab";
@@ -15,6 +16,7 @@ type NavId = "server" | "metadata" | "playback" | "advanced";
 interface Props {
   server: ServerRow | undefined;
   syncStatus: SyncStatus;
+  runSync: (s: ServerWithCredential, options?: SyncOptions) => boolean;
   syncError: string;
   lastSyncedAt: number | null;
   serverWithCredential: ServerWithCredential | undefined;
@@ -30,18 +32,18 @@ const NAV_ITEMS: { id: NavId; label: string; icon: React.ReactNode }[] = [
   { id: "advanced", label: "Advanced", icon: <Activity size={15} /> },
 ];
 
-export function SettingsView({ server, syncStatus, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
+export function SettingsView({ server, syncStatus, runSync, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("server");
   const [search, setSearch] = useState("");
 
   const panelContent = (nav: NavId, query: string) => {
     switch (nav) {
       case "server":
-        return <ServerTab server={server} serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} />;
+        return <ServerTab server={server} serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} syncStatus={syncStatus} runSync={runSync} />;
       case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":
-        return <PlaybackTab searchQuery={query} />;
+        return <PlaybackTab searchQuery={query} serverId={server?.id} />;
       case "advanced":
         return (
           <>

@@ -21,7 +21,9 @@ import {
   authenticateWithApiKey,
   fetchAlbumListByType,
   fetchAllAlbums,
+  fetchScanStatus,
   fetchStarred2,
+  songExists,
   scrobbleTrack,
   setRating,
   starTrack,
@@ -937,5 +939,67 @@ describe("what the transport breaker refuses to speak for", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(before + 3);
     expect(invokeCount("probe_server")).toBe(0);
+  });
+});
+
+describe("fetchScanStatus", () => {
+  it("reads the three watermark values the sync compares", async () => {
+    fetchMock.mockResolvedValue(
+      ok({
+        status: "ok",
+        serverVersion: "0.64.0 (1072e9f7)",
+        scanStatus: { scanning: false, count: 17678, lastScan: "2026-09-13T03:00:26Z" },
+      })
+    );
+    await expect(settle(fetchScanStatus(BASE, "alice", cred))).resolves.toEqual({
+      lastScan: "2026-09-13T03:00:26Z",
+      songCount: 17678,
+      serverVersion: "0.64.0 (1072e9f7)",
+    });
+  });
+
+  it("reports nulls rather than inventing values the server did not send", async () => {
+    fetchMock.mockResolvedValue(ok({ status: "ok" }));
+    await expect(settle(fetchScanStatus(BASE, "alice", cred))).resolves.toEqual({
+      lastScan: null,
+      songCount: null,
+      serverVersion: null,
+    });
+  });
+
+  it("rejects when the server refuses the endpoint, so the caller falls back", async () => {
+    // Some deployments restrict getScanStatus to admins. A rejection has to reach the caller
+    // as "no evidence"; swallowed into a null-filled watermark it would read as "unchanged".
+    fetchMock.mockResolvedValue(failed({ code: 50, message: "User is not authorized" }));
+    await expect(settle(fetchScanStatus(BASE, "alice", cred))).rejects.toThrow(
+      "User is not authorized"
+    );
+  });
+});
+
+describe("songExists", () => {
+  it("says yes for an id the server still answers for", async () => {
+    fetchMock.mockResolvedValue(ok({ status: "ok", song: { id: "tr-1" } }));
+    await expect(settle(songExists(BASE, "alice", cred, "tr-1"))).resolves.toBe(true);
+  });
+
+  it("says no only for the server's own not-found code", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 70, message: "Song not found" }));
+    await expect(settle(songExists(BASE, "alice", cred, "tr-1"))).resolves.toBe(false);
+  });
+
+  it("gives no verdict when the failure is about the account, not the id", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+    await expect(settle(songExists(BASE, "alice", cred, "tr-1"))).resolves.toBeNull();
+  });
+
+  it("gives no verdict when the request never reached the server", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+    await expect(settle(songExists(BASE, "alice", cred, "tr-1"))).resolves.toBeNull();
+  });
+
+  it("gives no verdict on an HTTP error", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(httpStatus(500)));
+    await expect(settle(songExists(BASE, "alice", cred, "tr-1"))).resolves.toBeNull();
   });
 });

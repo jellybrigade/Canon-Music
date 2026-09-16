@@ -149,6 +149,86 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^(let|const) \w+(: [^=]+)? = " src/lib --include='*.ts*' | grep -v '\.test\.' | grep -vE "=>|function|\[\]|\bnew (RegExp|URL)\b"
   ```
+- **A skip fast-path is only as good as a probe of the thing it skips.** `syncLibrary`'s `skipTracks` was keyed on `navidrome_created` + `songCount`, both album columns. Navidrome 0.64 rewrote ~87% of track ids and left every album row byte-identical, so the track pass was skipped for all 1512 albums and the mirror could never heal, on any number of syncs. Fix: three mirrored track ids drawn at random go through `songExists` before the album loop, and one Subsonic 70 disables the skip for the whole run. Only a 70 counts - a transport failure or a rejected credential says nothing about the id, and reading it as a miss turns every offline moment into a full pass. Ask of any skip gate: what evidence do I have about the rows I am *not* reading?
+  ```
+  grep -rn "skip\|unchanged" src/lib/sync.ts | grep -v '^\s*//'
+  ```
+- **A server-assigned id is a cache, not an identity.** Navidrome 0.64 re-encoded ~87% of its track ids without touching a file, so to Canon's prune every one of those tracks looked deleted and re-added: loved state, lyrics, waveforms, queued scrobbles and resume positions all died with the row, and no number of syncs brought them back. Fix: `planTrackIdRemap` (`src/lib/track-remap.ts`) pairs a mirrored row whose id the server stopped using with the fetched track holding the same `file_path`, and `remap_track_ids` (`library_write.rs`) carries every track-keyed row onto the new id in one transaction, before the upsert writes the new row and before the prune runs. Exact match on the path, since it is the server's own bytes; any ambiguity (no path, a path claimed twice on either side, a destination id the mirror already holds) means no evidence and the row goes to the prune. Store the natural key beside the assigned one, or the next id migration is a data loss.
+  ```
+  grep -rn "file_path" src/lib/sync.ts src/lib/track-remap.ts
+  ```
+- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/track-id-tables.ts` holds the list with per-table policy, `track-id-tables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains.
+  ```
+  grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/track-id-tables.ts src-tauri/src/library_write.rs
+  ```
+- **Watermark upstream identity, not only per-row timestamps.** Per-row mtimes cannot see a migration that rewrote the rows' keys, because the rows they sit on did not move. `servers.server_version` / `last_scan_at` / `song_count` (v49) come from `getScanStatus` at the top of every sync and any of the three moving forces a full track pass. Two halves that are easy to get wrong: `getScanStatus` is admin-only on some deployments, so a failure is "no evidence" and falls through to the probe rather than counting as "unchanged"; and the new watermark is stored only after a pass that completed, since storing it after an early break tells the next sync those albums were read and erases the evidence that they were not.
+  ```
+  grep -rn "getScanStatus\|last_scan_at\|server_version" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A 2xx body is not the type you asked for.** Subsonic rides its errors on HTTP 200 with `content-type: application/json`, so `audio_play`'s status check passed and `{"error":{"code":70}}` went into `Decoder::new`, which reported "This file could not be decoded" - blaming the file for a track id Navidrome 0.64 had rewritten. Every mirrored track in the library was unplayable and the message named the wrong cause. Fix: `stream_classify.rs::classify_stream_response` reads the head of the body first and names the real error; the prefetch cache and the gapless path run it too, or a poisoned cache entry walks straight past the live path's guard. Conservative by design: only a parsed envelope, an empty body or plainly-textual bytes are refused, since the decoder knows more containers than the classifier does. Any consumer of a binary body (stream, cover art, waveform source) owes the same check.
+  **Found again in the guard written for it:** the cover proxy substitutes `image/jpeg` when the
+  response carries no `Content-Type`, purely to have something to store beside the bytes, and then
+  handed that substitute to `is_image_response` - which trusts any `image/` prefix before it looks
+  at a byte. A header-less error body therefore walked into the memory *and* disk caches under
+  `{id}:{size}`, the permanent breakage the guard exists to stop. A stand-in value must never be
+  the evidence a check runs on: the guard now takes `Option<&str>` (absent means magic bytes or
+  nothing) and refuses an `image/` claim over a body carrying `subsonic-response`.
+  ```
+  grep -rn "Decoder::new\|::load_from_memory\|image::load" src-tauri/src | grep -v '#\[cfg(test)\]'
+  grep -rn "unwrap_or(\"image/\|unwrap_or(\"audio/\|unwrap_or(\"application/" src-tauri/src
+  ```
+- **A stand-in for a missing measurement must not be the value that binds the limit.** ReplayGain
+  peak is optional in the tags, and `computeReplayGainLinear` substituted `1.0` for an absent one
+  before clamping `linear` to `1.0 / peak` - so "no peak" meant a full-scale peak, the cap bound at
+  unity gain, and every positive pre-amp or fallback gain was silently thrown away. Measured on the
+  real mirror: 16,521 of 17,678 tracks carry no ReplayGain at all, so this was the normal path, not
+  an edge - the pre-amp slider did nothing for 93% of the library while reading as applied. Fix: an
+  absent or non-positive peak means there is nothing to clip against, so no cap is applied at all
+  (`nokkvi/data/src/audio/normalization.rs:88` is the same shape). The same pass made the gain
+  fallback symmetric: album mode already fell through to track gain, track mode dropped straight
+  past an available album gain to the constant. Ask of any default filling in for absent evidence:
+  is it neutral, or is it the extreme that decides the outcome?
+  ```
+  grep -rnE "Math\.(min|max)\([^)]*\?\?" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.**
+  `remap_track_ids` rewrites `tracks.id` instead of deleting the row, which is the whole point -
+  but `tracks_fts` was left out of the carry on the grounds that the sync rebuilds it, and the
+  rebuild deletes `WHERE id IN (SELECT id FROM tracks WHERE album_id IN (...))`, i.e. by the *new*
+  ids. Nothing could reach the old id again: not the rebuild, not `pruneAlbums`, not
+  `purgeServerData`, all of which subselect `tracks`. On a Navidrome 0.64 migration that is ~15k
+  dead rows in a 17.6k-track library, and they are not merely stale - `useSearch` ranks and caps
+  its pool at 2000 rows *before* joining `tracks`, so orphans take slots from real matches and a
+  broad query returns a fraction of them. Fix: one writer, `rebuildTracksFts(db, albumIds,
+  staleTrackIds)`, deleting by explicit old id as well as by album, called by the sync, the
+  play-time repair and `syncAlbumTracks` alike. Ask of any id rewrite: which tables did I decide
+  not to carry, and what deletes their old row now that the prune cannot see it?
+  ```
+  grep -rn "SET id = \|SET track_id = " src src-tauri/src | grep -v '\.test\.'
+  ```
+- **A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.**
+  Settings' **Resync library** cleared the sync watermark and started a sync, inferring intent from
+  the cleared columns - but `watermarkMoved` returns false outright when `getScanStatus` is
+  unreadable, which it is on any deployment restricting it to admins. The only remaining gate was
+  the 3-id probe, which passes whenever the sampled ids happen to resolve: exactly the state a user
+  reaches for the button in. The button reported success and ran the same skipped sync. Fix:
+  `syncLibrary(..., { forceTrackPass: true })`, an explicit parameter; the watermark clear stays,
+  but only so an interrupted resync is repeated by the next sync. A request is a parameter, not a
+  reading of the world.
+  ```
+  grep -rn "clearSyncWatermark\|forceTrackPass" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Per-statement conflict handling decides per statement, not per record.** The id remap ran
+  `UPDATE OR IGNORE` over nine tables and let each decide the collision for itself, but `OR IGNORE`
+  only declines where a uniqueness constraint exists: `scrobble_queue` (plain `track_id`) and
+  `playlist_resume` (keyed by `playlist_id`) have none, so when the destination id already held a
+  row, the user's queued scrobbles and resume position moved onto a track that kept its own id
+  while `tracks` correctly refused. The test that named the case asserted on `tracks` alone and
+  passed throughout. Fix: one `SELECT EXISTS` on the destination per track, before any table is
+  touched. A record-level decision belongs above the statements, not inside each of them.
+  ```
+  grep -rn "OR IGNORE\|ON CONFLICT DO NOTHING" src-tauri/src src --include='*.rs' --include='*.ts' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

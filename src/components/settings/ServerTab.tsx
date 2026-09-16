@@ -5,7 +5,7 @@ import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensio
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import { getDb } from "../../db";
-import { purgeServerData } from "../../lib/sync";
+import { clearSyncWatermark, purgeServerData, type SyncOptions } from "../../lib/sync";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { Server as ServerRow } from "../../types/server";
 
@@ -17,9 +17,11 @@ interface Props {
   serverWithCredential: ServerWithCredential | undefined;
   onRemoveServer: () => void;
   searchQuery: string;
+  syncStatus: "idle" | "syncing" | "done" | "partial" | "error";
+  runSync: (s: ServerWithCredential, options?: SyncOptions) => boolean;
 }
 
-export function ServerTab({ server, serverWithCredential, onRemoveServer, searchQuery }: Props) {
+export function ServerTab({ server, serverWithCredential, onRemoveServer, searchQuery, syncStatus, runSync }: Props) {
   const hasCredential = !!serverWithCredential;
   const queryClient = useQueryClient();
 
@@ -40,6 +42,8 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
   const [removeConfirm, setRemoveConfirm] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [removeError, setRemoveError] = useState("");
+  const [resyncConfirm, setResyncConfirm] = useState(false);
+  const [resyncError, setResyncError] = useState("");
 
   const fl = searchQuery.toLowerCase().trim();
   const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
@@ -161,6 +165,21 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     }
   }
 
+  async function handleResync() {
+    if (!serverWithCredential) return;
+    setResyncError("");
+    try {
+      const db = await getDb();
+      // The flag is what actually forces the pass; clearing the watermark is what makes the
+      // next sync do it too, so a resync interrupted half way is not silently skipped.
+      await clearSyncWatermark(db, serverWithCredential.server.id);
+      setResyncConfirm(false);
+      runSync(serverWithCredential, { forceTrackPass: true });
+    } catch (err) {
+      setResyncError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
   async function handleRemoveServer() {
     if (!server) return;
     setRemoving(true);
@@ -180,7 +199,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     }
   }
 
-  if (!show("server", "url", "username", "password", "display name", "connection")) return null;
+  if (!show("server", "url", "username", "password", "display name", "connection", "resync", "library")) return null;
 
   return (
     <section className="settings-section">
@@ -302,6 +321,32 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
               {serverSaving ? "Saving…" : "Save"}
             </button>
           </div>
+        </div>
+      )}
+
+      {server && serverWithCredential && (
+        <div className="settings-resync">
+          {!resyncConfirm ? (
+            <button
+              className="settings-btn"
+              onClick={() => { setResyncConfirm(true); setResyncError(""); }}
+              disabled={syncStatus === "syncing"}
+            >
+              Resync library
+            </button>
+          ) : (
+            <div className="settings-resync-confirm">
+              <span className="settings-hint">
+                Read every album's tracks again? This asks the server once per album, so a large
+                library takes a while. Use it when tracks are missing or will not play.
+              </span>
+              <button className="settings-btn" onClick={() => setResyncConfirm(false)}>Cancel</button>
+              <button className="settings-btn primary" onClick={() => { void handleResync(); }}>
+                Resync
+              </button>
+            </div>
+          )}
+          {resyncError && <span className="settings-error">Could not start the resync: {resyncError}</span>}
         </div>
       )}
 

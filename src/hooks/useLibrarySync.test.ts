@@ -31,6 +31,7 @@ const CLEAN: SyncResult = {
   skippedAlbums: 0,
   prunedAlbums: 0,
   prunedTracks: 0,
+  remappedTracks: 0,
   albumTracksIncomplete: false,
   skippedStages: [],
   changed: { albums: false, tracks: false, artists: false, loved: false, playlists: false },
@@ -190,6 +191,26 @@ describe("useLibrarySync in-flight guard", () => {
     await settle(0);
     await tick(5 * MINUTE);
     expect(syncLibrary).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("useLibrarySync options", () => {
+  it("hands the caller's forced pass to the sync", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+
+    act(() => {
+      result.current.runSync(SRV_A, { forceTrackPass: true });
+    });
+
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({ forceTrackPass: true });
+  });
+
+  it("asks for nothing extra on a run nobody requested", async () => {
+    renderSync(SRV_A);
+    await tick();
+
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toBeUndefined();
   });
 });
 

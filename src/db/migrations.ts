@@ -720,6 +720,27 @@ export const migrations: Migration[] = [
     version: 48,
     sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
   },
+  {
+    // The server's own identity as of the last completed sync. Album rows survived
+    // Navidrome 0.64's id migration byte for byte, so nothing in the mirror could tell
+    // that ~87% of the track ids under them had been rewritten, and the track pass was
+    // skipped for every album forever. A version, a scan stamp and a song count are the
+    // three things upstream moves when that can happen.
+    version: 49,
+    sql: `
+      ALTER TABLE servers ADD COLUMN last_scan_at TEXT;
+      ALTER TABLE servers ADD COLUMN server_version TEXT;
+      ALTER TABLE servers ADD COLUMN song_count INTEGER;
+    `,
+  },
+  {
+    // The same stamp v48 gave albums, one level down. `scrobble_history` only records
+    // what Canon itself sent, so a track played on the phone or in the web UI reads as
+    // never played here and Auto-DJ serves it again an hour later. Navidrome carries
+    // the annotation on the song entity, counting every client.
+    version: 50,
+    sql: `ALTER TABLE tracks ADD COLUMN played_at TEXT;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

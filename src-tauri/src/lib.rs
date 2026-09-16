@@ -1,8 +1,12 @@
 mod library_read;
 mod library_write;
 mod net_probe;
+mod stream_classify;
 mod streaming;
 mod upnp;
+use stream_classify::{
+    classify_stream_response, is_image_response, StreamVerdict, STREAM_HEAD_BYTES,
+};
 use streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
 
 /// Combines Read + Seek + Send into a single object-safe trait so we can
@@ -13,7 +17,7 @@ impl<T: Read + Seek + Send + Sync> AudioReader for T {}
 use keyring::Entry;
 use rodio::{Decoder, OutputStreamHandle, Sink, Source};
 use std::collections::HashMap;
-use std::io::{Cursor, Read, Seek};
+use std::io::{Cursor, Read, Seek, Write};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -325,15 +329,25 @@ fn handle_cover_request(
         } else {
             match state.http_client.get(&source_url).send() {
                 Ok(resp) if resp.status().is_success() => {
-                    let ct = resp
+                    let declared_ct = resp
                         .headers()
                         .get(reqwest::header::CONTENT_TYPE)
                         .and_then(|v| v.to_str().ok())
-                        .unwrap_or("image/jpeg")
-                        .to_string();
+                        .map(str::to_string);
+                    // The stand-in is only what gets stored beside the bytes; the guard below
+                    // is handed what the server actually declared, or nothing.
+                    let ct = declared_ct
+                        .clone()
+                        .unwrap_or_else(|| "image/jpeg".to_string());
                     match resp.bytes() {
                         Ok(b) => {
                             let b = b.to_vec();
+                            // Subsonic answers a rejected id with a 200 and a JSON envelope, and
+                            // both caches below are keyed by URL, so one bad answer would be
+                            // served as the artist's portrait until the cache is cleared.
+                            if !is_image_response(declared_ct.as_deref(), &b) {
+                                return cover_error_response(502);
+                            }
                             if let Some(dir) = COVER_CACHE_DIR.get() {
                                 disk_cache_write(dir, "artist", &source_url, &b, &ct);
                             }
@@ -406,15 +420,25 @@ fn handle_cover_request(
                 );
                 match state.http_client.get(&fetch_url).send() {
                     Ok(resp) if resp.status().is_success() => {
-                        let ct = resp
+                        let declared_ct = resp
                             .headers()
                             .get(reqwest::header::CONTENT_TYPE)
                             .and_then(|v| v.to_str().ok())
-                            .unwrap_or("image/jpeg")
-                            .to_string();
+                            .map(str::to_string);
+                        // Same stand-in, same reason: it names the cache entry, it does not
+                        // testify about the body.
+                        let ct = declared_ct
+                            .clone()
+                            .unwrap_or_else(|| "image/jpeg".to_string());
                         match resp.bytes() {
                             Ok(b) => {
                                 let b = b.to_vec();
+                                // Same guard as the artist branch above: the disk cache under
+                                // `{id}:{size}` outlives the session, so an error envelope
+                                // written here is a permanently broken cover.
+                                if !is_image_response(declared_ct.as_deref(), &b) {
+                                    return cover_error_response(502);
+                                }
                                 if let Some(dir) = COVER_CACHE_DIR.get() {
                                     disk_cache_write(dir, "cover", &cache_key, &b, &ct);
                                 }
@@ -651,52 +675,69 @@ async fn audio_play(
                     return;
                 }
             };
-            // reqwest treats a 404 or a 500 as a successful request, so without this the error
-            // page body streams straight into the decoder and surfaces as a bogus "unrecognised
-            // format" several seconds later, after the retry ladder has burned four attempts on
-            // a URL that was never going to work.
-            if !response.status().is_success() {
-                let status = response.status();
-                eprintln!("audio_play HTTP error: {status}");
-                let code = status.as_u16();
-                app.emit("audio-error", serde_json::json!({
-                    "url": url,
-                    "message": if code == 404 {
-                        "This track is not on the server anymore".to_string()
-                    } else if code == 401 || code == 403 {
-                        "The server rejected the request. Check the server credentials in Settings".to_string()
-                    } else {
-                        format!("Server returned {status}")
-                    },
-                    // A 4xx will not fix itself on a retry, so surface it now instead of after
-                    // 30 seconds of silent backoff. 408 and 429 are the two that will.
-                    "retryable": status.is_server_error() || code == 408 || code == 429,
-                })).ok();
-                return;
-            }
+            let status = response.status().as_u16();
             let ct = response
                 .headers()
                 .get("content-type")
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("")
-                .to_lowercase();
-            let codec = if ct.contains("flac") {
-                "FLAC"
-            } else if ct.contains("mpeg") || ct.contains("mp3") {
-                "MP3"
-            } else if ct.contains("ogg") {
-                "OGG"
-            } else if ct.contains("aac") || ct.contains("mp4") || ct.contains("m4a") {
-                "AAC"
-            } else if ct.contains("opus") {
-                "Opus"
-            } else if ct.contains("wav") {
-                "WAV"
-            } else {
-                ""
-            }
-            .to_string();
+                .to_string();
             let content_length = response.content_length();
+
+            // reqwest treats a 404 or a 500 as a successful request, and Subsonic rides its
+            // own errors on a 200 with a JSON body, so neither the status line nor the
+            // content-type alone can keep an error page out of the decoder. It surfaced as a
+            // bogus "unrecognised format" several seconds later, blaming the file for a stale
+            // track id. Read the head first and let `classify_stream_response` name the cause.
+            let mut response = response;
+            let mut head: Vec<u8> = Vec::new();
+            {
+                let mut chunk = vec![0u8; 8192];
+                while head.len() < STREAM_HEAD_BYTES {
+                    if play_id_arc.load(Ordering::Relaxed) != this_id {
+                        return;
+                    }
+                    match response.read(&mut chunk) {
+                        Ok(0) => break,
+                        Ok(n) => head.extend_from_slice(&chunk[..n]),
+                        Err(e) => {
+                            eprintln!("audio_play stream read error: {e}");
+                            app.emit(
+                                "audio-error",
+                                serde_json::json!({
+                                    "url": url,
+                                    "message": "The connection dropped while the track was downloading",
+                                    "detail": e.to_string(),
+                                    "retryable": true,
+                                }),
+                            )
+                            .ok();
+                            return;
+                        }
+                    }
+                }
+            }
+
+            let codec = match classify_stream_response(status, &ct, &head) {
+                StreamVerdict::Audio { codec } => codec,
+                StreamVerdict::Failure(failure) => {
+                    eprintln!("audio_play rejected stream: {}", failure.message);
+                    app.emit(
+                        "audio-error",
+                        serde_json::json!({
+                            "url": url,
+                            "message": failure.message,
+                            "detail": failure.detail,
+                            "retryable": failure.retryable,
+                            // Code 70 means the server no longer knows this id, which the
+                            // frontend answers by re-resolving the album rather than retrying.
+                            "subsonicCode": failure.subsonic_code,
+                        }),
+                    )
+                    .ok();
+                    return;
+                }
+            };
 
             const SPILL_THRESHOLD: u64 = 64 * 1024 * 1024;
             // Unknown Content-Length (chunked transfer) defaults to spill so large
@@ -722,15 +763,20 @@ async fn audio_play(
                 (Box::new(buf), AnyWriter::Ram(w))
             };
 
-            // Stream HTTP chunks into the buffer on a dedicated thread.
+            // Stream HTTP chunks into the buffer on a dedicated thread. The head read above
+            // is already off the socket, so it is handed to the writer first or the decoder
+            // starts mid-file.
             let play_id_dl = Arc::clone(&play_id_arc);
             let app_dl = app.clone();
             let url_dl = url.clone();
-            let mut response = response;
             std::thread::spawn(move || {
                 let mut chunk = vec![0u8; 65536];
                 let mut writer = writer;
-                let mut received: u64 = 0;
+                let mut received: u64 = head.len() as u64;
+                if !head.is_empty() && !writer.write_chunk(&head) {
+                    writer.finish();
+                    return;
+                }
                 // A read error part-way through the body, or a body that stops short of the
                 // advertised Content-Length, is a truncated track. Ending the writer normally
                 // would hand the decoder a clean EOF, the sink would empty, and a server dying
@@ -1031,14 +1077,38 @@ async fn audio_enqueue_next(
         let bytes = if let Some(b) = cached {
             b
         } else {
-            match http_client_long().get(&url).send().and_then(|r| r.bytes()) {
+            let response = match http_client_long().get(&url).send() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("audio_enqueue_next fetch error: {e}");
+                    cancel(&gapless_queued, &app);
+                    return;
+                }
+            };
+            let status = response.status().as_u16();
+            let ct = response
+                .headers()
+                .get("content-type")
+                .and_then(|v| v.to_str().ok())
+                .unwrap_or("")
+                .to_string();
+            let fetched = match response.bytes() {
                 Ok(b) => b.to_vec(),
                 Err(e) => {
                     eprintln!("audio_enqueue_next fetch error: {e}");
                     cancel(&gapless_queued, &app);
                     return;
                 }
+            };
+            // Silent here on purpose: the gapless path is speculative, and the same track is
+            // about to go through audio_play, which reports the cause properly.
+            let head = &fetched[..fetched.len().min(STREAM_HEAD_BYTES)];
+            if let StreamVerdict::Failure(failure) = classify_stream_response(status, &ct, head) {
+                eprintln!("audio_enqueue_next rejected stream: {}", failure.message);
+                cancel(&gapless_queued, &app);
+                return;
             }
+            fetched
         };
 
         // Abort if a newer explicit play started while we were downloading.
@@ -1093,20 +1163,45 @@ const MAX_PREFETCH_CACHE_ENTRIES: usize = 12;
 #[tauri::command]
 async fn audio_prefetch(state: tauri::State<'_, AudioState>, url: String) -> Result<(), String> {
     let cache_arc = Arc::clone(&state.prefetch_cache);
-    std::thread::spawn(
-        move || match http_client().get(&url).send().and_then(|r| r.bytes()) {
-            Ok(b) => {
-                let mut cache = cache_arc.lock().unwrap_or_else(|e| e.into_inner());
-                if cache.len() >= MAX_PREFETCH_CACHE_ENTRIES {
-                    cache.clear();
-                }
-                cache.insert(url, b.to_vec());
-            }
+    std::thread::spawn(move || {
+        let response = match http_client().get(&url).send() {
+            Ok(r) => r,
             Err(e) => {
                 eprintln!("audio_prefetch fetch error: {e}");
+                return;
             }
-        },
-    );
+        };
+        let status = response.status().as_u16();
+        let ct = response
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_string();
+        let bytes = match response.bytes() {
+            Ok(b) => b.to_vec(),
+            Err(e) => {
+                eprintln!("audio_prefetch fetch error: {e}");
+                return;
+            }
+        };
+        // A cache hit in audio_play skips every check the live path makes, so an error
+        // envelope stored here would reach the decoder exactly as it did before that path
+        // was guarded - and it would survive the retry, since the URL is the cache key.
+        let head = &bytes[..bytes.len().min(STREAM_HEAD_BYTES)];
+        if let StreamVerdict::Failure(failure) = classify_stream_response(status, &ct, head) {
+            eprintln!(
+                "audio_prefetch discarded a non-audio response: {}",
+                failure.message
+            );
+            return;
+        }
+        let mut cache = cache_arc.lock().unwrap_or_else(|e| e.into_inner());
+        if cache.len() >= MAX_PREFETCH_CACHE_ENTRIES {
+            cache.clear();
+        }
+        cache.insert(url, bytes);
+    });
     Ok(())
 }
 
@@ -1263,7 +1358,33 @@ async fn audio_extract_waveform(
                     .get(&url)
                     .send()
                     .map_err(|e| e.to_string())?;
+                let status = response.status().as_u16();
+                let ct = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_string();
+                // The decoder below would otherwise blame the file for an error envelope the
+                // same way the playback path used to, only silently: the waveform just never
+                // appears and nothing says why.
+                let mut head = vec![0u8; STREAM_HEAD_BYTES];
+                let mut filled = 0;
+                while filled < head.len() {
+                    match response.read(&mut head[filled..]) {
+                        Ok(0) => break,
+                        Ok(n) => filled += n,
+                        Err(e) => return Err(e.to_string()),
+                    }
+                }
+                head.truncate(filled);
+                if let StreamVerdict::Failure(failure) =
+                    classify_stream_response(status, &ct, &head)
+                {
+                    return Err(failure.message);
+                }
                 let mut file = std::fs::File::create(&temp_path_dl).map_err(|e| e.to_string())?;
+                file.write_all(&head).map_err(|e| e.to_string())?;
                 std::io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
                 Ok(())
             })();
@@ -1836,6 +1957,7 @@ pub fn run() {
             library_read::get_playlists,
             library_read::get_unmapped_tag_count,
             library_write::playlist_remove_track,
+            library_write::remap_track_ids,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

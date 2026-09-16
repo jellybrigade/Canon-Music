@@ -51,6 +51,7 @@ Fixed unless marked OPEN.
 - Accessible-name query = whole-tree scan, 150-300ms/call.
 - Shared mock `Response` breaks on double body read.
 - Fixed sleep pays ceiling every run; per-case rebuild pays per case.
+- A timeout ceiling set against an idle machine is measured against a busy one.
 - Self-registered listener state update isn't flushed by `act`.
 
 ## Data / state - `known-issues/data.md`
@@ -97,7 +98,16 @@ Fixed unless marked OPEN.
 - One-direction version compare can't say "too new".
 - A counter fed by every request of one burst counts one event many times.
 - Process-wide state for a per-server fact answers for servers it never saw.
+- A skip fast-path is only as good as a probe of the thing it skips.
+- A server-assigned id is a cache, not an identity.
+- A hand-kept list of the tables one id reaches is a list that goes stale.
+- Watermark upstream identity, not only per-row timestamps.
+- A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
+- A stand-in for a missing measurement must not be the value that binds the limit.
+- A rename escapes the prune, so every mirror keyed by the old id is orphaned forever.
+- A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.
+- Per-statement conflict handling decides per statement, not per record.
 
 ## UI - `known-issues/ui.md`
 

@@ -384,6 +384,7 @@ describe("post-migration schema", () => {
     expect(columnsOf(db, "tracks")).toEqual(
       expect.arrayContaining([
         "play_count",
+        "played_at",
         "tags_enriched_at",
         "replay_gain_track_gain",
         "replay_gain_album_gain",
@@ -391,6 +392,9 @@ describe("post-migration schema", () => {
         "suffix",
         "file_size",
       ])
+    );
+    expect(columnsOf(db, "servers")).toEqual(
+      expect.arrayContaining(["alt_url", "last_scan_at", "server_version", "song_count"])
     );
     expect(columnsOf(db, "artist_identity")).toEqual(
       expect.arrayContaining(["navidrome_image_url", "wikidata_image_url"])

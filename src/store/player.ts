@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { getDb } from "../db";
 import { LocalTarget, DlnaTarget, type PlaybackTarget } from "./playbackTarget";
 import { discoverRenderers, type DlnaRenderer } from "../lib/dlna";
+import { SUBSONIC_NOT_FOUND } from "../lib/navidrome";
 
 export interface CurrentTrack {
   id: string;
@@ -20,6 +21,21 @@ export interface CurrentTrack {
     albumGain?: number | null;
     albumPeak?: number | null;
   } | null;
+}
+
+/**
+ * A playback failure the UI can offer a specific action for. Carried on the error itself
+ * rather than beside it, so a writer that names a message cannot leave a stale cause behind.
+ */
+export type PlaybackErrorCause = "stale-track-id";
+
+export interface PlaybackError {
+  message: string;
+  cause: PlaybackErrorCause | null;
+}
+
+function plainError(message: string): PlaybackError {
+  return { message, cause: null };
 }
 
 export type ReplayGainMode = "off" | "track" | "album";
@@ -150,21 +166,17 @@ function computeReplayGainLinear(
   fallbackDb: number
 ): number {
   if (mode === "off") return 1.0;
-  let gainDb: number;
-  let peak: number;
-  if (mode === "album" && rg?.albumGain != null) {
-    gainDb = rg.albumGain;
-    peak = rg.albumPeak ?? 1.0;
-  } else if (rg?.trackGain != null) {
-    gainDb = rg.trackGain;
-    peak = rg.trackPeak ?? 1.0;
-  } else {
-    gainDb = fallbackDb;
-    peak = 1.0;
-  }
+  const preferAlbum = mode === "album";
+  const gainDb =
+    (preferAlbum ? rg?.albumGain ?? rg?.trackGain : rg?.trackGain ?? rg?.albumGain) ?? fallbackDb;
+  const peak = preferAlbum ? rg?.albumPeak ?? rg?.trackPeak : rg?.trackPeak ?? rg?.albumPeak;
   const linear = Math.pow(10, (gainDb + preAmpDb) / 20);
-  // Clipping prevention: cap so that peak sample stays at or below 1.0
-  return Math.min(linear, 1.0 / Math.max(peak, 0.001));
+  // Clipping prevention: cap so that peak sample stays at or below 1.0. Peak is optional in the
+  // tags and most files carry none, so an absent one means there is nothing to clip against -
+  // standing in a full-scale peak here would cancel every positive pre-amp and fallback gain
+  // for the whole library and leave both settings looking dead.
+  if (peak == null || peak <= 0) return linear;
+  return Math.min(linear, 1.0 / peak);
 }
 
 function adjustIndexAfterMove(currentIdx: number, from: number, to: number): number {
@@ -284,7 +296,7 @@ interface PlayerState {
   // connect, first bytes, format probing. Cleared by the audio-format event (emitted the instant
   // the sink is appended) or by the position ticker seeing the position move off zero.
   isBuffering: boolean;
-  error: string | null;
+  error: PlaybackError | null;
   elapsed: number;
   volume: number;
   repeat: RepeatMode;
@@ -341,6 +353,7 @@ interface PlayerState {
   stop: () => void;
   // Re-runs the current track from the start after a playback failure, with a fresh retry budget.
   retryCurrent: () => void;
+  applyTrackIdRemap: (remaps: readonly { oldId: string; newId: string }[]) => boolean;
   setVolume: (volume: number) => Promise<void>;
   toggleMute: () => Promise<void>;
   seek: (seconds: number) => Promise<void>;
@@ -419,7 +432,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         isPlaying: false,
         isLoading: false,
         isBuffering: false,
-        error: "The track never started playing. The server may be unreachable or overloaded",
+        error: plainError("The track never started playing. The server may be unreachable or overloaded"),
       });
     }, BUFFER_DEADLINE_MS);
   }
@@ -873,7 +886,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     const retryDelays = [2000, 4000, 8000, 16000];
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean }>("audio-error", (event) => {
+    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean; subsonicCode?: number | null }>("audio-error", (event) => {
       if (event.payload.url !== url) return;
       if (get().streamUrl !== url) return;
 
@@ -904,7 +917,15 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         if (event.payload.detail) console.error("Playback failed:", event.payload.detail);
         clearBufferDeadline();
         stopElapsedTimer();
-        set({ isPlaying: false, isLoading: false, isBuffering: false, error: event.payload.message });
+        set({
+          isPlaying: false,
+          isLoading: false,
+          isBuffering: false,
+          error: {
+            message: event.payload.message,
+            cause: event.payload.subsonicCode === SUBSONIC_NOT_FOUND ? "stale-track-id" : null,
+          },
+        });
       }
     });
 
@@ -960,7 +981,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // preloadWaveforms is deliberately not called here, see the elapsed ticker.
       } catch (e) {
         if (get().currentTrack?.id !== track.id) return;
-        set({ isPlaying: false, isLoading: false, isBuffering: false, error: e instanceof Error ? e.message : String(e) });
+        set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(e instanceof Error ? e.message : String(e)) });
       }
     };
 
@@ -1145,7 +1166,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             // returned but nothing has been fetched yet. audio-format or the ticker clears this.
             set({ isPlaying, isLoading: false, isBuffering: isPlaying });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
           }
         }
       } else {
@@ -1163,7 +1184,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         }, castBitrate, (message) => {
           // The renderer stopped answering. Nothing else on the cast path surfaces this:
           // there is no audio-error event, and the target has stopped its own timers.
-          set({ error: message, isPlaying: false, isBuffering: false });
+          set({ error: plainError(message), isPlaying: false, isBuffering: false });
           stopElapsedTimer();
         });
         set({ castDevice: renderer });
@@ -1179,7 +1200,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
             if (!isPlaying) activeTarget.pause(0);
             set({ isPlaying, isLoading: false, isBuffering: false });
           } catch (e) {
-            set({ isPlaying: false, isLoading: false, isBuffering: false, error: String(e) });
+            set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(String(e)) });
           }
         }
       }
@@ -1482,6 +1503,29 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       activeTarget.resume(pauseFadeMs);
       startElapsedTimer();
       set({ isPlaying: true });
+    },
+
+    // Rewrite the ids of tracks the server renamed under us, so the queue the user is looking
+    // at keeps playing instead of every entry 404ing. Returns whether the current track is one
+    // of them, which is the caller's cue to restart playback against the new id.
+    applyTrackIdRemap: (remaps) => {
+      if (remaps.length === 0) return false;
+      const byOldId = new Map(remaps.map((remap) => [remap.oldId, remap.newId]));
+      const rename = (track: CurrentTrack): CurrentTrack => {
+        const newId = byOldId.get(track.id);
+        return newId === undefined ? track : { ...track, id: newId };
+      };
+      const { queue, currentTrack, radioSeed } = get();
+      const newQueue = queue.map(rename);
+      // Reference equality decides the re-render for every queue consumer, so a repair that
+      // touched nothing this queue holds must leave the array alone.
+      const queueChanged = newQueue.some((track, index) => track !== queue[index]);
+      const newCurrent = currentTrack ? rename(currentTrack) : null;
+      const newSeed = radioSeed ? rename(radioSeed) : null;
+      if (queueChanged) set({ queue: newQueue });
+      if (newCurrent !== currentTrack) set({ currentTrack: newCurrent });
+      if (newSeed !== radioSeed) set({ radioSeed: newSeed });
+      return newCurrent !== currentTrack;
     },
 
     retryCurrent: () => {
@@ -1991,7 +2035,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
                 () => { void get().next(true); },
                 savedBitrate,
                 (message) => {
-                  set({ error: message, isPlaying: false, isBuffering: false });
+                  set({ error: plainError(message), isPlaying: false, isBuffering: false });
                   stopElapsedTimer();
                 }
               );

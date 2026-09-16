@@ -34,6 +34,8 @@ vi.mock("./navidrome", () => ({
   fetchPlaylists: vi.fn(),
   fetchPlaylistTracks: vi.fn(),
   fetchAndStoreOpenSubsonicExtensions: vi.fn(),
+  fetchScanStatus: vi.fn(),
+  songExists: vi.fn(),
 }));
 
 import {
@@ -43,6 +45,8 @@ import {
   fetchPlaylists,
   fetchPlaylistTracks,
   fetchAndStoreOpenSubsonicExtensions,
+  fetchScanStatus,
+  songExists,
 } from "./navidrome";
 import { syncLibrary } from "./sync";
 import { SQLITE_MAX_VARIABLES as CEILING } from "./db-batch";
@@ -79,6 +83,10 @@ beforeEach(async () => {
   vi.mocked(fetchPlaylists).mockResolvedValue([]);
   vi.mocked(fetchPlaylistTracks).mockResolvedValue([]);
   vi.mocked(fetchAndStoreOpenSubsonicExtensions).mockResolvedValue(undefined as never);
+  // The skip fast-path is not what this file is about: no scan status and ids that still
+  // resolve leave the per-album heuristic to decide, as it did before the probe existed.
+  vi.mocked(fetchScanStatus).mockRejectedValue(new Error("not an admin"));
+  vi.mocked(songExists).mockResolvedValue(true);
 
   serveAlbum([track("t1", "al-1"), track("t2", "al-1")]);
   await syncLibrary(server(), CRED);

@@ -6,6 +6,7 @@ import {
   Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX, AlertCircle,
 } from "lucide-react";
 import { usePlayerStore, isNextDisabled, repeatModeLabel, type CurrentTrack, type RadioMode } from "../store/player";
+import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { useLoved } from "../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -75,6 +76,7 @@ interface Props {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist?: (artistName: string) => void;
   onStartRadio: (album: AlbumRow, mode: RadioMode) => void;
+  onOpenResync: () => void;
   onBack?: () => void;
 }
 
@@ -317,7 +319,7 @@ function LyricsTabPanel({
   );
 }
 
-export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onBack }: Props) {
+export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onOpenResync, onBack }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isLoading = usePlayerStore((s) => s.isLoading);
@@ -584,9 +586,14 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           {error && (
             <div className="now-playing-error" role="alert">
               <AlertCircle size={15} className="now-playing-error-icon" aria-hidden="true" />
-              <span className="now-playing-error-msg">{error}</span>
-              <button className="player-error-action" onClick={retryCurrent}>Retry</button>
-              <button className="player-error-action" onClick={() => void next()} disabled={nextDisabled}>Skip</button>
+              <span className="now-playing-error-msg">{error.message}</span>
+              <PlaybackErrorActions
+                cause={error.cause}
+                onRetry={retryCurrent}
+                onSkip={() => void next()}
+                skipDisabled={nextDisabled}
+                onOpenResync={onOpenResync}
+              />
             </div>
           )}
 

@@ -907,7 +907,7 @@ describe("player store - buffering vs loading", () => {
     const state = usePlayerStore.getState();
     expect(state.isBuffering).toBe(false);
     expect(state.isPlaying).toBe(false);
-    expect(state.error).toMatch(/never started playing/);
+    expect(state.error?.message).toMatch(/never started playing/);
   });
 
   it("buffer deadline does not fire if audio-format already cleared it", async () => {
@@ -967,7 +967,51 @@ describe("player store - buffering vs loading", () => {
     const state = usePlayerStore.getState();
     expect(state.isBuffering).toBe(false);
     expect(state.isLoading).toBe(false);
-    expect(state.error).toBe("404 not found");
+    expect(state.error?.message).toBe("404 not found");
+  });
+
+  it("names a stale track id as the cause when the stream failed with Subsonic error 70", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-error", {
+      url: "http://test/a",
+      message: "The server does not have this track",
+      retryable: false,
+      subsonicCode: 70,
+    });
+
+    expect(usePlayerStore.getState().error).toEqual({
+      message: "The server does not have this track",
+      cause: "stale-track-id",
+    });
+  });
+
+  it("leaves the cause unnamed for a stream failure that is not a stale id", async () => {
+    const track = makeTrack("a");
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(track, "http://test/a");
+
+    emitTauriEvent("audio-error", {
+      url: "http://test/a",
+      message: "Wrong username or password",
+      retryable: false,
+      subsonicCode: 40,
+    });
+
+    expect(usePlayerStore.getState().error?.cause).toBeNull();
+  });
+
+  it("drops a named cause when the next track starts", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    await usePlayerStore.getState().play(makeTrack("a"), "http://test/a");
+    emitTauriEvent("audio-error", { url: "http://test/a", message: "gone", retryable: false, subsonicCode: 70 });
+    expect(usePlayerStore.getState().error?.cause).toBe("stale-track-id");
+
+    await usePlayerStore.getState().play(makeTrack("b"), "http://test/b");
+
+    expect(usePlayerStore.getState().error).toBeNull();
   });
 });
 
@@ -1186,6 +1230,39 @@ describe("player store - replay gain", () => {
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
+  it("mode 'track' falls through to albumGain when trackGain is null, not straight to the fallback", async () => {
+    usePlayerStore.setState({
+      currentTrack: trackWith({ trackGain: null, albumGain: -3, albumPeak: 1 }),
+      volume: 1,
+      replayGainFallbackGain: -6,
+    });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    const expectedLinear = Math.pow(10, -3 / 20);
+    expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
+  });
+
+  it("applies a positive pre-amp to a track carrying no peak tag", async () => {
+    // No tags at all is the normal case, not the edge one: most of a real library carries
+    // neither gain nor peak, so a peak assumed full-scale would cancel the pre-amp outright.
+    usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: 0 });
+    await usePlayerStore.getState().setReplayGainMode("track");
+    await usePlayerStore.getState().setReplayGainPreAmp(6);
+    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 6 / 20), 5);
+  });
+
+  it("applies a positive fallback gain to a track carrying no peak tag", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainPreAmp: 0 });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    await usePlayerStore.getState().setReplayGainFallbackGain(4);
+    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 4 / 20), 5);
+  });
+
+  it("clips against the other scope's peak when the preferred scope has none", async () => {
+    usePlayerStore.setState({ currentTrack: trackWith({ albumGain: 10, trackPeak: 0.5 }), volume: 1 });
+    await usePlayerStore.getState().setReplayGainMode("album");
+    expect(last(volumeCalls())).toBeCloseTo(2.0, 5);
+  });
+
   it("falls back to replayGainFallbackGain only when both album and track gain are missing", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: -6 });
     await usePlayerStore.getState().setReplayGainMode("track");
@@ -1339,5 +1416,76 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     await usePlayerStore.getState().loadSettings();
 
     expect(usePlayerStore.getState().replayGainMode).toBe("track");
+  });
+});
+
+describe("applyTrackIdRemap", () => {
+  it("moves the queue and the current track onto the ids the server rewrote", () => {
+    const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
+    usePlayerStore.setState({ queue, currentTrack: queue[1]!, queueIndex: 1 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+
+    expect(moved).toBe(true);
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("srv:b2");
+  });
+
+  it("reports the current track unmoved when only other queue entries were renamed", () => {
+    const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+
+    expect(moved).toBe(false);
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
+  });
+
+  it("keeps everything else about a renamed track, so the row still renders", () => {
+    const queue = [{ ...makeTrack("srv:a"), album: "Album", albumId: "srv:al", duration: 210 }];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:a", newId: "srv:a2" }]);
+
+    expect(usePlayerStore.getState().queue[0]).toMatchObject({
+      id: "srv:a2",
+      album: "Album",
+      albumId: "srv:al",
+      duration: 210,
+    });
+  });
+
+  it("carries the radio seed too, which outlives the queue it started", () => {
+    usePlayerStore.setState({ queue: [], currentTrack: null, radioSeed: makeTrack("srv:seed") });
+
+    usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:seed", newId: "srv:seed2" }]);
+
+    expect(usePlayerStore.getState().radioSeed?.id).toBe("srv:seed2");
+  });
+
+  it("leaves the queue array identical when no id it holds moved", () => {
+    const queue = [makeTrack("srv:a")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    const moved = usePlayerStore
+      .getState()
+      .applyTrackIdRemap([{ oldId: "srv:zzz", newId: "srv:zzz2" }]);
+
+    expect(moved).toBe(false);
+    // Reference equality, not contents: a new array here re-renders every queue consumer for
+    // a repair that changed nothing.
+    expect(usePlayerStore.getState().queue).toBe(queue);
+  });
+
+  it("does nothing with an empty list", () => {
+    const queue = [makeTrack("srv:a")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+
+    expect(usePlayerStore.getState().applyTrackIdRemap([])).toBe(false);
+    expect(usePlayerStore.getState().queue).toBe(queue);
   });
 });

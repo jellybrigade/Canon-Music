@@ -369,6 +369,7 @@ export interface NavidromeTrack {
   starred?: string;
   path?: string;
   playCount?: number;
+  played?: string;
   bitRate?: number;
   suffix?: string;
   size?: number;
@@ -483,6 +484,83 @@ export async function fetchStarred2(
     throw new Error(response.error?.message ?? "getStarred2 failed");
   }
   return response.starred2 ?? {};
+}
+
+/** The server's own identity, as far as the sync's skip fast-path is concerned. */
+export interface NavidromeScanStatus {
+  lastScan: string | null;
+  songCount: number | null;
+  serverVersion: string | null;
+}
+
+/**
+ * `getScanStatus`, the cheapest evidence that the server's own ids may have moved.
+ *
+ * Some deployments restrict it to admins, so a failure means "no evidence" and the caller
+ * has to fall back to probing ids directly - never to assuming nothing changed.
+ */
+export async function fetchScanStatus(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  altUrl?: string
+): Promise<NavidromeScanStatus> {
+  const params = buildAuthParams(username, credential);
+  const res = await apiPost(baseUrl, "getScanStatus", params, altUrl);
+  if (!res.ok) throw new Error(`getScanStatus returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": {
+      status: string;
+      error?: { message: string };
+      serverVersion?: string;
+      scanStatus?: { lastScan?: string; count?: number };
+    };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new Error(response.error?.message ?? "getScanStatus failed");
+  }
+  return {
+    lastScan: response.scanStatus?.lastScan ?? null,
+    songCount: response.scanStatus?.count ?? null,
+    serverVersion: response.serverVersion ?? null,
+  };
+}
+
+/**
+ * "The requested data was not found." After a server-side id migration this is true of most
+ * of the library at once, which is why several callers need to tell it from every other
+ * rejection rather than treating any failure the same.
+ */
+export const SUBSONIC_NOT_FOUND = 70;
+
+/**
+ * Whether the server still knows a track id, for the sync's skip probe.
+ *
+ * Only a Subsonic error 70 counts as "gone": every other failure is the transport or the
+ * account, which says nothing about the id and must not be read as evidence either way.
+ */
+export async function songExists(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential,
+  nativeTrackId: string,
+  altUrl?: string
+): Promise<boolean | null> {
+  const params = buildAuthParams(username, credential);
+  params.set("id", nativeTrackId);
+  try {
+    const res = await apiPost(baseUrl, "getSong", params, altUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      "subsonic-response": { status: string; error?: { code?: number }; song?: { id?: string } };
+    };
+    const response = data["subsonic-response"];
+    if (response.status === "ok") return response.song?.id !== undefined;
+    return response.error?.code === SUBSONIC_NOT_FOUND ? false : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
