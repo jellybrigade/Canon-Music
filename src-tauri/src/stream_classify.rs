@@ -217,10 +217,26 @@ pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) ->
 /// The same Subsonic-on-200 problem as the stream path, with a longer tail: a rejected cover
 /// id answers with a JSON envelope, and the proxy caches whatever came back under
 /// `{id}:{size}` on disk, so one bad answer outlives the session that got it.
-pub fn is_image_response(content_type: &str, head: &[u8]) -> bool {
-    if content_type.to_lowercase().starts_with("image/") {
+///
+/// `content_type` is what the response actually carried, so an absent header is `None` rather
+/// than the caller's stand-in: a substituted `image/jpeg` would otherwise vouch for bytes no
+/// one declared anything about. A real `image/` header is still accepted without magic bytes,
+/// since the decoders know more formats than this does (AVIF, HEIC, SVG) - but not over a body
+/// carrying an error envelope, which is the one case the server's own claim is known to be wrong.
+pub fn is_image_response(content_type: Option<&str>, head: &[u8]) -> bool {
+    if has_image_magic(head) {
         return true;
     }
+    match content_type {
+        Some(ct) => {
+            ct.to_lowercase().starts_with("image/")
+                && !String::from_utf8_lossy(head).contains("subsonic-response")
+        }
+        None => false,
+    }
+}
+
+fn has_image_magic(head: &[u8]) -> bool {
     head.starts_with(&[0xFF, 0xD8, 0xFF])
         || head.starts_with(b"\x89PNG")
         || head.starts_with(b"GIF87a")
@@ -421,22 +437,36 @@ mod tests {
 
     #[test]
     fn accepts_an_image_by_content_type_or_by_magic() {
-        assert!(is_image_response("image/jpeg", b""));
-        assert!(is_image_response("IMAGE/PNG", b""));
-        assert!(is_image_response("", &[0xFF, 0xD8, 0xFF, 0xE0]));
+        assert!(is_image_response(Some("image/jpeg"), b"\xFF\xD8\xFF\xE0"));
+        assert!(is_image_response(Some("IMAGE/PNG"), b"anything"));
+        assert!(is_image_response(None, &[0xFF, 0xD8, 0xFF, 0xE0]));
         assert!(is_image_response(
-            "application/octet-stream",
+            Some("application/octet-stream"),
             b"\x89PNG\r\n\x1a\n"
         ));
-        assert!(is_image_response("", b"GIF89a"));
-        assert!(is_image_response("", b"RIFF\x00\x00\x00\x00WEBPVP8 "));
+        assert!(is_image_response(None, b"GIF89a"));
+        assert!(is_image_response(None, b"RIFF\x00\x00\x00\x00WEBPVP8 "));
     }
 
     #[test]
     fn refuses_a_subsonic_error_envelope_offered_as_cover_art() {
         let body =
             br#"{"subsonic-response":{"error":{"code":70,"message":"Cover art not found"}}}"#;
-        assert!(!is_image_response("application/json", body));
-        assert!(!is_image_response("", body));
+        assert!(!is_image_response(Some("application/json"), body));
+        assert!(!is_image_response(None, body));
+        // The header is the server's claim about the body, and a server that rides an error
+        // on a 200 is exactly the one whose claim cannot be taken at face value.
+        assert!(!is_image_response(Some("image/jpeg"), body));
+    }
+
+    #[test]
+    fn refuses_a_body_no_one_declared_a_type_for() {
+        // The cover proxy substitutes image/jpeg when the header is absent, purely so it has
+        // something to store beside the bytes. That substitution must not vouch for them.
+        assert!(!is_image_response(None, b""));
+        assert!(!is_image_response(
+            None,
+            b"<html><body>Proxy error</body></html>"
+        ));
     }
 }

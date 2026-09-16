@@ -166,8 +166,16 @@ Fixed unless marked OPEN.
   grep -rn "getScanStatus\|last_scan_at\|server_version" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **A 2xx body is not the type you asked for.** Subsonic rides its errors on HTTP 200 with `content-type: application/json`, so `audio_play`'s status check passed and `{"error":{"code":70}}` went into `Decoder::new`, which reported "This file could not be decoded" - blaming the file for a track id Navidrome 0.64 had rewritten. Every mirrored track in the library was unplayable and the message named the wrong cause. Fix: `stream_classify.rs::classify_stream_response` reads the head of the body first and names the real error; the prefetch cache and the gapless path run it too, or a poisoned cache entry walks straight past the live path's guard. Conservative by design: only a parsed envelope, an empty body or plainly-textual bytes are refused, since the decoder knows more containers than the classifier does. Any consumer of a binary body (stream, cover art, waveform source) owes the same check.
+  **Found again in the guard written for it:** the cover proxy substitutes `image/jpeg` when the
+  response carries no `Content-Type`, purely to have something to store beside the bytes, and then
+  handed that substitute to `is_image_response` - which trusts any `image/` prefix before it looks
+  at a byte. A header-less error body therefore walked into the memory *and* disk caches under
+  `{id}:{size}`, the permanent breakage the guard exists to stop. A stand-in value must never be
+  the evidence a check runs on: the guard now takes `Option<&str>` (absent means magic bytes or
+  nothing) and refuses an `image/` claim over a body carrying `subsonic-response`.
   ```
   grep -rn "Decoder::new\|::load_from_memory\|image::load" src-tauri/src | grep -v '#\[cfg(test)\]'
+  grep -rn "unwrap_or(\"image/\|unwrap_or(\"audio/\|unwrap_or(\"application/" src-tauri/src
   ```
 - **A stand-in for a missing measurement must not be the value that binds the limit.** ReplayGain
   peak is optional in the tags, and `computeReplayGainLinear` substituted `1.0` for an absent one

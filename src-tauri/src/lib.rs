@@ -329,19 +329,23 @@ fn handle_cover_request(
         } else {
             match state.http_client.get(&source_url).send() {
                 Ok(resp) if resp.status().is_success() => {
-                    let ct = resp
+                    let declared_ct = resp
                         .headers()
                         .get(reqwest::header::CONTENT_TYPE)
                         .and_then(|v| v.to_str().ok())
-                        .unwrap_or("image/jpeg")
-                        .to_string();
+                        .map(str::to_string);
+                    // The stand-in is only what gets stored beside the bytes; the guard below
+                    // is handed what the server actually declared, or nothing.
+                    let ct = declared_ct
+                        .clone()
+                        .unwrap_or_else(|| "image/jpeg".to_string());
                     match resp.bytes() {
                         Ok(b) => {
                             let b = b.to_vec();
                             // Subsonic answers a rejected id with a 200 and a JSON envelope, and
                             // both caches below are keyed by URL, so one bad answer would be
                             // served as the artist's portrait until the cache is cleared.
-                            if !is_image_response(&ct, &b) {
+                            if !is_image_response(declared_ct.as_deref(), &b) {
                                 return cover_error_response(502);
                             }
                             if let Some(dir) = COVER_CACHE_DIR.get() {
@@ -416,19 +420,23 @@ fn handle_cover_request(
                 );
                 match state.http_client.get(&fetch_url).send() {
                     Ok(resp) if resp.status().is_success() => {
-                        let ct = resp
+                        let declared_ct = resp
                             .headers()
                             .get(reqwest::header::CONTENT_TYPE)
                             .and_then(|v| v.to_str().ok())
-                            .unwrap_or("image/jpeg")
-                            .to_string();
+                            .map(str::to_string);
+                        // Same stand-in, same reason: it names the cache entry, it does not
+                        // testify about the body.
+                        let ct = declared_ct
+                            .clone()
+                            .unwrap_or_else(|| "image/jpeg".to_string());
                         match resp.bytes() {
                             Ok(b) => {
                                 let b = b.to_vec();
                                 // Same guard as the artist branch above: the disk cache under
                                 // `{id}:{size}` outlives the session, so an error envelope
                                 // written here is a permanently broken cover.
-                                if !is_image_response(&ct, &b) {
+                                if !is_image_response(declared_ct.as_deref(), &b) {
                                     return cover_error_response(502);
                                 }
                                 if let Some(dir) = COVER_CACHE_DIR.get() {
