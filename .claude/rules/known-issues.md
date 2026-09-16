@@ -42,6 +42,8 @@ Fixed unless marked OPEN.
 - Router-owned callback in a deps array re-arms the listener it is named in.
 - Module-scoped promise memo assigned only on the success side stays poisoned.
 - Guard keyed on one error type != the broad condition.
+- A result from the previous key is still visible to the commit that switches the key.
+- A mounted flag cleared only in cleanup is false for good under StrictMode.
 
 ## Test / harness - `known-issues/testing.md`
 

@@ -35,7 +35,8 @@ import { getCoverArtUrl } from "../lib/navidrome";
 import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { ArtBackdrop } from "./ArtBackdrop";
 import { syncAlbumTracks } from "../lib/sync";
-import { shouldFetchMissingTracks } from "../lib/albumTracks";
+import { fetchAlbumTracks } from "../lib/albumTracks";
+import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
@@ -180,38 +181,17 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     }
   }, [tracks, doSyncTracks, album.id]);
 
-  // A library sync that stopped short leaves an album with no track rows at all, and the
-  // user had no way back from that except running a whole sync. Opening the album is the
-  // repair instead. mountedRef because the fetch outlives a fast navigation away.
-  const missingTracksRef = useRef<string | null>(null);
-  const mountedRef = useRef(true);
-  const [fetchingMissingTracks, setFetchingMissingTracks] = useState(false);
-  const [missingTracksError, setMissingTracksError] = useState<string | null>(null);
-  useEffect(() => () => { mountedRef.current = false; }, []);
-  useEffect(() => {
-    if (!shouldFetchMissingTracks({
-      isLoading,
-      error: tracksError,
-      tracks,
-      albumId: album.id,
-      attemptedAlbumId: missingTracksRef.current,
-    })) return;
-    missingTracksRef.current = album.id;
-    setFetchingMissingTracks(true);
-    setMissingTracksError(null);
-    doSyncTracks()
-      .catch((err: unknown) => {
-        if (mountedRef.current) setMissingTracksError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (mountedRef.current) setFetchingMissingTracks(false);
-      });
-  }, [tracks, isLoading, tracksError, album.id, doSyncTracks]);
-
-  const retryMissingTracks = useCallback(() => {
-    missingTracksRef.current = null;
+  const fetchMissingTracks = useCallback(async () => {
+    await fetchAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);
     useTrackListSessionStore.getState().bumpRefresh();
-  }, []);
+  }, [album.id, serverWithCredential]);
+  const missingTracks = useMissingTracksRepair({
+    albumId: album.id,
+    tracks,
+    isLoading,
+    error: tracksError,
+    fetchTracks: fetchMissingTracks,
+  });
 
   const refreshTags = useCallback(async () => {
     if (isTagRefreshing) return;
@@ -800,22 +780,22 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
             </button>
           </div>
         ) : !tracks || tracks.length === 0 ? (
-          fetchingMissingTracks ? (
+          missingTracks.isFetching ? (
             <div className="empty-state">
               <p className="empty-state-title">Getting this album's tracks</p>
               <p className="empty-state-hint">One moment, they will appear here ready to play.</p>
             </div>
-          ) : missingTracksError ? (
+          ) : missingTracks.error ? (
             <div className="empty-state">
               <p className="empty-state-title">Couldn't get this album's tracks</p>
-              <p className="empty-state-hint">{missingTracksError}</p>
-              <button className="empty-state-action" onClick={retryMissingTracks}>Try again</button>
+              <p className="empty-state-hint">{missingTracks.error}</p>
+              <button className="empty-state-action" onClick={missingTracks.retry}>Try again</button>
             </div>
           ) : (
             <div className="empty-state">
               <p className="empty-state-title">No tracks in this album</p>
               <p className="empty-state-hint">The server lists no tracks for it.</p>
-              <button className="empty-state-action" onClick={retryMissingTracks}>Check again</button>
+              <button className="empty-state-action" onClick={missingTracks.retry}>Check again</button>
             </div>
           )
         ) : (

@@ -45,3 +45,11 @@ Fixed unless marked OPEN.
   ```
   grep -rn "instanceof DOMException\|AbortError\|instanceof TypeError\|err\.name ===" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A result from the previous key is still visible to the commit that switches the key.** `useTracks` reset its rows with `setData(undefined)` inside the effect, so the render carrying the new album id, and every effect in that commit, still saw the old album's rows with `isLoading: false`. The album page's missing-tracks repair read an empty list from the previous album as the new album's and fetched tracks already mirrored. Its own fetch outcome had the same shape: one `fetching`/`error` pair shared by every album, so album A's late failure painted on album B. Fix: store the key beside the result and derive `current = result.key === key ? result : null` during render (`useTracks`, `usePlaylistTracks`, `useMissingTracksRepair`). A reset written in an effect is always one commit late.
+  ```
+  grep -rn "prev\w*IdRef.current !== " src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A mounted flag cleared only in cleanup is false for good under StrictMode.** `AlbumDetail`'s `useRef(true)` plus `useEffect(() => () => { ref.current = false })`: StrictMode's simulated unmount ran the cleanup and nothing set it back, so "Getting this album's tracks" never cleared in `pnpm tauri dev`. Setting it in the setup is the fix; not needing it (derive ownership from a key) is better. Test with `renderHook(..., { reactStrictMode: true })` - a `<StrictMode>` `wrapper` does not double-run effects there.
+  ```
+  grep -rn "useRef(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```

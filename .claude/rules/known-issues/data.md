@@ -274,8 +274,12 @@ Fixed unless marked OPEN.
   to tell it from a dead control. The album page did say something, but what it said was to
   run a library sync, which is the thing that had already failed. Fix: one
   `loadAlbumTracks` (`src/lib/albumTracks.ts`) fetches the album on a miss, so opening or
-  playing an album repairs it. Ask of any silent `return` on an empty list: what did the
-  user just click, and how do they find out nothing happened?
+  playing an album repairs it. **Found again in the fix:** the fetch could now reject, and
+  every caller discarded the promise with `void`, so offline the click still did nothing.
+  Play paths go through `loadAlbumTracksForPlay`, which reports both a failed fetch and a
+  server-empty album on the bar above the player. Ask of any silent `return` on an empty
+  list, and of any `void` on a promise that can reject: what did the user just click, and
+  how do they find out nothing happened?
   ```
   grep -rn "length === 0) return" src --include='*.ts*' | grep -v '\.test\.'
   ```

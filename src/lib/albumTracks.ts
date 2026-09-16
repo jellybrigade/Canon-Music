@@ -2,6 +2,7 @@ import { getDb } from "../db";
 import type { NavidromeCredential } from "./navidrome";
 import type { Server } from "../types/server";
 import { syncAlbumTracks } from "./sync";
+import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 
 export interface AlbumTrackRow {
   id: string;
@@ -15,9 +16,13 @@ export interface AlbumTrackRow {
 // track list over the network. Cleared on the failure side too, or one lost connection
 // leaves the album permanently unfetchable for the life of the process.
 const inFlight = new Map<string, Promise<void>>();
+// Albums the server itself listed as empty. Remembered so a click does not re-fetch them
+// every time; only the album page's explicit re-check goes to the server again.
+const reportedEmpty = new Set<string>();
 
 export function resetAlbumTrackFetches(): void {
   inFlight.clear();
+  reportedEmpty.clear();
 }
 
 async function readMirrored(albumDbId: string, serverId: string): Promise<AlbumTrackRow[]> {
@@ -31,11 +36,34 @@ async function readMirrored(albumDbId: string, serverId: string): Promise<AlbumT
 }
 
 /**
+ * Pull the album's tracks from the server, sharing any fetch already running for it.
+ */
+export function fetchAlbumTracks(
+  server: Server,
+  credential: NavidromeCredential,
+  albumDbId: string
+): Promise<void> {
+  reportedEmpty.delete(albumDbId);
+  let fetch = inFlight.get(albumDbId);
+  if (!fetch) {
+    fetch = syncAlbumTracks(server, credential, albumDbId)
+      .then(async () => {
+        if ((await readMirrored(albumDbId, server.id)).length === 0) reportedEmpty.add(albumDbId);
+      })
+      .finally(() => {
+        inFlight.delete(albumDbId);
+      });
+    inFlight.set(albumDbId, fetch);
+  }
+  return fetch;
+}
+
+/**
  * The album's tracks, fetching them from the server if the mirror holds none.
  *
  * A sync that stopped short leaves albums with no track rows at all, and every play path
  * used to return silently on that empty list: the user clicked play and nothing happened,
- * with no way to tell it apart from a broken button. One retry only - an album the server
+ * with no way to tell it apart from a broken button. One fetch only - an album the server
  * itself reports as empty must not re-fetch on every click.
  */
 export async function loadAlbumTracks(
@@ -44,17 +72,31 @@ export async function loadAlbumTracks(
   albumDbId: string
 ): Promise<AlbumTrackRow[]> {
   const mirrored = await readMirrored(albumDbId, server.id);
-  if (mirrored.length > 0) return mirrored;
+  if (mirrored.length > 0 || reportedEmpty.has(albumDbId)) return mirrored;
 
-  let fetch = inFlight.get(albumDbId);
-  if (!fetch) {
-    fetch = syncAlbumTracks(server, credential, albumDbId).finally(() => {
-      inFlight.delete(albumDbId);
-    });
-    inFlight.set(albumDbId, fetch);
-  }
-  await fetch;
+  await fetchAlbumTracks(server, credential, albumDbId);
   return await readMirrored(albumDbId, server.id);
+}
+
+/**
+ * `loadAlbumTracks` for a play, queue or radio click. Every way that ends with nothing to
+ * play is reported to the user, since the click itself gives no other sign.
+ */
+export async function loadAlbumTracksForPlay(
+  server: Server,
+  credential: NavidromeCredential,
+  album: { id: string; name: string }
+): Promise<AlbumTrackRow[]> {
+  const { report } = useAlbumTracksNoticeStore.getState();
+  try {
+    const tracks = await loadAlbumTracks(server, credential, album.id);
+    if (tracks.length === 0) report(`The server lists no tracks for ${album.name}`);
+    return tracks;
+  } catch (err) {
+    console.error("loadAlbumTracksForPlay: fetch failed", err);
+    report(`Couldn't get the tracks for ${album.name}: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
+  }
 }
 
 /**

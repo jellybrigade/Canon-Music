@@ -28,7 +28,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { useLibrarySync } from "./hooks/useLibrarySync";
-import { loadAlbumTracks } from "./lib/albumTracks";
+import { loadAlbumTracksForPlay } from "./lib/albumTracks";
 import { useTrackIdRepair } from "./hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
@@ -412,7 +412,7 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     // Fetches the album on a miss; the seed is picked by play count, which the shared
     // loader does not order by, so the rows are read again once they are there.
-    if ((await loadAlbumTracks(srv, credential, album.id)).length === 0) return;
+    if ((await loadAlbumTracksForPlay(srv, credential, album)).length === 0) return;
     const db = await getDb();
     type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
     const rows = await db.select<TrackRow[]>(
@@ -434,7 +434,7 @@ export default function App() {
   async function handleAddAlbumToQueue(album: AlbumRow) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
-    const rows = await loadAlbumTracks(srv, credential, album.id);
+    const rows = await loadAlbumTracksForPlay(srv, credential, album);
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;

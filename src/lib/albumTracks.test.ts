@@ -7,7 +7,8 @@ vi.mock("../db", () => ({ getDb: async () => holder.db }));
 vi.mock("./sync", () => ({ syncAlbumTracks: vi.fn() }));
 
 import { syncAlbumTracks } from "./sync";
-import { loadAlbumTracks, resetAlbumTrackFetches, shouldFetchMissingTracks } from "./albumTracks";
+import { fetchAlbumTracks, loadAlbumTracks, loadAlbumTracksForPlay, resetAlbumTrackFetches, shouldFetchMissingTracks } from "./albumTracks";
+import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 
 const mSync = vi.mocked(syncAlbumTracks);
 const ALBUM = `${SRV}:al-1`;
@@ -33,6 +34,7 @@ function seedAlbum(serverId: string, albumId: string, trackIds: string[]): void 
 beforeEach(async () => {
   vi.clearAllMocks();
   resetAlbumTrackFetches();
+  useAlbumTracksNoticeStore.setState({ notice: null });
   holder.db = await createMigratedTestDb();
 });
 
@@ -70,6 +72,33 @@ describe("loadAlbumTracks", () => {
     expect(mSync).toHaveBeenCalledTimes(1);
   });
 
+  it("does not fetch again on later clicks once the server reported the album empty", async () => {
+    seedAlbum(SRV, ALBUM, []);
+    mSync.mockResolvedValue(undefined);
+    await loadAlbumTracks(server(), CRED, ALBUM);
+    await loadAlbumTracks(server(), CRED, ALBUM);
+    await loadAlbumTracks(server(), CRED, ALBUM);
+    expect(mSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("fetches again after the album page explicitly re-checks an empty album", async () => {
+    seedAlbum(SRV, ALBUM, []);
+    mSync.mockResolvedValue(undefined);
+    await loadAlbumTracks(server(), CRED, ALBUM);
+    await fetchAlbumTracks(server(), CRED, ALBUM);
+    expect(mSync).toHaveBeenCalledTimes(2);
+  });
+
+  it("shares one fetch between a play click and the album page repairing the same album", async () => {
+    seedAlbum(SRV, ALBUM, []);
+    mSync.mockResolvedValue(undefined);
+    await Promise.all([
+      loadAlbumTracks(server(), CRED, ALBUM),
+      fetchAlbumTracks(server(), CRED, ALBUM),
+    ]);
+    expect(mSync).toHaveBeenCalledTimes(1);
+  });
+
   it("fetches once for two callers racing on the same album", async () => {
     seedAlbum(SRV, ALBUM, []);
     mSync.mockResolvedValue(undefined);
@@ -97,6 +126,34 @@ describe("loadAlbumTracks", () => {
     );
     mSync.mockResolvedValue(undefined);
     expect(await loadAlbumTracks(server(), CRED, ALBUM)).toEqual([]);
+  });
+});
+
+describe("loadAlbumTracksForPlay", () => {
+  const album = { id: ALBUM, name: "Blue Train" };
+
+  it("tells the user why nothing played when the fetch fails, instead of rejecting", async () => {
+    seedAlbum(SRV, ALBUM, []);
+    mSync.mockRejectedValueOnce(new Error("offline"));
+    expect(await loadAlbumTracksForPlay(server(), CRED, album)).toEqual([]);
+    expect(useAlbumTracksNoticeStore.getState().notice).toEqual({
+      message: "Couldn't get the tracks for Blue Train: offline",
+    });
+  });
+
+  it("tells the user the server lists no tracks for the album", async () => {
+    seedAlbum(SRV, ALBUM, []);
+    mSync.mockResolvedValue(undefined);
+    expect(await loadAlbumTracksForPlay(server(), CRED, album)).toEqual([]);
+    expect(useAlbumTracksNoticeStore.getState().notice).toEqual({
+      message: "The server lists no tracks for Blue Train",
+    });
+  });
+
+  it("says nothing when the album has tracks", async () => {
+    seedAlbum(SRV, ALBUM, [`${SRV}:tr-1`]);
+    expect(await loadAlbumTracksForPlay(server(), CRED, album)).toHaveLength(1);
+    expect(useAlbumTracksNoticeStore.getState().notice).toBeNull();
   });
 });
 
