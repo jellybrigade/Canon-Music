@@ -11,7 +11,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ServerTab } from "./ServerTab";
 import { getDb } from "../../db";
-import { clearSyncWatermark } from "../../lib/sync";
+import { clearSyncWatermark, type SyncOptions } from "../../lib/sync";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { Server as ServerRow } from "../../types/server";
 
@@ -25,7 +25,7 @@ const SERVER = {
 
 const WITH_CRED = { server: SERVER, credential: { type: "password" } } as unknown as ServerWithCredential;
 
-let runSync: ReturnType<typeof vi.fn<(s: ServerWithCredential) => boolean>>;
+let runSync: ReturnType<typeof vi.fn<(s: ServerWithCredential, options?: SyncOptions) => boolean>>;
 
 function renderTab(overrides: { syncStatus?: "idle" | "syncing"; withCredential?: boolean } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -44,7 +44,7 @@ function renderTab(overrides: { syncStatus?: "idle" | "syncing"; withCredential?
 }
 
 beforeEach(() => {
-  runSync = vi.fn<(s: ServerWithCredential) => boolean>(() => true);
+  runSync = vi.fn<(s: ServerWithCredential, options?: SyncOptions) => boolean>(() => true);
   vi.mocked(clearSyncWatermark).mockReset();
   vi.mocked(clearSyncWatermark).mockResolvedValue(undefined);
   vi.mocked(getDb).mockResolvedValue({ execute: vi.fn(), select: vi.fn() } as never);
@@ -74,7 +74,9 @@ describe("ServerTab resync", () => {
     await user.click(screen.getByRole("button", { name: "Resync library" }));
     await user.click(screen.getByRole("button", { name: "Resync" }));
 
-    await waitFor(() => expect(runSync).toHaveBeenCalledWith(WITH_CRED));
+    // The flag, not the cleared watermark, is what forces the pass: a deployment that
+    // restricts the scan status to admins gives the sync nothing to compare against.
+    await waitFor(() => expect(runSync).toHaveBeenCalledWith(WITH_CRED, { forceTrackPass: true }));
     expect(clearSyncWatermark).toHaveBeenCalledTimes(1);
     // The watermark has to be gone before the sync reads it, or the pass it is asking for is
     // the one the skip would have made anyway.

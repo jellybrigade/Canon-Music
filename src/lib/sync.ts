@@ -432,10 +432,17 @@ export interface SyncProgress {
   total: number;
 }
 
+/** What the caller knows that the sync's own evidence cannot tell it. */
+export interface SyncOptions {
+  /** Read every album's tracks whatever the watermark and the probe say. */
+  forceTrackPass?: boolean;
+}
+
 export async function syncLibrary(
   server: Server,
   credential: NavidromeCredential,
   onAlbumBatch?: (progress: SyncProgress) => void,
+  options?: SyncOptions,
 ): Promise<{
   failedAlbums: number;
   failedPlaylists: number;
@@ -487,9 +494,14 @@ export async function syncLibrary(
     )
   )[0];
   const serverIdentityMoved = watermarkMoved(storedWatermark, scanStatus);
+  // The caller's flag comes first, and not as a cleared watermark: `watermarkMoved` reads
+  // "no scan status" as "no evidence", which on a deployment that restricts getScanStatus to
+  // admins flattens a user asking for a resync into the same skipped sync they already had.
   // Short-circuit deliberate: a forced full pass has nothing left to learn from the probe.
   const forceTrackPass =
-    serverIdentityMoved || !(await mirroredTrackIdsStillResolve(db, server, credential, altUrl));
+    options?.forceTrackPass === true ||
+    serverIdentityMoved ||
+    !(await mirroredTrackIdsStillResolve(db, server, credential, altUrl));
   let failedAlbums = 0;
   let skippedAlbums = 0;
 

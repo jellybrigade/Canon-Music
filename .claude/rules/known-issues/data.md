@@ -198,6 +198,18 @@ Fixed unless marked OPEN.
   ```
   grep -rn "SET id = \|SET track_id = " src src-tauri/src | grep -v '\.test\.'
   ```
+- **A flag meaning "the user asked for this" must not be spelled as state a fallback can flatten.**
+  Settings' **Resync library** cleared the sync watermark and started a sync, inferring intent from
+  the cleared columns - but `watermarkMoved` returns false outright when `getScanStatus` is
+  unreadable, which it is on any deployment restricting it to admins. The only remaining gate was
+  the 3-id probe, which passes whenever the sampled ids happen to resolve: exactly the state a user
+  reaches for the button in. The button reported success and ran the same skipped sync. Fix:
+  `syncLibrary(..., { forceTrackPass: true })`, an explicit parameter; the watermark clear stays,
+  but only so an interrupted resync is repeated by the next sync. A request is a parameter, not a
+  reading of the world.
+  ```
+  grep -rn "clearSyncWatermark\|forceTrackPass" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

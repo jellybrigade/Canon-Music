@@ -194,6 +194,26 @@ describe("useLibrarySync in-flight guard", () => {
   });
 });
 
+describe("useLibrarySync options", () => {
+  it("hands the caller's forced pass to the sync", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+
+    act(() => {
+      result.current.runSync(SRV_A, { forceTrackPass: true });
+    });
+
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({ forceTrackPass: true });
+  });
+
+  it("asks for nothing extra on a run nobody requested", async () => {
+    renderSync(SRV_A);
+    await tick();
+
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toBeUndefined();
+  });
+});
+
 describe("useLibrarySync credential gate", () => {
   it("waits for the credential rather than reading one of its own", async () => {
     const { rerender } = renderSync(undefined);

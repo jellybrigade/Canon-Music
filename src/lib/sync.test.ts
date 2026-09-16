@@ -725,6 +725,41 @@ describe("clearSyncWatermark", () => {
   });
 });
 
+describe("syncLibrary forced track pass", () => {
+  async function seedUnchangedLibrary(): Promise<void> {
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { path: "/m/1.flac" })] });
+    await syncLibrary(server(), CRED);
+    mAlbumTracks.mockClear();
+  }
+
+  it("reads every album again when the user asked for it, even with no scan status to compare", async () => {
+    await seedUnchangedLibrary();
+
+    const result = await syncLibrary(server(), CRED, undefined, { forceTrackPass: true });
+
+    expect(result.skippedAlbums).toBe(0);
+    expect(mAlbumTracks).toHaveBeenCalledTimes(1);
+  });
+
+  it("still skips an unchanged album when nobody asked", async () => {
+    await seedUnchangedLibrary();
+
+    const result = await syncLibrary(server(), CRED);
+
+    expect(result.skippedAlbums).toBe(1);
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+  });
+
+  it("spends no probe requests on a pass it is already going to make", async () => {
+    await seedUnchangedLibrary();
+    mSongExists.mockClear();
+
+    await syncLibrary(server(), CRED, undefined, { forceTrackPass: true });
+
+    expect(mSongExists).not.toHaveBeenCalled();
+  });
+});
+
 describe("repairAlbumTrackIds", () => {
   function applyNativeRemap(remaps: { oldId: string; newId: string }[]): number {
     let moved = 0;

@@ -5,7 +5,7 @@ import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensio
 import type { NavidromeCredential } from "../../lib/navidrome";
 import { keychain } from "../../keychain";
 import { getDb } from "../../db";
-import { clearSyncWatermark, purgeServerData } from "../../lib/sync";
+import { clearSyncWatermark, purgeServerData, type SyncOptions } from "../../lib/sync";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { Server as ServerRow } from "../../types/server";
 
@@ -18,7 +18,7 @@ interface Props {
   onRemoveServer: () => void;
   searchQuery: string;
   syncStatus: "idle" | "syncing" | "done" | "partial" | "error";
-  runSync: (s: ServerWithCredential) => boolean;
+  runSync: (s: ServerWithCredential, options?: SyncOptions) => boolean;
 }
 
 export function ServerTab({ server, serverWithCredential, onRemoveServer, searchQuery, syncStatus, runSync }: Props) {
@@ -170,12 +170,11 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     setResyncError("");
     try {
       const db = await getDb();
-      // Clearing first is the whole point: the sync reads the watermark to decide whether it
-      // can skip the track pass, so starting one against a watermark still in place buys the
-      // user the same skipped sync they already had.
+      // The flag is what actually forces the pass; clearing the watermark is what makes the
+      // next sync do it too, so a resync interrupted half way is not silently skipped.
       await clearSyncWatermark(db, serverWithCredential.server.id);
       setResyncConfirm(false);
-      runSync(serverWithCredential);
+      runSync(serverWithCredential, { forceTrackPass: true });
     } catch (err) {
       setResyncError(err instanceof Error ? err.message : String(err));
     }

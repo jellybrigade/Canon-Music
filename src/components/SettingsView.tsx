@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Server, Tag, Play, ChevronRight, Activity } from "lucide-react";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { Server as ServerRow } from "../types/server";
+import type { SyncOptions } from "../lib/sync";
 import { ServerTab } from "./settings/ServerTab";
 import { TagsTab } from "./settings/TagsTab";
 import { PlaybackTab } from "./settings/PlaybackTab";
@@ -15,7 +16,7 @@ type NavId = "server" | "metadata" | "playback" | "advanced";
 interface Props {
   server: ServerRow | undefined;
   syncStatus: SyncStatus;
-  runSync: (s: ServerWithCredential) => boolean;
+  runSync: (s: ServerWithCredential, options?: SyncOptions) => boolean;
   syncError: string;
   lastSyncedAt: number | null;
   serverWithCredential: ServerWithCredential | undefined;
