@@ -45,9 +45,11 @@ export function useScrobble(
     const { server, credential } = serverWithCred;
     if (!trackId.startsWith(server.id + ":")) return;
     const nativeId = stripServerPrefix(trackId, server.id);
-    reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined).catch(
-      () => {} // server unreachable or transport stalled, nothing to do for this play
+    const report = new AbortController();
+    reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined, report.signal).catch(
+      () => {} // server unreachable, transport stalled or withdrawn, nothing to do for this play
     );
+    return () => report.abort();
   }, [playStartedAt, trackId, serverWithCred, isPlaying]);
 
   useEffect(() => {

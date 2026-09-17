@@ -492,6 +492,43 @@ describe("non-idempotent endpoints", () => {
     expect(body(0).get("submission")).toBe("false");
   });
 
+  it("stops retrying a now-playing report once its track is no longer playing", async () => {
+    // A retry landing after the next track's report would put the old track back on the
+    // server for the rest of the new one.
+    const controller = new AbortController();
+    fetchMock.mockImplementation(() => {
+      controller.abort();
+      return Promise.reject(new TypeError("Load failed"));
+    });
+
+    await expect(
+      settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT, controller.signal))
+    ).rejects.toThrow();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an in-flight now-playing report when its track stops playing", async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+
+    const report = reportNowPlaying(BASE, "alice", cred, "tr-1", undefined, controller.signal).catch(
+      (e: Error) => e
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    controller.abort();
+
+    expect(requestSignal?.aborted).toBe(true);
+    await settle(report);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("sends a rejected now-playing report to the alt url", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 

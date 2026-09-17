@@ -277,6 +277,31 @@ describe("useScrobble now-playing reporting", () => {
     expect(reportedIds()).toEqual(["t1", "t2"]);
   });
 
+  it("withdraws the outgoing track's report when the next track starts", async () => {
+    const { rerender } = renderHook(({ track }: { track: CurrentTrack }) => useScrobble(track, SWC), {
+      initialProps: { track: makeTrack() },
+    });
+    await setPlaying(true);
+
+    await act(async () => {
+      usePlayerStore.setState({ elapsed: 0, playStartedAt: 2000 });
+      rerender({ track: makeTrack("srv-a:t2") });
+      await Promise.resolve();
+    });
+
+    const signals = vi.mocked(reportNowPlaying).mock.calls.map((c) => c[5]);
+    expect(signals.map((signal) => signal?.aborted)).toEqual([true, false]);
+  });
+
+  it("withdraws a pending report on unmount", async () => {
+    const { unmount } = renderHook(() => useScrobble(makeTrack(), SWC));
+    await setPlaying(true);
+
+    unmount();
+
+    expect(vi.mocked(reportNowPlaying).mock.calls[0]?.[5]?.aborted).toBe(true);
+  });
+
   it("says nothing about a track belonging to another server", async () => {
     renderHook(() => useScrobble(makeTrack("srv-b:t9"), SWC));
 
