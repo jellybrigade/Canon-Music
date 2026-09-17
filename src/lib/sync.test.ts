@@ -1177,6 +1177,78 @@ describe("syncLibrary skip evidence", () => {
     expect(mAlbumTracks).toHaveBeenCalledTimes(1);
   });
 
+  describe("an interrupted track pass", () => {
+    const LIBRARY = Array.from({ length: 10 }, (_, i) => album(`al-${i}`, { songCount: 1 }));
+
+    /** A pass under STATUS that reads three albums and then hits the failure limit. */
+    async function interruptedPass(): Promise<void> {
+      seedServerRow();
+      mScanStatus.mockResolvedValue(STATUS);
+      mAllAlbums.mockResolvedValue(LIBRARY);
+      let call = 0;
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {
+        if (++call > 3) throw new Error("timed out");
+        return [track(`t-${albumId}`, albumId)];
+      });
+      expect((await syncLibrary(server(), CRED)).albumTracksIncomplete).toBe(true);
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => [track(`t-${albumId}`, albumId)]);
+    }
+
+    it("picks up where it stopped instead of starting over", async () => {
+      await interruptedPass();
+
+      const second = await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(7);
+      expect(second.skippedAlbums).toBe(3);
+      // The resumed half completes the pass, so the watermark may finally move.
+      expect((await storedWatermark())?.last_scan_at).toBe(STATUS.lastScan);
+    });
+
+    it("writes each album's progress in one statement per pass, not one per album", async () => {
+      await interruptedPass();
+      const writesBefore = db().queryLog.length;
+
+      await syncLibrary(server(), CRED);
+
+      const progressWrites = db()
+        .queryLog.slice(writesBefore)
+        .filter((q) => q.kind === "execute" && q.sql.includes("tracks_read_scan"));
+      expect(progressWrites.length).toBe(1);
+    });
+
+    it("starts over when the server identity moved since the interruption", async () => {
+      await interruptedPass();
+      mScanStatus.mockResolvedValue({ ...STATUS, lastScan: "2026-09-14T03:00:00Z" });
+
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+
+    it("still reads every album when the user asks for a resync", async () => {
+      await interruptedPass();
+
+      await syncLibrary(server(), CRED, undefined, { forceTrackPass: true });
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+
+    it("does not let progress stand in for the id probe after a completed pass", async () => {
+      await interruptedPass();
+      await syncLibrary(server(), CRED);
+      mAlbumTracks.mockClear();
+
+      // Same identity, every album carries its stamp, and the ids still stopped resolving:
+      // the stamp says when an album was read, not that the ids read then are still good.
+      mSongExists.mockResolvedValue(false);
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+  });
+
   it("keeps the stored watermark when the scan status cannot be read", async () => {
     seedServerRow();
     mScanStatus.mockResolvedValue(STATUS);

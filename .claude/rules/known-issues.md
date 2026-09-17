@@ -110,6 +110,7 @@ Fixed unless marked OPEN.
 - A server-assigned id is a cache, not an identity.
 - A hand-kept list of the tables one id reaches is a list that goes stale.
 - Watermark upstream identity, not only per-row timestamps.
+- Progress recorded only when a pass completes means a pass that keeps failing never completes.
 - A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
 - A stand-in for a missing measurement must not be the value that binds the limit.

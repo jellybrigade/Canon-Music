@@ -57,6 +57,11 @@ async function mirroredTrackIdsStillResolve(
   return !verdicts.includes(false);
 }
 
+/** One string for "the server as it was when these tracks were read", compared per album. */
+function scanIdentity(status: NavidromeScanStatus): string {
+  return JSON.stringify([status.serverVersion, status.lastScan, status.songCount]);
+}
+
 /** Whether the server's own identity moved since the last completed track pass. */
 function watermarkMoved(stored: ServerWatermark | undefined, status: NavidromeScanStatus | null): boolean {
   if (status === null) return false;
@@ -521,6 +526,11 @@ export async function syncLibrary(
   // "no scan status" as "no evidence", which on a deployment that restricts getScanStatus to
   // admins flattens a user asking for a resync into the same skipped sync they already had.
   // Short-circuit deliberate: a forced full pass has nothing left to learn from the probe.
+  const passIdentity = scanStatus === null ? null : scanIdentity(scanStatus);
+  // Only a pass forced by the identity alone may resume. An explicit resync is a request to
+  // read everything, and a failed id probe under an unchanged identity is evidence against
+  // albums already stamped with that identity.
+  const resumable = serverIdentityMoved && options?.forceTrackPass !== true && passIdentity !== null;
   const forceTrackPass =
     options?.forceTrackPass === true ||
     serverIdentityMoved ||
@@ -544,11 +554,12 @@ export async function syncLibrary(
     play_count: number | null;
     played_at: string | null;
     release_type: string | null;
+    tracks_read_scan: string | null;
   };
   type TrackCountRow = { album_id: string; c: number };
   const [existingAlbumRows, trackCountRows] = await Promise.all([
     db.select<ExistingAlbumRow[]>(
-      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type
+      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, tracks_read_scan
        FROM albums WHERE server_id = ?`,
       [server.id]
     ),
@@ -578,12 +589,13 @@ export async function syncLibrary(
     const existing = existingAlbumById.get(albumDbId);
     const existingCreated = existing?.navidrome_created ?? null;
     const existingTrackCount = trackCountByAlbumId.get(albumDbId) ?? 0;
-    const skipTracks =
-      !forceTrackPass &&
+    const albumUnchanged =
       existing !== undefined &&
       existingCreated !== null &&
       existingCreated === (album.created ?? null) &&
       (album.songCount === undefined || existingTrackCount === album.songCount);
+    const readInThisPass = resumable && existing?.tracks_read_scan === passIdentity;
+    const skipTracks = albumUnchanged && (!forceTrackPass || readInThisPass);
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     const row = [
@@ -685,6 +697,7 @@ export async function syncLibrary(
   let consecutiveFailures = 0;
   let albumTracksIncomplete = false;
   let attemptedCount = 0;
+  const readAlbumIds: string[] = [];
   for (const { album, albumDbId, existingTrackCount } of albumsNeedingTracks) {
     let tracks;
     attemptedCount++;
@@ -728,9 +741,23 @@ export async function syncLibrary(
       );
     }
     fetchedCount++;
+    readAlbumIds.push(albumDbId);
     ftsDirtyAlbumIds.add(albumDbId);
     if (fetchedCount === 1 || fetchedCount % BATCH_NOTIFY_INTERVAL === 0) {
       reportProgress(attemptedCount);
+    }
+  }
+
+  // Written after the loop, early break included, since progress kept only by a pass that
+  // completed is the livelock this column exists to break.
+  if (passIdentity !== null) {
+    const chunkSize = SQLITE_MAX_VARIABLES - 1;
+    for (let start = 0; start < readAlbumIds.length; start += chunkSize) {
+      const chunk = readAlbumIds.slice(start, start + chunkSize);
+      await db.execute(
+        `UPDATE albums SET tracks_read_scan = ? WHERE id IN (${chunk.map(() => "?").join(", ")})`,
+        [passIdentity, ...chunk]
+      );
     }
   }
 

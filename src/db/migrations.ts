@@ -741,6 +741,14 @@ export const migrations: Migration[] = [
     version: 50,
     sql: `ALTER TABLE tracks ADD COLUMN played_at TEXT;`,
   },
+  {
+    // The server identity each album's tracks were last read under. The watermark moves
+    // only after a complete pass, so a pass that kept breaking early re-read the whole
+    // library every sync and could never finish; this lets the next pass skip what the
+    // last one already read against the same identity.
+    version: 51,
+    sql: `ALTER TABLE albums ADD COLUMN tracks_read_scan TEXT;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */
