@@ -283,6 +283,22 @@ Fixed unless marked OPEN.
   ```
   grep -rn "length === 0) return" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A fixed edit distance is a bigger share of a short key, and file order is not a tiebreak.**
+  Both `findCanonical` and `findCanonicalSync` (two hand-copied blocks) accepted a Levenshtein
+  distance of 2 for any key of 5+ characters, so a tag reached a genre by losing a whole
+  meaningful prefix: `J-Rock` resolved to `Rock` as a confident `fuzzy` match, and every tag on
+  that shelf normalized into the wrong branch of the tree with nothing in TagsView Review to say
+  so. The second half was the tiebreak: the winner among equally-distant nodes was whichever
+  `nodesByKind` listed first, which is the order `canon-tree.json` happens to hold, so a
+  re-scrape that reorders the file silently moves tags between genres. Fix: one shared
+  `findFuzzy`, allowance `floor(min(key.length, candidate.length) / 5)` capped at 2, ties broken
+  by node id. Known limit kept deliberately: same-length near-neighbours (`art rock`/`alt rock`)
+  are one edit apart and still match, because length alone cannot tell them from
+  `postrock`/`post rock`. Ask of any fuzzy threshold: what share of the shorter string may it
+  destroy, and who decides a tie?
+  ```
+  grep -rn "levenshtein(\|similarity(" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

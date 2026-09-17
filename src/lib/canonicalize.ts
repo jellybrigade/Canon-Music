@@ -171,6 +171,36 @@ function levenshtein(a: string, b: string, maxDist: number): number {
   return prev[b.length]!;
 }
 
+const FUZZY_MIN_KEY_LENGTH = 5;
+const FUZZY_MAX_DISTANCE = 2;
+
+/**
+ * Edits allowed scale with the shorter of the two keys, so a tag cannot reach a
+ * genre by losing a whole meaningful prefix ("jrock" -> "rock") or by swapping
+ * the two characters that tell two real genres apart ("art rock"/"alt rock").
+ */
+function allowedFuzzyDistance(key: string, candidateKey: string): number {
+  return Math.min(FUZZY_MAX_DISTANCE, Math.floor(Math.min(key.length, candidateKey.length) / 5));
+}
+
+/** Ties are broken by id, so tree order never decides which genre a tag lands on. */
+function findFuzzy(key: string, kindNodes: TreeNode[]): TreeNode | null {
+  if (key.length < FUZZY_MIN_KEY_LENGTH) return null;
+  let bestNode: TreeNode | null = null;
+  let bestDist = FUZZY_MAX_DISTANCE + 1;
+  for (const node of kindNodes) {
+    const allowed = allowedFuzzyDistance(key, node.canonical_key);
+    if (allowed === 0) continue;
+    const dist = levenshtein(key, node.canonical_key, allowed);
+    if (dist > allowed) continue;
+    if (dist < bestDist || (dist === bestDist && bestNode !== null && node.id < bestNode.id)) {
+      bestDist = dist;
+      bestNode = node;
+    }
+  }
+  return bestNode;
+}
+
 export function getParentChain(node: TreeNode, byId: Map<string, TreeNode>, maxDepth = 4): string[] {
   const chain: string[] = [];
   const visited = new Set<string>();
@@ -251,21 +281,8 @@ export async function findCanonical(
     }
   }
 
-  // Fuzzy Levenshtein ≤ 2 (skip short strings to avoid false positives)
-  if (key.length >= 5) {
-    let bestNode: TreeNode | null = null;
-    let bestDist = 3;
-    for (const node of kindNodes) {
-      const dist = levenshtein(key, node.canonical_key, 2);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestNode = node;
-      }
-    }
-    if (bestNode) {
-      return { node: bestNode, matchType: "fuzzy" };
-    }
-  }
+  const fuzzy = findFuzzy(key, kindNodes);
+  if (fuzzy) return { node: fuzzy, matchType: "fuzzy" };
 
   return { node: null, matchType: "none" };
 }
@@ -307,20 +324,8 @@ export function findCanonicalSync(
     }
   }
 
-  if (key.length >= 5) {
-    let bestNode: TreeNode | null = null;
-    let bestDist = 3;
-    for (const node of kindNodes) {
-      const dist = levenshtein(key, node.canonical_key, 2);
-      if (dist < bestDist) {
-        bestDist = dist;
-        bestNode = node;
-      }
-    }
-    if (bestNode) {
-      return { node: bestNode, matchType: "fuzzy" };
-    }
-  }
+  const fuzzy = findFuzzy(key, kindNodes);
+  if (fuzzy) return { node: fuzzy, matchType: "fuzzy" };
 
   return { node: null, matchType: "none" };
 }

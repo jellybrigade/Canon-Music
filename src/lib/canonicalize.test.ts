@@ -212,6 +212,34 @@ describe("findCanonicalSync", () => {
     expect(result).toEqual({ node: null, matchType: "none" });
   });
 
+  it("does not fuzzy match a tag onto a shorter genre it merely contains", () => {
+    const rock = node({ id: "rock", name: "Rock" });
+    const tree = buildTree([rock]);
+    expect(findCanonicalSync("J-Rock", "genre", tree)).toEqual({ node: null, matchType: "none" });
+  });
+
+  it("still fuzzy matches a typo in a long tag", () => {
+    const psych = node({ id: "psychedelic", name: "Psychedelic" });
+    const tree = buildTree([psych]);
+    expect(findCanonicalSync("Pyschedelic", "genre", tree)).toEqual({
+      node: psych,
+      matchType: "fuzzy",
+    });
+  });
+
+  it("breaks a fuzzy tie by id rather than by tree order", () => {
+    const first = node({ id: "aardvark", name: "Synthwavo" });
+    const second = node({ id: "zebra", name: "Synthwavi" });
+    expect(findCanonicalSync("Synthwave", "genre", buildTree([first, second]))).toEqual({
+      node: first,
+      matchType: "fuzzy",
+    });
+    expect(findCanonicalSync("Synthwave", "genre", buildTree([second, first]))).toEqual({
+      node: first,
+      matchType: "fuzzy",
+    });
+  });
+
   it("returns none when nothing matches", () => {
     const tree = buildTree([node({ id: "x", name: "Completely Unrelated Thing" })]);
     const result = findCanonicalSync("zzz", "genre", tree);

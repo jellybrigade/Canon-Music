@@ -116,6 +116,7 @@ Fixed unless marked OPEN.
 - Global state holding server-scoped ids outlives the server that issued them.
 - Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.
 - An empty read and a broken button look the same to the user.
+- A fixed edit distance is a bigger share of a short key, and file order is not a tiebreak.
 
 ## UI - `known-issues/ui.md`
 
