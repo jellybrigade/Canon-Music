@@ -386,6 +386,9 @@ export async function clearSyncWatermark(db: Database, serverId: string): Promis
     "UPDATE servers SET last_scan_at = NULL, server_version = NULL, song_count = NULL WHERE id = ?",
     [serverId]
   );
+  // Progress stamps from earlier passes would otherwise let an interrupted resync be resumed
+  // as though the albums read before it were part of it.
+  await db.execute("UPDATE albums SET tracks_read_scan = NULL WHERE server_id = ?", [serverId]);
 }
 
 /**

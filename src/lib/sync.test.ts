@@ -783,6 +783,26 @@ describe("clearSyncWatermark", () => {
     );
     expect(row?.server_version).toBe("0.63.0");
   });
+
+  it("forgets which albums the last pass read, for this server only", async () => {
+    seedServerRow(SRV);
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { path: "/m/1.flac" })] });
+    mScanStatus.mockResolvedValue({ serverVersion: "0.64.0", lastScan: "2026-09-01T00:00:00Z", songCount: 1 });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(
+      `INSERT INTO albums (id, server_id, server_type, name, tracks_read_scan) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other', 'kept')`
+    );
+
+    await clearSyncWatermark(asDb(db()), SRV);
+
+    const rows = await db().select<{ id: string; tracks_read_scan: string | null }[]>(
+      "SELECT id, tracks_read_scan FROM albums ORDER BY id"
+    );
+    expect(rows).toEqual([
+      { id: `${SRV}:al-1`, tracks_read_scan: null },
+      { id: `${OTHER}:al-9`, tracks_read_scan: "kept" },
+    ]);
+  });
 });
 
 describe("syncLibrary forced track pass", () => {
@@ -1233,6 +1253,29 @@ describe("syncLibrary skip evidence", () => {
       await syncLibrary(server(), CRED, undefined, { forceTrackPass: true });
 
       expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+
+    it("repeats an interrupted resync over the albums it never reached", async () => {
+      await interruptedPass();
+      await syncLibrary(server(), CRED);
+
+      await clearSyncWatermark(asDb(db()), SRV);
+      let call = 0;
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {
+        if (++call > 3) throw new Error("timed out");
+        return [track(`t-${albumId}`, albumId)];
+      });
+      expect(
+        (await syncLibrary(server(), CRED, undefined, { forceTrackPass: true })).albumTracksIncomplete
+      ).toBe(true);
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => [track(`t-${albumId}`, albumId)]);
+
+      // Stamps from the pass before the resync must not pass for the resync's own progress.
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(7);
     });
 
     it("does not let progress stand in for the id probe after a completed pass", async () => {
