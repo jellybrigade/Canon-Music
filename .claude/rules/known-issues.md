@@ -17,6 +17,7 @@ Fixed unless marked OPEN.
 - "Load failed" ~25s = systemd-resolved, not Canon.
 - Two HTTP stacks also means two certificate stores.
 - "Something answered" is not "the right thing answered".
+- A diagnosis collected and used only for the message text is not a decision.
 
 ## Build / release pipeline - `known-issues/build.md`
 

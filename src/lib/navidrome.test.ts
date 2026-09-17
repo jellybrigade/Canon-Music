@@ -821,7 +821,13 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     );
   }
 
+  /** The native stack failing too, which is what a stall worth pausing requests for looks like. */
+  function probeFails(): void {
+    onInvoke("probe_server", () => ({ reachable: false, status: null, elapsedMs: 8000, error: "timed out" }));
+  }
+
   it("stops spending 12s ladders once two in a row have timed out", async () => {
+    probeFails();
     neverAnswers();
 
     await expect(settle(fetchStarred2(BASE, "alice", cred), LADDER_MS)).rejects.toThrow();
@@ -837,6 +843,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     neverAnswers();
 
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
       LADDER_MS
@@ -847,6 +854,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   });
 
   it("names the endpoint it refused to attempt while the transport is stalled", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -859,6 +867,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   });
 
   it("probes the native stack once, not once per failed attempt", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -907,7 +916,24 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
   });
 
+  it("keeps sending after a stall the native stack disproves", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    const err = (await settle(
+      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
+      LADDER_MS
+    )) as Error;
+
+    fetchMock.mockImplementation(() => ok({ status: "ok", starred2: {} }));
+    await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(err.message).toContain("90ms");
+    expect(err.message).not.toContain("Network Proxy");
+  });
+
   it("lets a healed transport back in once the cooldown passes", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -935,8 +961,9 @@ describe("what the transport breaker refuses to speak for", () => {
     );
   }
 
-  /** Two full ladders against BASE, which is what opens the breaker. */
+  /** Two full ladders against BASE with the native stack failing too, which opens the breaker. */
   async function stallBase(): Promise<void> {
+    onInvoke("probe_server", () => ({ reachable: false, status: null, elapsedMs: 8000, error: "timed out" }));
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);

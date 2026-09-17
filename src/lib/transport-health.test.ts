@@ -33,7 +33,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   resetTauriMocks();
   resetTransportHealth();
-  probeReachable();
+  // The breaker's own mechanics are about a transport that really is down. A probe that
+  // gets through excuses the stall instead, which has its own describe below.
+  probeUnreachable();
 });
 
 afterEach(() => {
@@ -98,8 +100,9 @@ describe("breaker", () => {
 });
 
 describe("diagnosis", () => {
-  it("names the local HTTP layer when the native stack reaches the server", async () => {
+  it("names the local HTTP layer when the native stack keeps reaching the server", async () => {
     probeReachable(120);
+    await noteTransportTimeout(URL_);
     await noteTransportTimeout(URL_);
     const notice = await noteTransportTimeout(URL_);
     expect(notice).toContain("120ms");
@@ -239,7 +242,7 @@ describe("while the probe is still running", () => {
       "probe_server",
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ reachable: true, status: 200, elapsedMs: 7, error: null });
+          release = () => resolve({ reachable: false, status: null, elapsedMs: 7, error: "connection refused" });
         })
     );
     return () => release();
@@ -253,23 +256,23 @@ describe("while the probe is still running", () => {
     const early = transportStallNotice(URL_);
     expect(early).not.toBeNull();
     expect(early).toContain("timing out");
-    expect(early).not.toContain("proxy");
+    expect(early).not.toContain("connection refused");
 
     release();
     await opening;
-    expect(transportStallNotice(URL_)).toContain("proxy");
+    expect(transportStallNotice(URL_)).toContain("connection refused");
   });
 
   it("does not serve the previous opening's diagnosis", async () => {
     await noteTransportTimeout(URL_);
     await noteTransportTimeout(URL_);
-    expect(transportStallNotice(URL_)).toContain("proxy");
+    expect(transportStallNotice(URL_)).toContain("connection refused");
 
     vi.advanceTimersByTime(15_001);
     const release = heldProbe();
     const reopening = noteTransportTimeout(URL_);
 
-    expect(transportStallNotice(URL_)).not.toContain("proxy");
+    expect(transportStallNotice(URL_)).not.toContain("connection refused");
 
     release();
     await reopening;
@@ -299,5 +302,78 @@ describe("describeStall on a reply that is not Navidrome", () => {
   it("still blames the local HTTP stack on a 204, which is a real answer", () => {
     const msg = describeStall(URL_, { reachable: true, status: 204, elapsedMs: 40, error: null });
     expect(msg).toContain("Network Proxy");
+  });
+});
+
+describe("a stall the native stack disproves", () => {
+  beforeEach(() => {
+    probeReachable(94);
+  });
+
+  it("does not open, since the server and the network just answered", async () => {
+    await noteTransportTimeout(URL_);
+    const cause = await noteTransportTimeout(URL_);
+
+    expect(transportStallNotice(URL_)).toBeNull();
+    expect(cause).toContain("94ms");
+    // One lost request is not this desktop's proxy, and saying so is the wrong advice.
+    expect(cause).not.toContain("proxy");
+  });
+
+  it("opens on the next timeout when nothing got through since", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    const notice = await noteTransportTimeout(URL_);
+
+    // Rust keeps reaching a server the webview keeps timing out on: the PAC-resolver stall
+    // the breaker exists for, where letting every request through costs 37s each.
+    expect(transportStallNotice(URL_)).not.toBeNull();
+    expect(notice).toContain("proxy");
+  });
+
+  it("needs a full second streak once a request has got through", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    recordTransportSuccess(URL_);
+
+    expect(await noteTransportTimeout(URL_)).toBeNull();
+    expect(transportStallNotice(URL_)).toBeNull();
+  });
+
+  it("leaves the cooldown on its first rung", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+
+    vi.advanceTimersByTime(15_001);
+    expect(transportStallNotice(URL_)).toBeNull();
+  });
+
+  it("probes once for the excuse and once for the opening", async () => {
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+    await noteTransportTimeout(URL_);
+
+    expect(invokeCount("probe_server")).toBe(2);
+  });
+
+  it("lifts the breaker when the answer lands after the caller stopped waiting", async () => {
+    let release = (): void => {};
+    onInvoke(
+      "probe_server",
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ reachable: true, status: 200, elapsedMs: 7900, error: null });
+        })
+    );
+    await noteTransportTimeout(URL_);
+    const opening = noteTransportTimeout(URL_);
+    await vi.advanceTimersByTimeAsync(3_000);
+    await opening;
+    expect(transportStallNotice(URL_)).not.toBeNull();
+
+    release();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(transportStallNotice(URL_)).toBeNull();
   });
 });
