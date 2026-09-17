@@ -318,7 +318,7 @@
   justify-content: flex-end;
   gap: var(--space-2xs);
   flex-shrink: 0;
-  width: 64px;
+  min-width: 64px;
 }
 
 .genre-col-actions {
@@ -384,6 +384,20 @@
 
 .genre-search-result-row {
   border-bottom: 1px solid var(--tint-2);
+}
+
+/* Search rows have the width to show count and actions side by side, so neither covers the other */
+.genre-search-result-row .genre-col-count {
+  min-width: 10ch;
+  text-align: right;
+}
+
+.genre-search-result-row .genre-col-actions {
+  position: static;
+}
+
+.genre-search-result-row:hover .genre-col-count {
+  opacity: 1;
 }
 
 .genre-col-breadcrumb {

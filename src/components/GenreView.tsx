@@ -177,7 +177,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                       ))}
                     </span>
                   )}
-                  <span className="genre-col-count">{count}</span>
+                  <span className="genre-col-count">{count} {count === 1 ? "album" : "albums"}</span>
                   <div className="genre-col-actions">
                     <button
                       className="genre-col-action-btn"
@@ -233,7 +233,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                     >
                       <span className="genre-col-name">{node.name}</span>
                       <div className="genre-col-right">
-                        <span className="genre-col-count">{count}</span>
+                        <span className="genre-col-count">{count} {count === 1 ? "album" : "albums"}</span>
                         <span className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`} aria-hidden>›</span>
                         <div className="genre-col-actions">
                           <button
