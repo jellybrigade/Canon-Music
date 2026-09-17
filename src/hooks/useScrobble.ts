@@ -21,6 +21,7 @@ export function useScrobble(
   // One timestamp per play, so a retry can ask whether the row it failed to confirm is there.
   const timestampRef = useRef<number | null>(null);
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const elapsed = usePlayerStore((s) => s.elapsed);
   const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPctRaw] = useSetting("scrobble.threshold_percent", "50");
@@ -33,15 +34,21 @@ export function useScrobble(
     timestampRef.current = null;
   }, [playStartedAt]);
 
+  // Navidrome expires its now-playing entry on a timer, so resuming owes the server the
+  // same report starting did: a pause outlasting that timer otherwise leaves it saying
+  // nothing is playing until the next track. Keyed on the id rather than the track
+  // object, which the position tick hands back new on every render, and gated on the
+  // player actually running, or a queue restored at launch reports a track nobody started.
+  const trackId = track?.id ?? null;
   useEffect(() => {
-    if (!track || !serverWithCred) return;
+    if (!isPlaying || !trackId || !serverWithCred) return;
     const { server, credential } = serverWithCred;
-    if (!track.id.startsWith(server.id + ":")) return;
-    const nativeId = stripServerPrefix(track.id, server.id);
+    if (!trackId.startsWith(server.id + ":")) return;
+    const nativeId = stripServerPrefix(trackId, server.id);
     reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined).catch(
-      () => {} // server unreachable, silently skip
+      () => {} // server unreachable or transport stalled, nothing to do for this play
     );
-  }, [playStartedAt, track, serverWithCred]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [playStartedAt, trackId, serverWithCred, isPlaying]);
 
   useEffect(() => {
     if (!track || scrobbedRef.current) return;

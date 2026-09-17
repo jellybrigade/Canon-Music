@@ -44,6 +44,8 @@ Fixed unless marked OPEN.
 - Guard keyed on one error type != the broad condition.
 - A result from the previous key is still visible to the commit that switches the key.
 - A mounted flag cleared only in cleanup is false for good under StrictMode.
+- A one-shot report of live state is wrong from the moment the state moves.
+- An endpoint's idempotency can live in a parameter, not in its name.
 
 ## Test / harness - `known-issues/testing.md`
 

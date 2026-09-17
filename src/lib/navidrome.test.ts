@@ -23,6 +23,7 @@ import {
   fetchAllAlbums,
   fetchScanStatus,
   fetchStarred2,
+  reportNowPlaying,
   songExists,
   scrobbleTrack,
   setRating,
@@ -475,6 +476,38 @@ describe("non-idempotent endpoints", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a now-playing report, which sets a state rather than appending a play", async () => {
+    // submission=false tells the server which track is on, the same shape of write as a
+    // star. Repeating it cannot double anything, and dropping it after one lost request
+    // leaves Navidrome saying nothing is playing for the rest of the track.
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1"))).rejects.toThrow(
+      "failed after 3 attempts"
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(body(0).get("submission")).toBe("false");
+  });
+
+  it("sends a rejected now-playing report to the alt url", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT))).rejects.toThrow();
+
+    expect(urls()).toContain("http://192.168.1.5:4533/rest/scrobble.view");
+  });
+
+  it("still gives the play submission exactly one shot on the same endpoint", async () => {
+    // Both callers are scrobble.view; only the submission tells them apart.
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000, ALT))).rejects.toThrow();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body(0).get("submission")).toBe("true");
   });
 
   it("matches the endpoint name with or without the .view suffix", async () => {

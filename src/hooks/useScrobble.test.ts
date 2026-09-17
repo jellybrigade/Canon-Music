@@ -22,7 +22,7 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 import { getDb } from "../db";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { usePlayerStore, type CurrentTrack } from "../store/player";
-import type { NavidromeCredential } from "../lib/navidrome";
+import { reportNowPlaying, type NavidromeCredential } from "../lib/navidrome";
 import type { Server } from "../types/server";
 import type { ServerWithCredential } from "./useServer";
 import { useScrobble } from "./useScrobble";
@@ -84,7 +84,7 @@ async function tickTo(elapsed: number) {
 beforeEach(async () => {
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as never);
-  usePlayerStore.setState({ elapsed: 0, playStartedAt: 1000 });
+  usePlayerStore.setState({ elapsed: 0, playStartedAt: 1000, isPlaying: false });
   consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -201,5 +201,87 @@ describe("useScrobble", () => {
 
     await tickTo(120);
     expect(insertAttempts()).toBe(4);
+  });
+});
+
+describe("useScrobble now-playing reporting", () => {
+  /** Flips the store's playing flag and lets the effect it re-runs settle. */
+  async function setPlaying(isPlaying: boolean) {
+    await act(async () => {
+      usePlayerStore.setState({ isPlaying });
+      await Promise.resolve();
+    });
+  }
+
+  function reportedIds(): string[] {
+    return vi.mocked(reportNowPlaying).mock.calls.map((c) => c[3]);
+  }
+
+  it("tells the server which track is playing once playback starts", async () => {
+    renderHook(() => useScrobble(makeTrack(), SWC));
+
+    await setPlaying(true);
+
+    expect(reportedIds()).toEqual(["t1"]);
+  });
+
+  it("says nothing about a restored track that is not playing", async () => {
+    // Queue restore writes currentTrack with the player stopped. Reporting it would tell
+    // Navidrome a track is playing the moment Canon launches, before anyone pressed play.
+    renderHook(() => useScrobble(makeTrack(), SWC));
+
+    await tickTo(0);
+
+    expect(reportNowPlaying).not.toHaveBeenCalled();
+  });
+
+  it("tells the server again when playback resumes after a pause", async () => {
+    // Navidrome expires its now-playing entry on a timer, so a pause long enough to
+    // outlast it leaves the server saying nothing is playing until the next report.
+    renderHook(() => useScrobble(makeTrack(), SWC));
+
+    await setPlaying(true);
+    expect(reportNowPlaying).toHaveBeenCalledTimes(1);
+
+    await setPlaying(false);
+    expect(reportNowPlaying).toHaveBeenCalledTimes(1);
+
+    await setPlaying(true);
+    expect(reportedIds()).toEqual(["t1", "t1"]);
+  });
+
+  it("reports once per play however many position polls follow", async () => {
+    renderHook(() => useScrobble(makeTrack(), SWC));
+
+    await setPlaying(true);
+    for (const elapsed of [20, 40, 60, 80, 100]) await tickTo(elapsed);
+
+    expect(reportNowPlaying).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports the next track without waiting for a pause in between", async () => {
+    const { rerender } = renderHook(({ track }: { track: CurrentTrack }) => useScrobble(track, SWC), {
+      initialProps: { track: makeTrack() },
+    });
+
+    await setPlaying(true);
+
+    // The store writes currentTrack and playStartedAt in one set(), so they reach the
+    // hook in a single commit; splitting them here would report the outgoing track again.
+    await act(async () => {
+      usePlayerStore.setState({ elapsed: 0, playStartedAt: 2000 });
+      rerender({ track: makeTrack("srv-a:t2") });
+      await Promise.resolve();
+    });
+
+    expect(reportedIds()).toEqual(["t1", "t2"]);
+  });
+
+  it("says nothing about a track belonging to another server", async () => {
+    renderHook(() => useScrobble(makeTrack("srv-b:t9"), SWC));
+
+    await setPlaying(true);
+
+    expect(reportNowPlaying).not.toHaveBeenCalled();
   });
 });
