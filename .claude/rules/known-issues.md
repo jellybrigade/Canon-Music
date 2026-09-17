@@ -57,6 +57,7 @@ Fixed unless marked OPEN.
 - Shared mock `Response` breaks on double body read.
 - Fixed sleep pays ceiling every run; per-case rebuild pays per case.
 - A timeout ceiling set against an idle machine is measured against a busy one.
+- A real sleep inside a real debounce window is a race, not a wait.
 - Self-registered listener state update isn't flushed by `act`.
 
 ## Data / state - `known-issues/data.md`

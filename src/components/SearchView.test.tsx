@@ -149,6 +149,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   cleanup();
   await db.close();
 });
@@ -230,11 +231,15 @@ describe("SearchView", () => {
     // whatever route the user navigated to, tacking a stray ?q onto it.
     seedAbba();
     const { hideSearchView } = mount();
+    // The one case here measured in the debounce window rather than past it, so it is the one
+    // that cannot be slept through: a loaded machine can spend the whole 200ms between the
+    // keystroke and the unmount, and then the write it is asserting against has already landed.
+    vi.useFakeTimers();
     fireEvent.change(input()!, { target: { value: "abba" } });
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS / 2)); });
+    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS / 2); });
 
     await act(async () => { hideSearchView(); });
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS * 2); });
 
     expect(input()).toBeNull();
     expect(url()).toBe("/search");
