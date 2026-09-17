@@ -1957,6 +1957,7 @@ pub fn run() {
             library_read::get_playlists,
             library_read::get_unmapped_tag_count,
             library_write::playlist_remove_track,
+            library_write::delete_user_tree_node,
             library_write::remap_track_ids,
         ])
         .run(tauri::generate_context!())
