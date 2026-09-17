@@ -53,3 +53,31 @@ Fixed unless marked OPEN.
   ```
   grep -rn "useRef(true)" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A one-shot report of live state is wrong from the moment the state moves.** `useScrobble`
+  told Navidrome which track was playing (`scrobble.view?submission=false`) off `playStartedAt`
+  alone, which the store stamps only for a new track or a gapless advance. Pause and resume never
+  move it, so a pause outlasting Navidrome's now-playing expiry left the server - and the Discord
+  rich-presence plugin that reads it - saying nothing was playing for the rest of the track, with
+  no way back until the next track started. The same trigger fired in the other direction: queue
+  restore writes `currentTrack` with the player stopped, so Canon announced a track nobody had
+  started every launch. Fix: gate on `isPlaying` and name it in the deps, so every start, resume
+  and track change re-asserts and a pause simply lets the entry expire on its own. Ask of any
+  state pushed into another process: what re-asserts it after the far side forgets, and can it be
+  pushed while locally false?
+  ```
+  grep -rn "playStartedAt" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **An endpoint's idempotency can live in a parameter, not in its name.** `NON_IDEMPOTENT_ENDPOINTS`
+  keyed the retry ladder on the bare endpoint name, but `scrobble` carries two opposite writes:
+  `submission=true` appends a play and must never be repeated, `submission=false` only sets which
+  track is on and is as safe to repeat as a `star`. The safe one inherited the unsafe one's single
+  shot, so one lost request - a breaker cooldown, one resolver stall - meant no now-playing for
+  that whole track, silently, since the caller discards the rejection. Fix: `isRetriableEndpoint`
+  takes the params and reads the submission. `updatePlaylist` is the same shape and is deliberately
+  left one-shot: a rename is a set-to-this-value write, but it shares the endpoint with the
+  membership edits and its failure reaches the user instead of being swallowed. Ask of any endpoint
+  on a policy list: does every caller of it do the same kind of write?
+  ```
+  grep -n "NON_IDEMPOTENT_ENDPOINTS" -A 6 src/lib/navidrome.ts
+  grep -rnE "callSubsonicVoid\(|apiPost\(" src/lib/navidrome.ts | grep -oE '"[a-zA-Z]+(\.view)?"' | sort | uniq -c | sort -rn | head
+  ```

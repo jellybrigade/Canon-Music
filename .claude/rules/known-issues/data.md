@@ -145,6 +145,20 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^(let|const) \w+ = (0|new Map|new Set)" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A refusal from a circuit breaker is not evidence about the record it was raised on.**
+  Two real stalls opened the transport breaker, and the album pass counted the next five
+  requests it refused in zero milliseconds as album failures, hit its consecutive-failure
+  limit and quit. Every partial sync said "failed to fetch tracks for 5 albums" whatever the
+  library held: the 5 was `CONSECUTIVE_FAILURE_LIMIT`, not anything the server did. The
+  playlist stage did the same to `failedPlaylists`. Fix: `apiPost` throws
+  `TransportStalledError` for a refusal, the album pass stops on the first one without
+  counting it, and the playlist stage still skips its write but counts no playlist. Ask of
+  any per-record failure counter behind a shared gate: did this record fail, or was it never
+  tried?
+  ```
+  grep -rn "Failures++\|failed\w*++" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
+  grep -rn "transportStallNotice\|TransportStalledError" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Process-wide state for a per-server fact answers for servers it never saw.** The breaker was one global set of counters, so a stall against one Navidrome failed requests to a different one, and did it with a message naming an address that caller never asked about. Same shape as the `server_id` scoping rule one row up, applied to memory instead of SQL: state about a server is keyed by that server. Its self-healing path also needs an exemption, so `ping.view` always gets its ladder and Settings can re-test.
   ```
   grep -rnE "^(let|const) \w+(: [^=]+)? = " src/lib --include='*.ts*' | grep -v '\.test\.' | grep -vE "=>|function|\[\]|\bnew (RegExp|URL)\b"
@@ -164,6 +178,21 @@ Fixed unless marked OPEN.
 - **Watermark upstream identity, not only per-row timestamps.** Per-row mtimes cannot see a migration that rewrote the rows' keys, because the rows they sit on did not move. `servers.server_version` / `last_scan_at` / `song_count` (v49) come from `getScanStatus` at the top of every sync and any of the three moving forces a full track pass. Two halves that are easy to get wrong: `getScanStatus` is admin-only on some deployments, so a failure is "no evidence" and falls through to the probe rather than counting as "unchanged"; and the new watermark is stored only after a pass that completed, since storing it after an early break tells the next sync those albums were read and erases the evidence that they were not.
   ```
   grep -rn "getScanStatus\|last_scan_at\|server_version" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Progress recorded only when a pass completes means a pass that keeps failing never completes.**
+  The watermark is stored only after a clean track pass, which is right on its own: storing it
+  after an early break would claim albums were read that were not. But a flaky transport broke
+  every pass part way, the watermark never moved, and every auto-sync started another full
+  ~1500-request pass that met the same flake - two correct rules making a livelock where
+  nothing accumulated. Fix: `albums.tracks_read_scan` (v51) stamps each album with the server
+  identity it was read under, written after the loop on the early break too, and a pass forced
+  by a moved identity skips albums already stamped with the current one. Not for an explicit
+  resync (a request to read everything) and not for a failed id probe under an unchanged
+  identity (evidence against the very albums carrying the stamp). Ask of any all-or-nothing
+  marker in front of long work: what does a run that gets 90% of the way leave the next run?
+  ```
+  grep -rn "Incomplete &&\|!.*Incomplete\b" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
+  grep -rn "tracks_read_scan" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **A 2xx body is not the type you asked for.** Subsonic rides its errors on HTTP 200 with `content-type: application/json`, so `audio_play`'s status check passed and `{"error":{"code":70}}` went into `Decoder::new`, which reported "This file could not be decoded" - blaming the file for a track id Navidrome 0.64 had rewritten. Every mirrored track in the library was unplayable and the message named the wrong cause. Fix: `stream_classify.rs::classify_stream_response` reads the head of the body first and names the real error; the prefetch cache and the gapless path run it too, or a poisoned cache entry walks straight past the live path's guard. Conservative by design: only a parsed envelope, an empty body or plainly-textual bytes are refused, since the decoder knows more containers than the classifier does. Any consumer of a binary body (stream, cover art, waveform source) owes the same check.
   **Found again in the guard written for it:** the cover proxy substitutes `image/jpeg` when the
@@ -282,6 +311,22 @@ Fixed unless marked OPEN.
   how do they find out nothing happened?
   ```
   grep -rn "length === 0) return" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A fixed edit distance is a bigger share of a short key, and file order is not a tiebreak.**
+  Both `findCanonical` and `findCanonicalSync` (two hand-copied blocks) accepted a Levenshtein
+  distance of 2 for any key of 5+ characters, so a tag reached a genre by losing a whole
+  meaningful prefix: `J-Rock` resolved to `Rock` as a confident `fuzzy` match, and every tag on
+  that shelf normalized into the wrong branch of the tree with nothing in TagsView Review to say
+  so. The second half was the tiebreak: the winner among equally-distant nodes was whichever
+  `nodesByKind` listed first, which is the order `canon-tree.json` happens to hold, so a
+  re-scrape that reorders the file silently moves tags between genres. Fix: one shared
+  `findFuzzy`, allowance `floor(min(key.length, candidate.length) / 5)` capped at 2, ties broken
+  by node id. Known limit kept deliberately: same-length near-neighbours (`art rock`/`alt rock`)
+  are one edit apart and still match, because length alone cannot tell them from
+  `postrock`/`post rock`. Ask of any fuzzy threshold: what share of the shorter string may it
+  destroy, and who decides a tie?
+  ```
+  grep -rn "levenshtein(\|similarity(" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.

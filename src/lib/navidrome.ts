@@ -4,6 +4,7 @@ import {
   noteTransportTimeout,
   recordTransportSuccess,
   transportStallNotice,
+  TransportStalledError,
 } from "./transport-health";
 
 let _streamMaxBitrate = 0;
@@ -115,9 +116,15 @@ const NON_IDEMPOTENT_ENDPOINTS = new Set([
   "deletePlaylist",
 ]);
 
-function isRetriableEndpoint(endpoint: string): boolean {
+function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean {
   // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
-  return !NON_IDEMPOTENT_ENDPOINTS.has(endpoint.replace(/\.view$/, ""));
+  const name = endpoint.replace(/\.view$/, "");
+  // scrobble carries two different writes. `submission=true` appends a play and cannot be
+  // repeated; `submission=false` only sets which track is on, so it is as safe to repeat
+  // as a star, and giving it one shot leaves the server saying nothing is playing for the
+  // rest of the track whenever a single request is lost.
+  if (name === "scrobble") return params.get("submission") === "false";
+  return !NON_IDEMPOTENT_ENDPOINTS.has(name);
 }
 
 /** The one endpoint a user runs on purpose to ask whether a server is up. Refusing it
@@ -127,11 +134,13 @@ function isLivenessCheck(endpoint: string): boolean {
   return endpoint.replace(/\.view$/, "") === "ping";
 }
 
-async function fetchWithTimeout(url: string, body: string): Promise<Response> {
+async function fetchWithTimeout(url: string, body: string, signal?: AbortSignal): Promise<Response> {
   // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
   // the older WebKitGTK builds Canon still runs against on Linux.
   const controller = new AbortController();
   let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller);
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -159,6 +168,7 @@ async function fetchWithTimeout(url: string, body: string): Promise<Response> {
     });
   } finally {
     clearTimeout(timer);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -178,7 +188,8 @@ async function apiPost(
   baseUrl: string,
   endpoint: string,
   params: URLSearchParams,
-  altUrl?: string
+  altUrl?: string,
+  signal?: AbortSignal
 ): Promise<Response> {
   const body = params.toString();
   const server = normalizeUrl(baseUrl);
@@ -192,20 +203,23 @@ async function apiPost(
   // Health is per server: one stalled server must not speak for another, least of all
   // in a message that names an address the caller never asked about.
   const stalled = isLivenessCheck(endpoint) ? null : transportStallNotice(server);
-  if (stalled) throw new Error(`${endpoint} not attempted: ${stalled}`);
+  if (stalled) throw new TransportStalledError(`${endpoint} not attempted: ${stalled}`);
 
   let lastFailure = "unknown error";
   let lastWasTimeout = false;
   // A write that cannot be safely repeated gets exactly one shot, full stop. Both routes
   // are the same Navidrome, and fetch cannot say whether a rejected request reached it,
   // so any rejection has to be treated as "may already have been applied".
-  const retriable = isRetriableEndpoint(endpoint);
+  const retriable = isRetriableEndpoint(endpoint, params);
   const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     for (const url of urls) {
+      // A withdrawn request is neither a failure nor a timeout, so it feeds nothing.
+      // Not `throwIfAborted`, which older WebKitGTK builds lack.
+      if (signal?.aborted) throw new DOMException(`${endpoint} withdrawn`, "AbortError");
       try {
-        const res = await fetchWithTimeout(url, body);
+        const res = await fetchWithTimeout(url, body, signal);
         recordTransportSuccess(server);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
@@ -213,6 +227,7 @@ async function apiPost(
         }
         return res;
       } catch (err) {
+        if (signal?.aborted) throw new DOMException(`${endpoint} withdrawn`, "AbortError");
         lastFailure = describeError(err);
         lastWasTimeout = isTimeout(err);
         // fetch rejects identically whether the request never left the machine or was
@@ -585,11 +600,12 @@ async function callSubsonicVoid(
   credential: NavidromeCredential,
   endpoint: string,
   extraParams: Record<string, string>,
-  altUrl?: string
+  altUrl?: string,
+  signal?: AbortSignal
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);
-  const res = await apiPost(baseUrl, endpoint, params, altUrl);
+  const res = await apiPost(baseUrl, endpoint, params, altUrl, signal);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
   const data = (await res.json()) as {
     "subsonic-response": { status: string; error?: { code?: number; message?: string } };
@@ -876,12 +892,15 @@ export function reportNowPlaying(
   username: string,
   credential: NavidromeCredential,
   nativeTrackId: string,
-  altUrl?: string
+  altUrl?: string,
+  signal?: AbortSignal
 ): Promise<void> {
+  // The retry ladder makes this report race the next track's: aborting `signal` when the
+  // track stops playing keeps a late retry from putting it back on the server.
   return callSubsonicVoid(baseUrl, username, credential, "scrobble.view", {
     id: nativeTrackId,
     submission: "false",
-  }, altUrl);
+  }, altUrl, signal);
 }
 
 export async function fetchAndStoreOpenSubsonicExtensions(

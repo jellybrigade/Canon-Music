@@ -32,6 +32,8 @@ interface ServerHealth {
   openUntil: number;
   openings: number;
   diagnosis: string | null;
+  /** A probe already reached the server during this streak, with nothing through since. */
+  excused: boolean;
 }
 
 const health = new Map<string, ServerHealth>();
@@ -44,6 +46,7 @@ function healthFor(baseUrl: string): ServerHealth {
     openUntil: 0,
     openings: 0,
     diagnosis: null,
+    excused: false,
   };
   cappedSet(health, baseUrl, fresh, MAX_TRACKED_SERVERS);
   return fresh;
@@ -55,6 +58,12 @@ export function resetTransportHealth(): void {
 
 export function recordTransportSuccess(baseUrl: string): void {
   health.delete(baseUrl);
+}
+
+/** A request refused without being sent because the breaker is open. It says nothing about
+ *  the record it was raised on, so a caller counting per-record failures must not count it. */
+export class TransportStalledError extends Error {
+  override name = "TransportStalledError";
 }
 
 function stalling(baseUrl: string): string {
@@ -71,8 +80,8 @@ export function transportStallNotice(baseUrl: string): string | null {
 }
 
 /** Records one request that spent its whole attempt ladder on timeouts. Returns the
- *  notice once the breaker is open, so the caller can put a cause in front of the user
- *  instead of a bare millisecond count. */
+ *  notice once the breaker is open, or the probe's reason for not opening it, so the caller
+ *  can put a cause in front of the user instead of a bare millisecond count. */
 export async function noteTransportTimeout(baseUrl: string): Promise<string | null> {
   const state = healthFor(baseUrl);
   // A stalled transport fails every in-flight request together, so all of them land here
@@ -81,7 +90,7 @@ export async function noteTransportTimeout(baseUrl: string): Promise<string | nu
   if (Date.now() < state.openUntil) return transportStallNotice(baseUrl);
 
   state.consecutiveTimeouts += 1;
-  const threshold = state.openings === 0 ? TRIP_AFTER_TIMEOUTS : 1;
+  const threshold = state.openings === 0 && !state.excused ? TRIP_AFTER_TIMEOUTS : 1;
   if (state.consecutiveTimeouts < threshold) return null;
 
   const cooldown =
@@ -94,11 +103,35 @@ export async function noteTransportTimeout(baseUrl: string): Promise<string | nu
   state.diagnosis = null;
 
   const opening = state.openings;
+  let excuse: string | null = null;
   const probing = probeNativeStack(baseUrl).then((probe) => {
-    if (state.openings === opening) state.diagnosis = describeStall(baseUrl, probe);
+    if (state.openings !== opening) return;
+    // Rust reaching the server in the same moment means the server and the network are up
+    // and one connection was lost, so the first such stall does not get to pause every
+    // request. Only the first: a webview that keeps timing out while Rust keeps getting
+    // through is the stalled-resolver case this breaker was written for.
+    if (!state.excused && probe !== null && answeredOk(probe)) {
+      state.excused = true;
+      state.openings -= 1;
+      state.openUntil = 0;
+      excuse = describeExcusedStall(baseUrl, probe);
+      return;
+    }
+    state.diagnosis = describeStall(baseUrl, probe);
   });
   await withinBudget(probing);
-  return transportStallNotice(baseUrl);
+  return excuse ?? transportStallNotice(baseUrl);
+}
+
+function answeredOk(probe: ServerProbe): boolean {
+  return probe.reachable && probe.status !== null && probe.status >= 200 && probe.status < 300;
+}
+
+function describeExcusedStall(baseUrl: string, probe: ServerProbe): string {
+  return (
+    `A request to ${baseUrl} timed out, but Canon's own network layer reached the server in ` +
+    `${Math.round(probe.elapsedMs)}ms, so it is up. The next request tries again.`
+  );
 }
 
 function withinBudget(work: Promise<void>): Promise<unknown> {
@@ -130,10 +163,10 @@ export function describeStall(baseUrl: string, probe: ServerProbe | null): strin
     // Anything that answers at all sets `reachable`, so a 404 from a wrong URL, a 502
     // from a proxy in front of a dead server and a 407 from an intercepting proxy would
     // all read as "the server is up" if the status were not asked about.
-    if (probe.status !== null && probe.status >= 200 && probe.status < 300) {
+    if (answeredOk(probe)) {
       return (
         `${prefix}, but Canon's own network layer reached it in ${ms}ms, so the server is up. ` +
-        "This machine's web HTTP stack is stalling: on Linux that is usually the desktop " +
+        "This machine's web HTTP stack keeps stalling: on Linux that is usually the desktop " +
         "proxy set to Automatic with no working PAC file, or a dead DNS server. Check the " +
         "system Network Proxy setting."
       );

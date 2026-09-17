@@ -54,6 +54,22 @@ Fixed unless marked OPEN.
   grep -n "testTimeout" vitest.config.ts src/test/appMount.ts
   pnpm test:run --reporter=verbose 2>&1 | grep -oE "[0-9]{4,}ms$" | sort -rn | head
   ```
+- **A real sleep inside a real debounce window is a race, not a wait.** Two search tests armed
+  the 200ms `?q` debounce, slept `DEBOUNCE_MS / 2` to sit "mid-window", then unmounted or
+  navigated and asserted no `?q` was written. Under `scripts/run-local-checks.sh`, which runs
+  the suite beside `cargo test` and clippy, the half-window sleep overran the whole window, the
+  write landed *before* the unmount, and `expected '/search?q=abba' to be '/search'` failed on a
+  correct component - a flake that reads as a product bug. Sleeping *past* a window is safe
+  (overrunning changes nothing); sleeping *inside* one is not, and no margin fixes it, because
+  the ceiling is set by whatever else the machine is doing. Fix: fake timers for the in-window
+  case, so real time cannot advance the debounce at all. In an `App`-mount suite, fake timers
+  also stall `waitFor`'s polling (30s timeout, a background normalizer waiting on real time), so
+  the navigation assertion there is a direct `expect` inside `act` rather than a `waitFor` - and
+  `vi.useRealTimers()` belongs in `afterEach`, since switching back mid-test drops the pending
+  fake timer the assertion depends on.
+  ```
+  grep -rn "setTimeout(r\|setTimeout(resolve" src --include='*.test.ts*' | grep -iE "/ ?2|debounce|window"
+  ```
 - **Self-registered listener state update isn't flushed by `act`.** Absence assertions need `waitFor`; presence self-corrects.
   ```
   grep -rn "toBeNull()" src --include='*.test.tsx' -B 3 | grep -A 3 "await act(async"

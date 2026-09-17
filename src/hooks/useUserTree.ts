@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import { canonicalKey, bustCanonTreeCache } from "../lib/canonicalize";
 import canonTreeData from "../assets/canon-tree.json";
@@ -153,24 +154,11 @@ export function useDeleteUserNode() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const db = await getDb();
-      const existing = await db.select<UserTreeNode[]>(
-        "SELECT * FROM user_tree_nodes WHERE id = ?",
-        [id]
-      );
-      if (!existing[0]) throw new Error("Node not found.");
+      // The changelog write, the mapping delete, the tag clear and the node delete pass
+      // through states the app cannot be started in, so they run as one transaction in Rust.
+      await invoke("delete_user_tree_node", { id, name });
 
-      await db.execute(
-        `INSERT INTO user_tree_changelog (node_id, node_name, action, before_json, after_json)
-         VALUES (?, ?, 'delete', ?, NULL)`,
-        [id, name, JSON.stringify(existing[0])]
-      );
-      // Clear any tag_mappings pointing to this node
-      await db.execute("DELETE FROM tag_mappings WHERE canonical_id = ?", [id]);
       invalidateManualMappings();
-      await db.execute("UPDATE track_tags SET canonical_id = NULL WHERE canonical_id = ?", [id]);
-      await db.execute("DELETE FROM user_tree_nodes WHERE id = ?", [id]);
-
       bustCanonTreeCache();
     },
     onSuccess: () => {

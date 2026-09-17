@@ -48,6 +48,7 @@ import {
 import { clearSyncWatermark, purgeServerData, purgeStrandedServers, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
+import { TransportStalledError } from "./transport-health";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -782,6 +783,26 @@ describe("clearSyncWatermark", () => {
     );
     expect(row?.server_version).toBe("0.63.0");
   });
+
+  it("forgets which albums the last pass read, for this server only", async () => {
+    seedServerRow(SRV);
+    serveLibrary([album("al-1", { songCount: 1 })], { "al-1": [track("t1", "al-1", { path: "/m/1.flac" })] });
+    mScanStatus.mockResolvedValue({ serverVersion: "0.64.0", lastScan: "2026-09-01T00:00:00Z", songCount: 1 });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(
+      `INSERT INTO albums (id, server_id, server_type, name, tracks_read_scan) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other', 'kept')`
+    );
+
+    await clearSyncWatermark(asDb(db()), SRV);
+
+    const rows = await db().select<{ id: string; tracks_read_scan: string | null }[]>(
+      "SELECT id, tracks_read_scan FROM albums ORDER BY id"
+    );
+    expect(rows).toEqual([
+      { id: `${SRV}:al-1`, tracks_read_scan: null },
+      { id: `${OTHER}:al-9`, tracks_read_scan: "kept" },
+    ]);
+  });
 });
 
 describe("syncLibrary forced track pass", () => {
@@ -1176,6 +1197,101 @@ describe("syncLibrary skip evidence", () => {
     expect(mAlbumTracks).toHaveBeenCalledTimes(1);
   });
 
+  describe("an interrupted track pass", () => {
+    const LIBRARY = Array.from({ length: 10 }, (_, i) => album(`al-${i}`, { songCount: 1 }));
+
+    /** A pass under STATUS that reads three albums and then hits the failure limit. */
+    async function interruptedPass(): Promise<void> {
+      seedServerRow();
+      mScanStatus.mockResolvedValue(STATUS);
+      mAllAlbums.mockResolvedValue(LIBRARY);
+      let call = 0;
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {
+        if (++call > 3) throw new Error("timed out");
+        return [track(`t-${albumId}`, albumId)];
+      });
+      expect((await syncLibrary(server(), CRED)).albumTracksIncomplete).toBe(true);
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => [track(`t-${albumId}`, albumId)]);
+    }
+
+    it("picks up where it stopped instead of starting over", async () => {
+      await interruptedPass();
+
+      const second = await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(7);
+      expect(second.skippedAlbums).toBe(3);
+      // The resumed half completes the pass, so the watermark may finally move.
+      expect((await storedWatermark())?.last_scan_at).toBe(STATUS.lastScan);
+    });
+
+    it("writes each album's progress in one statement per pass, not one per album", async () => {
+      await interruptedPass();
+      const writesBefore = db().queryLog.length;
+
+      await syncLibrary(server(), CRED);
+
+      const progressWrites = db()
+        .queryLog.slice(writesBefore)
+        .filter((q) => q.kind === "execute" && q.sql.includes("tracks_read_scan"));
+      expect(progressWrites.length).toBe(1);
+    });
+
+    it("starts over when the server identity moved since the interruption", async () => {
+      await interruptedPass();
+      mScanStatus.mockResolvedValue({ ...STATUS, lastScan: "2026-09-14T03:00:00Z" });
+
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+
+    it("still reads every album when the user asks for a resync", async () => {
+      await interruptedPass();
+
+      await syncLibrary(server(), CRED, undefined, { forceTrackPass: true });
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+
+    it("repeats an interrupted resync over the albums it never reached", async () => {
+      await interruptedPass();
+      await syncLibrary(server(), CRED);
+
+      await clearSyncWatermark(asDb(db()), SRV);
+      let call = 0;
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {
+        if (++call > 3) throw new Error("timed out");
+        return [track(`t-${albumId}`, albumId)];
+      });
+      expect(
+        (await syncLibrary(server(), CRED, undefined, { forceTrackPass: true })).albumTracksIncomplete
+      ).toBe(true);
+      mAlbumTracks.mockReset();
+      mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => [track(`t-${albumId}`, albumId)]);
+
+      // Stamps from the pass before the resync must not pass for the resync's own progress.
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(7);
+    });
+
+    it("does not let progress stand in for the id probe after a completed pass", async () => {
+      await interruptedPass();
+      await syncLibrary(server(), CRED);
+      mAlbumTracks.mockClear();
+
+      // Same identity, every album carries its stamp, and the ids still stopped resolving:
+      // the stamp says when an album was read, not that the ids read then are still good.
+      mSongExists.mockResolvedValue(false);
+      await syncLibrary(server(), CRED);
+
+      expect(mAlbumTracks).toHaveBeenCalledTimes(10);
+    });
+  });
+
   it("keeps the stored watermark when the scan status cannot be read", async () => {
     seedServerRow();
     mScanStatus.mockResolvedValue(STATUS);
@@ -1217,6 +1333,22 @@ describe("syncLibrary album track failures", () => {
     const result = await syncLibrary(server(), CRED);
     expect(mAlbumTracks).toHaveBeenCalledTimes(5);
     expect(result.failedAlbums).toBe(5);
+    expect(result.albumTracksIncomplete).toBe(true);
+  });
+
+  it("stops on an open breaker without counting its refusals as album failures", async () => {
+    mAllAlbums.mockResolvedValue(libraryOf(10));
+    let call = 0;
+    mAlbumTracks.mockImplementation(async () => {
+      call++;
+      if (call <= 2) throw new Error("getAlbum failed after 3 attempts: timed out after 12000ms");
+      throw new TransportStalledError("getAlbum not attempted: Requests to x are timing out.");
+    });
+    const result = await syncLibrary(server(), CRED);
+    // The refusal costs no time and names no album, so one is enough to stop, and it is
+    // not the fifth failure that would have blamed three albums the server never saw.
+    expect(mAlbumTracks).toHaveBeenCalledTimes(3);
+    expect(result.failedAlbums).toBe(2);
     expect(result.albumTracksIncomplete).toBe(true);
   });
 
@@ -1556,6 +1688,17 @@ describe("syncLibrary playlist stage", () => {
     expect(second.skippedStages).toEqual(["playlists"]);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM playlists ORDER BY id");
     expect(rows.map((r) => r.name)).toEqual(["Playlist pl-1", "Playlist pl-2"]);
+  });
+
+  it("reports a paused connection as a skipped stage, not as failed playlists", async () => {
+    await seedPlaylists();
+    mPlaylists.mockResolvedValue([pl("pl-1"), pl("pl-2")]);
+    mPlaylistTracks.mockRejectedValue(new TransportStalledError("getPlaylist not attempted"));
+    const second = await syncLibrary(server(), CRED);
+
+    expect(second.failedPlaylists).toBe(0);
+    expect(second.skippedStages).toEqual(["playlists"]);
+    expect(second.changed.playlists).toBe(false);
   });
 
   it("does not see another server's playlists", async () => {

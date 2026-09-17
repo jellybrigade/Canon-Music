@@ -150,6 +150,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   vi.clearAllMocks();
 });
@@ -301,12 +302,16 @@ describe("the /search route's cost", () => {
     // lands on wherever they went, tacking a query string onto a page that has no search.
     await mountApp(["/home", "/library"], 1);
     await openSearch();
+    // Measured inside the debounce window rather than past it, so real time cannot be slept
+    // through: a loaded machine can spend the whole 200ms getting from the keystroke to the
+    // navigation, and then the write this asserts against has already landed.
+    vi.useFakeTimers();
     fireEvent.change(searchInput()!, { target: { value: "abba" } });
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS / 2)); });
+    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS / 2); });
 
     await act(async () => { press("ArrowLeft", { altKey: true }); });
-    await waitFor(() => expect(url()).toBe("/library"));
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+    expect(url()).toBe("/library");
+    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS * 2); });
 
     expect(url()).toBe("/library");
   });

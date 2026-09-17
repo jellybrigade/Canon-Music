@@ -74,7 +74,7 @@ Every `.claude/rules/known-issues/` entry is a bug that shipped. Touching code n
 
 ## Status
 
-**v0.6.x active dev, schema v48.** Shipped: full incremental library sync + tag-issue scan, scrobble queue/flush, local tag normalization to canon tree, artist enrichment (`artist_identity`), `TagIssuesView`, shuffle re-seed on repeat-all wrap, queue reorder via Now Playing context menu (no DnD - `QueuePanel` removed in `44bad32`), OS media keys/MPRIS, Radio Auto-DJ, lyrics (LRClib + cache + synced scroll), settings redesign.
+**v0.6.x active dev, schema v51.** Shipped: full incremental library sync + tag-issue scan, scrobble queue/flush, local tag normalization to canon tree, artist enrichment (`artist_identity`), `TagIssuesView`, shuffle re-seed on repeat-all wrap, queue reorder via Now Playing context menu (no DnD - `QueuePanel` removed in `44bad32`), OS media keys/MPRIS, Radio Auto-DJ, lyrics (LRClib + cache + synced scroll), settings redesign.
 
 **Not scope:** writing tags to files (removed, redesign pending), AcoustID, sample-accurate gapless, streaming HTTP seek, package-manager distribution, MusicBrainz submission, light theme.
 

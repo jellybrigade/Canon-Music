@@ -32,6 +32,20 @@ Fixed unless marked OPEN.
   ```
   grep -rn "reachable" src src-tauri/src | grep -v '\.test\.'
   ```
+- **A diagnosis collected and used only for the message text is not a decision.** After two
+  timed-out ladders the breaker called `probe_server`, got `reachable: true, status: 200` in
+  94ms, wrote that into the notice, and opened anyway: every sync request for the next 15s was
+  refused against a server that had just answered, and the notice told the user to check a
+  desktop proxy setting that was fine. The probe was the one piece of evidence that the stall
+  was one lost connection rather than a stalled transport, and nothing branched on it. Fix: the
+  first 2xx probe in a streak excuses the stall and closes the breaker again, with a message
+  that says the server is up; a further timeout with nothing through since opens it as before,
+  since a webview that keeps timing out while Rust keeps getting through is exactly the PAC
+  stall above, and vetoing every time would bring back 37s per request. Ask of any check whose
+  result only reaches a string: would the code do anything different if it said the opposite?
+  ```
+  grep -rn "probe_server\|ServerProbe" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **WebKit's `err.stack` carries no message line, so logging the stack alone loses the error.** `logger.ts` stored `v.stack ?? v.message`, which on V8 opens with `Error: <message>` and on WebKitGTK - every shipped Canon build - is frames only. All 500 rows of `app_logs` read `Cn@tauri://localhost/assets/index-DO98X4Wg.js:430:23778` and nothing else, so a real user report of failing syncs could not be diagnosed from the logs at all, only from the surrounding message the call site happened to pass. Fix: `formatLogValue` puts `name: message` in front unless the stack already starts with it. Any place a browser API's output is stored rather than shown owes the question: is this the same string on the engine we actually ship?
   ```
   grep -rn "\.stack" src --include='*.ts*' | grep -v '\.test\.'

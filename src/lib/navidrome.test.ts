@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
-import { resetTransportHealth } from "./transport-health";
+import { resetTransportHealth, TransportStalledError } from "./transport-health";
 import {
   SubsonicError,
   addTrackToNavidromePlaylist,
@@ -23,6 +23,7 @@ import {
   fetchAllAlbums,
   fetchScanStatus,
   fetchStarred2,
+  reportNowPlaying,
   songExists,
   scrobbleTrack,
   setRating,
@@ -477,6 +478,75 @@ describe("non-idempotent endpoints", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("retries a now-playing report, which sets a state rather than appending a play", async () => {
+    // submission=false tells the server which track is on, the same shape of write as a
+    // star. Repeating it cannot double anything, and dropping it after one lost request
+    // leaves Navidrome saying nothing is playing for the rest of the track.
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1"))).rejects.toThrow(
+      "failed after 3 attempts"
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(body(0).get("submission")).toBe("false");
+  });
+
+  it("stops retrying a now-playing report once its track is no longer playing", async () => {
+    // A retry landing after the next track's report would put the old track back on the
+    // server for the rest of the new one.
+    const controller = new AbortController();
+    fetchMock.mockImplementation(() => {
+      controller.abort();
+      return Promise.reject(new TypeError("Load failed"));
+    });
+
+    await expect(
+      settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT, controller.signal))
+    ).rejects.toThrow();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cancels an in-flight now-playing report when its track stops playing", async () => {
+    const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+      requestSignal = init.signal as AbortSignal;
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+
+    const report = reportNowPlaying(BASE, "alice", cred, "tr-1", undefined, controller.signal).catch(
+      (e: Error) => e
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    controller.abort();
+
+    expect(requestSignal?.aborted).toBe(true);
+    await settle(report);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends a rejected now-playing report to the alt url", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT))).rejects.toThrow();
+
+    expect(urls()).toContain("http://192.168.1.5:4533/rest/scrobble.view");
+  });
+
+  it("still gives the play submission exactly one shot on the same endpoint", async () => {
+    // Both callers are scrobble.view; only the submission tells them apart.
+    fetchMock.mockRejectedValue(new TypeError("Load failed"));
+
+    await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000, ALT))).rejects.toThrow();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(body(0).get("submission")).toBe("true");
+  });
+
   it("matches the endpoint name with or without the .view suffix", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
@@ -788,7 +858,13 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     );
   }
 
+  /** The native stack failing too, which is what a stall worth pausing requests for looks like. */
+  function probeFails(): void {
+    onInvoke("probe_server", () => ({ reachable: false, status: null, elapsedMs: 8000, error: "timed out" }));
+  }
+
   it("stops spending 12s ladders once two in a row have timed out", async () => {
+    probeFails();
     neverAnswers();
 
     await expect(settle(fetchStarred2(BASE, "alice", cred), LADDER_MS)).rejects.toThrow();
@@ -804,6 +880,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     neverAnswers();
 
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
       LADDER_MS
@@ -814,6 +891,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   });
 
   it("names the endpoint it refused to attempt while the transport is stalled", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -821,9 +899,12 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     const err = (await fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)) as Error;
 
     expect(err.message).toContain("getStarred2");
+    // Typed, so a caller counting per-record failures can tell a refusal from a failure.
+    expect(err).toBeInstanceOf(TransportStalledError);
   });
 
   it("probes the native stack once, not once per failed attempt", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -872,7 +953,24 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
   });
 
+  it("keeps sending after a stall the native stack disproves", async () => {
+    neverAnswers();
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    const err = (await settle(
+      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
+      LADDER_MS
+    )) as Error;
+
+    fetchMock.mockImplementation(() => ok({ status: "ok", starred2: {} }));
+    await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
+
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(err.message).toContain("90ms");
+    expect(err.message).not.toContain("Network Proxy");
+  });
+
   it("lets a healed transport back in once the cooldown passes", async () => {
+    probeFails();
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
@@ -900,8 +998,9 @@ describe("what the transport breaker refuses to speak for", () => {
     );
   }
 
-  /** Two full ladders against BASE, which is what opens the breaker. */
+  /** Two full ladders against BASE with the native stack failing too, which opens the breaker. */
   async function stallBase(): Promise<void> {
+    onInvoke("probe_server", () => ({ reachable: false, status: null, elapsedMs: 8000, error: "timed out" }));
     neverAnswers();
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
     await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);

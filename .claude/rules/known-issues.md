@@ -17,6 +17,7 @@ Fixed unless marked OPEN.
 - "Load failed" ~25s = systemd-resolved, not Canon.
 - Two HTTP stacks also means two certificate stores.
 - "Something answered" is not "the right thing answered".
+- A diagnosis collected and used only for the message text is not a decision.
 
 ## Build / release pipeline - `known-issues/build.md`
 
@@ -44,6 +45,8 @@ Fixed unless marked OPEN.
 - Guard keyed on one error type != the broad condition.
 - A result from the previous key is still visible to the commit that switches the key.
 - A mounted flag cleared only in cleanup is false for good under StrictMode.
+- A one-shot report of live state is wrong from the moment the state moves.
+- An endpoint's idempotency can live in a parameter, not in its name.
 
 ## Test / harness - `known-issues/testing.md`
 
@@ -55,6 +58,7 @@ Fixed unless marked OPEN.
 - Shared mock `Response` breaks on double body read.
 - Fixed sleep pays ceiling every run; per-case rebuild pays per case.
 - A timeout ceiling set against an idle machine is measured against a busy one.
+- A real sleep inside a real debounce window is a race, not a wait.
 - Self-registered listener state update isn't flushed by `act`.
 
 ## Data / state - `known-issues/data.md`
@@ -100,11 +104,13 @@ Fixed unless marked OPEN.
 - Statement sequence with invalid intermediate states is a transaction.
 - One-direction version compare can't say "too new".
 - A counter fed by every request of one burst counts one event many times.
+- A refusal from a circuit breaker is not evidence about the record it was raised on.
 - Process-wide state for a per-server fact answers for servers it never saw.
 - A skip fast-path is only as good as a probe of the thing it skips.
 - A server-assigned id is a cache, not an identity.
 - A hand-kept list of the tables one id reaches is a list that goes stale.
 - Watermark upstream identity, not only per-row timestamps.
+- Progress recorded only when a pass completes means a pass that keeps failing never completes.
 - A 2xx body is not the type you asked for.
 - Transaction real only if statements share a connection.
 - A stand-in for a missing measurement must not be the value that binds the limit.
@@ -114,6 +120,7 @@ Fixed unless marked OPEN.
 - Global state holding server-scoped ids outlives the server that issued them.
 - Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.
 - An empty read and a broken button look the same to the user.
+- A fixed edit distance is a bigger share of a short key, and file order is not a tiebreak.
 
 ## UI - `known-issues/ui.md`
 
