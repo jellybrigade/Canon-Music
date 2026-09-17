@@ -5,6 +5,7 @@ import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
+import { sampleFromHead, seededShuffle } from "../lib/shuffle";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { useAlbums } from "../hooks/useAlbums";
@@ -69,6 +70,9 @@ interface ForYouCategoryConfig {
   enabled: boolean;
   customFilter?: ForYouCustomFilter;
 }
+
+/** Oldest-played albums a vault refresh draws from, so a refresh stays long-forgotten. */
+const VAULT_POOL_SIZE = 100;
 
 const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
   { key: "jump-back-in",     kicker: "Jump back in",     desc: "Recently played" },
@@ -191,20 +195,6 @@ function dedupePicks(candidates: SpotlightPick[], max: number): SpotlightPick[] 
     if (picks.length >= max) break;
   }
   return picks;
-}
-
-// Deterministic Fisher-Yates shuffle using a seed. Same seed = same order.
-function seededShuffle<T>(arr: T[], seed: number): T[] {
-  const result = [...arr];
-  let s = (seed ^ 0xdeadbeef) >>> 0;
-  for (let i = result.length - 1; i > 0; i--) {
-    s = Math.imul(s ^ (s >>> 17), 0x45d9f3b) >>> 0;
-    s = Math.imul(s ^ (s >>> 15), 0x45d9f3b) >>> 0;
-    s = (s ^ (s >>> 16)) >>> 0;
-    const j = s % (i + 1);
-    [result[i], result[j]] = [result[j]!, result[i]!];
-  }
-  return result;
 }
 
 function buildForYouGroups(
@@ -570,6 +560,12 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
               ))}
           {dropIndex === tabCount && <div className="foryou-v2-drop-line" />}
         </div>
+      </div>
+
+      <div className="foryou-v2-desc-row">
+        {descByKey[activeTabGroup.key] && (
+          <p className="foryou-v2-desc">{descByKey[activeTabGroup.key]}</p>
+        )}
         <div className="foryou-v2-tabs__actions">
           <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
             <RefreshCw size={14} />
@@ -637,10 +633,6 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           )}
           <button type="submit" className="foryou-v2-add-form__submit">Add</button>
         </form>
-      )}
-
-      {descByKey[activeTabGroup.key] && (
-        <p className="foryou-v2-desc">{descByKey[activeTabGroup.key]}</p>
       )}
 
       <div className="foryou-v2-grid" role="tabpanel">
@@ -725,6 +717,7 @@ interface AlbumCarouselProps {
   playAlbum: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   onRadio?: () => void;
+  onRefresh?: () => void;
 }
 
 /** Card stride is measured off the DOM rather than hardcoded: the card width and the
@@ -737,7 +730,7 @@ function cardStride(track: HTMLDivElement): number {
   return card.offsetWidth + gap;
 }
 
-function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio }: AlbumCarouselProps) {
+function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio, onRefresh }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
@@ -780,6 +773,11 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
       <div className="home-section__header">
         <h2 className="home-section__title">{title}</h2>
         {subtitle && <p className="home-section__subtitle">{subtitle}</p>}
+        {onRefresh && (
+          <button className="home-section__refresh-btn" onClick={onRefresh} aria-label={`Refresh ${title}`} title="Refresh">
+            <RefreshCw size={13} />
+          </button>
+        )}
         {onRadio && (
           <button className="home-section__radio-btn" onClick={onRadio} aria-label={`Start ${title} radio`} title="Start radio">
             <Radio size={13} />
@@ -849,6 +847,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
+  const [vaultSeed, setVaultSeed] = useState(0);
+  const refreshVault = useCallback(() => setVaultSeed(s => s + 1), []);
 
   const [rawCategoryConfig, setRawCategoryConfig] = useSetting("for_you_categories", DEFAULT_FOR_YOU_CONFIG_JSON);
   const categoryConfig = useMemo<ForYouCategoryConfig[]>(() => {
@@ -1013,7 +1013,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   );
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
-  const vaultItems = useMemo(() => vault.slice(0, 20) as AlbumRow[], [vault]);
+  const vaultItems = useMemo(() => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[], [vault, vaultSeed]);
 
   const featuredGenres = recentGenres;
 
@@ -1163,7 +1163,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} isLoading={recentlyReleasedLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" onRefresh={refreshVault} items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
         </>
       )}
       {contextMenu && (
