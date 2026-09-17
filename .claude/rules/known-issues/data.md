@@ -145,6 +145,20 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^(let|const) \w+ = (0|new Map|new Set)" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A refusal from a circuit breaker is not evidence about the record it was raised on.**
+  Two real stalls opened the transport breaker, and the album pass counted the next five
+  requests it refused in zero milliseconds as album failures, hit its consecutive-failure
+  limit and quit. Every partial sync said "failed to fetch tracks for 5 albums" whatever the
+  library held: the 5 was `CONSECUTIVE_FAILURE_LIMIT`, not anything the server did. The
+  playlist stage did the same to `failedPlaylists`. Fix: `apiPost` throws
+  `TransportStalledError` for a refusal, the album pass stops on the first one without
+  counting it, and the playlist stage still skips its write but counts no playlist. Ask of
+  any per-record failure counter behind a shared gate: did this record fail, or was it never
+  tried?
+  ```
+  grep -rn "Failures++\|failed\w*++" src/lib src/hooks --include='*.ts*' | grep -v '\.test\.'
+  grep -rn "transportStallNotice\|TransportStalledError" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Process-wide state for a per-server fact answers for servers it never saw.** The breaker was one global set of counters, so a stall against one Navidrome failed requests to a different one, and did it with a message naming an address that caller never asked about. Same shape as the `server_id` scoping rule one row up, applied to memory instead of SQL: state about a server is keyed by that server. Its self-healing path also needs an exemption, so `ping.view` always gets its ladder and Settings can re-test.
   ```
   grep -rnE "^(let|const) \w+(: [^=]+)? = " src/lib --include='*.ts*' | grep -v '\.test\.' | grep -vE "=>|function|\[\]|\bnew (RegExp|URL)\b"

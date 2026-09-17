@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
-import { resetTransportHealth } from "./transport-health";
+import { resetTransportHealth, TransportStalledError } from "./transport-health";
 import {
   SubsonicError,
   addTrackToNavidromePlaylist,
@@ -854,6 +854,8 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     const err = (await fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)) as Error;
 
     expect(err.message).toContain("getStarred2");
+    // Typed, so a caller counting per-record failures can tell a refusal from a failure.
+    expect(err).toBeInstanceOf(TransportStalledError);
   });
 
   it("probes the native stack once, not once per failed attempt", async () => {

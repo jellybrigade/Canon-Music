@@ -48,6 +48,7 @@ import {
 import { clearSyncWatermark, purgeServerData, purgeStrandedServers, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../test/navidromeFixtures";
+import { TransportStalledError } from "./transport-health";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -1220,6 +1221,22 @@ describe("syncLibrary album track failures", () => {
     expect(result.albumTracksIncomplete).toBe(true);
   });
 
+  it("stops on an open breaker without counting its refusals as album failures", async () => {
+    mAllAlbums.mockResolvedValue(libraryOf(10));
+    let call = 0;
+    mAlbumTracks.mockImplementation(async () => {
+      call++;
+      if (call <= 2) throw new Error("getAlbum failed after 3 attempts: timed out after 12000ms");
+      throw new TransportStalledError("getAlbum not attempted: Requests to x are timing out.");
+    });
+    const result = await syncLibrary(server(), CRED);
+    // The refusal costs no time and names no album, so one is enough to stop, and it is
+    // not the fifth failure that would have blamed three albums the server never saw.
+    expect(mAlbumTracks).toHaveBeenCalledTimes(3);
+    expect(result.failedAlbums).toBe(2);
+    expect(result.albumTracksIncomplete).toBe(true);
+  });
+
   it("keeps going after four consecutive failures", async () => {
     mAllAlbums.mockResolvedValue(libraryOf(10));
     let call = 0;
@@ -1556,6 +1573,17 @@ describe("syncLibrary playlist stage", () => {
     expect(second.skippedStages).toEqual(["playlists"]);
     const rows = await db().select<{ name: string }[]>("SELECT name FROM playlists ORDER BY id");
     expect(rows.map((r) => r.name)).toEqual(["Playlist pl-1", "Playlist pl-2"]);
+  });
+
+  it("reports a paused connection as a skipped stage, not as failed playlists", async () => {
+    await seedPlaylists();
+    mPlaylists.mockResolvedValue([pl("pl-1"), pl("pl-2")]);
+    mPlaylistTracks.mockRejectedValue(new TransportStalledError("getPlaylist not attempted"));
+    const second = await syncLibrary(server(), CRED);
+
+    expect(second.failedPlaylists).toBe(0);
+    expect(second.skippedStages).toEqual(["playlists"]);
+    expect(second.changed.playlists).toBe(false);
   });
 
   it("does not see another server's playlists", async () => {

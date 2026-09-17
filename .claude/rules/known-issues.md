@@ -103,6 +103,7 @@ Fixed unless marked OPEN.
 - Statement sequence with invalid intermediate states is a transaction.
 - One-direction version compare can't say "too new".
 - A counter fed by every request of one burst counts one event many times.
+- A refusal from a circuit breaker is not evidence about the record it was raised on.
 - Process-wide state for a per-server fact answers for servers it never saw.
 - A skip fast-path is only as good as a probe of the thing it skips.
 - A server-assigned id is a cache, not an identity.

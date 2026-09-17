@@ -4,6 +4,7 @@ import {
   noteTransportTimeout,
   recordTransportSuccess,
   transportStallNotice,
+  TransportStalledError,
 } from "./transport-health";
 
 let _streamMaxBitrate = 0;
@@ -198,7 +199,7 @@ async function apiPost(
   // Health is per server: one stalled server must not speak for another, least of all
   // in a message that names an address the caller never asked about.
   const stalled = isLivenessCheck(endpoint) ? null : transportStallNotice(server);
-  if (stalled) throw new Error(`${endpoint} not attempted: ${stalled}`);
+  if (stalled) throw new TransportStalledError(`${endpoint} not attempted: ${stalled}`);
 
   let lastFailure = "unknown error";
   let lastWasTimeout = false;

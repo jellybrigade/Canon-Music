@@ -12,6 +12,7 @@ import { runPool } from "./async-pool";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../db/track-id-tables";
 import { planTrackIdRemap } from "./track-remap";
 import type { TrackIdRemap } from "./track-remap";
+import { TransportStalledError } from "./transport-health";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -691,6 +692,11 @@ export async function syncLibrary(
       tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
       consecutiveFailures = 0;
     } catch (err) {
+      if (err instanceof TransportStalledError) {
+        console.error(`sync: stopping the album pass early, the connection is paused: ${err.message}`);
+        albumTracksIncomplete = true;
+        break;
+      }
       console.error(`sync: failed to fetch tracks for album "${album.name}" (${album.id}):`, err);
       failedAlbums++;
       consecutiveFailures++;
@@ -858,7 +864,7 @@ export async function syncLibrary(
         // stage is pushed once regardless rather than relying on that.
         if (!playlistWritesBlocked) skippedStages.push("playlists");
         playlistWritesBlocked = true;
-        failedPlaylists++;
+        if (!(err instanceof TransportStalledError)) failedPlaylists++;
       }
     },
     { concurrency: 4 }

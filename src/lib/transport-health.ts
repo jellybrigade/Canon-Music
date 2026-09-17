@@ -57,6 +57,12 @@ export function recordTransportSuccess(baseUrl: string): void {
   health.delete(baseUrl);
 }
 
+/** A request refused without being sent because the breaker is open. It says nothing about
+ *  the record it was raised on, so a caller counting per-record failures must not count it. */
+export class TransportStalledError extends Error {
+  override name = "TransportStalledError";
+}
+
 function stalling(baseUrl: string): string {
   return `Requests to ${baseUrl} are timing out`;
 }
