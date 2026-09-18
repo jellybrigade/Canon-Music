@@ -328,6 +328,21 @@ Fixed unless marked OPEN.
   ```
   grep -rn "levenshtein(\|similarity(" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A lookup miss skipped with `continue` deletes the user's own data without a word.**
+  Deleting a custom genre cleared `tag_mappings` and `track_tags` but left `album_user_genres`
+  naming the dead id, and `normalizeAlbum` skipped any user genre whose node it could not find:
+  the genre vanished from every album it was on, with no `album_genres` row, no unresolved row,
+  nothing in TagsView Review or Cleanup to find it by. A manual mapping pointing at a dead id did
+  the same through an `if (node && ...)` with no `else`. Fix: the delete clears every table
+  holding the node's `canonical_id` (the album genres, exclusions and derived `album_genres` too,
+  since nothing re-normalizes after a delete), and `resolveGenreTags` sends a missing node to
+  unmapped. Only the missing node reports: a duplicate or an excluded id stays silent, because
+  that drop is the user's own decision. Ask of any `continue` after a lookup: was the value
+  meant to be skipped, or did the thing it points at disappear?
+  ```
+  grep -rn "byId.get(" src --include='*.ts*' -A1 | grep -v '\.test\.' | grep "continue\|if (node &&"
+  python3 -c "import re;s=open('src/db/migrations.ts').read();print(sorted({m.group(1) for m in re.finditer(r'CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\(([^;]*?)\);',s,re.S) if 'canonical_id' in m.group(2)}))"; grep -n "canonical_id = ?" src-tauri/src/library_write.rs
+  ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.

@@ -140,7 +140,7 @@ fn delete_user_node(conn: &mut Connection, id: &str, name: &str) -> Result<(), S
         rusqlite::params![id, name, before.to_string()],
     )
     .map_err(|e| e.to_string())?;
-    // Between these three the tree still holds a node nothing maps to, and then tags
+    // Between these statements the tree still holds a node nothing maps to, and then tags
     // pointing at a node that is gone. Neither is a state the app can be started in.
     tx.execute("DELETE FROM tag_mappings WHERE canonical_id = ?", [id])
         .map_err(|e| e.to_string())?;
@@ -149,6 +149,15 @@ fn delete_user_node(conn: &mut Connection, id: &str, name: &str) -> Result<(), S
         [id],
     )
     .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM album_user_genres WHERE canonical_id = ?", [id])
+        .map_err(|e| e.to_string())?;
+    tx.execute(
+        "DELETE FROM album_genre_exclusions WHERE canonical_id = ?",
+        [id],
+    )
+    .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM album_genres WHERE canonical_id = ?", [id])
+        .map_err(|e| e.to_string())?;
     tx.execute("DELETE FROM user_tree_nodes WHERE id = ?", [id])
         .map_err(|e| e.to_string())?;
     tx.commit().map_err(|e| e.to_string())
@@ -712,6 +721,13 @@ mod tests {
           canonical_id TEXT NOT NULL, PRIMARY KEY (raw_value, kind));
         CREATE TABLE track_tags (id INTEGER PRIMARY KEY AUTOINCREMENT, track_id TEXT NOT NULL,
           kind TEXT NOT NULL, raw_value TEXT NOT NULL, canonical_id TEXT, source TEXT NOT NULL);
+        CREATE TABLE album_user_genres (album_id TEXT NOT NULL, canonical_id TEXT NOT NULL,
+          name TEXT NOT NULL, PRIMARY KEY (album_id, canonical_id));
+        CREATE TABLE album_genre_exclusions (album_id TEXT NOT NULL, canonical_id TEXT NOT NULL,
+          PRIMARY KEY (album_id, canonical_id));
+        CREATE TABLE album_genres (album_id TEXT NOT NULL, canonical_id TEXT NOT NULL,
+          relation TEXT NOT NULL, section TEXT, name TEXT NOT NULL,
+          PRIMARY KEY (album_id, canonical_id));
     ";
 
     fn user_tree_conn() -> Connection {
@@ -723,7 +739,13 @@ mod tests {
              INSERT INTO tag_mappings VALUES ('Doom-Jazz', 'genre', 'user:doom');
              INSERT INTO tag_mappings VALUES ('Sludgy', 'genre', 'user:keep');
              INSERT INTO track_tags VALUES (1, 't1', 'genre', 'Doom-Jazz', 'user:doom', 'server');
-             INSERT INTO track_tags VALUES (2, 't2', 'genre', 'Sludgy', 'user:keep', 'server');",
+             INSERT INTO track_tags VALUES (2, 't2', 'genre', 'Sludgy', 'user:keep', 'server');
+             INSERT INTO album_user_genres VALUES ('a1', 'user:doom', 'Doom Jazz');
+             INSERT INTO album_user_genres VALUES ('a1', 'user:keep', 'Sludge');
+             INSERT INTO album_genre_exclusions VALUES ('a2', 'user:doom');
+             INSERT INTO album_genre_exclusions VALUES ('a2', 'user:keep');
+             INSERT INTO album_genres VALUES ('a1', 'user:doom', 'direct', 'genres', 'Doom Jazz');
+             INSERT INTO album_genres VALUES ('a1', 'user:keep', 'direct', 'genres', 'Sludge');",
         )
         .expect("seed");
         conn
@@ -765,6 +787,58 @@ mod tests {
             scalar_count(
                 &conn,
                 "SELECT COUNT(*) FROM track_tags WHERE canonical_id IS NULL"
+            ),
+            1
+        );
+    }
+
+    #[test]
+    fn deleting_a_user_node_clears_every_album_row_naming_it() {
+        let mut conn = user_tree_conn();
+
+        delete_user_node(&mut conn, "user:doom", "Doom Jazz").expect("delete");
+
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_user_genres WHERE canonical_id = 'user:doom'"
+            ),
+            0,
+            "an album genre naming a deleted node vanishes from normalization"
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_genre_exclusions WHERE canonical_id = 'user:doom'"
+            ),
+            0
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_genres WHERE canonical_id = 'user:doom'"
+            ),
+            0,
+            "nothing re-normalizes the album, so a derived row would keep painting the dead genre"
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_genres WHERE canonical_id = 'user:keep'"
+            ),
+            1
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_user_genres WHERE canonical_id = 'user:keep'"
+            ),
+            1
+        );
+        assert_eq!(
+            scalar_count(
+                &conn,
+                "SELECT COUNT(*) FROM album_genre_exclusions WHERE canonical_id = 'user:keep'"
             ),
             1
         );

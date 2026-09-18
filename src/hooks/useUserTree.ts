@@ -154,7 +154,7 @@ export function useDeleteUserNode() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      // The changelog write, the mapping delete, the tag clear and the node delete pass
+      // The changelog write, the mapping, tag and album-genre clears and the node delete pass
       // through states the app cannot be started in, so they run as one transaction in Rust.
       await invoke("delete_user_tree_node", { id, name });
 

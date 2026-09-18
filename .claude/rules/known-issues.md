@@ -101,6 +101,7 @@ Fixed unless marked OPEN.
 - Secret written before owning row outlives the row.
 - Cleanup treating "already gone" as failure = permanent mess.
 - "Just finished" test built from restore-shared state fires at startup too.
+- A lookup miss skipped with `continue` deletes the user's own data without a word.
 - Statement sequence with invalid intermediate states is a transaction.
 - One-direction version compare can't say "too new".
 - A counter fed by every request of one burst counts one event many times.

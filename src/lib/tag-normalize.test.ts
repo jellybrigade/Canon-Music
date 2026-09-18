@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isStale, isYearLikeGenre, type NormalizedTags } from "./tag-normalize";
+import { isStale, isYearLikeGenre, resolveGenreTags, type NormalizedTags } from "./tag-normalize";
+import { canonicalKey, type CanonTree, type TreeNode } from "./canonicalize";
 
 describe("isYearLikeGenre", () => {
   it("matches a four-digit decade with trailing s", () => {
@@ -70,5 +71,82 @@ describe("isStale", () => {
     const computedAt = Math.floor(Date.now() / 1000) - 2 * 24 * 60 * 60;
     expect(isStale(tagsAt(computedAt), 1)).toBe(true);
     expect(isStale(tagsAt(computedAt), 3)).toBe(false);
+  });
+});
+
+describe("resolveGenreTags", () => {
+  const rock: TreeNode = { id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [] };
+  const jazz: TreeNode = { id: "jazz", name: "Jazz", type: "genre", canonical_key: "jazz", parents: [] };
+
+  function treeOf(nodes: TreeNode[]): CanonTree {
+    const byId = new Map(nodes.map((n) => [n.id, n]));
+    const byKey = new Map(nodes.map((n) => [n.canonical_key, n]));
+    return {
+      nodes,
+      byKey,
+      byId,
+      nodesByKind: new Map([["genre", nodes]]),
+      byKindAndKey: new Map([["genre", byKey]]),
+    };
+  }
+
+  function resolve(over: Partial<Parameters<typeof resolveGenreTags>[0]>) {
+    return resolveGenreTags({
+      tree: treeOf([rock, jazz]),
+      userGenres: [],
+      entries: [],
+      manualMap: new Map(),
+      excludedIds: new Set(),
+      ...over,
+    });
+  }
+
+  it("maps a user genre whose node exists as a manual tag", () => {
+    const { mapped, unmapped } = resolve({ userGenres: [{ canonical_id: "rock", name: "Rock" }] });
+    expect(mapped).toEqual([{ id: "rock", name: "Rock", source: "manual", confidence: 1.0 }]);
+    expect(unmapped).toEqual([]);
+  });
+
+  it("reports a user genre whose node is gone as unmapped instead of dropping it", () => {
+    const { mapped, unmapped } = resolve({ userGenres: [{ canonical_id: "user:gone", name: "Doom Jazz" }] });
+    expect(mapped).toEqual([]);
+    expect(unmapped).toEqual([{ id: null, name: "Doom Jazz", source: "manual", confidence: 1.0 }]);
+  });
+
+  it("drops a duplicate user genre silently", () => {
+    const { mapped, unmapped } = resolve({
+      userGenres: [
+        { canonical_id: "rock", name: "Rock" },
+        { canonical_id: "rock", name: "Rock" },
+      ],
+    });
+    expect(mapped.length).toBe(1);
+    expect(unmapped).toEqual([]);
+  });
+
+  it("reports a tag manually mapped to a node that is gone as unmapped", () => {
+    const { mapped, unmapped } = resolve({
+      entries: [{ name: "Doom-Jazz", source: "file" }],
+      manualMap: new Map([[canonicalKey("Doom-Jazz"), "user:gone"]]),
+    });
+    expect(mapped).toEqual([]);
+    expect(unmapped).toEqual([{ id: null, name: "Doom-Jazz", source: "file", confidence: 1.0 }]);
+  });
+
+  it("keeps a manual mapping to an excluded or already-seen node silent", () => {
+    const { mapped, unmapped } = resolve({
+      userGenres: [{ canonical_id: "rock", name: "Rock" }],
+      entries: [
+        { name: "Rawk", source: "file" },
+        { name: "Jazzy", source: "lastfm" },
+      ],
+      manualMap: new Map([
+        [canonicalKey("Rawk"), "rock"],
+        [canonicalKey("Jazzy"), "jazz"],
+      ]),
+      excludedIds: new Set(["jazz"]),
+    });
+    expect(mapped.map((t) => t.id)).toEqual(["rock"]);
+    expect(unmapped).toEqual([]);
   });
 });

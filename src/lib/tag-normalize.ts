@@ -1,5 +1,5 @@
 import { getDb } from "../db";
-import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds } from "./canonicalize";
+import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds, type CanonTree } from "./canonicalize";
 import { bucketize } from "./tag-buckets";
 import { fetchAlbumTags, fetchArtistGenreTags } from "./lastfm";
 import { getMinFolksonomyCount } from "./musicbrainz";
@@ -81,6 +81,67 @@ export function isStale(tags: NormalizedTags | null, staleDays = STALE_DAYS_DEFA
 }
 
 const inFlightPromises = new Map<string, Promise<NormalizedTags>>();
+
+export interface GenreResolutionInput {
+  tree: CanonTree;
+  userGenres: { canonical_id: string; name: string }[];
+  entries: { name: string; source: TagSource }[];
+  manualMap: Map<string, string>;
+  excludedIds: Set<string>;
+}
+
+export function resolveGenreTags({ tree, userGenres, entries, manualMap, excludedIds }: GenreResolutionInput): {
+  mapped: NormalizedTag[];
+  unmapped: NormalizedTag[];
+} {
+  const seenIds = new Set<string>();
+  const mapped: NormalizedTag[] = [];
+  const unmapped: NormalizedTag[] = [];
+
+  // User-entered genres take highest priority, injected first so seenIds blocks duplicates
+  for (const row of userGenres) {
+    const node = tree.byId.get(row.canonical_id);
+    if (!node) {
+      unmapped.push({ id: null, name: row.name, source: "manual", confidence: 1.0 });
+      continue;
+    }
+    if (seenIds.has(node.id)) continue;
+    seenIds.add(node.id);
+    mapped.push({ id: node.id, name: node.name, source: "manual", confidence: 1.0 });
+  }
+
+  for (const entry of entries) {
+    const manualId = manualMap.get(canonicalKey(entry.name));
+    const confidence =
+      entry.source === "file" ? 1.0
+      : entry.source === "lastfm" ? 0.8
+      : entry.source === "musicbrainz" ? 0.7
+      : 0.6;
+
+    if (manualId === "__ignored__") continue;
+
+    if (manualId && manualId !== "__accepted__") {
+      // Manual mapping overrides auto tree-matching
+      const node = tree.byId.get(manualId);
+      if (!node) {
+        unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
+      } else if (!seenIds.has(node.id) && !excludedIds.has(node.id)) {
+        seenIds.add(node.id);
+        mapped.push({ id: node.id, name: node.name, source: entry.source, confidence });
+      }
+    } else {
+      const match = findCanonicalSync(entry.name, "genre", tree);
+      if (match.node && !seenIds.has(match.node.id) && !excludedIds.has(match.node.id)) {
+        seenIds.add(match.node.id);
+        mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
+      } else if (!match.node) {
+        unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
+      }
+    }
+  }
+
+  return { mapped, unmapped };
+}
 
 export async function normalizeAlbum(
   albumId: string,
@@ -265,50 +326,18 @@ async function _doNormalizeAlbum(
   );
   const excludedIds = new Set(exclusionRows.map((r) => r.canonical_id));
 
-  const seenIds = new Set<string>();
-  const mapped: NormalizedTag[] = [];
-  const unmapped: NormalizedTag[] = [];
-
-  // User-entered genres take highest priority, injected first so seenIds blocks duplicates
   type UserGenreRow = { canonical_id: string; name: string };
   const userGenreRows = await db.select<UserGenreRow[]>(
     "SELECT canonical_id, name FROM album_user_genres WHERE album_id = ?",
     [albumId]
   );
-  for (const row of userGenreRows) {
-    const node = tree.byId.get(row.canonical_id);
-    if (!node || seenIds.has(node.id)) continue;
-    seenIds.add(node.id);
-    mapped.push({ id: node.id, name: node.name, source: "manual", confidence: 1.0 });
-  }
-
-  for (const entry of byKey.values()) {
-    const manualId = manualMap.get(canonicalKey(entry.name));
-    const confidence =
-      entry.source === "file" ? 1.0
-      : entry.source === "lastfm" ? 0.8
-      : entry.source === "musicbrainz" ? 0.7
-      : 0.6;
-
-    if (manualId === "__ignored__") continue;
-
-    if (manualId && manualId !== "__accepted__") {
-      // Manual mapping overrides auto tree-matching
-      const node = tree.byId.get(manualId);
-      if (node && !seenIds.has(node.id) && !excludedIds.has(node.id)) {
-        seenIds.add(node.id);
-        mapped.push({ id: node.id, name: node.name, source: entry.source, confidence });
-      }
-    } else {
-      const match = findCanonicalSync(entry.name, "genre", tree);
-      if (match.node && !seenIds.has(match.node.id) && !excludedIds.has(match.node.id)) {
-        seenIds.add(match.node.id);
-        mapped.push({ id: match.node.id, name: match.node.name, source: entry.source, confidence });
-      } else if (!match.node) {
-        unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
-      }
-    }
-  }
+  const { mapped, unmapped } = resolveGenreTags({
+    tree,
+    userGenres: userGenreRows,
+    entries: [...byKey.values()],
+    manualMap,
+    excludedIds,
+  });
 
   const buckets = bucketize(mapped.map((t) => t.id!), tree);
 
