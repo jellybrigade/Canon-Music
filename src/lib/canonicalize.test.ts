@@ -16,6 +16,7 @@ function node(over: Partial<TreeNode> & { id: string; name: string }): TreeNode 
     type: "genre",
     canonical_key: canonicalKey(over.name),
     parents: [],
+    sections: ["genres"],
     ...over,
   };
 }

@@ -6,9 +6,9 @@
  * Output: src/assets/canon-tree.json (or stdout with --stdout)
  * Flags:  --input <txt>, --custom <json> override the two inputs
  *
- * Node format: { id, name, type, canonical_key, parents, section }
+ * Node format: { id, name, type, canonical_key, parents, sections }
  *   type: "genre" | "mood" | "category"
- *   section: "genres" | "descriptors" | "scenes-and-movements"
+ *   sections: every section the node appears under, in SECTION_ORDER
  *   parents: direct parent ids (empty for top-level nodes)
  */
 
@@ -34,6 +34,15 @@ const SECTION_SLUGS = {
   Genres: "genres",
   "Scenes & Movements": "scenes-and-movements",
 };
+
+// Fixed rather than file order, so a re-scrape that reorders the sections changes nothing.
+const SECTION_ORDER = ["genres", "descriptors", "scenes-and-movements"];
+
+function addSection(node, section) {
+  if (node.sections.includes(section)) return;
+  node.sections.push(section);
+  node.sections.sort((a, b) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b));
+}
 
 function slugify(name) {
   return name
@@ -120,6 +129,7 @@ for (const raw of lines) {
     if (existing.type === "category" && type !== "category") {
       existing.type = type;
     }
+    addSection(existing, currentSection);
     // Push to stack so its children use it as parent
     stack.push({ depth, id, name });
   } else {
@@ -129,7 +139,7 @@ for (const raw of lines) {
       type,
       canonical_key: canonicalKey(name),
       parents: parentId ? [parentId] : [],
-      section: currentSection,
+      sections: [currentSection],
     };
     nodesById.set(id, node);
     stack.push({ depth, id, name });

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { bucketize } from "./tag-buckets";
 import type { CanonTree, NodeSection, TreeNode } from "./canonicalize";
 
-function node(id: string, section?: NodeSection): TreeNode {
-  return { id, name: id, type: "genre", canonical_key: id, parents: [], section };
+function node(id: string, ...sections: NodeSection[]): TreeNode {
+  return { id, name: id, type: "genre", canonical_key: id, parents: [], sections };
 }
 
 /** Only `byId` is read by bucketize, so the rest of the tree is left empty on purpose. */
@@ -23,6 +23,7 @@ describe("bucketize", () => {
     node("melancholic", "descriptors"),
     node("shoegaze-revival", "scenes-and-movements"),
     node("no-section-node"),
+    node("choral", "genres", "descriptors"),
   ]);
 
   it("sorts each id into the bucket named by its section", () => {
@@ -31,6 +32,10 @@ describe("bucketize", () => {
       descriptors: ["melancholic"],
       scenes: ["shoegaze-revival"],
     });
+  });
+
+  it("files a node listed in two sections into both buckets", () => {
+    expect(bucketize(["choral"], t)).toEqual({ genres: ["choral"], descriptors: ["choral"], scenes: [] });
   });
 
   it("drops ids the tree does not know", () => {

@@ -108,7 +108,7 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
               }}
             >
               <span className="tags-option-name">{n.name}</span>
-              <span className="tags-option-section">{n.section ?? n.type}</span>
+              <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
             </button>
           ))}
           {canCreate && (

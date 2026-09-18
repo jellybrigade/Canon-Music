@@ -12,7 +12,7 @@ export interface TreeNode {
   type: string;
   canonical_key: string;
   parents: string[];
-  section?: NodeSection;
+  sections: NodeSection[];
 }
 
 export interface CanonTree {
@@ -54,7 +54,7 @@ export async function getCanonTree(): Promise<CanonTree> {
       type: r.type,
       canonical_key: r.canonical_key,
       parents: JSON.parse(r.parent_ids) as string[],
-      section,
+      sections: section ? [section] : [],
     };
   });
 

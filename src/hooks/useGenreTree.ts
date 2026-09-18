@@ -7,11 +7,25 @@ export interface GenreTreeData {
   nodeById: Map<string, TreeNode>;
   childrenById: Map<string, string[]>;
   countById: Map<string, number>;
-  // Root node ids (empty parents or all parents have count 0) keyed by section
+  // Per section: node ids with no parent that both has albums and is listed in that section
   rootsBySection: Record<NodeSection, string[]>;
 }
 
 let cachedData: GenreTreeData | null = null;
+
+export function sectionRoots(liveNodes: TreeNode[]): Record<NodeSection, string[]> {
+  const sectionsById = new Map(liveNodes.map((n) => [n.id, n.sections]));
+  const sorted = [...liveNodes].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  const rootsOf = (section: NodeSection) =>
+    sorted
+      .filter((n) => n.sections.includes(section) && n.parents.every((p) => !sectionsById.get(p)?.includes(section)))
+      .map((n) => n.id);
+  return {
+    genres: rootsOf("genres"),
+    descriptors: rootsOf("descriptors"),
+    "scenes-and-movements": rootsOf("scenes-and-movements"),
+  };
+}
 
 export function invalidateGenreTreeCache(): void {
   cachedData = null;
@@ -61,24 +75,7 @@ async function buildGenreTree(): Promise<GenreTreeData> {
     });
   }
 
-  // Roots per section: nodes in that section whose parents are all absent from liveIds
-  const SECTIONS: NodeSection[] = ["genres", "descriptors", "scenes-and-movements"];
-  const rootsBySection = {} as Record<NodeSection, string[]>;
-  for (const section of SECTIONS) {
-    const roots = liveNodes
-      .filter(
-        (n) =>
-          (n.section === section || n.section === undefined) &&
-          (n.parents.length === 0 || n.parents.every((p) => !liveIds.has(p)))
-      )
-      .map((n) => n.id)
-      .sort((a, b) => {
-        const na = nodeById.get(a)?.name ?? "";
-        const nb = nodeById.get(b)?.name ?? "";
-        return na.localeCompare(nb, undefined, { sensitivity: "base" });
-      });
-    rootsBySection[section] = roots;
-  }
+  const rootsBySection = sectionRoots(liveNodes);
 
   cachedData = { nodeById, childrenById, countById, rootsBySection };
   return cachedData;

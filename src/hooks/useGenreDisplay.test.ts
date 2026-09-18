@@ -27,6 +27,7 @@ const SHOEGAZE: TreeNode = {
   type: "genre",
   canonical_key: "shoegaze",
   parents: [],
+  sections: ["genres"],
 };
 
 let queryClient: QueryClient;

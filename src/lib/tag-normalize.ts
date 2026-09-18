@@ -377,7 +377,7 @@ async function _doNormalizeAlbum(
   // --- Write album_genres (leaf + full DAG ancestors) and album_unresolved_genres ---
 
   // Build the resolved rows: direct leaves first
-  type AlbumGenreRow = { canonical_id: string; relation: "direct" | "ancestor"; section: string | null; name: string };
+  type AlbumGenreRow = { canonical_id: string; relation: "direct" | "ancestor"; name: string };
   const genreRows: AlbumGenreRow[] = [];
   const seenGenreIds = new Set<string>();
 
@@ -388,7 +388,7 @@ async function _doNormalizeAlbum(
 
     if (!seenGenreIds.has(tag.id)) {
       seenGenreIds.add(tag.id);
-      genreRows.push({ canonical_id: tag.id, relation: "direct", section: node.section ?? null, name: node.name });
+      genreRows.push({ canonical_id: tag.id, relation: "direct", name: node.name });
     }
 
     for (const ancestorId of getAncestorIds(node, tree.byId)) {
@@ -396,7 +396,7 @@ async function _doNormalizeAlbum(
       seenGenreIds.add(ancestorId);
       const ancestor = tree.byId.get(ancestorId);
       if (!ancestor) continue;
-      genreRows.push({ canonical_id: ancestorId, relation: "ancestor", section: ancestor.section ?? null, name: ancestor.name });
+      genreRows.push({ canonical_id: ancestorId, relation: "ancestor", name: ancestor.name });
     }
   }
 
@@ -405,7 +405,7 @@ async function _doNormalizeAlbum(
     const syntheticId = rawGenreId(tag.name);
     if (!seenGenreIds.has(syntheticId)) {
       seenGenreIds.add(syntheticId);
-      genreRows.push({ canonical_id: syntheticId, relation: "direct", section: null, name: tag.name });
+      genreRows.push({ canonical_id: syntheticId, relation: "direct", name: tag.name });
     }
   }
 
@@ -413,13 +413,13 @@ async function _doNormalizeAlbum(
   await db.execute("DELETE FROM album_genres WHERE album_id = ?", [albumId]);
   const genreInsertRows = genreRows
     .filter((r) => !excludedIds.has(r.canonical_id))
-    .map((row) => [albumId, row.canonical_id, row.relation, row.section, row.name]);
+    .map((row) => [albumId, row.canonical_id, row.relation, row.name]);
   await executeBatched(
     db,
     genreInsertRows,
-    "(?, ?, ?, ?, ?)",
-    5,
-    (placeholders) => `INSERT INTO album_genres (album_id, canonical_id, relation, section, name) VALUES ${placeholders}`
+    "(?, ?, ?, ?)",
+    4,
+    (placeholders) => `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ${placeholders}`
   );
 
   await db.execute("DELETE FROM album_unresolved_genres WHERE album_id = ?", [albumId]);

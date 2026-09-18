@@ -7,7 +7,9 @@
     "parents": [
       "rock"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   },
   {
     "id": "indie",
@@ -17,7 +19,9 @@
     "parents": [
       "rock"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   },
   {
     "id": "deutschrap",
@@ -27,7 +31,9 @@
     "parents": [
       "hip-hop"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   },
   {
     "id": "j-rock",
@@ -37,7 +43,9 @@
     "parents": [
       "rock"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   },
   {
     "id": "progressive-death-metal",
@@ -48,7 +56,9 @@
       "death-metal",
       "progressive-metal"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   },
   {
     "id": "contemporary-classical",
@@ -58,6 +68,8 @@
     "parents": [
       "western-classical-music"
     ],
-    "section": "genres"
+    "sections": [
+      "genres"
+    ]
   }
 ]

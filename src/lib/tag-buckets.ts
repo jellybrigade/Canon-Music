@@ -11,9 +11,9 @@ export function bucketize(tagIds: string[], tree: CanonTree): TagBuckets {
   for (const id of tagIds) {
     const node = tree.byId.get(id);
     if (!node) continue;
-    if (node.section === "genres") result.genres.push(id);
-    else if (node.section === "descriptors") result.descriptors.push(id);
-    else if (node.section === "scenes-and-movements") result.scenes.push(id);
+    if (node.sections.includes("genres")) result.genres.push(id);
+    if (node.sections.includes("descriptors")) result.descriptors.push(id);
+    if (node.sections.includes("scenes-and-movements")) result.scenes.push(id);
   }
   return result;
 }

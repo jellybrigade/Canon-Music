@@ -75,8 +75,8 @@ describe("isStale", () => {
 });
 
 describe("resolveGenreTags", () => {
-  const rock: TreeNode = { id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [] };
-  const jazz: TreeNode = { id: "jazz", name: "Jazz", type: "genre", canonical_key: "jazz", parents: [] };
+  const rock: TreeNode = { id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], sections: ["genres"] };
+  const jazz: TreeNode = { id: "jazz", name: "Jazz", type: "genre", canonical_key: "jazz", parents: [], sections: ["genres"] };
 
   function treeOf(nodes: TreeNode[]): CanonTree {
     const byId = new Map(nodes.map((n) => [n.id, n]));

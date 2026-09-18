@@ -46,10 +46,27 @@ describe("canon tree regeneration", () => {
     expect(tree).toMatchObject({ nodes: [{ id: "punk" }, { id: "hardcore-punk", parents: ["punk"] }] });
   });
 
+  it("lists a node under every section it appears in, in one order whatever the file's", () => {
+    const custom = writeTemp("c.json", "[]");
+    const scenesFirst = writeTemp(
+      "h.txt",
+      "Scenes & Movements\n    Futurism::genre\nGenres\n    Classical Music::genre\n        Futurism::genre\nDescriptors\n    Futurism::mood\n",
+    );
+    const genresFirst = writeTemp(
+      "h.txt",
+      "Descriptors\n    Futurism::mood\nGenres\n    Classical Music::genre\n        Futurism::genre\nScenes & Movements\n    Futurism::genre\n",
+    );
+    const futurism = (hierarchy: string) =>
+      (JSON.parse(runParser(["--input", hierarchy, "--custom", custom])) as { nodes: { id: string; sections: string[] }[] })
+        .nodes.find((n) => n.id === "futurism");
+    expect(futurism(scenesFirst)?.sections).toEqual(["genres", "descriptors", "scenes-and-movements"]);
+    expect(futurism(genresFirst)?.sections).toEqual(["genres", "descriptors", "scenes-and-movements"]);
+  });
+
   it("refuses a custom node whose id the hierarchy already has", () => {
     const custom = writeTemp(
       "c.json",
-      JSON.stringify([{ id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], section: "genres" }]),
+      JSON.stringify([{ id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], sections: ["genres"] }]),
     );
     expect(parserError(["--custom", custom])).toContain('custom node "rock" already exists');
   });
@@ -57,7 +74,7 @@ describe("canon tree regeneration", () => {
   it("refuses a custom node naming a parent the tree does not have", () => {
     const custom = writeTemp(
       "c.json",
-      JSON.stringify([{ id: "x-rock", name: "X Rock", type: "genre", canonical_key: "x rock", parents: ["no-such-genre"], section: "genres" }]),
+      JSON.stringify([{ id: "x-rock", name: "X Rock", type: "genre", canonical_key: "x rock", parents: ["no-such-genre"], sections: ["genres"] }]),
     );
     expect(parserError(["--custom", custom])).toContain('custom node "x-rock" names missing parent "no-such-genre"');
   });

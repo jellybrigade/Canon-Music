@@ -52,7 +52,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
     const q = parentQuery.toLowerCase();
     const section = sectionForType(type);
     return treeNodes
-      .filter((n) => n.section === section && (n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q)))
+      .filter((n) => n.sections.includes(section) && (n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q)))
       .slice(0, 8);
   }, [treeNodes, parentQuery, type]);
 
@@ -148,7 +148,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
                       }}
                     >
                       <span className="tags-option-name">{n.name}</span>
-                      <span className="tags-option-section">{n.section ?? n.type}</span>
+                      <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
                     </button>
                   ))}
                 </div>,
