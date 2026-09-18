@@ -677,10 +677,46 @@
   opacity: var(--opacity-75);
 }
 
+.foryou-v2-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: 0 0 var(--space-xs);
+}
+
 .foryou-v2-edit-hint {
   font-size: var(--text-sm);
   color: var(--text-tertiary, #666);
-  margin: 0 0 var(--space-xs);
+  margin: 0;
+}
+
+.foryou-v2-per-tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.foryou-v2-per-tab__select {
+  appearance: none;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-base);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  padding: 0.2em 1.8em 0.2em 0.5em;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5em center;
+}
+
+.foryou-v2-per-tab__select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .foryou-v2-desc-row {

@@ -5,7 +5,9 @@ import { useSetting } from "../hooks/useSetting";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import type { NavidromeAlbum } from "../lib/navidrome";
-import { sampleFromHead, seededShuffle } from "../lib/shuffle";
+import { sampleFromHead } from "../lib/shuffle";
+import { FOR_YOU_PER_TAB_CHOICES, type ForYouCategoryConfig, type ForYouGroup } from "../lib/forYouGroups";
+import { useForYouGroups } from "../hooks/useForYouGroups";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { useAlbums } from "../hooks/useAlbums";
@@ -51,24 +53,6 @@ interface Props {
 interface SpotlightPick {
   kicker: string;
   album: AlbumRow;
-}
-
-interface ForYouGroup {
-  /** Category key, not the label: two custom categories can share a kicker. */
-  key: string;
-  kicker: string;
-  albums: AlbumRow[];
-}
-
-type ForYouCustomFilter =
-  | { type: "decade"; decade: number }
-  | { type: "artist"; artist: string };
-
-interface ForYouCategoryConfig {
-  key: string;
-  kicker: string;
-  enabled: boolean;
-  customFilter?: ForYouCustomFilter;
 }
 
 /** Oldest-played albums a vault refresh draws from, so a refresh stays long-forgotten. */
@@ -195,42 +179,6 @@ function dedupePicks(candidates: SpotlightPick[], max: number): SpotlightPick[] 
     if (picks.length >= max) break;
   }
   return picks;
-}
-
-function buildForYouGroups(
-  spotlightIds: string[],
-  sources: Record<string, AlbumRow[]>,
-  config: ForYouCategoryConfig[],
-  seed: number,
-  perCategory = 4,
-): ForYouGroup[] {
-  const groups: ForYouGroup[] = [];
-  const used = new Set<string>(spotlightIds);
-
-  let catIdx = 0;
-  const groupFrom = (key: string, kicker: string, source: AlbumRow[]) => {
-    const withArt = source.filter(a => a.artwork_url);
-    if (withArt.length === 0) { catIdx++; return; }
-    // Shuffle with a per-category seed so different categories pick independently.
-    const shuffled = seededShuffle(withArt, seed * 31 + catIdx);
-    catIdx++;
-    const albums: AlbumRow[] = [];
-    for (const a of shuffled) {
-      if (albums.length >= perCategory) break;
-      if (used.has(a.id)) continue;
-      used.add(a.id);
-      albums.push(a);
-    }
-    if (albums.length > 0) groups.push({ key, kicker, albums });
-  };
-
-  for (const cat of config) {
-    if (!cat.enabled) continue;
-    const source = sources[cat.key] ?? [];
-    groupFrom(cat.key, cat.kicker, source);
-  }
-
-  return groups;
 }
 
 // ── Spotlight ─────────────────────────────────────────────────────────────────
@@ -364,9 +312,11 @@ interface ForYouRailProps {
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   config: ForYouCategoryConfig[];
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
+  perTab: number;
+  onPerTabChange: (count: number) => void;
 }
 
-function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange }: ForYouRailProps) {
+function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange, perTab, onPerTabChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
@@ -405,7 +355,7 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
           ))}
         </div>
         <div className="foryou-v2-grid">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: perTab }).map((_, i) => (
             <div key={i} className="foryou-v2-tile">
               <div className="foryou-v2-tile__art-wrap foryou-v2-tile__art-wrap--skeleton" />
             </div>
@@ -508,7 +458,21 @@ function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbu
       </div>
 
       {!locked && (
-        <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
+        <div className="foryou-v2-edit-row">
+          <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
+          <label className="foryou-v2-per-tab">
+            Albums per tab
+            <select
+              className="foryou-v2-per-tab__select"
+              value={perTab}
+              onChange={e => onPerTabChange(Number(e.target.value))}
+            >
+              {FOR_YOU_PER_TAB_CHOICES.map(count => (
+                <option key={count} value={count}>{count}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       )}
 
       <div className="foryou-v2-tabs" role="tablist" aria-label="For You categories">
@@ -1007,10 +971,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     ...customCategorySources,
   }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayedWithArt, almostDone, customCategorySources]);
 
-  const forYouGroups = useMemo(
-    () => buildForYouGroups(spotlightPicks.map(p => p.album.id), forYouSources, categoryConfig, forYouSeed, 6),
-    [spotlightPicks, forYouSources, categoryConfig, forYouSeed]
-  );
+  const spotlightIds = useMemo(() => spotlightPicks.map(p => p.album.id), [spotlightPicks]);
+  const { groups: forYouGroups, perTab: forYouPerTab, setPerTab: setForYouPerTab } =
+    useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
   const vaultItems = useMemo(() => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[], [vault, vaultSeed]);
@@ -1156,6 +1119,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onCardContextMenu={openCardContextMenu}
             config={categoryConfig}
             onConfigChange={handleForYouConfigChange}
+            perTab={forYouPerTab}
+            onPerTabChange={setForYouPerTab}
           />
 
           <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
