@@ -17,7 +17,8 @@ vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 import { resetTauriMocks, onInvoke, emitTauriEvent } from "../../../test/mocks/tauri";
 import { trackRenders, invokeCount } from "../../../test/perf";
 import { getDb } from "../../../db";
-import { usePlayerStore, type CurrentTrack } from "./player";
+import { usePlayerStore } from "./player";
+import { type CurrentTrack } from "./playerTypes";
 
 function mockDb() {
   const db = { select: vi.fn(async () => []), execute: vi.fn(async () => undefined) };

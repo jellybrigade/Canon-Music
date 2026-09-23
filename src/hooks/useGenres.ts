@@ -10,7 +10,7 @@ export interface GenreRow {
 }
 
 // Rusqlite read path (psysonic pattern), mirroring useAlbums/useArtists/useAllTracks.
-// Both hooks below read via src-tauri/src/library_read.rs instead of
+// Both hooks below read via src-tauri/src/library_read/genres.rs instead of
 // tauri-plugin-sql's sqlx pool, and cache rows on the session store keyed by tick so
 // repeat mounts reuse one fetch.
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { removeTrackFromNavidromePlaylist } from "../../clients/navidrome";
+import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { stripServerPrefix } from "../../lib/ids";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import type { PlaylistTrackRow } from "../../types/library";

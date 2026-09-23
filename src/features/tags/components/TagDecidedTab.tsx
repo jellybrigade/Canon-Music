@@ -4,6 +4,7 @@ import { useTagVocab, useTagMappings } from "../hooks/useTagMappings";
 import type { TagVocabRow } from "../hooks/useTagMappings";
 import type { TagKind, TreeNode } from "../lib/canonicalize";
 import { ACCEPTED, IGNORED, applySearch, Pagination } from "./TagsViewHelpers";
+import "./TagDecidedTab.css";
 
 // ── MappedGroup ───────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
-import { repairAlbumTrackIds } from "../../sync/sync";
+import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 

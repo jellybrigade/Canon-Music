@@ -8,7 +8,8 @@ import { render, cleanup, waitFor, act, fireEvent } from "@testing-library/react
 import { Profiler } from "react";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { usePlayerStore, type CurrentTrack } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { type CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { RadioButton } from "./RadioButton";

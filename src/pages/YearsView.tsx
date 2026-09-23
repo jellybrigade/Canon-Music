@@ -3,7 +3,7 @@ import { useAlbums } from "../hooks/useAlbums";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
-import type { RadioMode } from "../features/playback/store/player";
+import type { RadioMode } from "../features/playback/store/playerTypes";
 
 interface Props {
   serverWithCredential: ServerWithCredential;

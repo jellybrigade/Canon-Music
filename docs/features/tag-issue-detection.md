@@ -14,7 +14,7 @@ Until a view is built, issues silently accumulate in the `tag_issues` table with
 
 ### Detection (runs automatically, no user action)
 
-`scanForIssues(serverId)` (`src/features/tags/lib/tagIssues.ts:3`) runs at the end of every library sync (`src/features/sync/sync.ts:265`, called from within the sync pipeline after tracks/albums are updated). It:
+`scanForIssues(serverId)` (`src/features/tags/lib/tagIssues.ts:3`) runs at the end of every library sync (`syncLibrary` in `src/features/sync/sync.ts`, called from within the sync pipeline after tracks/albums are updated). It:
 
 1. Deletes all *non-dismissed* issues for that server (dismissed rows are preserved so a dismissal survives future rescans — `src/features/tags/lib/tagIssues.ts:6-14`).
 2. Re-inserts current issues via `INSERT OR IGNORE`, one query per issue type:
@@ -50,7 +50,7 @@ Settings → Metadata & Tags tab has a checkbox labeled **"Hide tag issues badge
 ## Implementation reference
 
 - Detection: `src/features/tags/lib/tagIssues.ts:3-71`
-- Sync trigger: `src/features/sync/sync.ts:265` (import at `src/features/sync/sync.ts:6`)
+- Sync trigger: `syncLibrary` in `src/features/sync/sync.ts`
 - Schema: `src/db/migrations.ts:176-183` (v8), `:232` (v10, `dismissed_at`)
 - Misleading settings toggle: `src/features/settings/components/TagsTab.tsx:369-375`
 - Actual sidebar badge (unrelated data): `src/App.tsx:291`, `:582`

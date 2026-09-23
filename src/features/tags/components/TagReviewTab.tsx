@@ -13,6 +13,7 @@ import {
   applySearch,
   Pagination,
 } from "./TagsViewHelpers";
+import "./TagReviewTab.css";
 
 // ── ReviewRow ─────────────────────────────────────────────────────────────────
 
@@ -71,7 +72,7 @@ interface TagReviewTabProps {
   onCreateNode: (name: string, rawValue?: string, rawKind?: TagKind) => void;
 }
 
-// Must match `.review-row { min-height }` in TagsView.css
+// Must match `.review-row { min-height }` in TagReviewTab.css
 const ROW_HEIGHT = 56;
 const DEFAULT_PAGE_SIZE = 12;
 

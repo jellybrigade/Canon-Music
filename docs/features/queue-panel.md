@@ -39,7 +39,7 @@ Lets you see and manage everything about to play — reorder tracks, jump to any
   - State: `queue: CurrentTrack[]`, `queueIndex: number`, `isQueueOpen: boolean`, `isShuffled: boolean`, `shuffleOrder: number[]`.
   - Actions: `addToQueue(track, streamUrlFn)` (:1166), `playNext(track, streamUrlFn)` (:1178), `toggleQueue()` (:1194), `removeFromQueue(position)` (:1202), `removeManyFromQueue(positions)` (:1242), `playFromQueueIndex(position)` (:1285), `moveQueueItem(from, to)` (:1294).
 - **Cross-device sync**: `src/features/playback/hooks/useQueueSync.ts:8-150` — restores queue via `getPlayQueue` on first server connect, saves via debounced `savePlayQueue` (10s + on visibility change).
-- **Other entry points** that feed the queue: `src/pages/AlbumDetail.tsx:902-917` (track context menu — Play Now / Play Next / Add to Queue / Start radio), `src/pages/TrackTableView.tsx:399,405`, `src/features/playlists/PlaylistDetail.tsx:551,554`, `src/features/playback/components/NowPlayingView.tsx:746,753,795,802,929-930` (radio suggestion cards).
+- **Other entry points** that feed the queue: `src/pages/album/TrackContextMenu.tsx` (track context menu — Play Now / Play Next / Add to Queue / Start radio), `src/pages/TrackTableView.tsx:399,405`, `src/features/playlists/PlaylistDetail.tsx:551,554`, `src/features/playback/components/NowPlayingAbout.tsx` (top/suggested track rows and their menu: Play now / Play next / Add to queue), `UpNextList.tsx` (queue row menu: move, start radio, remove).
 - Right-click menus use the shared `ContextMenu` component, which has a known WebKitGTK left-click race fix (deferred `mousedown` listener) — see `docs/known-issues.md`. Not queue-specific, but the queue's context menu relies on the same fixed component.
 
 ## Open questions

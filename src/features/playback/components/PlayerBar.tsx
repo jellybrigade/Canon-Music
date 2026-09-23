@@ -6,7 +6,8 @@ import {
   Play, Pause, SkipBack, SkipForward,
   Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
-import { usePlayerStore, isNextDisabled, repeatModeLabel } from "../store/player";
+import { usePlayerStore } from "../store/player";
+import { isNextDisabled, repeatModeLabel } from "../store/playerTypes";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { useTagsStore } from "../../tags/store/tags";
 import { useLoved } from "../../../hooks/useLoved";
@@ -18,7 +19,8 @@ import { SleepTimerPopover } from "./SleepTimerPopover";
 import { sleepTimerCountdown } from "../lib/sleepTimer";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { AlbumArt } from "../../../components/AlbumArt";
-import { getCoverArtUrl, setRating, fetchTrackRating } from "../../../clients/navidrome";
+import { setRating, fetchTrackRating } from "../../../clients/navidrome";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
 import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";

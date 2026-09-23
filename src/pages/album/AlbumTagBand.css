@@ -1,0 +1,128 @@
+.album-tag-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-md) var(--space-xs);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.album-tag-column {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.album-tag-column-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 var(--space-2xs) 0 0;
+  white-space: nowrap;
+}
+
+.album-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
+}
+
+.album-tag-chip--excludable {
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  gap: var(--space-2xs);
+}
+
+.album-tag-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+/* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
+.album-tag-chip--lastfm {
+  border-style: dashed;
+  opacity: var(--opacity-85);
+}
+
+.album-tag-chip--lastfm:hover {
+  opacity: 1;
+}
+
+.album-tag-chip--musicbrainz {
+  border-style: dotted;
+  opacity: var(--opacity-75);
+}
+
+.album-tag-chip--musicbrainz:hover {
+  opacity: 1;
+}
+
+/* Manual (user-entered) genre chips */
+.album-tag-chip--manual {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  border: 1px solid var(--accent, #7c6af0);
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* Column header row: title + add button inline */
+.album-tag-column-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+}
+
+.album-tag-add-genre-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 0;
+  transition: border-color var(--duration-base), color var(--duration-base);
+  flex-shrink: 0;
+}
+
+.album-tag-add-genre-btn:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-secondary);
+}
+
+/* ── Unmatched genres hint (opens TagDrawer) ── */
+
+.album-unmatched-hint {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-2xs) var(--space-2xs);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.album-unmatched-hint:hover { color: var(--text-secondary); }

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import "./Skeleton.css";
 
 // Shared loading-skeleton primitives. Before this existed every view that wanted one
-// hand-rolled its own bars (AlbumDetail.css, NowPlayingView.css, TrackTableView) and the
+// hand-rolled its own bars (AlbumDetail.css, NowPlayingAbout.css, TrackTableView) and the
 // views that did not want to hand-roll a third copy shipped a bare "Loading…" line
 // instead. All of these share the `canon-skeleton-pulse` keyframe in base.css, which the
 // app-wide prefers-reduced-motion rule there already freezes.

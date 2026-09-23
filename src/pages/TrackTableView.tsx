@@ -4,8 +4,8 @@ import { Play, Heart, SlidersHorizontal, ChevronUp, ChevronDown } from "lucide-r
 import type { AllTrackRow } from "../hooks/useAllTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { getCoverArtUrl } from "../clients/navidrome";
-import type { CurrentTrack } from "../features/playback/store/player";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
+import type { CurrentTrack } from "../features/playback/store/playerTypes";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import { usePlayerStore } from "../features/playback/store/player";
 import { useLoved } from "../hooks/useLoved";
@@ -14,6 +14,7 @@ import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { ContextMenu } from "../ui/ContextMenu";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import "./AlbumDetail.css";
+import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
 import { useClickOutside } from "../ui/useClickOutside";
 

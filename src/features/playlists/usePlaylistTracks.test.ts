@@ -13,7 +13,7 @@
  *
  * The removal's own SQL - the delete, the two negative-space compaction passes and the
  * `track_count` decrement - moved to the `playlist_remove_track` Rust command so it can run in
- * one transaction, and `src-tauri/src/library_write.rs` owns its table-state coverage. What is
+ * one transaction, and `src-tauri/src/library_write/playlists.rs` owns its table-state coverage. What is
  * left here is the hook's half of the contract: the server is told first, the command is
  * invoked once, and both session ticks fire so the list re-reads.
  *
@@ -25,8 +25,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
 vi.mock("../../db", () => ({ getDb: vi.fn() }));
-vi.mock("../../clients/navidrome", async () => {
-  const actual = await vi.importActual<typeof import("../../clients/navidrome")>("../../clients/navidrome");
+vi.mock("../../clients/navidromePlaylists", async () => {
+  const actual = await vi.importActual<typeof import("../../clients/navidromePlaylists")>("../../clients/navidromePlaylists");
   return { ...actual, removeTrackFromNavidromePlaylist: vi.fn() };
 });
 
@@ -34,7 +34,8 @@ import { renderHook, act, cleanup, waitFor } from "@testing-library/react";
 import { getDb } from "../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
-import { removeTrackFromNavidromePlaylist, type NavidromeCredential } from "../../clients/navidrome";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import type { Server } from "../../types/server";
 import type { ServerWithCredential } from "../../hooks/useServer";
@@ -131,7 +132,7 @@ async function flush() {
 
 /**
  * Stands in for the `playlist_remove_track` Rust command. Deliberately a reimplementation and
- * not the real statements: `src-tauri/src/library_write.rs` owns those and its own tests pin
+ * not the real statements: `src-tauri/src/library_write/playlists.rs` owns those and its own tests pin
  * their table state, including the rollback this double cannot model. It exists so the two
  * tests that need a compacted table to read back from - the second-removal index and the
  * re-render - have one.

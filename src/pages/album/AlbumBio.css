@@ -1,0 +1,41 @@
+.album-bio-section {
+  margin: var(--space-sm) var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.album-bio-wrap {
+  position: relative;
+}
+
+.album-bio-wrap--clamped {
+  max-height: 1.4rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+.album-bio {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.album-bio-toggle {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: var(--space-2xs) 0 0;
+  font-size: var(--text-base);
+  color: var(--accent);
+  cursor: pointer;
+  opacity: var(--opacity-85);
+  transition: opacity var(--motion-fast);
+}
+
+.album-bio-toggle:hover {
+  opacity: 1;
+}

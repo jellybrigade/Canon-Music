@@ -2,7 +2,8 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
-vi.mock("../../sync/sync", () => ({ clearSyncWatermark: vi.fn(), purgeServerData: vi.fn() }));
+vi.mock("../../sync/syncWatermark", () => ({ clearSyncWatermark: vi.fn() }));
+vi.mock("../../sync/syncPrune", () => ({ purgeServerData: vi.fn() }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, screen, waitFor } from "@testing-library/react";
@@ -11,7 +12,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ServerTab } from "./ServerTab";
 import { getDb } from "../../../db";
-import { clearSyncWatermark, type SyncOptions } from "../../sync/sync";
+import { type SyncOptions } from "../../sync/sync";
+import { clearSyncWatermark } from "../../sync/syncWatermark";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
 

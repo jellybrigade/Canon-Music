@@ -3,7 +3,7 @@ import { getDb } from "../db";
 import { SchemaTooNewError } from "../db/migrations";
 import { keychain } from "../lib/keychain";
 import type { Server } from "../types/server";
-import type { NavidromeCredential } from "../clients/navidrome";
+import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { QK } from "../lib/queryKeys";
 
 export interface ServerWithCredential {
@@ -12,7 +12,7 @@ export interface ServerWithCredential {
 }
 
 /**
- * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/lib.rs`, the one machine-readable part of a
+ * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/keychain.rs`, the one machine-readable part of a
  * keyring error. It marks the failures that clear without the user doing anything - the secret
  * store not up yet, or its collection still locked - and is stripped before display.
  */

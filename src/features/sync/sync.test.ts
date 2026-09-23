@@ -17,7 +17,8 @@ import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 import { onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { remappedTrackIdTables } from "../../db/trackIdTables";
 import { invokeCount } from "../../test/perf";
-import type { NavidromeAlbum, NavidromePlaylist, NavidromeStarred, NavidromeTrack } from "../../clients/navidrome";
+import type { NavidromeAlbum, NavidromeStarred, NavidromeTrack } from "../../clients/navidrome";
+import type { NavidromePlaylist } from "../../clients/navidromePlaylists";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 
@@ -28,24 +29,21 @@ vi.mock("../../clients/navidrome", () => ({
   fetchAllAlbums: vi.fn(),
   fetchAlbumTracks: vi.fn(),
   fetchStarred2: vi.fn(),
-  fetchPlaylists: vi.fn(),
-  fetchPlaylistTracks: vi.fn(),
   fetchAndStoreOpenSubsonicExtensions: vi.fn(),
   fetchScanStatus: vi.fn(),
   songExists: vi.fn(),
 }));
+vi.mock("../../clients/navidromePlaylists", () => ({
+  fetchPlaylists: vi.fn(),
+  fetchPlaylistTracks: vi.fn(),
+}));
 
-import {
-  fetchAllAlbums,
-  fetchAlbumTracks,
-  fetchStarred2,
-  fetchPlaylists,
-  fetchPlaylistTracks,
-  fetchAndStoreOpenSubsonicExtensions,
-  fetchScanStatus,
-  songExists,
-} from "../../clients/navidrome";
-import { clearSyncWatermark, purgeServerData, purgeStrandedServers, repairAlbumTrackIds, syncLibrary, syncAlbumTracks } from "./sync";
+import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "../../clients/navidrome";
+import { fetchPlaylists, fetchPlaylistTracks } from "../../clients/navidromePlaylists";
+import { syncLibrary } from "./sync";
+import { clearSyncWatermark } from "./syncWatermark";
+import { purgeServerData, purgeStrandedServers } from "./syncPrune";
+import { repairAlbumTrackIds, syncAlbumTracks } from "./syncTracks";
 import type { SyncProgress } from "./sync";
 import { album, CRED, OTHER, server, SRV, track } from "../../test/navidromeFixtures";
 import { TransportStalledError } from "../../lib/transportHealth";
@@ -611,7 +609,7 @@ describe("syncLibrary per-album track prune", () => {
 describe("syncLibrary track id remap", () => {
   /**
    * Stands in for the `remap_track_ids` Rust command. A reimplementation, not the real
-   * statements: `src-tauri/src/library_write.rs` owns those and its own tests pin the table
+   * statements: `src-tauri/src/library_write/track_remap.rs` owns those and its own tests pin the table
    * state, including the rollback this double cannot model. It exists so these tests can read
    * back a mirror that actually carried the rows.
    */

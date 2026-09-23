@@ -7,7 +7,7 @@ Links your album and artist records to canonical MusicBrainz entries so Canon ca
 ## Entry points
 
 - **Setting**: Settings → **Metadata** nav item → "MusicBrainz" section → toggle **"Auto-identify albums when opened"** (description: "Runs MusicBrainz lookup automatically when you open an album."). `src/features/settings/components/TagsTab.tsx:245-254`.
-- **Manual identify — album**: Album detail page → disc icon button, tooltip "Identify on MusicBrainz" (`src/pages/AlbumDetail.tsx:584-591`). If auto-identify is on but no match found yet, an **"Unidentified"** badge button appears instead (`AlbumDetail.tsx:550-557`) — clicking it opens the same dialog. Dialog heading: **"Identify Album"**.
+- **Manual identify — album**: Album detail page → disc icon button, tooltip "Identify on MusicBrainz" (`src/pages/album/AlbumHero.tsx`). If auto-identify is on but no match found yet, an **"Unidentified"** badge button appears instead (same file) — clicking it opens the same dialog. Dialog heading: **"Identify Album"**.
 - **Manual identify — artist**: Artist detail page → overflow menu → **"Identify artist"** (or **"Identify to add artwork"** if the artist has no portrait yet) (`src/pages/ArtistDetail.tsx:899-901`). Dialog heading: **"Identify Artist"**.
 - **Bulk review queue**: Sidebar → **"Unidentified"** nav item (badge shows count of albums that failed lookup) → **"Unidentified Albums"** page.
 

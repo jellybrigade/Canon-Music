@@ -1,4 +1,5 @@
-import type { NavidromeAlbum, NavidromeCredential, NavidromeTrack } from "../clients/navidrome";
+import type { NavidromeAlbum, NavidromeTrack } from "../clients/navidrome";
+import type { NavidromeCredential } from "../clients/navidromeUrls";
 import type { Server } from "../types/server";
 
 export const SRV = "srv-a";

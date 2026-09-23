@@ -7,13 +7,9 @@ vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
 import { resetTauriMocks, onInvoke, invoke, emitTauriEvent } from "../../../test/mocks/tauri";
 import { getDb } from "../../../db";
-import {
-  usePlayerStore,
-  normalizeShuffleOrder,
-  isNextDisabled,
-  buildShuffleOrder,
-  type CurrentTrack,
-} from "./player";
+import { usePlayerStore } from "./player";
+import { normalizeShuffleOrder, buildShuffleOrder } from "./queueOrder";
+import { isNextDisabled, type CurrentTrack } from "./playerTypes";
 
 // Boundary mock for getDb(): tests configure `select`/`execute` per case, never a real DB.
 function mockDb(

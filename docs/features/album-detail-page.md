@@ -44,17 +44,17 @@ Back button (top-left, "← Back") calls `onClose`, which resolves to `goBack()`
 
 ## Implementation
 
-- Main component: `src/pages/AlbumDetail.tsx:65` (`AlbumDetail`)
-- Route wrapper: `src/App.tsx:75-119` (`AlbumDetailRoute`) — loads album from router state or URL query param
-- Navigation: `src/hooks/useAppNavigation.ts:60-62` (`openAlbum`), `:76-78` (`goBack`)
-- Cover art: `coverArtUrl` via `getCoverArtUrl()` (`src/clients/navidrome.ts`), fallback `src/components/AlbumArt.tsx:14` (iTunes lookup), accent color extraction persisted to `albums.accent_color` (`AlbumDetail.tsx:297-316`)
-- Tag band data: `trackTagRows` query (`:117-132`, `QK.trackTagsAlbum`), `displayGenres`/`genreGroups` memos (`:384-430`), unmatched genres query against `album_unresolved_genres` (`:432-450`)
-- Genre editing: `src/components/AlbumGenreEditor.tsx:39` — writes to `album_user_genres` (insert `:81-88`, delete `:93-100`)
-- Tracklist: `useTracks(album.id)` (`:67`), column visibility state persisted to `localStorage` (`:245-252`), row render (`:780-856`), context menu (`:883-981`)
-- Playback: `handlePlayTrack` (`:341-345`), `handlePlayAlbum` respecting `album.play_action` setting (`:347-359`), Zustand `usePlayerStore` (`:69-74`)
-- Loved tracks: `useLoved()` (`:68`)
+- Main component: `src/pages/AlbumDetail.tsx` (`AlbumDetail`): data hooks, sync/auto-identify effects, playback handlers; sections live in `src/pages/album/`
+- Route wrapper: `src/app/DetailRoutes.tsx` (`AlbumDetailRoute`) — loads album by URL param
+- Navigation: `src/hooks/useAppNavigation.ts` (`openAlbum`, `goBack`)
+- Cover art: `coverArtUrl` via `getCoverArtUrl()` (`src/clients/navidromeUrls.ts`), accent color via `useAlbumAccent` (persisted to `albums.accent_color`); hero rendered by `album/AlbumHero.tsx` (title + suffix controls, identity facts, tag refresh line, actions)
+- Tag band data: `album/albumGenres.ts` - `useTrackTagGenres` (`QK.trackTagsAlbum`), `useRawSourcesByCanonicalId`, `useUnmatchedGenreCount` (against `album_unresolved_genres`), pure `buildDisplayGenres`/`groupGenresBySource`; chips rendered by `album/AlbumTagBand.tsx`
+- Genre editing: `src/components/AlbumGenreEditor.tsx` — writes to `album_user_genres`
+- Tracklist: `useTracks(album.id)`; `album/AlbumTrackList.tsx` owns loading/error/empty states, column visibility persisted to `localStorage`, row render; context menu in `album/TrackContextMenu.tsx`
+- Playback: `handlePlayTrack`, `handlePlayAlbum` respecting `album.play_action` setting, Zustand `usePlayerStore`
+- Loved tracks: `useLoved()`
 - Related strips: "More from Artist" via `useArtistAlbums` (`src/hooks/useArtistAlbums.ts`, `QK.artistAlbums`), "Fans Also Like" via `useSimilarArtistAlbums` (`src/features/enrichment/hooks/useSimilarArtistAlbums.ts`, `QK.similarArtistAlbums`)
-- Bio: `useEnrichAlbum()` (`:91`), `QK.albumEnrichment`, clamp/expand logic (`:727-737`)
+- Bio: `useEnrichAlbum()`, `QK.albumEnrichment`, clamp/expand logic in `album/AlbumBio.tsx`
 - React Query keys: `src/lib/queryKeys.ts` — `trackTagsAlbum` (34), `artistAlbums` (45), `similarArtistAlbums` (51), `normalizedTags` (57), `albumUnmatchedGenres` (59), `albumGenreRawSources` (60), `albumIdentity` (84), `albumEnrichment` (85)
 - Tables touched: `albums`, `album_identity`, `tracks`, `track_tags`, `album_unresolved_genres`, `album_user_genres`, `album_genres`, `tag_mappings`
 

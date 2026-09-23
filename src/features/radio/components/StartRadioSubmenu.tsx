@@ -1,5 +1,5 @@
-import { RADIO_MODES } from "../../playback/store/player";
-import type { RadioMode } from "../../playback/store/player";
+import { RADIO_MODES } from "../../playback/store/playerTypes";
+import type { RadioMode } from "../../playback/store/playerTypes";
 import { ContextMenuSubmenu } from "../../../ui/ContextMenu";
 
 interface Props {

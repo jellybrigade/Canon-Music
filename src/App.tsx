@@ -35,11 +35,11 @@ import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPr
 import { usePlayerStore } from "./features/playback/store/player";
 import { useTagsStore } from "./features/tags/store/tags";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
-import type { RadioMode, CurrentTrack } from "./features/playback/store/player";
+import type { RadioMode, CurrentTrack } from "./features/playback/store/playerTypes";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
 import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
-import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidrome";
+import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { stripServerPrefix } from "./lib/ids";

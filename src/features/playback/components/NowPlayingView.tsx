@@ -1,76 +1,29 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
-import { WaveformBars } from "./WaveformBars";
-import {
-  Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Heart, Loader, ListEnd, PlayCircle, Volume2, VolumeX, ChevronLeft, RefreshCw, ListX, AlertCircle,
-} from "lucide-react";
-import { usePlayerStore, isNextDisabled, repeatModeLabel, type CurrentTrack, type RadioMode } from "../store/player";
+import { ChevronLeft, RefreshCw, ListX, AlertCircle } from "lucide-react";
+import { usePlayerStore } from "../store/player";
+import { isNextDisabled, type RadioMode } from "../store/playerTypes";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import { useLoved } from "../../../hooks/useLoved";
 import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { AlbumRow } from "../../../types/library";
-import { getCoverArtUrl, getStreamUrl } from "../../../clients/navidrome";
 import { ArtBackdrop } from "../../../components/ArtBackdrop";
-import { RadioButton } from "../../radio/components/RadioButton";
-import { RadioQueueStatus } from "../../radio/components/RadioQueueStatus";
-import { ContextMenu } from "../../../ui/ContextMenu";
-import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
-import { stripServerPrefix } from "../../../lib/ids";
-import { parseLrc, type LrcLine } from "../../../clients/lrclib";
-import {
-  primaryArtistOf,
-  fetchArtistAlbums,
-  fetchArtistTopTracksForNowPlaying,
-  fetchSuggestedTracksForNowPlaying,
-  NOW_PLAYING_STALE_TIME,
-  SUGGESTED_STALE_TIME,
-  type NowPlayingTrack,
-} from "../lib/nowPlayingQueries";
+import { parseLrc } from "../../../clients/lrclib";
+import { primaryArtistOf } from "../lib/nowPlayingQueries";
 import { fetchBandsintownEvents, type BandsintownEvent } from "../../../clients/bandsintown";
 import { useBoolSetting } from "../../../hooks/useSetting";
-import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
-import { TourCard } from "../../../components/TourCard";
-import { useQuery } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
 import { AlbumArt } from "../../../components/AlbumArt";
+import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
+import { NowPlayingProgress } from "./NowPlayingProgress";
+import { LyricsTabPanel } from "./LyricsTabPanel";
+import { NowPlayingControls } from "./NowPlayingControls";
+import { UpNextList } from "./UpNextList";
+import { NowPlayingAbout } from "./NowPlayingAbout";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
-
-type TopTrack = NowPlayingTrack;
-type SuggestedTrack = NowPlayingTrack;
-
-function useArtistAlbums(artistName: string | null, serverId: string) {
-  return useQuery({
-    queryKey: QK.nowPlayingAlbums(artistName, serverId),
-    queryFn: (): Promise<AlbumRow[]> => fetchArtistAlbums(artistName!, serverId),
-    enabled: !!artistName,
-    // Matches what useNowPlayingPrefetch warms it with. Left at the default, the prefetched
-    // entry was stale the instant it landed and the tab re-ran the query on every open.
-    staleTime: NOW_PLAYING_STALE_TIME,
-  });
-}
-
-function useArtistTopTracks(artistName: string | null, serverId: string) {
-  return useQuery({
-    queryKey: QK.nowPlayingTopTracks(artistName, serverId),
-    queryFn: (): Promise<TopTrack[]> => fetchArtistTopTracksForNowPlaying(artistName!, serverId),
-    enabled: !!artistName,
-    staleTime: NOW_PLAYING_STALE_TIME,
-  });
-}
-
-function useSuggestedTracks(artistName: string | null, currentTrackId: string | null, serverId: string) {
-  return useQuery({
-    queryKey: QK.suggestedTracks(artistName, currentTrackId, serverId),
-    queryFn: (): Promise<SuggestedTrack[]> =>
-      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId, serverId),
-    enabled: !!artistName,
-    staleTime: SUGGESTED_STALE_TIME,
-  });
-}
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -80,299 +33,35 @@ interface Props {
   onOpenResync: () => void;
   onBack?: () => void;
 }
-
-function NowPlayingProgress({
-  duration, useWaveform, overlayPeaks,
-}: {
-  duration: number;
-  useWaveform: boolean;
-  overlayPeaks: number[] | null;
-}) {
-  const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
-  const isBuffering = usePlayerStore((s) => s.isBuffering);
-  const overlayFilledCount = useMemo(
-    () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
-    [progress, overlayPeaks]
-  );
-
-  return (
-    <div className="now-playing-progress-row">
-      <span className="player-elapsed">{formatDuration(elapsed)}</span>
-      <div
-        ref={barRef}
-        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}${isBuffering ? " now-playing-progress-bar--buffering" : ""}`}
-        aria-busy={isBuffering || undefined}
-        {...sliderProps}
-      >
-        {useWaveform ? (
-          <WaveformBars
-            peaks={overlayPeaks!}
-            filledCount={overlayFilledCount}
-            barClass="now-playing-waveform-bar"
-            filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
-          />
-        ) : (
-          <div className="now-playing-progress-fill" style={{ transform: `scaleX(${progress})` }} />
-        )}
-      </div>
-      <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
-    </div>
-  );
-}
-
-interface LyricsTabPanelProps {
-  lyricsLines: LrcLine[] | null;
-  lyricsPlain: string | null;
-  lyricsLoading: boolean;
-  lyricsOffsetMs: number;
-  lyricsSearchOpen: boolean;
-  lyricsSearchArtist: string;
-  lyricsSearchTitle: string;
-  setLyricsSearchArtist: (v: string) => void;
-  setLyricsSearchTitle: (v: string) => void;
-  lyricsOverride: LyricsOverride | null;
-  setLyricsOverride: (v: LyricsOverride | null) => void;
-  currentTrackArtist: string | null;
-  currentTrackTitle: string | null;
-  onSeek: (timeSec: number) => void;
-}
-
-interface LyricLineProps {
-  index: number;
-  text: string;
-  isActive: boolean;
-}
-
-const LyricLine = React.memo(function LyricLine({ index, text, isActive }: LyricLineProps) {
-  return (
-    <div
-      data-lyric-index={index}
-      className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-    >
-      {text || " "}
-    </div>
-  );
-});
-
-function LyricsTabPanel({
-  lyricsLines, lyricsPlain, lyricsLoading, lyricsOffsetMs,
-  lyricsSearchOpen, lyricsSearchArtist, lyricsSearchTitle,
-  setLyricsSearchArtist, setLyricsSearchTitle,
-  lyricsOverride, setLyricsOverride,
-  currentTrackArtist, currentTrackTitle, onSeek,
-}: LyricsTabPanelProps) {
-  const elapsed = usePlayerStore((s) => s.elapsed);
-  const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
-  const activeLyricIndexRef = useRef<number>(-1);
-  const lyricsContainerRef = useRef<HTMLDivElement>(null);
-  const userScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const resyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoScrollingRef = useRef(false);
-  const [showResyncPill, setShowResyncPill] = useState(false);
-
-  function scrollToActiveLine() {
-    const container = lyricsContainerRef.current;
-    if (!container) return;
-    const line = container.querySelector<HTMLDivElement>(`[data-lyric-index="${activeLyricIndexRef.current}"]`);
-    if (!line) return;
-    const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
-    autoScrollingRef.current = true;
-    container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
-    if (resyncTimeoutRef.current) clearTimeout(resyncTimeoutRef.current);
-    resyncTimeoutRef.current = setTimeout(() => { autoScrollingRef.current = false; }, 500);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-      if (resyncTimeoutRef.current) clearTimeout(resyncTimeoutRef.current);
-    };
-  }, []);
-
-  const activeLyricIndex = useMemo(() => {
-    if (!lyricsLines || lyricsLines.length === 0) return -1;
-    const isMatch = (i: number) =>
-      lyricsAdjElapsed >= lyricsLines[i]!.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
-    // Playback position moves forward almost always, so start the search from the last
-    // known index instead of rescanning the whole lyrics file on every 200ms tick.
-    const last = activeLyricIndexRef.current;
-    if (last >= 0 && last < lyricsLines.length && isMatch(last)) return last;
-    if (last >= 0 && last < lyricsLines.length - 1 && isMatch(last + 1)) return last + 1;
-    return lyricsLines.findIndex((_, i) => isMatch(i));
-  }, [lyricsAdjElapsed, lyricsLines]);
-
-  useEffect(() => {
-    if (!lyricsLines) return;
-    if (activeLyricIndex === activeLyricIndexRef.current) return;
-    activeLyricIndexRef.current = activeLyricIndex;
-    if (userScrollingRef.current) return;
-    scrollToActiveLine();
-  }, [activeLyricIndex, lyricsLines]);
-
-  function handleLyricsScroll() {
-    if (autoScrollingRef.current) return;
-    userScrollingRef.current = true;
-    setShowResyncPill(true);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    scrollTimeoutRef.current = setTimeout(() => {
-      userScrollingRef.current = false;
-      setShowResyncPill(false);
-      scrollToActiveLine();
-    }, 5000);
-  }
-
-  function handleResyncPress() {
-    if (scrollTimeoutRef.current) { clearTimeout(scrollTimeoutRef.current); scrollTimeoutRef.current = null; }
-    userScrollingRef.current = false;
-    setShowResyncPill(false);
-    scrollToActiveLine();
-  }
-
-  function handleLyricSeek(timeSec: number) {
-    userScrollingRef.current = false;
-    setShowResyncPill(false);
-    if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
-    onSeek(timeSec);
-  }
-
-  return (
-    <>
-      {lyricsSearchOpen && (
-        <form
-          className="lyrics-search-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (lyricsSearchArtist.trim() && lyricsSearchTitle.trim()) {
-              setLyricsOverride({ artist: lyricsSearchArtist.trim(), title: lyricsSearchTitle.trim() });
-            }
-          }}
-        >
-          <input
-            className="lyrics-search-input"
-            placeholder="Artist"
-            value={lyricsSearchArtist}
-            onChange={(e) => setLyricsSearchArtist(e.target.value)}
-          />
-          <input
-            className="lyrics-search-input"
-            placeholder="Track title"
-            value={lyricsSearchTitle}
-            onChange={(e) => setLyricsSearchTitle(e.target.value)}
-          />
-          <div className="lyrics-search-actions">
-            <button
-              type="submit"
-              className="lyrics-search-btn"
-              disabled={!lyricsSearchArtist.trim() || !lyricsSearchTitle.trim()}
-            >
-              Search
-            </button>
-            {lyricsOverride && (
-              <button
-                type="button"
-                className="lyrics-search-btn lyrics-search-btn--reset"
-                onClick={() => {
-                  setLyricsOverride(null);
-                  setLyricsSearchArtist(currentTrackArtist ?? "");
-                  setLyricsSearchTitle(currentTrackTitle ?? "");
-                }}
-              >
-                Reset
-              </button>
-            )}
-          </div>
-        </form>
-      )}
-      <div className="now-playing-lyrics-wrap">
-        <div
-          className="now-playing-lyrics"
-          ref={lyricsContainerRef}
-          onScroll={handleLyricsScroll}
-          onClick={(e) => {
-            const target = (e.target as HTMLElement).closest<HTMLElement>("[data-lyric-index]");
-            if (!target || !lyricsLines) return;
-            const idx = Number(target.dataset.lyricIndex);
-            const line = lyricsLines[idx];
-            if (line) handleLyricSeek(line.timeSec + lyricsOffsetMs / 1000);
-          }}
-        >
-          {lyricsLoading ? (
-            <p className="now-playing-empty">Loading lyrics…</p>
-          ) : lyricsLines && lyricsLines.length > 0 ? (
-            lyricsLines.map((line, i) => (
-              <LyricLine key={i} index={i} text={line.text} isActive={i === activeLyricIndex} />
-            ))
-          ) : lyricsPlain ? (
-            <pre className="lyrics-plain">{lyricsPlain}</pre>
-          ) : (
-            <p className="now-playing-empty">No lyrics found.</p>
-          )}
-        </div>
-        {showResyncPill && (
-          <button className="lyrics-resync-pill" onClick={handleResyncPress}>
-            <RefreshCw size={12} />
-            Re-sync
-          </button>
-        )}
-      </div>
-    </>
-  );
-}
-
 export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onOpenResync, onBack }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isLoading = usePlayerStore((s) => s.isLoading);
-  const volume = usePlayerStore((s) => s.volume);
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
   const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
-  const isShuffled = usePlayerStore((s) => s.isShuffled);
-  const shuffleOrder = usePlayerStore((s) => s.shuffleOrder);
-  const pause = usePlayerStore((s) => s.pause);
-  const resume = usePlayerStore((s) => s.resume);
   const next = usePlayerStore((s) => s.next);
   const error = usePlayerStore((s) => s.error);
   const retryCurrent = usePlayerStore((s) => s.retryCurrent);
-  const prev = usePlayerStore((s) => s.prev);
   const seek = usePlayerStore((s) => s.seek);
-  const setVolume = usePlayerStore((s) => s.setVolume);
-  const toggleMute = usePlayerStore((s) => s.toggleMute);
-  const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
-  const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
-  const addToQueue = usePlayerStore((s) => s.addToQueue);
-  const playNext = usePlayerStore((s) => s.playNext);
-  const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
-  const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
   const clearQueue = usePlayerStore((s) => s.clearQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
-  const [volumeOpen, setVolumeOpen] = useState(false);
   const [lyricsSearchOpen, setLyricsSearchOpen] = useState(false);
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
   const [lyricsOverride, setLyricsOverride] = useState<LyricsOverride | null>(null);
-  const [albumChipMenu, setAlbumChipMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
-  const [aboutTrackMenu, setAboutTrackMenu] = useState<{ x: number; y: number; track: TopTrack | SuggestedTrack } | null>(null);
-  const [upNextMenu, setUpNextMenu] = useState<{ x: number; y: number; position: number } | null>(null);
 
   const { server, credential } = serverWithCredential;
   const duration = currentTrack?.duration ?? 0;
   const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
-  const repeatLabel = repeatModeLabel(repeat);
-  const shuffleLabel = isShuffled ? "Shuffle on" : "Shuffle off";
 
   const primaryArtist = primaryArtistOf(currentTrack?.artist);
-  const { data: artistAlbums, isPending: albumsPending } = useArtistAlbums(primaryArtist, server.id);
-  const { data: topTracks, isPending: topTracksPending } = useArtistTopTracks(primaryArtist, server.id);
+  const { data: artistAlbums, isPending: albumsPending } = useNowPlayingAlbums(primaryArtist, server.id);
+  const { data: topTracks, isPending: topTracksPending } = useNowPlayingTopTracks(primaryArtist, server.id);
   const { data: suggestedTracks } = useSuggestedTracks(
     primaryArtist,
     currentTrack?.id ?? null,
@@ -436,13 +125,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
     : currentTrack?.coverArtUrl ?? null;
 
-  const orderedTracks = useMemo(
-    () => Array.from({ length: queue.length }, (_, pos) => {
-      const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-      return { position: pos, track: queue[idx] };
-    }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
-    [queue, isShuffled, shuffleOrder]
-  );
 
   const otherAlbums = useMemo(
     () => artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [],
@@ -464,43 +146,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab, queueIndex]);
 
-  function buildTrack(t: TopTrack | SuggestedTrack) {
-    const navId = stripServerPrefix(t.id, server.id);
-    const coverArtUrl = t.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
-      : null;
-    return {
-      track: {
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        duration: t.duration,
-        coverArtUrl,
-        artworkRef: t.artwork_url ?? null,
-        album: t.album_name ?? null,
-        albumId: t.album_id ?? null,
-      },
-      streamUrl: getStreamUrl(server.url, server.username, credential, navId),
-    };
-  }
-
-  function handlePlayTrack(t: TopTrack | SuggestedTrack) {
-    const { track } = buildTrack(t);
-    const streamUrlFn = (ct: CurrentTrack) =>
-      getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id));
-    playNext(track, streamUrlFn);
-    void next();
-  }
-
-  function handleAddToQueue(t: TopTrack | SuggestedTrack) {
-    const { track } = buildTrack(t);
-    addToQueue(track, (ct) => getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id)));
-  }
-
-  function handlePlayNext(t: TopTrack | SuggestedTrack) {
-    const { track } = buildTrack(t);
-    playNext(track, (ct) => getStreamUrl(server.url, server.username, credential, stripServerPrefix(ct.id, server.id)));
-  }
 
   if (!currentTrack) {
     return (
@@ -509,7 +154,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       </div>
     );
   }
-
 
   return (
     <>
@@ -608,93 +252,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             </div>
           )}
 
-          <div className="now-playing-controls">
-            <button
-              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
-              onClick={toggleShuffle}
-              title={shuffleLabel}
-              aria-label={shuffleLabel}
-              aria-pressed={isShuffled}
-            >
-              <Shuffle size={18} />
-            </button>
-            <button
-              className="player-btn"
-              onClick={() => void prev()}
-              disabled={queue.length === 0}
-              aria-label="Previous"
-            >
-              <SkipBack size={26} />
-            </button>
-            <button
-              className="player-btn player-btn--play player-btn--play-large"
-              onClick={isPlaying ? pause : resume}
-              disabled={isLoading}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isLoading
-                ? <Loader size={24} className="player-spin" />
-                : isPlaying
-                  ? <Pause size={24} fill="currentColor" strokeWidth={0} />
-                  : <Play size={24} fill="currentColor" strokeWidth={0} />}
-            </button>
-            <button
-              className="player-btn"
-              onClick={() => void next()}
-              disabled={nextDisabled}
-              aria-label="Next"
-            >
-              <SkipForward size={26} />
-            </button>
-            <button
-              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
-              onClick={() => void toggleRepeat()}
-              title={repeatLabel}
-              aria-label={repeatLabel}
-              aria-pressed={repeat !== "off"}
-            >
-              {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
-            </button>
-          </div>
-
-          <div className="now-playing-extras">
-            <div className="now-playing-extras-center">
-              <RadioButton />
-              <button
-                className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
-                onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
-                title={isLoved ? "Unlove" : "Love"}
-                aria-label={isLoved ? "Unlove" : "Love"}
-              >
-                <Heart size={22} fill={isLoved ? "currentColor" : "none"} strokeWidth={isLoved ? 0 : 2} />
-              </button>
-              <div className="now-playing-volume-wrap">
-                {volumeOpen && (
-                  <div className="now-playing-volume-popover">
-                    <input
-                      type="range"
-                      className="player-volume-slider now-playing-volume-slider"
-                      min={0}
-                      max={1}
-                      step={0.01}
-                      value={volume}
-                      onChange={(e) => void setVolume(parseFloat(e.target.value))}
-                      onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
-                      aria-label="Volume"
-                    />
-                  </div>
-                )}
-                <button
-                  className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
-                  onClick={() => setVolumeOpen((o) => !o)}
-                  onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
-                  title="Volume"
-                >
-                  {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}
-                </button>
-              </div>
-            </div>
-          </div>
+          <NowPlayingControls
+            nextDisabled={nextDisabled}
+            isLoved={isLoved}
+            onToggleLove={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
+          />
         </div>
 
         {/* ── Right: tabbed panel ── */}
@@ -771,232 +333,22 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>
             {tab === "up-next" && (
-              <>
-                {orderedTracks.length === 0 ? (
-                  <p className="now-playing-empty">Nothing queued. Play an album or track, or use "Add to queue" from any track menu.</p>
-                ) : (
-                  orderedTracks.map(({ position, track }) => (
-                    <button
-                      key={`${track.id}-${position}`}
-                      className={[
-                        "now-playing-up-next-row",
-                        position === queueIndex ? "now-playing-up-next-row--active" : "",
-                        position < queueIndex ? "now-playing-up-next-row--past" : "",
-                      ].filter(Boolean).join(" ")}
-                      onClick={() => void playFromQueueIndex(position)}
-                      onContextMenu={(e) => {
-                        e.preventDefault();
-                        setUpNextMenu({ x: e.clientX, y: e.clientY, position });
-                      }}
-                    >
-                      <span className="now-playing-up-next-indicator">
-                        {position === queueIndex ? <Play size={12} /> : null}
-                      </span>
-                      {track.artworkRef ? (
-                        <img
-                          className="now-playing-up-next-thumb"
-                          src={getCoverArtUrl(server.url, server.username, credential, track.artworkRef, 64)}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : track.coverArtUrl ? (
-                        <img className="now-playing-up-next-thumb" src={track.coverArtUrl} alt="" loading="lazy" decoding="async" />
-                      ) : (
-                        <div className="now-playing-up-next-thumb now-playing-up-next-thumb--placeholder" />
-                      )}
-                      <div className="now-playing-up-next-info">
-                        <div className="now-playing-up-next-title-row">
-                          <span className="now-playing-up-next-title">{track.title}</span>
-                        </div>
-                        <div className="now-playing-up-next-meta">
-                          <span className="now-playing-up-next-meta-text">
-                            {[track.artist, track.album ? albumDisplayName(track.album) : null].filter(Boolean).join(" • ")}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="now-playing-up-next-side">
-                        {track.duration != null && (
-                          <span className="now-playing-up-next-duration">
-                            {formatDuration(track.duration)}
-                          </span>
-                        )}
-                        <span className="now-playing-up-next-loved-slot">
-                          {lovedTrackIds.has(track.id) && (
-                            <Heart size={10} className="now-playing-up-next-loved" fill="currentColor" strokeWidth={0} />
-                          )}
-                        </span>
-                      </div>
-                    </button>
-                  ))
-                )}
-                <RadioQueueStatus />
-              </>
+              <UpNextList serverWithCredential={serverWithCredential} lovedTrackIds={lovedTrackIds} />
             )}
 
             {tab === "about" && (
-              <>
-                {aboutPending && (
-                  <div className="now-playing-about-skeleton" aria-hidden="true">
-                    <div className="now-playing-about-skeleton-title" />
-                    <div className="now-playing-about-skeleton-chips">
-                      {[0, 1, 2, 3].map((i) => (
-                        <div key={i} className="now-playing-about-skeleton-chip" />
-                      ))}
-                    </div>
-                    <div className="now-playing-about-skeleton-title" />
-                    {[0, 1, 2, 3, 4].map((i) => (
-                      <div key={i} className="now-playing-about-skeleton-row">
-                        <div className="now-playing-about-skeleton-thumb" />
-                        <div className="now-playing-about-skeleton-bar" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {otherAlbums.length > 0 && (
-                  <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">More from {primaryArtist}</h3>
-                    <div className="now-playing-album-scroll">
-                      {otherAlbums.map((album) => {
-                        const thumbUrl = album.artwork_url
-                          ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 120)
-                          : null;
-                        return (
-                          <button
-                            key={album.id}
-                            className="now-playing-album-chip"
-                            onClick={() => onSelectAlbum(album)}
-                            onContextMenu={(e) => { e.preventDefault(); setAlbumChipMenu({ x: e.clientX, y: e.clientY, album }); }}
-                          >
-                            {thumbUrl
-                              ? <img src={thumbUrl} alt={album.name} className="now-playing-album-chip-art" />
-                              : <div className="now-playing-album-chip-art now-playing-album-chip-art--placeholder" />
-                            }
-                            <span className="now-playing-album-chip-name">{albumDisplayName(album.name)}</span>
-                            {album.year && <span className="now-playing-album-chip-year">{album.year}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {topTracks && topTracks.length > 0 && (
-                  <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">Top tracks by {primaryArtist}</h3>
-                    <div className="now-playing-top-tracks-grid">
-                      {topTracks.slice(0, 10).map((track, i) => (
-                        <div key={track.id} className="now-playing-track-row" onContextMenu={(e) => { e.preventDefault(); setAboutTrackMenu({ x: e.clientX, y: e.clientY, track }); }}>
-                          {track.artwork_url
-                            ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
-                            : <span className="now-playing-track-num">{i + 1}</span>}
-                          <div className="now-playing-track-info">
-                            <span className="now-playing-track-title">{track.title}</span>
-                            {track.album_name && (
-                              <span className="now-playing-track-album">{albumDisplayName(track.album_name, track.album_id ?? undefined)}</span>
-                            )}
-                          </div>
-                          {track.duration && (
-                            <span className="now-playing-track-duration">
-                              {formatDuration(track.duration)}
-                            </span>
-                          )}
-                          <div className="now-playing-track-actions">
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play now"
-                              onClick={(e) => { e.stopPropagation(); handlePlayTrack(track); }}
-                            >
-                              <PlayCircle size={16} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play next"
-                              onClick={(e) => { e.stopPropagation(); handlePlayNext(track); }}
-                            >
-                              <Play size={14} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Add to queue"
-                              onClick={(e) => { e.stopPropagation(); handleAddToQueue(track); }}
-                            >
-                              <ListEnd size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {suggestedTracks && suggestedTracks.length > 0 && (
-                  <div className="now-playing-more-section">
-                    <h3 className="now-playing-section-title">Suggested</h3>
-                    <div className="now-playing-top-tracks-grid">
-                      {suggestedTracks.slice(0, 10).map((track) => (
-                        <div key={track.id} className="now-playing-track-row" onContextMenu={(e) => { e.preventDefault(); setAboutTrackMenu({ x: e.clientX, y: e.clientY, track }); }}>
-                          {track.artwork_url
-                            ? <img className="now-playing-track-thumb" src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)} alt="" />
-                            : <span className="now-playing-track-num" />}
-                          <div className="now-playing-track-info">
-                            <span className="now-playing-track-title">{track.title}</span>
-                            <span className="now-playing-track-album">
-                              {[track.artist, track.album_name ? albumDisplayName(track.album_name, track.album_id ?? undefined) : null].filter(Boolean).join(" - ")}
-                            </span>
-                          </div>
-                          {track.duration && (
-                            <span className="now-playing-track-duration">
-                              {formatDuration(track.duration)}
-                            </span>
-                          )}
-                          <div className="now-playing-track-actions">
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play now"
-                              onClick={() => handlePlayTrack(track)}
-                            >
-                              <PlayCircle size={16} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Play next"
-                              onClick={() => handlePlayNext(track)}
-                            >
-                              <Play size={14} />
-                            </button>
-                            <button
-                              className="now-playing-track-action-btn"
-                              title="Add to queue"
-                              onClick={() => handleAddToQueue(track)}
-                            >
-                              <ListEnd size={16} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {!aboutPending && otherAlbums.length === 0 && (!topTracks || topTracks.length === 0) && (
-                  <p className="now-playing-empty">
-                    Nothing else by {primaryArtist ?? "this artist"} in your library yet. Other
-                    albums and top tracks show up here once they are synced.
-                  </p>
-                )}
-
-                {primaryArtist && (
-                  <TourCard
-                    artistName={primaryArtist}
-                    enabled={bandsintownEnabled}
-                    loading={tourLoading}
-                    events={tourEvents}
-                    onEnable={() => void setBandsintownEnabled(true)}
-                  />
-                )}
-              </>
+              <NowPlayingAbout
+                serverWithCredential={serverWithCredential}
+                primaryArtist={primaryArtist}
+                pending={aboutPending}
+                otherAlbums={otherAlbums}
+                topTracks={topTracks}
+                suggestedTracks={suggestedTracks}
+                tour={{ enabled: bandsintownEnabled, loading: tourLoading, events: tourEvents, onEnable: () => void setBandsintownEnabled(true) }}
+                onSelectAlbum={onSelectAlbum}
+                onSelectArtist={onSelectArtist}
+                onStartRadio={onStartRadio}
+              />
             )}
 
             {tab === "lyrics" && (
@@ -1023,119 +375,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
       </div>
     </div>
 
-    {albumChipMenu && (
-      <ContextMenu x={albumChipMenu.x} y={albumChipMenu.y} onClose={() => setAlbumChipMenu(null)}>
-        <button onClick={() => { onSelectAlbum(albumChipMenu.album); setAlbumChipMenu(null); }}>Go to Album</button>
-        <StartRadioSubmenu
-          onSelect={(mode) => { onStartRadio(albumChipMenu.album, mode); setAlbumChipMenu(null); }}
-        />
-      </ContextMenu>
-    )}
-
-    {aboutTrackMenu && (
-      <ContextMenu x={aboutTrackMenu.x} y={aboutTrackMenu.y} onClose={() => setAboutTrackMenu(null)}>
-        <button onClick={() => { handlePlayTrack(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play now</button>
-        <button onClick={() => { handlePlayNext(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Play next</button>
-        <button onClick={() => { handleAddToQueue(aboutTrackMenu.track); setAboutTrackMenu(null); }}>Add to queue</button>
-        {aboutTrackMenu.track.album_id && (
-          <button
-            onClick={() => {
-              onSelectAlbum({
-                id: aboutTrackMenu.track.album_id!,
-                server_id: server.id,
-                name: aboutTrackMenu.track.album_name ?? "",
-                artist: aboutTrackMenu.track.artist,
-                year: null,
-                artwork_url: aboutTrackMenu.track.artwork_url,
-              });
-              setAboutTrackMenu(null);
-            }}
-          >
-            Go to Album
-          </button>
-        )}
-        {onSelectArtist && aboutTrackMenu.track.artist && (
-          <button
-            onClick={() => { onSelectArtist(aboutTrackMenu.track.artist!); setAboutTrackMenu(null); }}
-          >
-            Go to Artist
-          </button>
-        )}
-        {aboutTrackMenu.track.album_id && (
-          <StartRadioSubmenu
-            onSelect={(mode) => {
-              onStartRadio(
-                {
-                  id: aboutTrackMenu.track.album_id!,
-                  server_id: server.id,
-                  name: aboutTrackMenu.track.album_name ?? "",
-                  artist: aboutTrackMenu.track.artist,
-                  year: null,
-                  artwork_url: aboutTrackMenu.track.artwork_url,
-                },
-                mode
-              );
-              setAboutTrackMenu(null);
-            }}
-          />
-        )}
-      </ContextMenu>
-    )}
-
-    {upNextMenu && (
-      <ContextMenu x={upNextMenu.x} y={upNextMenu.y} onClose={() => setUpNextMenu(null)}>
-        {upNextMenu.position !== 0 && (
-          <button
-            onClick={() => {
-              moveQueueItem(upNextMenu.position, 0);
-              setUpNextMenu(null);
-            }}
-          >
-            Move to Top
-          </button>
-        )}
-        {queueIndex + 1 < queue.length && upNextMenu.position !== queueIndex + 1 && upNextMenu.position !== queueIndex && (
-          <button
-            onClick={() => {
-              moveQueueItem(upNextMenu.position, queueIndex + 1);
-              setUpNextMenu(null);
-            }}
-          >
-            Play Next
-          </button>
-        )}
-        {upNextMenu.position !== queue.length - 1 && (
-          <button
-            onClick={() => {
-              moveQueueItem(upNextMenu.position, queue.length - 1);
-              setUpNextMenu(null);
-            }}
-          >
-            Move to Bottom
-          </button>
-        )}
-        <StartRadioSubmenu
-          onSelect={(mode) => {
-            const entry = orderedTracks.find((t) => t.position === upNextMenu.position);
-            if (entry) {
-              void playFromQueueIndex(upNextMenu.position).then(() => {
-                startRadio(entry.track, mode);
-              });
-            }
-            setUpNextMenu(null);
-          }}
-        />
-        <button
-          className="context-menu-danger"
-          onClick={() => {
-            void removeFromQueue(upNextMenu.position);
-            setUpNextMenu(null);
-          }}
-        >
-          Remove
-        </button>
-      </ContextMenu>
-    )}
     </>
   );
 }

@@ -3,7 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Music, ListMusic } from "lucide-react";
 import type { PlaylistRow } from "./usePlaylists";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { getCoverArtUrl } from "../../clients/navidrome";
+import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";

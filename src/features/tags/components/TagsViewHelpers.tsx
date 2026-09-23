@@ -1,5 +1,5 @@
 import { useServers, useServerWithCredential } from "../../../hooks/useServer";
-import { getCoverArtUrl } from "../../../clients/navidrome";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { useTagAlbums } from "../hooks/useTagMappings";
 import { CanonCombobox } from "./CanonCombobox";
 import type { TagKind } from "../lib/canonicalize";

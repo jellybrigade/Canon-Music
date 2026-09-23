@@ -8,7 +8,7 @@ import { useLoved } from "../hooks/useLoved";
 import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useScrollMemory } from "../hooks/useScrollMemory";
-import { getCoverArtUrl } from "../clients/navidrome";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { AlbumArt } from "./AlbumArt";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
@@ -16,7 +16,7 @@ import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmen
 import { Pagination } from "../features/tags/components/TagsViewHelpers";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { CardGridSkeleton } from "../ui/Skeleton";
-import type { RadioMode } from "../features/playback/store/player";
+import type { RadioMode } from "../features/playback/store/playerTypes";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
 import "./AlbumGrid.css";
 

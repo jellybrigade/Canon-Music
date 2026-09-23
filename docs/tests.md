@@ -62,8 +62,8 @@ Rust, `cargo test` -> **81 passing**, all in `#[cfg(test)] mod tests` at the bot
 
 - `upnp.rs` (20): `xml_text`, `find_control_url` (absolute / root-relative / path-relative), `resolve_base` (`URLBase` vs location-derived), `parse_response` (non-200, NOTIFY, missing LOCATION, USN fallback).
 - `streaming.rs` (12): `finish()` -> `Ok(0)`, **`fail()` -> `UnexpectedEof` with the arrived bytes still served** (the truncated-stream regression), concurrent writer/blocking reader, `SeekFrom::End` off Content-Length, spill-file cleanup, writer dropped without finish -> `Interrupted`.
-- `library_read.rs` (4): `order_by_clause` allowlist, unknown key named in the error, injection-shaped keys rejected.
-- `lib.rs` (45): `sanitize_cache_key`, `percent_decode`, `xml_first_tag_text`, `friendly_keyring_error` (one per variant), disk cover cache round-trip + oldest-mtime eviction.
+- `library_read/albums.rs` (4): `order_by_clause` allowlist, unknown key named in the error, injection-shaped keys rejected.
+- `cover.rs`, `keychain.rs`, `upnp.rs` (45): `sanitize_cache_key`, `percent_decode`, `xml_first_tag_text`, `friendly_keyring_error` (one per variant), disk cover cache round-trip + oldest-mtime eviction.
 
 ### Landed 2026-08-03 (fourth pass)
 
@@ -229,8 +229,8 @@ Harness note: this is a **second** test file for one source file, deliberately. 
 
 **Follow-ups this pass created (bugs found, not fixed - out of scope):**
 
-1. **The `cover://` ready branch is not scoped by owner** (`navidrome.ts:200-202`, `src-tauri/src/lib.rs:133,324,343`). `getCoverArtUrl` discards `baseUrl`/`username`/`credential` entirely once ready; the host is reconstructed in Rust from `CoverState`'s single global `proxy_config` slot, and the disk cache key is `{id}:{size}` with no server namespace. This is known-issues' "A mirror not scoped by owner", sharper form - internally consistent, wrong host, passes typecheck. Made worse by `_coverServerReady` being one-way: `App.tsx:270-284` swallows an `updateCoverProxyConfig` failure and skips `initCoverServer()`, but on a **server switch** the flag is already `true` from the previous server, so covers keep resolving against server A's base URL and credentials. A password rotation likewise changes no cover URL, so stale bytes survive re-auth under a `max-age=604800` header. Fix shape: a `resetCoverServer()` called before each `updateCoverProxyConfig`, plus a server id in both the URL path and the Rust cache key. Current behavior is pinned by a test explicitly labelled as documenting it, not endorsing it.
-2. **`size` is unvalidated and, in the ready branch, interpolated unencoded** (`navidrome.ts:201`). `-1`, `NaN` and fractional sizes all produce URLs Rust silently coerces to 300 (`lib.rs:323`) while the JS string - and every React memo key and the Rust cache key derived from it - keeps the bogus value. Reachable: `TagsViewHelpers.tsx:42` passes a computed `size * 2`.
+1. **The `cover://` ready branch is not scoped by owner** (`navidrome.ts:200-202`, `src-tauri/src/cover.rs`). `getCoverArtUrl` discards `baseUrl`/`username`/`credential` entirely once ready; the host is reconstructed in Rust from `CoverState`'s single global `proxy_config` slot, and the disk cache key is `{id}:{size}` with no server namespace. This is known-issues' "A mirror not scoped by owner", sharper form - internally consistent, wrong host, passes typecheck. Made worse by `_coverServerReady` being one-way: `App.tsx:270-284` swallows an `updateCoverProxyConfig` failure and skips `initCoverServer()`, but on a **server switch** the flag is already `true` from the previous server, so covers keep resolving against server A's base URL and credentials. A password rotation likewise changes no cover URL, so stale bytes survive re-auth under a `max-age=604800` header. Fix shape: a `resetCoverServer()` called before each `updateCoverProxyConfig`, plus a server id in both the URL path and the Rust cache key. Current behavior is pinned by a test explicitly labelled as documenting it, not endorsing it.
+2. **`size` is unvalidated and, in the ready branch, interpolated unencoded** (`navidrome.ts:201`). `-1`, `NaN` and fractional sizes all produce URLs Rust silently coerces to 300 (`cover.rs`) while the JS string - and every React memo key and the Rust cache key derived from it - keeps the bogus value. Reachable: `TagsViewHelpers.tsx:42` passes a computed `size * 2`.
 3. **`HomeView.tsx:670` is the only unguarded `getCoverArtUrl` call site**, using `album.artwork_url!`. Every other site guards on falsiness. If it is ever undefined, `encodeURIComponent(undefined)` requests a cover literally named `"undefined"`, which Rust then caches under `"undefined:300"` - a silent, persistently cached wrong answer instead of a visible failure.
 4. `authenticate` duplicates `buildAuthParams`' `v`/`c`/`f` literals rather than calling it (`navidrome.ts:855` vs `:74-76`). Not wrong today; a protocol bump applied to one and not the other breaks login while leaving every other call working. Pinned by a test comparing the two param sets.
 
@@ -240,7 +240,7 @@ Harness note: this is a **second** test file for one source file, deliberately. 
 
 Closes section 3. Refactor first: every `#[tauri::command]` body in `src-tauri/src/library_read.rs` was a closure using only `&Connection` (never `AppHandle`), so each was hoisted to a free `query_*(conn, ...)` fn per CLAUDE.md's "extract free fn, test that"; `open_read_conn` split into `open_read_conn_at(&Path)` + a one-line `AppHandle` wrapper. Behavior unchanged. `get_albums` keeps a deliberate double `order_by_clause` call (once before `with_conn`, once inside `query_albums`) so a rejected sort still never opens the database - commented at the call site.
 
-Fixture is hand-written DDL in `mod tests` (~55 lines, post-ALTER shape, only the 12 tables these queries read), not a replay of `migrations.ts` - Rust cannot run the TS migrations, and this connection never sees the schema anyway. In-memory `rusqlite` for the query tests; a `ScratchDir` (copied from `lib.rs`/`streaming.rs`, still no `tempfile` dev-dep) for the two file-backed ones.
+Fixture is hand-written DDL in `mod tests` (~55 lines, post-ALTER shape, only the 12 tables these queries read), not a replay of `migrations.ts` - Rust cannot run the TS migrations, and this connection never sees the schema anyway. In-memory `rusqlite` for the query tests; a `ScratchDir` (copied from `cover.rs`/`streaming.rs`, still no `tempfile` dev-dep) for the two file-backed ones.
 
 `cargo test` 81 -> **125**.
 
@@ -643,7 +643,7 @@ No mocks needed, fast, and several already have known bug history.
 
 ### `src/lib/shuffle.ts`
 - [x] `shuffleArray` returns a permutation (same multiset), does not mutate input.
-- [x] Anchor semantics: `buildShuffleOrder(n, anchor)` (lives in `src/features/playback/store/player.ts`, was module-private - now a plain `export`, matching how `normalizeShuffleOrder` is exposed) puts `anchor` at position 0; `-1` means no anchor. **Regression: the "no anchor" wrap bug** - `-1` must produce a genuinely random position 0 across many runs, never a fixed index.
+- [x] Anchor semantics: `buildShuffleOrder(n, anchor)` (lives in `src/features/playback/store/queueOrder.ts` beside `normalizeShuffleOrder`) puts `anchor` at position 0; `-1` means no anchor. **Regression: the "no anchor" wrap bug** - `-1` must produce a genuinely random position 0 across many runs, never a fixed index.
 - [x] Statistical smoke: over 1000 runs no index is pinned to position 0.
 - [x] `n === 0` and `n === 1` degenerate cases.
 
@@ -710,7 +710,7 @@ No mocks needed, fast, and several already have known bug history.
 
 ---
 
-## 2. Store logic (`src/features/playback/store/player.ts` - the single riskiest file)
+## 2. Store logic (`src/features/playback/store/player.ts` and its split modules - the single riskiest file)
 
 Every one of these mirrors a real, documented, previously-shipped bug. This section is the core of the baseline.
 
@@ -799,7 +799,7 @@ Split into two scopes once the code was in view: **transport** (`apiPost` and ev
 - [x] Playlist position compaction after a removal (the second removal must delete the right remote index). Landed 2026-08-12 in `src/features/playlists/usePlaylistTracks.test.ts`, where the bullet itself said it belonged. **Mis-filed here:** `removeTrackFromNavidromePlaylist` is a thin `songIndexToRemove` sender; the compaction is `src/features/playlists/usePlaylistTracks.ts:61-97` and belongs in `usePlaylistTracks.test.ts` with `createMigratedTestDb`.
 - [x] `fetchAllAlbums` throws on any failed page rather than returning short.
 
-### `src-tauri/src/library_read.rs`
+### `src-tauri/src/library_read/`
 - [x] `order_by_clause` rejects unknown sort keys (SQL injection guard) - unit-testable, no DB. Also whitespace-only, unicode lookalikes, and a structural property over the fragments themselves.
 - [x] Every query filters by `server_id` where it should. **Answer: none of the 13 do.** Five are implicitly scoped by a `${server_id}:` id prefix; `get_artists` and the genre aggregates are not. Unchanged from the pre-port JS. Tests pin current behavior and each DTO's `server_id` reading off its own row column; the divergence is logged in `donow.md`.
 - [x] Integration: each `get_*` body extracted to a `query_*(&Connection, ...)` free fn and exercised against a fixture db. **Nothing in this file paginates** - no command takes `limit`/`offset`; covered the LIMIT/HAVING boundaries instead (`LIMIT 10`, `>= 5` twice, `LIMIT 18`).

@@ -49,7 +49,7 @@ The bar is always docked at the bottom of the main window whenever a track is lo
 - **Love**: `useLoved()` hook (`src/hooks/useLoved.ts`).
 - **Cast/DLNA**: renderer discovery/state lives in the player store (`castDevice`, `availableRenderers`, `scanRenderers`, `setCastDevice`); per `CLAUDE.md`, SSDP discovery itself is the one deliberate Rust exception (`src-tauri/src/upnp.rs`), all SOAP control stays in `src/clients/dlna.ts` / `src/features/playback/store/playbackTarget.ts`.
 - **Progress/seek UI**: `src/features/playback/components/PlayerProgress.tsx:15` (click-to-seek).
-- **Rust audio commands** (`src-tauri/src/lib.rs`) — thin per CLAUDE.md's "Rust stays thin" rule, just `rodio`/`symphonia` control:
+- **Rust audio commands** (`src-tauri/src/audio/`) — thin per CLAUDE.md's "Rust stays thin" rule, just `rodio`/`symphonia` control:
   - `audio_play` (:264) — load + decode, emits `audio-format` event.
   - `audio_pause` / `audio_resume` (:631, :667) — optional ~30ms fade ramp (the "pause/resume fade" setting).
   - `audio_stop` (:703) — bumps an internal `play_id`, clears state.

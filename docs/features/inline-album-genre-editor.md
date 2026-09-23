@@ -31,7 +31,7 @@ Every add/remove/exclude/resolve action triggers a full re-run of local tag norm
 ## Implementation
 
 - Component: `src/components/AlbumGenreEditor.tsx` — props take pre-grouped `genreGroups: GenreGroups` (manual/file/lastfm/musicbrainz/folksonomy/unsourced) and `rawSourcesByCanonicalId` computed by the parent.
-- Mounted from: `src/pages/AlbumDetail.tsx:714-724`, gated by `showGenreEditor` state (`AlbumDetail.tsx:269`); toggle button at `AlbumDetail.tsx:636-642`; unmatched-hint button at `AlbumDetail.tsx:647-655`.
+- Mounted from `src/pages/AlbumDetail.tsx`, gated by its `showGenreEditor` state; the toggle button and the unmatched-hint button live in `src/pages/album/AlbumTagBand.tsx`.
 - Add: `INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name)` (`AlbumGenreEditor.tsx:81-84`).
 - Remove: `DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?` (`AlbumGenreEditor.tsx:98-101`).
 - Exclude: `INSERT OR IGNORE INTO album_genre_exclusions (album_id, canonical_id)` (`AlbumGenreEditor.tsx:115-118`).

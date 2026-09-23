@@ -1,0 +1,175 @@
+/* ── Review tab ──────────────────────────────────────────────────────────────── */
+
+.review-autonote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-xs) var(--space-lg);
+  background: var(--accent-subtle);
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  gap: var(--space-sm);
+}
+
+.review-autonote-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.review-autonote-dismiss:hover { color: var(--text-primary); }
+
+.review-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.review-search {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--text-md);
+  padding: var(--space-xs) var(--space-sm);
+  outline: none;
+  width: 220px;
+  transition: border-color var(--duration-fast);
+}
+
+.review-search::placeholder { color: var(--text-tertiary); }
+.review-search:focus { border-color: var(--border-strong); }
+
+.review-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.review-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.review-kind-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.rkind-btn {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  padding: var(--space-2xs) var(--space-sm);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+  letter-spacing: 0.02em;
+}
+
+.rkind-btn:hover { color: var(--text-secondary); }
+.rkind-btn--active { color: var(--text-primary); }
+
+.review-toolbar-pagination {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+/* Fit container, CSS grid parent; all rows share column tracks via subgrid.
+   The name column is max-content so no row ever truncates. */
+.review-fit {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+  /* dots | name (fills space) | art | count | actions */
+  grid-template-columns: 56px 1fr 200px 36px auto;
+  column-gap: 14px;
+  align-content: start;
+  padding: 0 var(--space-lg);
+  box-sizing: border-box;
+  width: min(1200px, 100%);
+  margin: 0 auto;
+}
+
+/* Dense row, min-height must match ROW_HEIGHT in TagReviewTab.tsx */
+.review-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 56px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--duration-instant);
+}
+
+.review-row:hover { background: var(--bg-hover); }
+
+.rr-info { display: contents; }
+
+.rr-name {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1.35;
+  padding: var(--space-2xs) 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
+.rr-albums {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.rr-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.review-row .tags-art-strip { gap: 3px; }
+
+.review-row .tags-combobox {
+  width: 220px;
+  max-width: 220px;
+}
+
+.review-empty {
+  padding: var(--space-3xl) var(--space-lg);
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+}
+
+.review-empty strong {
+  display: block;
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2xs);
+  font-weight: 500;
+  font-size: var(--text-md);
+}

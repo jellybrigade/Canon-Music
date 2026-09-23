@@ -1,6 +1,6 @@
 import { getDb } from "../../../db";
 import { getCanonTree } from "../../tags/lib/canonicalize";
-import type { RadioMode } from "../../playback/store/player";
+import type { RadioMode } from "../../playback/store/playerTypes";
 
 export interface RadioCandidate {
   id: string;

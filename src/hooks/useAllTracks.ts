@@ -27,7 +27,7 @@ export interface AllTrackRow {
 
 // Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
 // split"). Mirrors useAlbums.ts/useArtists.ts/useTracks.ts - reads via
-// src-tauri/src/library_read.rs's dedicated read-only connection instead of
+// src-tauri/src/library_read/tracks.rs's dedicated read-only connection instead of
 // tauri-plugin-sql's sqlx pool. Ported after live measurement showed this hook's sqlx
 // select taking 1.8-3.5s vs ~100-250ms for the already-piloted rusqlite reads.
 // `enabled` lets the app root skip this fetch on routes that never render the track

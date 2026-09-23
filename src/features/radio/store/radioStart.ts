@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RadioStartRequest } from "../../playback/store/player";
+import type { RadioStartRequest } from "../../playback/store/playerTypes";
 
 // A radio start waiting on the user's replace-or-add answer. One at a time: a second request
 // while the dialog is open replaces the first, since only the latest click is still wanted.

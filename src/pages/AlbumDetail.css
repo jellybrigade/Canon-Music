@@ -30,16 +30,6 @@
   pointer-events: none;
 }
 
-/* Rendered by ArtBackdrop, which crossfades between covers. Blur is precomputed
-   on a tiny canvas (src/lib/artBlur.ts), so its layers only scale already-blurred
-   pixels to cover - a cheap compositor op - instead of running an expensive
-   `filter: blur()` raster over a large layer on every repaint (same WebKitGTK
-   cost that NowPlayingView's backdrop had, see NowPlayingView.css). */
-.album-detail-hero-bg {
-  --art-backdrop-pos: center top;
-  opacity: var(--opacity-30);
-}
-
 .album-detail-back {
   align-self: flex-start;
   font-size: var(--text-base);
@@ -80,13 +70,6 @@
   padding-bottom: var(--space-2xs);
 }
 
-.album-detail-title-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-xs);
-  min-width: 0;
-}
-
 .album-detail-title {
   font-family: var(--font-sans);
   font-size: var(--text-2xl);
@@ -96,78 +79,12 @@
   line-height: 1.15;
 }
 
-/* Both suffix controls are plain text affordances sitting in the hero. The
-   global `input, button` rule gives every button a radius and a drop shadow,
-   which on a transparent background renders as a floating glassy pill around
-   the text - so the shadow and the radius are cleared explicitly here. */
-.album-suffix-toggle-btn {
-  appearance: none;
-  background: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0 var(--space-2xs);
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: var(--text-base);
-  font-family: inherit;
-  white-space: nowrap;
-  flex-shrink: 0;
-  line-height: 1;
-  transition: color var(--duration-fast);
-}
-.album-suffix-toggle-btn:hover:not(:disabled) { color: var(--text-primary); }
-.album-suffix-toggle-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.album-suffix-add-btn {
-  appearance: none;
-  background: none;
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0;
-  /* The hero meta column is a stretch-aligned flex column, so without this the
-     button's hit area runs the full width of the page past its own label. */
-  align-self: flex-start;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  font-size: var(--text-base);
-  line-height: 1.4;
-  text-align: left;
-  font-family: inherit;
-  transition: color var(--duration-fast);
-}
-.album-suffix-add-btn:hover:not(:disabled) { color: var(--text-primary); }
-.album-suffix-add-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
 .album-detail-artist {
   font-size: var(--text-md);
   font-weight: 400;
   letter-spacing: 0.01em;
   color: var(--text-secondary);
   margin: 0;
-}
-
-.album-detail-artist--link {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-size: inherit;
-  font-weight: inherit;
-  letter-spacing: inherit;
-  color: var(--text-secondary);
-  text-decoration: none;
-}
-
-.album-detail-artist--link:hover {
-  color: var(--text-primary);
 }
 
 .album-detail-year {
@@ -194,39 +111,6 @@
 .play-album-btn:hover:not(:disabled) {
   background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 60%, black);
   border-color: transparent;
-}
-
-.album-meta-refresh-line {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-top: 0.1rem;
-}
-
-.album-meta-refresh-hint {
-  font-size: var(--text-base);
-  color: var(--text-tertiary);
-}
-
-.album-meta-refresh-btn {
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: var(--text-base);
-  color: var(--text-secondary);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  box-shadow: none;
-}
-
-.album-meta-refresh-btn:hover:not(:disabled) {
-  color: var(--text-primary);
-}
-
-.album-meta-refresh-error {
-  font-size: var(--text-base);
-  color: var(--danger);
 }
 
 /* ── Loading skeletons ──
@@ -268,150 +152,6 @@
 .album-track-skeleton-row:nth-child(2n) .album-track-skeleton-bar { animation-delay: 0.12s; }
 .album-track-skeleton-row:nth-child(3n) .album-track-skeleton-bar { animation-delay: 0.24s; }
 
-.track-skeleton-list {
-  padding: var(--space-xs) 0;
-}
-
-.track-skeleton-row {
-  display: grid;
-  align-items: center;
-  gap: var(--space-sm);
-  height: 40px;
-  padding: 0 var(--space-sm);
-}
-
-.track-skeleton-row:nth-child(2n) .track-skeleton-bar { animation-delay: 0.12s; }
-.track-skeleton-row:nth-child(3n) .track-skeleton-bar { animation-delay: 0.24s; }
-
-.album-detail-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-xs);
-  margin-top: var(--space-xs);
-}
-
-.album-identify-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  border-radius: var(--radius-base);
-  background: var(--tint-2);
-  border: 1px solid var(--tint-4);
-  color: var(--text-secondary, var(--overlay-50));
-  cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
-  box-shadow: none;
-}
-
-.album-identify-btn:hover {
-  background: var(--tint-4);
-  color: var(--text-primary, #fff);
-}
-
-.album-identify-btn--loved {
-  color: var(--accent);
-}
-
-.album-identify-btn--loved:hover {
-  color: var(--accent);
-}
-
-.album-detail-identity {
-  margin: 0;
-}
-
-.mb-verified-facts {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0 0.4em;
-  font-size: var(--text-base);
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin: 0;
-}
-
-.mb-verified-facts span + span::before {
-  content: "·";
-  margin-right: 0.4em;
-  opacity: var(--opacity-50);
-}
-
-.album-tag-band {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs) var(--space-md);
-  padding: var(--space-xs) var(--space-md) var(--space-xs);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.album-tag-column {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2xs);
-}
-
-.album-tag-column-title {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  margin: 0 var(--space-2xs) 0 0;
-  white-space: nowrap;
-}
-
-.album-tag-chip {
-  display: inline-flex;
-  align-items: center;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md-lg);
-  padding: 1px var(--space-xs);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
-}
-
-.album-tag-chip--excludable {
-  padding: 1px var(--space-2xs) 1px var(--space-xs);
-  gap: var(--space-2xs);
-}
-
-.album-tag-chip:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-  border-color: var(--text-tertiary);
-}
-
-/* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
-.album-tag-chip--lastfm {
-  border-style: dashed;
-  opacity: var(--opacity-85);
-}
-
-.album-tag-chip--lastfm:hover {
-  opacity: 1;
-}
-
-.album-tag-chip--musicbrainz {
-  border-style: dotted;
-  opacity: var(--opacity-75);
-}
-
-.album-tag-chip--musicbrainz:hover {
-  opacity: 1;
-}
-
 .album-tag-chip--musicbrainz-folksonomy {
   border-style: dotted;
   opacity: var(--opacity-60);
@@ -419,18 +159,6 @@
 
 .album-tag-chip--musicbrainz-folksonomy:hover {
   opacity: 1;
-}
-
-/* Manual (user-entered) genre chips */
-.album-tag-chip--manual {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  border: 1px solid var(--accent, #7c6af0);
-  border-radius: var(--radius-md-lg);
-  padding: 1px var(--space-2xs) 1px var(--space-xs);
-  font-size: var(--text-sm);
-  font-weight: 500;
 }
 
 .album-tag-chip-label {
@@ -461,35 +189,6 @@
 
 .album-tag-chip-remove:hover {
   opacity: 1;
-  color: var(--text-secondary);
-}
-
-/* Column header row: title + add button inline */
-.album-tag-column-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2xs);
-  width: 100%;
-}
-
-.album-tag-add-genre-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: var(--text-tertiary);
-  padding: 0;
-  transition: border-color var(--duration-base), color var(--duration-base);
-  flex-shrink: 0;
-}
-
-.album-tag-add-genre-btn:hover {
-  border-color: var(--text-tertiary);
   color: var(--text-secondary);
 }
 
@@ -579,48 +278,6 @@
   color: #22c55e;
 }
 
-.album-bio-section {
-  margin: var(--space-sm) var(--space-md) 0;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--surface-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-}
-
-.album-bio-wrap {
-  position: relative;
-}
-
-.album-bio-wrap--clamped {
-  max-height: 1.4rem;
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-}
-
-.album-bio {
-  font-size: var(--text-md);
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0;
-}
-
-.album-bio-toggle {
-  background: none;
-  border: none;
-  box-shadow: none;
-  padding: var(--space-2xs) 0 0;
-  font-size: var(--text-base);
-  color: var(--accent);
-  cursor: pointer;
-  opacity: var(--opacity-85);
-  transition: opacity var(--motion-fast);
-}
-
-.album-bio-toggle:hover {
-  opacity: 1;
-}
-
 .album-detail-body {
   flex: 1;
   overflow-y: auto;
@@ -628,130 +285,9 @@
   contain: paint;
 }
 
-.tracklist {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-md);
-  font-weight: 400;
-}
-
-.tracklist-row {
-  border-bottom: 1px solid var(--border);
-}
-
-.tracklist-row--playable {
-  cursor: pointer;
-}
-
-.tracklist-row--playable:hover {
-  background-color: var(--bg-hover);
-}
-
-.tracklist-row--active {
-  color: var(--accent);
-}
-
-.tracklist-row:hover {
-  background-color: var(--bg-hover);
-}
-
-.tracklist td {
-  padding: var(--space-xs) var(--space-xs);
-  vertical-align: middle;
-}
-
-.track-number {
-  color: var(--text-tertiary);
-  text-align: right;
-  width: 2.5rem;
-  padding-right: var(--space-sm);
-  font-size: var(--text-base);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
 .track-playing-indicator {
   color: var(--accent);
   animation: playingPulse 1.8s ease-in-out infinite;
-}
-
-.track-title {
-  font-weight: 500;
-  width: 40%;
-  letter-spacing: -0.005em;
-}
-
-.track-artist {
-  color: var(--text-secondary);
-  font-weight: 400;
-  width: 25%;
-  font-size: var(--text-base);
-}
-
-.track-genre {
-  width: 20%;
-}
-
-.track-genre-chip {
-  display: inline-block;
-  font-size: var(--text-sm);
-  font-weight: 400;
-  color: var(--text-tertiary);
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-
-.track-genre-chip:not(:last-child)::after {
-  content: "·";
-  margin: 0 var(--space-2xs);
-  opacity: var(--opacity-40);
-}
-
-.track-duration {
-  color: var(--text-tertiary);
-  text-align: right;
-  white-space: nowrap;
-  font-size: var(--text-base);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.01em;
-}
-
-.track-disc {
-  color: var(--text-tertiary);
-  font-size: var(--text-base);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.track-format {
-  color: var(--text-tertiary);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-}
-
-.track-bitrate {
-  color: var(--text-tertiary);
-  font-size: var(--text-base);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.track-plays {
-  color: var(--text-tertiary);
-  font-size: var(--text-base);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-
-
-
-/* ── Tracklist wrapper + floating column picker ── */
-.tracklist-wrapper {
-  display: flex;
-  flex-direction: column;
 }
 
 .tracklist-wrapper > .tracklist-col-picker-anchor {
@@ -950,31 +486,6 @@
   padding-right: var(--space-sm) !important;
 }
 
-/* ── Track table: selected row + sortable header buttons ── */
-.track-table-row--selected {
-  background-color: var(--bg-selected, var(--tint-3));
-}
-
-.track-sort-btn {
-  background: none;
-  border: none;
-  box-shadow: none;
-  cursor: pointer;
-  text-align: left;
-  padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: visible;
-}
-
-.track-sort-btn:hover {
-  color: var(--text-primary);
-}
-
 /* ── Unidentified album badge (shown when MB auto-identify is on and album has no confirmed identity) ── */
 .album-unidentified-badge {
   display: inline-flex;
@@ -1025,24 +536,6 @@
   padding-right: var(--space-xs);
   min-width: 2.5rem;
 }
-
-/* ── Unmatched genres hint (opens TagDrawer) ── */
-
-.album-unmatched-hint {
-  background: none;
-  border: none;
-  box-shadow: none;
-  color: var(--text-tertiary);
-  font: inherit;
-  font-size: var(--text-sm);
-  padding: var(--space-2xs) var(--space-2xs);
-  cursor: pointer;
-  transition: color var(--duration-fast);
-  white-space: nowrap;
-  align-self: flex-start;
-}
-
-.album-unmatched-hint:hover { color: var(--text-secondary); }
 
 .album-related-section {
   padding: var(--space-xl) 0 0;

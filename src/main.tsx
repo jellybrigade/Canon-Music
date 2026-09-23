@@ -6,7 +6,7 @@ import App from "./App";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { initLogger } from "./lib/logger";
 import { getDb } from "./db";
-import { purgeStrandedServers } from "./features/sync/sync";
+import { purgeStrandedServers } from "./features/sync/syncPrune";
 
 initLogger();
 

@@ -17,7 +17,7 @@ Spawn a `caveman:cavecrew-investigator` agent (or do it directly if scope is sma
 
 ## Phase 3 — Audit Canon's current implementation
 
-Read Canon's current code for this concern (file paths are usually named in the doc — `src-tauri/src/*.rs`, `keychain.ts`, `upnp.rs`, `lib.rs`'s `CoverState`, audio backend, CI workflow, etc.). Determine concretely:
+Read Canon's current code for this concern (file paths are usually named in the doc — `src-tauri/src/*.rs`, `keychain.ts`, `upnp.rs`, `cover.rs`'s `CoverState`, audio backend, CI workflow, etc.). Determine concretely:
 
 - Does Canon do the risky thing described, or has it already been mitigated?
 - Is this a real bug (will misbehave/crash/silently no-op on Mac or Windows) or just an untested-but-probably-fine assumption?

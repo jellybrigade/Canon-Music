@@ -1,8 +1,8 @@
 /**
- * Transport-layer coverage for `src/clients/navidrome.ts`: `apiPost`'s timeout / retry /
- * alt-URL behavior, the `SubsonicError` code channel, and `fetchAllAlbums`' refusal to
- * return a short list. `apiPost` is module-private, so every test drives it through a
- * real exported caller, which is also what pins the caller-specific error messages.
+ * Transport-layer coverage for `src/clients/navidromeTransport.ts`: `apiPost`'s timeout /
+ * retry / alt-URL behavior, the `SubsonicError` code channel, and `fetchAllAlbums`' refusal
+ * to return a short list. Every test drives `apiPost` through a real endpoint wrapper,
+ * which is also what pins the caller-specific error messages.
  *
  * The URL/credential builders (`getCoverArtUrl`, `getArtistImageUrl`, `getStreamUrl`,
  * the md5 salt/token vector) are a separate scope and are not covered here.
@@ -14,23 +14,10 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
 import { resetTransportHealth, TransportStalledError } from "../lib/transportHealth";
-import {
-  SubsonicError,
-  addTrackToNavidromePlaylist,
-  authenticate,
-  authenticateWithApiKey,
-  fetchAlbumListByType,
-  fetchAllAlbums,
-  fetchScanStatus,
-  fetchStarred2,
-  reportNowPlaying,
-  songExists,
-  scrobbleTrack,
-  setRating,
-  starTrack,
-  type NavidromeAlbum,
-  type NavidromeCredential,
-} from "./navidrome";
+import { authenticate, authenticateWithApiKey, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
+import type { NavidromeCredential } from "./navidromeUrls";
+import { SubsonicError } from "./navidromeTransport";
+import { addTrackToNavidromePlaylist } from "./navidromePlaylists";
 
 const BASE = "http://music.example";
 const ALT = "http://192.168.1.5:4533";

@@ -6,7 +6,7 @@ import type { TrackRow } from "../types/library";
 export type { TrackRow } from "../types/library";
 
 // Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
-// split"). Mirrors useAlbums.ts/useArtists.ts - reads via src-tauri/src/library_read.rs's
+// split"). Mirrors useAlbums.ts/useArtists.ts - reads via src-tauri/src/library_read/tracks.rs's
 // dedicated read-only connection instead of tauri-plugin-sql's sqlx pool.
 export function useTracks(albumId: string | null) {
   const refreshTick = useTrackListSessionStore((s) => s.refreshTick);

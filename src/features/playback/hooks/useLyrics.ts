@@ -7,7 +7,7 @@ import { fetchLyricsOvh } from "../../../clients/lyricsOvh";
 import { QK } from "../../../lib/queryKeys";
 import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import type { CurrentTrack } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 
 // `source` on a row that carries no lyrics is the only thing separating "we asked every
 // source and none of them had this track" from "the row is here for its offset_ms alone".

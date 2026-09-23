@@ -1,4 +1,5 @@
-import { usePlayerStore, RADIO_MODES } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { RADIO_MODES } from "../../playback/store/playerTypes";
 import "./RadioQueueStatus.css";
 
 export function RadioQueueStatus() {

@@ -21,8 +21,10 @@ vi.mock("../../../clients/navidrome", async () => {
 import { renderHook, act, cleanup } from "@testing-library/react";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { usePlayerStore, type CurrentTrack } from "../store/player";
-import { reportNowPlaying, type NavidromeCredential } from "../../../clients/navidrome";
+import { usePlayerStore } from "../store/player";
+import { type CurrentTrack } from "../store/playerTypes";
+import { reportNowPlaying } from "../../../clients/navidrome";
+import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import type { Server } from "../../../types/server";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useScrobble } from "./useScrobble";

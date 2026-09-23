@@ -1,4 +1,4 @@
-import type { PlaybackErrorCause } from "../store/player";
+import type { PlaybackErrorCause } from "../store/playerTypes";
 
 interface Props {
   cause: PlaybackErrorCause | null;

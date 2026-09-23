@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { Radio } from "lucide-react";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { useStartRadio } from "../hooks/useStartRadio";
-import { usePlayerStore, RADIO_MODES } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { RADIO_MODES } from "../../playback/store/playerTypes";
 import "./RadioButton.css";
 
 export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {

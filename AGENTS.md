@@ -79,7 +79,7 @@ Every `docs/known-issues/` entry is a bug that shipped. Touching code near one â
 - **Keep `docs/ARCHITECTURE.md` current** â€” files, purposes, data flow, invariants, new Tauri commands, new migrations. Same commit. Part of done.
 - **Rust scope follows precedent.** No cap on Rust business logic (thin-Rust rule retired 2026-07-14). Before non-trivial `src-tauri/` logic, check `reference-projects/psysonic` for how it split the same concern. Audio, keychain, network discovery stay Rust-native.
   - `upnp.rs::discover_upnp_renderers` = SSDP UDP multicast (JS can't). Returns LOCATION URLs; SOAP + renderer state stay TS (`src/clients/dlna.ts`, `src/features/playback/store/playbackTarget.ts`).
-  - `CoverState` (`lib.rs`) registers the `cover://` URI scheme (in-memory map + on-disk `<app_data_dir>/cover-cache`, both capped). Serving raw bytes needs Rust; URLs, creds, cache keys stay TS (`src/clients/navidrome.ts`). No TCP listener, so the thread-lifecycle risk class doesn't apply.
+  - `CoverState` (`cover.rs`) registers the `cover://` URI scheme (in-memory map + on-disk `<app_data_dir>/cover-cache`, both capped). Serving raw bytes needs Rust; URLs, creds, cache keys stay TS (`src/clients/navidromeUrls.ts`). No TCP listener, so the thread-lifecycle risk class doesn't apply.
 - **Enrichment is local-only.** Last.fm/MusicBrainz data writes SQLite only. Canon never writes user music files. `pending_edits`/`edit_history` tables and `servers.sidecar_*` are inert legacy schema.
 - **Genre tree is a DAG.** Don't flatten to single-parent; don't merge `canon-tree.json` with `user-tree.json`.
 

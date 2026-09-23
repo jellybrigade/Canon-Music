@@ -4,14 +4,7 @@ import type Database from "@tauri-apps/plugin-sql";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
-import {
-  createNavidromePlaylist,
-  deleteNavidromePlaylist,
-  addTrackToNavidromePlaylist,
-  addTracksToNavidromePlaylist,
-  updateNavidromePlaylist,
-  replaceNavidromePlaylistTracks,
-} from "../../clients/navidrome";
+import { createNavidromePlaylist, deleteNavidromePlaylist, addTrackToNavidromePlaylist, addTracksToNavidromePlaylist, updateNavidromePlaylist, replaceNavidromePlaylistTracks } from "../../clients/navidromePlaylists";
 import { stripServerPrefix } from "../../lib/ids";
 import { buildSmartQuery, parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 import { executeBatched } from "../../lib/dbBatch";
@@ -45,7 +38,7 @@ export interface PlaylistRow {
   rules_json: string | null;
 }
 
-// Load path reads via rusqlite (src-tauri/src/library_read.rs, psysonic pattern) and
+// Load path reads via rusqlite (src-tauri/src/library_read/playlists.rs, psysonic pattern) and
 // caches rows on the session store keyed by tick, so the several components mounting
 // this hook share one fetch. Mutations below stay on tauri-plugin-sql - writes and
 // migrations are not part of the read split.

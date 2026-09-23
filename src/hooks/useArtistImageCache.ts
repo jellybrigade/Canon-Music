@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { getArtistImageUrl, isCoverServerReady } from "../clients/navidrome";
+import { getArtistImageUrl, isCoverServerReady } from "../clients/navidromeUrls";
 import { resolvePortraitUrl } from "../clients/lastfm";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { runPool } from "../lib/asyncPool";

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { getDb } from "../../db";
 import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
-import type { NavidromeCredential } from "../../clients/navidrome";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { keychain } from "../../lib/keychain";
 import type { Server } from "../../types/server";
 import { CanonIcon } from "../../ui/CanonIcon";

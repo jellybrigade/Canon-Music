@@ -129,7 +129,7 @@ export function assertsNonNull(arg: string): boolean {
 
 const FILES = sourceFiles(SRC_DIR)
   .map((path) => ({ path: path.slice(SRC_DIR.length), text: readFileSync(path, "utf-8") }))
-  .filter(({ path }) => !path.endsWith("clients/navidrome.ts"));
+  .filter(({ path }) => !path.endsWith("clients/navidromeUrls.ts"));
 
 describe("getCoverArtUrl call sites", () => {
   it("finds the call sites at all, so a rename cannot silently empty this sweep", () => {

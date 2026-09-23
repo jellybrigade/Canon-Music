@@ -1,7 +1,8 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
-import { scrobbleTrack, SubsonicError } from "../../../clients/navidrome";
+import { scrobbleTrack } from "../../../clients/navidrome";
+import { SubsonicError } from "../../../clients/navidromeTransport";
 import { stripServerPrefix } from "../../../lib/ids";
 import { escapeLike } from "../../../lib/sql";
 import { QK } from "../../../lib/queryKeys";

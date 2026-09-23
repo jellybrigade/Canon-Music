@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { usePlayerStore } from "../store/player";
-import { getCoverArtUrl } from "../../../clients/navidrome";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 
 // The OS now-playing panel renders artwork much larger than any list row does, so it

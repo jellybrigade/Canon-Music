@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CurrentTrack } from "./player";
+import type { CurrentTrack } from "./playerTypes";
 import type { DlnaRenderer } from "../../../clients/dlna";
 import {
   buildDidlMetadata,

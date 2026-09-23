@@ -351,7 +351,7 @@ html[data-app-blurred] * {
 }
 
 /* Indeterminate sweep for the buffering progress track. Used by PlayerBar.css and
-   NowPlayingView.css; the gradient is a background, so it stays inside the element box and
+   NowPlayingProgress.css; the gradient is a background, so it stays inside the element box and
    needs no overflow clipping on a track whose waveform variant is overflow: visible. */
 @keyframes bufferSweep {
   from { background-position: -50% 0; }
@@ -403,7 +403,7 @@ html[data-app-blurred] * {
   50%       { opacity: 0.3; }
 }
 
-/* Shared by every loading skeleton (AlbumDetail.css, NowPlayingView.css). Defined here rather
+/* Shared by every loading skeleton (AlbumDetail.css, NowPlayingAbout.css). Defined here rather
    than per-file because a keyframes name is global: two copies are one copy that can drift. */
 @keyframes canon-skeleton-pulse {
   0%, 100% { opacity: var(--opacity-40); }
@@ -411,7 +411,7 @@ html[data-app-blurred] * {
 }
 
 /* ── Empty / error states ──
-   Shared by every view that has one (AppShell, AppRoutes, AlbumGrid, ArtistGrid, HomeView,
+   Shared by every view that has one (AppShell, DetailRoutes, AlbumGrid, ArtistGrid, HomeView,
    PlaylistList, PlaylistDetail, TrackTableView). Lives here rather than in one component's
    stylesheet because the users outnumber the owner. Title plus hint is the shape: the hint
    names the affordance that fills the view, so the state teaches rather than just reporting. */

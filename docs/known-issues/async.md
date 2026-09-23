@@ -12,13 +12,13 @@ globs:
 Bug classes that already shipped once. Heading = lesson. Greps kept, forensics in git.
 Fixed unless marked OPEN.
 
-- **Caller-id temp file is single-writer only if TS enforces it.** `waveformInFlight: Set<trackId>` in `player.ts`. Also: `Err` without emit strands one-shot `listen()`.
+- **Caller-id temp file is single-writer only if TS enforces it.** `waveformInFlight: Set<trackId>` in `playerRuntime.ts`. Also: `Err` without emit strands one-shot `listen()`.
 - **Handler resuming post-await: check intent, not state.** `pauseRequestedDuringLoad`; track-id equality != intent.
 - **Shared cancel token cancels intent, not effect.** Separate `pause_pending: AtomicBool`, checked before terminal action.
 - **Fast path around central action skips its guards.** Gapless advance bypassed `next()`, killed sleep timer. Guard both ends.
 - **Pause branch owes elapsed ticker the same stop.** Gapless end-of-track branch called `pause(0)` without `stopElapsedTimer()`, poll ran forever. Every `pause(0)` stops ticker same scope.
   ```
-  grep -n "activeTarget.pause(0)" src/features/playback/store/player.ts
+  grep -n "runtime.activeTarget.pause(0)" src/features/playback/store/*.ts
   ```
 - **Fire-and-forget command owes event on every exit.** Gapless bail-outs emit `gapless-cancelled`; final `sink.append` checks `sink.empty()`.
 - **Pre-scheduled work must carry its decision.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
@@ -78,8 +78,8 @@ Fixed unless marked OPEN.
   membership edits and its failure reaches the user instead of being swallowed. Ask of any endpoint
   on a policy list: does every caller of it do the same kind of write?
   ```
-  grep -n "NON_IDEMPOTENT_ENDPOINTS" -A 6 src/clients/navidrome.ts
-  grep -rnE "callSubsonicVoid\(|apiPost\(" src/clients/navidrome.ts | grep -oE '"[a-zA-Z]+(\.view)?"' | sort | uniq -c | sort -rn | head
+  grep -n "NON_IDEMPOTENT_ENDPOINTS" -A 6 src/clients/navidromeTransport.ts
+  grep -hnE "callSubsonicVoid\(|apiPost\(" src/clients/navidrome.ts src/clients/navidromePlaylists.ts src/clients/navidromeTransport.ts | grep -oE '"[a-zA-Z]+(\.view)?"' | sort | uniq -c | sort -rn | head
   ```
 - **A timer measures awake time; a deadline shown against `Date.now()` measures wall time.** The sleep timer displayed `sleepTimerEndsAt - Date.now()` but paused from one `setTimeout(preset)`, and GLib timers stop during suspend. After a laptop slept past the deadline the countdown read 0 while the music played on for the remaining *awake* minutes. Fix: a chained timeout of at most `SLEEP_TIMER_CHECK_MS` (15s) re-reads `Date.now()` and pauses once past `endsAt`. Ask of any long timer paired with a wall-clock number: which one does the user see, and which one acts?
   ```

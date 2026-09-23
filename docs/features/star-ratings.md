@@ -30,8 +30,8 @@ No menu, no modal — it's always-visible inline control.
 
 ## Implementation
 
-- `src/clients/navidrome.ts:361` — `setRating()`: POST `setRating.view` with `id`, `rating` (0–5 as string).
-- `src/clients/navidrome.ts:372` — `fetchTrackRating()`: GET `getSong`, reads `userRating` field off response, defaults to 0.
+- `src/clients/navidrome.ts` `setRating()`: POST `setRating.view` with `id`, `rating` (0–5 as string).
+- `src/clients/navidrome.ts` `fetchTrackRating()`: GET `getSong`, reads `userRating` field off response, defaults to 0.
 - `src/features/playback/components/PlayerBar.tsx:117-129` — `useQuery` keyed `QK.trackRating(nativeTrackId)` (`src/lib/queryKeys.ts:55`), `staleTime: Infinity`.
 - `src/features/playback/components/PlayerBar.tsx:110-111` — `hoverRating` state + `ratingDebounce` ref (200ms).
 - `src/features/playback/components/PlayerBar.tsx:209-220` — `handleStarClick`: optimistic `queryClient.setQueryData`, debounced `setRating` call, invalidate-on-failure.

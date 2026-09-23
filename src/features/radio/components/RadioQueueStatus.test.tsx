@@ -5,7 +5,8 @@ vi.mock("../../../db", () => ({ getDb: vi.fn(() => Promise.resolve({ select: () 
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/react";
-import { usePlayerStore, type CurrentTrack } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { type CurrentTrack } from "../../playback/store/playerTypes";
 import { RadioQueueStatus } from "./RadioQueueStatus";
 
 const seed: CurrentTrack = { id: "s", title: "Seed", artist: null, duration: 100 };

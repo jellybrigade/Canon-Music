@@ -6,7 +6,7 @@
  * connection"): the four statements this delete runs pass through states the app cannot be
  * started in (a node nothing maps to, then tags pointing at a node that is gone), and
  * tauri-plugin-sql's pool makes a TS `BEGIN` a no-op. The SQL itself now lives in the
- * `delete_user_tree_node` Rust command, where `src-tauri/src/library_write.rs` owns its
+ * `delete_user_tree_node` Rust command, where `src-tauri/src/library_write/user_tree.rs` owns its
  * table-state and rollback coverage. What is asserted here is the hook's half: the command is
  * invoked once with the node, the hook writes no SQL of its own, and a rejection reaches the
  * caller instead of leaving the caches claiming the node is gone.

@@ -158,11 +158,18 @@ describe("regression: prefetch/consumer key parity", () => {
   ];
 
   function importsSharedModule(source: string): boolean {
-    const match = source.match(/import\s*{([^}]+)}\s*from\s*["'].*nowPlayingQueries["']/);
-    const captured = match?.[1];
-    if (!captured) return false;
-    const named = captured.split(",").map((s) => s.trim());
+    const named = [...source.matchAll(/import\s*{([^}]+)}\s*from\s*["'].*nowPlayingQueries["']/g)]
+      .flatMap((m) => (m[1] ?? "").split(","))
+      .map((s) => s.trim().replace(/^type\s+/, ""));
     return sharedExports.every((name) => named.includes(name));
+  }
+
+  // The view reads the queries through useNowPlayingArtist, so the two files are one consumer.
+  function viewSource(): string {
+    return [
+      readFileSync(new URL("../components/NowPlayingView.tsx", import.meta.url), "utf-8"),
+      readFileSync(new URL("../hooks/useNowPlayingArtist.ts", import.meta.url), "utf-8"),
+    ].join("\n");
   }
 
   it("useNowPlayingPrefetch imports every query building block from the shared module", () => {
@@ -171,13 +178,12 @@ describe("regression: prefetch/consumer key parity", () => {
   });
 
   it("NowPlayingView imports the same building blocks, not a local re-declaration", () => {
-    const source = readFileSync(new URL("../components/NowPlayingView.tsx", import.meta.url), "utf-8");
-    expect(importsSharedModule(source)).toBe(true);
+    expect(importsSharedModule(viewSource())).toBe(true);
   });
 
   it("neither consumer hardcodes its own numeric staleTime for these queries", () => {
     const prefetch = readFileSync(new URL("../hooks/useNowPlayingPrefetch.ts", import.meta.url), "utf-8");
-    const view = readFileSync(new URL("../components/NowPlayingView.tsx", import.meta.url), "utf-8");
+    const view = viewSource();
     for (const source of [prefetch, view]) {
       const staleTimeValues = [...source.matchAll(/staleTime:\s*([^,\n]+)/g)].map((m) => (m[1] ?? "").trim());
       for (const value of staleTimeValues) {

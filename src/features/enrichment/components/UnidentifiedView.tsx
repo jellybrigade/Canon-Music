@@ -7,7 +7,7 @@ import { QK } from "../../../lib/queryKeys";
 import { getDb } from "../../../db";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import { AlbumArt } from "../../../components/AlbumArt";
-import { getCoverArtUrl } from "../../../clients/navidrome";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { AlbumRow } from "../../../types/library";
 import "./UnidentifiedView.css";

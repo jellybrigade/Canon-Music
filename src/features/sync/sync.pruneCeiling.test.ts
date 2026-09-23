@@ -31,23 +31,17 @@ vi.mock("../../clients/navidrome", () => ({
   fetchAllAlbums: vi.fn(),
   fetchAlbumTracks: vi.fn(),
   fetchStarred2: vi.fn(),
-  fetchPlaylists: vi.fn(),
-  fetchPlaylistTracks: vi.fn(),
   fetchAndStoreOpenSubsonicExtensions: vi.fn(),
   fetchScanStatus: vi.fn(),
   songExists: vi.fn(),
 }));
+vi.mock("../../clients/navidromePlaylists", () => ({
+  fetchPlaylists: vi.fn(),
+  fetchPlaylistTracks: vi.fn(),
+}));
 
-import {
-  fetchAllAlbums,
-  fetchAlbumTracks,
-  fetchStarred2,
-  fetchPlaylists,
-  fetchPlaylistTracks,
-  fetchAndStoreOpenSubsonicExtensions,
-  fetchScanStatus,
-  songExists,
-} from "../../clients/navidrome";
+import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "../../clients/navidrome";
+import { fetchPlaylists, fetchPlaylistTracks } from "../../clients/navidromePlaylists";
 import { syncLibrary } from "./sync";
 import { SQLITE_MAX_VARIABLES as CEILING } from "../../lib/dbBatch";
 

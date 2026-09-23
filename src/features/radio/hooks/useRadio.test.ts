@@ -23,7 +23,8 @@ import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 import { getDb } from "../../../db";
 import { getRadioCandidates } from "../lib/radio";
 import type { RadioCandidate } from "../lib/radio";
-import { usePlayerStore, type CurrentTrack } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { type CurrentTrack } from "../../playback/store/playerTypes";
 import { trackRenders } from "../../../test/perf";
 import { useRadio } from "./useRadio";
 

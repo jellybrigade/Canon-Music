@@ -1,5 +1,5 @@
 /**
- * URL and credential construction in `src/clients/navidrome.ts`: `getCoverArtUrl`,
+ * URL and credential construction in `src/clients/navidromeUrls.ts`: `getCoverArtUrl`,
  * `getArtistImageUrl`, `getStreamUrl`, `updateCoverProxyConfig`, and the md5
  * salt/token pair `authenticate` sends.
  *
@@ -20,9 +20,10 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 
 import { invoke } from "@tauri-apps/api/core";
 import { resetTauriMocks } from "../test/mocks/tauri";
-import type { NavidromeCredential } from "./navidrome";
+import { authenticate } from "./navidrome";
+import type { NavidromeCredential } from "./navidromeUrls";
 
-type Nav = typeof import("./navidrome");
+type Nav = typeof import("./navidromeUrls");
 
 const BASE = "http://music.example";
 const cred: NavidromeCredential = { type: "md5", token: "tok", salt: "slt" };
@@ -31,7 +32,7 @@ const apiKeyCred: NavidromeCredential = { type: "apikey", apiKey: "key-123" };
 /** A module instance with `_coverServerReady === false` and `_streamMaxBitrate === 0`. */
 async function freshNav(): Promise<Nav> {
   vi.resetModules();
-  return await import("./navidrome");
+  return await import("./navidromeUrls");
 }
 
 /** Query params of a built URL. */
@@ -425,7 +426,7 @@ describe("authenticate credential generation", () => {
 
   it("returns a 16-char lowercase hex salt", async () => {
     stubFetch();
-    const c = await nav.authenticate(BASE, "alice", "sesame");
+    const c = await authenticate(BASE, "alice", "sesame");
     expect(c.type).toBe("md5");
     expect(c.type === "md5" && c.salt).toMatch(/^[0-9a-f]{16}$/);
     vi.unstubAllGlobals();
@@ -434,14 +435,14 @@ describe("authenticate credential generation", () => {
   it("zero-pads each random byte, so a leading zero byte does not shorten the salt", async () => {
     stubRandom([0x00, 0x0f, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05]);
     stubFetch();
-    const c = await nav.authenticate(BASE, "alice", "sesame");
+    const c = await authenticate(BASE, "alice", "sesame");
     expect(c.type === "md5" && c.salt).toBe("000f00010203" + "0405");
     vi.unstubAllGlobals();
   });
 
   it("sets t to md5(password + salt) for the salt it actually sent", async () => {
     const fetchMock = stubFetch();
-    const c = await nav.authenticate(BASE, "alice", "sesame");
+    const c = await authenticate(BASE, "alice", "sesame");
     const sentSalt = sentBody(fetchMock).get("s")!;
     expect(sentBody(fetchMock).get("t")).toBe(md5("sesame" + sentSalt));
     expect(c.type === "md5" && c.token).toBe(md5("sesame" + sentSalt));
@@ -457,7 +458,7 @@ describe("authenticate credential generation", () => {
   it("produces a known token for a fixed salt", async () => {
     stubRandom([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]);
     stubFetch();
-    const c = await nav.authenticate(BASE, "alice", "password");
+    const c = await authenticate(BASE, "alice", "password");
     expect(c.type === "md5" && c.salt).toBe("0011223344556677");
     expect(c.type === "md5" && c.token).toBe("5a2003658ab58e3063203be3a03703be");
     vi.unstubAllGlobals();
@@ -466,14 +467,14 @@ describe("authenticate credential generation", () => {
   it("hashes the UTF-8 bytes of a unicode password", async () => {
     stubRandom([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]);
     stubFetch();
-    const c = await nav.authenticate(BASE, "alice", "pä&ss");
+    const c = await authenticate(BASE, "alice", "pä&ss");
     expect(c.type === "md5" && c.token).toBe("9d403c2f973a5463d065f055ec2cbf31");
     vi.unstubAllGlobals();
   });
 
   it("never sends the password itself, only the token", async () => {
     const fetchMock = stubFetch();
-    await nav.authenticate(BASE, "alice", "a&b=c");
+    await authenticate(BASE, "alice", "a&b=c");
     const raw = (fetchMock.mock.calls[0]![1] as RequestInit).body as string;
     expect(raw).not.toContain("a%26b");
     expect(raw).not.toContain("a&b");
@@ -483,8 +484,8 @@ describe("authenticate credential generation", () => {
 
   it("draws a fresh salt on every call", async () => {
     stubFetch();
-    const a = await nav.authenticate(BASE, "alice", "sesame");
-    const b = await nav.authenticate(BASE, "alice", "sesame");
+    const a = await authenticate(BASE, "alice", "sesame");
+    const b = await authenticate(BASE, "alice", "sesame");
     expect(a.type === "md5" && b.type === "md5" && a.salt).not.toBe(b.type === "md5" && b.salt);
     expect(a.type === "md5" && b.type === "md5" && a.token).not.toBe(
       b.type === "md5" && b.token
@@ -497,7 +498,7 @@ describe("authenticate credential generation", () => {
     // buildAuthParams. A protocol bump applied to one and not the other would break
     // login while leaving every other call working.
     const fetchMock = stubFetch();
-    await nav.authenticate(BASE, "alice", "sesame");
+    await authenticate(BASE, "alice", "sesame");
     const sent = sentBody(fetchMock);
     const built = params(nav.getStreamUrl(BASE, "alice", cred, "tr-1"));
     for (const key of ["v", "c", "f"]) {
@@ -508,7 +509,7 @@ describe("authenticate credential generation", () => {
 
   it("posts to <base>/rest/ping.view, not authenticate.view", async () => {
     const fetchMock = stubFetch();
-    await nav.authenticate(BASE, "alice", "sesame");
+    await authenticate(BASE, "alice", "sesame");
     expect(fetchMock.mock.calls[0]![0]).toBe("http://music.example/rest/ping.view");
     vi.unstubAllGlobals();
   });

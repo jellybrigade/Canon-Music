@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
 import { useSearch } from "../features/search/useSearch";
-import { getCoverArtUrl } from "../clients/navidrome";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";

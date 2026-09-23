@@ -15,9 +15,14 @@ const FEATURE_DIRS = FEATURES.flatMap((feature) =>
 );
 const CHECKED_DIRS = ["lib", "clients", "store", "db", ...FEATURE_DIRS];
 // A feature under ~15 files stays flat, so its components sit beside its logic files: every
-// file there is PascalCase (a component) or camelCase. `pages` and `ui` mix the two the same way.
+// file there is PascalCase (a component) or camelCase. `pages` and `ui` mix the two the same way,
+// and so does each page's folder of sections (`pages/home`).
+const PAGE_SECTION_DIRS = readdirSync(join(SRC_DIR, "pages"), { withFileTypes: true })
+  .filter((e) => e.isDirectory())
+  .map((e) => `pages/${e.name}`);
 const FLAT_DIRS = [
   "pages",
+  ...PAGE_SECTION_DIRS,
   "ui",
   ...FEATURES.map((feature) => `features/${feature}`).filter(
     (dir) => !readdirSync(join(SRC_DIR, dir), { withFileTypes: true }).some((e) => e.isDirectory()),

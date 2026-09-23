@@ -8,6 +8,7 @@ import {
   extractSuffix,
 } from "../../../hooks/useAlbumDisplayName";
 import { useAlbums } from "../../../hooks/useAlbums";
+import "./TitleCleanupTab.css";
 
 type AlbumEntry = { id: string; name: string; artist: string | null };
 

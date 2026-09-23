@@ -36,7 +36,7 @@ Fixed unless marked OPEN.
   ```
 - **Cache table inherits prune-exemption meant for user rows beside it.** `pruneAlbums` skipped `album_covers` (base64 cache) alongside genuinely-kept identity tables, stranding bytes forever. Exempt only if own content justifies it.
   ```
-  grep -n "viaAlbums(\"\|DELETE FROM album" src/features/sync/sync.ts
+  grep -n "viaAlbums(\"\|DELETE FROM album" src/features/sync/syncPrune.ts
   ```
 - **Loop-body filter instead of SQL costs whole table per pass.** `useScrobbleFlush` selected all `scrobble_queue`, `continue`d past other-server rows forever. Fix: scope read + count on `track_id LIKE ? ESCAPE '\\'`.
   ```
@@ -52,7 +52,7 @@ Fixed unless marked OPEN.
   ```
 - **Two failures suppressing same write need the same report.** Only listing-failure pushed `skippedStages`; per-playlist fetch failure blocked writes silently. Fix: push sits with the blocking flag.
   ```
-  grep -n "skippedStages.push\|Blocked = true\|Incomplete = true" src/features/sync/sync.ts
+  grep -n "skippedStages.push\|Blocked = true\|Incomplete = true" src/features/sync/sync.ts src/features/sync/syncLoved.ts src/features/sync/syncPlaylists.ts
   ```
 - **Interval-only progress never lands on end; wrong-quantity gate never lands on start.** `onAlbumBatch` fired every 25th, nothing after loop; opening tick gated on upsert writes, missed track-only runs. Fix: one `reportProgress` gated on actual work queue.
   ```
@@ -93,8 +93,8 @@ Fixed unless marked OPEN.
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `nowPlayingQueries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
 - **A bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.** `query_artists` took `artwork_url` bare from its per-artist group, so a tile's portrait changed after unrelated writes; `query_recent_genres`' fallback ordered by `album_count` alone, so the 18th/19th genre swapped between refreshes. Fix: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY navidrome_created DESC, year DESC, id)` and a `name COLLATE NOCASE` tiebreaker. Ask of any aggregate: which row is this, and would two runs agree? **Found again in the branch beside it:** the first fix landed only on the fallback, which runs for a user with no scrobble history, while the branch that actually runs ordered by `MAX(last_played)` alone - and one played album contributes several genres, all tied on it, so ties were the normal case rather than an edge. Fix a tiebreak on every branch of the query, not the one the test reached, and prefer `MIN(name)` over a bare `name` even where the name looks functionally dependent on the group key (a genre rename re-normalizes albums incrementally, so two names share one `canonical_id` until the last album is reprocessed).
   ```
-  grep -n "GROUP BY" src-tauri/src/*.rs | grep -v "COUNT(\|MIN(\|MAX(\|SUM("
-  grep -rn "LIMIT" src-tauri/src/*.rs src --include='*.ts*' | grep -v '\.test\.' | grep -v "ORDER BY"
+  grep -rn "GROUP BY" src-tauri/src --include='*.rs' | grep -v "COUNT(\|MIN(\|MAX(\|SUM("
+  grep -rn "LIMIT" src-tauri/src src --include='*.rs' --include='*.ts*' | grep -v '\.test\.' | grep -v "ORDER BY"
   ```
 - **Cap check that runs before the write evicts for a write that adds nothing.** `cappedSet` compared `size >= maxEntries` without asking whether the key was already held, so the cover and artist caches dropped a live entry on every plain overwrite and ran permanently at one entry under their own workload. Fix: `!cache.has(key) &&` in front of the check. Insertion order, not LRU, is the documented semantics. **Found 3x:** `artColor.ts` and `artBlur.ts` hand-rolled the same pre-write check, reachable because neither dedups in-flight work, so two components mounting on one cover URL both miss and both write. Now enforced repo-wide by `src/lib/cappedCacheGuard.test.ts`. The comparison tells the two spellings apart: a cap checked *before* the write is `>= MAX` and needs the `has` guard, one checked *after* a delete-then-set write is `> MAX` and is already safe.
   ```
@@ -165,15 +165,15 @@ Fixed unless marked OPEN.
   ```
 - **A skip fast-path is only as good as a probe of the thing it skips.** `syncLibrary`'s `skipTracks` was keyed on `navidrome_created` + `songCount`, both album columns. Navidrome 0.64 rewrote ~87% of track ids and left every album row byte-identical, so the track pass was skipped for all 1512 albums and the mirror could never heal, on any number of syncs. Fix: three mirrored track ids drawn at random go through `songExists` before the album loop, and one Subsonic 70 disables the skip for the whole run. Only a 70 counts - a transport failure or a rejected credential says nothing about the id, and reading it as a miss turns every offline moment into a full pass. Ask of any skip gate: what evidence do I have about the rows I am *not* reading?
   ```
-  grep -rn "skip\|unchanged" src/features/sync/sync.ts | grep -v '^\s*//'
+  grep -rn "skip\|unchanged" src/features/sync/sync.ts src/features/sync/syncWatermark.ts | grep -v '^\s*//'
   ```
-- **A server-assigned id is a cache, not an identity.** Navidrome 0.64 re-encoded ~87% of its track ids without touching a file, so to Canon's prune every one of those tracks looked deleted and re-added: loved state, lyrics, waveforms, queued scrobbles and resume positions all died with the row, and no number of syncs brought them back. Fix: `planTrackIdRemap` (`src/features/sync/trackRemap.ts`) pairs a mirrored row whose id the server stopped using with the fetched track holding the same `file_path`, and `remap_track_ids` (`library_write.rs`) carries every track-keyed row onto the new id in one transaction, before the upsert writes the new row and before the prune runs. Exact match on the path, since it is the server's own bytes; any ambiguity (no path, a path claimed twice on either side, a destination id the mirror already holds) means no evidence and the row goes to the prune. Store the natural key beside the assigned one, or the next id migration is a data loss.
+- **A server-assigned id is a cache, not an identity.** Navidrome 0.64 re-encoded ~87% of its track ids without touching a file, so to Canon's prune every one of those tracks looked deleted and re-added: loved state, lyrics, waveforms, queued scrobbles and resume positions all died with the row, and no number of syncs brought them back. Fix: `planTrackIdRemap` (`src/features/sync/trackRemap.ts`) pairs a mirrored row whose id the server stopped using with the fetched track holding the same `file_path`, and `remap_track_ids` (`library_write/track_remap.rs`) carries every track-keyed row onto the new id in one transaction, before the upsert writes the new row and before the prune runs. Exact match on the path, since it is the server's own bytes; any ambiguity (no path, a path claimed twice on either side, a destination id the mirror already holds) means no evidence and the row goes to the prune. Store the natural key beside the assigned one, or the next id migration is a data loss.
   ```
-  grep -rn "file_path" src/features/sync/sync.ts src/features/sync/trackRemap.ts
+  grep -rn "file_path" src/features/sync/syncTracks.ts src/features/sync/trackRemap.ts
   ```
 - **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/trackIdTables.ts` holds the list with per-table policy, `trackIdTables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains.
   ```
-  grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/trackIdTables.ts src-tauri/src/library_write.rs
+  grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/trackIdTables.ts src-tauri/src/library_write/track_remap.rs
   ```
 - **Watermark upstream identity, not only per-row timestamps.** Per-row mtimes cannot see a migration that rewrote the rows' keys, because the rows they sit on did not move. `servers.server_version` / `last_scan_at` / `song_count` (v49) come from `getScanStatus` at the top of every sync and any of the three moving forces a full track pass. Two halves that are easy to get wrong: `getScanStatus` is admin-only on some deployments, so a failure is "no evidence" and falls through to the probe rather than counting as "unchanged"; and the new watermark is stored only after a pass that completed, since storing it after an early break tells the next sync those albums were read and erases the evidence that they were not.
   ```
@@ -281,7 +281,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "INTO settings (key, value) VALUES ('" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "queue|radio|ids|track|album"
   grep -rn "useSetting(\"" src --include='*.ts*' | grep -v '\.test\.' | grep -iE "ids|track|album|queue"
-  grep -n "SELECT id FROM servers" src/features/playback/store/player.ts
+  grep -n "SELECT id FROM servers" src/features/playback/store/playerSettings.ts
   ```
 - **Rows whose owner row is gone are unreachable, not stale, and nothing sweeps them.**
   After a server was removed and re-added through the wizard, the live library still held
@@ -292,7 +292,7 @@ Fixed unless marked OPEN.
   albums, and a server with no `servers` row never triggers a sync, so the rows are
   permanently invisible *and* permanently undeletable. Orphans are not merely wasted bytes -
   `useSearch` caps its pool before joining `tracks`, so they take slots from real matches.
-  Fix: `purgeStrandedServers` (`src/features/sync/sync.ts`), run once from `main.tsx` after the DB
+  Fix: `purgeStrandedServers` (`src/features/sync/syncPrune.ts`), run once from `main.tsx` after the DB
   opens, diffs the `server_id`s in the mirrored tables against `servers` and purges each one
   left over. A delete path that has to finish is a delete path that needs a sweep behind it.
   ```
@@ -344,11 +344,11 @@ Fixed unless marked OPEN.
   meant to be skipped, or did the thing it points at disappear?
   ```
   grep -rn "byId.get(" src --include='*.ts*' -A1 | grep -v '\.test\.' | grep "continue\|if (node &&"
-  python3 -c "import re;s=open('src/db/migrations.ts').read();print(sorted({m.group(1) for m in re.finditer(r'CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\(([^;]*?)\);',s,re.S) if 'canonical_id' in m.group(2)}))"; grep -n "canonical_id = ?" src-tauri/src/library_write.rs
+  python3 -c "import re;s=open('src/db/migrations.ts').read();print(sorted({m.group(1) for m in re.finditer(r'CREATE TABLE(?: IF NOT EXISTS)?\s+(\w+)\s*\(([^;]*?)\);',s,re.S) if 'canonical_id' in m.group(2)}))"; grep -n "canonical_id = ?" src-tauri/src/library_write/user_tree.rs
   ```
 - **Statement sequence with invalid intermediate states is a transaction.** `runMigrations` wraps each block + version row in `BEGIN`/`COMMIT`, `ROLLBACK` rethrows original error.
 - **One-direction version compare can't say "too new".** `LATEST_SCHEMA_VERSION` + `SchemaTooNewError` (`>`, not `>=`), `DatabaseErrorScreen`, no retry button.
-- **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write.rs`; `src/db/migrations.ts` is the only legit TS `BEGIN`.
+- **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write/`; `src/db/migrations.ts` is the only legit TS `BEGIN`.
   ```
   grep -rn '"BEGIN"\|BEGIN TRANSACTION' src --include='*.ts*' | grep -v '\.test\.'
   ```

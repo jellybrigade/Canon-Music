@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CurrentTrack } from "../features/playback/store/player";
+import type { CurrentTrack } from "../features/playback/store/playerTypes";
 
 export interface DlnaRenderer {
   name: string;

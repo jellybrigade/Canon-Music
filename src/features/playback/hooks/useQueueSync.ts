@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import { savePlayQueue, getPlayQueue, getCoverArtUrl, getStreamUrl } from "../../../clients/navidrome";
+import { savePlayQueue, getPlayQueue } from "../../../clients/navidrome";
+import { getCoverArtUrl, getStreamUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import { stripServerPrefix } from "../../../lib/ids";
 

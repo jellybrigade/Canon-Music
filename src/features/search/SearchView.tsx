@@ -7,7 +7,7 @@ import type { ServerWithCredential } from "../../hooks/useServer";
 import type { Server } from "../../types/server";
 import type { AlbumRow, ArtistRow } from "../../types/library";
 import type { PlaylistRow } from "../playlists/usePlaylists";
-import type { RadioMode } from "../playback/store/player";
+import type { RadioMode } from "../playback/store/playerTypes";
 
 const SearchResults = lazy(() => import("./SearchResults").then((m) => ({ default: m.SearchResults })));
 

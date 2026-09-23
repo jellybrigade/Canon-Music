@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
-import { getCoverArtUrl, getArtistImageUrl } from "../clients/navidrome";
+import { getCoverArtUrl, getArtistImageUrl } from "../clients/navidromeUrls";
 import { resolvePortraitUrl } from "../clients/lastfm";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
@@ -12,7 +12,7 @@ import { ContextMenu } from "../ui/ContextMenu";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { ArtistIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { CardGridSkeleton } from "../ui/Skeleton";
-import type { RadioMode } from "../features/playback/store/player";
+import type { RadioMode } from "../features/playback/store/playerTypes";
 import { useSetting } from "../hooks/useSetting";
 
 /** Lazily triggers portrait enrichment once a grid tile scrolls into view, so

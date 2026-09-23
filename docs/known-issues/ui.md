@@ -101,6 +101,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn -A4 "\.map((" src --include='*.tsx' | grep -v '\.test\.' | grep -E "(--active|--selected)\" : \"\"" | grep -v "===\|!==\|\.has(\|\.includes("
   ```
+- **A menu's sub-mode held by its parent outlives the menu.** The album page kept the track context menu's `"main" | "playlist"` mode in page state and reset it only on dismiss, so picking a playlist closed the menu with the mode still `"playlist"` and the next right-click on any track opened straight onto the playlist list. Fix: `TrackContextMenu` owns its mode, so every close unmounts it. Pinned by `TrackContextMenu.test.tsx`. Ask of any state describing an open popup: does it die with the popup?
+  ```
+  grep -rnE "useState<\"main\"|[mM]enuMode" src --include='*.tsx' | grep -v '\.test\.'
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```

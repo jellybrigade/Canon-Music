@@ -61,7 +61,7 @@ Standard ordered track lists, synced to the Navidrome server (not local-only) �
 - `src/features/playlists/PlaylistList.tsx:18-132` — Playlists grid + "New Playlist" form
 - `src/features/playlists/PlaylistDetail.tsx:50-581` — detail view: play, rename/describe, cover, delete, column picker, context menu, resume-position tracking
 - `src/features/playlists/PlaylistDetail.tsx:110-121,130-134` — `playlist_resume` table read + `virtualizer.scrollToIndex` to restore scroll position
-- `src/pages/AlbumDetail.tsx:958-977` — "Add to Playlist" submenu on a track's context menu
+- `src/pages/album/TrackContextMenu.tsx` — "Add to Playlist" submenu on a track's context menu
 - `src/components/AlbumGrid.tsx:331-342` — "Add to Playlist" submenu on an album's context menu (adds whole album)
 - DB: `playlists` (id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json), `playlist_tracks` (playlist_id, track_id, position), `playlist_resume` (playlist_id, last_track_id, track_position, updated_at)
 

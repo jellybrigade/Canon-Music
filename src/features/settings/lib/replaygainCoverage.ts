@@ -1,4 +1,4 @@
-import type { ReplayGainMode } from "../../playback/store/player";
+import type { ReplayGainMode } from "../../playback/store/playerTypes";
 
 export interface ReplayGainCoverage {
   total: number;

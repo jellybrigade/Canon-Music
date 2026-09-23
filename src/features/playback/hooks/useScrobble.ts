@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { getDb } from "../../../db";
 import { usePlayerStore } from "../store/player";
-import type { CurrentTrack } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 import { reportNowPlaying } from "../../../clients/navidrome";
 import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";

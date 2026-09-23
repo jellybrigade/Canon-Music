@@ -4,11 +4,12 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
-vi.mock("../../sync/sync", () => ({ repairAlbumTrackIds: vi.fn() }));
+vi.mock("../../sync/syncTracks", () => ({ repairAlbumTrackIds: vi.fn() }));
 
 import { emitTauriEvent, listenerCount, resetTauriMocks } from "../../../test/mocks/tauri";
-import { repairAlbumTrackIds } from "../../sync/sync";
-import { usePlayerStore, type CurrentTrack } from "../store/player";
+import { repairAlbumTrackIds } from "../../sync/syncTracks";
+import { usePlayerStore } from "../store/player";
+import { type CurrentTrack } from "../store/playerTypes";
 import { useTrackIdRepair } from "./useTrackIdRepair";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 

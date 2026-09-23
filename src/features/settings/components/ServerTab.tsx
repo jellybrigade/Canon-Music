@@ -2,10 +2,12 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QK } from "../../../lib/queryKeys";
 import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
-import type { NavidromeCredential } from "../../../clients/navidrome";
+import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { keychain } from "../../../lib/keychain";
 import { getDb } from "../../../db";
-import { clearSyncWatermark, purgeServerData, type SyncOptions } from "../../sync/sync";
+import { type SyncOptions } from "../../sync/sync";
+import { clearSyncWatermark } from "../../sync/syncWatermark";
+import { purgeServerData } from "../../sync/syncPrune";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
 

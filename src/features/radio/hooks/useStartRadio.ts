@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import { usePlayerStore, type RadioStartAction, type RadioStartRequest } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { type RadioStartAction, type RadioStartRequest } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
 import { useSetting } from "../../../hooks/useSetting";
 

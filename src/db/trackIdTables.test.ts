@@ -9,8 +9,8 @@ import { describe, expect, it } from "vitest";
 import { TRACK_ID_TABLES, prunedTrackIdTables, purgedTrackIdTables, remappedTrackIdTables } from "./trackIdTables";
 
 const MIGRATIONS = readFileSync(fileURLToPath(new URL("./migrations.ts", import.meta.url)), "utf-8");
-const LIBRARY_WRITE = readFileSync(
-  fileURLToPath(new URL("../../src-tauri/src/library_write.rs", import.meta.url)),
+const TRACK_REMAP_RS = readFileSync(
+  fileURLToPath(new URL("../../src-tauri/src/library_write/track_remap.rs", import.meta.url)),
   "utf-8"
 );
 
@@ -80,7 +80,7 @@ describe("track id table registry", () => {
   it("agrees with the Rust list the remap writes through", () => {
     // The remap runs in one transaction, so it lives in Rust and keeps its own copy of the
     // list. A table added here and forgotten there is a table the remap silently drops.
-    const block = LIBRARY_WRITE.match(/REMAPPED_TRACK_ID_TABLES: &\[\(&str, &str\)\] = &\[([^\]]*)\]/);
+    const block = TRACK_REMAP_RS.match(/REMAPPED_TRACK_ID_TABLES: &\[\(&str, &str\)\] = &\[([^\]]*)\]/);
     expect(block).not.toBeNull();
     const rust = [...(block?.[1] ?? "").matchAll(/\("(\w+)", "(\w+)"\)/g)].map((m) => `${m[1]}.${m[2]}`);
     expect(rust).toEqual(remappedTrackIdTables().map((entry) => `${entry.table}.${entry.column}`));

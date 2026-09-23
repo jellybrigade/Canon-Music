@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { Radio, X } from "lucide-react";
-import { usePlayerStore, type RadioStartAction, type RadioStartRequest } from "../../playback/store/player";
+import { usePlayerStore } from "../../playback/store/player";
+import { type RadioStartAction, type RadioStartRequest } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
 import { useSetting } from "../../../hooks/useSetting";
 import { RADIO_START_ACTION_SETTING } from "../hooks/useStartRadio";

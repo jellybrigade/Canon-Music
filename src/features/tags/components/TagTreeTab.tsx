@@ -12,6 +12,7 @@ import {
 import type { UserTreeNode } from "../hooks/useUserTree";
 import type { TreeNode } from "../lib/canonicalize";
 import { canonicalKey } from "../lib/canonicalize";
+import "./TagTreeTab.css";
 
 // ── NodeModal ─────────────────────────────────────────────────────────────────
 

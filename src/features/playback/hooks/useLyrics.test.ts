@@ -26,7 +26,7 @@ import { fetchLyrics } from "../../../clients/lrclib";
 import { fetchLyricsOvh } from "../../../clients/lyricsOvh";
 import { fetchLyricsBySongId, getStoredOpenSubsonicExtensions } from "../../../clients/navidrome";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import type { CurrentTrack } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useLyrics } from "./useLyrics";
 

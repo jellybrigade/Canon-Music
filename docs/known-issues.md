@@ -146,5 +146,6 @@ Fixed unless marked OPEN.
 - Overlay sized to its container breaks when the container's shape varies.
 - A grid cell that can render `null` hands its column to the next sibling.
 - An option's "selected" test must compare to that option, not ask whether any option is set.
+- A menu's sub-mode held by its parent outlives the menu.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

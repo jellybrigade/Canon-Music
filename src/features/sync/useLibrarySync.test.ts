@@ -11,7 +11,7 @@ vi.mock("../../hooks/useSetting", () => ({ useSetting: vi.fn(() => [intervalSett
 import { renderHook, act } from "@testing-library/react";
 import { syncLibrary } from "./sync";
 import type { SyncProgress } from "./sync";
-import type { NavidromeCredential } from "../../clients/navidrome";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import type { Server } from "../../types/server";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { useLibrarySync } from "./useLibrarySync";

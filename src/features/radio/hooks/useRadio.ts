@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../../playback/store/player";
-import type { CurrentTrack } from "../../playback/store/player";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { getRadioCandidates } from "../lib/radio";
 import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
