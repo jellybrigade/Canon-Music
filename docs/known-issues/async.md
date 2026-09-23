@@ -37,7 +37,7 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "^\s*\}, \[[^]]*(navigate|setSearchParams|searchParams|location)[^]]*\]\)" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **Module-scoped promise memo assigned only on the success side stays poisoned.** `manualMappings.ts` cleared `inFlight` inside the resolved branch, so one rejected read handed the same rejection to every later caller and manual genre mappings silently stopped applying for the life of the process - reading as a mapping bug, not a db one. Fix: `try`/`catch` around the whole body, clearing under the same generation check the success path uses, then rethrow. `src/db/index.ts`'s `dbPromise` is the deliberate exception: a failed migration must not silently retry, and it surfaces on `DatabaseErrorScreen`.
+- **Module-scoped promise memo assigned only on the success side stays poisoned.** `manualMappings.ts` cleared `inFlight` only on resolve, so one rejected read handed its rejection to every later caller for the life of the process. Fix: clear in `catch` under the same generation check, rethrow. Deliberate exception: `src/db/index.ts`'s `dbPromise` (a failed migration must not silently retry; it surfaces on `DatabaseErrorScreen`).
   ```
   grep -rn "^let .*: Promise<\|^let .*Promise<.*> | null" src --include='*.ts*' | grep -v '\.test\.'
   ```
@@ -45,7 +45,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "instanceof DOMException\|AbortError\|instanceof TypeError\|err\.name ===" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **A result from the previous key is still visible to the commit that switches the key.** `useTracks` reset its rows with `setData(undefined)` inside the effect, so the render carrying the new album id, and every effect in that commit, still saw the old album's rows with `isLoading: false`. The album page's missing-tracks repair read an empty list from the previous album as the new album's and fetched tracks already mirrored. Its own fetch outcome had the same shape: one `fetching`/`error` pair shared by every album, so album A's late failure painted on album B. Fix: store the key beside the result and derive `current = result.key === key ? result : null` during render (`useTracks`, `usePlaylistTracks`, `useMissingTracksRepair`). A reset written in an effect is always one commit late.
+- **A result from the previous key is still visible to the commit that switches the key.** `useTracks` reset its rows in an effect, so the commit switching album id still saw the old album's rows with `isLoading: false`, and the missing-tracks repair fetched for the wrong album. Fix: store the key beside the result, derive `current = result.key === key ? result : null` during render (`useTracks`, `usePlaylistTracks`, `useMissingTracksRepair`). A reset written in an effect is always one commit late.
   ```
   grep -rn "prev\w*IdRef.current !== " src --include='*.ts*' | grep -v '\.test\.'
   ```
@@ -53,30 +53,11 @@ Fixed unless marked OPEN.
   ```
   grep -rn "useRef(true)" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **A one-shot report of live state is wrong from the moment the state moves.** `useScrobble`
-  told Navidrome which track was playing (`scrobble.view?submission=false`) off `playStartedAt`
-  alone, which the store stamps only for a new track or a gapless advance. Pause and resume never
-  move it, so a pause outlasting Navidrome's now-playing expiry left the server - and the Discord
-  rich-presence plugin that reads it - saying nothing was playing for the rest of the track, with
-  no way back until the next track started. The same trigger fired in the other direction: queue
-  restore writes `currentTrack` with the player stopped, so Canon announced a track nobody had
-  started every launch. Fix: gate on `isPlaying` and name it in the deps, so every start, resume
-  and track change re-asserts and a pause simply lets the entry expire on its own. Ask of any
-  state pushed into another process: what re-asserts it after the far side forgets, and can it be
-  pushed while locally false?
+- **A one-shot report of live state is wrong from the moment the state moves.** `useScrobble` sent now-playing off `playStartedAt` alone: a long pause let Navidrome's entry expire with nothing to re-assert it, and queue restore announced a track nobody started. Fix: gate on `isPlaying` and name it in the deps. Ask of any state pushed into another process: what re-asserts it after the far side forgets, and can it be pushed while locally false?
   ```
   grep -rn "playStartedAt" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **An endpoint's idempotency can live in a parameter, not in its name.** `NON_IDEMPOTENT_ENDPOINTS`
-  keyed the retry ladder on the bare endpoint name, but `scrobble` carries two opposite writes:
-  `submission=true` appends a play and must never be repeated, `submission=false` only sets which
-  track is on and is as safe to repeat as a `star`. The safe one inherited the unsafe one's single
-  shot, so one lost request - a breaker cooldown, one resolver stall - meant no now-playing for
-  that whole track, silently, since the caller discards the rejection. Fix: `isRetriableEndpoint`
-  takes the params and reads the submission. `updatePlaylist` is the same shape and is deliberately
-  left one-shot: a rename is a set-to-this-value write, but it shares the endpoint with the
-  membership edits and its failure reaches the user instead of being swallowed. Ask of any endpoint
-  on a policy list: does every caller of it do the same kind of write?
+- **An endpoint's idempotency can live in a parameter, not in its name.** `NON_IDEMPOTENT_ENDPOINTS` keyed on the bare name, so `scrobble` with `submission=false` (now-playing, safe to repeat) inherited `submission=true`'s single shot. Fix: `isRetriableEndpoint` takes the params. `updatePlaylist` stays one-shot deliberately. Ask of any endpoint on a policy list: does every caller of it do the same kind of write?
   ```
   grep -n "NON_IDEMPOTENT_ENDPOINTS" -A 6 src/clients/navidromeTransport.ts
   grep -hnE "callSubsonicVoid\(|apiPost\(" src/clients/navidrome.ts src/clients/navidromePlaylists.ts src/clients/navidromeTransport.ts | grep -oE '"[a-zA-Z]+(\.view)?"' | sort | uniq -c | sort -rn | head

@@ -17,7 +17,7 @@ Commit staged and unstaged changes on the development branch.
    - **Body discouraged - default to none.** If the change won't fit in 72 chars, the
      subject is usually bad or the commit is bundled: rewrite or split first. Only when it
      genuinely can't, add a body carrying the *why* alone, **200 chars hard cap**.
-     Forensics go to `docs/known-issues.md`, status notes go to the user in chat
+     Forensics go to `docs/known-issues-history.md`, status notes go to the user in chat
    - No trailer lines of any kind, including `Co-Authored-By` (overrides the harness default)
    - No mention of Claude, AI, or any tool
 6. Run the pre-commit checklist in `docs/git-standards.md` - `bash scripts/run-local-checks.sh` covers most of it.

@@ -5,7 +5,7 @@ description: Pick one item from instructions/possible-cross-platform-problems.md
 
 You are invoked in plan mode. Work through these phases in order.
 
-**Path note:** `instructions/` and `reference-projects/` live at the repo root (`/home/mschachner/Projects/Canon/`), not inside this skill's own directory (`.claude/skills/cross-platform/`). Don't `find`/`ls` under the skill dir looking for them.
+**Path note:** `instructions/` lives at the repo root (`/home/mschachner/Projects/Canon/`) and reference projects at `~/Projects/_ref/`, neither inside this skill's own directory (`.claude/skills/cross-platform/`). Don't `find`/`ls` under the skill dir looking for them.
 
 ## Phase 1 — Read the list
 
@@ -13,7 +13,7 @@ Read `instructions/possible-cross-platform-problems.md` (repo-root path, e.g. `/
 
 ## Phase 2 — Research competitor handling
 
-Spawn a `caveman:cavecrew-investigator` agent (or do it directly if scope is small) to search `reference-projects/` (repo-root path, sibling to `instructions/` — NOT under this skill's directory) for how other cross-platform Navidrome/Subsonic/media-player clients (Feishin, Supersonic, aonsoku, sonixd, Nocturne, etc.) handle this exact concern. The doc already has partial competitor notes inline for each item — use those as a starting pointer, but verify by reading the actual referenced files (don't trust the summary alone). Return: which project, file:line, the actual pattern/code used, and any caveats they hit.
+Spawn a `caveman:cavecrew-investigator` agent (or do it directly if scope is small) to search `~/Projects/_ref/` (outside the repo, NOT under this skill's directory) for how other cross-platform Navidrome/Subsonic/media-player clients (Feishin, Supersonic, aonsoku, sonixd, Nocturne, etc.) handle this exact concern. The doc already has partial competitor notes inline for each item — use those as a starting pointer, but verify by reading the actual referenced files (don't trust the summary alone). Return: which project, file:line, the actual pattern/code used, and any caveats they hit.
 
 ## Phase 3 — Audit Canon's current implementation
 

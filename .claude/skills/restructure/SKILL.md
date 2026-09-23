@@ -37,7 +37,7 @@ Record each guard test's scanned-file count before the move, so you can confirm 
 
 ## 4. Verify
 
-1. `grep -rn "<old path>" . --exclude-dir={node_modules,target,dist,reference-projects,.git}`
+1. `grep -rn "<old path>" . --exclude-dir={node_modules,target,dist,.git}`
    for each moved path: no hits.
 2. Each guard test scans the same file count as before. A glob matching zero files passes
    silently - check it.

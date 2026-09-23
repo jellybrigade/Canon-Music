@@ -11,7 +11,8 @@ Desktop music player + tag manager for self-hosted music servers (Navidrome). Ta
 | `docs/coding-standards.md` | Naming, comments, TS/React/Rust/SQL rules, code smells |
 | `docs/git-standards.md` | Branching, commit message format, pre-commit checklist |
 | `docs/known-issues.md` | Index of bug classes that already shipped once |
-| `docs/known-issues/<area>.md` | Full entries + reusable greps (async, build, data, platform, testing, ui) |
+| `docs/known-issues/<area>.md` | Entries: lesson, fix, reusable grep (async, build, data, platform, testing, ui) |
+| `docs/known-issues-history.md` | Backstory of trimmed entries, read on demand |
 | `docs/features/` | Per-feature technical docs |
 
 Read the matching `docs/known-issues/<area>.md` before touching code in that area.
@@ -35,7 +36,7 @@ git config core.hooksPath scripts/git-hooks  # once per clone: commit-msg hook
 
 ## Git
 
-Full rules: `docs/git-standards.md`. Short form: `development` = all work, commit every finished logical unit; `main` = releases only, tagged by CI, never commit direct. Subject imperative, <=50 chars target / 72 hard cap, effect not internals, no prefix, **no trailers of any kind**. **No body, ever** - subject only; if 72 chars can't carry it, tighten the subject or split the commit. Forensics go to `docs/known-issues.md`.
+Full rules: `docs/git-standards.md`. Short form: `development` = all work, commit every finished logical unit; `main` = releases only, tagged by CI, never commit direct. Subject imperative, <=50 chars target / 72 hard cap, effect not internals, no prefix, **no trailers of any kind**. **No body, ever** - subject only; if 72 chars can't carry it, tighten the subject or split the commit. Forensics go to `docs/known-issues-history.md`.
 
 ## Testing (TDD)
 
@@ -77,7 +78,7 @@ Every `docs/known-issues/` entry is a bug that shipped. Touching code near one â
 ## Architecture rules
 
 - **Keep `docs/ARCHITECTURE.md` current** â€” files, purposes, data flow, invariants, new Tauri commands, new migrations. Same commit. Part of done.
-- **Rust scope follows precedent.** No cap on Rust business logic (thin-Rust rule retired 2026-07-14). Before non-trivial `src-tauri/` logic, check `reference-projects/psysonic` for how it split the same concern. Audio, keychain, network discovery stay Rust-native.
+- **Rust scope follows precedent.** No cap on Rust business logic (thin-Rust rule retired 2026-07-14). Before non-trivial `src-tauri/` logic, check `~/Projects/_ref/psysonic` for how it split the same concern. Audio, keychain, network discovery stay Rust-native.
   - `upnp.rs::discover_upnp_renderers` = SSDP UDP multicast (JS can't). Returns LOCATION URLs; SOAP + renderer state stay TS (`src/clients/dlna.ts`, `src/features/playback/store/playbackTarget.ts`).
   - `CoverState` (`cover.rs`) registers the `cover://` URI scheme (in-memory map + on-disk `<app_data_dir>/cover-cache`, both capped). Serving raw bytes needs Rust; URLs, creds, cache keys stay TS (`src/clients/navidromeUrls.ts`). No TCP listener, so the thread-lifecycle risk class doesn't apply.
 - **Enrichment is local-only.** Last.fm/MusicBrainz data writes SQLite only. Canon never writes user music files. `pending_edits`/`edit_history` tables and `servers.sidecar_*` are inert legacy schema.

@@ -48,7 +48,7 @@ Read `instructions/what-to-do.md`. Pick **3–5 items** prioritizing high user i
 Spawn one `caveman:cavecrew-investigator` agent per item (run them in parallel). Each agent prompt must include:
 1. The item title and a one-sentence description of what it is
 2. Two search tasks:
-   - **A. Reference projects:** grep `reference-projects/` broadly — by behavior, function name, related terms. Not just one project. Return: which project(s), file paths, key function/component names, pattern used, any notable gotcha.
+   - **A. Reference projects:** grep `~/Projects/_ref/` (reference projects, outside the repo) broadly — by behavior, function name, related terms. Not just one project. Return: which project(s), file paths, key function/component names, pattern used, any notable gotcha.
    - **B. Canon current state:** locate relevant Canon code in `src/`. Return: existing files/components/hooks that relate, where new code slots in (file + approx line), existing abstractions/data to reuse, schema or API changes needed.
 
 Collect all agent results before proceeding to Phase 3R.
@@ -63,7 +63,7 @@ Write `instructions/donow.md` with one section per item. Use this format:
 **What:** One-sentence description of the feature/fix.
 
 **Reference patterns:**
-- `reference-projects/<name>/path/to/file.ts` — [what it does / pattern used]
+- `~/Projects/_ref/<name>/path/to/file.ts` — [what it does / pattern used]
 - (repeat for each relevant file)
 
 **Canon current state:**

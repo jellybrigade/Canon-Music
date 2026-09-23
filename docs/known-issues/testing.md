@@ -36,37 +36,12 @@ Fixed unless marked OPEN.
   ```
   grep -rn "setTimeout(r\|setTimeout(resolve" src --include='*.test.ts*' | grep -vE "[^0-9](0|[1-9][0-9]?)\)"
   ```
-- **A timeout ceiling set against an idle machine is measured against a busy one.** vitest's 5s
-  default failed `migrations.test.ts > reaches the same schema from every intermediate version` at
-  5164ms inside `scripts/run-local-checks.sh`, which runs the whole suite beside `cargo test` and
-  clippy; alone the same test takes 0.8-2.4s and passes. Not a race and not a slow test to delete:
-  it replays every migration block from every rung, so its cost is quadratic in the block count and
-  grows with each migration added. The protection already existed but only covered the family its
-  author had in front of them - `allowSlowAppMounts()` raises `testTimeout` to 30s for the 8 `App`
-  suites, leaving every other suite on the default, and the two heaviest non-App tests (3.9s and
-  2.1s idle) were one scheduling accident from the ceiling. Fix: `testTimeout: 15000` in
-  `vitest.config.ts`, one writer, rather than an annotation per slow test that the next slow test
-  has to remember to add. Testing Library's `findBy*` window stays short, since that is the one
-  that must fail fast. Reproduce a load-dependent failure before believing a fix: saturate every
-  core (`for i in $(seq 1 $(nproc)); do timeout 400 sh -c 'while :; do :; done' & done`) and run
-  the whole suite, not the one file.
+- **A timeout ceiling set against an idle machine is measured against a busy one.** Vitest's 5s default failed `migrations.test.ts` (cost quadratic in migration count) at 5164ms inside `run-local-checks.sh`; alone it takes 0.8-2.4s. Fix: `testTimeout: 15000` in `vitest.config.ts`, one writer, not per-test annotations; `findBy*`'s window stays short. Reproduce a load failure with every core saturated (`for i in $(seq 1 $(nproc)); do timeout 400 sh -c 'while :; do :; done' & done`) and the whole suite.
   ```
   grep -n "testTimeout" vitest.config.ts src/test/appMount.ts
   pnpm test:run --reporter=verbose 2>&1 | grep -oE "[0-9]{4,}ms$" | sort -rn | head
   ```
-- **A real sleep inside a real debounce window is a race, not a wait.** Two search tests armed
-  the 200ms `?q` debounce, slept `DEBOUNCE_MS / 2` to sit "mid-window", then unmounted or
-  navigated and asserted no `?q` was written. Under `scripts/run-local-checks.sh`, which runs
-  the suite beside `cargo test` and clippy, the half-window sleep overran the whole window, the
-  write landed *before* the unmount, and `expected '/search?q=abba' to be '/search'` failed on a
-  correct component - a flake that reads as a product bug. Sleeping *past* a window is safe
-  (overrunning changes nothing); sleeping *inside* one is not, and no margin fixes it, because
-  the ceiling is set by whatever else the machine is doing. Fix: fake timers for the in-window
-  case, so real time cannot advance the debounce at all. In an `App`-mount suite, fake timers
-  also stall `waitFor`'s polling (30s timeout, a background normalizer waiting on real time), so
-  the navigation assertion there is a direct `expect` inside `act` rather than a `waitFor` - and
-  `vi.useRealTimers()` belongs in `afterEach`, since switching back mid-test drops the pending
-  fake timer the assertion depends on.
+- **A real sleep inside a real debounce window is a race, not a wait.** Search tests slept `DEBOUNCE_MS / 2` then asserted no `?q` write; under load the sleep overran the window and the write landed first. Sleeping past a window is safe, inside one never is. Fix: fake timers for in-window cases. In `App`-mount suites fake timers stall `waitFor`, so assert directly inside `act` and put `vi.useRealTimers()` in `afterEach`.
   ```
   grep -rn "setTimeout(r\|setTimeout(resolve" src --include='*.test.ts*' | grep -iE "/ ?2|debounce|window"
   ```

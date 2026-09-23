@@ -30,4 +30,3 @@ lerna-debug.log*
 .claude/settings.local.json
 /HANDOFF.md
 instructions/
-reference-projects/

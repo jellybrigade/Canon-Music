@@ -3,7 +3,10 @@
 Bug classes that already shipped once. Full entries, greps and forensics live in
 `docs/known-issues/<area>.md`. This index lists lesson headings only; read the area file
 before touching matching code. (Claude Code loads the index always and each area file by
-its frontmatter globs, through symlinks in `.claude/rules/`.)
+its frontmatter globs, through symlinks in `.claude/rules/`.) An area entry is the bold
+lesson, one or two sentences of cause and fix, and its grep, ~6 lines of prose at most.
+Backstory (incident, numbers, what the first fix missed) goes to
+`known-issues-history.md`, which is read on demand and never auto-loaded.
 Fixed unless marked OPEN.
 
 ## Platform (Linux / WebKitGTK / audio) - `known-issues/platform.md`
