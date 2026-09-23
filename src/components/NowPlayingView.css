@@ -212,11 +212,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.now-playing-radio-chip-row {
-  display: flex;
-  justify-content: center;
-}
-
 /* Sits between the progress bar and the transport, so the reason playback stopped is next to
    the controls the user is about to reach for. The message wraps here rather than truncating,
    there is room for it in the overlay. */
@@ -369,16 +364,12 @@
   transition: box-shadow var(--duration-longest) ease;
 }
 
-/* ── Extras row (love, volume, radio chip) ── */
+/* ── Extras row (radio, love, volume) ── */
 .now-playing-extras {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: 100%;
-}
-
-.now-playing-extras-side {
-  /* left column: holds RadioChip */
 }
 
 .now-playing-extras-center {

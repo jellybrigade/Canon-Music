@@ -13,7 +13,8 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
 import { ArtBackdrop } from "./ArtBackdrop";
-import { RadioChip } from "./RadioChip";
+import { RadioButton } from "./RadioButton";
+import { RadioQueueStatus } from "./RadioQueueStatus";
 import { ContextMenu } from "./ContextMenu";
 import { StartRadioSubmenu } from "./StartRadioSubmenu";
 import { stripServerPrefix } from "../utils/ids";
@@ -349,7 +350,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const clearQueue = usePlayerStore((s) => s.clearQueue);
   const startRadio = usePlayerStore((s) => s.startRadio);
   const audioFormat = usePlayerStore((s) => s.audioFormat);
-  const radioActive = usePlayerStore((s) => s.radioActive);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
   const albumDisplayName = useAlbumDisplayName();
   const upNextRef = useRef<HTMLDivElement>(null);
@@ -597,12 +597,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
             </div>
           )}
 
-          {radioActive && (
-            <div className="now-playing-radio-chip-row">
-              <RadioChip />
-            </div>
-          )}
-
           {audioFormat && (
             <div className="now-playing-format">
               {audioFormat.codec && `${audioFormat.codec} · `}
@@ -664,8 +658,8 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
           </div>
 
           <div className="now-playing-extras">
-            <div className="now-playing-extras-side"></div>
             <div className="now-playing-extras-center">
+              <RadioButton />
               <button
                 className={`player-btn player-btn--icon now-playing-love-btn${isLoved ? " player-btn--active" : ""}`}
                 onClick={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
@@ -836,6 +830,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                     </button>
                   ))
                 )}
+                <RadioQueueStatus />
               </>
             )}
 

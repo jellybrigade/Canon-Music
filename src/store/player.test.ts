@@ -1597,3 +1597,116 @@ describe("applyTrackIdRemap", () => {
     expect(usePlayerStore.getState().queue).toBe(queue);
   });
 });
+
+describe("player store - startRadioFrom", () => {
+  function audioPlayCount() {
+    return invoke.mock.calls.filter((c) => c[0] === "audio_play").length;
+  }
+
+  it("replace swaps the queue for the seed tracks and plays the first", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: makeTrack("1"), isPlaying: true });
+    const seed = makeTrack("seed");
+
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [seed], streamUrlFor, mode: "same-genre", label: "Rock" });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["seed"]);
+    expect(state.currentTrack?.id).toBe("seed");
+    expect(state.radioActive).toBe(true);
+    expect(state.radioSeed?.id).toBe("seed");
+    expect(state.radioMode).toBe("same-genre");
+    expect(state.radioLabel).toBe("Rock");
+    expect(audioPlayCount()).toBe(1);
+  });
+
+  it("queue_last keeps the queue and current track and appends the seed without interrupting playback", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    const current = makeTrack("1");
+    usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
+    const seed = makeTrack("seed");
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed], streamUrlFor });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["0", "1", "2", "seed"]);
+    expect(state.queueIndex).toBe(1);
+    expect(state.currentTrack).toBe(current);
+    expect(state.isPlaying).toBe(true);
+    expect(state.radioActive).toBe(true);
+    expect(state.radioSeed?.id).toBe("seed");
+    expect(audioPlayCount()).toBe(0);
+  });
+
+  it("queue_last with nothing loaded plays the first appended track", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    const seed = makeTrack("seed");
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [seed], streamUrlFor });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["seed"]);
+    expect(state.currentTrack?.id).toBe("seed");
+    expect(state.radioActive).toBe(true);
+    expect(audioPlayCount()).toBe(1);
+  });
+
+  it("queue_last seeds radio from the explicit seed, not the first of several tracks", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    usePlayerStore.setState({ queue: makeTracks(2), queueIndex: 0, currentTrack: makeTrack("0"), isPlaying: true });
+    const tracks = [makeTrack("g1"), makeTrack("g2")];
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, seed: tracks[1], streamUrlFor });
+
+    expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["0", "1", "g1", "g2"]);
+    expect(usePlayerStore.getState().radioSeed?.id).toBe("g2");
+  });
+
+  it("does nothing without tracks or a seed", async () => {
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], streamUrlFor });
+
+    expect(usePlayerStore.getState().radioActive).toBe(false);
+    expect(audioPlayCount()).toBe(0);
+  });
+
+  it("replace seeded from the playing track keeps it playing and drops the rest of the queue", async () => {
+    const current = makeTrack("1");
+    usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
+
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: current, streamUrlFor });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["1"]);
+    expect(state.queueIndex).toBe(0);
+    expect(state.currentTrack).toBe(current);
+    expect(state.isPlaying).toBe(true);
+    expect(state.radioActive).toBe(true);
+    expect(state.radioSeed).toBe(current);
+    expect(audioPlayCount()).toBe(0);
+  });
+
+  it("replace seeded from the playing track keeps shuffle order aligned", async () => {
+    const tracks = makeTracks(3);
+    usePlayerStore.setState({ queue: tracks, isShuffled: true, shuffleOrder: [2, 0, 1], queueIndex: 1, currentTrack: tracks[0]!, isPlaying: true });
+
+    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: tracks[0]!, streamUrlFor });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["0"]);
+    expect(state.shuffleOrder).toEqual([0]);
+    expect(state.queueIndex).toBe(0);
+  });
+
+  it("queue_last seeded from the playing track leaves the queue alone", async () => {
+    const current = makeTrack("1");
+    usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: current, isPlaying: true });
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks: [], seed: current, streamUrlFor });
+
+    const state = usePlayerStore.getState();
+    expect(state.queue.map((t) => t.id)).toEqual(["0", "1", "2"]);
+    expect(state.queueIndex).toBe(1);
+    expect(state.radioSeed).toBe(current);
+    expect(audioPlayCount()).toBe(0);
+  });
+});

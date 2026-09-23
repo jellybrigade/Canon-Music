@@ -5,6 +5,7 @@ import { ScrobbleTracker } from "../hooks/useScrobble";
 import { UpdatePrompt } from "../components/UpdatePrompt";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { FeedbackModal } from "../components/FeedbackModal";
+import { RadioStartDialogHost } from "../components/RadioStartDialog";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
@@ -150,6 +151,7 @@ export function AppShell(props: AppViewProps) {
           initialText={crashReport ? `Canon crashed last session:\n\n${crashReport}` : undefined}
         />
       )}
+      <RadioStartDialogHost />
     </Suspense>
   );
 }

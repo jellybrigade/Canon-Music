@@ -15,6 +15,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import type { Server } from "../types/server";
 import type { NavidromeCredential } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
+import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
@@ -441,8 +442,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);
 
   const { data: seedTrack } = useArtistSeedTrack(name, server.id, { enabled: inView });
-  const playQueue = usePlayerStore((s) => s.playQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
 
@@ -484,8 +484,7 @@ const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelec
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = buildTrackObj(seedTrack, server, credential);
-              void playQueue([track], streamUrlFor, 0);
-              startRadio(track, mode);
+              void startRadio({ tracks: [track], streamUrlFor, mode });
               setMenu(null);
             }}
           />
@@ -542,7 +541,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: lastfmAlbums, isLoading: lastfmAlbumsLoading } = useLastfmTopAlbums(lastfmName);
 
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const playNext = usePlayerStore((s) => s.playNext);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -689,8 +688,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     const seed = topTracks[0];
     if (!seed) return;
     const track = toTrackObj(seed);
-    void playQueue([track], streamUrlFor, 0);
-    startRadio(track);
+    void startRadio({ tracks: [track], streamUrlFor });
   }
 
   const handleTrackContextMenu = useCallback((e: React.MouseEvent, track: TopTrack) => {
@@ -1105,8 +1103,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = toTrackObj(contextMenu.track);
-              void playQueue([track], streamUrlFor, 0);
-              startRadio(track, mode);
+              void startRadio({ tracks: [track], streamUrlFor, mode });
               setContextMenu(null);
             }}
           />

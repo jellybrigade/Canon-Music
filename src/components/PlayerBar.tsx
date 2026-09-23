@@ -13,7 +13,7 @@ import { useLoved } from "../hooks/useLoved";
 import { useSetting } from "../hooks/useSetting";
 import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
-import { RadioChip } from "./RadioChip";
+import { RadioButton } from "./RadioButton";
 import { ContextMenu } from "./ContextMenu";
 import { AlbumArt } from "./AlbumArt";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
@@ -375,7 +375,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                     <span className="player-artist">{currentTrack.artist}</span>
                   )
                 )}
-                <RadioChip />
               </>
             )}
           </div>
@@ -475,6 +474,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               </div>
             </>
           )}
+          <RadioButton />
           <button
             ref={timerBtnRef}
             className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}

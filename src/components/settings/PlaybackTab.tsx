@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../hooks/useSetting";
+import { RADIO_START_ACTION_SETTING } from "../../hooks/useStartRadio";
 import { useReplayGainCoverage } from "../../hooks/useReplayGainCoverage";
 import { describeReplayGainCoverage } from "../../lib/replaygain-coverage";
 import { usePlayerStore } from "../../store/player";
@@ -25,6 +26,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
   const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
+  const [radioStartAction, setRadioStartAction] = useSetting(RADIO_START_ACTION_SETTING, "ask");
 
   const speed = usePlayerStore((s) => s.speed);
   const setSpeed = usePlayerStore((s) => s.setSpeed);
@@ -99,7 +101,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
         </section>
       )}
 
-      {show("queue", "restore", "play album", "action", "radio", "continuous", "autoplay") && (
+      {show("queue", "restore", "play album", "action", "radio", "start radio", "continuous", "autoplay") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Queue</h3>
           <SettingRow
@@ -137,6 +139,21 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
               <option value="queue_next">Play next</option>
               <option value="queue_last">Add to end</option>
               <option value="shuffle">Shuffle &amp; play</option>
+            </select>
+          </SettingRow>
+          <SettingRow
+            title="Start radio action"
+            description="What starting a radio does to the current queue. Also set by 'Always do this' when you start one."
+          >
+            <select
+              value={radioStartAction}
+              onChange={(e) => void setRadioStartAction(e.target.value)}
+              className="settings-select"
+              aria-label="Start radio action"
+            >
+              <option value="ask">Ask every time</option>
+              <option value="replace">Replace queue</option>
+              <option value="queue_last">Add to end</option>
             </select>
           </SettingRow>
           <SettingRow

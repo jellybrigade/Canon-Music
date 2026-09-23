@@ -69,6 +69,19 @@ export type RadioMode =
   | "loved"
   | "random";
 
+// What starting a radio does to the queue: throw it away, or keep it and let radio follow it.
+export type RadioStartAction = "replace" | "queue_last";
+
+export interface RadioStartRequest {
+  tracks: CurrentTrack[];
+  streamUrlFor: (t: CurrentTrack) => string;
+  // Defaults to the first of `tracks`. A genre play queues many tracks but seeds from one;
+  // radio started from the playing track queues nothing and passes only the seed.
+  seed?: CurrentTrack;
+  mode?: RadioMode;
+  label?: string;
+}
+
 export const RADIO_MODES: { mode: RadioMode; label: string }[] = [
   { mode: "curated",          label: "Curated" },
   { mode: "same-genre",       label: "Same Genre" },
@@ -364,6 +377,7 @@ interface PlayerState {
   setStreamUrlFor: (fn: (t: CurrentTrack) => string) => void;
   setRadioActive: (active: boolean) => void;
   startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => void;
+  startRadioFrom: (action: RadioStartAction, request: RadioStartRequest) => Promise<void>;
   setRadioMode: (mode: RadioMode) => void;
   setRadioSimilarityScale: (scale: number) => void;
   toggleConsumeMode: () => Promise<void>;
@@ -1730,6 +1744,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     startRadio: (seed: CurrentTrack, mode?: RadioMode, label?: string) => {
       set({ radioActive: true, radioSeed: seed, ...(mode ? { radioMode: mode } : {}), radioLabel: label ?? null });
       void persistRadioState();
+    },
+
+    startRadioFrom: async (action, { tracks, streamUrlFor, seed, mode, label }) => {
+      const radioSeed = seed ?? tracks[0];
+      if (!radioSeed) return;
+      if (tracks.length === 0) {
+        // Seeded from the track already playing: nothing new to queue, and replacing must not
+        // restart it, so the queue shrinks to that track alone.
+        const { currentTrack, isShuffled } = get();
+        if (action === "replace" && currentTrack) {
+          set({ queue: [currentTrack], queueIndex: 0, shuffleOrder: isShuffled ? [0] : [] });
+          void persistQueueState();
+        }
+      } else if (action === "replace") {
+        await get().playQueue(tracks, streamUrlFor, 0);
+      } else {
+        const hadTrack = get().currentTrack !== null;
+        const firstAppended = get().queue.length;
+        get().addManyToQueue(tracks, streamUrlFor);
+        if (!hadTrack) await get().playFromQueueIndex(Math.min(firstAppended, get().queue.length - 1));
+      }
+      get().startRadio(radioSeed, mode, label);
     },
 
     setRadioMode: (mode: RadioMode) => {

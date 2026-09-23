@@ -22,6 +22,7 @@ import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
 import { useRecentGenres } from "../hooks/useGenres";
 import type { GenreRow } from "../hooks/useGenres";
 import { usePlayerStore } from "../store/player";
+import { useStartRadio } from "../hooks/useStartRadio";
 import type { RadioMode, CurrentTrack } from "../store/player";
 import { useSearch } from "../hooks/useSearch";
 import { getDb } from "../db";
@@ -806,8 +807,7 @@ function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSe
 export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onStartRadioFromArtist, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
   const { server, credential } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
-  const playQueue = usePlayerStore(s => s.playQueue);
-  const startRadio = usePlayerStore(s => s.startRadio);
+  const startRadio = useStartRadio();
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
   const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
@@ -1004,9 +1004,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     };
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));
-    await playQueue([track], streamUrlFn, 0);
-    startRadio(track, "same-genre", genreLabel);
-  }, [server, credential, playQueue, startRadio]);
+    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
+  }, [server, credential, startRadio]);
 
   const play = (album: AlbumRow) => void playAlbum(album);
 

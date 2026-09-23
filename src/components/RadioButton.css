@@ -1,0 +1,33 @@
+.radio-btn-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Panel shell + item row shared in base.css. Anchored to the button's right edge: in the
+   player bar it sits near the window edge, and opening leftward is safe in Now Playing too. */
+.radio-menu {
+  position: absolute;
+  bottom: calc(100% + var(--space-xs));
+  right: 0;
+  min-width: 148px;
+  z-index: var(--z-overlay);
+}
+
+.radio-menu-item {
+  font-size: var(--text-base);
+}
+
+.radio-menu-item--active {
+  color: var(--accent);
+}
+
+.radio-menu-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: var(--space-2xs) 0;
+}
+
+.radio-menu-item--stop {
+  color: var(--text-secondary);
+}

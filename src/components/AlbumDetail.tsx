@@ -40,6 +40,7 @@ import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { rawGenreId } from "../lib/canonicalize";
 import type { CurrentTrack } from "../store/player";
+import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../store/player";
 import "./AlbumDetail.css";
 import { useClickOutside } from "../hooks/useClickOutside";
@@ -77,7 +78,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const playNext = usePlayerStore((s) => s.playNext);
   const addManyToQueue = usePlayerStore((s) => s.addManyToQueue);
   const playNextMany = usePlayerStore((s) => s.playNextMany);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
@@ -976,8 +977,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
               <StartRadioSubmenu
                 onSelect={(mode) => {
                   const track = buildTrackObj(contextMenu.track);
-                  void playQueue([track], streamUrlFor, 0);
-                  startRadio(track, mode);
+                  void startRadio({ tracks: [track], streamUrlFor, mode });
                   setContextMenu(null);
                 }}
               />

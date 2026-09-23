@@ -11,6 +11,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { getCoverArtUrl } from "../lib/navidrome";
 import { makeStreamUrlBuilder } from "../lib/track";
 import type { CurrentTrack } from "../store/player";
+import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../store/player";
 import { useGenreMappings, applyGenreMappings } from "../hooks/useGenreDisplay";
 import { useLoved } from "../hooks/useLoved";
@@ -60,7 +61,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
@@ -583,8 +584,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = buildTrackObj(contextMenu.track);
-              void playQueue([track], streamUrlFor, 0);
-              startRadio(track, mode);
+              void startRadio({ tracks: [track], streamUrlFor, mode });
               setContextMenu(null);
             }}
           />

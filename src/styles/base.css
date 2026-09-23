@@ -72,7 +72,8 @@ body,
    .spm-btn) layer disabled-opacity + any extra flex/gap on top. */
 .identify-btn,
 .merge-btn,
-.spm-btn {
+.spm-btn,
+.radio-start-btn {
   background: var(--bg-hover-strong);
   border: 1px solid var(--border);
   border-radius: var(--radius-base);
@@ -86,13 +87,15 @@ body,
 
 .identify-btn:hover:not(:disabled),
 .merge-btn:hover:not(:disabled),
-.spm-btn:hover:not(:disabled) {
+.spm-btn:hover:not(:disabled),
+.radio-start-btn:hover:not(:disabled) {
   background: var(--bg-hover-strong);
 }
 
 .identify-btn--primary,
 .merge-btn--primary,
-.spm-btn--primary {
+.spm-btn--primary,
+.radio-start-btn--primary {
   background: var(--accent);
   border-color: transparent;
   font-weight: 500;
@@ -100,16 +103,17 @@ body,
 
 .identify-btn--primary:hover:not(:disabled),
 .merge-btn--primary:hover:not(:disabled),
-.spm-btn--primary:hover:not(:disabled) {
+.spm-btn--primary:hover:not(:disabled),
+.radio-start-btn--primary:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
-/* Shared dropdown/popover panel shell (ref: ContextMenu, context submenu, RadioChip
+/* Shared dropdown/popover panel shell (ref: ContextMenu, context submenu, RadioButton
    menu). Component-specific classes layer position (fixed/absolute), z-index tier,
    and min-width on top. */
 .context-menu,
 .context-submenu-content,
-.radio-chip-menu {
+.radio-menu {
   background: var(--bg-elevated);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-base);
@@ -118,11 +122,11 @@ body,
 }
 
 /* Shared dropdown item row for the panel shell above. Component-specific classes
-   layer font-size on top (differs: context menu uses --text-md, radio-chip
+   layer font-size on top (differs: context menu uses --text-md, radio menu
    --text-base). */
 .context-menu button,
 .context-submenu-trigger,
-.radio-chip-menu-item {
+.radio-menu-item {
   display: block;
   width: 100%;
   text-align: left;
@@ -137,7 +141,7 @@ body,
 
 .context-menu button:hover,
 .context-submenu-trigger:hover,
-.radio-chip-menu-item:hover {
+.radio-menu-item:hover {
   background: var(--bg-hover-strong);
   border-color: transparent;
 }
@@ -149,6 +153,7 @@ body,
 .identify-overlay,
 .feedback-overlay,
 .merge-overlay,
+.radio-start-overlay,
 .node-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -164,7 +169,8 @@ body,
 .spm-dialog,
 .identify-dialog,
 .feedback-modal,
-.merge-dialog {
+.merge-dialog,
+.radio-start-dialog {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   display: flex;

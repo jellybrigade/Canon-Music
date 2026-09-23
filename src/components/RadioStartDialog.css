@@ -1,0 +1,76 @@
+.radio-start-dialog {
+  /* border/radius/display/flex-direction: shared shell in styles/base.css */
+  background: var(--bg-surface);
+  width: 400px;
+  max-width: calc(100vw - 48px);
+  box-shadow: var(--shadow-2xl) var(--scrim-3);
+}
+
+.radio-start-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+}
+
+.radio-start-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.radio-start-close {
+  display: flex;
+  padding: var(--space-2xs);
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.radio-start-close:hover {
+  color: var(--text-primary);
+  background: var(--tint-3);
+}
+
+.radio-start-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.radio-start-body {
+  padding: var(--space-md) var(--space-lg);
+}
+
+.radio-start-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-lg);
+  border-top: 1px solid var(--border);
+}
+
+.radio-start-remember {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.radio-start-actions {
+  display: flex;
+  gap: var(--space-xs);
+}

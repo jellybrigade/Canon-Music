@@ -49,6 +49,7 @@ import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
+import { useStartRadio } from "./hooks/useStartRadio";
 import "./styles/tokens.css";
 import "./styles/library.css";
 import "./styles/base.css";
@@ -64,8 +65,7 @@ export default function App() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const play = usePlayerStore((s) => s.play);
-  const playQueue = usePlayerStore((s) => s.playQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
@@ -427,8 +427,7 @@ export default function App() {
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await playQueue([track], streamUrlFn, 0);
-    startRadio(track, mode);
+    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
 
   async function handleAddAlbumToQueue(album: AlbumRow) {
@@ -467,8 +466,7 @@ export default function App() {
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
     }));
-    await playQueue(tracks, streamUrlFn, 0);
-    startRadio(tracks[0]!, "same-genre", genreLabel);
+    await startRadio({ tracks, streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
@@ -491,8 +489,7 @@ export default function App() {
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await playQueue([track], streamUrlFn, 0);
-    startRadio(track, mode);
+    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
 
   // Resolve an album id to a full row, then open it. Used where callers only

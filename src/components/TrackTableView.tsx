@@ -6,6 +6,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { makeStreamUrlBuilder } from "../lib/track";
 import { getCoverArtUrl } from "../lib/navidrome";
 import type { CurrentTrack } from "../store/player";
+import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../store/player";
 import { useLoved } from "../hooks/useLoved";
 import { useScrollMemory } from "../hooks/useScrollMemory";
@@ -170,7 +171,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
   const playNext = usePlayerStore((s) => s.playNext);
   const addManyToQueue = usePlayerStore((s) => s.addManyToQueue);
   const playNextMany = usePlayerStore((s) => s.playNextMany);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const { lovedTrackIds, toggleTrackLove } = useLoved();
@@ -607,8 +608,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
           <StartRadioSubmenu
             onSelect={(mode) => {
               const track = buildTrackObj(contextMenu.track);
-              void playQueue([track], streamUrlFor, 0);
-              startRadio(track, mode);
+              void startRadio({ tracks: [track], streamUrlFor, mode });
               setContextMenu(null);
             }}
           />
