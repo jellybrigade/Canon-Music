@@ -202,6 +202,9 @@ Fixed unless marked OPEN.
   `{id}:{size}`, the permanent breakage the guard exists to stop. A stand-in value must never be
   the evidence a check runs on: the guard now takes `Option<&str>` (absent means magic bytes or
   nothing) and refuses an `image/` claim over a body carrying `subsonic-response`.
+  **Found 3x:** `classify_stream_response` returned on an audio content-type before looking at
+  the body, so an empty 200 or an error envelope labelled `audio/mpeg` reached the decoder and
+  the prefetch cache. A header is a claim; check the body before trusting it, on every path.
   ```
   grep -rn "Decoder::new\|::load_from_memory\|image::load" src-tauri/src | grep -v '#\[cfg(test)\]'
   grep -rn "unwrap_or(\"image/\|unwrap_or(\"audio/\|unwrap_or(\"application/" src-tauri/src
