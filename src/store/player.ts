@@ -125,6 +125,9 @@ let cancelAudioError: (() => void) | null = null;
 // help because it only arms once the position has advanced at least once.
 let bufferDeadlineTimer: ReturnType<typeof setTimeout> | null = null;
 const BUFFER_DEADLINE_MS = 30000;
+// Timers stop during suspend while the deadline is wall-clock, so the sleep timer re-checks
+// Date.now() at least this often instead of trusting one long timeout.
+const SLEEP_TIMER_CHECK_MS = 15000;
 // Debounces rapid prev/next so only one HTTP fetch fires after the user stops skipping.
 let navDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 // Debounces local queue-state persistence so a burst of skips/shuffles against a
@@ -331,6 +334,7 @@ interface PlayerState {
   waveformPeaks: number[] | null;
 
   sleepTimerEndsAt: number | null;
+  sleepTimerMinutes: number | null;
   sleepTimerEndOfTrack: boolean;
   setSleepTimer: (preset: number | "end-of-track") => void;
   clearSleepTimer: () => void;
@@ -1130,6 +1134,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     waveformPeaks: null,
 
     sleepTimerEndsAt: null,
+    sleepTimerMinutes: null,
     sleepTimerEndOfTrack: false,
     consumeMode: false,
     consumeOnSkip: false,
@@ -1370,20 +1375,27 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     setSleepTimer: (preset) => {
       if (sleepTimerTimeout) { clearTimeout(sleepTimerTimeout); sleepTimerTimeout = null; }
       if (preset === "end-of-track") {
-        set({ sleepTimerEndOfTrack: true, sleepTimerEndsAt: null });
+        set({ sleepTimerEndOfTrack: true, sleepTimerEndsAt: null, sleepTimerMinutes: null });
       } else {
         const endsAt = Date.now() + preset * 60 * 1000;
-        set({ sleepTimerEndsAt: endsAt, sleepTimerEndOfTrack: false });
-        sleepTimerTimeout = setTimeout(() => {
+        set({ sleepTimerEndsAt: endsAt, sleepTimerMinutes: preset, sleepTimerEndOfTrack: false });
+        const check = () => {
+          const remaining = endsAt - Date.now();
+          if (remaining > 0) {
+            sleepTimerTimeout = setTimeout(check, Math.min(remaining, SLEEP_TIMER_CHECK_MS));
+            return;
+          }
+          sleepTimerTimeout = null;
           get().pause();
           get().clearSleepTimer();
-        }, preset * 60 * 1000);
+        };
+        check();
       }
     },
 
     clearSleepTimer: () => {
       if (sleepTimerTimeout) { clearTimeout(sleepTimerTimeout); sleepTimerTimeout = null; }
-      set({ sleepTimerEndsAt: null, sleepTimerEndOfTrack: false });
+      set({ sleepTimerEndsAt: null, sleepTimerMinutes: null, sleepTimerEndOfTrack: false });
     },
 
     next: async (fromNaturalEnd = false) => {
@@ -1397,17 +1409,28 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         lastEndedTrackId = trackId;
       }
 
-      if (fromNaturalEnd && get().sleepTimerEndOfTrack) {
+      // An end-of-track sleep timer runs the same advance but lands paused, matching the gapless
+      // path, which pauses at the start of the next track. The engine holds nothing after a
+      // natural end, so the parked track has no stream URL and resume() loads it on demand.
+      const parking = fromNaturalEnd && get().sleepTimerEndOfTrack;
+      if (parking) {
         get().clearSleepTimer();
         stopElapsedTimer();
-        set({ isPlaying: false });
-        void persistQueueState();
-        return;
       }
+      const land = async (track: CurrentTrack) => {
+        if (!parking) {
+          await playTrack(track, streamUrlFor(track), true);
+          return;
+        }
+        set({ currentTrack: track, streamUrl: null, elapsed: 0, isPlaying: false, isLoading: false, isBuffering: false, error: null, waveformPeaks: null });
+        // The other natural-end signal for the finished track is still coming, and the dedupe
+        // above compares against the current track, which is now the parked one.
+        lastEndedTrackId = track.id;
+      };
 
       if (repeat === "repeat-one") {
         const track = resolveTrack(queue, shuffleOrder, isShuffled, queueIndex);
-        if (track) await playTrack(track, streamUrlFor(track), true);
+        if (track) await land(track);
         void persistQueueState();
         return;
       }
@@ -1422,12 +1445,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         } else if (repeat === "repeat-all" && queueIndex >= newQueue.length) {
           set({ queue: newQueue, queueIndex: 0 });
           const t = newQueue[0] ?? null;
-          if (t) void playTrack(t, streamUrlFor(t), true);
+          if (t) void land(t);
         } else {
           const nextIdx = Math.min(queueIndex, newQueue.length - 1);
           set({ queue: newQueue, queueIndex: nextIdx });
           const t = newQueue[nextIdx] ?? null;
-          if (t) void playTrack(t, streamUrlFor(t), true);
+          if (t) void land(t);
         }
         void persistQueueState();
         return;
@@ -1437,7 +1460,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       if (nextPosition < queue.length) {
         set({ queueIndex: nextPosition });
         const track = resolveTrack(queue, shuffleOrder, isShuffled, nextPosition);
-        if (track) await playTrack(track, streamUrlFor(track), true);
+        if (track) await land(track);
       } else if (repeat === "repeat-all") {
         // Re-shuffle on loop-back so each pass plays a different order. Unanchored (-1): the
         // previous pass has finished, so there is no playing track to keep at position 0, and
@@ -1447,7 +1470,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           : shuffleOrder;
         set({ queueIndex: 0, shuffleOrder: newShuffleOrder });
         const track = resolveTrack(queue, newShuffleOrder, isShuffled, 0);
-        if (track) await playTrack(track, streamUrlFor(track), true);
+        if (track) await land(track);
+      } else if (parking) {
+        const finished = get().currentTrack;
+        if (finished) await land(finished);
       } else {
         if (get().radioOnQueueEnd) {
           const seed = get().currentTrack;

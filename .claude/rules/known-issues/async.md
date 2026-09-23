@@ -81,3 +81,7 @@ Fixed unless marked OPEN.
   grep -n "NON_IDEMPOTENT_ENDPOINTS" -A 6 src/lib/navidrome.ts
   grep -rnE "callSubsonicVoid\(|apiPost\(" src/lib/navidrome.ts | grep -oE '"[a-zA-Z]+(\.view)?"' | sort | uniq -c | sort -rn | head
   ```
+- **A timer measures awake time; a deadline shown against `Date.now()` measures wall time.** The sleep timer displayed `sleepTimerEndsAt - Date.now()` but paused from one `setTimeout(preset)`, and GLib timers stop during suspend. After a laptop slept past the deadline the countdown read 0 while the music played on for the remaining *awake* minutes. Fix: a chained timeout of at most `SLEEP_TIMER_CHECK_MS` (15s) re-reads `Date.now()` and pauses once past `endsAt`. Ask of any long timer paired with a wall-clock number: which one does the user see, and which one acts?
+  ```
+  grep -rn "Date.now() +" src --include='*.ts*' | grep -v '\.test\.'
+  ```

@@ -47,6 +47,7 @@ Fixed unless marked OPEN.
 - A mounted flag cleared only in cleanup is false for good under StrictMode.
 - A one-shot report of live state is wrong from the moment the state moves.
 - An endpoint's idempotency can live in a parameter, not in its name.
+- A timer measures awake time; a deadline shown against `Date.now()` measures wall time.
 
 ## Test / harness - `known-issues/testing.md`
 
@@ -143,5 +144,6 @@ Fixed unless marked OPEN.
 - Hit-area halo grown toward a neighbour steals its clicks.
 - Overlay sized to its container breaks when the container's shape varies.
 - A grid cell that can render `null` hands its column to the next sibling.
+- An option's "selected" test must compare to that option, not ask whether any option is set.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

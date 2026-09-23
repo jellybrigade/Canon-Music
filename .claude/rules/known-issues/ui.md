@@ -97,6 +97,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "display: contents\|subgrid" src --include='*.css'
   ```
+- **An option's "selected" test must compare to that option, not ask whether any option is set.** The sleep timer menu marked each minute preset active on `sleepTimerEndsAt` being non-null, so arming 30 min lit up 15, 30, 45 and 60 alike. The store held only the end time, so nothing could say which preset armed it. Fix: `sleepTimerMinutes` beside `sleepTimerEndsAt`, row active on `sleepTimerMinutes === min`. Ask of any mapped list's active class: does the condition mention the item?
+  ```
+  grep -rn -A4 "\.map((" src --include='*.tsx' | grep -v '\.test\.' | grep -E "(--active|--selected)\" : \"\"" | grep -v "===\|!==\|\.has(\|\.includes("
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```

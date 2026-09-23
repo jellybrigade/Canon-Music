@@ -14,6 +14,8 @@ import { useSetting } from "../hooks/useSetting";
 import { runEnrichment } from "../hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioButton } from "./RadioButton";
+import { SleepTimerPopover } from "./SleepTimerPopover";
+import { sleepTimerCountdown } from "../lib/sleepTimer";
 import { ContextMenu } from "./ContextMenu";
 import { AlbumArt } from "./AlbumArt";
 import { getCoverArtUrl, setRating, fetchTrackRating } from "../lib/navidrome";
@@ -106,8 +108,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
   const sleepTimerEndOfTrack = usePlayerStore((s) => s.sleepTimerEndOfTrack);
-  const setSleepTimer        = usePlayerStore((s) => s.setSleepTimer);
-  const clearSleepTimer      = usePlayerStore((s) => s.clearSleepTimer);
 
   const castDevice           = usePlayerStore((s) => s.castDevice);
   const availableRenderers   = usePlayerStore((s) => s.availableRenderers);
@@ -221,13 +221,10 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   // Sleep timer countdown display
   useEffect(() => {
-    if (!sleepTimerEndsAt) { setRemaining(""); return; }
+    if (sleepTimerEndsAt === null) { setRemaining(""); return; }
+    const endsAt = sleepTimerEndsAt;
     function tick() {
-      const ms = sleepTimerEndsAt! - Date.now();
-      if (ms <= 0) { setRemaining(""); return; }
-      const m = Math.floor(ms / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      setRemaining(`${m}:${s.toString().padStart(2, "0")}`);
+      setRemaining(sleepTimerCountdown(endsAt, Date.now()));
     }
     tick();
     const id = setInterval(tick, 1000);
@@ -485,7 +482,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               }
               setTimerOpen((o) => !o);
             }}
-            title={timerActive ? (remaining || "End of track") : "Sleep timer"}
+            title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
             aria-label="Sleep timer"
           >
             {timerActive && remaining ? (
@@ -585,7 +582,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                 setTimerOpen((o) => !o);
                 setMoreOpen(false);
               }}
-              title={timerActive ? (remaining || "End of track") : "Sleep timer"}
+              title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
               aria-label="Sleep timer"
             >
               {timerActive && remaining ? (
@@ -642,35 +639,11 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
       </div>}
 
       {timerOpen && (
-        <div
-          ref={timerPopoverRef}
-          className="timer-popover"
-          style={timerPopoverPos ? { right: timerPopoverPos.right, bottom: timerPopoverPos.bottom } : undefined}
-        >
-          {([15, 30, 45, 60] as const).map((min) => (
-            <button
-              key={min}
-              className={`timer-popover-item${sleepTimerEndsAt ? " timer-popover-item--active" : ""}`}
-              onClick={() => { setSleepTimer(min); setTimerOpen(false); }}
-            >
-              {min} min
-            </button>
-          ))}
-          <button
-            className={`timer-popover-item${sleepTimerEndOfTrack ? " timer-popover-item--active" : ""}`}
-            onClick={() => { setSleepTimer("end-of-track"); setTimerOpen(false); }}
-          >
-            End of track
-          </button>
-          {timerActive && (
-            <button
-              className="timer-popover-item timer-popover-item--off"
-              onClick={() => { clearSleepTimer(); setTimerOpen(false); }}
-            >
-              Off
-            </button>
-          )}
-        </div>
+        <SleepTimerPopover
+          popoverRef={timerPopoverRef}
+          position={timerPopoverPos}
+          onClose={() => setTimerOpen(false)}
+        />
       )}
 
       {castOpen && (

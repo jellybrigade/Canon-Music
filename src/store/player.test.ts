@@ -619,16 +619,78 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().isPlaying).toBe(true);
     });
 
-    it("next(true) with sleepTimerEndOfTrack: non-gapless mirror of the same guard", async () => {
-      await setupPlayingQueue(2);
+    it("next(true) with sleepTimerEndOfTrack parks on the next track, paused, like the gapless path", async () => {
+      await setupPlayingQueue(3);
       usePlayerStore.setState({ sleepTimerEndOfTrack: true, gapless: false });
-      const queueIndexBefore = usePlayerStore.getState().queueIndex;
+      const playsBefore = invoke.mock.calls.filter((c) => c[0] === "audio_play").length;
+
+      await usePlayerStore.getState().next(true);
+      await vi.advanceTimersByTimeAsync(200);
+
+      const state = usePlayerStore.getState();
+      expect(state.isPlaying).toBe(false);
+      expect(state.queueIndex).toBe(1);
+      expect(state.currentTrack?.id).toBe("1");
+      expect(state.elapsed).toBe(0);
+      expect(state.sleepTimerEndOfTrack).toBe(false);
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_play").length).toBe(playsBefore);
+    });
+
+    it("play after a non-gapless sleep stop loads the parked track instead of resuming an empty sink", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ sleepTimerEndOfTrack: true, gapless: false });
+      await usePlayerStore.getState().next(true);
+
+      usePlayerStore.getState().resume();
+      await vi.advanceTimersByTimeAsync(0);
+
+      const plays = invoke.mock.calls.filter((c) => c[0] === "audio_play");
+      expect(last(plays)[1]).toMatchObject({ url: "http://test/1" });
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_resume")).toBe(false);
+    });
+
+    it("the duplicate natural-end signal after a sleep stop does not advance past the parked track", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ sleepTimerEndOfTrack: true, gapless: false });
+      await usePlayerStore.getState().next(true);
+      const playsBefore = invoke.mock.calls.filter((c) => c[0] === "audio_play").length;
+
+      emitTauriEvent("track-ended", undefined);
+      await vi.advanceTimersByTimeAsync(200);
+
+      const state = usePlayerStore.getState();
+      expect(state.queueIndex).toBe(1);
+      expect(state.isPlaying).toBe(false);
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_play").length).toBe(playsBefore);
+    });
+
+    it("a sleep stop on the last track keeps it, rewound, and play replays it", async () => {
+      await setupPlayingQueue(2, { queueIndex: 1 });
+      usePlayerStore.setState({ sleepTimerEndOfTrack: true, gapless: false, radioOnQueueEnd: true });
 
       await usePlayerStore.getState().next(true);
 
-      expect(usePlayerStore.getState().isPlaying).toBe(false);
-      expect(usePlayerStore.getState().queueIndex).toBe(queueIndexBefore);
-      expect(usePlayerStore.getState().sleepTimerEndOfTrack).toBe(false);
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("1");
+      expect(state.radioActive).toBe(false);
+      expect(state.streamUrl).toBeNull();
+      expect(state.elapsed).toBe(0);
+
+      usePlayerStore.getState().resume();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(last(invoke.mock.calls.filter((c) => c[0] === "audio_play"))[1]).toMatchObject({ url: "http://test/1" });
+    });
+
+    it("a sleep stop under repeat-one parks on the same track, rewound", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ sleepTimerEndOfTrack: true, gapless: false, repeat: "repeat-one" });
+
+      await usePlayerStore.getState().next(true);
+
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("0");
+      expect(state.streamUrl).toBeNull();
+      expect(state.isPlaying).toBe(false);
     });
   });
 
@@ -1163,6 +1225,29 @@ describe("player store - sleep timer", () => {
     expect(usePlayerStore.getState().isPlaying).toBe(true);
   });
 
+  it("pauses soon after a suspend carries the wall clock past the deadline", async () => {
+    armPlayingTrack();
+    onInvoke("audio_pause", () => Promise.resolve(undefined));
+
+    usePlayerStore.getState().setSleepTimer(30);
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    // Suspend: wall clock jumps, monotonic timers do not advance.
+    vi.setSystemTime(Date.now() + 60 * 60 * 1000);
+    await vi.advanceTimersByTimeAsync(15 * 1000);
+
+    expect(usePlayerStore.getState().isPlaying).toBe(false);
+    expect(usePlayerStore.getState().sleepTimerEndsAt).toBeNull();
+  });
+
+  it("holds exactly one timer across re-arming, none after clear", () => {
+    const timersBefore = vi.getTimerCount();
+    usePlayerStore.getState().setSleepTimer(30);
+    usePlayerStore.getState().setSleepTimer(45);
+    expect(vi.getTimerCount()).toBe(timersBefore + 1);
+    usePlayerStore.getState().clearSleepTimer();
+    expect(vi.getTimerCount()).toBe(timersBefore);
+  });
+
   it("clearSleepTimer cancels a pending numeric timer so it never fires", async () => {
     armPlayingTrack();
     onInvoke("audio_pause", () => Promise.resolve(undefined));
@@ -1172,6 +1257,16 @@ describe("player store - sleep timer", () => {
     await vi.advanceTimersByTimeAsync(30 * 60 * 1000);
 
     expect(usePlayerStore.getState().isPlaying).toBe(true);
+  });
+
+  it("remembers which preset armed the timer, and forgets it on switch to end-of-track or clear", () => {
+    usePlayerStore.getState().setSleepTimer(45);
+    expect(usePlayerStore.getState().sleepTimerMinutes).toBe(45);
+    usePlayerStore.getState().setSleepTimer("end-of-track");
+    expect(usePlayerStore.getState().sleepTimerMinutes).toBeNull();
+    usePlayerStore.getState().setSleepTimer(15);
+    usePlayerStore.getState().clearSleepTimer();
+    expect(usePlayerStore.getState().sleepTimerMinutes).toBeNull();
   });
 
   it("clearSleepTimer resets both fields regardless of which mode was armed", () => {
