@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { SchemaTooNewError } from "../db/migrations";
-import { keychain } from "../keychain";
+import { keychain } from "../lib/keychain";
 import type { Server } from "../types/server";
-import type { NavidromeCredential } from "../lib/navidrome";
-import { QK } from "../lib/query-keys";
+import type { NavidromeCredential } from "../clients/navidrome";
+import { QK } from "../lib/queryKeys";
 
 export interface ServerWithCredential {
   server: Server;

@@ -7,7 +7,7 @@ Canon has a remote-notice system: on launch, the app fetches `notice.json` from 
 
 ## How it works (for context, don't re-explain unless asked)
 
-- `src/lib/notice.ts` — `fetchRemoteNotice()` fetches the JSON, swallows errors, returns `null` if `id`/`message` missing.
+- `src/clients/notice.ts` — `fetchRemoteNotice()` fetches the JSON, swallows errors, returns `null` if `id`/`message` missing.
 - `src/components/RemoteNoticeBanner.tsx` — fixed-top dismissible banner, optional "Learn more" link via `openUrl`.
 - `App.tsx` — fetches on launch, compares `id` against `settings['notice.last_seen_id']` (SQLite, via `useSetting`); shows banner only if unseen; dismiss persists the id so it never reappears for that user.
 - `notice.json` (repo root) — the payload. Shape: `{ "id": string, "message": string, "url"?: string }`. Empty `id`/`message` = no banner shown (inert default).

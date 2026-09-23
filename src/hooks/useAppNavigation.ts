@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useLocation, useNavigationType } from "react-router-dom";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore } from "../features/playback/store/player";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
-import type { PlaylistRow } from "./usePlaylists";
+import type { PlaylistRow } from "../features/playlists/usePlaylists";
 
 export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings" | "search";
 

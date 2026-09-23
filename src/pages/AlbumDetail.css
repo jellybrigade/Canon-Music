@@ -1,0 +1,1068 @@
+/* ── Album detail view ── */
+.album-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.album-detail-header {
+  flex-shrink: 0;
+  padding: var(--space-md) var(--space-md) var(--space-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  position: relative;
+  overflow: hidden;
+  contain: paint;
+}
+
+/* Gradient fade at bottom, tall enough to blend blurred art into page background */
+.album-detail-header::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: linear-gradient(to bottom, transparent, var(--bg, #0f0f0f));
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Rendered by ArtBackdrop, which crossfades between covers. Blur is precomputed
+   on a tiny canvas (src/lib/artBlur.ts), so its layers only scale already-blurred
+   pixels to cover - a cheap compositor op - instead of running an expensive
+   `filter: blur()` raster over a large layer on every repaint (same WebKitGTK
+   cost that NowPlayingView's backdrop had, see NowPlayingView.css). */
+.album-detail-hero-bg {
+  --art-backdrop-pos: center top;
+  opacity: var(--opacity-30);
+}
+
+.album-detail-back {
+  align-self: flex-start;
+  font-size: var(--text-base);
+  padding: 0.2em 0.65em;
+  box-shadow: none;
+  opacity: var(--opacity-70);
+  position: relative;
+  z-index: 2;
+}
+
+.album-detail-back:hover {
+  opacity: 1;
+}
+
+.album-detail-hero {
+  display: flex;
+  gap: var(--space-md);
+  align-items: flex-end;
+  position: relative;
+  z-index: 2;
+}
+
+.album-detail-art {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: var(--radius-base);
+  background-color: var(--bg-card);
+  flex-shrink: 0;
+  box-shadow: var(--shadow-md) var(--scrim-3);
+}
+
+.album-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  min-width: 0;
+  padding-bottom: var(--space-2xs);
+}
+
+.album-detail-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.album-detail-title {
+  font-family: var(--font-sans);
+  font-size: var(--text-2xl);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  margin: 0;
+  line-height: 1.15;
+}
+
+/* Both suffix controls are plain text affordances sitting in the hero. The
+   global `input, button` rule gives every button a radius and a drop shadow,
+   which on a transparent background renders as a floating glassy pill around
+   the text - so the shadow and the radius are cleared explicitly here. */
+.album-suffix-toggle-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 var(--space-2xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-base);
+  font-family: inherit;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: color var(--duration-fast);
+}
+.album-suffix-toggle-btn:hover:not(:disabled) { color: var(--text-primary); }
+.album-suffix-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.album-suffix-add-btn {
+  appearance: none;
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  /* The hero meta column is a stretch-aligned flex column, so without this the
+     button's hit area runs the full width of the page past its own label. */
+  align-self: flex-start;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-size: var(--text-base);
+  line-height: 1.4;
+  text-align: left;
+  font-family: inherit;
+  transition: color var(--duration-fast);
+}
+.album-suffix-add-btn:hover:not(:disabled) { color: var(--text-primary); }
+.album-suffix-add-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.album-detail-artist {
+  font-size: var(--text-md);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.album-detail-artist--link {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.album-detail-artist--link:hover {
+  color: var(--text-primary);
+}
+
+.album-detail-year {
+  font-size: var(--text-base);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.play-album-btn {
+  margin-top: 0;
+  align-self: flex-start;
+  font-size: var(--text-base);
+  padding: 0.4em 1.1em;
+  box-shadow: none;
+  background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 70%, black);
+  color: #fff;
+  border-color: transparent;
+  transition: background-color var(--duration-slowest) ease;
+}
+
+.play-album-btn:hover:not(:disabled) {
+  background-color: color-mix(in oklab, var(--album-accent, var(--accent)) 60%, black);
+  border-color: transparent;
+}
+
+.album-meta-refresh-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: 0.1rem;
+}
+
+.album-meta-refresh-hint {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+}
+
+.album-meta-refresh-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  box-shadow: none;
+}
+
+.album-meta-refresh-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.album-meta-refresh-error {
+  font-size: var(--text-base);
+  color: var(--danger);
+}
+
+/* ── Loading skeletons ──
+   Shaped like the rows they stand in for, so the layout does not shift when real
+   data lands. The app-wide prefers-reduced-motion rule in base.css freezes the pulse, and
+   canon-skeleton-pulse is defined there too. */
+.album-track-skeleton {
+  padding: var(--space-xs) 0;
+}
+
+.album-track-skeleton-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 34px;
+  padding: 0 var(--space-xs);
+}
+
+.album-track-skeleton-bar,
+.track-skeleton-bar {
+  height: 9px;
+  border-radius: var(--radius-xs);
+  background: var(--text-tertiary);
+  animation: canon-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.album-track-skeleton-bar--num,
+.track-skeleton-bar--num {
+  width: 1.25rem;
+}
+
+.album-track-skeleton-bar--short {
+  width: 2.5rem;
+  justify-self: end;
+}
+
+/* Stagger so the rows read as a list settling in, not one block flashing. */
+.album-track-skeleton-row:nth-child(2n) .album-track-skeleton-bar { animation-delay: 0.12s; }
+.album-track-skeleton-row:nth-child(3n) .album-track-skeleton-bar { animation-delay: 0.24s; }
+
+.track-skeleton-list {
+  padding: var(--space-xs) 0;
+}
+
+.track-skeleton-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 40px;
+  padding: 0 var(--space-sm);
+}
+
+.track-skeleton-row:nth-child(2n) .track-skeleton-bar { animation-delay: 0.12s; }
+.track-skeleton-row:nth-child(3n) .track-skeleton-bar { animation-delay: 0.24s; }
+
+.album-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+}
+
+.album-identify-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: var(--radius-base);
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
+  color: var(--text-secondary, var(--overlay-50));
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+  box-shadow: none;
+}
+
+.album-identify-btn:hover {
+  background: var(--tint-4);
+  color: var(--text-primary, #fff);
+}
+
+.album-identify-btn--loved {
+  color: var(--accent);
+}
+
+.album-identify-btn--loved:hover {
+  color: var(--accent);
+}
+
+.album-detail-identity {
+  margin: 0;
+}
+
+.mb-verified-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 0.4em;
+  font-size: var(--text-base);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.mb-verified-facts span + span::before {
+  content: "·";
+  margin-right: 0.4em;
+  opacity: var(--opacity-50);
+}
+
+.album-tag-band {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs) var(--space-md);
+  padding: var(--space-xs) var(--space-md) var(--space-xs);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.album-tag-column {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+}
+
+.album-tag-column-title {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 var(--space-2xs) 0 0;
+  white-space: nowrap;
+}
+
+.album-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
+}
+
+.album-tag-chip--excludable {
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  gap: var(--space-2xs);
+}
+
+.album-tag-chip:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+
+/* file-sourced chips: solid border (default); lastfm-sourced: dashed; musicbrainz: dotted */
+.album-tag-chip--lastfm {
+  border-style: dashed;
+  opacity: var(--opacity-85);
+}
+
+.album-tag-chip--lastfm:hover {
+  opacity: 1;
+}
+
+.album-tag-chip--musicbrainz {
+  border-style: dotted;
+  opacity: var(--opacity-75);
+}
+
+.album-tag-chip--musicbrainz:hover {
+  opacity: 1;
+}
+
+.album-tag-chip--musicbrainz-folksonomy {
+  border-style: dotted;
+  opacity: var(--opacity-60);
+}
+
+.album-tag-chip--musicbrainz-folksonomy:hover {
+  opacity: 1;
+}
+
+/* Manual (user-entered) genre chips */
+.album-tag-chip--manual {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  border: 1px solid var(--accent, #7c6af0);
+  border-radius: var(--radius-md-lg);
+  padding: 1px var(--space-2xs) 1px var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.album-tag-chip-label {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: inherit;
+  font-weight: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.album-tag-chip-label:hover {
+  color: var(--text-primary);
+}
+
+.album-tag-chip-remove {
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  opacity: var(--opacity-50);
+  transition: opacity var(--duration-fast);
+}
+
+.album-tag-chip-remove:hover {
+  opacity: 1;
+  color: var(--text-secondary);
+}
+
+/* Column header row: title + add button inline */
+.album-tag-column-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+}
+
+.album-tag-add-genre-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  padding: 0;
+  transition: border-color var(--duration-base), color var(--duration-base);
+  flex-shrink: 0;
+}
+
+.album-tag-add-genre-btn:hover {
+  border-color: var(--text-tertiary);
+  color: var(--text-secondary);
+}
+
+/* Genre autocomplete input */
+.album-genre-input-wrapper {
+  position: relative;
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.album-genre-input {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  width: 100%;
+  outline: none;
+}
+
+.album-genre-input:focus {
+  border-color: var(--accent, #7c6af0);
+}
+
+.album-genre-autocomplete {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated, #1a1a1a);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2xs) 0;
+  z-index: var(--z-dropdown);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.album-genre-autocomplete-item {
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.album-genre-autocomplete-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+
+.album-tag-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-top: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.album-tag-action-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs) var(--space-xs);
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm-md);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-moderate), color var(--duration-moderate);
+}
+
+.album-tag-action-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.album-tag-action-btn:disabled { opacity: var(--opacity-40); cursor: default; }
+
+.album-tag-action-msg {
+  font-size: var(--text-base);
+  color: #22c55e;
+}
+
+.album-bio-section {
+  margin: var(--space-sm) var(--space-md) 0;
+  padding: var(--space-sm) var(--space-md);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.album-bio-wrap {
+  position: relative;
+}
+
+.album-bio-wrap--clamped {
+  max-height: 1.4rem;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+}
+
+.album-bio {
+  font-size: var(--text-md);
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.album-bio-toggle {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: var(--space-2xs) 0 0;
+  font-size: var(--text-base);
+  color: var(--accent);
+  cursor: pointer;
+  opacity: var(--opacity-85);
+  transition: opacity var(--motion-fast);
+}
+
+.album-bio-toggle:hover {
+  opacity: 1;
+}
+
+.album-detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: var(--normalizing-bar-height, 0px);
+  contain: paint;
+}
+
+.tracklist {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-md);
+  font-weight: 400;
+}
+
+.tracklist-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.tracklist-row--playable {
+  cursor: pointer;
+}
+
+.tracklist-row--playable:hover {
+  background-color: var(--bg-hover);
+}
+
+.tracklist-row--active {
+  color: var(--accent);
+}
+
+.tracklist-row:hover {
+  background-color: var(--bg-hover);
+}
+
+.tracklist td {
+  padding: var(--space-xs) var(--space-xs);
+  vertical-align: middle;
+}
+
+.track-number {
+  color: var(--text-tertiary);
+  text-align: right;
+  width: 2.5rem;
+  padding-right: var(--space-sm);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.track-playing-indicator {
+  color: var(--accent);
+  animation: playingPulse 1.8s ease-in-out infinite;
+}
+
+.track-title {
+  font-weight: 500;
+  width: 40%;
+  letter-spacing: -0.005em;
+}
+
+.track-artist {
+  color: var(--text-secondary);
+  font-weight: 400;
+  width: 25%;
+  font-size: var(--text-base);
+}
+
+.track-genre {
+  width: 20%;
+}
+
+.track-genre-chip {
+  display: inline-block;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.track-genre-chip:not(:last-child)::after {
+  content: "·";
+  margin: 0 var(--space-2xs);
+  opacity: var(--opacity-40);
+}
+
+.track-duration {
+  color: var(--text-tertiary);
+  text-align: right;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.track-disc {
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.track-format {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.track-bitrate {
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.track-plays {
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+
+
+/* ── Tracklist wrapper + floating column picker ── */
+.tracklist-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.tracklist-wrapper > .tracklist-col-picker-anchor {
+  align-self: flex-end;
+  padding: var(--space-2xs);
+}
+
+/* ── Column picker ── */
+.tracklist-col-picker-anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tracklist-col-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: var(--space-2xs) var(--space-2xs);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: color var(--duration-fast), background var(--duration-fast);
+}
+
+.tracklist-col-picker-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.tracklist-col-picker-popup {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-base);
+  padding: var(--space-2xs) 0;
+  z-index: var(--z-overlay);
+  min-width: 130px;
+  box-shadow: var(--shadow-md) var(--scrim-2);
+}
+
+.tracklist-col-picker-popup--left {
+  right: auto;
+  left: 0;
+}
+
+.tracklist-col-picker-popup label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--duration-fast), color var(--duration-fast);
+}
+
+.tracklist-col-picker-popup label:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ── Playlist list controls (header + col picker) ── */
+.playlist-list-controls {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.playlist-list-controls > .tracklist-col-picker-anchor {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-2xs);
+}
+
+/* ── Playlist column header ── */
+.playlist-col-header {
+  display: grid;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.playlist-col-header-cell {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  padding: var(--space-2xs) var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.playlist-col-header-cell--right {
+  text-align: right;
+}
+
+/* ── Playlist vrow extra columns ── */
+.playlist-vrow-album {
+  color: var(--text-secondary);
+  font-size: var(--text-base);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-vrow-year {
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+}
+
+.playlist-vrow-format {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.playlist-vrow-bitrate {
+  color: var(--text-tertiary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Virtualized playlist track rows ── */
+/* grid-template-columns set inline via style prop to match active columns */
+.playlist-vrow {
+  display: grid;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: var(--text-md);
+  font-weight: 400;
+}
+
+.playlist-vrow:hover {
+  background-color: var(--bg-hover);
+}
+
+.playlist-vrow--active {
+  color: var(--accent);
+}
+
+.playlist-vrow > * {
+  padding: var(--space-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-vrow-num {
+  color: var(--text-tertiary);
+  text-align: right;
+  padding-right: var(--space-sm) !important;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.playlist-vrow-title {
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+
+.playlist-vrow-artist {
+  color: var(--text-secondary);
+  font-weight: 400;
+  font-size: var(--text-base);
+}
+
+.playlist-vrow-genre {
+  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.playlist-vrow-duration {
+  color: var(--text-tertiary);
+  text-align: right;
+  white-space: nowrap;
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  padding-right: var(--space-sm) !important;
+}
+
+/* ── Track table: selected row + sortable header buttons ── */
+.track-table-row--selected {
+  background-color: var(--bg-selected, var(--tint-3));
+}
+
+.track-sort-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.track-sort-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ── Unidentified album badge (shown when MB auto-identify is on and album has no confirmed identity) ── */
+.album-unidentified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-size: var(--text-xs);
+  color: var(--text-secondary, var(--overlay-50));
+  background: var(--tint-2);
+  border: 1px solid var(--tint-4);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2xs) var(--space-xs);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: color var(--duration-moderate), background var(--duration-moderate), border-color var(--duration-moderate);
+  box-shadow: none;
+}
+
+.album-unidentified-badge:hover {
+  color: var(--text-primary, var(--overlay-90));
+  background: var(--tint-4);
+  border-color: var(--border-strong);
+}
+
+/* ── Tag level badge ── */
+.album-tag-level-badge {
+  display: inline-block;
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--tint-3);
+  border-radius: var(--radius-xs);
+  padding: 0.1em 0.35em;
+  color: var(--text-tertiary);
+  vertical-align: middle;
+  margin-left: 0.3em;
+  cursor: help;
+}
+
+/* ── Track year column ── */
+.track-year {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-style: italic;
+  padding-right: var(--space-xs);
+  min-width: 2.5rem;
+}
+
+/* ── Unmatched genres hint (opens TagDrawer) ── */
+
+.album-unmatched-hint {
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-tertiary);
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: var(--space-2xs) var(--space-2xs);
+  cursor: pointer;
+  transition: color var(--duration-fast);
+  white-space: nowrap;
+  align-self: flex-start;
+}
+
+.album-unmatched-hint:hover { color: var(--text-secondary); }
+
+.album-related-section {
+  padding: var(--space-xl) 0 0;
+}
+
+.album-related-title {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 0 0 calc(-1 * var(--space-xs));
+  padding: 0 var(--space-md);
+}
+
+.album-related-section .album-grid-wrapper {
+  flex: none;
+  /* No height/max-height cap: album count is bounded (RELATED_SHELF_LIMIT in
+     AlbumDetail.tsx) so this never scrolls/clips. Crops the virtualizer's
+     built-in trailing space (--album-grid-trailing-space, set in
+     AlbumGrid.tsx) after the last row since there's no next row to pad for. */
+  margin-bottom: calc(-1 * var(--album-grid-trailing-space, var(--space-2xl)));
+}

@@ -29,6 +29,5 @@ lerna-debug.log*
 # Local-only
 .claude/settings.local.json
 /HANDOFF.md
-instructions/*
-!instructions/docs-tech/
+instructions/
 reference-projects/

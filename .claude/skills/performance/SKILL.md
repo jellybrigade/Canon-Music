@@ -54,7 +54,7 @@ Find the concrete bottleneck(s). Do not fix anything here, unless it turns out C
 - **Expensive computation on the render path**: sorting/filtering/scoring large arrays inline instead of memoized, recomputing derived data every keystroke/tick.
 - **List rendering cost**: no virtualization on long lists (`AlbumGrid`, `ArtistGrid`, `TrackTableView`, tag trees) when item count can grow large.
 - **React Query issues**: missing/too-short `staleTime`, refetching on every mount, structural-sharing breaks (see `feedback-rq-set-bug` memory — never return a `Set`/`Map` from a `queryFn`), overlapping queries doing redundant work. Check the global `QueryClient` defaults (`src/main.tsx`) before flagging a missing per-hook `staleTime` as a bug — it may already be covered by a sane default.
-- **SQLite query cost**: N+1 query patterns, missing indexes, unbatched writes in loops (`lib/sync.ts`, `useScrobbleFlush.ts`).
+- **SQLite query cost**: N+1 query patterns, missing indexes, unbatched writes in loops (`features/sync/sync.ts`, `useScrobbleFlush.ts`).
 - **Memory leaks**: `useEffect` without cleanup for listeners/intervals/timeouts, growing `Map`/`Set`/array closures across renders that never evict, event listeners added to `window`/`document` never removed, Rust-side caches (`CoverState` HashMap) with no eviction policy.
 - **Playback-tick-driven re-renders**: anything subscribing to progress/time updates that re-renders more than the visible UI needs (`PlayerBar`, `PlayerProgress`, `WaveformBars`, lyrics sync).
 - **Fan-out concurrency**: enrichment/network fan-out with no concurrency cap (see recent commit "Cap concurrent artist enrichment fan-out" for precedent) or, conversely, over-throttled fan-out serializing work that could run in parallel.

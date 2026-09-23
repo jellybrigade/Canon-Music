@@ -1,0 +1,461 @@
+import { useState, useRef, useMemo, useLayoutEffect, type ReactNode, type RefObject } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
+import { Music, User } from "lucide-react";
+import type { SearchAlbum, SearchTrack, SearchArtist } from "./useSearch";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import type { AlbumRow, ArtistRow } from "../../types/library";
+import type { RadioMode } from "../playback/store/player";
+import { usePlayerStore } from "../playback/store/player";
+import { makeStreamUrlBuilder } from "../../lib/track";
+import { getCoverArtUrl } from "../../clients/navidrome";
+import { resolvePortraitUrl } from "../../clients/lastfm";
+import { useArtistImageMap, resolveArtistImageUrl } from "../../hooks/useArtistImageCache";
+import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
+import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
+import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
+import type { PlaylistRow } from "../playlists/usePlaylists";
+import "./SearchResults.css";
+
+interface Props {
+  albums: SearchAlbum[];
+  tracks: SearchTrack[];
+  artists: SearchArtist[];
+  serverWithCredential: ServerWithCredential;
+  playlists?: PlaylistRow[];
+  onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist: (artist: SearchArtist) => void;
+  onPlayTrack: (trackId: string) => void;
+  onStartRadioFromAlbum: (album: AlbumRow, mode: RadioMode) => void;
+  onStartRadioFromArtist: (artist: ArtistRow, mode: RadioMode) => void;
+  onAddAlbumToPlaylist?: (album: AlbumRow, playlist: PlaylistRow) => void;
+}
+
+type AlbumMenu = { x: number; y: number; album: SearchAlbum };
+type TrackMenu = { x: number; y: number; track: SearchTrack };
+type ArtistMenu = { x: number; y: number; artist: SearchArtist };
+
+const ARTIST_LIMIT = 12;
+const ALBUM_LIMIT = 12;
+const TRACK_LIMIT = 16;
+
+// Row geometry for the virtualized result lists (mirrors SearchResults.css).
+const SEARCH_PAD_X = 16;   // --space-md horizontal padding on .search-results
+const GRID_GAP = 4;        // --space-2xs (column + row gap on the result grids)
+// Row content: info block (primary text-md 18px*1.5 + gap 4px + secondary text-base 16px*1.5)
+// plus row vertical padding (--space-xs 8px * 2). This is the tallest case (two text lines,
+// taller than any thumbnail); rows with a single text line get a little extra gap.
+const ROW_CONTENT_HEIGHT = 27 + 4 + 24 + 16;
+const ROW_HEIGHT = ROW_CONTENT_HEIGHT + GRID_GAP;
+
+const ARTIST_CARD_MIN = 180;  // .search-artist-list minmax
+const ALBUM_CARD_MIN = 260;   // .search-album-list minmax
+const TRACK_CARD_MIN = 300;   // .search-track-list minmax
+
+/**
+ * Windows one result section's grid using the AlbumGrid useVirtualizer pattern.
+ * All sections share the single .search-results scroller, so each measures its
+ * own offset within that scroller (offsetTop) and feeds it as scrollMargin.
+ */
+function VirtualSection<T>({
+  items,
+  scrollRef,
+  cardMin,
+  renderItem,
+}: {
+  items: T[];
+  scrollRef: RefObject<HTMLDivElement | null>;
+  cardMin: number;
+  renderItem: (item: T) => ReactNode;
+}) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  const [scrollMargin, setScrollMargin] = useState(0);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    const obs = new ResizeObserver(measure);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [scrollRef]);
+
+  // Re-measure this list's offset within the shared scroller on every layout
+  // pass (sections above can expand/collapse). Guarded so it converges.
+  useLayoutEffect(() => {
+    if (listRef.current) {
+      const top = listRef.current.offsetTop;
+      setScrollMargin((prev) => (prev !== top ? top : prev));
+    }
+  });
+
+  const available = width > 0 ? width - SEARCH_PAD_X * 2 : 0;
+  const cols = Math.max(1, Math.floor((available + GRID_GAP) / (cardMin + GRID_GAP)));
+
+  const rows = useMemo<T[][]>(() => {
+    const result: T[][] = [];
+    for (let i = 0; i < items.length; i += cols) result.push(items.slice(i, i + cols));
+    return result;
+  }, [items, cols]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 3,
+    scrollMargin,
+  });
+
+  const prevLayoutKey = useRef(`${cols}-${rows.length}-${scrollMargin}`);
+  useLayoutEffect(() => {
+    const key = `${cols}-${rows.length}-${scrollMargin}`;
+    if (prevLayoutKey.current !== key) {
+      prevLayoutKey.current = key;
+      virtualizer.measure();
+    }
+  }, [cols, rows.length, scrollMargin, virtualizer]);
+
+  return (
+    <div ref={listRef} style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+      {virtualizer.getVirtualItems().map((virtualRow) => {
+        const rowItems = rows[virtualRow.index];
+        if (!rowItems) return null;
+        return (
+          <div
+            key={virtualRow.key}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              transform: `translateY(${virtualRow.start - scrollMargin}px)`,
+              height: `${ROW_CONTENT_HEIGHT}px`,
+              display: "grid",
+              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              columnGap: `${GRID_GAP}px`,
+            }}
+          >
+            {rowItems.map((item) => renderItem(item))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function formatDuration(seconds: number | null): string {
+  if (!seconds) return "";
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+// server_id comes off the row itself, never off the currently selected server:
+// stamping the selection onto a row produces something internally consistent
+// that streams from the wrong host (see known-issues.md).
+function toAlbumRow(album: SearchAlbum): AlbumRow {
+  return { id: album.id, server_id: album.server_id, name: album.name, artist: album.artist, year: null, artwork_url: album.artwork_url };
+}
+
+function trackAlbumRow(track: SearchTrack): AlbumRow {
+  return { id: track.album_id, server_id: track.server_id, name: track.album_name ?? "", artist: track.artist, year: null, artwork_url: null };
+}
+
+function toArtistRow(artist: SearchArtist): ArtistRow {
+  return {
+    name: artist.name,
+    album_count: artist.album_count,
+    artwork_url: null,
+    lastfm_image_url: artist.lastfm_image_url,
+    wikidata_image_url: artist.wikidata_image_url,
+    navidrome_image_url: artist.navidrome_image_url,
+    enriched_at: null,
+  };
+}
+
+export function SearchResults({
+  albums,
+  tracks,
+  artists,
+  serverWithCredential,
+  playlists,
+  onSelectAlbum,
+  onSelectArtist,
+  onPlayTrack,
+  onStartRadioFromAlbum,
+  onStartRadioFromArtist,
+  onAddAlbumToPlaylist,
+}: Props) {
+  const { server, credential } = serverWithCredential;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const albumDisplayName = useAlbumDisplayName();
+  const artistImageMap = useArtistImageMap();
+  const addToQueue = usePlayerStore((s) => s.addToQueue);
+  const playNext = usePlayerStore((s) => s.playNext);
+  const streamUrlFor = makeStreamUrlBuilder(server, credential);
+  const [showAllArtists, setShowAllArtists] = useState(false);
+  const [showAllAlbums, setShowAllAlbums] = useState(false);
+  const [showAllTracks, setShowAllTracks] = useState(false);
+  const [albumMenu, setAlbumMenu] = useState<AlbumMenu | null>(null);
+  const [trackMenu, setTrackMenu] = useState<TrackMenu | null>(null);
+  const [artistMenu, setArtistMenu] = useState<ArtistMenu | null>(null);
+  const [identifyAlbum, setIdentifyAlbum] = useState<SearchAlbum | null>(null);
+  const [identifyArtistName, setIdentifyArtistName] = useState<string | null>(null);
+
+  function buildTrackObj(track: SearchTrack) {
+    return {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      coverArtUrl: track.artwork_url ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512) : null,
+      artworkRef: track.artwork_url,
+      album: track.album_name,
+      albumId: track.album_id,
+      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
+        ? {
+            trackGain: track.replay_gain_track_gain,
+            trackPeak: track.replay_gain_track_peak,
+            albumGain: track.replay_gain_album_gain,
+            albumPeak: track.replay_gain_album_peak,
+          }
+        : null,
+    };
+  }
+
+  const visibleArtists = showAllArtists ? artists : artists.slice(0, ARTIST_LIMIT);
+  const visibleAlbums = showAllAlbums ? albums : albums.slice(0, ALBUM_LIMIT);
+  const visibleTracks = showAllTracks ? tracks : tracks.slice(0, TRACK_LIMIT);
+
+  const isEmpty = albums.length === 0 && tracks.length === 0 && artists.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="search-empty">
+        <p className="search-empty-title">No matches in your library</p>
+        <p className="search-empty-hint">
+          Search looks at track titles, artists, album names and genres. Try fewer words, or sync the server if the music is new.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="search-results" ref={scrollRef}>
+      {artists.length > 0 && (
+        <section className="search-group">
+          <h2 className="search-group-title">Artists</h2>
+          <VirtualSection
+            items={visibleArtists}
+            scrollRef={scrollRef}
+            cardMin={ARTIST_CARD_MIN}
+            renderItem={(artist) => (
+              <button
+                key={artist.name}
+                className="search-artist-row"
+                onClick={() => onSelectArtist(artist)}
+                onContextMenu={(e) => { e.preventDefault(); setArtistMenu({ x: e.clientX, y: e.clientY, artist }); }}
+              >
+                <div className="search-artist-icon">
+                  {(() => {
+                    const portraitUrl = resolvePortraitUrl(artist);
+                    const imgUrl = resolveArtistImageUrl(artistImageMap, artist.name, portraitUrl);
+                    return imgUrl ? (
+                      <img src={imgUrl} alt={artist.name} loading="lazy" />
+                    ) : (
+                      <User size={16} />
+                    );
+                  })()}
+                </div>
+                <div className="search-artist-info">
+                  <span className="search-item-primary">{artist.name}</span>
+                  <span className="search-item-secondary">
+                    {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+                  </span>
+                </div>
+              </button>
+            )}
+          />
+          {artists.length > ARTIST_LIMIT && !showAllArtists && (
+            <button className="search-show-all" onClick={() => setShowAllArtists(true)}>
+              Show all {artists.length} artists
+            </button>
+          )}
+        </section>
+      )}
+
+      {albums.length > 0 && (
+        <section className="search-group">
+          <h2 className="search-group-title">Albums</h2>
+          <VirtualSection
+            items={visibleAlbums}
+            scrollRef={scrollRef}
+            cardMin={ALBUM_CARD_MIN}
+            renderItem={(album) => (
+              <button
+                key={album.id}
+                className="search-album-row"
+                onClick={() => onSelectAlbum(toAlbumRow(album))}
+                onContextMenu={(e) => { e.preventDefault(); setAlbumMenu({ x: e.clientX, y: e.clientY, album }); }}
+              >
+                <div className="search-album-thumb">
+                  {album.artwork_url ? (
+                    <img
+                      src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 64)}
+                      alt={album.name}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <Music size={18} />
+                  )}
+                </div>
+                <div className="search-album-info">
+                  <span className="search-item-primary">{albumDisplayName(album.name)}</span>
+                  {album.artist && (
+                    <span className="search-item-secondary">{album.artist}</span>
+                  )}
+                </div>
+              </button>
+            )}
+          />
+          {albums.length > ALBUM_LIMIT && !showAllAlbums && (
+            <button className="search-show-all" onClick={() => setShowAllAlbums(true)}>
+              Show all {albums.length} albums
+            </button>
+          )}
+        </section>
+      )}
+
+      {tracks.length > 0 && (
+        <section className="search-group">
+          <h2 className="search-group-title">Tracks</h2>
+          <VirtualSection
+            items={visibleTracks}
+            scrollRef={scrollRef}
+            cardMin={TRACK_CARD_MIN}
+            renderItem={(track) => (
+              <button
+                key={track.id}
+                className="search-track-row"
+                onClick={() => onPlayTrack(track.id)}
+                onContextMenu={(e) => { e.preventDefault(); setTrackMenu({ x: e.clientX, y: e.clientY, track }); }}
+              >
+                <div className="search-track-thumb">
+                  {track.artwork_url ? (
+                    <img
+                      src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
+                      alt={track.album_name ?? track.title}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <Music size={16} />
+                  )}
+                </div>
+                <div className="search-track-info">
+                  <span className="search-item-primary">{track.title}</span>
+                  <span className="search-item-secondary">
+                    {[track.artist, track.album_name].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+                {track.duration != null && (
+                  <span className="search-track-duration">{formatDuration(track.duration)}</span>
+                )}
+              </button>
+            )}
+          />
+          {tracks.length > TRACK_LIMIT && !showAllTracks && (
+            <button className="search-show-all" onClick={() => setShowAllTracks(true)}>
+              Show all {tracks.length} tracks
+            </button>
+          )}
+        </section>
+      )}
+
+      {albumMenu && (
+        <ContextMenu x={albumMenu.x} y={albumMenu.y} onClose={() => setAlbumMenu(null)}>
+          <button onClick={() => { onSelectAlbum(toAlbumRow(albumMenu.album)); setAlbumMenu(null); }}>
+            Open album
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode); setAlbumMenu(null); }}
+          />
+          {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
+            <ContextMenuSubmenu label="Add to Playlist">
+              {playlists.map((pl) => (
+                <button
+                  key={pl.id}
+                  onClick={() => { onAddAlbumToPlaylist(toAlbumRow(albumMenu.album), pl); setAlbumMenu(null); }}
+                >
+                  {pl.name}
+                </button>
+              ))}
+            </ContextMenuSubmenu>
+          )}
+          <button onClick={() => { setIdentifyAlbum(albumMenu.album); setAlbumMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
+        </ContextMenu>
+      )}
+
+      {trackMenu && (
+        <ContextMenu x={trackMenu.x} y={trackMenu.y} onClose={() => setTrackMenu(null)}>
+          <button onClick={() => { onPlayTrack(trackMenu.track.id); setTrackMenu(null); }}>Play Now</button>
+          <button onClick={() => { playNext(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+            Play Next
+          </button>
+          <button onClick={() => { addToQueue(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+            Add to Queue
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode); setTrackMenu(null); }}
+          />
+          <button onClick={() => { onSelectAlbum(trackAlbumRow(trackMenu.track)); setTrackMenu(null); }}>
+            Go to Album
+          </button>
+          {trackMenu.track.artist && (
+            <button
+              onClick={() => {
+                onSelectArtist({ name: trackMenu.track.artist!, album_count: 0, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null });
+                setTrackMenu(null);
+              }}
+            >
+              Go to Artist
+            </button>
+          )}
+        </ContextMenu>
+      )}
+
+      {artistMenu && (
+        <ContextMenu x={artistMenu.x} y={artistMenu.y} onClose={() => setArtistMenu(null)}>
+          <button onClick={() => { onSelectArtist(artistMenu.artist); setArtistMenu(null); }}>
+            Open artist
+          </button>
+          <StartRadioSubmenu
+            onSelect={(mode) => { onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode); setArtistMenu(null); }}
+          />
+          <button onClick={() => { setIdentifyArtistName(artistMenu.artist.name); setArtistMenu(null); }}>
+            Identify on MusicBrainz…
+          </button>
+        </ContextMenu>
+      )}
+
+      {identifyAlbum && (
+        <AlbumIdentifyDialog
+          albumId={identifyAlbum.id}
+          artist={identifyAlbum.artist ?? ""}
+          album={identifyAlbum.name}
+          onClose={() => setIdentifyAlbum(null)}
+        />
+      )}
+
+      {identifyArtistName && (
+        <ArtistIdentifyDialog
+          artistName={identifyArtistName}
+          onClose={() => setIdentifyArtistName(null)}
+        />
+      )}
+    </div>
+  );
+}

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
-import { useSearch } from "../hooks/useSearch";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { useSearch } from "../features/search/useSearch";
+import { getCoverArtUrl } from "../clients/navidrome";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
-import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
 

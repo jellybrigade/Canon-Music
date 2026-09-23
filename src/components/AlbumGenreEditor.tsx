@@ -1,13 +1,13 @@
 import { useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { X, Plus } from "lucide-react";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 import { getDb } from "../db";
-import { normalizeAlbum } from "../lib/tag-normalize";
-import { getCanonTree, rawGenreId } from "../lib/canonicalize";
-import { useAlbumIdentity } from "../hooks/useAlbumIdentity";
-import { UnmatchedSection } from "./TagDrawer";
-import type { TreeNode } from "../lib/canonicalize";
+import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
+import { getCanonTree, rawGenreId } from "../features/tags/lib/canonicalize";
+import { useAlbumIdentity } from "../features/enrichment/hooks/useAlbumIdentity";
+import { UnmatchedSection } from "../features/tags/components/TagDrawer";
+import type { TreeNode } from "../features/tags/lib/canonicalize";
 import "./AlbumGenreEditor.css";
 
 export type DisplayGenre = {

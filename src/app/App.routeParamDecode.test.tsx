@@ -24,8 +24,8 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
-vi.mock("../lib/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
-vi.mock("../keychain", () => ({
+vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
+vi.mock("../lib/keychain", () => ({
   keychain: {
     get: vi.fn().mockResolvedValue(
       JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
@@ -35,12 +35,12 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("../components/AlbumDetail", () => ({
+vi.mock("../pages/AlbumDetail", () => ({
   AlbumDetail: ({ album }: { album: { id: string } }) => (
     <div data-testid="album-detail" data-album-id={album.id} />
   ),
 }));
-vi.mock("../components/ArtistDetail", () => ({
+vi.mock("../pages/ArtistDetail", () => ({
   ArtistDetail: ({ artist }: { artist: { name: string; album_count: number } }) => (
     <div
       data-testid="artist-detail"
@@ -49,13 +49,13 @@ vi.mock("../components/ArtistDetail", () => ({
     />
   ),
 }));
-vi.mock("../components/PlaylistDetail", () => ({
+vi.mock("../features/playlists/PlaylistDetail", () => ({
   PlaylistDetail: ({ playlist }: { playlist: { id: string } }) => (
     <div data-testid="playlist-detail" data-playlist-id={playlist.id} />
   ),
 }));
-vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
-vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
+vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
+vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";

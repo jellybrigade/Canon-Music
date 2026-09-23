@@ -43,3 +43,160 @@
   --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-2: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
+
+/* ── Design tokens (dark by default) ── */
+:root {
+  --bg:            #0f0f0f;
+  --bg-elevated:   #141414;
+  --bg-card:       #1c1c1c;
+  --bg-sidebar:    #0d0d0d;
+  --bg-player:     #141414;
+  --bg-input:      rgba(255, 255, 255, 0.06);
+  --bg-hover:      rgba(255, 255, 255, 0.05);
+  --bg-hover-strong: rgba(255, 255, 255, 0.08);
+
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --text-primary:   #f0f0f0;
+  --text-secondary: #999;
+  --text-tertiary:  #666;
+
+  --accent:        #5a8ef8;
+  --accent-hover:  #4a7ef0;
+  --accent-subtle: rgba(90, 142, 248, 0.15);
+  --accent-border: rgba(90, 142, 248, 0.3);
+
+  --danger:        #e74c3c;
+  --success-a:     #4caf7d;
+  --success-b:     #27ae60;
+
+  /* Legacy-page colors, not part of the core bg/accent scale, but each value
+     recurs verbatim across multiple files (HomeView.css, ArtistMergeModal.css,
+     UpdatePrompt.css / AlbumGenreEditor.css, AlbumDetail.css / CommandPalette.css,
+     AlbumDetail.css, HomeView.css), tokenized here to kill the duplication. */
+  --color-link-blue:    #396cd8;
+  --color-accent-purple: #7c6af0;
+  --color-bg-deep:      #1a1a1a;
+
+  --surface-0:     #111111;
+  --surface-1:     #1c1c1c;
+  --surface-2:     #252525;
+  --surface-3:     #2e2e2e;
+
+  --progress-track: rgba(255, 255, 255, 0.12);
+
+  --tint-1: rgba(255, 255, 255, 0.04);
+  --tint-2: rgba(255, 255, 255, 0.06);
+  --tint-3: rgba(255, 255, 255, 0.08);
+  --tint-4: rgba(255, 255, 255, 0.12);
+  --tint-5: rgba(255, 255, 255, 0.15);
+  --tint-6: rgba(255, 255, 255, 0.25);
+
+  --scrim-1: rgba(0, 0, 0, 0.25);
+  --scrim-2: rgba(0, 0, 0, 0.45);
+  --scrim-3: rgba(0, 0, 0, 0.6);
+  --scrim-4: rgba(0, 0, 0, 0.8);
+
+  /* White-on-photo text/overlay ladder, legibility over album art & video, ascending opacity */
+  --overlay-05: rgba(255, 255, 255, 0.05);
+  --overlay-10: rgba(255, 255, 255, 0.1);
+  --overlay-15: rgba(255, 255, 255, 0.15);
+  --overlay-20: rgba(255, 255, 255, 0.2);
+  --overlay-30: rgba(255, 255, 255, 0.3);
+  --overlay-40: rgba(255, 255, 255, 0.4);
+  --overlay-50: rgba(255, 255, 255, 0.5);
+  --overlay-60: rgba(255, 255, 255, 0.6);
+  --overlay-70: rgba(255, 255, 255, 0.7);
+  --overlay-80: rgba(255, 255, 255, 0.8);
+  --overlay-90: rgba(255, 255, 255, 0.9);
+
+  /* Shadow scale, shape only; pair with a --scrim-* for color, e.g. box-shadow: var(--shadow-md) var(--scrim-2); */
+  --shadow-xs:  0 2px 2px;
+  --shadow-sm:  0 2px 8px;
+  --shadow-md:  0 4px 16px;
+  --shadow-lg:  0 8px 24px;
+  --shadow-xl:  0 16px 48px;
+  --shadow-2xl: 0 24px 64px;
+  --shadow-3xl: 0 24px 80px;
+
+  --blur-xs: 6px;
+  --blur-sm: 16px;
+  --blur-md: 24px;
+  --blur-lg: 55px;
+  --blur-xl: 120px;
+
+  --player-bar-height: 92px;
+
+  --z-panel:     50;
+  --z-dropdown: 100;
+  --z-overlay:  200;
+  --z-modal:    300;
+
+  /* Typography */
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Type scale, root is 20px; tokens below are rem values against that base. */
+  --text-2xs: 0.5rem;    /* 10px */
+  --text-xs:  0.6rem;    /* 12px */
+  --text-sm:  0.7rem;    /* 14px */
+  --text-base: 0.8rem;   /* 16px */
+  --text-md:  0.9rem;    /* 18px */
+  --text-lg:  1rem;      /* 20px */
+  --text-xl:  1.25rem;   /* 25px */
+  --text-2xl: 1.5rem;    /* 30px */
+  --text-3xl: 1.75rem;   /* 35px */
+  --text-4xl: 2rem;      /* 40px */
+}
+
+/* Light theme override */
+.light-theme {
+  --bg:            #f6f6f6;
+  --bg-elevated:   #ffffff;
+  --bg-card:       #ffffff;
+  --bg-sidebar:    #ececec;
+  --bg-player:     #f0f0f0;
+  --bg-input:      #ffffff;
+  --bg-hover:      rgba(0, 0, 0, 0.04);
+  --bg-hover-strong: rgba(0, 0, 0, 0.06);
+
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+
+  --text-primary:   #0f0f0f;
+  --text-secondary: #666;
+  --text-tertiary:  #888;
+
+  --progress-track: rgba(0, 0, 0, 0.12);
+
+  --tint-1: rgba(0, 0, 0, 0.03);
+  --tint-2: rgba(0, 0, 0, 0.045);
+  --tint-3: rgba(0, 0, 0, 0.06);
+  --tint-4: rgba(0, 0, 0, 0.09);
+  --tint-5: rgba(0, 0, 0, 0.12);
+  --tint-6: rgba(0, 0, 0, 0.18);
+
+  --scrim-1: rgba(0, 0, 0, 0.18);
+  --scrim-2: rgba(0, 0, 0, 0.32);
+  --scrim-3: rgba(0, 0, 0, 0.45);
+  --scrim-4: rgba(0, 0, 0, 0.65);
+
+  --surface-0:     #f5f5f5;
+  --surface-1:     #ffffff;
+  --surface-2:     #f0f0f0;
+  --surface-3:     #e6e6e6;
+}
+
+/* ── Opacity scale (element-level states: disabled, muted, hover-fade) ── */
+:root {
+  --opacity-20: 0.2;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-45: 0.45;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-75: 0.75;
+  --opacity-85: 0.85;
+  --opacity-90: 0.9;
+}

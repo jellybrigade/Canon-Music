@@ -4,9 +4,9 @@ import { CRED, server, SRV, OTHER } from "../test/navidromeFixtures";
 
 const holder: { db: FakeDatabase | null } = { db: null };
 vi.mock("../db", () => ({ getDb: async () => holder.db }));
-vi.mock("./sync", () => ({ syncAlbumTracks: vi.fn() }));
+vi.mock("../features/sync/sync", () => ({ syncAlbumTracks: vi.fn() }));
 
-import { syncAlbumTracks } from "./sync";
+import { syncAlbumTracks } from "../features/sync/sync";
 import { fetchAlbumTracks, loadAlbumTracks, loadAlbumTracksForPlay, resetAlbumTrackFetches, shouldFetchMissingTracks } from "./albumTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchAlbumListByType } from "../lib/navidrome";
-import type { NavidromeAlbum } from "../lib/navidrome";
+import { fetchAlbumListByType } from "../clients/navidrome";
+import type { NavidromeAlbum } from "../clients/navidrome";
 import type { ServerWithCredential } from "./useServer";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 
 export function useCarouselAlbums(
   serverWithCred: ServerWithCredential | null | undefined,

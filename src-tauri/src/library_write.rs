@@ -165,8 +165,8 @@ fn delete_user_node(conn: &mut Connection, id: &str, name: &str) -> Result<(), S
 
 /// Tables whose rows are keyed to a track id and are carried when the server rewrites one.
 ///
-/// Mirrors `remappedTrackIdTables()` in src/db/track-id-tables.ts, which is the source of truth;
-/// src/db/track-id-tables.test.ts sweeps this list against it so the two cannot drift. `tracks`
+/// Mirrors `remappedTrackIdTables()` in src/db/trackIdTables.ts, which is the source of truth;
+/// src/db/trackIdTables.test.ts sweeps this list against it so the two cannot drift. `tracks`
 /// itself is rewritten last, below, and `tracks_fts` is deliberately absent: the sync rebuilds it
 /// from `tracks` for every album it touched, and deletes the row left under the old id while it
 /// is there.

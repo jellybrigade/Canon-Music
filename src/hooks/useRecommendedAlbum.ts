@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 
 interface RecommendedAlbumRow {
   id: string;

@@ -2,7 +2,7 @@
  * LIKE treats `%` and `_` as wildcards, so any value interpolated into a pattern has to be
  * escaped and the statement has to carry an ESCAPE clause. Held here rather than per-file
  * because two private copies had already diverged in spelling, and a divergent escaper is
- * invisible to the sweep in `sql-escaping.test.ts` - that test can see a missing clause, not a
+ * invisible to the sweep in `sqlEscaping.test.ts` - that test can see a missing clause, not a
  * wrong escaper.
  *
  * Spell the clause with a doubled backslash in TS source. The single-backslash spelling decodes

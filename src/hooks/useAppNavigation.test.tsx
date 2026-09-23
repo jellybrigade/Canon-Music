@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import type { AlbumRow } from "../types/library";
-import type { PlaylistRow } from "./usePlaylists";
+import type { PlaylistRow } from "../features/playlists/usePlaylists";
 import { useAppNavigation } from "./useAppNavigation";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);

@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { SearchView, type SearchViewProps } from "../components/SearchView";
+import { SearchView, type SearchViewProps } from "../features/search/SearchView";
 import { ROUTES } from "../lib/routes";
 
 /**

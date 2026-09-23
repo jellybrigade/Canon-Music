@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { FeedbackModal } from "./FeedbackModal";
-import { __resetModalRegistry, useAnyModalOpen } from "../hooks/useModalChrome";
+import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
 vi.mock("../lib/logger", () => ({ logger: { getRecent: () => Promise.resolve(""), error: vi.fn() } }));

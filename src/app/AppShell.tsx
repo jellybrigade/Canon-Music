@@ -1,11 +1,11 @@
 import { Suspense, lazy, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
-import { PlayerBar } from "../components/PlayerBar";
-import { ScrobbleTracker } from "../hooks/useScrobble";
+import { PlayerBar } from "../features/playback/components/PlayerBar";
+import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { UpdatePrompt } from "../components/UpdatePrompt";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { FeedbackModal } from "../components/FeedbackModal";
-import { RadioStartDialogHost } from "../components/RadioStartDialog";
+import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));

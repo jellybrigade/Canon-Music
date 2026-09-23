@@ -40,7 +40,7 @@ const SRV: ServerWithCredential = {
 
 let db: FakeDatabase;
 
-// Mirrors src/hooks/useSearch.test.ts: tracks_fts has no trigger, sync.ts writes it
+// Mirrors src/features/search/useSearch.test.ts: tracks_fts has no trigger, sync.ts writes it
 // explicitly, so seeding `tracks` alone leaves the index empty and every search returns
 // nothing.
 function seedAlbum(opts: { id: string; name: string; artist?: string | null; serverId?: string }) {

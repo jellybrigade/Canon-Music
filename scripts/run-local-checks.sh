@@ -38,16 +38,16 @@ print_status() {
 branch_check() {
   local branch; branch=$(git rev-parse --abbrev-ref HEAD)
   if [ "$branch" = "main" ]; then
-    echo "On main. All work belongs on development (see .claude/rules/git-standards.md)." >&2
+    echo "On main. All work belongs on development (see docs/git-standards.md)." >&2
     return 1
   fi
   echo "On $branch."
 }
 
-# instructions/ is gitignored except docs-tech; nothing else from it may be staged.
+# instructions/ is gitignored; nothing from it may be staged.
 staged_check() {
   local bad
-  bad=$(git diff --cached --name-only | grep '^instructions/' | grep -v '^instructions/docs-tech/' || true)
+  bad=$(git diff --cached --name-only | grep '^instructions/' || true)
   if [ -n "$bad" ]; then
     echo "Staged files under instructions/ (must stay untracked):" >&2
     echo "$bad" >&2

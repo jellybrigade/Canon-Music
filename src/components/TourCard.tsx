@@ -1,7 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { Calendar, Info } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { BandsintownEvent } from "../lib/bandsintown";
+import type { BandsintownEvent } from "../clients/bandsintown";
 import "./TourCard.css";
 
 interface Props {

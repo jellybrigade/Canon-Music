@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { UpdatePrompt } from "./UpdatePrompt";
-import { __resetModalRegistry, useAnyModalOpen } from "../hooks/useModalChrome";
+import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
 // Never resolves: the prompt stays in its installing state for the duration of the case.

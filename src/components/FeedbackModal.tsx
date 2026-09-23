@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import { logger } from "../lib/logger";
-import { useModalChrome } from "../hooks/useModalChrome";
-import { useOverlayDismiss } from "../hooks/useOverlayDismiss";
+import { useModalChrome } from "../ui/useModalChrome";
+import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 import "./FeedbackModal.css";
 
 const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;

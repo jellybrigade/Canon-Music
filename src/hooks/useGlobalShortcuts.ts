@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { usePlayerStore, isNextDisabled } from "../store/player";
+import { usePlayerStore, isNextDisabled } from "../features/playback/store/player";
 import type { ServerWithCredential } from "./useServer";
 import { useLoved } from "./useLoved";
 import { isTextEntryTarget } from "../lib/keyboard";

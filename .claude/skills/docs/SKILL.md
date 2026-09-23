@@ -3,11 +3,11 @@ name: docs
 description: Pick the most important undocumented item from instructions/docs.md, research the actual code, and write a highly technical draft doc for it. Use when user says "docs", "write docs", "next doc", or invokes /docs.
 ---
 
-Paths below are relative to project root (`/home/mschachner/Projects/Canon/instructions/`), NOT the skill dir.
+Paths below are relative to project root (`/home/mschachner/Projects/Canon/`), NOT the skill dir.
 
 ## Phase 1 — Pick the target
 
-Read `instructions/docs.md` (the outline/feature inventory) and `instructions/docs-tech/` (create dir if missing — holds written drafts, one file per outline item, filename = slugified item text, e.g. `09-tags-review-tab.md`).
+Read `instructions/docs.md` (the outline/feature inventory) and `docs/features/` (holds written drafts, one file per outline item, filename = slugified item text, no number prefix, e.g. `tags-review-tab.md`).
 
 Items already documented are marked `[x]` (done) in `docs.md`; undocumented items are unmarked (or `[ ]`) — add checkboxes to any line lacking one. Pick the **single most important unmarked item** — prioritize by user impact and complexity (features a user would get stuck on without docs beat trivial/self-evident ones). Skip items that are just section headers with no concrete feature.
 
@@ -21,13 +21,13 @@ Spawn a `caveman:cavecrew-investigator` agent (or search directly if scope is sm
 - Every component/file/hook implementing this feature
 - Every Tauri command, DB table/column, React Query key, Zustand slice it touches
 - Exact UI structure: what button/menu/tab triggers it, what element opens, what it's labeled, keyboard shortcuts if any
-- Edge cases, gotchas, or known issues already noted in `.claude/rules/known-issues.md` or code comments
+- Edge cases, gotchas, or known issues already noted in `docs/known-issues.md` or code comments
 
 Then read the actual files yourself — don't rely solely on agent summary — to verify exact strings (labels, prop names, table/column names) and get line numbers.
 
 ## Phase 3 — Write the doc
 
-Write `instructions/docs-tech/<slug>.md`. Lead with the user's perspective — what they see, do, and get — and keep implementation detail in support of that, not as the main event. This still isn't final end-user prose (later pass rewrites for tone), but it should already read like a feature explanation a user could follow, not a code walkthrough.
+Write `docs/features/<slug>.md`. Lead with the user's perspective — what they see, do, and get — and keep implementation detail in support of that, not as the main event. This still isn't final end-user prose (later pass rewrites for tone), but it should already read like a feature explanation a user could follow, not a code walkthrough.
 
 1. **What it is** — one line, framed as user value ("lets you X" / "automatically does Y so you don't have to Z"), not as a pipeline/mechanism description.
 2. **Entry points** — exact click path: "Settings → Metadata & Tags tab → 'Refresh All Now' button", including what opens (modal/panel/inline) and its exact heading text.
@@ -40,10 +40,10 @@ Precision still matters — don't soften facts or guess — but weight the doc t
 
 ## Phase 4 — Mark done
 
-In `instructions/docs.md`, check off the item: `[ ]` → `[x]`, and append a link to the written file, e.g. ` — see docs-tech/09-tags-review-tab.md`.
+In `instructions/docs.md`, check off the item: `[ ]` → `[x]`, and append a link to the written file, e.g. ` — see docs/features/tags-review-tab.md`.
 
 ## Phase 5 — Commit
 
-`instructions/docs-tech/` tracked (unignored exception in `.gitignore`), rest of `instructions/` (incl. `docs.md`) stays gitignored. Commit the new/updated `docs-tech/<slug>.md` file to `development`.
+`docs/features/` is tracked; `instructions/` (incl. `docs.md`) stays gitignored. Commit the new/updated `docs/features/<slug>.md` file to `development`.
 
 Report the file written and one-sentence summary of what got documented.
