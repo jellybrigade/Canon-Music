@@ -230,3 +230,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn '"BEGIN"\|BEGIN TRANSACTION' src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Recall and ranking must see the same query.** `useSearch` tokenized the query for FTS (collapsing whitespace, stripping `"`) but `scoreMatch` scored the raw string, so `love  song` or `he"llo` matched the index and every hit scored 0 and was filtered out. Fix: `toSearchTokens` feeds both. Any query normalized for one stage must be normalized for every later one.
+  ```
+  grep -rn "split(/\\s+/)\|replace(/\"/g" src --include='*.ts*' | grep -v '\.test\.'
+  ```
