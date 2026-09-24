@@ -351,6 +351,7 @@ pub fn run() {
             library_read::playlists::get_playlists,
             library_read::tags::get_unmapped_tag_count,
             library_write::genre_carry::carry_genre_renames,
+            library_write::genre_carry::repair_dangling_genre_id,
             library_write::playlists::playlist_remove_track,
             library_write::user_tree::delete_user_tree_node,
             library_write::track_remap::remap_track_ids,

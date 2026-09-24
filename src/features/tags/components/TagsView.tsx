@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QK } from "../../../lib/queryKeys";
 import { useTagVocab, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
+import { useDanglingGenreIds } from "../hooks/useDanglingGenreIds";
 import {
   useUserNodes,
   useCreateUserNode,
@@ -41,6 +42,7 @@ export function TagsView() {
   const queryClient = useQueryClient();
   const { data: vocab = [] } = useTagVocab();
   const { data: userNodes = [] } = useUserNodes();
+  const { data: dangling = [] } = useDanglingGenreIds();
   const { saveMapping } = useTagMappings();
   const autoMapExact = useAutoMapExact();
   const autoMapRanRef = useRef(false);
@@ -77,7 +79,7 @@ export function TagsView() {
     void refreshTree();
   }
 
-  const reviewCount = vocab.filter((r) => !r.canonical_id && r.album_count > 0).length;
+  const reviewCount = vocab.filter((r) => !r.canonical_id && r.album_count > 0).length + dangling.length;
   const decidedCount = vocab.filter((r) => !!r.canonical_id).length;
   const supersededCount = userNodes.filter(isSuperseeded).length;
 

@@ -173,3 +173,60 @@
   font-weight: 500;
   font-size: var(--text-md);
 }
+
+/* Stored genre ids no tree node carries. Capped so a long list can't starve the review rows. */
+.review-dangling {
+  flex-shrink: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: var(--space-sm) var(--space-lg);
+  border-bottom: 1px solid var(--border);
+  background: var(--accent-subtle);
+}
+
+.review-dangling-note {
+  margin: 0;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+}
+
+.review-dangling-error { color: var(--danger); }
+
+.review-dangling-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--space-xs);
+}
+
+.review-dangling-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-xs) 0;
+}
+
+.review-dangling-row + .review-dangling-row { border-top: 1px solid var(--border); }
+
+.rd-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.rd-name {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.rd-uses {
+  font-size: var(--text-base);
+  color: var(--text-tertiary);
+}
+
+.review-dangling .tags-combobox {
+  width: 220px;
+  max-width: 220px;
+}

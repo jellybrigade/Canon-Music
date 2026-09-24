@@ -23,6 +23,10 @@ vi.mock("../hooks/useTagMappings", () => ({
   useTagMappings: () => ({ saveMapping: { mutate: vi.fn() } }),
   useTagAlbums: (rawValue: string) => ({ data: albumsByTag[rawValue] }),
 }));
+vi.mock("../hooks/useDanglingGenreIds", () => ({
+  useDanglingGenreIds: () => ({ data: [], isError: false }),
+  useRepairDanglingGenreId: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+}));
 vi.mock("../../../hooks/useMeasuredElement", () => ({
   useMeasuredElement: () => ({ attach: () => {}, height: 0 }),
 }));
