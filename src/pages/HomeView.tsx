@@ -30,6 +30,7 @@ import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyD
 import { type SpotlightPick, naviToAlbumRow, stripFeaturedArtists, buildSpotlightCandidates, dedupePicks, Spotlight } from "./home/Spotlight";
 import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, mergeForYouConfig, ForYouRail } from "./home/ForYouRail";
 import { GenreChipsLine } from "./home/GenreChipsLine";
+import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
 import "./HomeView.css";
 import "./GenreView.css";
@@ -62,8 +63,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const startRadio = useStartRadio();
   const playAlbum = usePlayAlbum(serverWithCredential);
-  const [forYouSeed, setForYouSeed] = useState(() => Math.floor(Math.random() * 1_000_000));
-  const refreshForYou = useCallback(() => setForYouSeed(s => s + 1), []);
+  const [forYouSeed, setForYouSeed] = useState(getForYouSeed);
+  const refreshForYou = useCallback(() => setForYouSeed(nextForYouSeed()), []);
   const [vaultSeed, setVaultSeed] = useState(0);
   const refreshVault = useCallback(() => setVaultSeed(s => s + 1), []);
 
