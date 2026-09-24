@@ -35,6 +35,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **Clearing an in-memory cache on every keyset refetch blanks what's on screen.** `useAlbumCoverMap`/`useArtistImageMap` queryFns `.clear()`ed loaded data_urls on each invalidation although rows are never rewritten, so every visible cover fell back to the server URL and swapped back. Fix: keep loaded entries, drop only ids gone from the keyset.
+  ```
+  grep -rn "\.clear()" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Cache table inherits prune-exemption meant for user rows beside it.** `pruneAlbums` skipped `album_covers` (base64 cache) alongside genuinely-kept identity tables, stranding bytes forever. Exempt only if own content justifies it.
   ```
   grep -n "viaAlbums(\"\|DELETE FROM album" src/features/sync/syncPrune.ts
