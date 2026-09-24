@@ -12,6 +12,7 @@
   background-color: var(--bg-player);
   border-top: 1px solid var(--border);
   z-index: var(--z-dropdown);
+  --player-controls-size: 40px;
 }
 
 .player-section {
@@ -28,10 +29,13 @@
 .player-section--center {
   flex: 1;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--space-2xs);
   min-width: 0;
-  padding-top: var(--space-xl);
+  align-self: stretch;
+  /* The controls are absolutely positioned, so the progress row is placed below them by hand:
+     controls inset, controls, then the same gap again before the waveform's tallest bar. */
+  padding-top: calc(var(--space-xs) * 2 + var(--player-controls-size));
 }
 
 .player-section--right {
@@ -226,7 +230,7 @@
   gap: var(--space-2xs);
   position: absolute;
   left: 50%;
-  top: 6px;
+  top: var(--space-xs);
   transform: translateX(-50%);
 }
 
@@ -263,8 +267,8 @@
 }
 
 .player-btn--play {
-  width: 40px;
-  height: 40px;
+  width: var(--player-controls-size);
+  height: var(--player-controls-size);
   padding: 0;
   display: flex;
   align-items: center;
