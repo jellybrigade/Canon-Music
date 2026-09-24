@@ -64,6 +64,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "setIsLoading(true)\|setLoading(true)" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A query keyed by what is playing goes blank on every track change unless it holds its last answer.** `useRecommendedAlbum` keys on the playing album, so each change left `data` undefined, Home's spotlight fell back to a carousel pick (keyed remount) and swapped again when the new pick landed. Fix: `placeholderData: keepPreviousData`, pinned by `useRecommendedAlbum.trackChange.test.ts`. Only where the old answer is still a fair answer: lyrics and raw tags for the previous track would be wrong content, so those stay pending.
+  ```
+  grep -rnE "use[A-Z][A-Za-z]*\((currentTrack|currentAlbumId|track)" src --include='*.tsx' | grep -v '\.test\.'
+  ```
 - **Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.** 8 browse routes drifted into 3 wrong messages (told user to add a server they already have, stuck "Loading...", blank `<main>`). Fix: shared `CredentialNotice`/`CredentialGate`, pending vs failed vs absent.
   ```
   grep -rn "if (!serverWithCred\|if (!credential\|if (!server)\|if (!session" src --include='*.tsx' | grep -v '\.test\.'

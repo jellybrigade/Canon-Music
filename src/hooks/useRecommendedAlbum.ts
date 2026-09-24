@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/queryKeys";
 import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
@@ -44,6 +44,8 @@ export function useRecommendedAlbum(albumId: string | null) {
       return rows[0] ?? null;
     },
     enabled: !!albumId,
+    // Hold the last pick while the next album's query runs, or the spotlight swaps twice per track.
+    placeholderData: keepPreviousData,
     staleTime: HOME_STALE_TIME,
     gcTime: HOME_GC_TIME,
   });
