@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { initLogger } from "./lib/logger";
 import { getDb } from "./db";
 import { purgeStrandedServers } from "./features/sync/syncPrune";
+import { carryGenreTree } from "./features/tags/lib/genreTreeCarry";
 
 initLogger();
 
@@ -15,6 +16,9 @@ initLogger();
 void getDb()
   .then((db) => purgeStrandedServers(db))
   .catch((err: unknown) => console.error("startup: failed to purge removed servers:", err));
+void getDb()
+  .then((db) => carryGenreTree(db))
+  .catch((err: unknown) => console.error("startup: failed to carry renamed genre ids:", err));
 
 // Suppress WebKit's default context menu on non-input elements, custom menus are attached per-component.
 document.addEventListener("contextmenu", (e) => {

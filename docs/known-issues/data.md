@@ -162,7 +162,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "file_path" src/features/sync/syncTracks.ts src/features/sync/trackRemap.ts
   ```
-- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/trackIdTables.ts` holds the list with per-table policy, `trackIdTables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains.
+- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/trackIdTables.ts` holds the list with per-table policy, `trackIdTables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains. **Found again** for genre tree ids: a rename carry per scrape as a hand-written migration; now `src/db/genreIdTables.ts`, swept the same way.
   ```
   grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/trackIdTables.ts src-tauri/src/library_write/track_remap.rs
   ```

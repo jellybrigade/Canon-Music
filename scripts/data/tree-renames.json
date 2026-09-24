@@ -1,0 +1,7 @@
+[
+  { "from": "punk", "fromName": "Punk", "to": "punk-post-punk-hardcore" },
+  { "from": "pyschedelic", "fromName": "Pyschedelic", "to": "psychedelic" },
+  { "from": "field-recordings", "fromName": "Field Recordings", "to": "field-recording" },
+  { "from": "newa-folk-music", "fromName": "Newa Folk Music", "to": "newa-music" },
+  { "from": "sacred-harp-singing", "fromName": "Sacred Harp Singing", "to": "shape-note-singing" }
+]

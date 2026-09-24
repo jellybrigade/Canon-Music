@@ -2,9 +2,14 @@
 /**
  * Parse RateYourMusic Hierarchy.txt into canon-tree.json
  *
- * Input:  scripts/data/rym-hierarchy.txt, then scripts/data/custom-nodes.json appended after it
+ * Input:  scripts/data/rym-hierarchy.txt, then scripts/data/custom-nodes.json appended after it,
+ *         plus scripts/data/tree-renames.json, the append-only history of renamed ids
  * Output: src/assets/canon-tree.json (or stdout with --stdout)
- * Flags:  --input <txt>, --custom <json> override the two inputs
+ * Flags:  --input <txt>, --custom <json>, --renames <json> override the three inputs
+ *
+ * Output format: { version, renames, nodes }
+ *   version: content hash of renames + nodes; the app carries stored ids when it moves
+ *   renames: { from, fromName, to } with every chain resolved to the id the tree holds now
  *
  * Node format: { id, name, type, canonical_key, parents, sections }
  *   type: "genre" | "mood" | "category"
@@ -12,6 +17,7 @@
  *   parents: direct parent ids (empty for top-level nodes)
  */
 
+import { createHash } from "crypto";
 import { readFileSync, writeFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -27,6 +33,7 @@ function flagValue(flag, fallback) {
 
 const INPUT = flagValue("--input", join(ROOT, "scripts", "data", "rym-hierarchy.txt"));
 const CUSTOM = flagValue("--custom", join(ROOT, "scripts", "data", "custom-nodes.json"));
+const RENAMES = flagValue("--renames", join(ROOT, "scripts", "data", "tree-renames.json"));
 const TO_STDOUT = process.argv.includes("--stdout");
 
 const SECTION_SLUGS = {
@@ -159,8 +166,32 @@ for (const custom of JSON.parse(readFileSync(CUSTOM, "utf8"))) {
   nodesById.set(custom.id, custom);
 }
 
+// A rename is refused unless it leaves the tree for good and lands on a node that exists, so
+// the app never carries a user's mapping onto an id nothing resolves.
+function resolveRenames(history) {
+  const targets = new Map();
+  for (const { from, fromName, to } of history) {
+    if (targets.has(from)) throw new Error(`"${from}" is renamed twice in ${RENAMES}`);
+    targets.set(from, { fromName, to });
+  }
+  return [...targets].map(([from, { fromName }]) => {
+    if (nodesById.has(from)) throw new Error(`rename source "${from}" is still in the tree`);
+    const seen = new Set([from]);
+    let to = from;
+    while (targets.has(to)) {
+      to = targets.get(to).to;
+      if (seen.has(to)) throw new Error(`rename cycle through "${from}"`);
+      seen.add(to);
+    }
+    if (!nodesById.has(to)) throw new Error(`rename target "${to}" is not in the tree (from "${from}")`);
+    return { from, fromName, to };
+  });
+}
+
+const renames = resolveRenames(JSON.parse(readFileSync(RENAMES, "utf8")));
 const nodes = Array.from(nodesById.values());
-const json = JSON.stringify({ nodes }, null, 2);
+const version = createHash("sha256").update(JSON.stringify({ renames, nodes })).digest("hex").slice(0, 16);
+const json = JSON.stringify({ version, renames, nodes }, null, 2);
 
 if (TO_STDOUT) {
   process.stdout.write(json);
@@ -170,5 +201,6 @@ if (TO_STDOUT) {
   console.log(`  genre: ${nodes.filter((n) => n.type === "genre").length}`);
   console.log(`  mood: ${nodes.filter((n) => n.type === "mood").length}`);
   console.log(`  category: ${nodes.filter((n) => n.type === "category").length}`);
-  console.log(`Written to ${OUTPUT}`);
+  console.log(`  renames: ${renames.length}`);
+  console.log(`Written to ${OUTPUT} (version ${version})`);
 }
