@@ -79,7 +79,7 @@ export function createPlayerEngine(
     const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, repeat } = get();
     if (!streamUrlFor) return;
     const nextPosition = queueIndex + 1;
-    const wrapped = nextPosition >= queue.length;
+    const wrapped = enqueued ? enqueued.wraps : nextPosition >= queue.length;
     if (wrapped && repeat !== "repeat-all") return;
 
     let newQueueIndex: number;
@@ -277,7 +277,7 @@ export function createPlayerEngine(
                   // record exists to prevent. Leave the first one standing.
                   if (!runtime.gaplessActive) {
                     runtime.gaplessActive = true;
-                    runtime.gaplessEnqueued = { track: nextTrack, position: effectiveNext, ...(wrapOrder ? { wrapOrder } : {}) };
+                    runtime.gaplessEnqueued = { track: nextTrack, position: effectiveNext, wraps: wrapping, ...(wrapOrder ? { wrapOrder } : {}) };
                     void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
                       runtime.gaplessActive = false;
                       runtime.gaplessEnqueued = null;

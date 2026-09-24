@@ -749,6 +749,18 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().queueIndex).toBe(1);
     });
 
+    it("queue shrunk to the playing track (radio replace): the handed-over track is still shown, not read as a wrap", async () => {
+      await setupPlayingQueue(3); // enqueues track "1"
+      await driveTickerToEnqueue();
+
+      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0"), streamUrlFor });
+
+      emitTauriEvent("track-advanced", undefined);
+
+      expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
+      expect(usePlayerStore.getState().queueIndex).toBe(0);
+    });
+
     it("remove a different, unrelated track before it: id-scan relocates by shifted position", async () => {
       await setupPlayingQueue(4, { queueIndex: 1 }); // queue 0,1,2,3 ; queueIndex 1 (playing "1") ; enqueues "2"
       await driveTickerToEnqueue();

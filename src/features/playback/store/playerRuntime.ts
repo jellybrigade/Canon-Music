@@ -25,7 +25,9 @@ interface PlayerRuntime {
   // order has to be built at enqueue time, because the enqueued track is resolved against it and
   // rodio cannot un-append. `track-advanced` adopts it rather than building a second, different
   // order that would not have the audible track at position 0.
-  gaplessEnqueued: { track: CurrentTrack; position: number; wrapOrder?: number[] } | null;
+  // `wraps` carries the loop-back decision too: a queue shrunk inside the lead window would
+  // otherwise read an ordinary hand-off as a wrap and drop it.
+  gaplessEnqueued: { track: CurrentTrack; position: number; wraps: boolean; wrapOrder?: number[] } | null;
 
   // Bumped by every queue mutation. The elapsed ticker keys its "already handed off the next
   // track" guard on this as well as the index, so an edit that changes the successor re-arms

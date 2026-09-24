@@ -21,7 +21,10 @@ Fixed unless marked OPEN.
   grep -n "runtime.activeTarget.pause(0)" src/features/playback/store/*.ts
   ```
 - **Fire-and-forget command owes event on every exit.** Gapless bail-outs emit `gapless-cancelled`; final `sink.append` checks `sink.empty()`.
-- **Pre-scheduled work must carry its decision.** `gaplessEnqueued: {track, position, wrapOrder}`; `next()` passes `-1` for no anchor.
+- **Pre-scheduled work must carry its decision.** `gaplessEnqueued: {track, position, wraps, wrapOrder}`; `next()` passes `-1` for no anchor. **Found again:** `track-advanced` re-derived "is this a wrap" from the live queue length, so radio replace shrinking the queue to the playing track inside the lead window dropped the hand-off and the UI stayed on the finished track. Ask of any handler for pre-scheduled work: which of its branches read live state the scheduler already decided?
+  ```
+  grep -n "queue.length\|queueIndex + 1" src/features/playback/store/playerEngine.ts
+  ```
 - **`await invoke()` loading flag = IPC round trip, not work.** Separate `isBuffering`, cleared by `audio-format` event. `thread::spawn` commands only honest via event.
 - **Timeout cleared on first-phase settle doesn't bound the rest.** `fetchWithTimeout` cleared abort in `finally` around `fetch` alone; body read after headers had no timeout, could hang forever. Fix: abort spans buffered `res.text()` same `try`.
   ```
