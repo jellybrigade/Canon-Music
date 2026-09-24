@@ -8,7 +8,7 @@ import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
 import { useAlbums } from "./useAlbums";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
-import type { AlbumRow } from "../types/library";
+import type { AlbumRow, AlbumSort } from "../types/library";
 
 function album(id: string, serverId: string): AlbumRow {
   return { id, server_id: serverId, name: id, artist: null, year: null, artwork_url: null };
@@ -95,5 +95,37 @@ describe("useAlbums", () => {
     const { result } = renderHook(() => useAlbums("artist", []));
     await waitFor(() => expect(result.current.data).toHaveLength(2));
     expect(result.current.data?.map((a) => a.server_id)).toEqual(["s1", "s2"]);
+  });
+
+  // A tick refetch of rows already on screen is not loading: Home rendered skeletons over
+  // Loved / Newly Added on every 1.5s sync bump.
+  it("keeps isLoading false while a refresh tick refetches rows already shown", async () => {
+    onInvoke("get_albums", () => [album("a1", "s1")]);
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useAlbums("artist", []);
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toEqual([album("a1", "s1")]));
+
+    onInvoke("get_albums", () => new Promise(() => {}));
+    seen.length = 0;
+    act(() => useAlbumBrowseSessionStore.getState().bumpRefresh());
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain(true);
+    expect(result.current.data).toEqual([album("a1", "s1")]);
+  });
+
+  it("reports loading from the commit that switches to a key with no rows yet", async () => {
+    onInvoke("get_albums", () => [album("a1", "s1")]);
+    const { result, rerender } = renderHook(({ sort }) => useAlbums(sort, []), {
+      initialProps: { sort: "artist" as AlbumSort },
+    });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    onInvoke("get_albums", () => new Promise(() => {}));
+    rerender({ sort: "year" });
+    expect(result.current.isLoading).toBe(true);
   });
 });

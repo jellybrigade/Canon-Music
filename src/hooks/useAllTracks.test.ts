@@ -94,4 +94,22 @@ describe("useAllTracks", () => {
     await waitFor(() => expect(result.current.error).toBe("db locked"));
     expect(result.current.data).toBeUndefined();
   });
+
+  it("keeps isLoading false while a refresh tick refetches rows already shown", async () => {
+    onInvoke("get_all_tracks", () => [row("t1")]);
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useAllTracks();
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toEqual([row("t1")]));
+
+    onInvoke("get_all_tracks", () => new Promise(() => {}));
+    seen.length = 0;
+    act(() => useAllTracksSessionStore.setState({ refreshTick: 1 }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain(true);
+    expect(result.current.data).toEqual([row("t1")]);
+  });
 });

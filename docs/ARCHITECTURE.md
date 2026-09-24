@@ -375,6 +375,8 @@ Credentials:
 
 The eight `*SessionStore.ts` files are deliberately not one `createSessionStore` factory. All they share is `refreshTick` + `bumpRefresh`; the cache policy is the part that differs and each one is load-bearing: album keeps an 8-entry keyed LRU wiped by a tick bump, artist debounces its bump 400ms, loved drops out-of-order stale reads, genres holds two slots on one tick, playlist has two independent ticks, allTracks one slot, artistAlbums and trackList a tick only. A factory would need an option for each, and separate stores keep a bump in one domain from re-rendering subscribers of another.
 
+Every hook over these stores returns `isLoading` meaning "no rows to show for this key yet", never "a read is in flight": a tick bump (every 1.5s during sync) refetches while the previous rows stay on screen, and consumers such as `AlbumCarousel` render skeletons on `isLoading` alone. `useAlbums` tracks the key its rows were read under (`loadedKey`), so a sort or genre-filter switch is still loading; the single-key hooks derive `isFetching && data === undefined`.
+
 | File | Purpose |
 |---|---|
 | `albumTracksNotice.ts` | Zustand `notice`/`report(message)`/`dismiss()`. Written only by `loadAlbumTracksForPlay`, read by `AlbumTracksNotice` in `PlayerBar`. Reporting the message already shown is a no-op, so repeated failing clicks do not re-render. |

@@ -23,18 +23,18 @@ export function useGenres(enabled: boolean = true) {
     const s = useGenresSessionStore.getState();
     return s.rows && s.cachedTick === s.refreshTick ? (s.rows as GenreRow[]) : undefined;
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  const [isFetching, setIsFetching] = useState(() => data === undefined);
 
   useEffect(() => {
     if (!enabled) return;
     const s = useGenresSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as GenreRow[]);
-      setIsLoading(false);
+      setIsFetching(false);
       return;
     }
     let cancelled = false;
-    setIsLoading(true);
+    setIsFetching(true);
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -44,11 +44,11 @@ export function useGenres(enabled: boolean = true) {
         if (!cancelled) {
           useGenresSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("useGenres: failed to load genres", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsFetching(false);
       }
     })();
     return () => {
@@ -56,7 +56,8 @@ export function useGenres(enabled: boolean = true) {
     };
   }, [refreshTick, enabled]);
 
-  return { data, isLoading };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined };
 }
 
 // Genres drawn from the user's most recently played albums (up to 10 albums).
@@ -70,17 +71,17 @@ export function useRecentGenres() {
       ? (s.recentRows as GenreRow[])
       : undefined;
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  const [isFetching, setIsFetching] = useState(() => data === undefined);
 
   useEffect(() => {
     const s = useGenresSessionStore.getState();
     if (s.recentRows && s.recentCachedTick === refreshTick) {
       setData(s.recentRows as GenreRow[]);
-      setIsLoading(false);
+      setIsFetching(false);
       return;
     }
     let cancelled = false;
-    setIsLoading(true);
+    setIsFetching(true);
     (async () => {
       try {
         await getDb();
@@ -88,11 +89,11 @@ export function useRecentGenres() {
         if (!cancelled) {
           useGenresSessionStore.getState().setRecentRows(rows, refreshTick);
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("useRecentGenres: failed to load genres", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsFetching(false);
       }
     })();
     return () => {
@@ -101,5 +102,6 @@ export function useRecentGenres() {
   }, [refreshTick]);
 
   const genres = useMemo(() => data ?? [], [data]);
-  return { data, isLoading, genres };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined, genres };
 }

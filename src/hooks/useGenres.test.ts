@@ -66,6 +66,24 @@ describe("useGenres", () => {
     expect(result.current.data).toEqual([genre("rock")]);
     expect(invoke).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps isLoading false while a refresh tick refetches rows already shown", async () => {
+    onInvoke("get_genres", () => [genre("g1")]);
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useGenres();
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toEqual([genre("g1")]));
+
+    onInvoke("get_genres", () => new Promise(() => {}));
+    seen.length = 0;
+    act(() => useGenresSessionStore.setState({ refreshTick: 1 }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain(true);
+    expect(result.current.data).toEqual([genre("g1")]);
+  });
 });
 
 describe("useRecentGenres", () => {
@@ -106,5 +124,23 @@ describe("useRecentGenres", () => {
     await waitFor(() => expect(recentHandler).toHaveBeenCalledTimes(2));
     void genresHook;
     void recentHook;
+  });
+
+  it("keeps isLoading false while a refresh tick refetches rows already shown", async () => {
+    onInvoke("get_recent_genres", () => [genre("g1")]);
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useRecentGenres();
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toEqual([genre("g1")]));
+
+    onInvoke("get_recent_genres", () => new Promise(() => {}));
+    seen.length = 0;
+    act(() => useGenresSessionStore.setState({ refreshTick: 1 }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain(true);
+    expect(result.current.data).toEqual([genre("g1")]);
   });
 });

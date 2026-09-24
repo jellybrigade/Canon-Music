@@ -142,6 +142,7 @@ Fixed unless marked OPEN.
 - `location.key === "default"` stops marking the first entry once that entry is replaced.
 - Router value copied into `useState` never resyncs while the route stays mounted.
 - `null` for "don't know yet" and "isn't there" paints the same blank page.
+- A refetch with rows already on screen is not loading.
 - Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.
 - An error path that builds its own value can fail before delivering the message.
 - Decoding an already-decoded value = no-op or crash.

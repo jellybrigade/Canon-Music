@@ -48,17 +48,17 @@ export function usePlaylists() {
     const s = usePlaylistSessionStore.getState();
     return s.rows && s.cachedTick === s.playlistsTick ? (s.rows as PlaylistRow[]) : undefined;
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  const [isFetching, setIsFetching] = useState(() => data === undefined);
 
   useEffect(() => {
     const s = usePlaylistSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as PlaylistRow[]);
-      setIsLoading(false);
+      setIsFetching(false);
       return;
     }
     let cancelled = false;
-    setIsLoading(true);
+    setIsFetching(true);
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -68,11 +68,11 @@ export function usePlaylists() {
         if (!cancelled) {
           usePlaylistSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("usePlaylists: failed to load playlists", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsFetching(false);
       }
     })();
     return () => {
@@ -236,5 +236,6 @@ export function usePlaylists() {
     await refreshSmartPlaylist({ ...playlist, name: filters.name, rules_json: JSON.stringify(filters) }, swc);
   }
 
-  return { data, isLoading, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover, createSmartPlaylist, refreshSmartPlaylist, updateSmartPlaylistRules };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined, createPlaylist, deletePlaylist, addTrackToPlaylist, renamePlaylist, addAlbumToPlaylist, setCustomCover, createSmartPlaylist, refreshSmartPlaylist, updateSmartPlaylistRules };
 }

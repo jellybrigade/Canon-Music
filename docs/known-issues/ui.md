@@ -59,6 +59,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
   ```
+- **A refetch with rows already on screen is not loading.** Every tick-driven read hook (`useAlbums`, `useAllTracks`, `useArtists`, `useGenres`, `usePlaylists`, `useArtistAlbums`) set `isLoading` on each refetch, so Home's Loved / Newly Added carousels swapped to skeletons on every 1.5s sync bump. Fix: `isLoading` means no rows for the current key; `useAlbums` keys it on the rows' own read key. Pinned by each hook's "keeps isLoading false while a refresh tick refetches" test. Ask of any loading flag: does it describe the screen, or the wire?
+  ```
+  grep -rn "setIsLoading(true)\|setLoading(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.** 8 browse routes drifted into 3 wrong messages (told user to add a server they already have, stuck "Loading...", blank `<main>`). Fix: shared `CredentialNotice`/`CredentialGate`, pending vs failed vs absent.
   ```
   grep -rn "if (!serverWithCred\|if (!credential\|if (!server)\|if (!session" src --include='*.tsx' | grep -v '\.test\.'

@@ -21,7 +21,7 @@ export function useArtists(enabled: boolean = true) {
     const s = useArtistBrowseSessionStore.getState();
     return s.rows && s.cachedTick === s.refreshTick ? (s.rows as ArtistRow[]) : undefined;
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  const [isFetching, setIsFetching] = useState(() => data === undefined);
   // A failed read leaves `data` undefined, which is indistinguishable from an empty
   // library. Callers need the difference to avoid rendering "no artists, sync first" over
   // a failure the user cannot fix by syncing. Mirrors useAllTracks.ts.
@@ -32,13 +32,13 @@ export function useArtists(enabled: boolean = true) {
     const s = useArtistBrowseSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as ArtistRow[]);
-      setIsLoading(false);
+      setIsFetching(false);
       setError(null);
       return;
     }
     let cancelled = false;
     async function load() {
-      setIsLoading(true);
+      setIsFetching(true);
       setError(null);
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -48,13 +48,13 @@ export function useArtists(enabled: boolean = true) {
         if (!cancelled) {
           useArtistBrowseSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("useArtists: failed to load artists", err);
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
-          setIsLoading(false);
+          setIsFetching(false);
         }
       }
     }
@@ -64,5 +64,6 @@ export function useArtists(enabled: boolean = true) {
     };
   }, [refreshTick, enabled]);
 
-  return { data, isLoading, error };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined, error };
 }
