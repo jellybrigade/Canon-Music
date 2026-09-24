@@ -31,6 +31,67 @@ export class SchemaTooNewError extends Error {
   }
 }
 
+interface GenreIdRename {
+  from: string;
+  to: string;
+  toName: string;
+  /** Old display name, seeded as a mapping when its key no longer resolves exactly or fuzzily. */
+  seedName?: string;
+}
+
+/** Ids the September 2026 RYM re-scrape renamed. Frozen: v52 is built from it. */
+export const RYM_ID_RENAMES: readonly GenreIdRename[] = [
+  { from: "punk", to: "punk-post-punk-hardcore", toName: "Punk / Post-Punk / Hardcore", seedName: "Punk" },
+  { from: "pyschedelic", to: "psychedelic", toName: "Psychedelic" },
+  { from: "field-recordings", to: "field-recording", toName: "Field Recording" },
+  { from: "newa-folk-music", to: "newa-music", toName: "Newa Music", seedName: "Newa Folk Music" },
+  {
+    from: "sacred-harp-singing",
+    to: "shape-note-singing",
+    toName: "Shape Note Singing",
+    seedName: "Sacred Harp Singing",
+  },
+];
+
+// Every stored reference to a renamed tree id moves with it, or the user's mappings, album
+// genres and exclusions silently fall out of the tree. Albums touching a renamed id, or
+// holding a genre no node matched before, are re-normalized against the new tree.
+function rymRenameSql(): string {
+  const olds = RYM_ID_RENAMES.map((r) => `'${r.from}'`).join(", ");
+  const statements = [
+    `UPDATE albums SET computed_at = NULL
+       WHERE id IN (SELECT album_id FROM album_genres WHERE canonical_id IN (${olds}))
+          OR id IN (SELECT album_id FROM album_user_genres WHERE canonical_id IN (${olds}))
+          OR id IN (SELECT album_id FROM album_genre_exclusions WHERE canonical_id IN (${olds}))
+          OR id IN (SELECT album_id FROM album_unresolved_genres)`,
+  ];
+  for (const { from, to, toName, seedName } of RYM_ID_RENAMES) {
+    statements.push(
+      `UPDATE tag_mappings SET canonical_id = '${to}' WHERE canonical_id = '${from}'`,
+      `UPDATE track_tags SET canonical_id = '${to}' WHERE canonical_id = '${from}'`,
+      `UPDATE OR IGNORE album_genres SET canonical_id = '${to}', name = '${toName}' WHERE canonical_id = '${from}'`,
+      `DELETE FROM album_genres WHERE canonical_id = '${from}'`,
+      `UPDATE OR IGNORE album_user_genres SET canonical_id = '${to}', name = '${toName}' WHERE canonical_id = '${from}'`,
+      `DELETE FROM album_user_genres WHERE canonical_id = '${from}'`,
+      `UPDATE OR IGNORE album_genre_exclusions SET canonical_id = '${to}' WHERE canonical_id = '${from}'`,
+      `DELETE FROM album_genre_exclusions WHERE canonical_id = '${from}'`,
+      `UPDATE user_tree_nodes SET parent_ids = REPLACE(parent_ids, '"${from}"', '"${to}"')
+         WHERE parent_ids LIKE '%"${from}"%'`,
+      `UPDATE playlists SET rules_json = REPLACE(rules_json, '"${from}"', '"${to}"')
+         WHERE rules_json LIKE '%"${from}"%'`
+    );
+    if (seedName) {
+      const norm = seedName.toLowerCase();
+      statements.push(
+        `INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value)
+           SELECT '${seedName}', 'genre', '${to}', 'manual', '${norm}'
+           WHERE NOT EXISTS (SELECT 1 FROM tag_mappings WHERE norm_value = '${norm}' AND kind = 'genre')`
+      );
+    }
+  }
+  return statements.join(";\n");
+}
+
 export async function runMigrations(database: MigrationDb): Promise<void> {
   // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
   // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
@@ -748,6 +809,10 @@ export const migrations: Migration[] = [
     // last one already read against the same identity.
     version: 51,
     sql: `ALTER TABLE albums ADD COLUMN tracks_read_scan TEXT;`,
+  },
+  {
+    version: 52,
+    sql: rymRenameSql(),
   },
 ];
 
