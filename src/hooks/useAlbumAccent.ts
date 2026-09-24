@@ -3,14 +3,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
 import { QK } from "../lib/queryKeys";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 
 /**
  * The accent color an album tints itself with, derived from its cover art and cached on the
  * `albums` row.
  *
- * The invalidation is the point: the album detail route renders a row it holds through React
- * Query, so a bare `UPDATE` leaves that row's `accent_color` null for the whole 60s staleTime
- * and every revisit inside the window decodes the cover again.
+ * Publishing the write is the point: the album detail route renders a row it holds through
+ * React Query and Home fills picks from the cached album list, so a bare `UPDATE` leaves both
+ * copies null and every revisit decodes the cover again.
  */
 export function useAlbumAccent(
   albumId: string,
@@ -37,6 +38,7 @@ export function useAlbumAccent(
         if (!color) return;
         const db = await getDb();
         await db.execute("UPDATE albums SET accent_color = ? WHERE id = ?", [color, albumId]);
+        useAlbumBrowseSessionStore.getState().setAccent(albumId, color);
         await queryClient.invalidateQueries({ queryKey: QK.albumById(albumId, serverId) });
       })
       .catch((err) => {

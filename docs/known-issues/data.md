@@ -95,6 +95,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
   ```
+- **A write that updates one cached copy leaves the others stale.** `useAlbumAccent` invalidated `QK.albumById` but not `albumBrowseSessionStore`'s row cache, which Home fills Spotlight picks from, so every Home visit until the next sync decoded the cover again and flashed the tint off. Fix: `setAccent` patches the cached rows too. For each `UPDATE`, list every copy of the column: RQ keys *and* session stores.
+  ```
+  grep -rn "UPDATE \(albums\|artists\|tracks\) SET" src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `nowPlayingQueries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
 - **A bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.** `query_artists` took `artwork_url` bare from its group; `query_recent_genres` cut a `LIMIT` across ties, and the first fix covered only the branch the test reached. Fix: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ..., id)`, a `name COLLATE NOCASE` tiebreak on every branch, `MIN(name)` over a bare `name`. Ask of any aggregate: which row is this, and would two runs agree?
   ```

@@ -27,7 +27,7 @@ export function useAlbums(
   // data paints the previous rows immediately - no loading flash, no re-invoke.
   const [data, setData] = useState<AlbumRow[] | undefined>(() => {
     const s = useAlbumBrowseSessionStore.getState();
-    return s.getRows(cacheKey, s.refreshTick) as AlbumRow[] | undefined;
+    return s.getRows(cacheKey, s.refreshTick);
   });
   // The key the rows in `data` were read under. A tick refetch keeps its rows on screen, so
   // only a key with nothing read for it yet is loading; the old key's rows are not an answer.
@@ -42,7 +42,7 @@ export function useAlbums(
     const cached = useAlbumBrowseSessionStore.getState().getRows(cacheKey, refreshTick);
     if (cached) {
       // Cache hit for this exact (sort, ids, tick) - use it, skip the query.
-      setData(cached as AlbumRow[]);
+      setData(cached);
       setLoadedKey(cacheKey);
       setError(null);
       return;
