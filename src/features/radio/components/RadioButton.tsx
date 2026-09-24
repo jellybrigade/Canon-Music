@@ -3,7 +3,7 @@ import { Radio } from "lucide-react";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../../playback/store/player";
-import { RADIO_MODES } from "../../playback/store/playerTypes";
+import { RADIO_MODES, type RadioMode } from "../../playback/store/playerTypes";
 import "./RadioButton.css";
 
 export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
@@ -20,14 +20,15 @@ export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
 
   useClickOutside(wrapRef, () => setOpen(false), open);
 
-  function handleClick() {
+  function pickMode(mode: RadioMode) {
+    setOpen(false);
     if (radioActive) {
-      setOpen((v) => !v);
+      setRadioMode(mode);
       return;
     }
     const { currentTrack, streamUrlFor } = usePlayerStore.getState();
     if (!currentTrack || !streamUrlFor) return;
-    void startRadio({ tracks: [], seed: currentTrack, streamUrlFor });
+    void startRadio({ tracks: [], seed: currentTrack, streamUrlFor, mode });
   }
 
   const modeLabel = RADIO_MODES.find((m) => m.mode === radioMode)?.label ?? "Radio";
@@ -38,35 +39,39 @@ export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
     <div className="radio-btn-wrap" ref={wrapRef}>
       <button
         className={`radio-btn player-btn player-btn--icon${radioActive ? " player-btn--active" : ""}`}
-        onClick={handleClick}
+        onClick={() => setOpen((v) => !v)}
         disabled={!radioActive && !hasTrack}
         title={title}
         aria-label={label}
-        aria-haspopup={radioActive ? "menu" : undefined}
-        aria-expanded={radioActive ? open : undefined}
+        aria-haspopup="menu"
+        aria-expanded={open}
       >
         <Radio size={iconSize} />
       </button>
-      {open && radioActive && (
+      {open && (
         <div className="radio-menu" role="menu">
           {RADIO_MODES.map(({ mode, label: itemLabel }) => (
             <button
               key={mode}
               role="menuitem"
-              className={`radio-menu-item${radioMode === mode ? " radio-menu-item--active" : ""}`}
-              onClick={() => { setRadioMode(mode); setOpen(false); }}
+              className={`radio-menu-item${radioActive && radioMode === mode ? " radio-menu-item--active" : ""}`}
+              onClick={() => pickMode(mode)}
             >
               {itemLabel}
             </button>
           ))}
-          <div className="radio-menu-divider" />
-          <button
-            role="menuitem"
-            className="radio-menu-item radio-menu-item--stop"
-            onClick={() => { setRadioActive(false); setOpen(false); }}
-          >
-            Stop radio
-          </button>
+          {radioActive && (
+            <>
+              <div className="radio-menu-divider" />
+              <button
+                role="menuitem"
+                className="radio-menu-item radio-menu-item--stop"
+                onClick={() => { setRadioActive(false); setOpen(false); }}
+              >
+                Stop radio
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

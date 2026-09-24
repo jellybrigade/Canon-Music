@@ -50,7 +50,7 @@ afterEach(() => {
 });
 
 describe("RadioButton", () => {
-  it("offers to start radio from the playing track when radio is off", async () => {
+  it("asks which radio to start when radio is off", async () => {
     await mount();
 
     expect(toggle().getAttribute("aria-label")).toBe("Start radio");
@@ -58,9 +58,24 @@ describe("RadioButton", () => {
 
     fireEvent.click(toggle());
 
+    expect(menu()).not.toBeNull();
+    expect(document.querySelector(".radio-menu-item--stop")).toBeNull();
+    expect(document.querySelector(".radio-menu-item--active")).toBeNull();
+    expect(useRadioStartStore.getState().pending).toBeNull();
+  });
+
+  it("starts the picked radio from the playing track", async () => {
+    await mount();
+
+    fireEvent.click(toggle());
+    const sameArtist = Array.from(document.querySelectorAll<HTMLButtonElement>(".radio-menu-item"))
+      .find((item) => item.textContent === "Same Artist")!;
+    fireEvent.click(sameArtist);
+
     const pending = useRadioStartStore.getState().pending;
     expect(pending?.seed).toBe(current);
     expect(pending?.tracks).toEqual([]);
+    expect(pending?.mode).toBe("same-artist");
     expect(menu()).toBeNull();
   });
 
