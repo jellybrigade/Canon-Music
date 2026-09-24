@@ -123,3 +123,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "virtualRow\.start\|virtualItem\.start\|getTotalSize()" src --include='*.tsx' | grep -v '\.test\.' | grep "[+-]"
   ```
+- **Slide transition on a polled value eases across seeks too.** The 500ms fill transition outlasted the 200ms poll, so seek-back and track change swept the fill backwards. Fix: `useSeekBar`'s `isJump` drops the transition for backward or >1s steps.
+  ```
+  grep -rnE "transition:.*(transform|width).*linear" src --include='*.css'
+  ```

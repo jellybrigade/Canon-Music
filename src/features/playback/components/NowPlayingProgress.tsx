@@ -10,7 +10,7 @@ export function NowPlayingProgress({
   duration: number;
   overlayPeaks: readonly number[] | null;
 }) {
-  const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
+  const { barRef, elapsed, progress, isJump, sliderProps } = useSeekBar(duration);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
@@ -34,7 +34,10 @@ export function NowPlayingProgress({
             filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
           />
         ) : (
-          <div className="now-playing-progress-fill" style={{ transform: `scaleX(${progress})` }} />
+          <div
+            className={`now-playing-progress-fill${isJump ? " now-playing-progress-fill--jump" : ""}`}
+            style={{ transform: `scaleX(${progress})` }}
+          />
         )}
       </div>
       <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>

@@ -11,7 +11,7 @@ export function PlayerProgress() {
   const isBuffering = usePlayerStore((s) => s.isBuffering);
   const [showWaveform] = useBoolSetting("player.show_waveform", true);
 
-  const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
+  const { barRef, elapsed, progress, isJump, sliderProps } = useSeekBar(duration);
 
   const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
   const filledCount = useMemo(
@@ -36,7 +36,10 @@ export function PlayerProgress() {
             filledClass="waveform-bar waveform-bar--filled"
           />
         ) : (
-          <div className="player-progress-fill" style={{ transform: `scaleX(${progress})` }} />
+          <div
+            className={`player-progress-fill${isJump ? " player-progress-fill--jump" : ""}`}
+            style={{ transform: `scaleX(${progress})` }}
+          />
         )}
       </div>
       <span className="player-duration">
