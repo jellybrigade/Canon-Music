@@ -5,11 +5,10 @@ import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
 import "./NowPlayingProgress.css";
 
 export function NowPlayingProgress({
-  duration, useWaveform, overlayPeaks,
+  duration, overlayPeaks,
 }: {
   duration: number;
-  useWaveform: boolean;
-  overlayPeaks: number[] | null;
+  overlayPeaks: readonly number[] | null;
 }) {
   const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
@@ -23,13 +22,13 @@ export function NowPlayingProgress({
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
         ref={barRef}
-        className={`now-playing-progress-bar${useWaveform ? " now-playing-progress-bar--waveform" : ""}${isBuffering ? " now-playing-progress-bar--buffering" : ""}`}
+        className={`now-playing-progress-bar${overlayPeaks ? " now-playing-progress-bar--waveform" : ""}${isBuffering ? " now-playing-progress-bar--buffering" : ""}`}
         aria-busy={isBuffering || undefined}
         {...sliderProps}
       >
-        {useWaveform ? (
+        {overlayPeaks ? (
           <WaveformBars
-            peaks={overlayPeaks!}
+            peaks={overlayPeaks}
             filledCount={overlayFilledCount}
             barClass="now-playing-waveform-bar"
             filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"

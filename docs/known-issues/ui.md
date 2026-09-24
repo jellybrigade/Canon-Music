@@ -55,7 +55,7 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "useState\((searchParams|params|query|pathname)" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state.
+- **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state. **Found again:** the progress bar read `waveformPeaks: null` (cleared on every track change) as "no waveform" and dropped to the 3px bar until peaks loaded, jumping the layout per track. Fix: `displayedWaveformPeaks` draws a flat placeholder; only the setting decides the variant.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
   ```

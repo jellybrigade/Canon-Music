@@ -22,6 +22,7 @@ import { UpNextList } from "./UpNextList";
 import { NowPlayingAbout } from "./NowPlayingAbout";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { albumRowOfTrack } from "../lib/trackAlbum";
+import { displayedWaveformPeaks } from "../lib/waveformDisplay";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
@@ -78,7 +79,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useBoolSetting("player.show_waveform", true);
-  const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
   const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
   const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
   const [tourLoading, setTourLoading] = useState(false);
@@ -104,18 +104,19 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   // Downsample to 80 bars for the overlay, reduces DOM nodes from 200 and cuts jank.
   // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.
   const overlayPeaks = useMemo(() => {
-    if (!waveformPeaks) return null;
+    const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
+    if (!peaks) return null;
     const TARGET = 80;
-    if (waveformPeaks.length <= TARGET) return waveformPeaks;
-    const ratio = waveformPeaks.length / TARGET;
+    if (peaks.length <= TARGET) return peaks;
+    const ratio = peaks.length / TARGET;
     return Array.from({ length: TARGET }, (_, i) => {
       const start = Math.floor(i * ratio);
       const end = Math.floor((i + 1) * ratio);
       let sum = 0;
-      for (let j = start; j < end; j++) sum += waveformPeaks[j] ?? 0;
+      for (let j = start; j < end; j++) sum += peaks[j] ?? 0;
       return sum / (end - start);
     });
-  }, [waveformPeaks]);
+  }, [showWaveform, waveformPeaks]);
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
@@ -218,7 +219,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <NowPlayingProgress
             duration={duration}
-            useWaveform={!!useWaveform}
             overlayPeaks={overlayPeaks}
           />
 

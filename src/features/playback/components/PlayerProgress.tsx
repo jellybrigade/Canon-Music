@@ -3,6 +3,7 @@ import { usePlayerStore } from "../store/player";
 import { useBoolSetting } from "../../../hooks/useSetting";
 import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
 import { WaveformBars } from "./WaveformBars";
+import { displayedWaveformPeaks } from "../lib/waveformDisplay";
 
 export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
@@ -12,10 +13,10 @@ export function PlayerProgress() {
 
   const { barRef, elapsed, progress, sliderProps } = useSeekBar(duration);
 
-  const useWaveform = showWaveform && waveformPeaks && waveformPeaks.length > 0;
+  const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
   const filledCount = useMemo(
-    () => (waveformPeaks ? Math.round(progress * waveformPeaks.length) : 0),
-    [progress, waveformPeaks]
+    () => (peaks ? Math.round(progress * peaks.length) : 0),
+    [progress, peaks]
   );
 
   return (
@@ -23,13 +24,13 @@ export function PlayerProgress() {
       <span className="player-elapsed">{formatDuration(elapsed)}</span>
       <div
         ref={barRef}
-        className={`player-progress-bar${useWaveform ? " player-progress-bar--waveform" : ""}${isBuffering ? " player-progress-bar--buffering" : ""}`}
+        className={`player-progress-bar${peaks ? " player-progress-bar--waveform" : ""}${isBuffering ? " player-progress-bar--buffering" : ""}`}
         aria-busy={isBuffering || undefined}
         {...sliderProps}
       >
-        {useWaveform ? (
+        {peaks ? (
           <WaveformBars
-            peaks={waveformPeaks}
+            peaks={peaks}
             filledCount={filledCount}
             barClass="waveform-bar"
             filledClass="waveform-bar waveform-bar--filled"
