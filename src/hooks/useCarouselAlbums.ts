@@ -3,6 +3,7 @@ import { fetchAlbumListByType } from "../clients/navidrome";
 import type { NavidromeAlbum } from "../clients/navidrome";
 import type { ServerWithCredential } from "./useServer";
 import { QK } from "../lib/queryKeys";
+import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
 
 export function useCarouselAlbums(
   serverWithCred: ServerWithCredential | null | undefined,
@@ -15,6 +16,7 @@ export function useCarouselAlbums(
       const { server, credential } = serverWithCred!;
       return fetchAlbumListByType(server.url, server.username, credential, type, 20, server.alt_url ?? undefined);
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: HOME_STALE_TIME,
+    gcTime: HOME_GC_TIME,
   });
 }

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { QK } from "../lib/queryKeys";
+import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
 
 interface RecommendedAlbumRow {
   id: string;
@@ -43,6 +44,7 @@ export function useRecommendedAlbum(albumId: string | null) {
       return rows[0] ?? null;
     },
     enabled: !!albumId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: HOME_STALE_TIME,
+    gcTime: HOME_GC_TIME,
   });
 }

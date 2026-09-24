@@ -39,6 +39,7 @@ Canon/
 │   │   ├── transportHealth.ts  Per-server breaker + native-stack probe behind apiPost's timeout ladder: noteTransportTimeout(url), transportStallNotice(url), recordTransportSuccess(url), describeStall()
 │   │   ├── sidecar.ts         checkSidecarHealth() + probeSidecar(host) + writeTags() HTTP client wrappers
 │   │   ├── albumTracks.ts     loadAlbumTracks(): an album's tracks, fetching them on a mirror miss so a short sync never reads as a dead play button
+│   │   ├── homeQueryTiming.ts HOME_STALE_TIME + HOME_GC_TIME (30 min) for Home's rail queries, which unmount on every navigation away
 │   │   └── logger.ts          In-memory ring buffer (console.* patched) + debounced batched writes to app_logs table; used by FeedbackModal + ErrorBoundary
 │   ├── clients/
 │   │   ├── lastfm.ts          Last.fm API: fetchAlbumTags(), classifyTag(), fetchSimilarArtists(), fetchArtistTopTracks(); uses makeRateLimiter()
