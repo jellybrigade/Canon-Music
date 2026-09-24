@@ -218,26 +218,31 @@
 }
 
 .home-section__radio-btn {
-  margin-left: auto;
   align-self: center;
+  margin-left: var(--space-xs);
   background: none;
   border: none;
-  padding: var(--space-2xs) var(--space-2xs);
+  box-shadow: none;
+  padding: var(--space-2xs);
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  opacity: 0;
-  transition: opacity var(--duration-moderate), color var(--duration-moderate);
+  transition: color var(--duration-moderate);
 }
 
-.home-section:hover .home-section__radio-btn {
-  opacity: 1;
+.home-rail__header .home-section__radio-btn {
+  margin-left: 0;
 }
 
 .home-section__radio-btn:hover {
   color: var(--text-primary);
+}
+
+.home-section__radio-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 @keyframes skeleton-pulse {

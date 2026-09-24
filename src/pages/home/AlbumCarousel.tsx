@@ -73,14 +73,14 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
       <div className="home-section__header">
         <h2 className="home-section__title">{title}</h2>
         {subtitle && <p className="home-section__subtitle">{subtitle}</p>}
-        {onRefresh && (
-          <button className="home-section__refresh-btn" onClick={onRefresh} aria-label={`Refresh ${title}`} title="Refresh">
-            <RefreshCw size={13} />
-          </button>
-        )}
         {onRadio && (
           <button className="home-section__radio-btn" onClick={onRadio} aria-label={`Start ${title} radio`} title="Start radio">
             <Radio size={13} />
+          </button>
+        )}
+        {onRefresh && (
+          <button className="home-section__refresh-btn" onClick={onRefresh} aria-label={`Refresh ${title}`} title="Refresh">
+            <RefreshCw size={13} />
           </button>
         )}
       </div>
