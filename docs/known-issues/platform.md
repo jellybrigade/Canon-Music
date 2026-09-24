@@ -40,4 +40,8 @@ Fixed unless marked OPEN.
   ```
   grep -rn "\.stack" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A scroller whose content grows keeps painting at its old width on WebKitGTK.** Unlocking For You adds disabled tabs to an `overflow-x: auto` list; the new tabs were clipped at the locked row's old end until hovered. Fix: key the list on the lock state so it remounts. Not reproducible in jsdom (no paint). Ask of any scroller whose item set swaps on a toggle: does it get a fresh box?
+  ```
+  grep -rn "overflow-x: auto" src --include='*.css'
+  ```
 - **"Load failed" ~25s = systemd-resolved, not Canon.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.

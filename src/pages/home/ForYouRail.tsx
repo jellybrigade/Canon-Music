@@ -214,7 +214,9 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
       )}
 
       <div className="foryou-v2-tabs" role="tablist" aria-label="For You categories">
-        <div className="foryou-v2-tabs__list">
+        {/* Keyed on lock state: WebKitGTK keeps painting this scroller at its old width
+            when unlocking adds tabs, clipping the new ones until hovered. */}
+        <div key={locked ? "locked" : "unlocked"} className="foryou-v2-tabs__list">
           {locked
             ? groups.map((group, i) => (
                 <div key={group.key} className="foryou-v2-tab-slot">

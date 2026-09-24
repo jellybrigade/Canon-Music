@@ -18,6 +18,7 @@ Fixed unless marked OPEN.
 - Unbounded thread-per-request -> SIGKILL.
 - Webview honours PAC, Rust does not; a dead PAC stalls only half of Canon.
 - WebKit's `err.stack` carries no message line, so logging the stack alone loses the error.
+- A scroller whose content grows keeps painting at its old width on WebKitGTK.
 - "Load failed" ~25s = systemd-resolved, not Canon.
 - Two HTTP stacks also means two certificate stores.
 - "Something answered" is not "the right thing answered".
