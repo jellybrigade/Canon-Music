@@ -11,7 +11,7 @@
 }
 
 .radio-queue-status-label {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -20,19 +20,20 @@
 
 .radio-queue-status-stop {
   flex-shrink: 0;
-  padding: var(--space-2xs) var(--space-xs);
-  background: none;
-  border: none;
+  padding: var(--space-2xs) var(--space-sm);
+  background: var(--tint-3);
+  border: 1px solid var(--border);
   box-shadow: none;
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
-  color: var(--text-secondary);
+  font-family: inherit;
+  color: var(--text-primary);
   cursor: pointer;
+  transition: background var(--duration-fast);
 }
 
 .radio-queue-status-stop:hover {
-  color: var(--text-primary);
-  background: var(--tint-3);
+  background: var(--tint-5);
 }
 
 .radio-queue-status-stop:focus-visible {
