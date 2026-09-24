@@ -9,14 +9,18 @@ import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { RadioQueueStatus } from "../../radio/components/RadioQueueStatus";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
+import type { AlbumRow } from "../../../types/library";
+import { albumRowOfTrack } from "../lib/trackAlbum";
 import "./UpNextList.css";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
   lovedTrackIds: Set<string>;
+  onSelectAlbum: (album: AlbumRow) => void;
+  onSelectArtist?: (artistName: string) => void;
 }
 
-export function UpNextList({ serverWithCredential, lovedTrackIds }: Props) {
+export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum, onSelectArtist }: Props) {
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
@@ -36,6 +40,9 @@ export function UpNextList({ serverWithCredential, lovedTrackIds }: Props) {
     }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
     [queue, isShuffled, shuffleOrder]
   );
+  const menuTrack = upNextMenu ? orderedTracks.find((t) => t.position === upNextMenu.position)?.track : undefined;
+  const menuArtist = menuTrack?.artist ?? null;
+  const menuAlbum = menuTrack ? albumRowOfTrack(menuTrack) : null;
 
   return (
     <>
@@ -131,12 +138,21 @@ export function UpNextList({ serverWithCredential, lovedTrackIds }: Props) {
               Move to Bottom
             </button>
           )}
+          {menuAlbum && (
+            <button onClick={() => { onSelectAlbum(menuAlbum); setUpNextMenu(null); }}>
+              Go to Album
+            </button>
+          )}
+          {onSelectArtist && menuArtist && (
+            <button onClick={() => { onSelectArtist(menuArtist); setUpNextMenu(null); }}>
+              Go to Artist
+            </button>
+          )}
           <StartRadioSubmenu
             onSelect={(mode) => {
-              const entry = orderedTracks.find((t) => t.position === upNextMenu.position);
-              if (entry) {
+              if (menuTrack) {
                 void playFromQueueIndex(upNextMenu.position).then(() => {
-                  startRadio(entry.track, mode);
+                  startRadio(menuTrack, mode);
                 });
               }
               setUpNextMenu(null);

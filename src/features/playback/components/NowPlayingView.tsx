@@ -21,6 +21,7 @@ import { NowPlayingControls } from "./NowPlayingControls";
 import { UpNextList } from "./UpNextList";
 import { NowPlayingAbout } from "./NowPlayingAbout";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { albumRowOfTrack } from "../lib/trackAlbum";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
@@ -58,6 +59,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const duration = currentTrack?.duration ?? 0;
   const nextDisabled = isNextDisabled(repeat, queueIndex, queue.length, radioOnQueueEnd);
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
+  const currentAlbum = currentTrack ? albumRowOfTrack(currentTrack) : null;
 
   const primaryArtist = primaryArtistOf(currentTrack?.artist);
   const { data: artistAlbums, isPending: albumsPending } = useNowPlayingAlbums(primaryArtist, server.id);
@@ -201,17 +203,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
               )
             )}
             {currentTrack.album && (
-              currentTrack.albumId ? (
+              currentAlbum ? (
                 <button
                   className="now-playing-album now-playing-album--link"
-                  onClick={() => onSelectAlbum({
-                    id: currentTrack.albumId!,
-                    server_id: serverWithCredential.server.id,
-                    name: currentTrack.album!,
-                    artist: currentTrack.artist ?? null,
-                    year: null,
-                    artwork_url: currentTrack.artworkRef ?? null,
-                  })}
+                  onClick={() => onSelectAlbum(currentAlbum)}
                 >
                   {albumDisplayName(currentTrack.album!)}
                 </button>
@@ -333,7 +328,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <div className="now-playing-tab-panel" ref={tab === "up-next" ? upNextRef : undefined}>
             {tab === "up-next" && (
-              <UpNextList serverWithCredential={serverWithCredential} lovedTrackIds={lovedTrackIds} />
+              <UpNextList
+                serverWithCredential={serverWithCredential}
+                lovedTrackIds={lovedTrackIds}
+                onSelectAlbum={onSelectAlbum}
+                onSelectArtist={onSelectArtist}
+              />
             )}
 
             {tab === "about" && (
