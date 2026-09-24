@@ -248,6 +248,13 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     paddingEnd: PADDING,
   });
 
+  const topRowIndex = virtualizer.getVirtualItemForOffset(virtualizer.scrollOffset ?? 0)?.index ?? 0;
+  let activeSection: string | undefined;
+  for (const section of scrubberSections) {
+    if (section.rowIndex > topRowIndex) break;
+    activeSection = section.label;
+  }
+
   // Keyed by sort because each sort is a different ordering of the same rows,
   // so an offset taken under one is meaningless under another.
   useScrollMemory(containerRef, `albums:${sort ?? "default"}`, rows.length > 0);
@@ -361,7 +368,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           {scrubberSections.map(({ label, rowIndex }) => (
             <button
               key={label}
-              className="album-grid-scrubber-item"
+              className={`album-grid-scrubber-item${label === activeSection ? " album-grid-scrubber-item--active" : ""}`}
+              aria-current={label === activeSection ? "true" : undefined}
               onClick={() => virtualizer.scrollToIndex(rowIndex, { align: "start" })}
             >
               {label}

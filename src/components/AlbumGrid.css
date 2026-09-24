@@ -47,6 +47,11 @@
   min-width: 1.5rem;
 }
 
+.album-grid-scrubber-item--active {
+  color: var(--text-primary);
+  background: var(--tint-2);
+}
+
 .album-grid-scrubber-item:hover {
   color: var(--accent);
   background: var(--tint-2);

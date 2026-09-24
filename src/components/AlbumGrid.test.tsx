@@ -512,6 +512,60 @@ describe("AlbumGrid scrubber jump", () => {
   });
 });
 
+describe("AlbumGrid scrubber position", () => {
+  const perLetter = COLS * 2;
+
+  function activeLabels(): string[] {
+    return Array.from(document.querySelectorAll(".album-grid-scrubber-item--active")).map(
+      (b) => b.textContent!
+    );
+  }
+
+  function scrollGridTo(top: number) {
+    const scroller = document.querySelector<HTMLElement>(".album-grid-scroller")!;
+    act(() => {
+      Object.defineProperty(scroller, "scrollTop", { configurable: true, value: top });
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+  }
+
+  it("marks the first section before any scroll", () => {
+    renderGrid({ albums: lettered(ALPHABET, perLetter), sort: "alphabetical" });
+    expect(activeLabels()).toEqual(["A"]);
+  });
+
+  it("marks the section of the row at the top of the viewport as it scrolls", () => {
+    renderGrid({ albums: lettered(ALPHABET, perLetter), sort: "alphabetical" });
+    scrollGridTo(PADDING + 22 * ROW_H);
+    expect(activeLabels()).toEqual(["L"]);
+    // Second row of L's section is still L, not the next letter.
+    scrollGridTo(PADDING + 23 * ROW_H);
+    expect(activeLabels()).toEqual(["L"]);
+    scrollGridTo(PADDING + 4 * ROW_H);
+    expect(activeLabels()).toEqual(["C"]);
+  });
+
+  it("marks a skipped letter's predecessor, not the next letter, across gaps", () => {
+    renderGrid({ albums: lettered(["A", "M", "Z"], COLS * 6), sort: "alphabetical" });
+    scrollGridTo(PADDING + 3 * ROW_H);
+    expect(activeLabels()).toEqual(["A"]);
+    scrollGridTo(PADDING + 7 * ROW_H);
+    expect(activeLabels()).toEqual(["M"]);
+  });
+
+  it("marks the decade in year sort", () => {
+    const perYear = COLS * 8;
+    const albums = [1990, 2000, 2010].flatMap((year, y) =>
+      Array.from({ length: perYear }, (_, i) =>
+        album({ id: `srv-a:${y}-${i}`, name: `Album ${y}-${i}`, year })
+      )
+    );
+    renderGrid({ albums, sort: "year" });
+    scrollGridTo(PADDING + YEAR_HEADER_HEIGHT + 9 * ROW_H);
+    expect(activeLabels()).toEqual(["2000s"]);
+  });
+});
+
 describe("AlbumGrid card interaction", () => {
   it("opens an album on click and on Enter, and ignores other keys", () => {
     renderGrid({ albums: lettered(["A"], 1) });
