@@ -12,7 +12,11 @@
   background-color: var(--bg-player);
   border-top: 1px solid var(--border);
   z-index: var(--z-dropdown);
-  --player-controls-size: 40px;
+  /* Art, and the transport stacked over the waveform, share one height so their top and
+     bottom edges line up and the right-side buttons sit on their midline. */
+  --player-stack-height: 64px;
+  --player-controls-size: 36px;
+  --player-waveform-height: calc(var(--player-stack-height) - var(--player-controls-size) - var(--space-2xs));
 }
 
 .player-section {
@@ -22,24 +26,22 @@
 }
 
 .player-section--left {
-  flex: 0 0 260px;
+  flex: 1 1 0;
   min-width: 0;
 }
 
+/* Sides share one grow factor, so the center column (and the controls centered in it) sits on
+   the bar's midline whenever the right side's buttons fit their share. */
 .player-section--center {
-  flex: 1;
+  flex: 2 1 0;
   flex-direction: column;
-  justify-content: flex-start;
+  justify-content: center;
   gap: var(--space-2xs);
   min-width: 0;
-  align-self: stretch;
-  /* The controls are absolutely positioned, so the progress row is placed below them by hand:
-     controls inset, controls, then the same gap again before the waveform's tallest bar. */
-  padding-top: calc(var(--space-xs) * 2 + var(--player-controls-size));
 }
 
 .player-section--right {
-  flex: 0 0 310px;
+  flex: 1 1 0;
   justify-content: flex-end;
   gap: var(--space-xs);
 }
@@ -55,8 +57,8 @@
 .player-thumb-wrap {
   position: relative;
   flex-shrink: 0;
-  width: 54px;
-  height: 54px;
+  width: var(--player-stack-height);
+  height: var(--player-stack-height);
 }
 
 .player-thumb-expand {
@@ -98,8 +100,8 @@
 }
 
 .player-thumb {
-  width: 54px;
-  height: 54px;
+  width: var(--player-stack-height);
+  height: var(--player-stack-height);
   border-radius: var(--radius-sm-md);
   background-color: var(--bg-card);
   overflow: hidden;
@@ -228,10 +230,6 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-2xs);
-  position: absolute;
-  left: 50%;
-  top: var(--space-xs);
-  transform: translateX(-50%);
 }
 
 .player-btn {
@@ -370,7 +368,7 @@
 }
 
 .player-progress-bar--waveform {
-  height: 28px;
+  height: var(--player-waveform-height);
   background: transparent;
   overflow: visible;
   display: flex;
@@ -379,7 +377,7 @@
   border-radius: 0;
 }
 
-/* The waveform variant is already 28px tall, so it doesn't take the hover grow. */
+/* The waveform variant is already full height, so it doesn't take the hover grow. */
 .player-progress-bar--waveform:hover {
   transform: none;
 }
@@ -412,7 +410,7 @@
 
 .waveform-bar {
   flex: 1;
-  height: calc(max(var(--peak, 0.05) * 28px, 2px));
+  height: calc(max(var(--peak, 0.05) * var(--player-waveform-height), 2px));
   background-color: var(--progress-track);
   border-radius: 1px;
 }
@@ -649,8 +647,18 @@
   display: none;
 }
 
-/* ── Narrow player bar (≤640px) ── */
-@media (max-width: 640px) {
+/* Stars are the widest group on the right; dropping them first keeps the waveform usable
+   until the narrow layout takes over. */
+@media (max-width: 1100px) {
+  .player-stars--hide-narrow {
+    display: none;
+  }
+}
+
+/* ── Narrow player bar (≤900px) ── */
+/* Below this the right-side buttons, the transport and a usable waveform no longer fit side by
+   side, so the secondary buttons move into the more panel. */
+@media (max-width: 900px) {
   .player-bar {
     gap: var(--space-xs);
     padding: 0 var(--space-sm);

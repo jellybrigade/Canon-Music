@@ -151,5 +151,6 @@ Fixed unless marked OPEN.
 - An option's "selected" test must compare to that option, not ask whether any option is set.
 - A menu's sub-mode held by its parent outlives the menu.
 - A `var()` naming a token nobody defines computes to the property's initial value.
+- Flex item with a fixed basis narrower than its content overflows onto its neighbours.
 - TS geometry constant restating CSS value drifts silently.
 - Layout constant applied by hand is invisible to library computing offsets.

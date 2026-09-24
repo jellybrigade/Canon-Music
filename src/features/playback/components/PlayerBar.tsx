@@ -412,10 +412,10 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading
-                ? <Loader size={22} className="player-spin" />
+                ? <Loader size={20} className="player-spin" />
                 : isPlaying
-                  ? <Pause size={22} fill="currentColor" strokeWidth={0} />
-                  : <Play size={22} fill="currentColor" strokeWidth={0} />}
+                  ? <Pause size={20} fill="currentColor" strokeWidth={0} />
+                  : <Play size={20} fill="currentColor" strokeWidth={0} />}
             </button>
             <button
               className="player-btn"

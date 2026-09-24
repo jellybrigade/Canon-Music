@@ -109,6 +109,10 @@ Fixed unless marked OPEN.
   ```
   pnpm vitest run src/lib/cssTokenGuard.test.ts
   ```
+- **Flex item with a fixed basis narrower than its content overflows onto its neighbours.** Player bar right side was `flex: 0 0 310px` holding ~435px of buttons, and the narrow layout started at 640px, far below the ~900px the full row needs, so volume clipped and buttons overlaid the waveform. Transport controls centred on the bar, waveform on its column, so the two sat off each other. Fix: equal-grow sides, controls positioned in the center column, stars drop at 1100px, narrow layout at 900px. Not reproducible in jsdom (no layout).
+  ```
+  grep -rnE "flex: 0 0 [0-9]+px" src --include='*.css'
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```
