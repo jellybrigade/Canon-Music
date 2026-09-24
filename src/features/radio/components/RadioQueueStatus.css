@@ -5,7 +5,7 @@
   gap: var(--space-sm);
   margin-top: var(--space-xs);
   padding: var(--space-xs) var(--space-xs) 0;
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border);
   font-size: var(--text-sm);
   color: var(--text-secondary);
 }

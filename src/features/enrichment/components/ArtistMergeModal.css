@@ -2,7 +2,7 @@
 
 .merge-dialog {
   /* border/radius/display/flex-direction: shared shell in styles/base.css */
-  background: var(--bg-surface, #1e1e1e);
+  background: var(--bg-card);
   width: 440px;
   max-width: calc(100vw - 48px);
   max-height: calc(100vh - 80px);

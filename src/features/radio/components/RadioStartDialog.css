@@ -1,6 +1,6 @@
 .radio-start-dialog {
   /* border/radius/display/flex-direction: shared shell in styles/base.css */
-  background: var(--bg-surface);
+  background: var(--bg-card);
   width: 400px;
   max-width: calc(100vw - 48px);
   box-shadow: var(--shadow-2xl) var(--scrim-3);

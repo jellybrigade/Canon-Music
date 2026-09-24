@@ -43,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
           gap: "1rem",
           padding: "2rem",
           textAlign: "center",
-          background: "var(--bg-primary, #16161a)",
+          background: "var(--bg)",
           color: "var(--text-primary, #eee)",
         }}
       >

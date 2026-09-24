@@ -7,7 +7,7 @@
   overflow: hidden;
   transition: width var(--duration-slow) ease;
   position: relative;
-  background: var(--bg-base);
+  background: var(--bg);
 }
 
 .filter-sidebar--open {

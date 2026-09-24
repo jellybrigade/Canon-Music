@@ -15,7 +15,7 @@
 
 /* ── Track table: selected row + sortable header buttons ── */
 .track-table-row--selected {
-  background-color: var(--bg-selected, var(--tint-3));
+  background-color: var(--tint-3);
 }
 
 .track-sort-btn {

@@ -110,7 +110,7 @@ export function AboutTab({ searchQuery }: Props) {
           <span className="settings-hint">You're up to date.</span>
         )}
         {updateCheckState === "error" && (
-          <span className="settings-hint" style={{ color: "var(--color-error, #e05050)" }}>
+          <span className="settings-hint" style={{ color: "var(--danger)" }}>
             Couldn't check for updates.
           </span>
         )}

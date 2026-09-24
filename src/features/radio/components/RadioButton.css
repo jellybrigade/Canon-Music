@@ -24,7 +24,7 @@
 
 .radio-menu-divider {
   height: 1px;
-  background: var(--border-subtle);
+  background: var(--border);
   margin: var(--space-2xs) 0;
 }
 

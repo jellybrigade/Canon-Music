@@ -105,6 +105,10 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "useState<\"main\"|[mM]enuMode" src --include='*.tsx' | grep -v '\.test\.'
   ```
+- **A `var()` naming a token nobody defines computes to the property's initial value.** `RadioStartDialog` read `var(--bg-surface)`, never defined, so its `background` was transparent from day one; siblings hid the same ghost behind `#1e1e1e` fallbacks. 8 ghost tokens, 14 reads. Fix: real tokens, `src/lib/cssTokenGuard.test.ts` fails on any read without a definition. A fallback on a design token is a tell, not proof: most here name real tokens.
+  ```
+  pnpm vitest run src/lib/cssTokenGuard.test.ts
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```
