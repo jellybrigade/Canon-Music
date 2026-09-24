@@ -164,12 +164,6 @@ pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) ->
         });
     }
 
-    if let Some(codec) = codec_from_content_type(content_type) {
-        return StreamVerdict::Audio {
-            codec: codec.to_string(),
-        };
-    }
-
     if let Some((code, message)) = parse_subsonic_error(head) {
         return StreamVerdict::Failure(subsonic_failure(code, message));
     }
@@ -181,6 +175,14 @@ pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) ->
             retryable: true,
             subsonic_code: None,
         });
+    }
+
+    // Trusted only after the body checks: an audio content-type vouches for nothing when the
+    // body is empty or an error envelope, and the prefetch cache would keep either.
+    if let Some(codec) = codec_from_content_type(content_type) {
+        return StreamVerdict::Audio {
+            codec: codec.to_string(),
+        };
     }
 
     if let Some(codec) = codec_from_magic(head) {
@@ -266,27 +268,27 @@ mod tests {
     #[test]
     fn names_the_codec_from_an_audio_content_type() {
         assert_eq!(
-            codec(classify_stream_response(200, "audio/flac", b"")),
+            codec(classify_stream_response(200, "audio/flac", b"\x00\x01")),
             "FLAC"
         );
         assert_eq!(
-            codec(classify_stream_response(200, "audio/mpeg", b"")),
+            codec(classify_stream_response(200, "audio/mpeg", b"\x00\x01")),
             "MP3"
         );
         assert_eq!(
-            codec(classify_stream_response(200, "audio/ogg", b"")),
+            codec(classify_stream_response(200, "audio/ogg", b"\x00\x01")),
             "OGG"
         );
         assert_eq!(
-            codec(classify_stream_response(200, "audio/opus", b"")),
+            codec(classify_stream_response(200, "audio/opus", b"\x00\x01")),
             "Opus"
         );
         assert_eq!(
-            codec(classify_stream_response(200, "audio/mp4", b"")),
+            codec(classify_stream_response(200, "audio/mp4", b"\x00\x01")),
             "AAC"
         );
         assert_eq!(
-            codec(classify_stream_response(200, "audio/wav", b"")),
+            codec(classify_stream_response(200, "audio/wav", b"\x00\x01")),
             "WAV"
         );
     }
@@ -393,6 +395,20 @@ mod tests {
         assert!(f.message.contains("empty"), "{}", f.message);
         assert!(f.retryable);
         assert_eq!(f.subsonic_code, None);
+    }
+
+    #[test]
+    fn refuses_an_empty_body_even_under_an_audio_content_type() {
+        let f = failure(classify_stream_response(200, "audio/mpeg", b""));
+        assert!(f.message.contains("empty"), "{}", f.message);
+        assert!(f.retryable);
+    }
+
+    #[test]
+    fn names_a_subsonic_error_even_under_an_audio_content_type() {
+        let body = br#"{"subsonic-response":{"status":"failed","error":{"code":70,"message":"not found"}}}"#;
+        let f = failure(classify_stream_response(200, "audio/mpeg", body));
+        assert_eq!(f.subsonic_code, Some(70));
     }
 
     #[test]

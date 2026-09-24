@@ -47,6 +47,11 @@
   min-width: 1.5rem;
 }
 
+.album-grid-scrubber-item--active {
+  color: var(--text-primary);
+  background: var(--tint-2);
+}
+
 .album-grid-scrubber-item:hover {
   color: var(--accent);
   background: var(--tint-2);
@@ -164,10 +169,10 @@
   text-shadow: 0 1px 4px var(--scrim-4);
 }
 
-/* The .empty-state* rules used to live here, but AppShell, AppRoutes, ArtistGrid, HomeView,
+/* The .empty-state* rules used to live here, but AppShell, DetailRoutes, ArtistGrid, HomeView,
    PlaylistList, PlaylistDetail and TrackTableView all use them without importing this file -
    they only rendered correctly because the bundler flattens every imported stylesheet into
-   one. Moved to App.css, which every view genuinely shares. */
+   one. Moved to base.css, which every view genuinely shares. */
 
 /* ── Loved / hearts ── */
 .track-heart-cell {

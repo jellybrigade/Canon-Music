@@ -186,7 +186,7 @@
 
 .update-prompt-error {
   font-size: var(--text-base);
-  color: var(--color-error, #e05050);
+  color: var(--danger);
   margin: 0;
 }
 

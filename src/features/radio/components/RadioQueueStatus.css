@@ -1,0 +1,42 @@
+/* Closes the Up Next list: radio appends here, so this says what comes after the last row. */
+.radio-queue-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  padding: var(--space-xs) var(--space-xs) 0;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.radio-queue-status-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.radio-queue-status-stop {
+  flex-shrink: 0;
+  padding: var(--space-2xs) var(--space-sm);
+  background: var(--tint-3);
+  border: 1px solid var(--border);
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-family: inherit;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.radio-queue-status-stop:hover {
+  background: var(--tint-5);
+}
+
+.radio-queue-status-stop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}

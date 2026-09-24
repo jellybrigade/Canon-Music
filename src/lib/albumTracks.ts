@@ -1,7 +1,7 @@
 import { getDb } from "../db";
-import type { NavidromeCredential } from "./navidrome";
+import type { NavidromeCredential } from "../clients/navidromeUrls";
 import type { Server } from "../types/server";
-import { syncAlbumTracks } from "./sync";
+import { syncAlbumTracks } from "../features/sync/syncTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 
 export interface AlbumTrackRow {

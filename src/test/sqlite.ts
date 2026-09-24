@@ -2,7 +2,7 @@
  * In-memory SQLite harness presenting the same `execute` / `select` surface as
  * tauri-plugin-sql's `Database`, backed by better-sqlite3.
  *
- * This is what makes `src/lib/sync.ts`, `smartPlaylist.ts`, `db-batch.ts` and the query hooks
+ * This is what makes `src/features/sync/sync.ts`, `smartPlaylist.ts`, `dbBatch.ts` and the query hooks
  * testable at all: they only ever touch `getDb()`, so a test can hand them this object and
  * assert against real SQL against the real schema, rather than mocking the queries away and
  * proving nothing.

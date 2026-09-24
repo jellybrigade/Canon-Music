@@ -18,8 +18,8 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
-vi.mock("../lib/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
-vi.mock("../keychain", () => ({
+vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
+vi.mock("../lib/keychain", () => ({
   keychain: {
     get: vi.fn().mockResolvedValue(
       JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
@@ -29,18 +29,18 @@ vi.mock("../keychain", () => ({
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
-vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
-vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
+vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
+vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn().mockResolvedValue("0.6.0") }));
 // `SearchResults`' pairing with `SearchView` is covered against the real component in
 // `App.modalInOverlay.test.tsx`. Nothing here asserts on a result row, a grid cell or a filter.
-vi.mock("../components/SearchResults", () => ({
+vi.mock("../features/search/SearchResults", () => ({
   SearchResults: () => <div data-testid="results" />,
 }));
 vi.mock("../components/AlbumGrid", () => ({ AlbumGrid: () => <div data-testid="album-grid" /> }));
 vi.mock("../components/FilterSidebar", () => ({ FilterSidebar: () => <div data-testid="filters" /> }));
-vi.mock("../components/ArtistGrid", () => ({ ArtistGrid: () => <div data-testid="artist-grid" /> }));
-vi.mock("../components/HomeView", () => ({ HomeView: () => <div data-testid="home-view" /> }));
+vi.mock("../pages/ArtistGrid", () => ({ ArtistGrid: () => <div data-testid="artist-grid" /> }));
+vi.mock("../pages/HomeView", () => ({ HomeView: () => <div data-testid="home-view" /> }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useEffect } from "react";

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { fetchItunesCoverArt } from "../lib/itunes";
+import { fetchItunesCoverArt } from "../clients/itunes";
 
 interface Props {
   src: string | null;

@@ -11,14 +11,14 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
-vi.mock("../lib/canonicalize", () => ({ getCanonTree: vi.fn() }));
+vi.mock("../features/tags/lib/canonicalize", () => ({ getCanonTree: vi.fn() }));
 
 import { renderHook, waitFor, cleanup } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { getCanonTree } from "../lib/canonicalize";
-import type { CanonTree, TreeNode } from "../lib/canonicalize";
+import { getCanonTree } from "../features/tags/lib/canonicalize";
+import type { CanonTree, TreeNode } from "../features/tags/lib/canonicalize";
 import { useGenreMappings, applyGenreMappings } from "./useGenreDisplay";
 
 const SHOEGAZE: TreeNode = {
@@ -27,6 +27,7 @@ const SHOEGAZE: TreeNode = {
   type: "genre",
   canonical_key: "shoegaze",
   parents: [],
+  sections: ["genres"],
 };
 
 let queryClient: QueryClient;

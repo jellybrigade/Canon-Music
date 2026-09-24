@@ -2,7 +2,8 @@
 description: Typography scale, readability and accessibility rules for components and styles
 globs:
   - "src/components/**"
-  - "src/styles/**"
+  - "src/pages/**"
+  - "src/ui/**"
   - "src/app/**"
   - "src/**/*.css"
 ---

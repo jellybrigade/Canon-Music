@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { AlbumRow } from "../types/library";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 
 export function useRecentlyReleasedAlbums(limit = 20) {
   return useQuery<AlbumRow[]>({

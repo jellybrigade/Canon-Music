@@ -58,7 +58,7 @@ Spawn **one** `caveman:cavecrew-investigator` agent (per CLAUDE.md: research via
 - Zustand store slices read/written, and how broadly components subscribe
 - React Query keys involved, their `staleTime`/invalidation, who else uses the same key
 - SQLite reads/writes (`db.execute`/`select`, `src/db/**`, migrations touched)
-- network calls (`src/lib/navidrome.ts`, `lastfm.ts`, `musicbrainz.ts`, external services) and their retry/timeout/rate-limit behaviour
+- network calls (`src/clients/navidrome.ts`, `lastfm.ts`, `musicbrainz.ts`, external services) and their retry/timeout/rate-limit behaviour
 - Tauri commands into `src-tauri/`, and what the Rust side does with them
 - effects/listeners/intervals/timers set up, and their cleanup
 - CSS files owning the feature's visual states
@@ -80,20 +80,20 @@ Go stage by stage along the path. Hunt for:
 - `window`/`document` listeners never removed
 - object URLs / blobs created and never revoked
 - unbounded `Map`/`Set`/array caches with no eviction (check `src/lib/boundedCache.ts` — reuse it rather than rolling a new one)
-- Rust-side caches (`CoverState`) and thread/permit lifetimes — see `.claude/rules/known-issues.md` for the thread-storm precedent
+- Rust-side caches (`CoverState`) and thread/permit lifetimes — see `docs/known-issues.md` for the thread-storm precedent
 
 **Efficiency**
-- N+1 queries, unbatched writes inside loops (`src/lib/db-batch.ts` exists — use it)
+- N+1 queries, unbatched writes inside loops (`src/lib/dbBatch.ts` exists — use it)
 - duplicate queries fired by sibling components for the same data
 - expensive computation on the render path instead of memoized
 - store subscriptions broader than needed, causing re-render storms (playback-tick-driven UI especially)
-- uncapped network fan-out (`src/lib/async-pool.ts`, `rate-limiter.ts` exist — use them)
+- uncapped network fan-out (`src/lib/asyncPool.ts`, `rateLimiter.ts` exist — use them)
 
 **Cleanliness**
 - dead code, unreachable branches, leftover debugging
 - duplicated logic that belongs in one shared helper
 - logic living at the wrong altitude (business logic in a component, presentation in a hook)
-- em dashes / en dashes anywhere in `src/` (banned, see `.claude/rules/coding-standards.md`)
+- em dashes / en dashes anywhere in `src/` (banned, see `docs/coding-standards.md`)
 
 **UI completeness** (per `.claude/rules/design-guidelines.md`)
 - missing loading / empty / error states, or a spinner where a skeleton belongs
@@ -165,7 +165,7 @@ If the change is UI-visible, write a concrete numbered manual check for the user
 - Update `ARCHITECTURE.md` in the same commit if any file was added, moved, deleted, or repurposed, or a Tauri command / migration / invariant changed.
 - **Everything found but not changed gets written into `instructions/review.md` directly beneath the item, one indented `LATER: <thing>` bullet each.** This covers anything left out because scope wouldn't allow it, because it was too risky, because it belongs to a different item, or because the user declined it. Each `LATER:` line carries enough context to be picked up standalone: the file:line, what the problem is, and the intended fix. Write these even when the user says no to acting on them — the point is that the finding survives the session.
 - Anything deferred that is a genuine backlog item in its own right (a feature, not a defect in this pipeline) also goes to `/whattodo`.
-- **Every defect whose cause generalizes gets a `.claude/rules/known-issues.md` entry, this commit. Mandatory, not "if it seems worth it".** The entry carries: what broke, the fix, a `**Generalizes:**` line, and the grep from Phase 3's sweep. Writing it is what makes the class findable by a future session that has never seen this bug - a commit message is not greppable in any workflow anyone actually runs. The search-overlay bug shipped a second time precisely because the pass that fixed it wrote no entry, so the class existed nowhere a later session would look.
+- **Every defect whose cause generalizes gets a `docs/known-issues.md` entry, this commit. Mandatory, not "if it seems worth it".** The entry carries: what broke, the fix, a `**Generalizes:**` line, and the grep from Phase 3's sweep, in ~6 lines of prose at most; backstory goes to `docs/known-issues-history.md`. Writing it is what makes the class findable by a future session that has never seen this bug - a commit message is not greppable in any workflow anyone actually runs. The search-overlay bug shipped a second time precisely because the pass that fixed it wrote no entry, so the class existed nowhere a later session would look.
 - If the item being reviewed already has a ticked box and this pass found something that ticked box should have covered, say so on the item: a bold `**MISSED, fixed <date> (<sha>)**` or `**INCOMPLETE, finished ...**` line under it, naming why the earlier pass didn't see it. A tick that silently hides a known miss is worse than an unchecked box, because the next session reads it as covered.
 
 ## Phase 8 — Commit (mandatory, never deferred)

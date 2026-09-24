@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { getArtistImageUrl, isCoverServerReady } from "../lib/navidrome";
-import { resolvePortraitUrl } from "../lib/lastfm";
-import { makeRateLimiter } from "../lib/rate-limiter";
-import { runPool } from "../lib/async-pool";
-import { QK } from "../lib/query-keys";
+import { getArtistImageUrl, isCoverServerReady } from "../clients/navidromeUrls";
+import { resolvePortraitUrl } from "../clients/lastfm";
+import { makeRateLimiter } from "../lib/rateLimiter";
+import { runPool } from "../lib/asyncPool";
+import { QK } from "../lib/queryKeys";
 
 // Wikimedia Commons rate-limits anonymous fetches aggressively; a batch of 5 concurrent
 // requests reliably trips 429s. Keep the request RATE low and retry 429s with backoff

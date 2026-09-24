@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 
 /**
  * The accent color an album tints itself with, derived from its cover art and cached on the

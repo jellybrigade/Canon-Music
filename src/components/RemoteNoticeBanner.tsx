@@ -1,6 +1,6 @@
 import { Megaphone, X } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { RemoteNotice } from "../lib/notice";
+import type { RemoteNotice } from "../clients/notice";
 import "./RemoteNoticeBanner.css";
 
 interface Props {

@@ -1,11 +1,11 @@
 import { useCallback } from "react";
 import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "./useServer";
-import type { CurrentTrack } from "../store/player";
-import { usePlayerStore } from "../store/player";
+import type { CurrentTrack } from "../features/playback/store/playerTypes";
+import { usePlayerStore } from "../features/playback/store/player";
 import { useSetting } from "./useSetting";
-import { getCoverArtUrl, getStreamUrl } from "../lib/navidrome";
-import { stripServerPrefix } from "../utils/ids";
+import { getCoverArtUrl, getStreamUrl } from "../clients/navidromeUrls";
+import { stripServerPrefix } from "../lib/ids";
 import { shuffleArray } from "../lib/shuffle";
 import { loadAlbumTracksForPlay } from "../lib/albumTracks";
 

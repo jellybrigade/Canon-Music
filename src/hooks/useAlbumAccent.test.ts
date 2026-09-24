@@ -19,7 +19,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 import { useAlbumAccent } from "./useAlbumAccent";
 
 const SERVER_ID = "srv-a";

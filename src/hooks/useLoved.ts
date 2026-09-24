@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import type { ServerWithCredential } from "./useServer";
-import { starTrack, unstarTrack, starAlbum, unstarAlbum } from "../lib/navidrome";
-import { stripServerPrefix } from "../utils/ids";
+import { starTrack, unstarTrack, starAlbum, unstarAlbum } from "../clients/navidrome";
+import { stripServerPrefix } from "../lib/ids";
 import { useLovedSessionStore, type LovedSets } from "../store/lovedSessionStore";
 
 interface LovedDto {

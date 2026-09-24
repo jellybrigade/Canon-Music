@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { getCoverArtUrl } from "../lib/navidrome";
-import { QK } from "../lib/query-keys";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { QK } from "../lib/queryKeys";
 import type { ServerWithCredential } from "./useServer";
 
 const BATCH_SIZE = 5;
@@ -183,7 +183,7 @@ function dataUrlToObjectUrl(dataUrl: string): string {
 // now scales with the set of covers actually VIEWED in a session, not the whole library.
 //
 // This is a SQLite-flavored port of psysonic's warm-disk-peek pattern
-// (reference-projects/psysonic/src/cover/*): a synchronous cache read for consumers
+// (psysonic src/cover/*): a synchronous cache read for consumers
 // (getDiskSrcForGrid), a dedup'd background fetch for misses (coverArtInFlight), a
 // subscriber notification to re-render when a fetch lands (subscribeDiskSrcCache), and a
 // bounded in-memory cache. Psysonic also warms a bounded first-N batch up front; we skip

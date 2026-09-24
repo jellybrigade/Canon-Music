@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { installAndRestart, type DownloadProgress } from "../lib/updater";
-import { useModalChrome } from "../hooks/useModalChrome";
+import { useModalChrome } from "../ui/useModalChrome";
 import "./UpdatePrompt.css";
 
 interface ChangelogSection {

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../lib/query-keys";
+import { QK } from "../lib/queryKeys";
 import { getDb } from "../db";
-import { getCanonTree } from "../lib/canonicalize";
-import type { TreeNode } from "../lib/canonicalize";
+import { getCanonTree } from "../features/tags/lib/canonicalize";
+import type { TreeNode } from "../features/tags/lib/canonicalize";
 
 const IGNORED = "__ignored__";
 const ACCEPTED = "__accepted__";

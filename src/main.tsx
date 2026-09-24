@@ -3,10 +3,10 @@ import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
-import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { initLogger } from "./lib/logger";
 import { getDb } from "./db";
-import { purgeStrandedServers } from "./lib/sync";
+import { purgeStrandedServers } from "./features/sync/syncPrune";
 
 initLogger();
 

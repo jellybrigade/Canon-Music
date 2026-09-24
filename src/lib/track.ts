@@ -1,8 +1,8 @@
-import { getStreamUrl } from "./navidrome";
-import { stripServerPrefix } from "../utils/ids";
+import { getStreamUrl } from "../clients/navidromeUrls";
+import { stripServerPrefix } from "./ids";
 import type { Server } from "../types/server";
-import type { NavidromeCredential } from "./navidrome";
-import type { CurrentTrack } from "../store/player";
+import type { NavidromeCredential } from "../clients/navidromeUrls";
+import type { CurrentTrack } from "../features/playback/store/playerTypes";
 
 export function makeStreamUrlBuilder(
   server: Server,

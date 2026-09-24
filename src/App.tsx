@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Music, Users, Tag, Settings, ListMusic, Headphones, House, Layers, Calendar, LayoutList, CircleHelp, Search } from "lucide-react";
-const Wizard = lazy(() => import("./components/setup/Wizard").then((m) => ({ default: m.Wizard })));
+const Wizard = lazy(() => import("./features/setup/Wizard").then((m) => ({ default: m.Wizard })));
 import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useAlbums } from "./hooks/useAlbums";
@@ -10,49 +10,49 @@ import { useAllTracks } from "./hooks/useAllTracks";
 import { useGenres } from "./hooks/useGenres";
 import { useLoved } from "./hooks/useLoved";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
-import { usePlaylists } from "./hooks/usePlaylists";
-import { useScrobbleFlush } from "./hooks/useScrobbleFlush";
-import { useUnmappedTagCount } from "./hooks/useTagMappings";
-import { useMediaSession } from "./hooks/useMediaSession";
-import { useRadio } from "./hooks/useRadio";
-import { useFailedLookupAlbumIds } from "./hooks/useAlbumIdentity";
-import { useBackgroundNormalizer } from "./hooks/useBackgroundNormalizer";
+import { usePlaylists } from "./features/playlists/usePlaylists";
+import { useScrobbleFlush } from "./features/playback/hooks/useScrobbleFlush";
+import { useUnmappedTagCount } from "./features/tags/hooks/useTagMappings";
+import { useMediaSession } from "./features/playback/hooks/useMediaSession";
+import { useRadio } from "./features/radio/hooks/useRadio";
+import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
+import { useBackgroundNormalizer } from "./features/tags/hooks/useBackgroundNormalizer";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
-import { useSearchShortcuts } from "./hooks/useSearchShortcuts";
+import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
 import { ROUTES } from "./lib/routes";
-import { useAnyModalOpen } from "./hooks/useModalChrome";
-import { useQueueSync } from "./hooks/useQueueSync";
-import { useWakeLock } from "./hooks/useWakeLock";
+import { useAnyModalOpen } from "./ui/useModalChrome";
+import { useQueueSync } from "./features/playback/hooks/useQueueSync";
+import { useWakeLock } from "./features/playback/hooks/useWakeLock";
 import { useAppNavigation } from "./hooks/useAppNavigation";
 import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
 import { useSidebarResize } from "./hooks/useSidebarResize";
-import { useLibrarySync } from "./hooks/useLibrarySync";
+import { useLibrarySync } from "./features/sync/useLibrarySync";
 import { loadAlbumTracksForPlay } from "./lib/albumTracks";
-import { useTrackIdRepair } from "./hooks/useTrackIdRepair";
+import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
-import { useNowPlayingPrefetch } from "./hooks/useNowPlayingPrefetch";
-import { usePlayerStore } from "./store/player";
-import { useTagsStore } from "./store/tags";
+import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
+import { usePlayerStore } from "./features/playback/store/player";
+import { useTagsStore } from "./features/tags/store/tags";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
-import type { RadioMode, CurrentTrack } from "./store/player";
+import type { RadioMode, CurrentTrack } from "./features/playback/store/playerTypes";
 import { extractAccent } from "./lib/artColor";
 import { checkForUpdate } from "./lib/updater";
-import { fetchRemoteNotice, type RemoteNotice } from "./lib/notice";
-import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./lib/navidrome";
+import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
+import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { stripServerPrefix } from "./utils/ids";
+import { stripServerPrefix } from "./lib/ids";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
+import { useStartRadio } from "./features/radio/hooks/useStartRadio";
 import "./styles/tokens.css";
-import "./styles/library.css";
+import "./app/library.css";
 import "./styles/base.css";
-import "./App.css";
 
 export default function App() {
   useWakeLock();
@@ -64,8 +64,7 @@ export default function App() {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const play = usePlayerStore((s) => s.play);
-  const playQueue = usePlayerStore((s) => s.playQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
@@ -427,8 +426,7 @@ export default function App() {
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await playQueue([track], streamUrlFn, 0);
-    startRadio(track, mode);
+    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
 
   async function handleAddAlbumToQueue(album: AlbumRow) {
@@ -467,8 +465,7 @@ export default function App() {
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
     }));
-    await playQueue(tracks, streamUrlFn, 0);
-    startRadio(tracks[0]!, "same-genre", genreLabel);
+    await startRadio({ tracks, streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
@@ -491,8 +488,7 @@ export default function App() {
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await playQueue([track], streamUrlFn, 0);
-    startRadio(track, mode);
+    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
 
   // Resolve an album id to a full row, then open it. Used where callers only

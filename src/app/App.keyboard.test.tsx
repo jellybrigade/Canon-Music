@@ -14,8 +14,8 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
-vi.mock("../lib/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
-vi.mock("../keychain", () => ({
+vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
+vi.mock("../lib/keychain", () => ({
   keychain: {
     get: vi.fn().mockResolvedValue(
       JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
@@ -30,8 +30,8 @@ vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
 vi.mock("./AppRoutes", async () => ({
   AppRoutes: (await import("../test/appRoutesStub")).AppRoutesSearchStub,
 }));
-vi.mock("../components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
-vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
+vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
+vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
@@ -41,7 +41,7 @@ import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { usePlayerStore } from "../store/player";
+import { usePlayerStore } from "../features/playback/store/player";
 
 allowSlowAppMounts();
 

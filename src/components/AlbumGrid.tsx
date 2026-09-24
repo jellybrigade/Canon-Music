@@ -5,19 +5,19 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { AlbumRow, AlbumSort } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useLoved } from "../hooks/useLoved";
-import { useFailedLookupAlbumIds } from "../hooks/useAlbumIdentity";
+import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
 import { useBoolSetting } from "../hooks/useSetting";
 import { useScrollMemory } from "../hooks/useScrollMemory";
-import { getCoverArtUrl } from "../lib/navidrome";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { useAlbumCoverMap } from "../hooks/useCoverCache";
 import { AlbumArt } from "./AlbumArt";
-import { ContextMenu, ContextMenuSubmenu } from "./ContextMenu";
-import { StartRadioSubmenu } from "./StartRadioSubmenu";
-import { Pagination } from "./TagsViewHelpers";
-import { AlbumIdentifyDialog } from "./IdentifyDialog";
-import { CardGridSkeleton } from "./Skeleton";
-import type { RadioMode } from "../store/player";
-import type { PlaylistRow } from "../hooks/usePlaylists";
+import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
+import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
+import { Pagination } from "../features/tags/components/TagsViewHelpers";
+import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
+import { CardGridSkeleton } from "../ui/Skeleton";
+import type { RadioMode } from "../features/playback/store/playerTypes";
+import type { PlaylistRow } from "../features/playlists/usePlaylists";
 import "./AlbumGrid.css";
 
 const PAGE_SIZE = 100;
@@ -248,6 +248,13 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     paddingEnd: PADDING,
   });
 
+  const topRowIndex = virtualizer.getVirtualItemForOffset(virtualizer.scrollOffset ?? 0)?.index ?? 0;
+  let activeSection: string | undefined;
+  for (const section of scrubberSections) {
+    if (section.rowIndex > topRowIndex) break;
+    activeSection = section.label;
+  }
+
   // Keyed by sort because each sort is a different ordering of the same rows,
   // so an offset taken under one is meaningless under another.
   useScrollMemory(containerRef, `albums:${sort ?? "default"}`, rows.length > 0);
@@ -361,7 +368,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           {scrubberSections.map(({ label, rowIndex }) => (
             <button
               key={label}
-              className="album-grid-scrubber-item"
+              className={`album-grid-scrubber-item${label === activeSection ? " album-grid-scrubber-item--active" : ""}`}
+              aria-current={label === activeSection ? "true" : undefined}
               onClick={() => virtualizer.scrollToIndex(rowIndex, { align: "start" })}
             >
               {label}

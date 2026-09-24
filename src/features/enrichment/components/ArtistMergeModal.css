@@ -1,0 +1,165 @@
+/* .merge-overlay: shared shape in styles/base.css */
+
+.merge-dialog {
+  /* border/radius/display/flex-direction: shared shell in styles/base.css */
+  background: var(--bg-card);
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 80px);
+  box-shadow: var(--shadow-2xl) var(--scrim-3);
+}
+
+/* ── Header ── */
+.merge-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg) var(--space-md);
+  border-bottom: 1px solid var(--border, var(--tint-3));
+  flex-shrink: 0;
+}
+
+.merge-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary, #fff);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.merge-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, var(--overlay-50));
+  cursor: pointer;
+  padding: var(--space-2xs);
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+}
+
+.merge-close:hover {
+  color: var(--text-primary, #fff);
+  background: var(--tint-3);
+}
+
+/* ── Body ── */
+.merge-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-md) var(--space-lg);
+  gap: var(--space-sm);
+}
+
+.merge-description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary, var(--overlay-60));
+  margin: 0;
+  line-height: 1.5;
+}
+
+.merge-description strong {
+  color: var(--text-primary, #fff);
+}
+
+.merge-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+}
+
+.merge-field-label {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-secondary, var(--overlay-50));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Base shape shared with .spm-input and .identify-field > input, see styles/base.css. */
+.merge-search {
+  box-sizing: border-box;
+}
+
+.merge-list {
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border, var(--tint-3));
+  border-radius: var(--radius-base);
+  min-height: 0;
+  max-height: 240px;
+}
+
+.merge-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-xs) var(--space-sm);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border, var(--tint-2));
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--text-primary, #fff);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--motion-fast, 120ms);
+}
+
+.merge-candidate:last-child {
+  border-bottom: none;
+}
+
+.merge-candidate:hover {
+  background: var(--tint-2);
+  border-color: transparent;
+  border-bottom-color: var(--border, var(--tint-2));
+}
+
+.merge-candidate--selected {
+  background: rgba(57, 108, 216, 0.18);
+  color: #fff;
+}
+
+.merge-candidate--selected:hover {
+  background: rgba(57, 108, 216, 0.26);
+}
+
+.merge-candidate-meta {
+  font-size: var(--text-xs);
+  color: var(--text-secondary, var(--overlay-50));
+  flex-shrink: 0;
+  margin-left: var(--space-xs);
+}
+
+.merge-empty {
+  padding: var(--space-md) var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--text-secondary, var(--overlay-40));
+  margin: 0;
+}
+
+/* ── Footer ── */
+.merge-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-sm) var(--space-lg);
+  border-top: 1px solid var(--border, var(--tint-3));
+  flex-shrink: 0;
+}
+
+/* Shared shape in styles/base.css (.identify-btn, .merge-btn, .spm-btn). */
+
+.merge-btn--primary:disabled {
+  opacity: var(--opacity-40);
+  cursor: not-allowed;
+}

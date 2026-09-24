@@ -13,7 +13,7 @@ import { useEffect, useRef } from "react";
  * This is the *second* of the two mechanisms that dismiss the palette, and the narrower one.
  * `useAppNavigation` dismisses on the intent to navigate, which covers every navigation the app
  * offers the user, including the ones that move the router nowhere and so cannot be seen here.
- * What is left for this hook is a route navigating on its own - AppRoutes sending the user back
+ * What is left for this hook is a route navigating on its own - DetailRoutes sending the user back
  * to /playlists after deleting one - which never passes through that hook at all.
  *
  * Takes one `dismiss` callback rather than a list of overlays: a new overlay is added by

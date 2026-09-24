@@ -6,7 +6,7 @@ import type { ArtistRow } from "../types/library";
 export type { ArtistRow } from "../types/library";
 
 // Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
-// split"). Mirrors useAlbums.ts - reads via src-tauri/src/library_read.rs's dedicated
+// split"). Mirrors useAlbums.ts - reads via src-tauri/src/library_read/artists.rs's dedicated
 // read-only connection instead of tauri-plugin-sql's sqlx pool. Writes/migrations for
 // `artists` stay on tauri-plugin-sql.
 // `enabled` lets the app root skip this fetch on routes that never render an artist

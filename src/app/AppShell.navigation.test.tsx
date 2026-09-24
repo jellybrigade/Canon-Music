@@ -50,7 +50,7 @@ vi.mock("./AppRoutes", () => ({
   },
 }));
 
-vi.mock("../components/PlayerBar", () => ({
+vi.mock("../features/playback/components/PlayerBar", () => ({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   PlayerBar: (props: any) => (
     <div data-testid="player-bar-stub">
@@ -74,7 +74,7 @@ vi.mock("../components/CommandPalette", () => ({
     ),
 }));
 
-vi.mock("../hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
+vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
 afterEach(() => {
   cleanup();

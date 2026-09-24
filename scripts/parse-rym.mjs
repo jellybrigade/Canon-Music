@@ -2,12 +2,13 @@
 /**
  * Parse RateYourMusic Hierarchy.txt into canon-tree.json
  *
- * Input:  scripts/data/rym-hierarchy.txt
- * Output: src/assets/canon-tree.json
+ * Input:  scripts/data/rym-hierarchy.txt, then scripts/data/custom-nodes.json appended after it
+ * Output: src/assets/canon-tree.json (or stdout with --stdout)
+ * Flags:  --input <txt>, --custom <json> override the two inputs
  *
- * Node format: { id, name, type, canonical_key, parents, section }
+ * Node format: { id, name, type, canonical_key, parents, sections }
  *   type: "genre" | "mood" | "category"
- *   section: "genres" | "descriptors" | "scenes-and-movements"
+ *   sections: every section the node appears under, in SECTION_ORDER
  *   parents: direct parent ids (empty for top-level nodes)
  */
 
@@ -17,14 +18,31 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
-const INPUT = join(ROOT, "scripts", "data", "rym-hierarchy.txt");
 const OUTPUT = join(ROOT, "src", "assets", "canon-tree.json");
+
+function flagValue(flag, fallback) {
+  const index = process.argv.indexOf(flag);
+  return index === -1 ? fallback : process.argv[index + 1];
+}
+
+const INPUT = flagValue("--input", join(ROOT, "scripts", "data", "rym-hierarchy.txt"));
+const CUSTOM = flagValue("--custom", join(ROOT, "scripts", "data", "custom-nodes.json"));
+const TO_STDOUT = process.argv.includes("--stdout");
 
 const SECTION_SLUGS = {
   Descriptors: "descriptors",
   Genres: "genres",
   "Scenes & Movements": "scenes-and-movements",
 };
+
+// Fixed rather than file order, so a re-scrape that reorders the sections changes nothing.
+const SECTION_ORDER = ["genres", "descriptors", "scenes-and-movements"];
+
+function addSection(node, section) {
+  if (node.sections.includes(section)) return;
+  node.sections.push(section);
+  node.sections.sort((a, b) => SECTION_ORDER.indexOf(a) - SECTION_ORDER.indexOf(b));
+}
 
 function slugify(name) {
   return name
@@ -104,12 +122,14 @@ for (const raw of lines) {
   if (nodesById.has(id)) {
     // Node already exists (DAG: multiple parents). Add new parent if not already listed.
     const existing = nodesById.get(id);
-    if (parentId && !existing.parents.includes(parentId)) {
+    // "Hardcore [Punk]" holds "Hardcore Punk": both slug to one id, which must not parent itself.
+    if (parentId && parentId !== id && !existing.parents.includes(parentId)) {
       existing.parents.push(parentId);
     }
     if (existing.type === "category" && type !== "category") {
       existing.type = type;
     }
+    addSection(existing, currentSection);
     // Push to stack so its children use it as parent
     stack.push({ depth, id, name });
   } else {
@@ -119,18 +139,36 @@ for (const raw of lines) {
       type,
       canonical_key: canonicalKey(name),
       parents: parentId ? [parentId] : [],
-      section: currentSection,
+      sections: [currentSection],
     };
     nodesById.set(id, node);
     stack.push({ depth, id, name });
   }
 }
 
-const nodes = Array.from(nodesById.values());
-console.log(`Parsed ${nodes.length} nodes`);
-console.log(`  genre: ${nodes.filter((n) => n.type === "genre").length}`);
-console.log(`  mood: ${nodes.filter((n) => n.type === "mood").length}`);
-console.log(`  category: ${nodes.filter((n) => n.type === "category").length}`);
+// Nodes RYM does not have. Appended here so the parser stays the tree's only writer.
+for (const custom of JSON.parse(readFileSync(CUSTOM, "utf8"))) {
+  if (nodesById.has(custom.id)) {
+    throw new Error(`custom node "${custom.id}" already exists in ${INPUT}; drop it from ${CUSTOM}`);
+  }
+  for (const parent of custom.parents) {
+    if (!nodesById.has(parent)) {
+      throw new Error(`custom node "${custom.id}" names missing parent "${parent}"`);
+    }
+  }
+  nodesById.set(custom.id, custom);
+}
 
-writeFileSync(OUTPUT, JSON.stringify({ nodes }, null, 2));
-console.log(`Written to ${OUTPUT}`);
+const nodes = Array.from(nodesById.values());
+const json = JSON.stringify({ nodes }, null, 2);
+
+if (TO_STDOUT) {
+  process.stdout.write(json);
+} else {
+  writeFileSync(OUTPUT, json);
+  console.log(`Parsed ${nodes.length} nodes`);
+  console.log(`  genre: ${nodes.filter((n) => n.type === "genre").length}`);
+  console.log(`  mood: ${nodes.filter((n) => n.type === "mood").length}`);
+  console.log(`  category: ${nodes.filter((n) => n.type === "category").length}`);
+  console.log(`Written to ${OUTPUT}`);
+}

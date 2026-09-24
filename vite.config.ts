@@ -8,8 +8,8 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react()],
 
-  // reference-projects/ holds unrelated third-party apps checked in for reference only;
-  // vite's dependency scanner otherwise crawls their imports and fails to resolve them.
+  // Vite's dependency scanner otherwise crawls every HTML file under the project root, and
+  // fails on any unrelated app checked out there.
   optimizeDeps: {
     entries: ["index.html", "src/**/*.{ts,tsx}"],
   },

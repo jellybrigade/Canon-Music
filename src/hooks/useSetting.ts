@@ -88,3 +88,9 @@ export async function refreshAllSettings(): Promise<void> {
     settingListeners.get(key)?.forEach((fn) => fn(value));
   }
 }
+
+// Test-only: the cache is module state, so a suite that swaps in a fresh database per case
+// would otherwise read the previous case's values.
+export function __resetSettingCache(): void {
+  settingCache.clear();
+}

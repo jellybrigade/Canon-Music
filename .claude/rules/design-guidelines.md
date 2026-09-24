@@ -2,14 +2,15 @@
 description: Design guidelines for components and styles - production-grade UI, tokens, color, motion, bans
 globs:
   - "src/components/**"
-  - "src/styles/**"
+  - "src/pages/**"
+  - "src/ui/**"
   - "src/app/**"
   - "src/**/*.css"
 ---
 
 # Design Guidelines
 
-Applies to `src/components/**`, `src/styles/**`. Ship production-grade: no unfinished states, no "good enough" spacing or contrast.
+Applies to UI code and every stylesheet (`src/components/**`, `src/pages/**`, `src/ui/**`, `src/app/**`, `src/**/*.css`). Ship production-grade: no unfinished states, no "good enough" spacing or contrast.
 
 Layout/spacing/hierarchy rules live in `design/layout.md`, type rules in `design/typeset.md` (both auto-loaded). Read on demand from `.claude/design-docs/`: `interaction-design.md` (complex forms, modals, settings panels), `animate.md`, `colorize.md`, `adapt.md`, `clarify.md` (copy, empty states, errors).
 
@@ -17,10 +18,10 @@ Layout/spacing/hierarchy rules live in `design/layout.md`, type rules in `design
 
 Never ship a raw literal (`opacity: 0.4`, `z-index: 1000`, `#1a1a1a`) where a token scale exists. Before writing any value:
 
-1. `grep -rn "^\s*--<prefix>-" src/App.css src/styles/` for the token family (`--opacity-*`, `--space-*`, `--z-*`, `--duration-*`, `--tint-*`, `--radius-*`, `--shadow-*`).
+1. `grep -rn "^\s*--<prefix>-" src/styles/tokens.css` for the token family (`--opacity-*`, `--space-*`, `--z-*`, `--duration-*`, `--tint-*`, `--radius-*`, `--shadow-*`).
 2. Pick the closest value to the intended visual result, checking neighbors (`--opacity-40` vs `--opacity-45`), not just the first hit.
 3. `grep -rn "var(--opacity-40)" src/` to see existing usage; matching a same-purpose site keeps consistency.
-4. Genuinely nothing fits → add a token to the scale in `App.css` next to its siblings. Never inline a magic number, never invent a one-off var outside the scale.
+4. Genuinely nothing fits → add a token to the scale in `src/styles/tokens.css` next to its siblings. Never inline a magic number, never invent a one-off var outside the scale.
 
 ## Color
 
@@ -56,7 +57,7 @@ Z-index from the scale (`--z-dropdown`, `--z-overlay`, `--z-modal`). Some files 
 - Identical repeated card grids (icon + heading + text x N) as default layout; nested cards.
 - Tiny uppercase tracked "eyebrow" labels above sections; 01/02/03 section markers outside a real ordered sequence.
 - Headings that overflow their container at any window size the app supports.
-- Reinvented standard affordances (custom scrollbars, replaced `<select>`, one-off modal chrome). **Exception:** the custom `appearance: none` checkbox in `src/App.css` is the app-wide style, user-confirmed 2026-07-14 - match it, don't revert to native.
+- Reinvented standard affordances (custom scrollbars, replaced `<select>`, one-off modal chrome). **Exception:** the custom `appearance: none` checkbox in `src/styles/base.css` is the app-wide style, user-confirmed 2026-07-14 - match it, don't revert to native.
 - Modal as first reach. Try inline editing or progressive disclosure; Canon already has `ArtistMergeModal`, `SmartPlaylistModal`, `IdentifyDialog` and doesn't need a fourth pattern.
 
 ## What's fine (don't over-correct)

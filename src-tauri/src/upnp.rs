@@ -226,6 +226,76 @@ fn parse_response(text: &str) -> Option<RawRenderer> {
     })
 }
 
+#[tauri::command]
+pub async fn discover_upnp_renderers(timeout_ms: u64) -> Result<Vec<ResolvedRenderer>, String> {
+    // Run blocking SSDP discovery + HTTP description fetches on a thread.
+    tokio::task::spawn_blocking(move || discover_and_resolve(timeout_ms))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+static SOAP_CLIENT: std::sync::OnceLock<reqwest::blocking::Client> = std::sync::OnceLock::new();
+
+fn soap_client() -> &'static reqwest::blocking::Client {
+    SOAP_CLIENT.get_or_init(|| {
+        reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("reqwest SOAP client init failed")
+    })
+}
+
+// Pulls the text of the first `<tag>...</tag>` out of an XML document, ignoring any
+// namespace prefix on the tag. Deliberately minimal: it only has to read the two
+// fields of a UPnP SOAP fault, which are plain text with no nesting.
+fn xml_first_tag_text(xml: &str, tag: &str) -> Option<String> {
+    let open = format!("{tag}>");
+    let start = xml.find(&open)? + open.len();
+    let rest = &xml[start..];
+    let end = rest.find("</")?;
+    let value = rest[..end].trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
+    }
+}
+
+#[tauri::command]
+pub async fn upnp_soap(url: String, soap_action: String, body: String) -> Result<String, String> {
+    // CORS blocks native WebView fetch() for LAN UPnP devices; proxy through Rust.
+    tokio::task::spawn_blocking(move || {
+        let resp = soap_client()
+            .post(&url)
+            .header("Content-Type", "text/xml; charset=utf-8")
+            .header("SOAPAction", &soap_action)
+            .body(body)
+            .send()
+            .map_err(|e| e.to_string())?;
+        let status = resp.status();
+        let text = resp.text().map_err(|e| e.to_string())?;
+        // UPnP signals every action failure as HTTP 500 with a SOAP fault body. Returning
+        // Ok here would make an unsupported action look like a successful one, so the
+        // caller's fallback path could never run. Surface the fault as an Err instead.
+        if status.as_u16() == 500 {
+            let code = xml_first_tag_text(&text, "errorCode");
+            let desc = xml_first_tag_text(&text, "errorDescription");
+            return Err(match (code, desc) {
+                (Some(c), Some(d)) => format!("UPnP error {c}: {d}"),
+                (Some(c), None) => format!("UPnP error {c}"),
+                (None, Some(d)) => format!("UPnP error: {d}"),
+                (None, None) => "UPnP SOAP fault (HTTP 500)".to_string(),
+            });
+        }
+        if !status.is_success() {
+            return Err(format!("SOAP failed: {status}"));
+        }
+        Ok(text)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,5 +547,73 @@ mod tests {
         let text = "HTTP/1.1 200 OK\r\nEXT\r\nLOCATION: http://h/d.xml\r\n\r\n";
         let r = parse_response(text).expect("a valueless EXT line must not abort parsing");
         assert_eq!(r.location, "http://h/d.xml");
+    }
+
+    // ── xml_first_tag_text ────────────────────────────────────────────────────
+
+    #[test]
+    fn xml_first_tag_text_extracts_a_soap_fault_field() {
+        let xml = "<s:Fault><detail><UPnPError>\
+             <errorCode>701</errorCode>\
+             <errorDescription>Transition not available</errorDescription>\
+             </UPnPError></detail></s:Fault>";
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("701".to_string())
+        );
+        assert_eq!(
+            xml_first_tag_text(xml, "errorDescription"),
+            Some("Transition not available".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_matches_a_tag_that_carries_a_namespace_prefix() {
+        let xml = "<u:errorCode>718</u:errorCode>";
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("718".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_trims_surrounding_whitespace() {
+        let xml = "<errorDescription>\n   Invalid Action  \n</errorDescription>";
+        assert_eq!(
+            xml_first_tag_text(xml, "errorDescription"),
+            Some("Invalid Action".to_string())
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_when_the_tag_is_absent() {
+        assert_eq!(xml_first_tag_text("<s:Fault/>", "errorCode"), None);
+        assert_eq!(xml_first_tag_text("", "errorCode"), None);
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_for_an_empty_or_whitespace_only_value() {
+        assert_eq!(
+            xml_first_tag_text("<errorCode></errorCode>", "errorCode"),
+            None
+        );
+        assert_eq!(
+            xml_first_tag_text("<errorCode>   </errorCode>", "errorCode"),
+            None
+        );
+    }
+
+    #[test]
+    fn xml_first_tag_text_returns_none_when_the_element_is_never_closed() {
+        assert_eq!(xml_first_tag_text("<errorCode>701", "errorCode"), None);
+    }
+
+    #[test]
+    fn xml_first_tag_text_takes_the_first_occurrence_when_a_tag_repeats() {
+        let xml = "<errorCode>701</errorCode><errorCode>402</errorCode>";
+        assert_eq!(
+            xml_first_tag_text(xml, "errorCode"),
+            Some("701".to_string())
+        );
     }
 }

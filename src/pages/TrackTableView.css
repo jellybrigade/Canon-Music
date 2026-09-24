@@ -1,0 +1,39 @@
+.track-skeleton-list {
+  padding: var(--space-xs) 0;
+}
+
+.track-skeleton-row {
+  display: grid;
+  align-items: center;
+  gap: var(--space-sm);
+  height: 40px;
+  padding: 0 var(--space-sm);
+}
+
+.track-skeleton-row:nth-child(2n) .track-skeleton-bar { animation-delay: 0.12s; }
+.track-skeleton-row:nth-child(3n) .track-skeleton-bar { animation-delay: 0.24s; }
+
+/* ── Track table: selected row + sortable header buttons ── */
+.track-table-row--selected {
+  background-color: var(--tint-3);
+}
+
+.track-sort-btn {
+  background: none;
+  border: none;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+  padding: var(--space-2xs) var(--space-xs);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.track-sort-btn:hover {
+  color: var(--text-primary);
+}
