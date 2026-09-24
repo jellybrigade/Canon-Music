@@ -1,7 +1,7 @@
 .radio-start-dialog {
   /* border/radius/display/flex-direction: shared shell in styles/base.css */
   background: var(--bg-card);
-  width: 400px;
+  width: 440px;
   max-width: calc(100vw - 48px);
   box-shadow: var(--shadow-2xl) var(--scrim-3);
 }
@@ -67,6 +67,7 @@
   gap: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--text-secondary);
+  white-space: nowrap;
   cursor: pointer;
 }
 
