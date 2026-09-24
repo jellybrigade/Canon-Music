@@ -1,10 +1,11 @@
 ---
 description: Known async/lifecycle bugs already shipped once - full detail
-globs:
+paths:
   - "src/store/**"
   - "src/hooks/**"
   - "src/lib/**"
   - "src-tauri/**"
+  - "src/features/**"
 ---
 
 # Async / lifecycle

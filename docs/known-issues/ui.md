@@ -1,7 +1,8 @@
 ---
 description: Known UI bugs already shipped once - full detail
-globs:
+paths:
   - "src/components/**"
+  - "src/features/**"
   - "src/app/**"
   - "src/**/*.css"
 ---

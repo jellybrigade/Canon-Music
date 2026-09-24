@@ -1,9 +1,10 @@
 ---
 description: Known Linux/WebKitGTK/audio platform bugs already shipped once - full detail
-globs:
+paths:
   - "src-tauri/**"
   - "src/hooks/**"
   - "src/components/**"
+  - "src/features/**"
 ---
 
 # Platform (Linux / WebKitGTK / audio)

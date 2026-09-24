@@ -1,6 +1,6 @@
 ---
 description: Known test/harness bugs already shipped once - full detail
-globs:
+paths:
   - "src/**/*.test.ts"
   - "src/**/*.test.tsx"
   - "src/test/**"

@@ -180,7 +180,7 @@ Canon/
 │   ├── tests.md               TDD plan, baseline checklist, progress log
 │   ├── coding-standards.md    Naming, comments, TS/React/Rust/SQL rules
 │   ├── git-standards.md       Branching, commit format, pre-commit checklist
-│   ├── known-issues.md        Index of shipped bug classes (lesson headings)
+│   ├── known-issues.md        Area pointers to known-issues/<area>.md
 │   ├── known-issues/          Entries (lesson, fix, grep) per area; frontmatter globs scope Claude Code loading
 │   ├── known-issues-history.md Backstory behind trimmed entries, read on demand, not auto-loaded
 │   └── features/              One technical draft per feature (written by /docs)

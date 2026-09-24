@@ -1,7 +1,8 @@
 ---
 description: Layout, spacing and grid rules for components and styles
-globs:
+paths:
   - "src/components/**"
+  - "src/features/**"
   - "src/pages/**"
   - "src/ui/**"
   - "src/app/**"

@@ -1,12 +1,13 @@
 ---
 description: Known data/state bugs already shipped once - full detail
-globs:
+paths:
   - "src/lib/**"
   - "src/db/**"
   - "src/hooks/**"
   - "src/store/**"
   - "src/app/**"
   - "src/components/**"
+  - "src/features/**"
 ---
 
 # Data / state
