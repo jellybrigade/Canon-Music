@@ -107,6 +107,18 @@
       ]
     },
     {
+      "id": "gothic",
+      "name": "Gothic",
+      "type": "mood",
+      "canonical_key": "gothic",
+      "parents": [
+        "dark"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "infernal",
       "name": "Infernal",
       "type": "mood",
@@ -323,6 +335,18 @@
       ]
     },
     {
+      "id": "grassland",
+      "name": "Grassland",
+      "type": "mood",
+      "canonical_key": "grassland",
+      "parents": [
+        "natural"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "mountains",
       "name": "Mountains",
       "type": "mood",
@@ -363,6 +387,30 @@
       "name": "Tropical",
       "type": "mood",
       "canonical_key": "tropical",
+      "parents": [
+        "natural"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "wetland",
+      "name": "Wetland",
+      "type": "mood",
+      "canonical_key": "wetland",
+      "parents": [
+        "natural"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "wind",
+      "name": "Wind",
+      "type": "mood",
+      "canonical_key": "wind",
       "parents": [
         "natural"
       ],
@@ -419,10 +467,10 @@
       ]
     },
     {
-      "id": "pyschedelic",
-      "name": "Pyschedelic",
+      "id": "psychedelic",
+      "name": "Psychedelic",
       "type": "mood",
-      "canonical_key": "pyschedelic",
+      "canonical_key": "psychedelic",
       "parents": [
         "atmosphere"
       ],
@@ -786,20 +834,6 @@
       ]
     },
     {
-      "id": "novelty",
-      "name": "Novelty",
-      "type": "mood",
-      "canonical_key": "novelty",
-      "parents": [
-        "form",
-        "descriptor"
-      ],
-      "sections": [
-        "genres",
-        "descriptors"
-      ]
-    },
-    {
       "id": "parody",
       "name": "Parody",
       "type": "mood",
@@ -966,6 +1000,30 @@
       ]
     },
     {
+      "id": "epistolary",
+      "name": "Epistolary",
+      "type": "mood",
+      "canonical_key": "epistolary",
+      "parents": [
+        "lyrics"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "list-song",
+      "name": "List song",
+      "type": "mood",
+      "canonical_key": "list song",
+      "parents": [
+        "lyrics"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "lyrical-dissonance",
       "name": "Lyrical dissonance",
       "type": "mood",
@@ -1042,6 +1100,18 @@
       "name": "Boastful",
       "type": "mood",
       "canonical_key": "boastful",
+      "parents": [
+        "tone"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "cautionary",
+      "name": "Cautionary",
+      "type": "mood",
+      "canonical_key": "cautionary",
       "parents": [
         "tone"
       ],
@@ -1222,6 +1292,18 @@
       "name": "Sarcastic",
       "type": "mood",
       "canonical_key": "sarcastic",
+      "parents": [
+        "tone"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "sassy",
+      "name": "Sassy",
+      "type": "mood",
+      "canonical_key": "sassy",
       "parents": [
         "tone"
       ],
@@ -1730,6 +1812,18 @@
       ]
     },
     {
+      "id": "clanging",
+      "name": "Clanging",
+      "type": "mood",
+      "canonical_key": "clanging",
+      "parents": [
+        "style"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "complex",
       "name": "Complex",
       "type": "mood",
@@ -1778,10 +1872,34 @@
       ]
     },
     {
+      "id": "skronky",
+      "name": "Skronky",
+      "type": "mood",
+      "canonical_key": "skronky",
+      "parents": [
+        "dissonant"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "eclectic",
       "name": "Eclectic",
       "type": "mood",
       "canonical_key": "eclectic",
+      "parents": [
+        "style"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "four-on-the-floor",
+      "name": "Four on the floor",
+      "type": "mood",
+      "canonical_key": "four on the floor",
       "parents": [
         "style"
       ],
@@ -2150,6 +2268,18 @@
       ]
     },
     {
+      "id": "warbly",
+      "name": "Warbly",
+      "type": "mood",
+      "canonical_key": "warbly",
+      "parents": [
+        "style"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "technique",
       "name": "Technique",
       "type": "category",
@@ -2283,6 +2413,18 @@
       ]
     },
     {
+      "id": "mixed-meter",
+      "name": "Mixed meter",
+      "type": "mood",
+      "canonical_key": "mixed meter",
+      "parents": [
+        "composition"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "polyrhythm",
       "name": "Polyrhythm",
       "type": "mood",
@@ -2325,6 +2467,18 @@
       "canonical_key": "uncommon time signatures",
       "parents": [
         "composition"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "interpolation",
+      "name": "Interpolation",
+      "type": "mood",
+      "canonical_key": "interpolation",
+      "parents": [
+        "technique"
       ],
       "sections": [
         "descriptors"
@@ -2407,6 +2561,18 @@
       "name": "Rubato",
       "type": "mood",
       "canonical_key": "rubato",
+      "parents": [
+        "technique"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "tone-clusters",
+      "name": "Tone clusters",
+      "type": "mood",
+      "canonical_key": "tone clusters",
       "parents": [
         "technique"
       ],
@@ -2522,10 +2688,34 @@
       ]
     },
     {
+      "id": "alter-ego",
+      "name": "Alter ego",
+      "type": "mood",
+      "canonical_key": "alter ego",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "apology",
       "name": "Apology",
       "type": "mood",
       "canonical_key": "apology",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "aviation",
+      "name": "Aviation",
+      "type": "mood",
+      "canonical_key": "aviation",
       "parents": [
         "theme"
       ],
@@ -2583,6 +2773,18 @@
       ]
     },
     {
+      "id": "boredom",
+      "name": "Boredom",
+      "type": "mood",
+      "canonical_key": "boredom",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "callback",
       "name": "Callback",
       "type": "mood",
@@ -2599,6 +2801,18 @@
       "name": "Childhood",
       "type": "mood",
       "canonical_key": "childhood",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "circus",
+      "name": "Circus",
+      "type": "mood",
+      "canonical_key": "circus",
       "parents": [
         "theme"
       ],
@@ -2671,6 +2885,18 @@
       "name": "Courage",
       "type": "mood",
       "canonical_key": "courage",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "creative-process",
+      "name": "Creative process",
+      "type": "mood",
+      "canonical_key": "creative process",
       "parents": [
         "theme"
       ],
@@ -2782,6 +3008,18 @@
       "canonical_key": "drought",
       "parents": [
         "disaster"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "dishonesty",
+      "name": "Dishonesty",
+      "type": "mood",
+      "canonical_key": "dishonesty",
+      "parents": [
+        "theme"
       ],
       "sections": [
         "descriptors"
@@ -3097,6 +3335,30 @@
       "canonical_key": "cosmetics",
       "parents": [
         "fashion"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "jewelry",
+      "name": "Jewelry",
+      "type": "mood",
+      "canonical_key": "jewelry",
+      "parents": [
+        "fashion"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "fear",
+      "name": "Fear",
+      "type": "mood",
+      "canonical_key": "fear",
+      "parents": [
+        "theme"
       ],
       "sections": [
         "descriptors"
@@ -3479,6 +3741,18 @@
       ]
     },
     {
+      "id": "homesickness",
+      "name": "Homesickness",
+      "type": "mood",
+      "canonical_key": "homesickness",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "horror",
       "name": "Horror",
       "type": "mood",
@@ -3509,6 +3783,18 @@
       "canonical_key": "ideology",
       "parents": [
         "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "anticonsumerism",
+      "name": "Anticonsumerism",
+      "type": "mood",
+      "canonical_key": "anticonsumerism",
+      "parents": [
+        "ideology"
       ],
       "sections": [
         "descriptors"
@@ -3876,6 +4162,42 @@
       ]
     },
     {
+      "id": "kissing",
+      "name": "Kissing",
+      "type": "mood",
+      "canonical_key": "kissing",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "law",
+      "name": "Law",
+      "type": "mood",
+      "canonical_key": "law",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "police",
+      "name": "Police",
+      "type": "mood",
+      "canonical_key": "police",
+      "parents": [
+        "law"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "leisure",
       "name": "Leisure",
       "type": "mood",
@@ -3989,6 +4311,18 @@
       "name": "Breakup",
       "type": "mood",
       "canonical_key": "breakup",
+      "parents": [
+        "love"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "long-distance-relationship",
+      "name": "Long-distance relationship",
+      "type": "mood",
+      "canonical_key": "longdistance relationship",
       "parents": [
         "love"
       ],
@@ -4118,6 +4452,30 @@
       ]
     },
     {
+      "id": "exile",
+      "name": "Exile",
+      "type": "mood",
+      "canonical_key": "exile",
+      "parents": [
+        "migration"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "monarchy",
+      "name": "Monarchy",
+      "type": "mood",
+      "canonical_key": "monarchy",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "money",
       "name": "Money",
       "type": "mood",
@@ -4226,10 +4584,34 @@
       ]
     },
     {
+      "id": "bugs",
+      "name": "Bugs",
+      "type": "mood",
+      "canonical_key": "bugs",
+      "parents": [
+        "animals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "cats",
       "name": "Cats",
       "type": "mood",
       "canonical_key": "cats",
+      "parents": [
+        "animals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "dogs",
+      "name": "Dogs",
+      "type": "mood",
+      "canonical_key": "dogs",
       "parents": [
         "animals"
       ],
@@ -4346,6 +4728,18 @@
       ]
     },
     {
+      "id": "older-adulthood",
+      "name": "Older adulthood",
+      "type": "mood",
+      "canonical_key": "older adulthood",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "paranoia",
       "name": "Paranoia",
       "type": "mood",
@@ -4418,10 +4812,10 @@
       ]
     },
     {
-      "id": "pirates",
-      "name": "Pirates",
+      "id": "phones",
+      "name": "Phones",
       "type": "mood",
-      "canonical_key": "pirates",
+      "canonical_key": "phones",
       "parents": [
         "theme"
       ],
@@ -4430,10 +4824,10 @@
       ]
     },
     {
-      "id": "police",
-      "name": "Police",
+      "id": "pirates",
+      "name": "Pirates",
       "type": "mood",
-      "canonical_key": "police",
+      "canonical_key": "pirates",
       "parents": [
         "theme"
       ],
@@ -4556,6 +4950,18 @@
       "canonical_key": "sexual",
       "parents": [
         "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "kink",
+      "name": "Kink",
+      "type": "mood",
+      "canonical_key": "kink",
+      "parents": [
+        "sexual"
       ],
       "sections": [
         "descriptors"
@@ -4718,6 +5124,18 @@
       ]
     },
     {
+      "id": "success",
+      "name": "Success",
+      "type": "mood",
+      "canonical_key": "success",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "technology",
       "name": "Technology",
       "type": "mood",
@@ -4818,6 +5236,18 @@
       "name": "Trains",
       "type": "mood",
       "canonical_key": "trains",
+      "parents": [
+        "vehicles"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "trucks",
+      "name": "Trucks",
+      "type": "mood",
+      "canonical_key": "trucks",
       "parents": [
         "vehicles"
       ],
@@ -5088,6 +5518,30 @@
       ]
     },
     {
+      "id": "gurgling-vocals",
+      "name": "Gurgling vocals",
+      "type": "mood",
+      "canonical_key": "gurgling vocals",
+      "parents": [
+        "growling"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "pig-squealing",
+      "name": "Pig squealing",
+      "type": "mood",
+      "canonical_key": "pig squealing",
+      "parents": [
+        "harsh-vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "shrieking",
       "name": "Shrieking",
       "type": "mood",
@@ -5104,6 +5558,18 @@
       "name": "Male vocalist",
       "type": "mood",
       "canonical_key": "male vocalist",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "murmuring",
+      "name": "Murmuring",
+      "type": "mood",
+      "canonical_key": "murmuring",
       "parents": [
         "vocals"
       ],
@@ -5196,6 +5662,18 @@
       ]
     },
     {
+      "id": "stuttering-vocals",
+      "name": "Stuttering vocals",
+      "type": "mood",
+      "canonical_key": "stuttering vocals",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "talk-singing",
       "name": "Talk-singing",
       "type": "mood",
@@ -5208,10 +5686,46 @@
       ]
     },
     {
+      "id": "throat-singing",
+      "name": "Throat singing",
+      "type": "mood",
+      "canonical_key": "throat singing",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "toasting",
+      "name": "Toasting",
+      "type": "mood",
+      "canonical_key": "toasting",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "whispering",
       "name": "Whispering",
       "type": "mood",
       "canonical_key": "whispering",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "whistle-register",
+      "name": "Whistle register",
+      "type": "mood",
+      "canonical_key": "whistle register",
       "parents": [
         "vocals"
       ],
@@ -5677,6 +6191,18 @@
       ]
     },
     {
+      "id": "yanyue",
+      "name": "Yanyue",
+      "type": "genre",
+      "canonical_key": "yanyue",
+      "parents": [
+        "chinese-classical-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "yayue",
       "name": "Yayue",
       "type": "genre",
@@ -6051,6 +6577,20 @@
       ]
     },
     {
+      "id": "bayawan",
+      "name": "Bayawan",
+      "type": "genre",
+      "canonical_key": "bayawan",
+      "parents": [
+        "maqamic-music",
+        "traditional-folk-music",
+        "uyghur-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "persian-classical-music",
       "name": "Persian Classical Music",
       "type": "genre",
@@ -6282,6 +6822,18 @@
       ]
     },
     {
+      "id": "tappa",
+      "name": "Tappa",
+      "type": "genre",
+      "canonical_key": "tappa",
+      "parents": [
+        "hindustani-classical-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "tarana",
       "name": "Tarana",
       "type": "genre",
@@ -6373,6 +6925,18 @@
       "name": "Gamelan angklung",
       "type": "genre",
       "canonical_key": "gamelan angklung",
+      "parents": [
+        "balinese-gamelan"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "gamelan-gambang",
+      "name": "Gamelan gambang",
+      "type": "genre",
+      "canonical_key": "gamelan gambang",
       "parents": [
         "balinese-gamelan"
       ],
@@ -6784,6 +7348,19 @@
       ]
     },
     {
+      "id": "spiritual-art-song",
+      "name": "Spiritual Art Song",
+      "type": "genre",
+      "canonical_key": "spiritual art song",
+      "parents": [
+        "art-song",
+        "concert-spiritual"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "bagatelle",
       "name": "Bagatelle",
       "type": "genre",
@@ -7012,6 +7589,18 @@
       ]
     },
     {
+      "id": "impromptu",
+      "name": "Impromptu",
+      "type": "genre",
+      "canonical_key": "impromptu",
+      "parents": [
+        "character-piece"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "nocturne",
       "name": "Nocturne",
       "type": "genre",
@@ -7223,18 +7812,6 @@
       ]
     },
     {
-      "id": "impromptu",
-      "name": "Impromptu",
-      "type": "genre",
-      "canonical_key": "impromptu",
-      "parents": [
-        "western-classical-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "latin-american-classical-music",
       "name": "Latin American Classical Music",
       "type": "genre",
@@ -7347,6 +7924,31 @@
       "canonical_key": "medieval lyric poetry",
       "parents": [
         "medieval-classical-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "minnesang",
+      "name": "Minnesang",
+      "type": "genre",
+      "canonical_key": "minnesang",
+      "parents": [
+        "medieval-lyric-poetry",
+        "german-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "troubador-song",
+      "name": "Troubador Song",
+      "type": "genre",
+      "canonical_key": "troubador song",
+      "parents": [
+        "medieval-lyric-poetry"
       ],
       "sections": [
         "genres"
@@ -7524,7 +8126,8 @@
         "modern-classical"
       ],
       "sections": [
-        "genres"
+        "genres",
+        "scenes-and-movements"
       ]
     },
     {
@@ -8153,6 +8756,20 @@
       "canonical_key": "serenade",
       "parents": [
         "western-classical-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "seresta",
+      "name": "Seresta",
+      "type": "genre",
+      "canonical_key": "seresta",
+      "parents": [
+        "serenade",
+        "modinha",
+        "southeastern-brazilian-music"
       ],
       "sections": [
         "genres"
@@ -8943,6 +9560,19 @@
       ]
     },
     {
+      "id": "hard-renaissance",
+      "name": "Hard Renaissance",
+      "type": "genre",
+      "canonical_key": "hard renaissance",
+      "parents": [
+        "artcore",
+        "hardcore-edm"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "balani-show",
       "name": "Balani Show",
       "type": "genre",
@@ -9061,6 +9691,18 @@
       "name": "Hardcore Breaks",
       "type": "genre",
       "canonical_key": "hardcore breaks",
+      "parents": [
+        "breakbeat-hardcore"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "jungle-techno",
+      "name": "Jungle Techno",
+      "type": "genre",
+      "canonical_key": "jungle techno",
       "parents": [
         "breakbeat-hardcore"
       ],
@@ -9250,6 +9892,18 @@
       "sections": [
         "genres",
         "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "dark-disco",
+      "name": "Dark Disco",
+      "type": "genre",
+      "canonical_key": "dark disco",
+      "parents": [
+        "electronic-dance-music"
+      ],
+      "sections": [
+        "genres"
       ]
     },
     {
@@ -9894,6 +10548,31 @@
       "canonical_key": "hard beat",
       "parents": [
         "new-beat"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "skizzo",
+      "name": "Skizzo",
+      "type": "genre",
+      "canonical_key": "skizzo",
+      "parents": [
+        "new-beat"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "tbm",
+      "name": "TBM",
+      "type": "genre",
+      "canonical_key": "tbm",
+      "parents": [
+        "ebm",
+        "techno"
       ],
       "sections": [
         "genres"
@@ -10670,7 +11349,7 @@
       "canonical_key": "digital hardcore",
       "parents": [
         "hardcore-edm",
-        "punk"
+        "punk-post-punk-hardcore"
       ],
       "sections": [
         "genres"
@@ -10732,6 +11411,18 @@
       "canonical_key": "gabber",
       "parents": [
         "hardcore-edm"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "dutch-trancecore",
+      "name": "Dutch Trancecore",
+      "type": "genre",
+      "canonical_key": "dutch trancecore",
+      "parents": [
+        "gabber"
       ],
       "sections": [
         "genres"
@@ -10841,6 +11532,18 @@
       "canonical_key": "uptempo hardcore",
       "parents": [
         "hardcore-edm"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "hardtekk",
+      "name": "Hardtekk",
+      "type": "genre",
+      "canonical_key": "hardtekk",
+      "parents": [
+        "electronic-dance-music"
       ],
       "sections": [
         "genres"
@@ -11559,6 +12262,18 @@
       ]
     },
     {
+      "id": "epic-house",
+      "name": "Epic House",
+      "type": "genre",
+      "canonical_key": "epic house",
+      "parents": [
+        "progressive-house"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "speed-garage",
       "name": "Speed Garage",
       "type": "genre",
@@ -11851,6 +12566,19 @@
       ]
     },
     {
+      "id": "outrun",
+      "name": "Outrun",
+      "type": "genre",
+      "canonical_key": "outrun",
+      "parents": [
+        "electronic-dance-music",
+        "synthwave"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "post-dubstep",
       "name": "Post-Dubstep",
       "type": "genre",
@@ -12131,6 +12859,18 @@
       ]
     },
     {
+      "id": "toytown-techno",
+      "name": "Toytown Techno",
+      "type": "genre",
+      "canonical_key": "toytown techno",
+      "parents": [
+        "electronic-dance-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "trance",
       "name": "Trance",
       "type": "genre",
@@ -12171,6 +12911,18 @@
       "name": "Dream Trance",
       "type": "genre",
       "canonical_key": "dream trance",
+      "parents": [
+        "trance"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "electro-trance",
+      "name": "Electro Trance",
+      "type": "genre",
+      "canonical_key": "electro trance",
       "parents": [
         "trance"
       ],
@@ -12835,6 +13587,19 @@
       ]
     },
     {
+      "id": "dungeon-chip",
+      "name": "Dungeon Chip",
+      "type": "genre",
+      "canonical_key": "dungeon chip",
+      "parents": [
+        "bit-music",
+        "dungeon-synth"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "fm-synthesis",
       "name": "FM Synthesis",
       "type": "genre",
@@ -13078,6 +13843,18 @@
       ]
     },
     {
+      "id": "keller-synth",
+      "name": "Keller Synth",
+      "type": "genre",
+      "canonical_key": "keller synth",
+      "parents": [
+        "dungeon-synth"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "winter-synth",
       "name": "Winter Synth",
       "type": "genre",
@@ -13146,8 +13923,7 @@
       "type": "genre",
       "canonical_key": "eai",
       "parents": [
-        "electroacoustic",
-        "free-improvisation"
+        "electroacoustic"
       ],
       "sections": [
         "genres"
@@ -13596,7 +14372,8 @@
       "type": "genre",
       "canonical_key": "berlin school",
       "parents": [
-        "progressive-electronic"
+        "progressive-electronic",
+        "krautrock"
       ],
       "sections": [
         "genres"
@@ -13609,7 +14386,7 @@
       "canonical_key": "synth punk",
       "parents": [
         "electronic",
-        "punk"
+        "punk-post-punk-hardcore"
       ],
       "sections": [
         "genres"
@@ -13679,16 +14456,15 @@
       ]
     },
     {
-      "id": "sovietwave",
-      "name": "Sovietwave",
+      "id": "dreamwave",
+      "name": "Dreamwave",
       "type": "genre",
-      "canonical_key": "sovietwave",
+      "canonical_key": "dreamwave",
       "parents": [
         "synthwave"
       ],
       "sections": [
-        "genres",
-        "scenes-and-movements"
+        "genres"
       ]
     },
     {
@@ -14035,6 +14811,18 @@
       ]
     },
     {
+      "id": "cut-up-noise",
+      "name": "Cut-Up Noise",
+      "type": "genre",
+      "canonical_key": "cutup noise",
+      "parents": [
+        "harsh-noise"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "harsh-noise-wall",
       "name": "Harsh Noise Wall",
       "type": "genre",
@@ -14299,6 +15087,20 @@
       "canonical_key": "indie folk",
       "parents": [
         "contemporary-folk"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "jibonmukhi-gaan",
+      "name": "Jibonmukhi gaan",
+      "type": "genre",
+      "canonical_key": "jibonmukhi gaan",
+      "parents": [
+        "contemporary-folk",
+        "south-asian-music",
+        "singer-songwriter"
       ],
       "sections": [
         "genres"
@@ -14612,6 +15414,18 @@
       ]
     },
     {
+      "id": "chakacha",
+      "name": "Chakacha",
+      "type": "genre",
+      "canonical_key": "chakacha",
+      "parents": [
+        "ngoma"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "unyago",
       "name": "Unyago",
       "type": "genre",
@@ -14824,10 +15638,10 @@
       ]
     },
     {
-      "id": "sacred-harp-singing",
-      "name": "Sacred Harp Singing",
+      "id": "shape-note-singing",
+      "name": "Shape Note Singing",
       "type": "genre",
-      "canonical_key": "sacred harp singing",
+      "canonical_key": "shape note singing",
       "parents": [
         "american-folk-music",
         "a-cappella",
@@ -14850,25 +15664,25 @@
       ]
     },
     {
-      "id": "talking-blues",
-      "name": "Talking Blues",
+      "id": "jubilee",
+      "name": "Jubilee",
       "type": "genre",
-      "canonical_key": "talking blues",
+      "canonical_key": "jubilee",
       "parents": [
-        "american-folk-music"
+        "concert-spiritual",
+        "barbershop"
       ],
       "sections": [
         "genres"
       ]
     },
     {
-      "id": "traditional-black-gospel",
-      "name": "Traditional Black Gospel",
+      "id": "talking-blues",
+      "name": "Talking Blues",
       "type": "genre",
-      "canonical_key": "traditional black gospel",
+      "canonical_key": "talking blues",
       "parents": [
-        "american-folk-music",
-        "gospel"
+        "american-folk-music"
       ],
       "sections": [
         "genres"
@@ -14955,6 +15769,20 @@
       ]
     },
     {
+      "id": "bedoui-wahrani",
+      "name": "Bedoui wahrani",
+      "type": "genre",
+      "canonical_key": "bedoui wahrani",
+      "parents": [
+        "arabic-folk-music",
+        "maghrebi-music",
+        "bedouin-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "fijiri",
       "name": "Fijiri",
       "type": "genre",
@@ -15015,19 +15843,6 @@
       "parents": [
         "traditional-folk-music",
         "oceanian-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "bayawan",
-      "name": "Bayawan",
-      "type": "genre",
-      "canonical_key": "bayawan",
-      "parents": [
-        "traditional-folk-music",
-        "uyghur-music"
       ],
       "sections": [
         "genres"
@@ -15152,7 +15967,8 @@
       "type": "genre",
       "canonical_key": "fandango caicara",
       "parents": [
-        "brazilian-folk-music"
+        "brazilian-folk-music",
+        "fandango"
       ],
       "sections": [
         "genres"
@@ -15780,6 +16596,19 @@
       "parents": [
         "chinese-folk-music",
         "sizhu-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "dongzu-dage",
+      "name": "Dongzu dage",
+      "type": "genre",
+      "canonical_key": "dongzu dage",
+      "parents": [
+        "chinese-folk-music",
+        "polyphonic-chant"
       ],
       "sections": [
         "genres"
@@ -16911,6 +17740,18 @@
       ]
     },
     {
+      "id": "morris-music",
+      "name": "Morris Music",
+      "type": "genre",
+      "canonical_key": "morris music",
+      "parents": [
+        "english-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "northumbrian-folk-music",
       "name": "Northumbrian Folk Music",
       "type": "genre",
@@ -17102,6 +17943,18 @@
       "parents": [
         "european-folk-music",
         "german-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "fahrtenlied",
+      "name": "Fahrtenlied",
+      "type": "genre",
+      "canonical_key": "fahrtenlied",
+      "parents": [
+        "german-folk-music"
       ],
       "sections": [
         "genres"
@@ -18100,6 +18953,19 @@
       ]
     },
     {
+      "id": "musica-festera",
+      "name": "Música festera",
+      "type": "genre",
+      "canonical_key": "musica festera",
+      "parents": [
+        "spanish-folk-music",
+        "march"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "pasodoble",
       "name": "Pasodoble",
       "type": "genre",
@@ -18413,6 +19279,19 @@
       ]
     },
     {
+      "id": "cueca-brava",
+      "name": "Cueca brava",
+      "type": "genre",
+      "canonical_key": "cueca brava",
+      "parents": [
+        "cueca",
+        "chilean-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "huayno",
       "name": "Huayno",
       "type": "genre",
@@ -18454,6 +19333,32 @@
       "name": "Chimaychi",
       "type": "genre",
       "canonical_key": "chimaychi",
+      "parents": [
+        "huayno",
+        "peruvian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "chuscada",
+      "name": "Chuscada",
+      "type": "genre",
+      "canonical_key": "chuscada",
+      "parents": [
+        "huayno",
+        "peruvian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "huayno-con-arpa",
+      "name": "Huayno con Arpa",
+      "type": "genre",
+      "canonical_key": "huayno con arpa",
       "parents": [
         "huayno",
         "peruvian-music"
@@ -18823,6 +19728,19 @@
       ]
     },
     {
+      "id": "stomp-dance-song",
+      "name": "Stomp Dance Song",
+      "type": "genre",
+      "canonical_key": "stomp dance song",
+      "parents": [
+        "indigenous-american-traditional-music",
+        "indigenous-north-american-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "tonada-potosina",
       "name": "Tonada potosina",
       "type": "genre",
@@ -18975,6 +19893,18 @@
       ]
     },
     {
+      "id": "nagara-naam",
+      "name": "Nagara naam",
+      "type": "genre",
+      "canonical_key": "nagara naam",
+      "parents": [
+        "assamese-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "bengali-folk-music",
       "name": "Bengali Folk Music",
       "type": "genre",
@@ -19042,6 +19972,18 @@
       "parents": [
         "south-asian-folk-music",
         "central-asian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "dohori",
+      "name": "Dohori",
+      "type": "genre",
+      "canonical_key": "dohori",
+      "parents": [
+        "south-asian-folk-music"
       ],
       "sections": [
         "genres"
@@ -19133,10 +20075,10 @@
       ]
     },
     {
-      "id": "newa-folk-music",
-      "name": "Newa Folk Music",
+      "id": "nepali-lok-geet",
+      "name": "Nepali lok geet",
       "type": "genre",
-      "canonical_key": "newa folk music",
+      "canonical_key": "nepali lok geet",
       "parents": [
         "south-asian-folk-music"
       ],
@@ -19707,6 +20649,18 @@
       "name": "Arabesque Rap",
       "type": "genre",
       "canonical_key": "arabesque rap",
+      "parents": [
+        "hip-hop"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "battle-rap",
+      "name": "Battle Rap",
+      "type": "genre",
+      "canonical_key": "battle rap",
       "parents": [
         "hip-hop"
       ],
@@ -20585,6 +21539,18 @@
       ]
     },
     {
+      "id": "pimp-rap",
+      "name": "Pimp Rap",
+      "type": "genre",
+      "canonical_key": "pimp rap",
+      "parents": [
+        "hip-hop"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "political-hip-hop",
       "name": "Political Hip Hop",
       "type": "genre",
@@ -21047,6 +22013,19 @@
       ]
     },
     {
+      "id": "free-funk",
+      "name": "Free Funk",
+      "type": "genre",
+      "canonical_key": "free funk",
+      "parents": [
+        "avant-garde-jazz",
+        "jazz-funk"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "free-jazz",
       "name": "Free Jazz",
       "type": "genre",
@@ -21068,6 +22047,19 @@
       ],
       "sections": [
         "genres"
+      ]
+    },
+    {
+      "id": "yass",
+      "name": "Yass",
+      "type": "genre",
+      "canonical_key": "yass",
+      "parents": [
+        "avant-garde-jazz"
+      ],
+      "sections": [
+        "genres",
+        "scenes-and-movements"
       ]
     },
     {
@@ -21451,6 +22443,19 @@
       "canonical_key": "neobop",
       "parents": [
         "jazz"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "paramaribop",
+      "name": "Paramaribop",
+      "type": "genre",
+      "canonical_key": "paramaribop",
+      "parents": [
+        "jazz",
+        "south-american-music"
       ],
       "sections": [
         "genres"
@@ -23208,6 +24213,18 @@
       ]
     },
     {
+      "id": "operatic-pop",
+      "name": "Operatic Pop",
+      "type": "genre",
+      "canonical_key": "operatic pop",
+      "parents": [
+        "classical-crossover"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "dangdut",
       "name": "Dangdut",
       "type": "genre",
@@ -23949,19 +24966,6 @@
       ]
     },
     {
-      "id": "nederbeat",
-      "name": "Nederbeat",
-      "type": "genre",
-      "canonical_key": "nederbeat",
-      "parents": [
-        "beat"
-      ],
-      "sections": [
-        "genres",
-        "scenes-and-movements"
-      ]
-    },
-    {
       "id": "beat-rock",
       "name": "Beat Rock",
       "type": "genre",
@@ -24100,6 +25104,19 @@
       "canonical_key": "power pop",
       "parents": [
         "pop-rock"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "rock-jiwang",
+      "name": "Rock Jiwang",
+      "type": "genre",
+      "canonical_key": "rock jiwang",
+      "parents": [
+        "pop-rock",
+        "malay-music"
       ],
       "sections": [
         "genres"
@@ -24258,6 +25275,19 @@
       ]
     },
     {
+      "id": "rockaballad",
+      "name": "Rockaballad",
+      "type": "genre",
+      "canonical_key": "rockaballad",
+      "parents": [
+        "pop",
+        "rock-roll"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "rumba-catalana",
       "name": "Rumba catalana",
       "type": "genre",
@@ -24313,6 +25343,18 @@
       "name": "Levenslied",
       "type": "genre",
       "canonical_key": "levenslied",
+      "parents": [
+        "schlager"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "partyschlager",
+      "name": "Partyschlager",
+      "type": "genre",
+      "canonical_key": "partyschlager",
       "parents": [
         "schlager"
       ],
@@ -24775,10 +25817,10 @@
       ]
     },
     {
-      "id": "punk",
-      "name": "Punk",
+      "id": "punk-post-punk-hardcore",
+      "name": "Punk / Post-Punk / Hardcore",
       "type": "genre",
-      "canonical_key": "punk",
+      "canonical_key": "punk postpunk hardcore",
       "parents": [],
       "sections": [
         "genres"
@@ -24790,7 +25832,7 @@
       "type": "genre",
       "canonical_key": "art punk",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -24816,7 +25858,7 @@
       "type": "genre",
       "canonical_key": "cowpunk",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -24829,7 +25871,7 @@
       "type": "genre",
       "canonical_key": "emo",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -24920,7 +25962,7 @@
       "type": "genre",
       "canonical_key": "folk punk",
       "parents": [
-        "punk"
+        "punk-post-punk-hardcore"
       ],
       "sections": [
         "genres"
@@ -24953,12 +25995,24 @@
       ]
     },
     {
+      "id": "rustic-stomp",
+      "name": "Rustic Stomp",
+      "type": "genre",
+      "canonical_key": "rustic stomp",
+      "parents": [
+        "folk-punk"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "hardcore-punk",
       "name": "Hardcore [Punk]",
       "type": "genre",
       "canonical_key": "hardcore punk",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "punk-rock",
         "rock"
       ],
@@ -25184,12 +26238,24 @@
       ]
     },
     {
+      "id": "tough-guy-hardcore",
+      "name": "Tough Guy Hardcore",
+      "type": "genre",
+      "canonical_key": "tough guy hardcore",
+      "parents": [
+        "hardcore-punk"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "mod-revival",
       "name": "Mod Revival",
       "type": "genre",
       "canonical_key": "mod revival",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "new-wave",
         "mod"
       ],
@@ -25204,7 +26270,7 @@
       "type": "genre",
       "canonical_key": "pigfuck",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "noise-rock"
       ],
       "sections": [
@@ -25217,7 +26283,7 @@
       "type": "genre",
       "canonical_key": "postpunk",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -25319,7 +26385,7 @@
       "type": "genre",
       "canonical_key": "protopunk",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -25332,7 +26398,7 @@
       "type": "genre",
       "canonical_key": "punk blues",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -25345,7 +26411,7 @@
       "type": "genre",
       "canonical_key": "punk poetry",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "poetry"
       ],
       "sections": [
@@ -25358,7 +26424,7 @@
       "type": "genre",
       "canonical_key": "punk rock",
       "parents": [
-        "punk",
+        "punk-post-punk-hardcore",
         "rock"
       ],
       "sections": [
@@ -25398,6 +26464,18 @@
       "parents": [
         "punk-rock",
         "garage-rock"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "budget-rock",
+      "name": "Budget Rock",
+      "type": "genre",
+      "canonical_key": "budget rock",
+      "parents": [
+        "garage-punk"
       ],
       "sections": [
         "genres"
@@ -25647,19 +26725,6 @@
       ]
     },
     {
-      "id": "doo-wop",
-      "name": "Doo-Wop",
-      "type": "genre",
-      "canonical_key": "doowop",
-      "parents": [
-        "r-b",
-        "vocal-group"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "funk",
       "name": "Funk",
       "type": "genre",
@@ -25831,6 +26896,19 @@
       "sections": [
         "genres",
         "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "doo-wop",
+      "name": "Doo-Wop",
+      "type": "genre",
+      "canonical_key": "doowop",
+      "parents": [
+        "rhythm-blues",
+        "vocal-group"
+      ],
+      "sections": [
+        "genres"
       ]
     },
     {
@@ -26689,6 +27767,18 @@
       ]
     },
     {
+      "id": "m-godro",
+      "name": "M'godro",
+      "type": "genre",
+      "canonical_key": "mgodro",
+      "parents": [
+        "comorian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "dinka-music",
       "name": "Dinka Music",
       "type": "genre",
@@ -26750,6 +27840,18 @@
       ]
     },
     {
+      "id": "luo-music",
+      "name": "Luo Music",
+      "type": "genre",
+      "canonical_key": "luo music",
+      "parents": [
+        "east-african-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "marrabenta",
       "name": "Marrabenta",
       "type": "genre",
@@ -26766,6 +27868,30 @@
       "name": "Mchiriku",
       "type": "genre",
       "canonical_key": "mchiriku",
+      "parents": [
+        "east-african-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "mijikenda-music",
+      "name": "Mijikenda Music",
+      "type": "genre",
+      "canonical_key": "mijikenda music",
+      "parents": [
+        "east-african-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "mugithi",
+      "name": "Mugithi",
+      "type": "genre",
+      "canonical_key": "mugithi",
       "parents": [
         "east-african-music"
       ],
@@ -27143,31 +28269,6 @@
       ]
     },
     {
-      "id": "rai",
-      "name": "Raï",
-      "type": "genre",
-      "canonical_key": "rai",
-      "parents": [
-        "maghrebi-music",
-        "arabic-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "traditional-rai",
-      "name": "Traditional Raï",
-      "type": "genre",
-      "canonical_key": "traditional rai",
-      "parents": [
-        "rai"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "moorish-music",
       "name": "Moorish Music",
       "type": "genre",
@@ -27284,6 +28385,18 @@
       "canonical_key": "tigrinya music",
       "parents": [
         "ethiopic-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "guayla",
+      "name": "Guayla",
+      "type": "genre",
+      "canonical_key": "guayla",
+      "parents": [
+        "tigrinya-music"
       ],
       "sections": [
         "genres"
@@ -28158,6 +29271,31 @@
       "canonical_key": "bedouin music",
       "parents": [
         "arabic-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "rai",
+      "name": "Raï",
+      "type": "genre",
+      "canonical_key": "rai",
+      "parents": [
+        "bedouin-music",
+        "arabic-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "traditional-rai",
+      "name": "Traditional Raï",
+      "type": "genre",
+      "canonical_key": "traditional rai",
+      "parents": [
+        "rai"
       ],
       "sections": [
         "genres"
@@ -29371,6 +30509,30 @@
       ]
     },
     {
+      "id": "jhumar",
+      "name": "Jhumar",
+      "type": "genre",
+      "canonical_key": "jhumar",
+      "parents": [
+        "south-asian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "newa-music",
+      "name": "Newa Music",
+      "type": "genre",
+      "canonical_key": "newa music",
+      "parents": [
+        "south-asian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "sindhi-music",
       "name": "Sindhi Music",
       "type": "genre",
@@ -30247,19 +31409,6 @@
       ]
     },
     {
-      "id": "bachata",
-      "name": "Bachata",
-      "type": "genre",
-      "canonical_key": "bachata",
-      "parents": [
-        "caribbean-music",
-        "hispanic-american-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "brukdown",
       "name": "Brukdown",
       "type": "genre",
@@ -30684,13 +31833,111 @@
       ]
     },
     {
+      "id": "dominican-music",
+      "name": "Dominican Music",
+      "type": "genre",
+      "canonical_key": "dominican music",
+      "parents": [
+        "caribbean-music",
+        "hispanic-american-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "bachata",
+      "name": "Bachata",
+      "type": "genre",
+      "canonical_key": "bachata",
+      "parents": [
+        "dominican-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "dembow",
       "name": "Dembow",
       "type": "genre",
       "canonical_key": "dembow",
       "parents": [
-        "caribbean-music",
-        "hispanic-american-music"
+        "dominican-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "merengue",
+      "name": "Merengue",
+      "type": "genre",
+      "canonical_key": "merengue",
+      "parents": [
+        "dominican-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "mambo-urbano",
+      "name": "Mambo urbano",
+      "type": "genre",
+      "canonical_key": "mambo urbano",
+      "parents": [
+        "merengue"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "merecumbe",
+      "name": "Merecumbé",
+      "type": "genre",
+      "canonical_key": "merecumbe",
+      "parents": [
+        "merengue",
+        "cumbia"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "merengue-tipico",
+      "name": "Merengue típico",
+      "type": "genre",
+      "canonical_key": "merengue tipico",
+      "parents": [
+        "merengue"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "merenhouse",
+      "name": "Merenhouse",
+      "type": "genre",
+      "canonical_key": "merenhouse",
+      "parents": [
+        "merengue"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "tecnomerengue",
+      "name": "Tecnomerengue",
+      "type": "genre",
+      "canonical_key": "tecnomerengue",
+      "parents": [
+        "merengue",
+        "south-american-music"
       ],
       "sections": [
         "genres"
@@ -31065,81 +32312,6 @@
       ]
     },
     {
-      "id": "merengue",
-      "name": "Merengue",
-      "type": "genre",
-      "canonical_key": "merengue",
-      "parents": [
-        "caribbean-music",
-        "hispanic-american-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "mambo-urbano",
-      "name": "Mambo urbano",
-      "type": "genre",
-      "canonical_key": "mambo urbano",
-      "parents": [
-        "merengue"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "merecumbe",
-      "name": "Merecumbé",
-      "type": "genre",
-      "canonical_key": "merecumbe",
-      "parents": [
-        "merengue",
-        "cumbia"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "merengue-tipico",
-      "name": "Merengue típico",
-      "type": "genre",
-      "canonical_key": "merengue tipico",
-      "parents": [
-        "merengue"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "merenhouse",
-      "name": "Merenhouse",
-      "type": "genre",
-      "canonical_key": "merenhouse",
-      "parents": [
-        "merengue"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "tecnomerengue",
-      "name": "Tecnomerengue",
-      "type": "genre",
-      "canonical_key": "tecnomerengue",
-      "parents": [
-        "merengue",
-        "south-american-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "palo-de-mayo",
       "name": "Palo de mayo",
       "type": "genre",
@@ -31173,6 +32345,20 @@
         "caribbean-music",
         "hispanic-american-music",
         "south-american-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "reggae-panameno",
+      "name": "Reggae panameño",
+      "type": "genre",
+      "canonical_key": "reggae panameno",
+      "parents": [
+        "caribbean-music",
+        "central-american-music",
+        "hispanic-american-music"
       ],
       "sections": [
         "genres"
@@ -31422,6 +32608,19 @@
       ]
     },
     {
+      "id": "valaam-chant",
+      "name": "Valaam Chant",
+      "type": "genre",
+      "canonical_key": "valaam chant",
+      "parents": [
+        "east-slavic-church-music",
+        "russian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "znamenny-chant",
       "name": "Znamenny Chant",
       "type": "genre",
@@ -31452,6 +32651,19 @@
       "canonical_key": "requiem",
       "parents": [
         "mass"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "moravian-church-music",
+      "name": "Moravian Church Music",
+      "type": "genre",
+      "canonical_key": "moravian church music",
+      "parents": [
+        "christian-liturgical-music",
+        "european-music"
       ],
       "sections": [
         "genres"
@@ -31752,7 +32964,8 @@
         "chanson"
       ],
       "sections": [
-        "genres"
+        "genres",
+        "scenes-and-movements"
       ]
     },
     {
@@ -32505,13 +33718,40 @@
       ]
     },
     {
-      "id": "jubilee",
-      "name": "Jubilee",
+      "id": "traditional-black-gospel",
+      "name": "Traditional Black Gospel",
       "type": "genre",
-      "canonical_key": "jubilee",
+      "canonical_key": "traditional black gospel",
+      "parents": [
+        "black-gospel"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "urban-contemporary-gospel",
+      "name": "Urban Contemporary Gospel",
+      "type": "genre",
+      "canonical_key": "urban contemporary gospel",
+      "parents": [
+        "black-gospel",
+        "ccm"
+      ],
+      "sections": [
+        "genres",
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "gospel-hymn",
+      "name": "Gospel Hymn",
+      "type": "genre",
+      "canonical_key": "gospel hymn",
       "parents": [
         "gospel",
-        "barbershop"
+        "northern-american-music",
+        "hymn"
       ],
       "sections": [
         "genres"
@@ -32528,20 +33768,6 @@
       ],
       "sections": [
         "genres"
-      ]
-    },
-    {
-      "id": "urban-contemporary-gospel",
-      "name": "Urban Contemporary Gospel",
-      "type": "genre",
-      "canonical_key": "urban contemporary gospel",
-      "parents": [
-        "gospel",
-        "ccm"
-      ],
-      "sections": [
-        "genres",
-        "scenes-and-movements"
       ]
     },
     {
@@ -32897,6 +34123,19 @@
       ]
     },
     {
+      "id": "cachaca",
+      "name": "Cachaca",
+      "type": "genre",
+      "canonical_key": "cachaca",
+      "parents": [
+        "cumbia",
+        "south-american-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "cumbia-mexicana",
       "name": "Cumbia mexicana",
       "type": "genre",
@@ -32977,6 +34216,42 @@
       "canonical_key": "cumbia nortena peruana",
       "parents": [
         "cumbia-peruana"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "cumbia-sanjuanera",
+      "name": "Cumbia sanjuanera",
+      "type": "genre",
+      "canonical_key": "cumbia sanjuanera",
+      "parents": [
+        "cumbia-nortena-peruana"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "cumbia-surena-peruana",
+      "name": "Cumbia sureña peruana",
+      "type": "genre",
+      "canonical_key": "cumbia surena peruana",
+      "parents": [
+        "cumbia-peruana"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "tecnocumbia",
+      "name": "Tecnocumbia",
+      "type": "genre",
+      "canonical_key": "tecnocumbia",
+      "parents": [
+        "cumbia"
       ],
       "sections": [
         "genres"
@@ -33295,6 +34570,18 @@
       ]
     },
     {
+      "id": "coplas-cajamarquinas",
+      "name": "Coplas cajamarquinas",
+      "type": "genre",
+      "canonical_key": "coplas cajamarquinas",
+      "parents": [
+        "peruvian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "huaylarsh",
       "name": "Huaylarsh",
       "type": "genre",
@@ -33356,6 +34643,18 @@
       ]
     },
     {
+      "id": "marinera-nortena",
+      "name": "Marinera norteña",
+      "type": "genre",
+      "canonical_key": "marinera nortena",
+      "parents": [
+        "marinera"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "tondero",
       "name": "Tondero",
       "type": "genre",
@@ -33374,6 +34673,18 @@
       "canonical_key": "vals criollo",
       "parents": [
         "musica-criolla-peruana"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "pandilla",
+      "name": "Pandilla",
+      "type": "genre",
+      "canonical_key": "pandilla",
+      "parents": [
+        "peruvian-music"
       ],
       "sections": [
         "genres"
@@ -33678,6 +34989,18 @@
       ]
     },
     {
+      "id": "sikuri",
+      "name": "Sikuri",
+      "type": "genre",
+      "canonical_key": "sikuri",
+      "parents": [
+        "indigenous-andean-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "indigenous-north-american-music",
       "name": "Indigenous North American Music",
       "type": "genre",
@@ -33733,6 +35056,18 @@
       "canonical_key": "oodham music",
       "parents": [
         "indigenous-north-american-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "waila",
+      "name": "Waila",
+      "type": "genre",
+      "canonical_key": "waila",
+      "parents": [
+        "o-odham-music"
       ],
       "sections": [
         "genres"
@@ -35757,18 +37092,6 @@
       ]
     },
     {
-      "id": "krautrock",
-      "name": "Krautrock",
-      "type": "genre",
-      "canonical_key": "krautrock",
-      "parents": [
-        "experimental-rock"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "folk-rock",
       "name": "Folk Rock",
       "type": "genre",
@@ -36595,6 +37918,18 @@
       ]
     },
     {
+      "id": "contemporary-a-cappella",
+      "name": "Contemporary A Cappella",
+      "type": "genre",
+      "canonical_key": "contemporary a cappella",
+      "parents": [
+        "a-cappella"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "educational-music",
       "name": "Educational Music",
       "type": "genre",
@@ -36751,10 +38086,10 @@
       ]
     },
     {
-      "id": "field-recordings",
-      "name": "Field Recordings",
+      "id": "field-recording",
+      "name": "Field Recording",
       "type": "genre",
-      "canonical_key": "field recordings",
+      "canonical_key": "field recording",
       "parents": [
         "uncategorised"
       ],
@@ -36768,7 +38103,7 @@
       "type": "genre",
       "canonical_key": "nature recordings",
       "parents": [
-        "field-recordings"
+        "field-recording"
       ],
       "sections": [
         "genres"
@@ -36840,7 +38175,7 @@
       "type": "genre",
       "canonical_key": "radio broadcast recordings",
       "parents": [
-        "field-recordings"
+        "field-recording"
       ],
       "sections": [
         "genres"
@@ -36887,6 +38222,18 @@
       "name": "Jingles",
       "type": "genre",
       "canonical_key": "jingles",
+      "parents": [
+        "uncategorised"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "krautrock",
+      "name": "Krautrock",
+      "type": "genre",
+      "canonical_key": "krautrock",
       "parents": [
         "uncategorised"
       ],
@@ -37007,6 +38354,18 @@
       "name": "Mechanical Music",
       "type": "genre",
       "canonical_key": "mechanical music",
+      "parents": [
+        "uncategorised"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "novelty",
+      "name": "Novelty",
+      "type": "genre",
+      "canonical_key": "novelty",
       "parents": [
         "uncategorised"
       ],
@@ -37151,6 +38510,16 @@
       ]
     },
     {
+      "id": "austin-new-sincerity",
+      "name": "Austin New Sincerity",
+      "type": "genre",
+      "canonical_key": "austin new sincerity",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "authenticite",
       "name": "Authenticité",
       "type": "genre",
@@ -37175,6 +38544,16 @@
       "name": "Beijing New Sound",
       "type": "genre",
       "canonical_key": "beijing new sound",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "berlin-techno",
+      "name": "Berlin Techno",
+      "type": "genre",
+      "canonical_key": "berlin techno",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -37221,10 +38600,30 @@
       ]
     },
     {
+      "id": "boston-hardcore",
+      "name": "Boston Hardcore",
+      "type": "genre",
+      "canonical_key": "boston hardcore",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "bristol-sound",
       "name": "Bristol Sound",
       "type": "genre",
       "canonical_key": "bristol sound",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "british-beat-boom",
+      "name": "British Beat Boom",
+      "type": "genre",
+      "canonical_key": "british beat boom",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -37271,10 +38670,30 @@
       ]
     },
     {
+      "id": "brumbeat",
+      "name": "Brumbeat",
+      "type": "genre",
+      "canonical_key": "brumbeat",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "cascadian-black-metal",
       "name": "Cascadian Black Metal",
       "type": "genre",
       "canonical_key": "cascadian black metal",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "cbgb-scene",
+      "name": "CBGB Scene",
+      "type": "genre",
+      "canonical_key": "cbgb scene",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -37509,6 +38928,16 @@
       ]
     },
     {
+      "id": "du-ca",
+      "name": "Du ca",
+      "type": "genre",
+      "canonical_key": "du ca",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "dusseldorf-school",
       "name": "Düsseldorf School",
       "type": "genre",
@@ -37565,6 +38994,16 @@
       ]
     },
     {
+      "id": "echtzeitmusik",
+      "name": "Echtzeitmusik",
+      "type": "genre",
+      "canonical_key": "echtzeitmusik",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "emo-revival",
       "name": "Emo Revival",
       "type": "genre",
@@ -37580,18 +39019,6 @@
       "type": "genre",
       "canonical_key": "english underground",
       "parents": [],
-      "sections": [
-        "scenes-and-movements"
-      ]
-    },
-    {
-      "id": "ladbroke-grove-scene",
-      "name": "Ladbroke Grove Scene",
-      "type": "genre",
-      "canonical_key": "ladbroke grove scene",
-      "parents": [
-        "english-underground"
-      ],
       "sections": [
         "scenes-and-movements"
       ]
@@ -37641,6 +39068,16 @@
       "name": "Fort Thunder Scene",
       "type": "genre",
       "canonical_key": "fort thunder scene",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "frankfurt-sound",
+      "name": "Frankfurt Sound",
+      "type": "genre",
+      "canonical_key": "frankfurt sound",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -37741,6 +39178,26 @@
       "name": "Hoboken Sound",
       "type": "genre",
       "canonical_key": "hoboken sound",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "hollandse-school",
+      "name": "Hollandse School",
+      "type": "genre",
+      "canonical_key": "hollandse school",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "hollywood-punk",
+      "name": "Hollywood Punk",
+      "type": "genre",
+      "canonical_key": "hollywood punk",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -37849,6 +39306,26 @@
       ]
     },
     {
+      "id": "la-onda",
+      "name": "La Onda",
+      "type": "genre",
+      "canonical_key": "la onda",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "ladbroke-grove-scene",
+      "name": "Ladbroke Grove Scene",
+      "type": "genre",
+      "canonical_key": "ladbroke grove scene",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "laurel-canyon-scene",
       "name": "Laurel Canyon Scene",
       "type": "genre",
@@ -37899,6 +39376,16 @@
       ]
     },
     {
+      "id": "los-angeles-hardcore",
+      "name": "Los Angeles Hardcore",
+      "type": "genre",
+      "canonical_key": "los angeles hardcore",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "louisville-sound",
       "name": "Louisville Sound",
       "type": "genre",
@@ -37933,6 +39420,16 @@
       "name": "Manila Sound",
       "type": "genre",
       "canonical_key": "manila sound",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "medway-scene",
+      "name": "Medway Scene",
+      "type": "genre",
+      "canonical_key": "medway scene",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38009,10 +39506,30 @@
       ]
     },
     {
+      "id": "nederbeat",
+      "name": "Nederbeat",
+      "type": "genre",
+      "canonical_key": "nederbeat",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "neue-deutsche-welle",
       "name": "Neue Deutsche Welle",
       "type": "genre",
       "canonical_key": "neue deutsche welle",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "neue-neue-deutsche-welle",
+      "name": "Neue Neue Deutsche Welle",
+      "type": "genre",
+      "canonical_key": "neue neue deutsche welle",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38043,6 +39560,16 @@
       "name": "New London Jazz",
       "type": "genre",
       "canonical_key": "new london jazz",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "new-london-silence",
+      "name": "New London Silence",
+      "type": "genre",
+      "canonical_key": "new london silence",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38309,6 +39836,16 @@
       ]
     },
     {
+      "id": "pop-de-guitarras",
+      "name": "Pop de guitarras",
+      "type": "genre",
+      "canonical_key": "pop de guitarras",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "pop-kreatif",
       "name": "Pop Kreatif",
       "type": "genre",
@@ -38383,6 +39920,16 @@
       "name": "Riot Grrrl",
       "type": "genre",
       "canonical_key": "riot grrrl",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "rock-against-racism",
+      "name": "Rock Against Racism",
+      "type": "genre",
+      "canonical_key": "rock against racism",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38511,6 +40058,16 @@
       ]
     },
     {
+      "id": "sao-paulo-queer-underground",
+      "name": "São Paulo Queer Underground",
+      "type": "genre",
+      "canonical_key": "sao paulo queer underground",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "scene",
       "name": "Scene",
       "type": "genre",
@@ -38537,6 +40094,16 @@
       "name": "Scottish Folk Revival",
       "type": "genre",
       "canonical_key": "scottish folk revival",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "scum-rock",
+      "name": "Scum Rock",
+      "type": "genre",
+      "canonical_key": "scum rock",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38603,6 +40170,16 @@
       ]
     },
     {
+      "id": "socialist-realism",
+      "name": "Socialist Realism",
+      "type": "genre",
+      "canonical_key": "socialist realism",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "soundclown",
       "name": "SoundClown",
       "type": "genre",
@@ -38630,6 +40207,16 @@
       "parents": [
         "southern-hip-hop"
       ],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "sovietwave",
+      "name": "Sovietwave",
+      "type": "genre",
+      "canonical_key": "sovietwave",
+      "parents": [],
       "sections": [
         "scenes-and-movements"
       ]
@@ -38735,6 +40322,16 @@
       ]
     },
     {
+      "id": "tecktonik",
+      "name": "Tecktonik",
+      "type": "genre",
+      "canonical_key": "tecktonik",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "teutonic-thrash-metal",
       "name": "Teutonic Thrash Metal",
       "type": "genre",
@@ -38765,10 +40362,40 @@
       ]
     },
     {
+      "id": "the-new-thing",
+      "name": "The New Thing",
+      "type": "genre",
+      "canonical_key": "the new thing",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "the-sound-of-young-scotland",
+      "name": "The Sound of Young Scotland",
+      "type": "genre",
+      "canonical_key": "the sound of young scotland",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "the-wave",
       "name": "The Wave",
       "type": "genre",
       "canonical_key": "the wave",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "topanga-canyon-scene",
+      "name": "Topanga Canyon Scene",
+      "type": "genre",
+      "canonical_key": "topanga canyon scene",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38809,6 +40436,16 @@
       "name": "Ultra",
       "type": "genre",
       "canonical_key": "ultra",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "ultra-metal",
+      "name": "Ultra Metal",
+      "type": "genre",
+      "canonical_key": "ultra metal",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -38953,6 +40590,26 @@
       ]
     },
     {
+      "id": "vtuber-music",
+      "name": "VTuber Music",
+      "type": "genre",
+      "canonical_key": "vtuber music",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "wandelweiser",
+      "name": "Wandelweiser",
+      "type": "genre",
+      "canonical_key": "wandelweiser",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "warez-scene",
       "name": "Warez Scene",
       "type": "genre",
@@ -39019,16 +40676,6 @@
       "name": "Women's Music Movement",
       "type": "genre",
       "canonical_key": "womens music movement",
-      "parents": [],
-      "sections": [
-        "scenes-and-movements"
-      ]
-    },
-    {
-      "id": "yass",
-      "name": "Yass",
-      "type": "genre",
-      "canonical_key": "yass",
       "parents": [],
       "sections": [
         "scenes-and-movements"
