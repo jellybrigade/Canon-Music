@@ -366,7 +366,6 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onSelectAlbum={onSelectAlbum}
             playAlbum={play}
             onRefresh={refreshForYou}
-            onStartRadio={(album) => onStartRadio(album, "same-genre")}
             onCardContextMenu={openCardContextMenu}
             config={categoryConfig}
             onConfigChange={handleForYouConfigChange}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Lock, Play, Plus, Radio, RefreshCw, Unlock, X } from "lucide-react";
+import { Lock, Play, Plus, RefreshCw, Unlock, X } from "lucide-react";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { FOR_YOU_PER_TAB_CHOICES, type ForYouCategoryConfig, type ForYouGroup } from "../../lib/forYouGroups";
@@ -52,7 +52,6 @@ interface ForYouRailProps {
   onSelectAlbum: (album: AlbumRow) => void;
   playAlbum: (album: AlbumRow) => void;
   onRefresh: () => void;
-  onStartRadio?: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   config: ForYouCategoryConfig[];
   onConfigChange: (config: ForYouCategoryConfig[]) => void;
@@ -60,7 +59,7 @@ interface ForYouRailProps {
   onPerTabChange: (count: number) => void;
 }
 
-export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onStartRadio, onCardContextMenu, config, onConfigChange, perTab, onPerTabChange }: ForYouRailProps) {
+export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu, config, onConfigChange, perTab, onPerTabChange }: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
@@ -194,11 +193,6 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
     <section className="home-rail">
       <div className="home-rail__header">
         <p className="home-section-label" style={{ margin: 0 }}>For You</p>
-        {onStartRadio && activeTabGroup.albums[0] && (
-          <button className="home-section__radio-btn" onClick={() => onStartRadio(activeTabGroup.albums[0]!)} aria-label={`Start ${activeTabGroup.kicker} radio`} title="Start radio">
-            <Radio size={13} />
-          </button>
-        )}
       </div>
 
       {!locked && (
