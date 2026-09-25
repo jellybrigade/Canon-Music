@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
-import { bustCanonTreeCache, getCanonTree } from "../lib/canonicalize";
+import { getCanonTree } from "../lib/canonicalize";
 import { findDanglingGenreIds, repairDanglingGenreId } from "../lib/danglingGenreIds";
-import { invalidateManualMappings } from "../lib/manualMappings";
+import { refreshGenreIdReads } from "../lib/genreTreeCarry";
 
 export function useDanglingGenreIds() {
   return useQuery({
@@ -21,16 +21,6 @@ export function useRepairDanglingGenreId() {
   return useMutation({
     mutationFn: ({ from, to }: { from: string; to: { id: string; name: string } | null }) =>
       repairDanglingGenreId(from, to),
-    onSuccess: () => {
-      invalidateManualMappings();
-      // A custom node's parent list may have changed under the cached tree.
-      bustCanonTreeCache();
-      void queryClient.invalidateQueries({ queryKey: QK.tagVocab() });
-      void queryClient.invalidateQueries({ queryKey: QK.tagMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.trackTagsAll() });
-      void queryClient.invalidateQueries({ queryKey: QK.genreDisplayMappings() });
-      void queryClient.invalidateQueries({ queryKey: QK.normalizedTagsAll() });
-      void queryClient.invalidateQueries({ queryKey: QK.userTreeNodes() });
-    },
+    onSuccess: () => refreshGenreIdReads(queryClient),
   });
 }

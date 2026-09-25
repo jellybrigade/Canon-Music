@@ -74,3 +74,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "Date.now() +" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A startup write racing first render must refresh what the render already read.** The genre rename carry ran fire-and-forget beside first render and only busted the in-memory tree, so Tags kept listing just-carried ids as missing from the tree. Fix: `refreshGenreIdReads(queryClient)` after the carry. Any `void getDb().then(...)` in `main.tsx` that writes rows a query reads must invalidate that query.
+  ```
+  grep -n "void getDb()" -A1 src/main.tsx
+  ```

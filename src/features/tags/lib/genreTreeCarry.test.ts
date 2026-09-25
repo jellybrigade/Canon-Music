@@ -1,4 +1,5 @@
 import type Database from "@tauri-apps/plugin-sql";
+import { QueryClient } from "@tanstack/react-query";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import canonTreeData from "../../../assets/canon-tree.json";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
@@ -12,6 +13,7 @@ vi.mock("../../../db", () => ({ getDb: async () => holder.db }));
 
 const { carryGenreTree, planGenreRenames } = await import("./genreTreeCarry");
 const { getCanonTree } = await import("./canonicalize");
+const { QK } = await import("../../../lib/queryKeys");
 
 function asDb(db: FakeDatabase): Database {
   return db as unknown as Database;
@@ -69,9 +71,15 @@ describe("planGenreRenames", () => {
   });
 });
 
+function spiedClient() {
+  const queryClient = new QueryClient();
+  const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+  return { queryClient, invalidate };
+}
+
 describe("carryGenreTree", () => {
   it("carries the bundled renames once, when the stored tree version differs", async () => {
-    await carryGenreTree(asDb(testDb()));
+    await carryGenreTree(asDb(testDb()), new QueryClient());
     expect(invokeCount("carry_genre_renames")).toBe(1);
     const [args] = invokeArgs("carry_genre_renames") as [{ renames: { from: string }[]; treeVersion: string }];
     expect(args.treeVersion).toBe(canonTreeData.version);
@@ -83,9 +91,21 @@ describe("carryGenreTree", () => {
     await db.execute("INSERT INTO settings (key, value) VALUES ('genre_tree_version', ?)", [canonTreeData.version]);
     db.selectCount = 0;
     db.executeCount = 0;
-    await carryGenreTree(asDb(db));
+    const { queryClient, invalidate } = spiedClient();
+    await carryGenreTree(asDb(db), queryClient);
     expect(invokeCount("carry_genre_renames")).toBe(0);
     expect(db.selectCount).toBe(1);
     expect(db.executeCount).toBe(0);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
+
+  // Tags may already have read the old ids during first render, before the carry landed.
+  it("refreshes every genre id read once the carry lands", async () => {
+    const { queryClient, invalidate } = spiedClient();
+    await carryGenreTree(asDb(testDb()), queryClient);
+    const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
+    expect(keys).toEqual(
+      expect.arrayContaining([QK.tagVocab(), QK.tagMappings(), QK.normalizedTagsAll(), QK.danglingGenreIds()])
+    );
   });
 });
