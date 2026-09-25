@@ -442,10 +442,10 @@ describe("RYM genre id renames", () => {
       INSERT INTO album_genre_exclusions (album_id, canonical_id) VALUES ('a2', 'newa-folk-music')`);
     await db.execute(`
       INSERT INTO user_tree_nodes (id, name, type, canonical_key, parent_ids)
-      VALUES ('user:skate punk', 'Skate Punk', 'genre', 'skate punk', '["punk","punk-rock"]')`);
+      VALUES ('user:skate punk', 'Skate Punk', 'genre', 'skate punk', '["punk","punk-post-punk-hardcore"]')`);
     await db.execute(`
       INSERT INTO playlists (id, server_id, name, is_smart, rules_json)
-      VALUES ('p1', 's1', 'Hymns', 1, '{"selectedGenres":["sacred-harp-singing","punk-rock"]}')`);
+      VALUES ('p1', 's1', 'punk', 1, '{"name":"punk","selectedGenres":["punk","punk-rock"]}')`);
     await db.execute(`
       INSERT INTO albums (id, server_id, server_type, name, computed_at, normalized_tags_json)
       VALUES ('a1', 's1', 'navidrome', 'A', 100, '{}'), ('a3', 's1', 'navidrome', 'C', 100, '{}'), ('a4', 's1', 'navidrome', 'D', 100, '{}')`);
@@ -473,11 +473,18 @@ describe("RYM genre id renames", () => {
     expect(await one("SELECT canonical_id FROM album_genre_exclusions")).toEqual({
       canonical_id: "newa-music",
     });
+  });
+
+  // A text replace over whole JSON would hit a playlist named "punk" and double up parents.
+  it("leaves JSON id lists to the startup carry", async () => {
+    const db = await seededAt51();
+    await runMigrations(db);
+    const one = async (sql: string) => (await db.select<Record<string, unknown>[]>(sql))[0];
     expect(await one("SELECT parent_ids FROM user_tree_nodes")).toEqual({
-      parent_ids: '["punk-post-punk-hardcore","punk-rock"]',
+      parent_ids: '["punk","punk-post-punk-hardcore"]',
     });
     expect(await one("SELECT rules_json FROM playlists")).toEqual({
-      rules_json: '{"selectedGenres":["shape-note-singing","punk-rock"]}',
+      rules_json: '{"name":"punk","selectedGenres":["punk","punk-rock"]}',
     });
   });
 

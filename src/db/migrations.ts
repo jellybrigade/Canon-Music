@@ -56,6 +56,8 @@ export const RYM_ID_RENAMES: readonly GenreIdRename[] = [
 // Every stored reference to a renamed tree id moves with it, or the user's mappings, album
 // genres and exclusions silently fall out of the tree. Albums touching a renamed id, or
 // holding a genre no node matched before, are re-normalized against the new tree.
+// JSON id lists (tree parents, smart playlist genres) are left to the startup carry, which
+// rewrites only the list itself and dedupes it.
 function rymRenameSql(): string {
   const olds = RYM_ID_RENAMES.map((r) => `'${r.from}'`).join(", ");
   const statements = [
@@ -74,11 +76,7 @@ function rymRenameSql(): string {
       `UPDATE OR IGNORE album_user_genres SET canonical_id = '${to}', name = '${toName}' WHERE canonical_id = '${from}'`,
       `DELETE FROM album_user_genres WHERE canonical_id = '${from}'`,
       `UPDATE OR IGNORE album_genre_exclusions SET canonical_id = '${to}' WHERE canonical_id = '${from}'`,
-      `DELETE FROM album_genre_exclusions WHERE canonical_id = '${from}'`,
-      `UPDATE user_tree_nodes SET parent_ids = REPLACE(parent_ids, '"${from}"', '"${to}"')
-         WHERE parent_ids LIKE '%"${from}"%'`,
-      `UPDATE playlists SET rules_json = REPLACE(rules_json, '"${from}"', '"${to}"')
-         WHERE rules_json LIKE '%"${from}"%'`
+      `DELETE FROM album_genre_exclusions WHERE canonical_id = '${from}'`
     );
     if (seedName) {
       const norm = seedName.toLowerCase();
