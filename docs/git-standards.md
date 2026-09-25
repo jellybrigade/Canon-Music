@@ -8,7 +8,7 @@ description: Git workflow standards - branching, commit subject discipline, pre-
 
 ## Branching
 
-- All work on `development`. `main` = releases only, owned by `/release` + CI. No feature branches.
+- All work on `development`. `main` = releases only, owned by `/release` + CI. No feature branches, except big restructures or breaking changes spanning multiple sessions: own branch off `development` so other work continues meanwhile.
 
 ## Commit subject
 

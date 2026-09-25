@@ -19,7 +19,7 @@ bash scripts/run-local-checks.sh   # all pre-commit checks
 
 ## Git
 
-`development` only; `main` = releases via `/release`. Subject only (imperative, <=50 target, 72 cap, effect not internals). No body, no prefix, no trailers ever.
+`development` only (multi-session breaking changes: own branch); `main` = releases via `/release`. Subject only (imperative, <=50 target, 72 cap, effect not internals). No body, no prefix, no trailers ever.
 
 ## Testing (TDD)
 
