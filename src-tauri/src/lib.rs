@@ -167,6 +167,7 @@ pub fn run() {
             fade_gen: Arc::new(AtomicU64::new(0)),
             pause_pending: Arc::new(AtomicBool::new(false)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
+            gapless_started: Arc::new(AtomicU64::new(0)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())

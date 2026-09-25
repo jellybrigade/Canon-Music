@@ -60,4 +60,6 @@ pub(crate) struct AudioState {
     pub(crate) pause_pending: Arc<AtomicBool>,
     // Set when a next track has been appended for gapless playback; cleared on transition or explicit play.
     pub(crate) gapless_queued: Arc<AtomicBool>,
+    // play_id under which playback reached the queued gapless source; 0 once the watcher reports it.
+    pub(crate) gapless_started: Arc<AtomicU64>,
 }

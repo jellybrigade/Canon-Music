@@ -21,6 +21,10 @@ Fixed unless marked OPEN.
   ```
   grep -n "runtime.activeTarget.pause(0)" src/features/playback/store/*.ts
   ```
+- **A poller that infers an event from the difference between two readings misses one that goes out and back between them.** The gapless watcher reported a hand-off only as `sink.len()` dropping across its 100ms poll; `audio_enqueue_next` appending while the current source had under 100ms left took len 1 -> 2 -> 1 unseen, so `track-advanced` never fired and the position never reset. Fix: `append_gapless` puts a rodio `EmptyCallback` ahead of the source that records the `play_id` when playback reaches it, and the watcher consumes that. Ask of any polled comparison: can the value change and change back inside one interval?
+  ```
+  grep -rn -A8 "thread::sleep\|setInterval(" src-tauri/src src --include='*.rs' --include='*.ts*' | grep -v '\.test\.' | grep -E "prev_?\w* ?[<>]|[<>] ?prev_?\w*"
+  ```
 - **Fire-and-forget command owes event on every exit.** Gapless bail-outs emit `gapless-cancelled`; final `sink.append` checks `sink.empty()`.
 - **Pre-scheduled work must carry its decision.** `gaplessEnqueued: {track, position, wraps, wrapOrder}`; `next()` passes `-1` for no anchor. **Found again:** `track-advanced` re-derived "is this a wrap" from the live queue length, so radio replace shrinking the queue to the playing track inside the lead window dropped the hand-off and the UI stayed on the finished track. Ask of any handler for pre-scheduled work: which of its branches read live state the scheduler already decided?
   ```
