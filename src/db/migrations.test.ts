@@ -3,9 +3,11 @@ import {
   LATEST_SCHEMA_VERSION,
   SchemaTooNewError,
   migrations,
+  RYM_ID_RENAMES,
   runMigrations,
   type MigrationDb,
 } from "./migrations";
+import canonTreeData from "../assets/canon-tree.json";
 import { createTestDb, createMigratedTestDb, forkTestDb, type FakeDatabase } from "../test/sqlite";
 
 const LATEST = Math.max(...migrations.map((m) => m.version));
@@ -408,6 +410,110 @@ describe("post-migration schema", () => {
     expect(columnsOf(db, "servers")).toEqual(expect.arrayContaining(["alt_url"]));
     expect(columnsOf(db, "tag_mappings")).toEqual(expect.arrayContaining(["norm_value"]));
     expect(columnsOf(db, "lyrics")).toEqual(expect.arrayContaining(["offset_ms"]));
+  });
+});
+
+describe("RYM genre id renames", () => {
+  const treeIds = new Set(canonTreeData.nodes.map((n) => n.id));
+
+  it("renames only ids the tree dropped, onto ids the tree has", () => {
+    for (const { from, to } of RYM_ID_RENAMES) {
+      expect(treeIds.has(from), from).toBe(false);
+      expect(treeIds.has(to), to).toBe(true);
+    }
+  });
+
+  async function seededAt51(): Promise<FakeDatabase> {
+    const db = createTestDb();
+    await migrateThrough(db, 51);
+    await db.execute(`
+      INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value)
+      VALUES ('Punk Rock', 'genre', 'punk', 'manual', 'punk rock')`);
+    await db.execute(`
+      INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source)
+      VALUES ('t1', 'mood', 'Pyschedelic', 'pyschedelic', 'lastfm')`);
+    await db.execute(`
+      INSERT INTO album_user_genres (album_id, canonical_id, name)
+      VALUES ('a1', 'field-recordings', 'Field Recordings')`);
+    await db.execute(`
+      INSERT INTO album_genres (album_id, canonical_id, relation, name)
+      VALUES ('a1', 'punk', 'direct', 'Punk'), ('a1', 'rock', 'direct', 'Rock')`);
+    await db.execute(`
+      INSERT INTO album_genre_exclusions (album_id, canonical_id) VALUES ('a2', 'newa-folk-music')`);
+    await db.execute(`
+      INSERT INTO user_tree_nodes (id, name, type, canonical_key, parent_ids)
+      VALUES ('user:skate punk', 'Skate Punk', 'genre', 'skate punk', '["punk","punk-post-punk-hardcore"]')`);
+    await db.execute(`
+      INSERT INTO playlists (id, server_id, name, is_smart, rules_json)
+      VALUES ('p1', 's1', 'punk', 1, '{"name":"punk","selectedGenres":["punk","punk-rock"]}')`);
+    await db.execute(`
+      INSERT INTO albums (id, server_id, server_type, name, computed_at, normalized_tags_json)
+      VALUES ('a1', 's1', 'navidrome', 'A', 100, '{}'), ('a3', 's1', 'navidrome', 'C', 100, '{}'), ('a4', 's1', 'navidrome', 'D', 100, '{}')`);
+    await db.execute(`
+      INSERT INTO album_unresolved_genres (album_id, raw_value, source) VALUES ('a4', 'Outrun', 'lastfm')`);
+    return db;
+  }
+
+  it("carries every stored reference onto the renamed id", async () => {
+    const db = await seededAt51();
+    await runMigrations(db);
+
+    const one = async (sql: string) => (await db.select<Record<string, unknown>[]>(sql))[0];
+    expect(await one("SELECT canonical_id FROM tag_mappings WHERE raw_value = 'Punk Rock'")).toEqual({
+      canonical_id: "punk-post-punk-hardcore",
+    });
+    expect(await one("SELECT canonical_id FROM track_tags")).toEqual({ canonical_id: "psychedelic" });
+    expect(await one("SELECT canonical_id, name FROM album_user_genres")).toEqual({
+      canonical_id: "field-recording",
+      name: "Field Recording",
+    });
+    expect(
+      await db.select("SELECT canonical_id FROM album_genres ORDER BY canonical_id")
+    ).toEqual([{ canonical_id: "punk-post-punk-hardcore" }, { canonical_id: "rock" }]);
+    expect(await one("SELECT canonical_id FROM album_genre_exclusions")).toEqual({
+      canonical_id: "newa-music",
+    });
+  });
+
+  // A text replace over whole JSON would hit a playlist named "punk" and double up parents.
+  it("leaves JSON id lists to the startup carry", async () => {
+    const db = await seededAt51();
+    await runMigrations(db);
+    const one = async (sql: string) => (await db.select<Record<string, unknown>[]>(sql))[0];
+    expect(await one("SELECT parent_ids FROM user_tree_nodes")).toEqual({
+      parent_ids: '["punk","punk-post-punk-hardcore"]',
+    });
+    expect(await one("SELECT rules_json FROM playlists")).toEqual({
+      rules_json: '{"name":"punk","selectedGenres":["punk","punk-rock"]}',
+    });
+  });
+
+  it("re-normalizes albums that held a renamed id or an unresolved genre, and no others", async () => {
+    const db = await seededAt51();
+    await runMigrations(db);
+    expect(
+      await db.select("SELECT id, computed_at FROM albums ORDER BY id")
+    ).toEqual([
+      { id: "a1", computed_at: null },
+      { id: "a3", computed_at: 100 },
+      { id: "a4", computed_at: null },
+    ]);
+  });
+
+  it("maps the old names whose key no longer resolves, without overriding the user's own mapping", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 51);
+    await db.execute(`
+      INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value)
+      VALUES ('Newa Folk Music', 'genre', 'south-asian-folk-music', 'manual', 'newa folk music')`);
+    await runMigrations(db);
+    expect(
+      await db.select("SELECT raw_value, canonical_id, source FROM tag_mappings ORDER BY raw_value")
+    ).toEqual([
+      { raw_value: "Newa Folk Music", canonical_id: "south-asian-folk-music", source: "manual" },
+      { raw_value: "Punk", canonical_id: "punk-post-punk-hardcore", source: "manual" },
+      { raw_value: "Sacred Harp Singing", canonical_id: "shape-note-singing", source: "manual" },
+    ]);
   });
 });
 

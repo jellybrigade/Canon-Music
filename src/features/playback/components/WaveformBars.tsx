@@ -1,7 +1,7 @@
 import React, { memo } from "react";
 
 interface Props {
-  peaks: number[];
+  peaks: readonly number[];
   filledCount: number;
   barClass: string;
   filledClass: string;

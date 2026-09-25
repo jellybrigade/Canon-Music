@@ -1,7 +1,8 @@
 ---
 description: Design guidelines for components and styles - production-grade UI, tokens, color, motion, bans
-globs:
+paths:
   - "src/components/**"
+  - "src/features/**"
   - "src/pages/**"
   - "src/ui/**"
   - "src/app/**"

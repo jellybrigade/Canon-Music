@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getDb } from "../../../db";
 import { resolveTrack } from "./queueOrder";
+import { WAVEFORM_BAR_COUNT, WAVEFORM_STUB_PEAK } from "../lib/waveformDisplay";
 import { runtime, waveformInFlight } from "./playerRuntime";
 import type { PlayerGet, PlayerSet } from "./playerTypes";
 
@@ -113,7 +114,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
       }
 
       // Accumulate raw (un-normalized) chunks as they arrive, normalize for display
-      const rawPeaks = new Array<number>(200).fill(0);
+      const rawPeaks = new Array<number>(WAVEFORM_BAR_COUNT).fill(0);
       let runningMax = 0;
       let filledCount = 0;
 
@@ -131,7 +132,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
           if (get().currentTrack?.id !== trackId) return;
           const scale = runningMax > 0 ? 1 / runningMax : 1;
           // Show each bar at its actual position; unfilled bars get a stub so the load direction is clear.
-          const display = rawPeaks.map((v, i) => i < filledCount ? v * scale : 0.1);
+          const display = rawPeaks.map((v, i) => i < filledCount ? v * scale : WAVEFORM_STUB_PEAK);
           set({ waveformPeaks: display });
         }
       );

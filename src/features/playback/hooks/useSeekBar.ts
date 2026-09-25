@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { usePlayerStore } from "../store/player";
 
 const SECONDS_PER_MINUTE = 60;
@@ -14,6 +14,18 @@ export function formatDuration(seconds: number): string {
 /** Fraction of the track a single arrow-key press moves. */
 const KEY_STEP_RATIO = 0.05;
 
+/** Largest forward step still read as playback: the 200ms position poll with slack for a late tick. */
+const MAX_PLAYBACK_STEP_SECONDS = 1;
+
+/**
+ * Whether the fill moved by seek or track change rather than by playback. The fill's slide
+ * transition outlasts the poll, so easing across a jump sweeps visibly backwards or overshoots.
+ */
+export function isProgressJump(previous: number, next: number, duration: number): boolean {
+  if (next < previous) return true;
+  return (next - previous) * duration > MAX_PLAYBACK_STEP_SECONDS;
+}
+
 export interface SeekBarState {
   /** Attach to the element carrying the track background. */
   barRef: React.RefObject<HTMLDivElement | null>;
@@ -21,6 +33,8 @@ export interface SeekBarState {
   elapsed: number;
   /** Position as 0..1, clamped. 0 when the duration is unknown. */
   progress: number;
+  /** The last progress change was a seek or track change: show it without the slide. */
+  isJump: boolean;
   /** Spread onto the slider element. Covers role, a11y, keyboard and click-to-seek. */
   sliderProps: {
     role: "slider";
@@ -52,6 +66,11 @@ export function useSeekBar(duration: number): SeekBarState {
 
   const seekable = duration > 0;
   const progress = seekable ? Math.min(elapsed / duration, 1) : 0;
+
+  const [lastProgress, setLastProgress] = useState({ progress, isJump: false });
+  if (lastProgress.progress !== progress) {
+    setLastProgress({ progress, isJump: isProgressJump(lastProgress.progress, progress, duration) });
+  }
 
   const onClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -88,6 +107,7 @@ export function useSeekBar(duration: number): SeekBarState {
     barRef,
     elapsed,
     progress,
+    isJump: lastProgress.isJump,
     sliderProps: {
       role: "slider",
       "aria-label": "Seek",

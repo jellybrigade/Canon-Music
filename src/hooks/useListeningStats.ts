@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
 import type { AlbumRow } from "../types/library";
 import { QK } from "../lib/queryKeys";
+import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
 
 export interface AlbumStatRow extends AlbumRow {
   plays: number;
@@ -56,7 +57,8 @@ export function useListeningStats() {
         []
       );
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: HOME_STALE_TIME,
+    gcTime: HOME_GC_TIME,
   });
 
   // "Finish the album" and "Almost done" used to be two queries that scanned the same
@@ -83,7 +85,8 @@ export function useListeningStats() {
         []
       );
     },
-    staleTime: 5 * 60 * 1000,
+    staleTime: HOME_STALE_TIME,
+    gcTime: HOME_GC_TIME,
   });
 
   const stats = query.data ?? [];

@@ -367,6 +367,10 @@
   transition: transform var(--duration-longest) linear;
 }
 
+.player-progress-fill--jump {
+  transition: none;
+}
+
 .player-progress-bar--waveform {
   height: var(--player-waveform-height);
   background: transparent;

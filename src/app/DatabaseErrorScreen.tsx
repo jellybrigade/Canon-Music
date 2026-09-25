@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { SchemaTooNewError } from "../db/migrations";
+import { checkForUpdate, installAndRestart, type DownloadProgress } from "../lib/updater";
 
 interface Props {
   error: unknown;
@@ -24,6 +26,7 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
           Nothing has been changed on disk. Update Canon to the version you were using and your
           library opens as before.
         </p>
+        <UpdateButton />
       </div>
     );
   }
@@ -44,4 +47,68 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
       </button>
     </div>
   );
+}
+
+type UpdateState =
+  | { phase: "idle" }
+  | { phase: "checking" }
+  | { phase: "installing"; progress: DownloadProgress | null }
+  | { phase: "none" }
+  | { phase: "failed"; message: string };
+
+/**
+ * The update modal lives inside the app shell, which never mounts on this screen, so without
+ * this the only way out would be a manual download.
+ */
+function UpdateButton() {
+  const [state, setState] = useState<UpdateState>({ phase: "idle" });
+  const isBusy = state.phase === "checking" || state.phase === "installing";
+
+  async function handleUpdate() {
+    setState({ phase: "checking" });
+    const update = await checkForUpdate();
+    if (!update) {
+      setState({ phase: "none" });
+      return;
+    }
+    setState({ phase: "installing", progress: null });
+    try {
+      await installAndRestart(update, (progress) => setState({ phase: "installing", progress }));
+    } catch (e) {
+      setState({ phase: "failed", message: e instanceof Error ? e.message : String(e) });
+    }
+  }
+
+  return (
+    <>
+      <button
+        className="app-fatal-btn"
+        onClick={() => { void handleUpdate(); }}
+        disabled={isBusy}
+      >
+        Update Canon
+      </button>
+      {state.phase !== "idle" && (
+        <p className="app-fatal-hint" role="status">
+          {describeUpdateState(state)}
+        </p>
+      )}
+    </>
+  );
+}
+
+function describeUpdateState(state: Exclude<UpdateState, { phase: "idle" }>): string {
+  switch (state.phase) {
+    case "checking":
+      return "Checking for updates…";
+    case "installing": {
+      const { progress } = state;
+      if (!progress?.total) return "Downloading…";
+      return `Downloading… ${Math.round((progress.downloaded / progress.total) * 100)}%`;
+    }
+    case "none":
+      return "No newer Canon found. Check your connection, or try again once the next release is out.";
+    case "failed":
+      return state.message;
+  }
 }

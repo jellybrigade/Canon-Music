@@ -400,16 +400,12 @@ describe("useSearch query parsing", () => {
     expect(res.tracks.map(t => t.id)).toEqual(["w-trk"]);
   });
 
-  // Pinned as current behavior, not endorsed: `toFtsQuery` collapses interior runs of
-  // whitespace, but `scoreMatch` compares the *raw* query string, so "love  song" scores 0
-  // against "Love Song" and every FTS hit is filtered back out. Logged in donow.md.
-  it("returns nothing when interior whitespace is doubled, despite the index matching", async () => {
+  it("matches when interior whitespace is doubled", async () => {
     seedPair({ key: "w", albumName: "Whitespace Album", trackTitle: "Love Song", artist: "W" });
 
     const res = await search("love  song");
 
-    expect(res.tracks).toEqual([]);
-    expect(res.albums).toEqual([]);
+    expect(res.tracks.map(t => t.id)).toEqual(["w-trk"]);
   });
 
   it("treats FTS5 operator words as literal tokens, not operators", async () => {
@@ -421,10 +417,7 @@ describe("useSearch query parsing", () => {
     expect(res.tracks).toEqual([]);
   });
 
-  // Same split as the whitespace case: the quote is stripped for FTS (so the index does match
-  // "Hello There" and the query does not blow up on unbalanced syntax) but `scoreMatch` sees the
-  // raw `he"llo` and scores 0, so the row is filtered out again. Pinned, logged in donow.md.
-  it("strips double quotes for the index without throwing, though scoring still drops the row", async () => {
+  it("ignores double quotes in the query", async () => {
     seedPair({ key: "q", albumName: "Quote Album", trackTitle: "Hello There", artist: "Q" });
 
     const res = await search('he"llo');
@@ -432,7 +425,7 @@ describe("useSearch query parsing", () => {
     expect(
       db.raw.prepare(`SELECT COUNT(*) c FROM tracks_fts WHERE tracks_fts MATCH '"hello"*'`).get()
     ).toEqual({ c: 1 });
-    expect(res.tracks).toEqual([]);
+    expect(res.tracks.map(t => t.id)).toEqual(["q-trk"]);
   });
 
   it("returns empty for a punctuation-only query rather than failing the query", async () => {

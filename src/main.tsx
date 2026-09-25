@@ -7,6 +7,7 @@ import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { initLogger } from "./lib/logger";
 import { getDb } from "./db";
 import { purgeStrandedServers } from "./features/sync/syncPrune";
+import { carryGenreTree } from "./features/tags/lib/genreTreeCarry";
 
 initLogger();
 
@@ -40,6 +41,10 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+void getDb()
+  .then((db) => carryGenreTree(db, queryClient))
+  .catch((err: unknown) => console.error("startup: failed to carry renamed genre ids:", err));
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

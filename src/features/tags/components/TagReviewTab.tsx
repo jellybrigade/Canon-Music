@@ -13,6 +13,7 @@ import {
   applySearch,
   Pagination,
 } from "./TagsViewHelpers";
+import { DanglingGenresPanel } from "./DanglingGenresPanel";
 import "./TagReviewTab.css";
 
 // ── ReviewRow ─────────────────────────────────────────────────────────────────
@@ -136,6 +137,7 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
           <button className="review-autonote-dismiss" onClick={onDismissAutoNote}>×</button>
         </div>
       )}
+      <DanglingGenresPanel treeNodes={treeNodes} />
       <div className="review-toolbar">
         <input
           className="review-search"

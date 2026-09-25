@@ -295,10 +295,8 @@ export function useArtistImageMap(): Pick<Map<string, string>, "get"> {
     queryKey: QK.artistCovers(),
     queryFn: async () => {
       const db = await getDb();
-      // Runs on initial load + every invalidation (after a cache-all pass). Drop cached
-      // data_urls so re-fetched portraits get re-pulled fresh on demand.
-      dataUrlByArtist.clear();
-      artistLoadsInFlight.clear();
+      // Portrait rows are only ever inserted for a missing artist, never rewritten or pruned,
+      // so loaded data_urls stay valid across invalidation; clearing them blanked every portrait.
       const rows = await db.select<{ artist_name: string }[]>(`SELECT artist_name FROM artist_covers`);
       return rows.map((r) => r.artist_name);
     },

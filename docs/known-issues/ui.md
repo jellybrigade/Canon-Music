@@ -1,7 +1,8 @@
 ---
 description: Known UI bugs already shipped once - full detail
-globs:
+paths:
   - "src/components/**"
+  - "src/features/**"
   - "src/app/**"
   - "src/**/*.css"
 ---
@@ -55,9 +56,17 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "useState\((searchParams|params|query|pathname)" src --include='*.ts*' | grep -v '\.test\.'
   ```
-- **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state.
+- **`null` for "don't know yet" and "isn't there" paints the same blank page.** `data ?? null` collapses `useQuery`'s pending distinction. Name the pending state. **Found again:** the progress bar read `waveformPeaks: null` (cleared on every track change) as "no waveform" and dropped to the 3px bar until peaks loaded, jumping the layout per track. Fix: `displayedWaveformPeaks` draws a flat placeholder; only the setting decides the variant.
   ```
   grep -rn "data:.*\} = useQuery" src/app --include='*.tsx' | grep -v '\.test\.'
+  ```
+- **A refetch with rows already on screen is not loading.** Every tick-driven read hook (`useAlbums`, `useAllTracks`, `useArtists`, `useGenres`, `usePlaylists`, `useArtistAlbums`) set `isLoading` on each refetch, so Home's Loved / Newly Added carousels swapped to skeletons on every 1.5s sync bump. Fix: `isLoading` means no rows for the current key; `useAlbums` keys it on the rows' own read key. Pinned by each hook's "keeps isLoading false while a refresh tick refetches" test. Ask of any loading flag: does it describe the screen, or the wire?
+  ```
+  grep -rn "setIsLoading(true)\|setLoading(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **A query keyed by what is playing goes blank on every track change unless it holds its last answer.** `useRecommendedAlbum` keys on the playing album, so each change left `data` undefined, Home's spotlight fell back to a carousel pick (keyed remount) and swapped again when the new pick landed. Fix: `placeholderData: keepPreviousData`, pinned by `useRecommendedAlbum.trackChange.test.ts`. Only where the old answer is still a fair answer: lyrics and raw tags for the previous track would be wrong content, so those stay pending.
+  ```
+  grep -rnE "use[A-Z][A-Za-z]*\((currentTrack|currentAlbumId|track)" src --include='*.tsx' | grep -v '\.test\.'
   ```
 - **Prerequisite gate is a state machine too; confident-wrong beats blank-wrong, but both are wrong.** 8 browse routes drifted into 3 wrong messages (told user to add a server they already have, stuck "Loading...", blank `<main>`). Fix: shared `CredentialNotice`/`CredentialGate`, pending vs failed vs absent.
   ```
@@ -117,4 +126,8 @@ Fixed unless marked OPEN.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```
   grep -rn "virtualRow\.start\|virtualItem\.start\|getTotalSize()" src --include='*.tsx' | grep -v '\.test\.' | grep "[+-]"
+  ```
+- **Slide transition on a polled value eases across seeks too.** The 500ms fill transition outlasted the 200ms poll, so seek-back and track change swept the fill backwards. Fix: `useSeekBar`'s `isJump` drops the transition for backward or >1s steps.
+  ```
+  grep -rnE "transition:.*(transform|width).*linear" src --include='*.css'
   ```

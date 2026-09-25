@@ -1,9 +1,11 @@
 use super::{http_client, http_client_long, AudioReader, AudioState};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
 use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
-use rodio::{Decoder, Sink, Source};
+use rodio::cpal::FromSample;
+use rodio::source::EmptyCallback;
+use rodio::{Decoder, Sample, Sink, Source};
 use std::io::{Cursor, Read};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
@@ -45,6 +47,7 @@ pub async fn audio_play(
     let volume_arc = Arc::clone(&state.volume);
     let speed_arc = Arc::clone(&state.speed);
     let gapless_queued_arc = Arc::clone(&state.gapless_queued);
+    let gapless_started_arc = Arc::clone(&state.gapless_started);
 
     // Reset gapless state — any pending enqueue is now stale.
     state.gapless_queued.store(false, Ordering::Relaxed);
@@ -318,25 +321,19 @@ pub async fn audio_play(
         .ok();
 
         // Poll-based watcher: checks every 100ms so it can't hang if sink never empties.
-        // Also detects gapless track transitions by watching sink.len() decrease.
         let play_id_watcher = Arc::clone(&play_id_arc);
         let sink_watcher = Arc::clone(&sink);
         let gapless_queued_watcher = Arc::clone(&gapless_queued_arc);
+        let gapless_started_watcher = Arc::clone(&gapless_started_arc);
         let pos_watcher = Arc::clone(&pos_arc);
         let app_watcher = app.clone();
         std::thread::spawn(move || {
-            let mut prev_sink_len = sink_watcher.len();
             loop {
                 std::thread::sleep(Duration::from_millis(100));
                 if play_id_watcher.load(Ordering::Relaxed) != this_id {
                     return;
                 }
-                let sink_len = sink_watcher.len();
-                // Gapless transition: a source was consumed (len decreased) while another is queued.
-                if sink_len < prev_sink_len
-                    && gapless_queued_watcher.load(Ordering::Relaxed)
-                    && !sink_watcher.empty()
-                {
+                if take_gapless_start(&gapless_started_watcher, this_id) {
                     gapless_queued_watcher.store(false, Ordering::Relaxed);
                     {
                         let mut pos = pos_watcher.lock().unwrap_or_else(|e| e.into_inner());
@@ -344,10 +341,7 @@ pub async fn audio_play(
                         pos.play_start = Some(Instant::now());
                     }
                     app_watcher.emit("track-advanced", ()).ok();
-                    prev_sink_len = sink_len;
-                    continue;
                 }
-                prev_sink_len = sink_len;
                 if sink_watcher.empty() {
                     break;
                 }
@@ -385,6 +379,7 @@ pub async fn audio_enqueue_next(
 
     let sink_arc = Arc::clone(&state.sink);
     let gapless_queued = Arc::clone(&state.gapless_queued);
+    let gapless_started = Arc::clone(&state.gapless_started);
     let play_id_arc = Arc::clone(&state.play_id);
     let snap_id = play_id_arc.load(Ordering::Relaxed);
     let cache_arc = Arc::clone(&state.prefetch_cache);
@@ -477,7 +472,7 @@ pub async fn audio_enqueue_next(
                 cancel(&gapless_queued, &app);
                 return;
             }
-            sink.append(source);
+            append_gapless(&sink, source, gapless_started, snap_id);
             // Flag stays true — set in compare_exchange above; watcher clears it on transition.
         } else {
             cancel(&gapless_queued, &app);
@@ -485,6 +480,26 @@ pub async fn audio_enqueue_next(
     });
 
     Ok(())
+}
+
+/// Appends `source` behind a zero-length marker that records `play_id` in `started` at the
+/// sample where playback reaches it, so the watcher cannot miss a hand-off between polls.
+fn append_gapless<S>(sink: &Sink, source: S, started: Arc<AtomicU64>, play_id: u64)
+where
+    S: Source + Send + 'static,
+    f32: FromSample<S::Item>,
+    S::Item: Sample + Send,
+{
+    sink.append::<EmptyCallback<f32>>(EmptyCallback::new(Box::new(move || {
+        started.store(play_id, Ordering::Release);
+    })));
+    sink.append(source);
+}
+
+fn take_gapless_start(started: &AtomicU64, play_id: u64) -> bool {
+    started
+        .compare_exchange(play_id, 0, Ordering::AcqRel, Ordering::Relaxed)
+        .is_ok()
 }
 
 // Full track buffers, not thumbnails — cap far below MAX_COVER_CACHE_ENTRIES to bound RSS growth
@@ -537,4 +552,81 @@ pub async fn audio_prefetch(
         cache.insert(url, bytes);
     });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rodio::buffer::SamplesBuffer;
+
+    fn tone(samples: usize) -> SamplesBuffer<f32> {
+        SamplesBuffer::new(1, 44_100, vec![0.5; samples])
+    }
+
+    fn pull(output: &mut impl Iterator<Item = f32>, samples: usize) {
+        for _ in 0..samples {
+            output.next();
+        }
+    }
+
+    #[test]
+    fn reports_a_hand_off_that_the_source_count_cannot_see() {
+        let (sink, mut output) = Sink::new_idle();
+        let started = Arc::new(AtomicU64::new(0));
+        sink.append(tone(4));
+        let len_before = sink.len();
+
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+        pull(&mut output, 5);
+
+        assert_eq!(sink.len(), len_before);
+        assert!(take_gapless_start(&started, 7));
+    }
+
+    #[test]
+    fn reports_each_hand_off_exactly_once() {
+        let (sink, mut output) = Sink::new_idle();
+        let started = Arc::new(AtomicU64::new(0));
+        sink.append(tone(4));
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+        pull(&mut output, 5);
+
+        assert!(take_gapless_start(&started, 7));
+        assert!(!take_gapless_start(&started, 7));
+    }
+
+    #[test]
+    fn does_not_report_a_hand_off_before_playback_reaches_it() {
+        let (sink, mut output) = Sink::new_idle();
+        let started = Arc::new(AtomicU64::new(0));
+        sink.append(tone(4));
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+
+        pull(&mut output, 3);
+        assert!(!take_gapless_start(&started, 7));
+
+        pull(&mut output, 2);
+        assert!(take_gapless_start(&started, 7));
+    }
+
+    #[test]
+    fn stopped_sink_never_reports_its_queued_hand_off() {
+        let (sink, mut output) = Sink::new_idle();
+        let started = Arc::new(AtomicU64::new(0));
+        sink.append(tone(2_000));
+        append_gapless(&sink, tone(2_000), Arc::clone(&started), 5);
+        pull(&mut output, 500);
+
+        sink.stop();
+        pull(&mut output, 4_000);
+
+        assert_eq!(started.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn ignores_a_hand_off_recorded_under_an_earlier_play() {
+        let started = AtomicU64::new(5);
+
+        assert!(!take_gapless_start(&started, 6));
+    }
 }

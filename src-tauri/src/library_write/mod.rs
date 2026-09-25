@@ -9,6 +9,7 @@ use rusqlite::{Connection, OpenFlags};
 use std::sync::Mutex;
 use std::time::Duration;
 
+pub mod genre_carry;
 pub mod playlists;
 pub mod track_remap;
 pub mod user_tree;

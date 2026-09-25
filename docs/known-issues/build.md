@@ -1,6 +1,6 @@
 ---
 description: Known build/release pipeline bugs already shipped once - full detail
-globs:
+paths:
   - ".github/**"
   - "scripts/**"
   - "package.json"

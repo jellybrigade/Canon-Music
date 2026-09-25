@@ -167,6 +167,7 @@ pub fn run() {
             fade_gen: Arc::new(AtomicU64::new(0)),
             pause_pending: Arc::new(AtomicBool::new(false)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
+            gapless_started: Arc::new(AtomicU64::new(0)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
@@ -350,6 +351,8 @@ pub fn run() {
             library_read::loved::get_loved,
             library_read::playlists::get_playlists,
             library_read::tags::get_unmapped_tag_count,
+            library_write::genre_carry::carry_genre_renames,
+            library_write::genre_carry::repair_dangling_genre_id,
             library_write::playlists::playlist_remove_track,
             library_write::user_tree::delete_user_tree_node,
             library_write::track_remap::remap_track_ids,

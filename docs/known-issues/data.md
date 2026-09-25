@@ -1,12 +1,13 @@
 ---
 description: Known data/state bugs already shipped once - full detail
-globs:
+paths:
   - "src/lib/**"
   - "src/db/**"
   - "src/hooks/**"
   - "src/store/**"
   - "src/app/**"
   - "src/components/**"
+  - "src/features/**"
 ---
 
 # Data / state
@@ -33,6 +34,10 @@ Fixed unless marked OPEN.
 - **Paging loop bounded only by server-controlled exit = unbounded.** `fetchAllAlbums` looped forever on `offset`-ignoring server. Fix: repeated first id throws, offset capped 500,000.
   ```
   grep -rn "while (true)\|while(true)" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Clearing an in-memory cache on every keyset refetch blanks what's on screen.** `useAlbumCoverMap`/`useArtistImageMap` queryFns `.clear()`ed loaded data_urls on each invalidation although rows are never rewritten, so every visible cover fell back to the server URL and swapped back. Fix: keep loaded entries, drop only ids gone from the keyset.
+  ```
+  grep -rn "\.clear()" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **Cache table inherits prune-exemption meant for user rows beside it.** `pruneAlbums` skipped `album_covers` (base64 cache) alongside genuinely-kept identity tables, stranding bytes forever. Exempt only if own content justifies it.
   ```
@@ -89,6 +94,10 @@ Fixed unless marked OPEN.
 - **Inline `queryKey` = nothing else can invalidate it.** Album/artist detail routes' inline keys survived background `UPDATE`s stale for whole `staleTime`. Fix: shared nested `QK.*` constants.
   ```
   grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."
+  ```
+- **A write that updates one cached copy leaves the others stale.** `useAlbumAccent` invalidated `QK.albumById` but not `albumBrowseSessionStore`'s row cache, which Home fills Spotlight picks from, so every Home visit until the next sync decoded the cover again and flashed the tint off. Fix: `setAccent` patches the cached rows too. For each `UPDATE`, list every copy of the column: RQ keys *and* session stores.
+  ```
+  grep -rn "UPDATE \(albums\|artists\|tracks\) SET" src --include='*.ts*' | grep -v '\.test\.'
   ```
 - **Duplicated prefetch warms a key nobody reads.** Key/`queryFn`/`staleTime` must be byte-identical; shared in `nowPlayingQueries.ts`. **Repo-wide: `ESCAPE '\'` in TS string = `ESCAPE ''`, throws - write `ESCAPE '\\'`.**
 - **A bare column under `GROUP BY`, and a `LIMIT` cut on a non-unique key, both pick arbitrarily.** `query_artists` took `artwork_url` bare from its group; `query_recent_genres` cut a `LIMIT` across ties, and the first fix covered only the branch the test reached. Fix: `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ..., id)`, a `name COLLATE NOCASE` tiebreak on every branch, `MIN(name)` over a bare `name`. Ask of any aggregate: which row is this, and would two runs agree?
@@ -162,7 +171,7 @@ Fixed unless marked OPEN.
   ```
   grep -rn "file_path" src/features/sync/syncTracks.ts src/features/sync/trackRemap.ts
   ```
-- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/trackIdTables.ts` holds the list with per-table policy, `trackIdTables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains.
+- **A hand-kept list of the tables one id reaches is a list that goes stale.** The prune, the server purge and the remap each need "every table keyed by a track id", and three copies means the twelfth table is in one of them. Fix: `src/db/trackIdTables.ts` holds the list with per-table policy, `trackIdTables.test.ts` sweeps `migrations.ts` for any table it missed and pins the Rust copy against it (the remap runs in a transaction, so it cannot read the TS list). A registry the members are swept into beats an enumeration someone maintains. **Found again** for genre tree ids: a rename carry per scrape as a hand-written migration; now `src/db/genreIdTables.ts`, swept the same way.
   ```
   grep -rn "track_id\b" src/db/migrations.ts | grep -c "" && grep -n "TRACK_ID_TABLES" src/db/trackIdTables.ts src-tauri/src/library_write/track_remap.rs
   ```
@@ -224,4 +233,12 @@ Fixed unless marked OPEN.
 - **Transaction real only if statements share a connection.** `tauri-plugin-sql` pools 10 connections, no affinity - TS `BEGIN` from a user gesture is silent no-op + deadlock. Multi-write mutations go `src-tauri/src/library_write/`; `src/db/migrations.ts` is the only legit TS `BEGIN`.
   ```
   grep -rn '"BEGIN"\|BEGIN TRANSACTION' src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Recall and ranking must see the same query.** `useSearch` tokenized the query for FTS (collapsing whitespace, stripping `"`) but `scoreMatch` scored the raw string, so `love  song` or `he"llo` matched the index and every hit scored 0 and was filtered out. Fix: `toSearchTokens` feeds both. Any query normalized for one stage must be normalized for every later one.
+  ```
+  grep -rn "split(/\\s+/)\|replace(/\"/g" src --include='*.ts*' | grep -v '\.test\.'
+  ```
+- **Text replace over a JSON column hits every string in it.** Migration 52 ran `REPLACE(rules_json, '"punk"', ...)`, which also renamed a smart playlist called `punk` and its contains filters, and `REPLACE(parent_ids, ...)` could list the same parent twice. Fix: rewrite only the id list itself (parse, map, dedupe), as `genre_carry.rs` does.
+  ```
+  grep -rnE "REPLACE\([a-z_.]*(json|_ids)" src --include='*.ts' | grep -v '\.test\.'
   ```

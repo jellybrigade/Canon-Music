@@ -21,6 +21,8 @@ import { extractAccent } from "../lib/artColor";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { QK } from "../lib/queryKeys";
 import { useAlbumAccent } from "./useAlbumAccent";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import type { AlbumRow } from "../types/library";
 
 const SERVER_ID = "srv-a";
 const ALBUM_ID = "srv-a:alb1";
@@ -52,6 +54,7 @@ beforeEach(async () => {
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
   vi.mocked(extractAccent).mockResolvedValue(COLOR);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  useAlbumBrowseSessionStore.setState({ refreshTick: 0, cachedTick: -1, entries: new Map() });
 });
 
 afterEach(() => {
@@ -77,6 +80,23 @@ describe("useAlbumAccent", () => {
     await waitFor(() => expect(storedAccent()).toBe(COLOR));
     expect(invalidate).toHaveBeenCalledTimes(1);
     expect(invalidate).toHaveBeenCalledWith({ queryKey: QK.albumById(ALBUM_ID, SERVER_ID) });
+  });
+
+  it("writes the color into the album list Home reuses, so a Home revisit does not decode again", async () => {
+    const row = (id: string): AlbumRow => ({
+      id, server_id: SERVER_ID, name: id, artist: null, year: null, artwork_url: null, accent_color: null,
+    });
+    const store = useAlbumBrowseSessionStore.getState();
+    store.setRows([row(ALBUM_ID), row("srv-a:alb2")], 0, "artist|");
+    store.setRows([row("srv-a:alb2")], 0, "year|");
+    const untouched = store.getRows("year|", 0);
+
+    renderHook(() => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID), { wrapper });
+    await waitFor(() => expect(storedAccent()).toBe(COLOR));
+
+    const cached = useAlbumBrowseSessionStore.getState().getRows("artist|", 0);
+    expect(cached?.map((album) => album.accent_color)).toEqual([COLOR, null]);
+    expect(useAlbumBrowseSessionStore.getState().getRows("year|", 0)).toBe(untouched);
   });
 
   it("decodes the cover once across a revisit that reads the stored color back", async () => {

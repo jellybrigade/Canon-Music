@@ -27,9 +27,11 @@ export function useAlbums(
   // data paints the previous rows immediately - no loading flash, no re-invoke.
   const [data, setData] = useState<AlbumRow[] | undefined>(() => {
     const s = useAlbumBrowseSessionStore.getState();
-    return s.getRows(cacheKey, s.refreshTick) as AlbumRow[] | undefined;
+    return s.getRows(cacheKey, s.refreshTick);
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  // The key the rows in `data` were read under. A tick refetch keeps its rows on screen, so
+  // only a key with nothing read for it yet is loading; the old key's rows are not an answer.
+  const [loadedKey, setLoadedKey] = useState<string | null>(() => (data === undefined ? null : cacheKey));
   // A failed read leaves `data` undefined, which is indistinguishable from an empty
   // library. Callers need the difference to avoid rendering "no albums" - or a "Loading…"
   // line that never resolves - over a failure. Mirrors useAllTracks.ts.
@@ -40,14 +42,13 @@ export function useAlbums(
     const cached = useAlbumBrowseSessionStore.getState().getRows(cacheKey, refreshTick);
     if (cached) {
       // Cache hit for this exact (sort, ids, tick) - use it, skip the query.
-      setData(cached as AlbumRow[]);
-      setIsLoading(false);
+      setData(cached);
+      setLoadedKey(cacheKey);
       setError(null);
       return;
     }
     let cancelled = false;
     async function load() {
-      setIsLoading(true);
       setError(null);
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both
@@ -57,13 +58,12 @@ export function useAlbums(
         if (!cancelled) {
           useAlbumBrowseSessionStore.getState().setRows(rows, refreshTick, cacheKey);
           setData(rows);
-          setIsLoading(false);
+          setLoadedKey(cacheKey);
         }
       } catch (err) {
         console.error("useAlbums: failed to load albums", err);
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
-          setIsLoading(false);
         }
       }
     }
@@ -74,5 +74,5 @@ export function useAlbums(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sort, canonicalIdsKey, refreshTick, enabled]);
 
-  return { data, isLoading, error };
+  return { data, isLoading: loadedKey !== cacheKey && error === null, error };
 }

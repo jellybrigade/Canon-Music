@@ -43,7 +43,7 @@ export function useAllTracks(enabled: boolean = true) {
     const s = useAllTracksSessionStore.getState();
     return s.rows && s.cachedTick === s.refreshTick ? (s.rows as AllTrackRow[]) : undefined;
   });
-  const [isLoading, setIsLoading] = useState(() => data === undefined);
+  const [isFetching, setIsFetching] = useState(() => data === undefined);
   // A failed read leaves `data` undefined, which is indistinguishable from an empty
   // library. Callers need the difference to avoid rendering "no tracks" over a failure.
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +53,12 @@ export function useAllTracks(enabled: boolean = true) {
     const s = useAllTracksSessionStore.getState();
     if (s.rows && s.cachedTick === refreshTick) {
       setData(s.rows as AllTrackRow[]);
-      setIsLoading(false);
+      setIsFetching(false);
       setError(null);
       return;
     }
     let cancelled = false;
-    setIsLoading(true);
+    setIsFetching(true);
     setError(null);
     (async () => {
       try {
@@ -69,13 +69,13 @@ export function useAllTracks(enabled: boolean = true) {
         if (!cancelled) {
           useAllTracksSessionStore.getState().setRows(rows, refreshTick);
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("useAllTracks: failed to load tracks", err);
         if (!cancelled) {
           setError(err instanceof Error ? err.message : String(err));
-          setIsLoading(false);
+          setIsFetching(false);
         }
       }
     })();
@@ -84,5 +84,6 @@ export function useAllTracks(enabled: boolean = true) {
     };
   }, [refreshTick, enabled]);
 
-  return { data, isLoading, error };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined, error };
 }

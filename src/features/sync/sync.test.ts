@@ -173,10 +173,12 @@ describe("purgeServerData", () => {
       INSERT INTO tag_mappings (raw_value, kind, canonical_id) VALUES ('rock', 'genre', 'rock');
       INSERT INTO user_tree_nodes (id, name, type, canonical_key) VALUES ('n', 'N', 'genre', 'n');
     `);
+    const tables = ["artist_identity", "artist_aliases", "artist_covers", "radio_signal_cache", "tag_mappings", "user_tree_nodes"];
+    const before = await Promise.all(tables.map(async (table) => ({ table, rows: await count(table) })));
+    expect(before.every((entry) => entry.rows > 0)).toBe(true);
     await purgeServerData(asDb(db()), SRV);
-    for (const table of ["artist_identity", "artist_aliases", "artist_covers", "radio_signal_cache", "tag_mappings", "user_tree_nodes"]) {
-      expect({ table, rows: await count(table) }).toEqual({ table, rows: 1 });
-    }
+    const after = await Promise.all(tables.map(async (table) => ({ table, rows: await count(table) })));
+    expect(after).toEqual(before);
   });
 
   it("deletes only its own opensub_extensions settings key", async () => {

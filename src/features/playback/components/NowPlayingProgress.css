@@ -56,6 +56,10 @@
     box-shadow var(--duration-longest) ease;
 }
 
+.now-playing-progress-fill--jump {
+  transition-property: background, box-shadow;
+}
+
 .now-playing-progress-bar--waveform {
   height: 48px;
   background: transparent;

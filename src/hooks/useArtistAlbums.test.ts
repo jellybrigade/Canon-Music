@@ -3,7 +3,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
+import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 import { getDb } from "../db";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { useArtistAlbums } from "./useArtistAlbums";
@@ -67,5 +67,22 @@ describe("useArtistAlbums server scoping", () => {
     await waitFor(() => expect(result.current.data?.map((a) => a.id)).toEqual(["alpha:al1"]));
     rerender({ serverId: "beta" });
     await waitFor(() => expect(result.current.data?.map((a) => a.id)).toEqual(["beta:al2"]));
+  });
+
+  it("keeps isLoading false while a refresh tick refetches the same artist", async () => {
+    seedAlbum("alpha", "1", "Burial");
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useArtistAlbums("Burial", "alpha");
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toHaveLength(1));
+
+    seedAlbum("alpha", "2", "Burial");
+    seen.length = 0;
+    act(() => useArtistAlbumsSessionStore.setState({ refreshTick: 1 }));
+    await waitFor(() => expect(result.current.data).toHaveLength(2));
+    expect(seen).not.toContain(true);
   });
 });

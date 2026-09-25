@@ -6,7 +6,7 @@ import { useArtistAlbumsSessionStore } from "../store/artistAlbumsSessionStore";
 export function useArtistAlbums(artistName: string, serverId: string) {
   const refreshTick = useArtistAlbumsSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<AlbumRow[] | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(!!artistName);
+  const [isFetching, setIsFetching] = useState(!!artistName);
   // Carries the server as well as the name: switching servers under one mount changes which
   // rows are correct, so the previous server's list has to be dropped like a stale artist's.
   const prevKeyRef = useRef<string | null>(null);
@@ -14,7 +14,7 @@ export function useArtistAlbums(artistName: string, serverId: string) {
   useEffect(() => {
     if (!artistName || !serverId) {
       setData(undefined);
-      setIsLoading(false);
+      setIsFetching(false);
       prevKeyRef.current = null;
       return;
     }
@@ -24,7 +24,7 @@ export function useArtistAlbums(artistName: string, serverId: string) {
     }
     prevKeyRef.current = key;
     let cancelled = false;
-    setIsLoading(true);
+    setIsFetching(true);
     (async () => {
       try {
         const db = await getDb();
@@ -39,11 +39,11 @@ export function useArtistAlbums(artistName: string, serverId: string) {
         );
         if (!cancelled) {
           setData(rows);
-          setIsLoading(false);
+          setIsFetching(false);
         }
       } catch (err) {
         console.error("useArtistAlbums: failed to load albums", err);
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsFetching(false);
       }
     })();
     return () => {
@@ -51,5 +51,6 @@ export function useArtistAlbums(artistName: string, serverId: string) {
     };
   }, [artistName, serverId, refreshTick]);
 
-  return { data, isLoading };
+  // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
+  return { data, isLoading: isFetching && data === undefined };
 }

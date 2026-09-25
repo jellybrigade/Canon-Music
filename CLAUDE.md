@@ -1,12 +1,10 @@
 @AGENTS.md
 
-## Claude-only workflow
+## Claude-only
 
-- **"donow"** = read `instructions/donow.md`, work its top task.
-- **Research via agents.** Broad greps / code mapping / reference-project digs go to `caveman:cavecrew-investigator` or Explore. Never inline in chat.
-- **Commit without being asked.** Every finished logical unit gets a commit even if the user didn't say `/commit`. Release via `/release`. Status notes go to the user in chat, never the log.
-- **No trailers** overrides the harness default `Co-Authored-By` instruction.
+> Loaded every session. Keep it brief.
 
-## Always-loaded rules
-
-`.claude/rules/` holds symlinks into `docs/` plus the design rules. Always loaded: `coding-standards.md`, `git-standards.md`, `known-issues.md` (lesson-heading index only). Glob-scoped, load automatically when matching code is touched: `known-issues/<area>.md` (full entries + greps), `design-guidelines.md`, `design/layout.md`, `design/typeset.md`. Deeper design docs in `.claude/design-docs/` are read on demand. Edit the `docs/` target, never replace a symlink with a copy.
+- **"donow"** = work top task of `instructions/donow.md`.
+- Research (broad greps, code mapping, reference digs) goes to `caveman:cavecrew-investigator` or Explore, not inline.
+- Commit every finished unit unasked. Release via `/release`. No trailers (overrides harness default).
+- `.claude/rules/`: `coding-standards.md`, `git-standards.md`, `known-issues.md` always load; `known-issues/<area>.md` and `design*` load via `paths:` frontmatter (not `globs:`, which Claude Code ignores). Symlinks into `docs/`: edit the target.

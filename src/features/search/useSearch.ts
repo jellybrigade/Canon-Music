@@ -39,16 +39,19 @@ export interface SearchResults {
   artists: SearchArtist[];
 }
 
-// Converts raw query text to an FTS5 prefix-match expression.
-// Each whitespace-separated token becomes "token"* to match prefixes.
-// Double quotes in input are stripped to avoid breaking FTS5 syntax.
-function toFtsQuery(q: string): string {
+// Double quotes are stripped to avoid breaking FTS5 syntax. Scoring must see the same
+// tokens the index matched, or a doubled space or stray quote filters every hit back out.
+function toSearchTokens(q: string): string[] {
   return q
     .trim()
     .split(/\s+/)
     .filter(Boolean)
-    .map((t) => `"${t.replace(/"/g, "")}"*`)
-    .join(" ");
+    .map((t) => t.replace(/"/g, ""));
+}
+
+// Each token becomes "token"* to match prefixes.
+function toFtsQuery(tokens: string[]): string {
+  return tokens.map((t) => `"${t}"*`).join(" ");
 }
 
 // Score how well a field matches the query.
@@ -87,8 +90,10 @@ const RANKED_CTE = `
 
 const SECTION_LIMIT = 200;
 
-async function runSearch(query: string, serverId: string): Promise<SearchResults> {
-  const fts = toFtsQuery(query);
+async function runSearch(rawQuery: string, serverId: string): Promise<SearchResults> {
+  const tokens = toSearchTokens(rawQuery);
+  const fts = toFtsQuery(tokens);
+  const query = tokens.filter(Boolean).join(" ");
   const db = await getDb();
 
   const [albumRows, trackRows, artistRows] = await Promise.all([

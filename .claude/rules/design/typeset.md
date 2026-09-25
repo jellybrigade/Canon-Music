@@ -1,7 +1,8 @@
 ---
 description: Typography scale, readability and accessibility rules for components and styles
-globs:
+paths:
   - "src/components/**"
+  - "src/features/**"
   - "src/pages/**"
   - "src/ui/**"
   - "src/app/**"

@@ -295,16 +295,16 @@ export function useAlbumCoverMap(): Pick<Map<string, string>, "get"> {
     queryKey: QK.albumCovers(),
     queryFn: async () => {
       const db = await getDb();
-      // This runs on initial load and on every invalidation (after a sync / cache-all pass).
-      // Drop cached data_urls so any covers whose bytes changed on re-sync get re-pulled
-      // fresh on demand instead of serving stale base64.
-      dataUrlByAlbum.clear();
-      albumLoadsInFlight.clear();
-      // Drop ids queued against the previous keyset too, so a pending drain can't write
-      // pre-invalidation bytes back into the cache we just cleared.
-      pendingAlbumIds.clear();
       const rows = await db.select<{ album_id: string }[]>(`SELECT album_id FROM album_covers`);
-      return rows.map((r) => r.album_id);
+      const ids = rows.map((r) => r.album_id);
+      // A cover row is only ever inserted for a missing album or pruned, never rewritten, so
+      // loaded bytes stay valid across invalidation. Clearing them all made every visible
+      // cover fall back to the server URL and swap back in: only forget pruned ones.
+      const keyset = new Set(ids);
+      for (const albumId of [...dataUrlByAlbum.keys()]) {
+        if (!keyset.has(albumId)) dataUrlByAlbum.delete(albumId);
+      }
+      return ids;
     },
     staleTime: Infinity,
     gcTime: Infinity,

@@ -4,7 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
+import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
 import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
 import { useArtists } from "./useArtists";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
@@ -85,5 +85,23 @@ describe("useArtists", () => {
     const { result } = renderHook(() => useArtists());
     await waitFor(() => expect(result.current.error).toBe("db locked"));
     expect(result.current.data).toBeUndefined();
+  });
+
+  it("keeps isLoading false while a refresh tick refetches rows already shown", async () => {
+    onInvoke("get_artists", () => [artist("A")]);
+    const seen: boolean[] = [];
+    const { result } = renderHook(() => {
+      const r = useArtists();
+      seen.push(r.isLoading);
+      return r;
+    });
+    await waitFor(() => expect(result.current.data).toEqual([artist("A")]));
+
+    onInvoke("get_artists", () => new Promise(() => {}));
+    seen.length = 0;
+    act(() => useArtistBrowseSessionStore.setState({ refreshTick: 1 }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(seen).not.toContain(true);
+    expect(result.current.data).toEqual([artist("A")]);
   });
 });
