@@ -44,9 +44,8 @@ export async function scanForIssues(serverId: string): Promise<void> {
     [serverId]
   );
 
-  // Both grouping queries below were measured against a 169k-track library
-  // (see the item 9 note in instructions/performance-issues.md). The GROUP BY
-  // form beats every EXISTS/index rewrite tried, so leave them alone.
+  // Both grouping queries below were measured against a 169k-track library: the
+  // GROUP BY form beats every EXISTS/index rewrite tried, so leave them alone.
   await db.execute(
     `INSERT OR IGNORE INTO tag_issues (track_id, issue_type, details)
      SELECT t.id, 'inconsistent_album_artist',

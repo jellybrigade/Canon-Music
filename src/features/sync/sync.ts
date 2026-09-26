@@ -377,8 +377,8 @@ export async function syncLibrary(
   const albumsChanged = albumUpsertParams.length > 0 || prunedAlbums > 0;
   const tracksChanged = fetchedCount > 0 || prunedAlbums > 0 || prunedTracks > 0;
 
-  // Both are whole-table sweeps over tracks / track_tags (see performance-issues
-  // items 9 and 18), so they only run when this sync actually touched that data.
+  // Both are whole-table sweeps over tracks / track_tags, so they only run when
+  // this sync actually touched that data.
   if (albumsChanged || tracksChanged) {
     // Scan for tag issues after all data is updated
     await scanForIssues(server.id);
