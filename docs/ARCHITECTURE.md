@@ -160,7 +160,7 @@ Canon/
 │   ├── ui/                    App-wide primitives: Skeleton, ContextMenu, CanonIcon, ErrorBoundary, modal chrome + dismissal hooks
 │   ├── components/            Domain components shared across pages and features
 │   │   ├── AlbumGenreEditor.tsx  Inline genre editor panel: grouped chips with exclude/remove, add-genre autocomplete, unmatched resolver
-│   │   ├── AlbumGrid.tsx      Album card grid; hover heart; off-tree badge (AlertTriangle icon); letter/decade scrubber marks the section at the viewport top
+│   │   ├── AlbumGrid.tsx      Album card grid; hover heart; off-tree badge (AlertTriangle icon); letter/decade scrubber indexes every album (a letter starting mid-row jumps to its row) and marks the section of the top row's first album
 │   │   └── CredentialNotice.tsx  Shared "no credential yet" body: pending vs failed, with a Try again button
 │   ├── styles/
 │   │   ├── tokens.css         Every design token: color/surface/tint/overlay/scrim, spacing, radius, motion, shadow, blur, z-index, type scale, opacity; light-theme overrides

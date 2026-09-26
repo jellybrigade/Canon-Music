@@ -122,6 +122,10 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "flex: 0 0 [0-9]+px" src --include='*.css'
   ```
+- **An index sampled from one element per group misses whatever starts inside a group.** The album grid's A-Z scrubber read each row's first album only, so a letter beginning in column 2+ got no button. Fix: scan every album, jump target stays the row; the active mark follows the top row's first album, not the last label on it. Ask of any per-row or per-page summary: does it read the whole group?
+  ```
+  grep -rnE "items\[0\]|\.items\.at\(0\)" src --include='*.tsx' | grep -v '\.test\.'
+  ```
 - **TS geometry constant restating CSS value drifts silently.** Measure from DOM. Sum literal (`168 + 14`) = tell of hand-copied box model.
 - **Layout constant applied by hand is invisible to library computing offsets.** `AlbumGrid` added `PADDING` itself, `scrollToIndex` parked rows under top edge. Fix: pass `paddingStart`/`paddingEnd`, one writer.
   ```

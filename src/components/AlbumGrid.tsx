@@ -32,6 +32,12 @@ type GridRow =
   | { type: "year-header"; label: string }
   | { type: "albums"; items: AlbumRow[] };
 
+interface ScrubberSection {
+  label: string;
+  rowIndex: number;
+  column: number;
+}
+
 interface Props {
   albums: AlbumRow[];
   serverWithCredential: ServerWithCredential;
@@ -206,30 +212,30 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
         row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : []
       );
       const seen = new Set<string>();
-      const sections: { label: string; rowIndex: number }[] = [];
+      const sections: ScrubberSection[] = [];
       for (const { label, rowIndex } of yearHeaders) {
         const year = parseInt(label, 10);
         const bucketLabel = isNaN(year) ? label : `${Math.floor(year / 10) * 10}s`;
         if (!seen.has(bucketLabel)) {
           seen.add(bucketLabel);
-          sections.push({ label: bucketLabel, rowIndex });
+          sections.push({ label: bucketLabel, rowIndex, column: 0 });
         }
       }
       return sections;
     }
     const seen = new Set<string>();
-    const sections: { label: string; rowIndex: number }[] = [];
+    const sections: ScrubberSection[] = [];
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i]!;
       if (row.type !== "albums") continue;
-      const album = row.items[0];
-      if (!album) continue;
-      const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
-      const ch = src[0]?.toUpperCase() ?? "#";
-      const label = /[A-Z]/.test(ch) ? ch : "#";
-      if (!seen.has(label)) {
-        seen.add(label);
-        sections.push({ label, rowIndex: i });
+      for (const [column, album] of row.items.entries()) {
+        const src = sort === "artist" ? (album.artist ?? album.name) : album.name;
+        const ch = src[0]?.toUpperCase() ?? "#";
+        const label = /[A-Z]/.test(ch) ? ch : "#";
+        if (!seen.has(label)) {
+          seen.add(label);
+          sections.push({ label, rowIndex: i, column });
+        }
       }
     }
     return sections;
@@ -251,7 +257,9 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const topRowIndex = virtualizer.getVirtualItemForOffset(virtualizer.scrollOffset ?? 0)?.index ?? 0;
   let activeSection: string | undefined;
   for (const section of scrubberSections) {
-    if (section.rowIndex > topRowIndex) break;
+    // A letter starting mid-row shares the top row with the letter its first album belongs to.
+    const startsMidTopRow = section.rowIndex === topRowIndex && section.column > 0;
+    if (section.rowIndex > topRowIndex || startsMidTopRow) break;
     activeSection = section.label;
   }
 
