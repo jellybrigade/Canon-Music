@@ -238,6 +238,10 @@ Fixed unless marked OPEN.
   ```
   grep -rn "split(/\\s+/)\|replace(/\"/g" src --include='*.ts*' | grep -v '\.test\.'
   ```
+- **A prefix the format lets repeat must be consumed as a run.** `parseLrc` matched one `[mm:ss.xx]` and kept `(.*)$` verbatim, so LRC's repeated-line form `[00:12.00][01:44.00]chorus` showed a raw bracket and lost the second cue. Fix: match the whole timestamp run, emit one cue per timestamp.
+  ```
+  grep -rn '(\.\*)\$' src --include='*.ts*' | grep -v '\.test\.'
+  ```
 - **Text replace over a JSON column hits every string in it.** Migration 52 ran `REPLACE(rules_json, '"punk"', ...)`, which also renamed a smart playlist called `punk` and its contains filters, and `REPLACE(parent_ids, ...)` could list the same parent twice. Fix: rewrite only the id list itself (parse, map, dedupe), as `genre_carry.rs` does.
   ```
   grep -rnE "REPLACE\([a-z_.]*(json|_ids)" src --include='*.ts' | grep -v '\.test\.'

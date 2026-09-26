@@ -51,6 +51,14 @@ describe("parseLrc", () => {
     expect(parseLrc("")).toEqual([]);
   });
 
+  it("emits one cue per timestamp when a line repeats", () => {
+    expect(parseLrc("[01:44.00][00:12.00]chorus\n[00:30.00]verse")).toEqual([
+      { timeSec: 12, text: "chorus" },
+      { timeSec: 30, text: "verse" },
+      { timeSec: 104, text: "chorus" },
+    ]);
+  });
+
   it("tolerates CRLF line endings", () => {
     expect(parseLrc("[00:01.00]a\r\n[00:02.00]b").map((l) => l.text)).toEqual(["a", "b"]);
   });
