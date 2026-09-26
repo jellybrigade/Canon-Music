@@ -588,7 +588,7 @@
   margin-left: var(--space-xs);
 }
 
-/* ── Discography tabs (underline style, coding-standards.md) ── */
+/* ── Discography tabs (underline style, AGENTS.md) ── */
 .artist-tabs {
   display: flex;
   gap: var(--space-lg);

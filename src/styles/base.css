@@ -37,7 +37,7 @@ body,
   scrollbar-color: var(--border-strong) transparent;
 }
 
-/* Shared underline-tab base (ref impl: .tags-tab-btn in TagsView.css, see coding-standards.md).
+/* Shared underline-tab base (ref impl: .tags-tab-btn in TagsView.css, see AGENTS.md).
    Component-specific tab classes (.tags-tab-btn, .artist-tab-btn, .foryou-v2-tab) layer
    their own font-size/padding/spacing on top of this. */
 .tags-tab-btn,

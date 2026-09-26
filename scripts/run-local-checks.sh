@@ -38,7 +38,7 @@ print_status() {
 branch_check() {
   local branch; branch=$(git rev-parse --abbrev-ref HEAD)
   if [ "$branch" = "main" ]; then
-    echo "On main. All work belongs on development (see docs/git-standards.md)." >&2
+    echo "On main. All work belongs on development (see AGENTS.md)." >&2
     return 1
   fi
   echo "On $branch."
@@ -56,7 +56,7 @@ staged_check() {
   echo "No forbidden staged paths."
 }
 
-# Repo bans em/en dashes anywhere under src/ (see coding-standards.md).
+# Repo bans em/en dashes anywhere under src/ (see AGENTS.md).
 dash_check() {
   local hits
   hits=$(grep -rn $'—\|–' src --include='*.ts' --include='*.tsx' --include='*.css' || true)

@@ -246,9 +246,8 @@ describe("getCoverArtUrl once the cover server is ready", () => {
     // Documents current behavior, not desired behavior. baseUrl/username/credential are
     // all discarded here; the host is reconstructed in Rust from CoverState's single
     // global proxy_config slot, and the disk cache key is `{id}:{size}` with no server
-    // namespace. Same shape as known-issues' "A mirror not scoped by owner". Recorded as
-    // a follow-up in docs/tests.md; flip this assertion when the URL gains a
-    // server id.
+    // namespace. Same shape as known-issues' server_id scoping entry. Flip this
+    // assertion when the URL gains a server id.
     const a = nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 300);
     const b = nav.getCoverArtUrl("http://other.example", "bob", apiKeyCred, "al-1", 300);
     expect(b).toBe(a);
