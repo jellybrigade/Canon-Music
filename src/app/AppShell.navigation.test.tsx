@@ -143,7 +143,6 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     setCanonicalIdFilters: () => {},
     queueClass: "",
     currentTrack: null,
-    metaBarVisible: false,
     sidebarExpanded: false,
     setSidebarExpanded: () => {},
     sidebarLiveWidth: null,

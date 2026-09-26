@@ -33,7 +33,6 @@ import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
 import { usePlayerStore } from "./features/playback/store/player";
-import { useTagsStore } from "./features/tags/store/tags";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
 import type { RadioMode, CurrentTrack } from "./features/playback/store/playerTypes";
 import { extractAccent } from "./lib/artColor";
@@ -69,9 +68,6 @@ export default function App() {
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
 
-  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
-  const pullProgress = useTagsStore((s) => s.pullProgress);
-  const metaBarVisible = !!(enrichmentPending || pullProgress);
 
   const canonicalIdFilters = useLibraryFiltersStore((s) => s.canonicalIdFilters);
   const lovedOnly = useLibraryFiltersStore((s) => s.lovedOnly);
@@ -618,7 +614,6 @@ export default function App() {
     setHideTagBadge,
     queryClient,
     currentTrack,
-    metaBarVisible,
     navItems,
     commandPaletteOpen,
     setCommandPaletteOpen,

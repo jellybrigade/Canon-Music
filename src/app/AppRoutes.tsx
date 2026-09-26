@@ -134,7 +134,6 @@ export interface AppViewProps {
   setHideTagBadge: (v: boolean) => Promise<void>;
   queryClient: QueryClient;
   currentTrack: CurrentTrack | null;
-  metaBarVisible: boolean;
   navItems: NavItem[];
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: React.Dispatch<React.SetStateAction<boolean>>;

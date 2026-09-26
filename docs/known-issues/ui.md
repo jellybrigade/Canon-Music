@@ -131,3 +131,7 @@ Fixed unless marked OPEN.
   ```
   grep -rnE "transition:.*(transform|width).*linear" src --include='*.css'
   ```
+- **Fixed bottom chrome is reserved once, by the shell.** Player bar and status badge take no flow space; each route padded for them itself, and Home (flat 96px vs 116px of chrome), Tags and Unidentified (padding shorthand won by stylesheet order) let the last row sit under the badge. Fix: `:where(.app-layout > *)` gives every route root `margin-bottom: var(--bottom-chrome-reserve)`; a route root must not set a fixed `height` (it defeats the stretch). Guard: `src/lib/bottomChromeGuard.test.ts`.
+  ```
+  grep -rnE "var\(--(player-bar-reserve|normalizing-bar-height)" src --include='*.css' | grep -v styles/base.css
+  ```

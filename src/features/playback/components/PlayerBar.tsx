@@ -203,6 +203,8 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
       "--normalizing-bar-height",
       (pullProgress || enrichmentPending || albumTracksNotice) ? "24px" : "0px"
     );
+    // The badge unmounts with the bar (Now Playing); a stale height would reserve an empty strip.
+    return () => document.documentElement.style.setProperty("--normalizing-bar-height", "0px");
   }, [pullProgress, enrichmentPending, albumTracksNotice]);
 
   useEffect(() => {
