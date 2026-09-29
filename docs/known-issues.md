@@ -99,6 +99,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **Version compares must also catch "too new".** `SchemaTooNewError` on `>` `LATEST_SCHEMA_VERSION`, no retry.
 - **Recall and ranking must see the same query.** `toSearchTokens` feeds FTS and `scoreMatch`. grep: `grep -rn 'split(/\\s+/)\|replace(/"/g' src --include='*.ts*' | grep -v '\.test\.'`
 - **A prefix the format lets repeat must be consumed as a run.** `parseLrc` emits one cue per timestamp in `[a][b]line`.
+- **A non-`Option` Rust field over a nullable column fails the whole read on one row.** `collect::<Result<Vec<_>>>` turned one track with NULL `album_id` into an empty tracks view; filter in SQL or type it `Option`. grep: `grep -rnE "^\s+\w+: (String|i64|f64),$" src-tauri/src/library_read`
 - **Text `REPLACE` over a JSON column hits every string in it.** Parse, map, dedupe the id list (`genre_carry.rs`).
 
 ## UI / overlays / navigation
