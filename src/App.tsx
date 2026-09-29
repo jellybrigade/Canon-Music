@@ -49,6 +49,7 @@ import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
+import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
 import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
@@ -436,18 +437,7 @@ export default function App() {
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
-    const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
-    const rows = await db.select<TrackRow[]>(
-      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
-              ${REPLAY_GAIN_COLUMNS}
-       FROM tracks t
-       JOIN albums a ON t.album_id = a.id
-       JOIN album_genres ag ON ag.album_id = a.id
-       WHERE ag.canonical_id = ?
-       ORDER BY RANDOM()`,
-      [canonicalId]
-    );
+    const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));

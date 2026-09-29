@@ -20,7 +20,6 @@ import { usePlayerStore } from "../features/playback/store/player";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import type { RadioMode, CurrentTrack } from "../features/playback/store/playerTypes";
 import { useSearch } from "../features/search/useSearch";
-import { getDb } from "../db";
 import { stripServerPrefix } from "../lib/ids";
 import { SearchResults } from "../features/search/SearchResults";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
@@ -34,7 +33,8 @@ import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
 import "./HomeView.css";
 import "./GenreView.css";
-import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../lib/replayGainRow";
+import { replayGainFromRow } from "../lib/replayGainRow";
+import { loadGenreSeedTracks } from "../features/radio/lib/genreSeed";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -235,19 +235,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const featuredGenres = recentGenres;
 
   const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
-    const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
-    const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
-              ${REPLAY_GAIN_COLUMNS}
-       FROM tracks t
-       JOIN albums a ON t.album_id = a.id
-       JOIN album_genres ag ON a.id = ag.album_id
-       WHERE ag.canonical_id = ? AND ag.relation = 'direct'
-       ORDER BY RANDOM()
-       LIMIT 1`,
-      [canonicalId]
-    );
+    const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
     const t = rows[0];
     if (!t) return;
     const coverArtUrl = t.artwork_url
