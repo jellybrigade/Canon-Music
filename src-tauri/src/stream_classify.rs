@@ -1,6 +1,5 @@
-//! Decides whether a stream response is actually audio before it reaches the decoder.
-//! Subsonic rides errors on HTTP 200 with a JSON/XML body, which `Decoder::new` would
-//! otherwise misreport as "file could not be decoded".
+//! Checks a stream response is audio before decoding: Subsonic sends errors as HTTP 200
+//! JSON/XML, which `Decoder::new` would misreport as "file could not be decoded".
 
 /// What the response turned out to be.
 #[derive(Debug, PartialEq, Eq)]
