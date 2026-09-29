@@ -1,5 +1,5 @@
 import { buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { apiPost, callSubsonicVoid } from "./navidromeTransport";
+import { apiPost, callSubsonicVoid, SubsonicError } from "./navidromeTransport";
 import type { NavidromeTrack } from "./navidrome";
 
 export interface NavidromePlaylist {
@@ -22,13 +22,13 @@ export async function fetchPlaylists(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       playlists?: { playlist?: NavidromePlaylist[] };
     };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getPlaylists failed");
+    throw new SubsonicError("getPlaylists", response.error?.code ?? null, response.error?.message ?? "getPlaylists failed");
   }
   // Navidrome returns shared playlists twice (owner view + shared view); deduplicate by id.
   const raw = response.playlists?.playlist ?? [];
@@ -50,13 +50,13 @@ export async function fetchPlaylistTracks(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       playlist?: { entry?: NavidromeTrack[] };
     };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getPlaylist failed");
+    throw new SubsonicError("getPlaylist", response.error?.code ?? null, response.error?.message ?? "getPlaylist failed");
   }
   return response.playlist?.entry ?? [];
 }
@@ -75,13 +75,13 @@ export async function createNavidromePlaylist(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       playlist?: NavidromePlaylist;
     };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "createPlaylist failed");
+    throw new SubsonicError("createPlaylist", response.error?.code ?? null, response.error?.message ?? "createPlaylist failed");
   }
   if (!response.playlist) throw new Error("createPlaylist returned no playlist");
   return response.playlist;
@@ -125,11 +125,11 @@ export async function addTracksToNavidromePlaylist(
   const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
   if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
   const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { message: string } };
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "updatePlaylist failed");
+    throw new SubsonicError("updatePlaylist", response.error?.code ?? null, response.error?.message ?? "updatePlaylist failed");
   }
 }
 
@@ -177,10 +177,10 @@ export async function replaceNavidromePlaylistTracks(
   const res = await apiPost(baseUrl, "updatePlaylist", params, altUrl);
   if (!res.ok) throw new Error(`updatePlaylist returned ${res.status}`);
   const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { message: string } };
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "updatePlaylist failed");
+    throw new SubsonicError("updatePlaylist", response.error?.code ?? null, response.error?.message ?? "updatePlaylist failed");
   }
 }

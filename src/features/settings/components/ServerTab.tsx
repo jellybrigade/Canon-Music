@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QK } from "../../../lib/queryKeys";
 import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
+import { loginFailureMessage } from "../../setup/loginFailureMessage";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { keychain } from "../../../lib/keychain";
 import { getDb } from "../../../db";
@@ -101,7 +102,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       setServerTestedCredential(cred);
     } catch (err) {
       setServerTestState("error");
-      setServerTestError(err instanceof Error ? err.message : String(err));
+      setServerTestError(loginFailureMessage(err, editAuthMethod));
     }
   }
 

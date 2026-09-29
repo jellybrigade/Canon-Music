@@ -558,6 +558,16 @@ describe("SubsonicError", () => {
     expect(err.message).toBe("Song not found");
   });
 
+  it("carries the code from a read endpoint too", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    const err = (await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(40);
+    expect(err.message).toBe("Wrong username or password");
+  });
+
   it.each([40, 41, 50])("distinguishes auth code %i from the droppable 70", async (code) => {
     fetchMock.mockResolvedValue(failed({ code, message: "nope" }));
 
@@ -826,6 +836,25 @@ describe("authenticate / authenticateWithApiKey", () => {
     await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow(
       "Wrong username or password"
     );
+  });
+
+  it("keeps the Subsonic code on a refused password login", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    const err = (await settle(authenticate(BASE, "alice", "pw").catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(40);
+  });
+
+  it("keeps the Subsonic code on a refused api-key login", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 44, message: "Invalid API key" }));
+
+    const err = (await settle(authenticateWithApiKey(BASE, "alice", "key-1").catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(44);
+    expect(err.message).toBe("Invalid API key");
   });
 });
 

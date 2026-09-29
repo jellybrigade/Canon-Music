@@ -1,6 +1,6 @@
 import { md5 } from "js-md5";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { apiPost, callSubsonicVoid } from "./navidromeTransport";
+import { apiPost, callSubsonicVoid, SubsonicError } from "./navidromeTransport";
 
 export interface NavidromeAlbum {
   id: string;
@@ -57,7 +57,7 @@ export async function fetchAllAlbums(
 
     const response = data["subsonic-response"];
     if (response.status !== "ok") {
-      throw new Error(response.error?.message ?? "Failed to fetch albums");
+      throw new SubsonicError("getAlbumList2", response.error?.code ?? null, response.error?.message ?? "Failed to fetch albums");
     }
 
     const page = response.albumList2?.album ?? [];
@@ -103,7 +103,7 @@ export async function fetchAlbumListByType(
 
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Failed to fetch album list");
+    throw new SubsonicError("getAlbumList2", response.error?.code ?? null, response.error?.message ?? "Failed to fetch album list");
   }
 
   return response.albumList2?.album ?? [];
@@ -158,7 +158,7 @@ export async function fetchAlbumTracks(
 
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Failed to fetch album tracks");
+    throw new SubsonicError("getAlbum", response.error?.code ?? null, response.error?.message ?? "Failed to fetch album tracks");
   }
 
   return response.album?.song ?? [];
@@ -216,13 +216,13 @@ export async function fetchStarred2(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       starred2?: NavidromeStarred;
     };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getStarred2 failed");
+    throw new SubsonicError("getStarred2", response.error?.code ?? null, response.error?.message ?? "getStarred2 failed");
   }
   return response.starred2 ?? {};
 }
@@ -252,14 +252,14 @@ export async function fetchScanStatus(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       serverVersion?: string;
       scanStatus?: { lastScan?: string; count?: number };
     };
   };
   const response = data["subsonic-response"];
   if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getScanStatus failed");
+    throw new SubsonicError("getScanStatus", response.error?.code ?? null, response.error?.message ?? "getScanStatus failed");
   }
   return {
     lastScan: response.scanStatus?.lastScan ?? null,
@@ -522,33 +522,32 @@ function pingFailureMessage(baseUrl: string, status: number): string {
   return `Server returned ${status}. Check URL (tried: ${normalizeUrl(baseUrl)}/rest/ping.view)`;
 }
 
+async function pingForLogin(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<NavidromeCredential> {
+  const res = await apiPost(baseUrl, "ping.view", buildAuthParams(username, credential));
+  if (!res.ok) {
+    throw new Error(pingFailureMessage(baseUrl, res.status));
+  }
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new SubsonicError("ping.view", response.error?.code ?? null, response.error?.message ?? "Authentication failed");
+  }
+  return credential;
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,
   password: string
 ): Promise<NavidromeCredential> {
   const salt = generateSalt();
-  const token = md5(password + salt);
-  const params = new URLSearchParams({ u: username, t: token, s: salt, v: "1.16.1", c: "canon", f: "json" });
-
-  const res = await apiPost(baseUrl, "ping.view", params);
-  if (!res.ok) {
-    throw new Error(pingFailureMessage(baseUrl, res.status));
-  }
-
-  const data = (await res.json()) as {
-    "subsonic-response": {
-      status: string;
-      error?: { code: number; message: string };
-    };
-  };
-
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Authentication failed");
-  }
-
-  return { type: "md5", token, salt };
+  return pingForLogin(baseUrl, username, { type: "md5", token: md5(password + salt), salt });
 }
 
 export interface SavedPlayQueue {
@@ -615,17 +614,5 @@ export async function authenticateWithApiKey(
   username: string,
   apiKey: string
 ): Promise<NavidromeCredential> {
-  const params = new URLSearchParams({ u: username, apiKey, v: "1.16.1", c: "canon", f: "json" });
-  const res = await apiPost(baseUrl, "ping.view", params);
-  if (!res.ok) {
-    throw new Error(pingFailureMessage(baseUrl, res.status));
-  }
-  const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { code: number; message: string } };
-  };
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Authentication failed");
-  }
-  return { type: "apikey", apiKey };
+  return pingForLogin(baseUrl, username, { type: "apikey", apiKey });
 }

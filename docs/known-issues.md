@@ -71,6 +71,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **All-or-nothing progress never completes under a flaky transport.** `albums.tracks_read_scan` stamps each album with the identity it was read under, so a forced pass resumes.
 - **"The user asked for this" is a parameter, not state a fallback can flatten.** Resync passes `forceTrackPass: true`. grep: `grep -rn "clearSyncWatermark\|forceTrackPass" src --include='*.ts*' | grep -v '\.test\.'`
 - **Per-statement conflict handling decides per statement, not per record.** `UPDATE OR IGNORE` moved child rows onto a destination `tracks` refused; check `SELECT EXISTS` once per record first.
+- **An error rebuilt from the message alone drops the code the caller branches on.** Login threw `new Error(message)`, so Subsonic code 40 could never read as "wrong password"; every envelope failure throws `SubsonicError`. grep: `grep -rn 'throw new Error(.*error?\.message' src --include='*.ts*' | grep -v '\.test\.'`
 - **Drain loops breaking on any error block on the first permanent failure.** Scrobble flush drops error 70, still breaks on 40/41/50.
 - **An effect bailing on an unfilled ref never runs** when the target renders after a skeleton. Use readiness as a dep, or a callback ref (`useMeasuredElement`).
 - **A local-only query must not gate on the network credential.** Gate `enabled` on the token only if `queryFn` uses it. grep: `grep -rn "serverWithCred.*\.server\.id\|serverWithCredential?.server.id" src --include='*.ts*' | grep -v '\.test\.'`

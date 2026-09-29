@@ -113,7 +113,7 @@ Rust (`src-tauri/src/`):
 | Loved | `useLoved.ts`, `syncLoved.ts` | Local write first, star/unstar fire-and-forget; sync replaces local state from `getStarred2`. Album shows loved if starred or any track loved. |
 | Covers | `cover.rs`, `navidromeUrls.ts`, `useCoverCache.ts` | `getCoverArtUrl` returns `cover://` once proxy config is set; `album_covers`/`artist_covers` are data-URL art caches filled by a background pass (batches of 5). |
 | Settings / logs | `useSetting.ts`, `logger.ts`, `settingsBackup.ts` | `useSetting` returns `loaded`; gate expensive work on it. Logger ring buffer (500) flushes to `app_logs` every 3 s when dirty. |
-| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `net_probe.rs` | `apiPost`: 12 s timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). |
+| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `net_probe.rs` | `apiPost`: 12 s timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). A Subsonic error envelope throws `SubsonicError` carrying `code`; login copy for 40/44 lives in `features/setup/loginFailureMessage.ts`. |
 
 ## 6. Genre tree
 
