@@ -17,6 +17,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **A diagnosis used only for message text is not a decision.** The breaker got a 2xx probe, wrote it in the notice, and opened anyway. First 2xx probe in a streak closes it. grep: `grep -rn "probe_server\|ServerProbe" src --include='*.ts*' | grep -v '\.test\.'`
 - **WebKit's `err.stack` has no message line.** Logging the stack alone lost every message; `formatLogValue` prefixes `name: message`. grep: `grep -rn "\.stack" src --include='*.ts*' | grep -v '\.test\.'`
 - **A scroller whose content grows keeps painting at its old width.** New tabs in an `overflow-x: auto` list clipped until hover; key the list on the toggle so it remounts. Not reproducible in jsdom. grep: `grep -rn "overflow-x: auto" src --include='*.css'`
+- **A `box-shadow` ring extends past its element's box; `overflow-x: auto` clips it there.** `.artist-similar-strip` had `padding-bottom` only, so the owned-artist accent ring was cut off at the top; pad every side the ring can bleed into, not just the one that looked wrong.
 - **"Load failed" after ~25s is usually systemd-resolved.** Check `resolvectl status` / `journalctl -u systemd-resolved` first. Hardening: 12s `AbortController`, 3 retries, non-fatal `skippedStages`.
 
 ## Build / release
