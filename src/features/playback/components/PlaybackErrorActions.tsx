@@ -8,12 +8,8 @@ interface Props {
   onOpenResync: () => void;
 }
 
-/**
- * The actions offered beside a playback error, shared by the player bar and the now-playing
- * view so the two cannot drift apart. Retry and Skip always apply; a stale track id is the
- * one failure the user cannot resolve from here, because the ids the whole mirror was built
- * from are gone, so it points at the resync that reads them again.
- */
+/** Shared by the player bar and now-playing view so they can't drift apart. A stale
+ * track id can't be fixed here since the ids the mirror was built from are gone. */
 export function PlaybackErrorActions({ cause, onRetry, onSkip, skipDisabled, onOpenResync }: Props) {
   return (
     <>

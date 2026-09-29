@@ -95,10 +95,8 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
     enabled: !!(artist.trim() || album.trim()),
   });
 
-  // Re-rank raw MB results by our fuzzy score (title + artist + year + known-artist
-  // bonus) so the best match sorts first, and show that score instead of MB's own
-  // relevance score, MB's score can tie same-titled releases by different
-  // artists/years at 100%, which is exactly the ambiguity this needs to break.
+  // MB's own relevance score can tie same-titled releases by different artists/years at 100%;
+  // our fuzzy score (title + artist + year + known-artist bonus) breaks that ambiguity.
   const rankedSearchResults = rawSearchResults
     ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
     : undefined;
@@ -428,10 +426,8 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     enabled: !!artistName.trim(),
   });
 
-  // An MBID already confirmed for this artist via a previously matched album
-  // (album_identity) or a prior artist-identify confirmation. If it's among
-  // the search results, pre-select it, no need to make the user pick between
-  // candidates when we already know the answer.
+  // If an MBID already confirmed via a matched album or prior artist-identify is among the
+  // search results, pre-select it; no need to make the user pick when we already know the answer.
   const { data: confirmedArtistMbid } = useConfirmedArtistMbid(artistName);
   useEffect(() => {
     if (savedIdentity || selectedCandidate || !confirmedArtistMbid || !searchResults) return;

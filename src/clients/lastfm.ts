@@ -139,10 +139,8 @@ export interface LastfmArtistInfo {
 // Hash of Last.fm's "missing artist" placeholder image, reject it everywhere
 export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
-/** Picks the best available artist portrait: Wikidata (and fanart.tv/TheAudioDB,
- * folded into the same column by useEnrichArtist) first, then the server's own
- * scraped image (Navidrome's getArtistInfo2, no MBID needed), then Last.fm direct,
- * filtering out Last.fm's generic placeholder image. */
+/** Priority: Wikidata (fanart.tv/TheAudioDB folded in by useEnrichArtist), then the server's
+ * own scraped image, then Last.fm direct, filtering the generic Last.fm placeholder. */
 export function resolvePortraitUrl(
   enrichment: {
     lastfm_image_url: string | null;
@@ -377,11 +375,8 @@ export interface LastfmTopTrack {
   playcount: number;
 }
 
-/**
- * Normalize a track title for owned-vs-Last.fm matching: strips trailing
- * bracket/parenthetical qualifiers (Remastered, Live, feat. X, year mixes)
- * before the usual alphanumeric fold, so "Song (Remastered 2011)" matches "Song".
- */
+/** Strips trailing bracket/parenthetical qualifiers (Remastered, Live, feat. X, year mixes)
+ * so "Song (Remastered 2011)" matches "Song" against Last.fm. */
 export function normalizeTrackTitle(s: string): string {
   return s
     .toLowerCase()
@@ -454,10 +449,8 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   }
 }
 
-// Last.fm has no per-album track lookup, same-titled tracks across releases (e.g.
-// clipping.'s many "Intro" tracks) share one canonical Last.fm track page. This returns
-// whichever album Last.fm considers representative for that page, used to guess which
-// local copy the playcount actually belongs to.
+// Last.fm has no per-album track lookup; same-titled tracks across releases share one
+// canonical track page, so this guesses which local copy the playcount belongs to.
 export async function fetchTrackAlbum(artist: string, track: string): Promise<string | null> {
   const apiKey = await getApiKey();
   if (!apiKey) return null;

@@ -41,10 +41,7 @@ export interface NavItem {
 }
 
 /**
- * Single computed props bag threaded from App (MainApp role) through AppShell
- * into AppRoutes. App owns every hook/state/handler; the shell and route tree
- * are pure presentational splits that consume this. Passed by spread so the
- * field set is declared once and tsc verifies App supplies all of it.
+ * Passed by spread so the field set is declared once and tsc verifies App supplies all of it.
  */
 export interface AppViewProps {
   // Server / data

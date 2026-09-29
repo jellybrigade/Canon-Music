@@ -3,8 +3,6 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 
-// ── RAM-backed streaming buffer ───────────────────────────────────────────────
-
 struct StreamingState {
     buffer: Vec<u8>,
     read_pos: u64,
@@ -22,11 +20,8 @@ struct StreamingShared {
     data_available: Condvar,
 }
 
-/// Growing byte buffer fed by a background download thread.
-/// Implements `Read + Seek + Send` so it passes directly to `rodio::Decoder`
-/// while the HTTP body is still arriving. Forward reads block on a Condvar
-/// until data arrives. `SeekFrom::End` resolves immediately if Content-Length
-/// is known; otherwise it waits until `finish()` is called.
+/// Growing byte buffer fed by a background download thread; forward reads block on a Condvar
+/// until data arrives. `SeekFrom::End` waits for `finish()` unless Content-Length is known.
 pub struct StreamingBuffer {
     shared: Arc<StreamingShared>,
 }
@@ -164,8 +159,6 @@ impl Seek for StreamingBuffer {
         Ok(new_pos)
     }
 }
-
-// ── File-backed streaming buffer (spill >64 MiB to disk) ─────────────────────
 
 struct FileBufState {
     bytes_written: u64,
@@ -355,8 +348,6 @@ impl Seek for FileBackedStreamingBuffer {
     }
 }
 
-// ── Unified writer for the download thread ────────────────────────────────────
-
 pub enum AnyWriter {
     Ram(StreamingWriter),
     File(FileBackedStreamingWriter),
@@ -391,10 +382,8 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
     use std::time::Duration;
 
-    /// Reads until the reader reports EOF or an error, returning both the bytes that
-    /// arrived and the terminal outcome. Written by hand rather than with
-    /// `read_to_end` because the whole point of these tests is the distinction
-    /// between a clean `Ok(0)` and an `Err`, which `read_to_end` collapses.
+    /// Written by hand rather than `read_to_end`, which collapses the distinction between a
+    /// clean `Ok(0)` and an `Err` that these tests exist to check.
     fn drain<R: Read>(r: &mut R) -> (Vec<u8>, io::Result<usize>) {
         let mut out = Vec::new();
         let mut chunk = [0u8; 8];

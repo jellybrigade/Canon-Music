@@ -11,12 +11,8 @@ interface GenresSessionState {
   setRecentRows: (rows: unknown[], tick: number) => void;
 }
 
-// Fifth domain in the RQ -> local-SQLite-mirror migration (psysonic pattern).
-// Shared by useGenres and useRecentGenres, mirroring how the loved domain
-// shares one store across tracks/albums. Single low-frequency call site
-// (library sync finishing), no debounce needed. Both hooks also cache their
-// fetched rows here (keyed by tick) so remounts and multiple consumers reuse
-// one fetch per tick instead of re-querying, same as allTracksSessionStore.
+// Shared by useGenres and useRecentGenres (RQ -> local-mirror migration), like the loved
+// domain shares one store across tracks/albums. Rows cached by tick so consumers reuse one fetch.
 export const useGenresSessionStore = create<GenresSessionState>((set) => ({
   refreshTick: 0,
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),

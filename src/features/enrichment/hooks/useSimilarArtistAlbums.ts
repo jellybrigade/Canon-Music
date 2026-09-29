@@ -3,10 +3,8 @@ import { QK } from "../../../lib/queryKeys";
 import { getDb } from "../../../db";
 import type { AlbumRow } from "../../../types/library";
 
-// One representative (most recent) album per similar-in-library artist,
-// ordered to match the caller's artistNames ranking (Last.fm similarity),
-// not alphabetically, callers may truncate the result and expect the
-// most-similar artists to survive the cut.
+// Ordered to match artistNames (Last.fm similarity), not alphabetically;
+// callers truncate and expect the most-similar artists to survive the cut.
 export function useSimilarArtistAlbums(artistNames: string[], serverId: string) {
   return useQuery({
     queryKey: QK.similarArtistAlbums(artistNames, serverId),

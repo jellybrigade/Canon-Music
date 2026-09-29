@@ -9,10 +9,8 @@ import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { CurrentTrack } from "../store/playerTypes";
 
-// `source` on a row that carries no lyrics is the only thing separating "we asked every
-// source and none of them had this track" from "the row is here for its offset_ms alone".
-// Both columns are NOT NULL, so the distinction has to be a value. Rows written by `refresh`
-// and by `setOffsetMs` carry this; every completed lookup names the service it came from.
+// Distinguishes "asked every source, found nothing" from "row exists only for offset_ms";
+// both lyric columns are NOT NULL so the distinction must live in a value.
 const NO_LOOKUP_SOURCE = "cleared";
 
 export interface LyricsOverride {
@@ -75,19 +73,15 @@ export function useLyrics(
         "SELECT plain, synced, source FROM lyrics WHERE track_id = ?",
         [track.id]
       );
-      // A completed lookup that found nothing is still a cache hit: most of a library has no
-      // lyrics anywhere, and re-asking three services on every open of the tab costs the whole
-      // lookup for the tracks that can never benefit from it. Only a row `refresh` cleared or
-      // `setOffsetMs` created on its own is worth asking about again.
+      // A completed lookup that found nothing is still a cache hit, otherwise every open of
+      // the tab re-asks three services for tracks that will never have lyrics.
       const hit = cached[0];
       if (hit && (hit.plain || hit.synced || hit.source !== NO_LOOKUP_SOURCE)) {
         return { plain: hit.plain, synced: hit.synced };
       }
 
-      // Try server-side lyrics (OpenSubsonic getLyricsBySongId) before falling back to LRClib.
-      // A null extension list means the probe has not answered yet, so this stage was not
-      // asked rather than asked and declined; the write below must not then record a
-      // completed lookup, or the server's own .lrc is never consulted for this track again.
+      // A null extension list means the probe hasn't answered yet (not asked, not declined);
+      // the write below must not record a completed lookup in that case.
       let everySourceAnswered = true;
       if (serverWithCredential) {
         const { server, credential } = serverWithCredential;

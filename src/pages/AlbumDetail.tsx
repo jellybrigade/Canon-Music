@@ -120,11 +120,8 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     useTrackListSessionStore.getState().bumpRefresh();
   }, [album.id, serverWithCredential]);
 
-  // Auto-sync when all tracks are missing bit_rate, leftover from v32 migration.
-  // Guarded to one attempt per album: doSyncTracks bumps the track-list refresh tick,
-  // which makes useTracks hand back a fresh array and re-run this effect. If the server
-  // reports no bitRate for these tracks, the condition is still true on that new array,
-  // so without the guard this re-syncs the album over the network forever.
+  // Auto-sync when all tracks are missing bit_rate (v32 migration leftover). Guarded to one
+  // attempt per album, or the refetch it triggers would re-satisfy the condition and loop.
   const bitRateSyncedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!tracks || tracks.length === 0) return;

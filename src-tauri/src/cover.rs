@@ -8,10 +8,8 @@ pub(crate) struct CoverProxyConfig {
     pub(crate) auth_params: String,
 }
 
-// Bounds concurrent cover-art request handling. Without this, a burst of grid
-// requests (e.g. rapid sidebar view-switching) fans out unbounded work with
-// no upper bound, which can thread-storm the process into an unrecoverable
-// SIGKILL. Permit acquired before the blocking fetch/decode work runs.
+// Bounds concurrent cover-art requests; without it a burst of grid requests (rapid
+// sidebar switching) can thread-storm the process into an unrecoverable SIGKILL.
 pub(crate) const MAX_COVER_REQUESTS: usize = 16;
 
 // In-memory cache capped at this many entries, cleared on overflow (simple,
@@ -37,12 +35,8 @@ pub(crate) struct CoverState {
 pub(crate) static COVER_CACHE_DIR: std::sync::OnceLock<std::path::PathBuf> =
     std::sync::OnceLock::new();
 
-/// Cache keys (cover ids, artist-image source URLs) can contain characters unsafe
-/// for filenames (`/`, `:`, `?`) - replace anything outside a safe set instead of
-/// hashing, so cache files stay debuggable by eye. `kind` namespaces cover vs.
-/// artist-image keys into distinct filenames so a sanitized collision between
-/// the two (e.g. a cover `"id:size"` key and an unrelated artist-image URL both
-/// reducing to the same safe string) can't serve one type's bytes for the other.
+/// Cache keys can contain filename-unsafe characters; replace anything outside a safe set
+/// (not hash) so files stay debuggable. `kind` namespaces keys so a collision can't cross types.
 pub(crate) fn sanitize_cache_key(kind: &str, key: &str) -> String {
     let safe: String = key
         .chars()
@@ -90,11 +84,9 @@ pub(crate) fn disk_cache_write(
     }
 }
 
-/// Sweeps the disk cache down to `MAX_DISK_CACHE_ENTRIES` image entries (each with
-/// its `.ct` sidecar) by deleting oldest-mtime files first, once the cap is exceeded.
-/// Bounded like the in-memory cache's clear-on-overflow, just LRU-ish instead of a
-/// full clear since disk persistence is the point. Called periodically (not on
-/// every write) from `disk_cache_write` since it's a full directory scan.
+/// Sweeps the disk cache down to `MAX_DISK_CACHE_ENTRIES`, deleting oldest-mtime files
+/// first; LRU-ish rather than a full clear since disk persistence is the point, and called
+/// periodically rather than every write since it's a full directory scan.
 pub(crate) fn evict_disk_cache_if_needed(dir: &std::path::Path) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
@@ -157,13 +149,9 @@ pub fn set_cover_proxy_config(
     });
 }
 
-// `getBlurredBackdrop` (src/lib/artBlur.ts) loads cover images with
-// `img.crossOrigin = "anonymous"` so it can read pixels back via canvas for the
-// blurred NowPlaying backdrop. Per Tauri's custom-scheme docs, cross-origin
-// image/fetch loads against a registered scheme need an explicit
-// Access-Control-Allow-Origin or the browser treats the canvas as tainted -
-// needed on every response (including errors) or a failed fetch surfaces as an
-// opaque network error instead of the real status.
+// `getBlurredBackdrop` loads covers with `crossOrigin = "anonymous"` to read pixels via
+// canvas; needs Access-Control-Allow-Origin on every response, including errors, or a
+// failed fetch surfaces as an opaque network error instead of the real status.
 pub(crate) fn cover_error_response(status: u16) -> tauri::http::Response<Vec<u8>> {
     tauri::http::Response::builder()
         .status(status)
@@ -185,10 +173,8 @@ pub(crate) fn cover_image_response(
         .unwrap_or_else(|_| cover_error_response(500))
 }
 
-/// Handles a `cover://localhost/cover/<id>?size=<n>` or `cover://localhost/artist-image/<encoded>`
-/// request: in-memory cache -> on-disk cache -> upstream fetch (Navidrome or the raw artist-image
-/// source URL), populating both caches on a miss. Runs on a `spawn_blocking` thread, gated by
-/// `CoverState.request_sem` (see caller) - same 16-permit cap the old loopback server used.
+/// Handles a `cover://` request: in-memory cache -> on-disk cache -> upstream fetch,
+/// populating both on a miss. Runs on a `spawn_blocking` thread gated by `CoverState.request_sem`.
 pub(crate) fn handle_cover_request(
     state: &CoverState,
     request: &tauri::http::Request<Vec<u8>>,

@@ -6,15 +6,7 @@ import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 
-/**
- * Subsonic error 70 at play time means the server does not know the id Canon asked for, which
- * after a server-side id migration is true of most of the library at once. Re-resolve that one
- * album against the server, carry the local-only rows onto the new ids, and play again.
- *
- * Deliberately per album rather than a full resync: the user pressed play, not sync, and a full
- * pass is 1500+ requests. An album is repaired at most once per session, because a repair that
- * did not help would otherwise answer its own error forever.
- */
+/** On Subsonic 70 at play time, re-resolves the album's track ids and retries, once per album per session. */
 export function useTrackIdRepair(serverWithCredential: ServerWithCredential | undefined): void {
   // Read through a ref so a credential arriving does not tear down and re-arm the listener.
   const serverRef = useRef(serverWithCredential);

@@ -230,12 +230,8 @@ export interface NavidromeScanStatus {
   serverVersion: string | null;
 }
 
-/**
- * `getScanStatus`, the cheapest evidence that the server's own ids may have moved.
- *
- * Some deployments restrict it to admins, so a failure means "no evidence" and the caller
- * has to fall back to probing ids directly - never to assuming nothing changed.
- */
+/** Some deployments restrict `getScanStatus` to admins, so a failure means "no evidence" -
+ * the caller must fall back to probing ids directly, never assume nothing changed. */
 export async function fetchScanStatus(
   baseUrl: string,
   username: string,
@@ -262,19 +258,12 @@ export async function fetchScanStatus(
   };
 }
 
-/**
- * "The requested data was not found." After a server-side id migration this is true of most
- * of the library at once, which is why several callers need to tell it from every other
- * rejection rather than treating any failure the same.
- */
+/** "The requested data was not found." After a server-side id migration this is true of
+ * most of the library at once, so callers must tell it apart from every other rejection. */
 export const SUBSONIC_NOT_FOUND = 70;
 
-/**
- * Whether the server still knows a track id, for the sync's skip probe.
- *
- * Only a Subsonic error 70 counts as "gone": every other failure is the transport or the
- * account, which says nothing about the id and must not be read as evidence either way.
- */
+/** Only Subsonic error 70 counts as "gone"; every other failure is the transport or the
+ * account and must not be read as evidence either way. */
 export async function songExists(
   baseUrl: string,
   username: string,

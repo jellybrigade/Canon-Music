@@ -1,17 +1,6 @@
 /**
- * Fixed-size worker pool for long background passes (artist-image warm-up,
- * background normalizer).
- *
- * Why a pool instead of the `for (batch of chunks) { await Promise.all(batch); await sleep() }`
- * shape these passes used to have: a chunk loop is a barrier. Every item in a chunk
- * waits for the slowest one before the next chunk starts, so per-item wall clock is
- * `max(chunk) + delay` rather than `avg(item)`. With N workers pulling from a shared
- * cursor, a slow item only occupies its own worker.
- *
- * Pacing is NOT this helper's job. Both callers are network-bound and already have a
- * real throttle in front of the network (`makeRateLimiter` for Last.fm, a per-host
- * token bucket for portraits), so the pool only decides how many items may be
- * in flight, never how fast requests leave.
+ * Fixed-size worker pool for long background passes. Unlike chunked `Promise.all`, a slow item
+ * holds only its own worker. Caps concurrency only; callers own rate limiting.
  */
 export interface PoolOptions {
   concurrency: number;
@@ -20,12 +9,7 @@ export interface PoolOptions {
   onProgress?: (done: number, total: number) => void;
 }
 
-/**
- * Runs `worker` over every item with at most `concurrency` in flight.
- * A worker that throws is treated as a completed item, so one bad item cannot
- * abort the pass; the worker is responsible for logging its own failure.
- * Resolves once every item has settled, or early once `signal` aborts.
- */
+/** Runs `worker` over items with at most `concurrency` in flight; a throw counts as settled, not aborted. */
 export async function runPool<T>(
   items: readonly T[],
   worker: (item: T, index: number) => Promise<void>,

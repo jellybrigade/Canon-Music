@@ -1,12 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
-// Scroll offsets survive unmount so returning to a browse view lands where the
-// user left it. Deliberately module-level and not persisted: this is session
-// memory, not a setting, and a stored offset from a previous run would point
-// into a library that may have been re-sorted or re-synced since.
-//
-// Bounded because the key includes ids for detail routes (/playlist/<id>), so
-// a long session browsing many playlists would otherwise grow it without limit.
+// Module-level, not persisted: session memory only, since a stored offset could point
+// into a re-synced library. Bounded since keys include detail-route ids (/playlist/<id>).
 const MAX_KEYS = 64;
 const offsets = new Map<string, number>();
 
@@ -22,15 +17,7 @@ function remember(key: string, top: number) {
   }
 }
 
-/**
- * Remembers `ref`'s scrollTop under `key` and restores it on the next mount.
- *
- * `ready` gates both halves: a virtualized scroller has no scrollable height
- * until its rows exist, so setting scrollTop before then is silently clamped to
- * 0, and a view that renders its scroller only once it has content has no
- * element to listen on before then either. Pass the condition that means
- * "content has height" (rows.length > 0), not merely "the element is mounted".
- */
+/** Remembers `ref`'s scrollTop under `key`; pass `ready` as "content has height" or restores clamp to 0. */
 export function useScrollMemory(
   ref: RefObject<HTMLElement | null>,
   key: string,
@@ -49,11 +36,8 @@ export function useScrollMemory(
     if (saved) el.scrollTop = saved;
   }, [ref, key, ready]);
 
-  // `ready` gates the save too, and not only as an optimisation: a view that renders a
-  // skeleton or an empty state instead of its scroller has no element on the first pass,
-  // and an effect that bails on a null ref never re-runs unless a dep moves. Without
-  // `ready` in the deps, `ArtistGrid` never attached this listener at all and recorded no
-  // offset for the restore above to find.
+  // `ready` gates the save too: a skeleton/empty-state render has no element on the first
+  // pass, and an effect bailing on a null ref never re-runs unless `ready` is a dep.
   useEffect(() => {
     if (!ready) return;
     const el = ref.current;

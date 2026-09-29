@@ -42,10 +42,8 @@ fn map_genre_row(row: &rusqlite::Row) -> rusqlite::Result<GenreRowDto> {
     })
 }
 
-// Genres from the 10 most recently played albums, falling back to top genres by
-// album_count when there is no scrobble history. The fallback branch lived in JS
-// before (src/hooks/useGenres.ts useRecentGenres); it is decided here now so the
-// no-history case costs one IPC round trip instead of two.
+// Falls back to top genres by album_count when there is no scrobble history, decided here
+// so the no-history case costs one IPC round trip instead of two.
 #[tauri::command]
 pub fn get_recent_genres(
     app: tauri::AppHandle,

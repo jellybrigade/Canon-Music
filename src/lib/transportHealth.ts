@@ -106,10 +106,8 @@ export async function noteTransportTimeout(baseUrl: string): Promise<string | nu
   let excuse: string | null = null;
   const probing = probeNativeStack(baseUrl).then((probe) => {
     if (state.openings !== opening) return;
-    // Rust reaching the server in the same moment means the server and the network are up
-    // and one connection was lost, so the first such stall does not get to pause every
-    // request. Only the first: a webview that keeps timing out while Rust keeps getting
-    // through is the stalled-resolver case this breaker was written for.
+    // Rust succeeding at the same moment means only one connection was lost, so the first
+    // such stall doesn't pause every request; only a webview stuck while Rust works is the resolver case this guards.
     if (!state.excused && probe !== null && answeredOk(probe)) {
       state.excused = true;
       state.openings -= 1;

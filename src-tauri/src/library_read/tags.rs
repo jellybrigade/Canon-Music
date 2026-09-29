@@ -1,9 +1,7 @@
 use super::LibraryReadStore;
 use rusqlite::Connection;
-// Scalar replacement for the full useTagVocab payload at app root, which existed only
-// to compute this badge number. Reproduces the JS predicate exactly:
-// !canonical_id && album_count > 0. The UNION ALL arm of the vocab query always has
-// album_count = 0, so it can never satisfy the predicate and is dropped here.
+// Reproduces the JS predicate exactly: !canonical_id && album_count > 0. The UNION ALL arm
+// of the vocab query always has album_count = 0, so it's dropped here.
 #[tauri::command]
 pub fn get_unmapped_tag_count(
     app: tauri::AppHandle,

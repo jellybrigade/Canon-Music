@@ -36,11 +36,8 @@ export const DEFAULT_SMART_FILTERS: SmartFilters = {
   minPlayCount: 0,
 };
 
-// `rules_json` is read back in three places, two of them inside a render body, so a
-// malformed or legacy value must not throw. Merging over the defaults also covers rows
-// written before a field existed: an absent `genreMode` used to read as `undefined`,
-// which `buildSmartQuery` treats as "exclude", and an absent `selectedGenres` threw on
-// `.length` there. Returns null only when the JSON itself is unusable.
+// Must not throw on malformed or legacy JSON. Merging over defaults covers rows written
+// before a field existed (e.g. missing `genreMode`, `selectedGenres`); null means unusable JSON.
 export function parseSmartFilters(rulesJson: string | null): SmartFilters | null {
   if (!rulesJson) return null;
   try {

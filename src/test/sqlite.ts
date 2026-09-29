@@ -1,17 +1,6 @@
 /**
- * In-memory SQLite harness presenting the same `execute` / `select` surface as
- * tauri-plugin-sql's `Database`, backed by better-sqlite3.
- *
- * This is what makes `src/features/sync/sync.ts`, `smartPlaylist.ts`, `dbBatch.ts` and the query hooks
- * testable at all: they only ever touch `getDb()`, so a test can hand them this object and
- * assert against real SQL against the real schema, rather than mocking the queries away and
- * proving nothing.
- *
- * Deliberate differences from the plugin, both of which matter when reading a failure:
- * - `execute` here is synchronous underneath, so an interleaving bug that only shows up across
- *   the async SQL bridge will not reproduce.
- * - the plugin rejects with a plain string, not an `Error`. `migrations.ts` handles both shapes,
- *   so tests here exercise the `Error` branch.
+ * In-memory better-sqlite3 behind tauri-plugin-sql's `execute`/`select` surface. Differs from
+ * the plugin: synchronous underneath (no async interleavings), and rejects with `Error`, not string.
  */
 import BetterSqlite3 from "better-sqlite3";
 import { runMigrations } from "../db/migrations";
@@ -33,9 +22,8 @@ export interface FakeDatabase {
   /** Count of `select` calls, for "this pass reads the library once" assertions. */
   selectCount: number;
   /**
-   * Every statement seen, in order, tagged by kind. Waste assertions usually want a count
-   * of one *shape* of query rather than of all SQL, and a total alone cannot tell a second
-   * read of the same table from a different read that had to happen.
+   * Every statement seen, in order, tagged by kind - waste assertions usually want a
+   * count of one query *shape*, which a bare total can't distinguish.
    */
   queryLog: { kind: "execute" | "select"; sql: string }[];
 }
@@ -97,9 +85,8 @@ function wrapRaw(raw: BetterSqlite3.Database): FakeDatabase {
 }
 
 /**
- * Runs the real `runMigrations` from `src/db/migrations.ts` against the harness db. This calls
- * production code on purpose: the harness used to carry its own copy of the runner, so a fix to
- * one copy left the other stale and the suite green either way.
+ * Runs the real `runMigrations` on purpose: a harness-owned copy of the runner
+ * previously went stale while the suite stayed green.
  */
 export async function migrateTestDb(db: FakeDatabase): Promise<void> {
   await runMigrations(db);

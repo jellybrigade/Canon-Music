@@ -8,11 +8,8 @@ export function useWakeLock() {
   useEffect(() => {
     if (!("wakeLock" in navigator)) return;
 
-    // request() is async, so a pause arriving inside the request window used to run
-    // this effect's cleanup while lockRef was still null: cleanup released nothing,
-    // then the pending request resolved and stored a live sentinel nobody owned, and
-    // the screen stayed awake for the rest of the session. Release against the intent
-    // recorded here, not against whatever happened to be in the ref when cleanup ran.
+    // request() is async: a pause during the request window could run cleanup before the
+    // sentinel is stored, orphaning it awake forever. Release against this intent flag, not the ref.
     let cancelled = false;
     // A visibilitychange inside the request window would otherwise start a second
     // request whose sentinel overwrites the first, leaving that one unreleased.

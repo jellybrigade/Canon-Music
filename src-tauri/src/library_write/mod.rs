@@ -1,10 +1,5 @@
-// Write counterpart to library_read/. Exists for one reason: a mutation whose
-// intermediate states are invalid cannot be made atomic from TypeScript.
-// tauri-plugin-sql runs every execute() through an sqlx pool (Pool::connect, default 10
-// connections) with no connection affinity, so a "BEGIN" issued from TS is only really a
-// transaction while nothing else queries concurrently - which src/db/migrations.ts can
-// guarantee and a user-triggered playlist edit cannot (the 5-minute sync overlaps it).
-// See known-issues.md, "A statement sequence whose intermediate states are invalid".
+// tauri-plugin-sql pools connections with no affinity, so a "BEGIN" from TS is only a real
+// transaction while nothing else queries concurrently; multi-write mutations need this instead.
 use rusqlite::{Connection, OpenFlags};
 use std::sync::Mutex;
 use std::time::Duration;

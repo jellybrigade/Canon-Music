@@ -52,7 +52,6 @@ pub async fn audio_play(
     // Reset gapless state — any pending enqueue is now stale.
     state.gapless_queued.store(false, Ordering::Relaxed);
 
-    // Take cached bytes if available; clear remaining stale entries.
     let cached_bytes = {
         let mut cache = state
             .prefetch_cache
@@ -63,11 +62,9 @@ pub async fn audio_play(
         hit
     };
 
-    // Download and decode on a blocking thread so audio_play returns immediately.
-    // Pre-fetched bytes use an in-memory Cursor (instant start). Otherwise a
-    // StreamingBuffer lets the decoder start as soon as format-probing data arrives
-    // (~first 64 KB), reducing initial buffering wait. Tracks >64 MiB spill to a
-    // temp file in stream-spill/ to avoid accumulating large Vec<u8> in RAM.
+    // Decode on a blocking thread so audio_play returns immediately. Pre-fetched bytes use
+    // an in-memory Cursor; otherwise a StreamingBuffer lets decoding start on the first ~64KB,
+    // and tracks >64 MiB spill to stream-spill/ instead of accumulating in RAM.
     std::thread::spawn(move || {
         let spill_dir = app
             .path()
@@ -75,7 +72,6 @@ pub async fn audio_play(
             .ok()
             .map(|d| d.join("stream-spill"));
 
-        // Build reader: either from prefetch cache or a streaming HTTP response.
         let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
             (Box::new(Cursor::new(bytes)), String::new())
         } else {
@@ -105,11 +101,9 @@ pub async fn audio_play(
                 .to_string();
             let content_length = response.content_length();
 
-            // reqwest treats a 404 or a 500 as a successful request, and Subsonic rides its
-            // own errors on a 200 with a JSON body, so neither the status line nor the
-            // content-type alone can keep an error page out of the decoder. It surfaced as a
-            // bogus "unrecognised format" several seconds later, blaming the file for a stale
-            // track id. Read the head first and let `classify_stream_response` name the cause.
+            // reqwest treats 404/500 as success, and Subsonic errors ride a 200 with a JSON
+            // body, so status/content-type alone can't keep an error page out of the decoder
+            // (it surfaced as a bogus "unrecognised format"); read the head and classify it.
             let mut response = response;
             let mut head: Vec<u8> = Vec::new();
             {
@@ -198,11 +192,9 @@ pub async fn audio_play(
                     writer.finish();
                     return;
                 }
-                // A read error part-way through the body, or a body that stops short of the
-                // advertised Content-Length, is a truncated track. Ending the writer normally
-                // would hand the decoder a clean EOF, the sink would empty, and a server dying
-                // mid-track would look exactly like a track that reached its end: silently cut
-                // short, then auto-advanced past, with no error anywhere.
+                // A read error or a body short of Content-Length is a truncated track; ending the
+                // writer normally would hand the decoder a clean EOF and it would auto-advance
+                // past a dead server silently, with no error anywhere.
                 let mut truncated = false;
                 loop {
                     if play_id_dl.load(Ordering::Relaxed) != this_id {
@@ -357,10 +349,8 @@ pub async fn audio_play(
     Ok(())
 }
 
-/// Called by JS at ~80% of the current track. Downloads the file (or uses the
-/// prefetch cache if available), decodes it, and appends it to the active sink so
-/// rodio transitions without silence. Emits `track-advanced` when the current
-/// source finishes and the next one begins.
+/// Called by JS at ~80% of the current track; appends the next source to the active
+/// sink so rodio transitions without silence.
 #[tauri::command]
 pub async fn audio_enqueue_next(
     app: tauri::AppHandle,
@@ -393,7 +383,6 @@ pub async fn audio_enqueue_next(
             app.emit("gapless-cancelled", ()).ok();
         };
 
-        // Use prefetch cache if a concurrent audio_prefetch already downloaded this URL.
         let cached = {
             cache_arc
                 .lock()
@@ -462,12 +451,9 @@ pub async fn audio_enqueue_next(
 
         let sink_opt = sink_arc.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if let Some(sink) = sink_opt {
-            // The current track already ran out while this download was in flight, so the
-            // watcher has exited and emitted track-ended. play_id has not been bumped yet
-            // (the frontend's audio_play is still an IPC round trip away), so the checks
-            // above pass. Appending here would start this source on the dead sink for the
-            // few milliseconds until audio_play stops it — an audible blip of the wrong
-            // track start, with no watcher left to clear the gapless flag.
+            // The track already ran out while this download was in flight (watcher exited,
+            // play_id not yet bumped since audio_play is an IPC round trip away), so appending
+            // here would blip the wrong track on the dead sink with no watcher to clear the flag.
             if sink.empty() {
                 cancel(&gapless_queued, &app);
                 return;

@@ -3,10 +3,8 @@ import { SearchView, type SearchViewProps } from "../features/search/SearchView"
 import { ROUTES } from "../lib/routes";
 
 /**
- * Stand-in for `AppRoutes` in the acceptance suites that drive search. Every other route pulls
- * its own data and none of those files assert on it, but `/search` is their subject, so that
- * one path renders the real `SearchView`. `AppViewProps` already carries every prop it needs;
- * the rest ride along and are ignored.
+ * Stand-in for `AppRoutes` in acceptance suites that drive search: only `/search` renders the
+ * real `SearchView`, other routes render an inert placeholder.
  */
 export function AppRoutesSearchStub(props: SearchViewProps) {
   return useLocation().pathname === ROUTES.SEARCH

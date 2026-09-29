@@ -23,17 +23,8 @@ fn remove_playlist_track(
         rusqlite::params![playlist_id, position],
     )
     .map_err(|e| e.to_string())?;
-    // Close the hole the delete left. `position` doubles as the server's
-    // songIndexToRemove (see the call in PlaylistDetail), and the server compacts its own
-    // indexes on removal, so leaving a gap means the next removal in the same session
-    // sends a stale index and deletes the wrong track server side. It is also what the row
-    // numbering renders, so a gap shows up as 1, 2, 4.
-    //
-    // Two passes through negative space because PRIMARY KEY (playlist_id, position) is
-    // enforced per row: a single in-place decrement collides with the row still holding the
-    // target position whenever SQLite happens to scan descending. That negative window is
-    // exactly why this lives in one transaction - a process killed between the passes would
-    // otherwise leave rows at negative positions that nothing ever repairs.
+    // Close the gap: `position` is the server's songIndexToRemove, so a hole makes the next
+    // removal hit the wrong track. Two passes via negative positions to dodge the PK.
     tx.execute(
         "UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?",
         rusqlite::params![playlist_id, position],

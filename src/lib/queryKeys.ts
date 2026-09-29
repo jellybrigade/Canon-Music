@@ -6,11 +6,8 @@ export const QK = {
   albumsListeningStats: () => ["albums", "listening-stats"] as const,
   /** Partially-heard albums. Backs both "Finish the album" and "Almost done". */
   albumsPartiallyHeard: () => ["albums", "partially-heard"] as const,
-  /**
-   * One album row, for the detail route. Nested under `albums` so a broad
-   * `albumsAll()` invalidation reaches it; scoped by server because the row it
-   * resolves is only unambiguous, not necessarily the selected server's.
-   */
+  /** One album row for the detail route; nested under `albums` for broad invalidation,
+   * scoped by server since the row alone doesn't guarantee the selected server. */
   albumById: (albumId: string | undefined, serverId: string | undefined) =>
     ["albums", "by-id", albumId, serverId] as const,
   // Partial key for broad invalidation of all album queries

@@ -24,10 +24,8 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     void (async () => {
       const db = await getDb();
 
-      // "Restore queue on startup" is a single user-facing setting, so it has to gate the
-      // server-side restore too. Only loadSettings honoured it, which meant turning the
-      // setting off suppressed the local snapshot and then let the server put the queue
-      // straight back.
+      // Must gate the server-side restore too, or turning this setting off still lets
+      // the server put the queue back after the local snapshot is suppressed.
       const settingRows = await db.select<{ value: string }[]>(
         "SELECT value FROM settings WHERE key = 'queue.restore_on_startup'",
         []

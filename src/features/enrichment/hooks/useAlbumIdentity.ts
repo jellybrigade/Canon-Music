@@ -18,8 +18,6 @@ import { stripTrailingBrackets } from "../lib/albumIdentify";
 const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
 
-// ── Stored identity row ────────────────────────────────────────────────────────
-
 export interface AlbumIdentityRow {
   album_id: string;
   mb_release_group_id: string | null;
@@ -60,12 +58,7 @@ export function useAlbumIdentity(albumId: string) {
   });
 }
 
-/**
- * Looks for an MB artist MBID already confirmed for this artist name, either
- * via the artist-identify dialog (`artist_identity`) or a previously matched
- * album by the same artist (`album_identity`). Used to disambiguate release
- * groups that share a title across different artists.
- */
+/** Used to disambiguate release groups that share a title across different artists. */
 export function useConfirmedArtistMbid(artistName: string) {
   return useQuery({
     queryKey: QK.confirmedArtistMbid(artistName),
@@ -92,8 +85,6 @@ export function useConfirmedArtistMbid(artistName: string) {
   });
 }
 
-// ── Live lookup result ─────────────────────────────────────────────────────────
-
 export type MatchStatus = "found" | "ambiguous" | "not_found" | "error";
 
 export interface AlbumLookupResult {
@@ -106,10 +97,6 @@ export interface AlbumLookupResult {
   error: string | null;
 }
 
-/**
- * On-demand MB lookup. Only fires when `enabled` is true.
- * Uses saved MBIDs if available; otherwise searches by artist + album strings.
- */
 export function useIdentifyAlbum({
   albumId,
   artist,
@@ -137,7 +124,6 @@ export function useIdentifyAlbum({
     queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount, year, confirmedArtistMbid),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
-        // Step 1: resolve RG MBID, prefer explicit override, then search
         let rgId = overrideMbRgId ?? null;
         let candidates: MbReleaseGroupCandidate[] = [];
 
@@ -166,7 +152,6 @@ export function useIdentifyAlbum({
             };
           }
 
-          // Filter by track count, then rank by fuzzy score
           const filtered = filterByTrackCount(candidates, trackCount ?? 0);
           const ranked = rankCandidates(filtered, artist, searchTitle, year, confirmedArtistMbid);
           const top = ranked[0]!;
@@ -178,7 +163,6 @@ export function useIdentifyAlbum({
             top.candidate.primaryType !== "Single" &&
             second?.candidate.primaryType === "Single";
 
-          // Auto-pick if one clear winner, user still confirms in dialog
           if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
             rgId = top.candidate.id;
             candidates = ranked.map((r) => r.candidate);
@@ -196,11 +180,8 @@ export function useIdentifyAlbum({
           }
         }
 
-        // Step 2: full RG lookup (genres + releases)
         const rgDetail = await lookupReleaseGroup(rgId);
 
-        // Step 3: release lookup for combined genres
-        // Use explicit override if provided, else pick first release with a date
         let releaseDetail: MbReleaseDetail | null = null;
         const releaseId =
           overrideMbReleaseId ??
@@ -252,8 +233,6 @@ export function useIdentifyAlbum({
   });
 }
 
-// ── Save confirmed identity ────────────────────────────────────────────────────
-
 export interface SaveAlbumIdentityInput {
   albumId: string;
   mbReleaseGroupId: string | null;
@@ -275,10 +254,8 @@ export interface SaveAlbumIdentityInput {
   matchScore?: number | null;
 }
 
-/**
- * Single write path for album_identity rows. Accepts an optional confirmedAt
- * so bulk callers can supply their own timestamp without calling Date.now() twice.
- */
+/** Accepts an optional confirmedAt so bulk callers can supply their own timestamp
+ * instead of calling Date.now() twice. */
 export async function persistAlbumIdentity(
   input: SaveAlbumIdentityInput & { confirmedAt?: number }
 ): Promise<void> {
@@ -328,14 +305,7 @@ export function useSaveAlbumIdentity() {
   });
 }
 
-// ── Record failed auto-lookup attempt ─────────────────────────────────────────
-
-/**
- * Writes a minimal row marking that an auto-lookup was attempted but did not
- * produce a confident match. Uses INSERT OR IGNORE so it never clobbers a
- * confirmed row that arrived via the dialog or a race condition.
- */
-// ── Failed lookup IDs (for grid badge) ───────────────────────────────────────
+// INSERT OR IGNORE so it never clobbers a confirmed row that arrived via the dialog or a race.
 
 /** Returns the set of album IDs that were looked up but yielded no MB match. */
 export function useFailedLookupAlbumIds() {

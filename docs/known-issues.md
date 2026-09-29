@@ -7,7 +7,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 ## Platform / WebKitGTK / audio
 
 - **Left-click popups self-close on WebKitGTK.** The opening click's tail reaches the outside-click listener. Use `useClickOutside` (deferred attach, capture `mousedown`), no local copies. grep: `grep -rn 'addEventListener("mousedown"' src --include='*.ts*' | grep -v '\.test\.'`
-- **Focus-loss compositor crash is upstream `wry`; keep the mitigations.** `web-process-terminated` → `.reload()`, `useAppActivityTracking` blur stamp, `webkit2gtk-nvidia-quirk`, `"visible": false` + `window.show()` on load. Never touch `set_hardware_acceleration_policy` blind.
+- **Focus-loss compositor crash is upstream `wry`; keep the mitigations.** `web-process-terminated` → `.reload()`, `useAppActivityTracking` blur stamp, `webkit2gtk-nvidia-quirk`, `"visible": false` + `window.show()` on load; WebKit smooth scrolling stays off (suspected trigger). Never touch `set_hardware_acceleration_policy` blind.
 - **ALSA underruns under load.** rodio 0.19 buffer too small; `PULSE_LATENCY_MSEC=60` in `run()`. Real fix is rodio 0.20+.
 - **Read-only rusqlite can't own the WAL `-shm`.** `library_read/mod.rs` opens `READ_WRITE | NO_MUTEX | URI`, no `CREATE`.
 - **Unbounded thread-per-request gets SIGKILLed.** Cover proxy takes a permit before spawning, `spawn_blocking`, cap 16. Tell: `ps -eLf | grep canon | wc -l` climbing.

@@ -14,8 +14,7 @@ interface MappingRow {
 }
 
 /**
- * Returns a Map of raw genre value → display name (or null if ignored).
- * Unmapped raw values are absent from the map, show as-is.
+ * Map of raw genre value to display name (null if ignored), absent if unmapped.
  * Built outside React Query to avoid structuralSharing issues with Map.
  */
 export function useGenreMappings(): Map<string, string | null> {
@@ -59,10 +58,8 @@ export function useGenreMappings(): Map<string, string | null> {
 }
 
 /**
- * Splits a raw genre string, applies mappings, de-dupes.
- * Raw values with no mapping decision yet (unaccepted/unmapped) are dropped,
- * not shown as-is - only genres that went through accept/map/ignore surface here.
- * Returns ordered array of display genre names.
+ * Splits a raw genre string, applies mappings, de-dupes. Raw values with no mapping
+ * decision yet are dropped, not shown as-is.
  */
 export function applyGenreMappings(
   rawGenreString: string | null,

@@ -12,10 +12,8 @@ export interface AlbumTrackRow extends ReplayGainColumns {
   duration: number | null;
 }
 
-// One fetch per album, however many callers ask: an album grid click and the detail view
-// opening behind it are two callers on one miss, and both would otherwise pull the same
-// track list over the network. Cleared on the failure side too, or one lost connection
-// leaves the album permanently unfetchable for the life of the process.
+// One fetch per album however many callers ask (grid click and detail view opening behind it
+// are two callers on one miss); cleared on the failure side too, or a lost connection strands the album.
 const inFlight = new Map<string, Promise<void>>();
 // Albums the server itself listed as empty. Remembered so a click does not re-fetch them
 // every time; only the album page's explicit re-check goes to the server again.
@@ -60,12 +58,7 @@ export function fetchAlbumTracks(
 }
 
 /**
- * The album's tracks, fetching them from the server if the mirror holds none.
- *
- * A sync that stopped short leaves albums with no track rows at all, and every play path
- * used to return silently on that empty list: the user clicked play and nothing happened,
- * with no way to tell it apart from a broken button. One fetch only - an album the server
- * itself reports as empty must not re-fetch on every click.
+ * The album's tracks, fetching once if the mirror holds none, so play never silently no-ops.
  */
 export async function loadAlbumTracks(
   server: Server,
@@ -79,10 +72,7 @@ export async function loadAlbumTracks(
   return await readMirrored(albumDbId, server.id);
 }
 
-/**
- * `loadAlbumTracks` for a play, queue or radio click. Every way that ends with nothing to
- * play is reported to the user, since the click itself gives no other sign.
- */
+/** `loadAlbumTracks` for a play, queue or radio click; every way to end with nothing to play is reported. */
 export async function loadAlbumTracksForPlay(
   server: Server,
   credential: NavidromeCredential,
@@ -100,15 +90,7 @@ export async function loadAlbumTracksForPlay(
   }
 }
 
-/**
- * Whether opening an album should pull its tracks from the server.
- *
- * Only once the read has actually landed: `undefined` is "not known yet" and firing on it
- * would fetch every album the moment it opens. `attemptedAlbumId` is an album id rather
- * than a flag because the view stays mounted while the user walks between albums, and the
- * fetch writes the rows the caller is watching, so an unkeyed guard either re-fires forever
- * or blocks the second album outright.
- */
+/** Whether opening an album should fetch its tracks; `attemptedAlbumId` is keyed by album since the view stays mounted across albums. */
 export function shouldFetchMissingTracks(state: {
   isLoading: boolean;
   error: unknown;

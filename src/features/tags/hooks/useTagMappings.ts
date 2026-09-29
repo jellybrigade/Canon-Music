@@ -6,12 +6,8 @@ import type { TagKind } from "../lib/canonicalize";
 import { QK } from "../../../lib/queryKeys";
 import { invalidateManualMappings } from "../lib/manualMappings";
 
-// ── Sentinel constants ────────────────────────────────────────────────────────
-
 export const ACCEPTED = "__accepted__";
 export const IGNORED = "__ignored__";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 /** A row from the unified tag vocabulary. canonical_id = null means unresolved. */
 export interface TagVocabRow {
@@ -25,8 +21,6 @@ export interface TagVocabRow {
   mapping_source: "auto" | "manual" | null;
   locked: number;
 }
-
-// ── useTagMappings ─────────────────────────────────────────────────────────────
 
 export function useTagMappings() {
   const queryClient = useQueryClient();
@@ -137,18 +131,9 @@ export function useTagMappings() {
   return { saveMapping, deleteMapping, lockMapping };
 }
 
-// ── useTagVocab ───────────────────────────────────────────────────────────────
-
 /**
- * Unified vocabulary query. Returns all distinct (raw_value, kind) tags in the library
- * joined with any tag_mappings decision. Album counts everywhere; sentinel-safe.
- *
- * Classification in JS:
- *   !canonical_id && album_count > 0  → unresolved (Review)
- *   canonical_id = '__accepted__'     → accepted
- *   canonical_id = '__ignored__'      → ignored
- *   canonical_id (other)              → mapped to canon node
- *   album_count = 0 && canonical_id   → stale (decision but tag gone from library)
+ * Every distinct (raw_value, kind) tag joined with its tag_mappings decision, with album counts.
+ * Classified in JS: unresolved, accepted, ignored, mapped, or stale (decision, no albums left).
  */
 export function useTagVocab() {
   return useQuery({
@@ -190,16 +175,9 @@ export function useTagVocab() {
   });
 }
 
-// ── useUnmappedTagCount ───────────────────────────────────────────────────────
-
 /**
- * Scalar count of unresolved tags that still have albums in the library, i.e. the
- * sidebar Tags badge number. The app root used to fetch the whole useTagVocab payload
- * (every distinct raw tag in the library) and take `.length` of a filter over it; this
- * runs the same predicate in SQL via rusqlite and returns one integer.
- *
- * Key is a child of QK.tagVocab() so the existing invalidations in saveMapping /
- * deleteMapping / lockMapping / useAutoMapExact / useRapToHipHop match it by prefix.
+ * Sidebar Tags badge: unresolved tags with albums, counted in SQL. Keyed under QK.tagVocab()
+ * so existing mapping invalidations match by prefix.
  */
 export function useUnmappedTagCount() {
   return useQuery({
@@ -212,8 +190,6 @@ export function useUnmappedTagCount() {
     },
   });
 }
-
-// ── useTagAlbums ──────────────────────────────────────────────────────────────
 
 /** Album art for a tag, works for both resolved and unresolved tags. */
 export function useTagAlbums(rawValue: string, kind: TagKind) {
@@ -237,8 +213,6 @@ export function useTagAlbums(rawValue: string, kind: TagKind) {
     enabled: !!rawValue,
   });
 }
-
-// ── useAutoMapExact ────────────────────────────────────────────────────────────
 
 export function useAutoMapExact() {
   const queryClient = useQueryClient();
@@ -329,8 +303,6 @@ export function useAutoMapExact() {
     },
   });
 }
-
-// ── useRapToHipHop ─────────────────────────────────────────────────────────────
 
 export function useRapToHipHop() {
   const queryClient = useQueryClient();

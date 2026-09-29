@@ -3,11 +3,8 @@ export interface Migration {
   sql: string;
 }
 
-/**
- * The subset of tauri-plugin-sql's `Database` that `runMigrations` needs. Declared here so the
- * test harness can drive the real runner instead of re-implementing it, which is what let the
- * two copies drift apart before.
- */
+/** Declared here so the test harness can drive the real runner instead of re-implementing it,
+ * which is what let the two copies drift apart before. */
 export interface MigrationDb {
   execute(query: string, bindValues?: unknown[]): Promise<unknown>;
   select<T>(query: string, bindValues?: unknown[]): Promise<T>;
@@ -53,11 +50,8 @@ export const RYM_ID_RENAMES: readonly GenreIdRename[] = [
   },
 ];
 
-// Every stored reference to a renamed tree id moves with it, or the user's mappings, album
-// genres and exclusions silently fall out of the tree. Albums touching a renamed id, or
-// holding a genre no node matched before, are re-normalized against the new tree.
-// JSON id lists (tree parents, smart playlist genres) are left to the startup carry, which
-// rewrites only the list itself and dedupes it.
+// Every stored reference to a renamed tree id must move with it or silently fall out of the
+// tree. JSON id lists (tree parents, smart playlist genres) are left to the startup carry.
 function rymRenameSql(): string {
   const olds = RYM_ID_RENAMES.map((r) => `'${r.from}'`).join(", ");
   const statements = [
@@ -91,10 +85,8 @@ function rymRenameSql(): string {
 }
 
 export async function runMigrations(database: MigrationDb): Promise<void> {
-  // WAL mode lets reads proceed while a write is in flight instead of exclusive-locking the
-  // whole file; sqlx's default pool otherwise opens several connections against a rollback-journal
-  // (DELETE mode) db, so concurrent sync/scrobble/enrichment writes can starve UI reads with
-  // "database is locked" errors. WAL is a persistent on-disk setting, but PRAGMA is cheap to re-run.
+  // Without WAL, sqlx's pooled connections hit "database is locked" under concurrent
+  // sync/scrobble/enrichment writes. WAL is a persistent setting, but PRAGMA is cheap to re-run.
   await database.execute("PRAGMA journal_mode=WAL");
 
   await database.execute(`
@@ -109,9 +101,8 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
   );
   const current = rows[0]?.version ?? 0;
 
-  // A high-water mark answers "what still needs running", never "is this file too new for me".
-  // Without this the loop body simply never executes and the older build then runs its own
-  // queries against a newer schema, failing scattered and late instead of once and clearly.
+  // Without this check, an older build silently runs its own queries against a newer schema,
+  // failing scattered and late instead of once and clearly.
   if (current > LATEST_SCHEMA_VERSION) {
     throw new SchemaTooNewError(current, LATEST_SCHEMA_VERSION);
   }
@@ -125,28 +116,16 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
-      // A block has to be all-or-nothing. Several blocks are only correct as a sequence - v25 and
-      // v35 rebuild track_tags as create/copy/drop/rename, so a process that dies between the DROP
-      // and the RENAME leaves every tag in a table the app cannot see, and the replay on the next
-      // launch dies on the CREATE forever. The version row goes inside the same transaction: a
-      // block that ran but was not recorded is replayed against a database it already changed.
-      //
-      // BEGIN / COMMIT only work here because the statements of one block reach the same
-      // connection. tauri-plugin-sql runs every execute() through an sqlx pool with no connection
-      // affinity, but these awaits are strictly sequential and `getDb()` gates every other caller
-      // behind the same promise, so the pool never has cause to open a second connection while a
-      // migration is in flight. Anything that starts issuing queries concurrently with the runner
-      // breaks that, and would need the block moved behind a single Rust-side transaction instead.
+      // All-or-nothing per block, version row included: several blocks rebuild tables in steps.
+      // BEGIN holds only because the runner is sequential and getDb() gates every other caller.
       await database.execute("BEGIN");
       try {
         for (const statement of statements) {
           try {
             await database.execute(statement);
           } catch (e) {
-            // Ignore "duplicate column name", ALTER TABLE ADD COLUMN on an already-existing column.
-            // Happens when a migration version was recorded but the DDL ran twice (e.g. HMR race).
-            // SQLite rolls back the failed statement only, so the surrounding transaction survives.
-            // tauri-plugin-sql rejects with a plain string, not an Error instance, so check both shapes.
+            // Duplicate column name happens when a version was recorded but the DDL ran twice
+            // (e.g. HMR race); tauri-plugin-sql rejects with a plain string, not an Error, so check both.
             const message = e instanceof Error ? e.message : String(e);
             if (!message.includes("duplicate column name")) throw e;
           }
@@ -772,19 +751,14 @@ export const migrations: Migration[] = [
     `,
   },
   {
-    // The server's own "last played" timestamp. Without it the listening-stats
-    // carousels only ever know about plays Canon itself scrobbled, so a fresh
-    // install against a long-established server shows an empty "On Repeat" and
-    // sorts "From the Vault" on empty strings.
+    // Without this, listening-stats carousels only know plays Canon itself scrobbled, so a
+    // fresh install against a long-established server shows an empty "On Repeat".
     version: 48,
     sql: `ALTER TABLE albums ADD COLUMN played_at TEXT;`,
   },
   {
-    // The server's own identity as of the last completed sync. Album rows survived
-    // Navidrome 0.64's id migration byte for byte, so nothing in the mirror could tell
-    // that ~87% of the track ids under them had been rewritten, and the track pass was
-    // skipped for every album forever. A version, a scan stamp and a song count are the
-    // three things upstream moves when that can happen.
+    // Album rows survived Navidrome 0.64's id migration byte for byte, so nothing in the
+    // mirror could tell ~87% of track ids had been rewritten; these three watermark identity.
     version: 49,
     sql: `
       ALTER TABLE servers ADD COLUMN last_scan_at TEXT;
@@ -793,18 +767,14 @@ export const migrations: Migration[] = [
     `,
   },
   {
-    // The same stamp v48 gave albums, one level down. `scrobble_history` only records
-    // what Canon itself sent, so a track played on the phone or in the web UI reads as
-    // never played here and Auto-DJ serves it again an hour later. Navidrome carries
-    // the annotation on the song entity, counting every client.
+    // `scrobble_history` only records what Canon itself sent, so a track played on the phone
+    // reads as never played and Auto-DJ serves it again; Navidrome's own count covers every client.
     version: 50,
     sql: `ALTER TABLE tracks ADD COLUMN played_at TEXT;`,
   },
   {
-    // The server identity each album's tracks were last read under. The watermark moves
-    // only after a complete pass, so a pass that kept breaking early re-read the whole
-    // library every sync and could never finish; this lets the next pass skip what the
-    // last one already read against the same identity.
+    // The watermark moves only after a complete pass, so a pass that kept breaking early
+    // re-read the whole library forever; this lets the next pass skip what's already read.
     version: 51,
     sql: `ALTER TABLE albums ADD COLUMN tracks_read_scan TEXT;`,
   },

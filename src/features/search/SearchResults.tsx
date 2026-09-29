@@ -53,11 +53,8 @@ const ARTIST_CARD_MIN = 180;  // .search-artist-list minmax
 const ALBUM_CARD_MIN = 260;   // .search-album-list minmax
 const TRACK_CARD_MIN = 300;   // .search-track-list minmax
 
-/**
- * Windows one result section's grid using the AlbumGrid useVirtualizer pattern.
- * All sections share the single .search-results scroller, so each measures its
- * own offset within that scroller (offsetTop) and feeds it as scrollMargin.
- */
+// All sections share the single .search-results scroller, so each measures its own
+// offset within it (offsetTop) and feeds it as scrollMargin.
 function VirtualSection<T>({
   items,
   scrollRef,

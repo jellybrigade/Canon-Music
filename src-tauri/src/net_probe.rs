@@ -41,10 +41,8 @@ pub fn describe_failure(is_timeout: bool, is_connect: bool, raw: &str) -> String
 
 fn run_probe(base_url: &str) -> ServerProbe {
     let started = Instant::now();
-    // reqwest is built on `rustls-tls-native-roots` rather than the bundled webpki roots so
-    // that this client trusts what WebKitGTK trusts. A self-signed or private-CA Navidrome
-    // would otherwise fail TLS here and be reported as down in the one message written to
-    // be believed.
+    // Built on `rustls-tls-native-roots`, not bundled webpki roots, so this client trusts what
+    // WebKitGTK trusts; otherwise a private-CA Navidrome would be reported down.
     let client = match reqwest::blocking::Client::builder()
         .timeout(PROBE_TIMEOUT)
         .build()

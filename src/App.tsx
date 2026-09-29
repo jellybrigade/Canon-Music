@@ -84,12 +84,8 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  // The command palette is the one remaining overlay that is not URL-backed - it paints over
-  // whatever route is showing. So anything that navigates while it is up lands behind it and
-  // the click looks inert. It is dismissed inside useAppNavigation, at the one place every
-  // navigation the app offers is expressed, rather than at each source - the palette used to
-  // rely on the five setCommandPaletteOpen calls in its own handlers, which by construction
-  // could not cover navigation that started anywhere else.
+  // Not URL-backed, so it must be dismissed centrally in useAppNavigation; per-handler
+  // setCommandPaletteOpen calls couldn't cover navigation started elsewhere.
   const dismissOverlays = useCallback(() => {
     setCommandPaletteOpen(false);
   }, []);
@@ -120,10 +116,8 @@ export default function App() {
   const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError, refetch: refetchCredential } = useServerWithCredential(server?.id);
-  // Derived rather than read off `isPending` on purpose: that query is `enabled: !!server?.id`,
-  // and a disabled React Query stays `pending` forever, so `isPending` cannot tell "the keychain
-  // read is running" from "there is no server to read one for". Consumers need the distinction
-  // because a falsy `serverWithCred` is otherwise indistinguishable from a permanent failure.
+  // Derived, not `isPending`: the query is `enabled: !!server?.id`, so a disabled query stays
+  // `pending` forever and can't tell "keychain read running" from "no server to read for".
   const credPending = !!server && !serverWithCred && !credError;
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
@@ -151,14 +145,8 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
 
-  // These four feed exactly one route each (see AppRoutes), so they are gated on the
-  // pathname rather than loaded for every view. Gating skips the fetch only - each
-  // hook keeps its last rows and its session-store seed, so returning to the route
-  // still paints immediately. `pathname` not `view`: view folds /album/:id into
-  // "library", which would drag the whole album list into every album detail page.
-  // Also gated on `sortLoaded`: until the stored sort has been read back, `sort` is
-  // only the "artist" default, and firing here would scan the whole library in the
-  // wrong order, paint it, then scan again once the real sort arrived.
+  // Gated on `pathname` not `view` (folds /album/:id into "library") and on `sortLoaded`
+  // to avoid scanning once with the default sort and again once the real sort arrives.
   const { data: albums, isLoading: albumsLoading, error: albumsError } =
     useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
   const { data: artists, isLoading: artistsLoading, error: artistsError } =
@@ -233,20 +221,16 @@ export default function App() {
     return () => clearInterval(id);
   }, [autoCheckUpdates, autoCheckIntervalMin]);
 
-  // Covers the one navigation that never passes through useAppNavigation, and so cannot be
-  // dismissed on intent: a route sending the user elsewhere itself, as AppRoutes does after
-  // deleting a playlist. Keyed on pathname alone, not the whole location - a `?q` change while
-  // staying on /search must not close the command palette on every keystroke.
+  // Covers navigation that bypasses useAppNavigation (e.g. AppRoutes redirecting after a
+  // playlist delete). Keyed on pathname alone so a `?q` change on /search doesn't close it.
   useDismissOnNavigate(pathname, dismissOverlays);
 
   useSearchShortcuts({
     searchInputRef,
     searchActive: pathname === ROUTES.SEARCH,
     commandPaletteOpen,
-    // The named overlay plus anything registered through `useModalChrome`. Cannot be extended
-    // to cover a modal opened inside /search itself (`SearchResults`' identify dialog) - that
-    // state never reaches this component - so the registry answers "is something painted over
-    // me" for every modal at once.
+    // Registry-based so it also covers modals opened inside /search itself (e.g. the identify
+    // dialog), whose open state never reaches this component directly.
     overlayAbove,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
     openSearch: useCallback(() => navigateTo("search"), [navigateTo]),
@@ -503,11 +487,8 @@ export default function App() {
 
   if (serversLoading) return null;
 
-  // `servers` is undefined for a failed read as well as an empty table, so
-  // falling through to the wizard here would show first-run setup to a fully
-  // configured user. Finishing it would insert a *second* server row, and
-  // `servers?.[0]` orders by created_at, so the app would then keep using the
-  // old row while the user had just entered credentials for the new one.
+  // `servers` is undefined for a failed read as well as an empty table; falling through to
+  // the wizard would insert a second row and `servers?.[0]` would keep using the old one.
   if (serversError) {
     return (
       <DatabaseErrorScreen

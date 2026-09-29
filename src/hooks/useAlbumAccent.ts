@@ -6,12 +6,8 @@ import { QK } from "../lib/queryKeys";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 
 /**
- * The accent color an album tints itself with, derived from its cover art and cached on the
- * `albums` row.
- *
- * Publishing the write is the point: the album detail route renders a row it holds through
- * React Query and Home fills picks from the cached album list, so a bare `UPDATE` leaves both
- * copies null and every revisit decodes the cover again.
+ * An album's accent color from its cover, cached on the `albums` row. The write must reach
+ * every cached copy (album route and Home picks), or each visit decodes the cover again.
  */
 export function useAlbumAccent(
   albumId: string,

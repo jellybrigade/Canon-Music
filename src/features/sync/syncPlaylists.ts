@@ -4,18 +4,14 @@ import { runPool } from "../../lib/asyncPool";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { SyncStageContext } from "./syncStage";
 
-// Sync playlists, collect all track lists before deleting to avoid wipe on partial failure.
-// Non-fatal for the same reason as the loved pass (syncLoved.ts): albums and tracks are already
-// committed, so a failed playlist listing skips this pass instead of throwing away the
-// whole sync.
+// Non-fatal like the loved pass (syncLoved.ts): a failed playlist listing skips this pass
+// instead of throwing away the whole sync.
 export async function syncPlaylists(
   { db, server, credential, altUrl, skippedStages }: SyncStageContext,
 ): Promise<{ failedPlaylists: number; playlistsChanged: boolean }> {
   let failedPlaylists = 0;
-  // The write below prunes playlists absent from the fetched list, so an incomplete
-  // picture of the server's playlists must not reach it: a playlist whose track list
-  // failed would be erased outright. Any fetch failure in this pass blocks the write and
-  // leaves the stored playlists as they are until a later sync reads them cleanly.
+  // The write below prunes playlists absent from the fetched list, so any fetch failure
+  // must block it entirely or a playlist whose track list failed gets erased outright.
   let playlistWritesBlocked = false;
   const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl).catch(
     (err: unknown) => {
@@ -26,10 +22,8 @@ export async function syncPlaylists(
     }
   );
   type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
-  // One getPlaylist round trip per playlist, and every auto-sync tick pays for all of
-  // them because the comparison below needs the track lists to build its signature.
-  // Serially that is playlistCount * round-trip on the critical path of every sync;
-  // the pool bounds how many are in flight without changing what is fetched.
+  // One round trip per playlist, needed every sync tick to build the comparison signature;
+  // the pool bounds concurrency without changing what's fetched.
   const fetchedByIndex = new Array<PlaylistWithTracks | undefined>(playlists.length);
   await runPool(
     playlists,
@@ -39,10 +33,8 @@ export async function syncPlaylists(
         fetchedByIndex[index] = { pl, tracks };
       } catch (err) {
         console.error(`sync: failed to fetch tracks for playlist "${pl.name}" (${pl.id}):`, err);
-        // Blocks the write for every playlist, not just this one, so it owes the caller
-        // the same stage the listing failure reports. The listing failure cannot also be
-        // in flight here (it returns [], leaving the pool nothing to iterate), but the
-        // stage is pushed once regardless rather than relying on that.
+        // Blocks the write for every playlist, not just this one; push the stage once
+        // rather than relying on the listing-failure path having already done so.
         if (!playlistWritesBlocked) skippedStages.push("playlists");
         playlistWritesBlocked = true;
         if (!(err instanceof TransportStalledError)) failedPlaylists++;
@@ -78,13 +70,9 @@ export async function syncPlaylists(
   ]);
 
   const existingTrackIdsByPlaylist = new Map<string, string[]>();
-  // Playlists whose stored positions are no longer 0..n-1. The album prune deletes the
-  // playlist_tracks rows of the tracks it drops and leaves the positions around them alone,
-  // and the server drops the same tracks from the playlist, so every gate below that compares
-  // the two sides sees an identical name, count and ordered id list. `position` is the
-  // songIndexToRemove PlaylistDetail sends, so a hole makes the next removal delete the wrong
-  // track server side. Rewriting the playlist is what closes it, so the hole has to reach the
-  // gates that decide whether to rewrite.
+  // Playlists whose stored positions are no longer 0..n-1: the album prune leaves gaps that
+  // look identical to the server side, but `position` drives PlaylistDetail's removal, so a
+  // hole must still force a rewrite even though the compare-gates below see no difference.
   const holedPlaylists = new Set<string>();
   for (const row of existingPlaylistTracks) {
     const list = existingTrackIdsByPlaylist.get(row.playlist_id);
@@ -131,12 +119,8 @@ export async function syncPlaylists(
   const playlistsChanged =
     !playlistWritesBlocked && (fetchedSignature !== existingSignature || holedPlaylists.size > 0);
   if (playlistsChanged) {
-    // Upsert the server-owned columns rather than DELETE-all-then-INSERT. is_smart,
-    // rules_json and custom_cover_data are local-only and the server knows nothing
-    // about them, so re-inserting from the fetched payload erased them: a smart
-    // playlist lost its rules and silently became an ordinary one the first time any
-    // playlist's signature changed, which a freshly created smart playlist causes by
-    // itself (the server reports a coverArt the local insert never wrote).
+    // Upsert server-owned columns rather than DELETE-all-then-INSERT: is_smart, rules_json
+    // and custom_cover_data are local-only and a full re-insert silently erased them.
     const fetchedIds = new Set(playlistsWithTracks.map(({ pl }) => `${server.id}:${pl.id}`));
     const removedIds = existingPlaylists.map((r) => r.id).filter((id) => !fetchedIds.has(id));
     if (removedIds.length > 0) {

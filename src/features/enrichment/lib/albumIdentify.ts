@@ -1,7 +1,3 @@
-/**
- * Core MB auto-identify logic as a plain async function, no React hooks.
- * Used by useAutoIdentifyAlbum (per-album, on mount) and bulk sync (SettingsView).
- */
 import {
   searchReleaseGroups,
   lookupReleaseGroup,
@@ -74,10 +70,8 @@ export async function autoIdentifyAlbum({
 
     let ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
 
-    // The local title may carry a mix/edition suffix ("BRAT (Dolby Atmos Mix)")
-    // that MB's search still returns hits for, just scored poorly against the
-    // noisy full title. Retry with the bracket stripped and merge in anything
-    // new whenever the first pass didn't land a confident match.
+    // Mix/edition suffixes ("BRAT (Dolby Atmos Mix)") score poorly against MB's
+    // full-title match; retry stripped and merge in if the first pass wasn't confident.
     if (stripped && stripped !== searchTitle && ranked[0]!.score < AUTO_CONFIRM_THRESHOLD) {
       const strippedCandidates = await searchReleaseGroups(artist, stripped);
       const seen = new Set(candidates.map((c) => c.id));
@@ -101,11 +95,8 @@ export async function autoIdentifyAlbum({
 
     const rgDetail = await lookupReleaseGroup(top.candidate.id);
 
-    // Prefer a dated release as the first guess (most likely the canonical
-    // pressing), but a release group often bundles alternate editions (bonus
-    // disc, live, reissue) with different tracklists under one dated entry.
-    // If that guess's track count doesn't match, try a couple more releases
-    // before concluding the release group itself needs manual review.
+    // Dated release is the likely canonical pressing, but bonus/live/reissue editions
+    // share the same dated entry with different tracklists; try a couple more on mismatch.
     const orderedReleaseIds = [
       rgDetail.releases.find((r) => r.date)?.id,
       ...rgDetail.releases.map((r) => r.id),
@@ -127,10 +118,8 @@ export async function autoIdentifyAlbum({
     const combinedGenres = combineGenres(rgDetail.genres, releaseDetail?.genres ?? []);
     const combinedTags = combineGenres(rgDetail.tags, releaseDetail?.tags ?? []);
 
-    // Text similarity alone can't tell a correct match from a same-titled
-    // deluxe/live/compilation edition with a different tracklist. Downgrade
-    // to manual review when none of the releases tried above match (allows
-    // for a bonus/hidden track without false-flagging).
+    // Title similarity can't distinguish a same-titled deluxe/live edition;
+    // downgrade to manual review if no tried release's track count matches.
     if (
       trackCount > 0 &&
       releaseDetail?.trackCount &&

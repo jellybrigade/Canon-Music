@@ -15,16 +15,8 @@ export interface ServerWatermark {
 }
 
 /**
- * Whether the mirrored track ids are still ids the server answers to.
- *
- * Album metadata is evidence about albums. Navidrome 0.64 rewrote ~87% of track ids while
- * leaving every album row byte-identical, so the sync's per-album skip matched for all 1512
- * albums and the mirror could never heal, on any number of syncs. A few ids drawn at random
- * are cheap and answer the question the skip is actually asking.
- *
- * Only a Subsonic "not found" counts against the mirror: a transport failure or a rejected
- * credential says nothing about the id, and treating it as a miss would turn every offline
- * moment into a 1500-request full pass.
+ * Probe a few random mirrored track ids, since album metadata can't reveal a track-id rewrite.
+ * Only Subsonic "not found" counts as a miss; transport or credential failures say nothing.
  */
 export async function mirroredTrackIdsStillResolve(
   db: Database,
@@ -62,12 +54,8 @@ export function watermarkMoved(stored: ServerWatermark | undefined, status: Navi
 }
 
 /**
- * Forget what the server looked like at the last completed sync, so the next one reads every
- * album's tracks instead of trusting the per-album skip.
- *
- * The user-facing escape hatch for a mirror that is wrong in a way no probe caught: expensive
- * (one track request per album, 1500+ on a real library), which is why nothing calls it on its
- * own. See `watermarkMoved`.
+ * Forget the last-sync watermark so the next sync reads every album's tracks. Expensive
+ * (one request per album); only the user-triggered resync calls it.
  */
 export async function clearSyncWatermark(db: Database, serverId: string): Promise<void> {
   await db.execute(

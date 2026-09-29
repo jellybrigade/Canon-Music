@@ -47,10 +47,7 @@ export async function fetchWikipediaBio(name: string): Promise<string | null> {
   }
 }
 
-/**
- * Fetch Wikipedia bio for an artist via MusicBrainz ID → Wikidata sitelink.
- * More reliable than name lookup for artists with common/ambiguous names (e.g. "Ye").
- */
+// More reliable than name lookup for artists with common/ambiguous names (e.g. "Ye").
 export async function fetchWikipediaBioByMbid(mbid: string): Promise<string | null> {
   try {
     const sparql = `SELECT ?article WHERE { ?item wdt:P434 "${mbid}" . ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . } LIMIT 1`;

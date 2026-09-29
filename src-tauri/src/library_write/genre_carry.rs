@@ -2,10 +2,8 @@ use super::LibraryWriteStore;
 use rusqlite::{Connection, Transaction};
 use std::collections::HashMap;
 
-/// Columns holding one genre tree id per row.
-///
-/// Mirrors `GENRE_ID_HOLDERS` in src/db/genreIdTables.ts, which is the source of truth;
-/// src/db/genreIdTables.test.ts sweeps these lists against it so the two cannot drift.
+/// Columns holding one genre tree id per row. Mirrors `GENRE_ID_HOLDERS` in
+/// src/db/genreIdTables.ts (source of truth); genreIdTables.test.ts sweeps both against drift.
 const GENRE_ID_COLUMNS: &[(&str, &str)] = &[
     ("tag_mappings", "canonical_id"),
     ("track_tags", "canonical_id"),
@@ -60,13 +58,8 @@ pub fn carry_genre_renames(
     })
 }
 
-/// Carry every stored reference to a renamed tree id onto its successor, then record the tree
-/// version it was carried to.
-///
-/// One transaction, because a half-carried rename leaves an album's user genre under the new id
-/// and its exclusion under the old one. The version is written last, inside it, so a failure
-/// leaves the old version and the next launch carries again. Idempotent: over already-carried
-/// data every statement matches nothing.
+/// One transaction: a half-carried rename splits an album's genre and exclusion across old/new
+/// ids. Version written last so a failed run just retries; idempotent otherwise.
 fn carry_genre_renames_in(
     conn: &mut Connection,
     renames: &[GenreIdRename],
@@ -122,9 +115,7 @@ pub fn repair_dangling_genre_id(
 }
 
 /// Moves every reference to an id no tree node carries onto `to`, or removes them all.
-///
-/// One transaction for the same reason as the carry. A removed mapping leaves its raw tag
-/// unmapped rather than gone, so the tag returns to Review.
+/// A removed mapping leaves its raw tag unmapped rather than gone, so it returns to Review.
 fn repair_dangling_genre_id_in(
     conn: &mut Connection,
     from: &str,

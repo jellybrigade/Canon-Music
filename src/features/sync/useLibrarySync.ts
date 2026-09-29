@@ -13,13 +13,8 @@ import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
-// A failed run cannot stay claimed: with the auto-sync interval off nothing else
-// would ever retry it, so a server that was down at launch stays unsynced until
-// the user presses sync or restarts. Clearing the claim in the settle handler
-// instead would restart the run immediately and hammer an unreachable server, so
-// the retry is delayed and bounded - past the last delay the manual sync button
-// and a server switch are the only ways back, which is what the interval-off
-// setting asks for.
+// Clearing the claim immediately on failure would hammer an unreachable server, so retry is
+// delayed and bounded; past the last delay only the manual sync button or a server switch retries.
 const RETRY_DELAYS_MS = [30_000, 120_000, 300_000];
 
 /** "a", "a and b", "a, b and c". A plain join reads as a chain past two items. */
@@ -100,13 +95,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     setSyncError("");
     setSyncProgress(null);
     setNextRetryAt(null);
-    // No bump here: nothing has been written yet at sync start, so bumping would
-    // only force a full re-read of the album table for identical data. The
-    // progress callback below bumps once rows actually land.
-    //
-    // Progress fires every BATCH_NOTIFY_INTERVAL albums, which on a large library
-    // can be several times a second, debounce so mid-sync UI (e.g. HomeView's
-    // For You rail) isn't reshuffling multiple times a second.
+    // No bump here: nothing has been written yet, so bumping would force a full re-read for
+    // no reason. Progress fires often on a large library, so the callback below debounces its bump.
     let lastInvalidate = 0;
     syncLibrary(
       s.server,
@@ -198,10 +188,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     return true;
   }
 
-  // Claims the server as synced only once a run actually starts. Stamping first
-  // and calling runSync second lost the sync entirely when one was already in
-  // flight: runSync is a no-op then, but the server counted as done and nothing
-  // retried until the next auto-sync tick, or never when the interval is off.
+  // Claims the server as synced only once a run actually starts. Stamping first lost the sync
+  // when one was already in flight: runSync is a no-op then, but nothing counted as pending.
   function syncIfNeeded(s: ServerWithCredential) {
     if (syncedRef.current === s.server.id) return;
     if (runSync(s)) syncedRef.current = s.server.id;
@@ -213,9 +201,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
-  // Only touches refs, so the identity it captures on mount behaves like any later one.
-  // The flag is re-armed in the body because StrictMode's mount/unmount/mount would
-  // otherwise leave every later run's settle handler permanently disarmed.
+  // Re-armed in the body: StrictMode's mount/unmount/mount would otherwise leave every
+  // later run's settle handler permanently disarmed.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     mountedRef.current = true;
@@ -229,10 +216,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);
     if (!target || isNaN(intervalMin) || intervalMin <= 0) return;
-    // Keyed on the id, not the object: `App.tsx` derives the server from a query result, so an
-    // equal-but-new object arrives on any refetch or remount, and re-arming on each one would
-    // reset the countdown before a tick could land. The tick reads the live server for the
-    // same reason it cannot depend on it.
+    // Keyed on the id, not the object: `App.tsx` yields an equal-but-new object on any
+    // refetch, and re-arming on each one would reset the countdown before a tick could land.
     const id = setInterval(() => {
       const latest = serverRef.current;
       if (latest) runSync(latest);

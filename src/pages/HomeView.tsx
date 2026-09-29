@@ -146,10 +146,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
 
-  // Picks sourced from the carousels arrive as NavidromeAlbum rows, which carry no
-  // accent_color. Without this the Spotlight effect re-extracts and re-writes an
-  // accent the albums table already holds, once per mount, and flashes the accent
-  // off in between. Fill it from the local mirror before rendering.
+  // Carousel picks arrive as NavidromeAlbum rows with no accent_color; without filling it
+  // from the local mirror, Spotlight re-extracts on every mount and flashes the accent off.
   const accentByAlbumId = useMemo(() => {
     const map = new Map<string, string>();
     for (const a of allAlbums ?? []) {

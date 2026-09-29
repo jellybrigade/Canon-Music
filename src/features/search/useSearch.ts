@@ -67,17 +67,8 @@ function scoreMatch(field: string | null, query: string): number {
   return 0;
 }
 
-// The pool of FTS hits the per-section queries are allowed to draw from.
-// Ranking happens inside this CTE so the cap keeps the *best* matches; without
-// the ORDER BY, a bare LIMIT hands back whatever FTS visited first (rowid order,
-// i.e. oldest-synced), and the JS re-ranking below never sees the good rows.
-//
-// MATERIALIZED is load-bearing, not a hint: if SQLite flattens the CTE into the
-// outer join it rejects the query outright with "unable to use function bm25 in
-// the requested context". Requires SQLite 3.35+ (bundled: 3.46).
-//
-// Column weights mirror the JS scoring intent below - a title hit beats an
-// artist hit beats an album hit beats a genre hit.
+// FTS pool ranked by weighted bm25 (title > artist > album > genre) inside the CTE, so the
+// cap keeps the best hits. MATERIALIZED is required: flattened, SQLite rejects bm25 here.
 const RANKED_POOL = 2000;
 const RANKED_CTE = `
   WITH ranked AS MATERIALIZED (
@@ -138,10 +129,8 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
     ),
   ]);
 
-  // Re-rank results in JS. FTS5 gives recall; scoring gives relevance.
-  // Albums: primary field = title, secondary = artist (weighted 0.6×).
-  // Tracks: same. Albums matched only via genre/album-title score 0 and are dropped.
-  // Artists: primary field = name only; artist scoring 0 means FTS matched a track field, not the name.
+  // Re-rank in JS: FTS5 gives recall, scoring gives relevance. A zero score (e.g. an album
+  // matched only via genre) is dropped rather than kept at the bottom.
   const albums: SearchAlbum[] = albumRows
     .map(a => ({ item: a, s: Math.max(scoreMatch(a.name, query), Math.floor(scoreMatch(a.artist, query) * 0.6)) }))
     .filter(x => x.s > 0)

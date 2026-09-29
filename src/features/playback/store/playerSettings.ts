@@ -220,10 +220,8 @@ export function createSettingsActions(
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         let showWaveform = true;
-        // The queue snapshot and the radio seed are global settings rows carrying
-        // server-scoped track ids, so removing a server strands ids the mirror no longer
-        // holds and every stripServerPrefix consumer throws the moment one is restored.
-        // Only these two keys carry ids, so nothing else pays for the read.
+        // queue_state and radio_seed carry server-scoped track ids in a global settings row;
+        // removing a server strands ids the mirror no longer holds, so check only these two keys.
         const carriesTrackIds = rows.some(
           (r) => (r.key === "queue_state" || r.key === "radio_seed") && r.value
         );

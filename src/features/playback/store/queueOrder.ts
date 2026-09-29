@@ -8,13 +8,8 @@ export function adjustIndexAfterMove(currentIdx: number, from: number, to: numbe
   return adj;
 }
 
-// Returns a shuffle order that is guaranteed to cover every queue entry exactly once.
-// Appending to a shuffle order that does not already cover the whole queue silently shifts
-// every position, so callers that splice into it normalize first. A short order is repaired by
-// keeping the positions it does describe and appending whatever queue indices it left out.
-// Always returns a fresh array: every caller splices or pushes into the result, and handing
-// back the stored order itself would mutate live state in place and leave the reference
-// unchanged, so components subscribed to shuffleOrder would not re-render.
+// Callers splice into the result, so a short order is repaired (not replaced) and a fresh
+// array is always returned, since handing back the stored order would mutate live state in place.
 export function normalizeShuffleOrder(order: number[], queueLength: number): number[] {
   if (order.length === queueLength) return [...order];
   const seen = new Set<number>();
@@ -31,12 +26,8 @@ export function normalizeShuffleOrder(order: number[], queueLength: number): num
   return repaired;
 }
 
-// Drops already-played entries off the front of the queue once an append pushes it past the
-// user's maxQueueSize. playQueue has always windowed its input to the cap, but appends did not,
-// so a radio session (one addToQueue per track played, never trimmed) grew without bound and
-// re-serialised the whole array into SQLite on every mutation. Only entries behind the current
-// track are ever dropped, so nothing the user is about to hear is lost. Returns null when there
-// is nothing to trim.
+// Appends (unlike playQueue) were never windowed to maxQueueSize, so a radio session grew
+// unbounded; only entries behind the current track are dropped. Returns null when nothing to trim.
 export function trimQueueToCap(
   queue: CurrentTrack[],
   shuffleOrder: number[],
@@ -79,10 +70,8 @@ export function resolveTrack(
   return queue[idx] ?? null;
 }
 
-// anchorQueueIndex pins that queue index to position 0, so the track already playing stays
-// playing when shuffle is switched on mid-track. Pass -1 to leave the shuffle unbiased: on a
-// repeat-all loop-back nothing is playing yet, and anchoring there would make every pass open
-// with the same track, which is the opposite of what re-shuffling on the wrap is for.
+// anchorQueueIndex pins that index to position 0 so the playing track stays playing when
+// shuffle turns on mid-track. Pass -1 on a repeat-all wrap, where nothing is playing yet.
 export function buildShuffleOrder(length: number, anchorQueueIndex: number): number[] {
   const indices = Array.from({ length }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {

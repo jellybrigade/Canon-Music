@@ -77,10 +77,8 @@ export function AlbumDetailRoute({
   if (!serverWithCred) {
     return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
   }
-  // `data` is undefined while the lookup is in flight as well as when the album is genuinely
-  // absent from the mirror, so the old `fetchedAlbum ?? null` folded both into one bare
-  // `return null` and painted a blank page for each. Same split, and the same copy shape, as
-  // PlaylistDetailRoute below.
+  // `data` is undefined both while pending and when genuinely absent; `fetchedAlbum ?? null`
+  // folded both into a blank page. Same split as PlaylistDetailRoute below.
   if (!fetchedAlbum) {
     return (
       <main className={`library${queueClass}`}>
@@ -138,11 +136,8 @@ export function ArtistDetailRoute({
     queryFn: async () => {
       const db = await getDb();
       const serverId = serverWithCred!.server.id;
-      // Matched case-insensitively because the name in the URL can come from a
-      // Last.fm similar-artist card, whose spelling drifts from the local one
-      // ("Tyler, The Creator" vs "Tyler, the Creator"). `a.name` is selected, so
-      // everything downstream queries with the library's own spelling and finds
-      // the artist's albums and tracks.
+      // Matched case-insensitively: a Last.fm card's spelling can drift ("Tyler, The Creator"
+      // vs "Tyler, the Creator"); `a.name` is selected so downstream queries use the library's own spelling.
       const rows = await db.select<ArtistRow[]>(
         `SELECT a.name, a.album_count,
            (SELECT al.artwork_url FROM albums al
@@ -162,16 +157,10 @@ export function ArtistDetailRoute({
     return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
   }
   if (!decodedName) return null;
-  // Held until the lookup settles: `data` is undefined while pending as well as
-  // when the artist is genuinely absent, so rendering the fallback immediately
-  // painted a library artist's hero as "0 albums in library" with no portrait
-  // for the length of the query, then swapped it out.
+  // Held until the lookup settles, else the fallback briefly paints "0 albums" with no portrait.
   if (artistPending) return <main className={`library${queueClass}`} />;
-  // Recommended/similar artists surfaced in an artist view are not in the local
-  // `artists` table, so the lookup above misses. Fall back to a minimal row
-  // synthesized from the URL name (same shape openArtist(string) builds) so
-  // ArtistDetail still renders and can enrich/look up by name, instead of
-  // hard-returning null (which painted a black screen).
+  // Recommended/similar artists aren't in the local `artists` table; synthesize a minimal row
+  // (same shape as openArtist(string)) instead of hard-returning null (black screen).
   const artist: ArtistRow = fetchedArtist ?? {
     name: decodedName,
     album_count: 0,
@@ -228,12 +217,8 @@ export function PlaylistDetailRoute({
 }) {
   const { playlistId } = useParams<{ playlistId: string }>();
   const navigate = useNavigate();
-  // Resolved out of the same list the playlists view renders rather than through a second
-  // query of its own. The previous `["playlist-by-id"]` key was outside `QK` and nothing
-  // invalidated it, while every playlist mutation signals through the playlist session
-  // store instead - so renaming, editing the description, setting a cover or refreshing a
-  // smart playlist from this page left the row this component rendered untouched, and the
-  // edit visibly reverted until the default staleTime lapsed.
+  // Resolved from the same list the playlists view renders, not a second query: the old
+  // `["playlist-by-id"]` key was outside `QK`, so mutations never invalidated it and edits reverted.
   // Already decoded by `useParams`; see the note in `ArtistDetailRoute`.
   const decodedId = playlistId ?? null;
   const playlist = useMemo(

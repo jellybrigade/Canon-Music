@@ -12,9 +12,8 @@ export interface ServerWithCredential {
 }
 
 /**
- * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/keychain.rs`, the one machine-readable part of a
- * keyring error. It marks the failures that clear without the user doing anything - the secret
- * store not up yet, or its collection still locked - and is stripped before display.
+ * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/keychain.rs`; marks failures that
+ * clear on their own (secret store not up yet, collection still locked) and is stripped before display.
  */
 export const SECRET_STORE_UNAVAILABLE = "secret-store-unavailable: ";
 
@@ -58,11 +57,8 @@ export function useServerWithCredential(serverId: string | undefined) {
   return useQuery({
     queryKey: QK.serverCredential(serverId),
     enabled: !!serverId,
-    // A missing entry and a corrupt payload are permanent until the user acts, so retrying only
-    // delays the message telling them to. A secret store that is not up yet is not: Canon can
-    // autostart before gnome-keyring/kwallet, and nothing else invalidates this key, so one such
-    // failure would otherwise leave the whole session without a credential - no sync, and the
-    // backoff ladder in useLibrarySync never arms because no run ever starts.
+    // A missing entry or corrupt payload is permanent, but Canon can autostart before
+    // gnome-keyring/kwallet is up; without retrying that case the session never gets a credential.
     retry: shouldRetryCredentialRead,
     retryDelay: credentialRetryDelay,
     // Written in exactly one place, which invalidates this key itself, so refetching on success
@@ -77,10 +73,8 @@ export function useServerWithCredential(serverId: string | undefined) {
       );
       const server = rows[0];
       if (!server) throw new Error(`Server ${serverId} not found`);
-      // `get_credential` rejects when the entry is absent rather than resolving
-      // to an empty string, so a falsy-check here would never fire and the raw
-      // keyring string ("No matching entry found in secure storage") would be
-      // what the user sees.
+      // `get_credential` rejects on a missing entry rather than resolving to an empty
+      // string; without this catch the raw keyring error string reaches the user.
       let credJson: string;
       try {
         credJson = await keychain.get(`canon.server.${server.id}`, "credential");

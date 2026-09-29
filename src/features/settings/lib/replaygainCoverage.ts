@@ -28,11 +28,8 @@ function decibels(db: number): string {
   return `${db >= 0 ? "+" : ""}${db} dB`;
 }
 
-/**
- * What the selected mode can actually do with this library's tags. Almost no library carries
- * ReplayGain on every track, and a mode with no tags behind it is silently identical to Off:
- * the control reads as a working choice while every track takes the fallback gain.
- */
+// A mode with no ReplayGain tags behind it is silently identical to Off: the control reads
+// as a working choice while every track takes the fallback gain.
 export function describeReplayGainCoverage(
   coverage: ReplayGainCoverage,
   mode: ReplayGainMode,

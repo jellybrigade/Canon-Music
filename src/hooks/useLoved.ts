@@ -49,12 +49,8 @@ async function loadLoved(tick: number): Promise<void> {
   return promise;
 }
 
-// Toggles for one id run one at a time, chained off whatever toggle for that id is
-// still running. The love state a toggle acts on is read from SQLite rather than from
-// the render-time sets: bumpRefresh only reloads asynchronously and the session store
-// deliberately keeps the previous sets while that reload is in flight, so a second
-// click inside the window used to read the same pre-click state as the first, take the
-// same branch and leave the heart where it started.
+// Toggles for one id chain off any toggle for that id still running, and read love state
+// from SQLite: a second click before bumpRefresh's async reload landed used to see stale state.
 const toggleChains = new Map<string, Promise<void>>();
 
 function serializeByKey(key: string, work: () => Promise<void>): Promise<void> {

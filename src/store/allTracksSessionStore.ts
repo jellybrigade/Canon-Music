@@ -9,11 +9,8 @@ interface AllTracksSessionState {
   setRows: (rows: unknown[], tick: number, key?: string) => void;
 }
 
-// Fourth domain in the RQ -> local-SQLite-mirror migration (psysonic pattern).
-// useAllTracks reads SQLite directly instead of react-query; sync invalidation
-// bumps this tick to trigger a refetch. Single low-frequency call site
-// (library sync finishing), no debounce needed. Also caches the fetched rows
-// (keyed by tick) so re-mounting a view reuses them instead of flashing empty.
+// useAllTracks reads SQLite directly (RQ -> local-mirror migration, psysonic pattern);
+// sync bumps this tick to refetch. Caches rows by tick so remounts reuse them, not flash empty.
 export const useAllTracksSessionStore = create<AllTracksSessionState>((set) => ({
   refreshTick: 0,
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),

@@ -1,16 +1,5 @@
-/**
- * MusicBrainz metadata client.
- *
- * Uses @tauri-apps/plugin-http (not browser fetch) so that a proper
- * User-Agent header can be set, required by MB's usage policy.
- *
- * Rate limit: ≥ 1 req/sec (MB enforces this server-side; we use 1100 ms).
- *
- * Genre note: MB stores community-voted genres at both Release Group and
- * Release level. Combined genres = union(RG genres, matched-release genres).
- * We do NOT fetch every pressing's genres, MB's 1 req/sec makes a
- * full-catalog union prohibitively slow.
- */
+// plugin-http rather than fetch so the User-Agent MB requires can be set. 1100 ms between
+// requests; genres are RG plus the matched release only, not every pressing.
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { makeRateLimiter } from "../lib/rateLimiter";
 
@@ -21,8 +10,6 @@ const USER_AGENT = `Canon/${APP_VERSION} ( https://github.com/jellybrigade/canon
 
 // MB enforces ≤ 1 req/sec; use 1100 ms for safe margin
 const rateLimit = makeRateLimiter(1100);
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface MbGenre {
   name: string;
@@ -89,8 +76,6 @@ export interface MbArtistDetail {
   genres: MbGenre[];
 }
 
-// ── HTTP helper ───────────────────────────────────────────────────────────────
-
 async function mbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   await rateLimit();
   const url = new URL(path, MB_BASE);
@@ -107,8 +92,6 @@ async function mbGet<T>(path: string, params: Record<string, string> = {}): Prom
   }
   return res.json() as Promise<T>;
 }
-
-// ── Release Group search ───────────────────────────────────────────────────────
 
 interface MbSearchRGResponse {
   "release-groups"?: Array<{
@@ -161,8 +144,6 @@ export async function searchReleaseGroups(
   return (albumOnlyData["release-groups"] ?? []).map(toCandidate);
 }
 
-// ── Release Group lookup ───────────────────────────────────────────────────────
-
 interface MbLookupRGResponse {
   id: string;
   title: string;
@@ -203,8 +184,6 @@ export async function lookupReleaseGroup(rgMbid: string): Promise<MbReleaseGroup
   };
 }
 
-// ── Release lookup ─────────────────────────────────────────────────────────────
-
 interface MbLookupReleaseResponse {
   id: string;
   title: string;
@@ -243,8 +222,6 @@ export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetai
   };
 }
 
-// ── Artist search ──────────────────────────────────────────────────────────────
-
 interface MbSearchArtistResponse {
   artists?: Array<{
     id: string;
@@ -269,8 +246,6 @@ export async function searchArtists(name: string): Promise<MbArtistCandidate[]> 
     score: a.score ?? null,
   }));
 }
-
-// ── Artist release groups browse ───────────────────────────────────────────────
 
 interface MbBrowseRGResponse {
   "release-groups"?: Array<{ id: string; title: string }>;
@@ -300,8 +275,6 @@ export async function fetchArtistReleaseGroupTitles(artistMbid: string): Promise
   return titles;
 }
 
-// ── Artist lookup ──────────────────────────────────────────────────────────────
-
 interface MbLookupArtistResponse {
   id: string;
   name: string;
@@ -323,8 +296,6 @@ export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> 
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
   };
 }
-
-// ── Wikidata image lookup ──────────────────────────────────────────────────────
 
 interface WikidataSparqlResponse {
   results?: {
@@ -358,8 +329,6 @@ export async function fetchWikidataImageByMbid(mbid: string): Promise<string | n
   }
 }
 
-// ── Folksonomy threshold ───────────────────────────────────────────────────────
-
 const MIN_FOLKSONOMY_COUNT_DEFAULT = 2;
 
 export async function getMinFolksonomyCount(): Promise<number> {
@@ -381,13 +350,7 @@ export async function setMinFolksonomyCount(count: number): Promise<void> {
   );
 }
 
-// ── Genre utilities ────────────────────────────────────────────────────────────
-
-/**
- * Combine genres from Release Group and a specific Release.
- * Deduped (case-insensitive name), sorted descending by combined vote count.
- * RG genres = aggregate community view; release genres = pressing-specific.
- */
+// RG genres are an aggregate community view; release genres are pressing-specific.
 export function combineGenres(rgGenres: MbGenre[], releaseGenres: MbGenre[]): MbGenre[] {
   const byName = new Map<string, MbGenre>();
   for (const g of [...rgGenres, ...releaseGenres]) {

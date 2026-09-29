@@ -23,23 +23,8 @@ const VIEW_TO_PATH: Record<AppView, string> = {
 };
 
 /**
- * `dismissOverlays` runs on the *intent* to go somewhere, not on the pathname landing
- * somewhere new. The one overlay it dismisses now (the command palette) is not URL-backed, so
- * asking for the route already open - the active sidebar item, the album whose page is
- * showing, Alt+ArrowLeft at the first history entry - moves the router nowhere and leaves it
- * painted over the answer, which reads as the click doing nothing. Dismissing here rather than
- * at each source is what stops a navigation added later from missing it; see known-issues.md,
- * "State deciding which subtree renders, but absent from the URL". Search used to be the other
- * name on that list; it left the class by becoming the `/search` route below, so `goBack`,
- * Alt+Arrow and the thumb buttons now do one thing (move the router) instead of two (also
- * clearing search state out from under the page the router moved to).
- *
- * The dismissal is urgent, not a transition, though React Router 7 commits its own location
- * update as one. Routes are `lazy` under the same already-mounted Suspense boundary the overlay
- * renders in, and React keeps a boundary's committed content while a transition suspends, so a
- * matched priority holds the dismissal until the destination chunk resolves - the overlay stays
- * over the click that asked for it. Urgent, the overlay goes at once and the route the user came
- * from stays painted for the frame or two until the transition lands.
+ * Runs on navigation intent, not pathname change - the palette isn't in the URL, so
+ * navigating to the already-open route would leave it painted. Urgent, not a transition.
  */
 export function useAppNavigation(dismissOverlays: () => void) {
   const navigate = useNavigate();
@@ -72,11 +57,8 @@ export function useAppNavigation(dismissOverlays: () => void) {
     return "library";
   })();
 
-  // Asking for the page already showing must not push a second copy of its entry: Back from
-  // there returns to the same page, which reads as Back doing nothing. Worst on /search, where
-  // `leaveSearch` is `navigate(-1)` - the sidebar item stranded the user in search. Compared on
-  // pathname alone, so the sidebar Search item keeps the query already in the box. `dismiss`
-  // runs either way: the click meant something even when the router stays put.
+  // Must not push a duplicate entry for the page already showing (Back would then read as
+  // doing nothing) - worst on /search, where `leaveSearch` is `navigate(-1)`. `dismiss` still runs either way.
   function goTo(to: string) {
     if (to !== pathname) navigate(to);
     dismiss();
@@ -111,11 +93,8 @@ export function useAppNavigation(dismissOverlays: () => void) {
     dismiss();
   }
 
-  // Whether the first history entry - the one with nothing behind it - is the entry showing.
-  // `"default"` is react-router's key for it, but a `replace` mints a fresh key and /search
-  // writes its own `?q` with `replace`, so one keystroke erased the marker. Followed instead:
-  // a push leaves that entry, a replace stays on it (carry the key over), and a pop is back on
-  // it exactly when the key matches the one it was last seen under.
+  // Whether the first history entry is showing. `"default"` is react-router's key for it, but
+  // a `replace` (e.g. /search's `?q`) mints a fresh key, so the key is tracked and carried over instead.
   const firstEntryKey = useRef("default");
   const onFirstEntry = useRef(location.key === "default");
   useEffect(() => {
@@ -125,30 +104,16 @@ export function useAppNavigation(dismissOverlays: () => void) {
     } else onFirstEntry.current = location.key === firstEntryKey.current;
   }, [location.key, navigationType]);
 
-  // `navigate(-1)` over a remembered pathname on purpose: it is symmetric with the push that
-  // opened search, so it restores the history index and scroll position, where a remembered
-  // pathname would push a *new* entry - Back from there would return to /search, an
-  // inescapable ping-pong - and is exactly the non-URL navigation state this hook exists to
-  // avoid. Nothing to go back to on the first entry, which catches /search as a cold mount,
-  // reachable via the web-process-terminated -> reload() recovery in lib.rs. `replace`
-  // there so the dead-end /search is not left behind for Forward.
+  // navigate(-1), not a remembered pathname: a push would ping-pong back to /search on
+  // Back. First-entry case (cold mount via the lib.rs reload recovery) replaces instead.
   function leaveSearch() {
     if (onFirstEntry.current) navigate("/home", { replace: true });
     else navigate(-1);
     dismiss();
   }
 
-  // Back and forward for the whole app. The only other way to go back is the
-  // per-detail-page back button, and there was no way to go forward at all.
-  // Alt+Arrow is the desktop convention and is free here: useGlobalShortcuts
-  // bails on altKey, so its left/right seek bindings can't collide. Mouse
-  // buttons 3 and 4 are the thumb buttons; WebKit does not act on them itself.
-  //
-  // Deliberately has no `isTextEntryTarget` guard, unlike every other window-level shortcut
-  // that preventDefaults. Alt+Arrow is browser-conventional back/forward and browsers honour
-  // it inside text fields; GTK entries bind word-wise motion to Ctrl+Arrow, not Alt+Arrow, so
-  // the keystroke is not being taken from the field. Adding the guard here would make Canon
-  // the odd one out, not safer.
+  // App-wide back/forward: Alt+Arrow and mouse thumb buttons. No text-entry guard, by design:
+  // Alt+Arrow is browser back/forward even in fields, and GTK word motion is Ctrl+Arrow.
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;

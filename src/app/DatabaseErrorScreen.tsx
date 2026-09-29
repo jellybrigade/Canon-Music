@@ -7,10 +7,7 @@ interface Props {
   onRetry: () => void;
 }
 
-/**
- * A database from a newer build and an unreadable one are different failures: the first is
- * permanent until the user updates, so offering "Try again" would be a button that cannot work.
- */
+/** Newer-build schema is permanent until the user updates; "Try again" can't work for it. */
 export function DatabaseErrorScreen({ error, onRetry }: Props) {
   const tooNew = error instanceof SchemaTooNewError ? error : null;
 
@@ -56,10 +53,7 @@ type UpdateState =
   | { phase: "none" }
   | { phase: "failed"; message: string };
 
-/**
- * The update modal lives inside the app shell, which never mounts on this screen, so without
- * this the only way out would be a manual download.
- */
+/** App shell's update modal never mounts on this screen; without this the only way out is a manual download. */
 function UpdateButton() {
   const [state, setState] = useState<UpdateState>({ phase: "idle" });
   const isBusy = state.phase === "checking" || state.phase === "installing";

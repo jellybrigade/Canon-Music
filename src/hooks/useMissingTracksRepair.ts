@@ -3,12 +3,8 @@ import { shouldFetchMissingTracks } from "../lib/albumTracks";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 
 /**
- * Fetches an open album's tracks from the server when the mirror holds none.
- *
- * A library sync that stopped short leaves an album with no track rows at all, and the user
- * had no way back from that except running a whole sync, so opening the album is the repair.
- * The outcome carries the album it belongs to: the view stays mounted while the user walks
- * between albums, and a slower fetch for the previous one must not settle the next one.
+ * Fetches an open album's tracks when the mirror holds none. The outcome carries its album id
+ * so a slow fetch for the previous album can't settle the next one.
  */
 export function useMissingTracksRepair(read: {
   albumId: string;

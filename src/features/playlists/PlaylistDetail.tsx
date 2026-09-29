@@ -138,10 +138,8 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     overscan: 5,
   });
 
-  // Restoring the scroll position is a once-per-playlist courtesy, not a reaction to the
-  // track list. `tracks` is a fresh array after every mutation (remove a track, refresh a
-  // smart playlist), and re-running on it yanked the list back to the resume row each
-  // time, undoing wherever the user had scrolled to.
+  // Once per playlist, not a reaction to `tracks`: it's a fresh array after every mutation,
+  // and re-running on it yanked the list back to the resume row, undoing the user's scroll.
   const resumeScrolledFor = useRef<string | null>(null);
   useEffect(() => {
     if (resumeIndex === null || !tracks || resumeIndex >= tracks.length) return;

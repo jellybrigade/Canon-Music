@@ -16,10 +16,8 @@ export function createPlayerEngine(
   { persistQueueState }: PlayerPersistence,
   { preloadWaveforms, fetchWaveform }: PlayerWaveform
 ) {
-  // Global listener: update audioFormat whenever Rust emits it at play start.
-  // Rust emits this immediately after sink.append(source), so it is also the earliest and most
-  // accurate signal that the fetch/probe wait is over and sound is starting. The ticker's
-  // position check below is the backstop for paths that produce no format event.
+  // Rust emits this immediately after sink.append(source): earliest, most accurate signal
+  // that the fetch/probe wait is over. The ticker's position check below backstops paths with no format event.
   void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
     clearBufferDeadline();
     set({
@@ -87,11 +85,8 @@ export function createPlayerEngine(
     let nextTrack: CurrentTrack | null;
 
     if (wrapped) {
-      // The enqueue already built the order for this pass and resolved the handed-over source
-      // against it, so adopt that one: rebuilding here would produce an order whose position 0
-      // is some other track than the one now audible. The length check catches a queue edited
-      // inside the lead window, where the carried order no longer describes the queue; fall back
-      // to a fresh order anchored on the track the engine actually started.
+      // Adopt the order the enqueue already built and resolved against the handed-over source;
+      // rebuilding would put some other track at position 0. Fall back if a queue edit inside the lead window invalidated it.
       const carried = enqueued?.wrapOrder;
       if (carried && carried.length === queue.length) {
         newShuffleOrder = carried;
@@ -144,16 +139,13 @@ export function createPlayerEngine(
       isBuffering: false,
       waveformPeaks: null,
     });
-    // Apply ReplayGain for the gapless-advanced track
     const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
     runtime.currentReplayGainLinear = castDevice
       ? 1.0
       : computeReplayGainLinear(nextTrack.replayGain, replayGainMode, replayGainPreAmp, replayGainFallbackGain);
     void runtime.activeTarget.setVolume(volume * Math.sqrt(runtime.currentReplayGainLinear));
-    // An end-of-track sleep timer set after the next source was already enqueued cannot stop the
-    // transition, the audio engine has moved on. Honour it here instead: the queue now sits at the
-    // start of the next track, paused. The enqueue itself is blocked while the flag is set (see the
-    // elapsed ticker), so this only covers a timer armed inside the gapless lead window.
+    // A sleep timer set after the next source was already enqueued can't stop the transition;
+    // honour it here instead (covers only a timer armed inside the gapless lead window).
     if (get().sleepTimerEndOfTrack) {
       get().clearSleepTimer();
       runtime.activeTarget.pause(0);
@@ -178,11 +170,8 @@ export function createPlayerEngine(
     let prefetchedFor: string | null = null;
     let stallPos: number | null = null;
     let stallSince: number | null = null;
-    // Audio is only considered started once the position has actually advanced.
-    // audio_play returns before the download/decode finishes, so position stays at 0
-    // during initial buffering; arming the watchdog then would tear the stream down
-    // and restart it every 5s, meaning a slow-starting track never starts at all.
-    // A genuinely dead stream is handled by the audio-error retry listener instead.
+    // audio_play returns before decode finishes, so position stays 0 during buffering; arming
+    // the watchdog then would restart the stream every 5s and it would never start.
     let hasAdvanced = false;
     runtime.elapsedInterval = setInterval(() => {
       const genAtPoll = runtime.seekGen;
@@ -258,10 +247,8 @@ export function createPlayerEngine(
                 void runtime.activeTarget.setNext(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null);
               }
             } else {
-              // A repeat-all loop-back under shuffle installs a fresh order, and the track that
-              // opens the new pass is position 0 of *that* order, not of the one being replaced.
-              // rodio cannot un-append, so the order has to be decided here, before the source is
-              // handed over, and travel with it to track-advanced.
+              // A repeat-all loop-back under shuffle installs a fresh order; the opening track is
+              // position 0 of that order. rodio can't un-append, so decide the order here and carry it to track-advanced.
               const wrapOrder = canGapless && wrapping && isShuffled && queue.length > 1
                 ? buildShuffleOrder(queue.length, -1)
                 : null;
@@ -270,11 +257,8 @@ export function createPlayerEngine(
               if (nextTrack) {
                 const nextUrl = streamUrlFor(nextTrack);
                 if (canGapless) {
-                  // A queue edit bumps the revision and gets us here a second time, but rodio
-                  // cannot un-append a source: audio_enqueue_next sees its slot already claimed
-                  // and returns without doing anything. Re-recording gaplessEnqueued here would
-                  // name a track the engine never received, which is exactly the mismatch the
-                  // record exists to prevent. Leave the first one standing.
+                  // A queue edit can get us here a second time, but rodio can't un-append; the slot
+                  // is already claimed. Re-recording gaplessEnqueued would name a track the engine never received.
                   if (!runtime.gaplessActive) {
                     runtime.gaplessActive = true;
                     runtime.gaplessEnqueued = { track: nextTrack, position: effectiveNext, wraps: wrapping, ...(wrapOrder ? { wrapOrder } : {}) };
@@ -289,19 +273,13 @@ export function createPlayerEngine(
                   // wrong one.
                   void runtime.activeTarget.setNext(nextUrl, nextTrack, nextTrack.coverArtUrl ?? null);
                 }
-                // Nothing is handed to a cast target ahead of time. A renderer that has been
-                // given the next URI advances on its own, and Canon cannot observe that
-                // transition (GetTransportInfo reads PLAYING across it), so the UI would sit
-                // on the finished track for the whole of the next one and then play it again.
+                // Nothing handed to a cast target ahead of time: it would advance on its own and
+                // Canon can't observe the transition (GetTransportInfo reads PLAYING across it).
               }
             }
           }
-          // Fallback: advance when pos reaches end in case track-ended event doesn't fire.
-          // Suppressed while gaplessActive, the Rust engine is handling the transition.
-          // For DLNA targets the DlnaTarget fires onTrackEnd directly, so skip fallback there.
-          // Requires isPlaying: a paused player must never advance on its own, whatever the
-          // reported position is. Without this, any position drift while paused (such as the
-          // seek-while-paused bug in audio_seek) silently skipped the user to the next track.
+          // Fallback: advance when pos reaches end in case track-ended doesn't fire (suppressed
+          // for gapless/DLNA). Requires isPlaying, or position drift while paused (e.g. the seek-while-paused bug) skips a track.
           if (isPlaying && !castDevice && !runtime.gaplessActive && duration && pos >= duration - 0.25 && runtime.naturalEndFiredForIndex !== queueIndex) {
             runtime.naturalEndFiredForIndex = queueIndex;
             void get().next(true);
@@ -347,7 +325,7 @@ export function createPlayerEngine(
             armBufferDeadline(url);
             startElapsedTimer();
           } catch {
-            // next audio-error event triggers another retry if attempts remain
+            // empty: the listener above handles the next audio-error retry
           }
         }, delay);
       } else {
@@ -397,12 +375,9 @@ export function createPlayerEngine(
         if (get().currentTrack?.id !== track.id) return;
         const paused = runtime.pauseRequestedDuringLoad;
         runtime.pauseRequestedDuringLoad = false;
-        // isBuffering is deliberately not re-asserted here. A DLNA load has genuinely finished by
-        // this point so it clears, but on the local target audio_play has only spawned its
-        // download thread; audio-format may already have landed for a prefetch-cache hit, and
-        // setting the flag back to true would leave it stuck until the ticker cleared it.
+        // isBuffering deliberately not re-asserted: on a prefetch-cache hit, audio-format may
+        // already have landed, and setting it back to true would leave it stuck until the ticker cleared it.
         set(get().castDevice ? { isPlaying: !paused, isLoading: false, isBuffering: false } : { isPlaying: !paused, isLoading: false });
-        // Apply ReplayGain for this track now that the sink exists
         const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
         runtime.currentReplayGainLinear = castDevice
           ? 1.0

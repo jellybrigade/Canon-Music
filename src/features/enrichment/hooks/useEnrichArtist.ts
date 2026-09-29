@@ -1,15 +1,5 @@
-/**
- * On-open artist enrichment from Last.fm.
- *
- * On mount, checks if the artist_identity row is stale (enriched_at older than
- * staleness_days, or missing). If stale, fetches artist.getInfo and persists:
- * bio, listeners, playcount, similar artists, top tags, image URL, enriched_at.
- *
- * MB columns (mb_artist_id, lastfm_artist_name, confirmed_at) are preserved.
- * Failures are silent, the hook never throws to the UI.
- *
- * Returns { data, isLoading, isRefreshing, error, refresh }.
- */
+// On open, refreshes a stale artist_identity row from Last.fm artist.getInfo, preserving
+// MB columns. Failures are silent.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
@@ -76,10 +66,8 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
-// Enrichment fans out per rendered artist card (e.g. up to 12 similar-artist cards
-// per artist page), and each chain makes several sequential network calls. Without a
-// cap, quickly browsing artist -> similar artist -> similar artist stacks unbounded
-// concurrent chains with no cancellation, degrading the app until it crashes.
+// Bounds chains fanning out per rendered artist card; uncapped, quick browsing
+// stacks unbounded concurrent chains with no cancellation and crashes the app.
 const MAX_CONCURRENT_ENRICH = 3;
 const MAX_QUEUED_ENRICH = 24;
 let activeEnrichCount = 0;
@@ -105,12 +93,7 @@ function releaseEnrichSlot(): void {
   if (next) next();
 }
 
-/**
- * When MB returns multiple artist candidates, score each against the user's
- * local album titles. The candidate whose release groups best overlap with
- * local albums (score ≥ 0.5, gap ≥ 0.15 to second place) is auto-confirmed
- * and its MBID is persisted with confirmed_at.
- */
+/** Scores MB artist candidates against local album titles; auto-confirms the best (score >= 0.5, gap >= 0.15). */
 async function disambiguateArtistByLocalAlbums(
   artistName: string,
   candidates: import("../../../clients/musicbrainz").MbArtistCandidate[],
@@ -125,10 +108,8 @@ async function disambiguateArtistByLocalAlbums(
   );
   const localAlbums = localRows.map((r) => r.name);
   if (localAlbums.length === 0) {
-    // Not in the library, no album overlap to verify against. Use the closest
-    // name match anyway (not persisted as confirmed) so portrait art still resolves
-    // for "fans also like" style artists instead of silently giving up, but still
-    // require a reasonable name match to avoid attaching an unrelated artist's identity.
+    // No local albums to verify overlap against; fall back to closest name match
+    // (unconfirmed) instead of giving up, still requiring a reasonable match.
     const ranked = candidates
       .map((c) => ({ id: c.id, sim: similarity(c.name, artistName) }))
       .sort((a, b) => b.sim - a.sim);

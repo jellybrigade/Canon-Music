@@ -89,10 +89,8 @@ export function buildDidlMetadata(
   const artist = escapeXml(track.artist ?? "");
   const album = escapeXml(track.album ?? "");
   const duration = track.duration ? secsToTime(track.duration) : "0:00:00";
-  // Only an address the renderer can fetch itself is worth sending. Canon's own art URLs
-  // use the private "cover://" scheme registered inside the app, which resolves nowhere
-  // else on the network, and some renderers reject the whole DIDL document over one
-  // unreachable albumArtURI rather than just skipping the art.
+  // Canon's own "cover://" URLs resolve nowhere else on the network, and some renderers
+  // reject the whole DIDL document over one unreachable albumArtURI.
   const artIsFetchable = !!coverArtUrl && /^https?:\/\//i.test(coverArtUrl);
   const artUri = artIsFetchable ? `<upnp:albumArtURI>${escapeXml(coverArtUrl!)}</upnp:albumArtURI>` : "";
   // Claiming audio/mpeg for a raw stream is a lie whenever the server holds FLAC, and a

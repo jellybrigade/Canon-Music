@@ -17,10 +17,8 @@ const KEY_STEP_RATIO = 0.05;
 /** Largest forward step still read as playback: the 200ms position poll with slack for a late tick. */
 const MAX_PLAYBACK_STEP_SECONDS = 1;
 
-/**
- * Whether the fill moved by seek or track change rather than by playback. The fill's slide
- * transition outlasts the poll, so easing across a jump sweeps visibly backwards or overshoots.
- */
+// The fill's slide transition outlasts the poll, so easing across a seek/track-change jump
+// sweeps visibly backwards or overshoots; callers should show jumps without the slide.
 export function isProgressJump(previous: number, next: number, duration: number): boolean {
   if (next < previous) return true;
   return (next - previous) * duration > MAX_PLAYBACK_STEP_SECONDS;
@@ -50,15 +48,7 @@ export interface SeekBarState {
   };
 }
 
-/**
- * Seek-bar behaviour shared by the player bar and the now-playing overlay.
- *
- * Both previously carried byte-identical click and keyboard handlers, and the overlay kept its
- * click handler up in the view component while its sibling keyboard handler sat in the child.
- * Centralizing them also means the ARIA contract is written once: values are reported in seconds
- * with a spoken `aria-valuetext`, rather than the bare 0-100 percentage that screen readers used
- * to announce as a meaningless number.
- */
+/** Seek-bar click, keyboard and ARIA shared by the player bar and now-playing overlay. */
 export function useSeekBar(duration: number): SeekBarState {
   const elapsed = usePlayerStore((s) => s.elapsed);
   const seek = usePlayerStore((s) => s.seek);

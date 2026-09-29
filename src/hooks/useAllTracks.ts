@@ -25,14 +25,8 @@ export interface AllTrackRow {
   replay_gain_album_peak: number | null;
 }
 
-// Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
-// split"). Mirrors useAlbums.ts/useArtists.ts/useTracks.ts - reads via
-// src-tauri/src/library_read/tracks.rs's dedicated read-only connection instead of
-// tauri-plugin-sql's sqlx pool. Ported after live measurement showed this hook's sqlx
-// select taking 1.8-3.5s vs ~100-250ms for the already-piloted rusqlite reads.
-// `enabled` lets the app root skip this fetch on routes that never render the track
-// table. When false the effect returns early without clearing `data` - the session-store
-// seed and last-loaded rows survive, so returning to the route paints instantly.
+// Reads through the Rust read-only connection (library_read/tracks.rs). `enabled: false`
+// skips the fetch but keeps `data`, so returning to the route paints instantly.
 export function useAllTracks(enabled: boolean = true) {
   const refreshTick = useAllTracksSessionStore((s) => s.refreshTick);
 

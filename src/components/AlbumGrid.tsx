@@ -71,9 +71,7 @@ interface CardProps {
 const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredential, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
   const albumDisplayName = useAlbumDisplayName();
   const { server, credential } = serverWithCredential;
-  // Derive the fallback cover URL here (not inline in the parent's render) and
-  // memoize on its stable inputs so the same card gets the same string reference
-  // across renders. getCoverArtUrl returns a fresh string each call, which would
+  // Memoized because getCoverArtUrl returns a fresh string each call, which would
   // otherwise defeat this component's React.memo.
   const artUrl = useMemo(
     () => coverUrl ?? (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null),
@@ -176,7 +174,6 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const cardWidth = available > 0 ? (available - COL_GAP * (cols - 1)) / cols : CARD_MIN;
   const rowHeight = Math.round(cardWidth) + ROW_GAP;
 
-  // Build mixed rows: year-header rows interleaved with album rows when sort=year
   const rows = useMemo<GridRow[]>(() => {
     if (cols === 0) return [];
     if (sort === "year") {
@@ -241,10 +238,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     return sections;
   }, [rows, sort, cols]);
 
-  // The grid's padding is declared to the virtualizer rather than added to each row's `top`
-  // by hand. Hand-adding it left every offset the virtualizer computes itself 20px short of
-  // where the row was actually painted, so the scrubber's `scrollToIndex` landed its target
-  // row tucked under the top edge. One writer for the number.
+  // Padding is declared to the virtualizer, not added by hand to each row's `top`: hand-adding
+  // it desynced from scrollToIndex's own offsets, tucking the scrubber's target under the edge.
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => containerRef.current,
@@ -282,10 +277,8 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       style={{ "--album-grid-trailing-space": `${PADDING + ROW_GAP}px` } as CSSProperties}
     >
       <div ref={containerRef} className="album-grid-scroller">
-        {/* Error first: a failed read leaves the caller's data undefined, so `isLoading`
-            is still true and a skeleton would otherwise pulse forever over the failure.
-            Both states are gated on having no rows, so a failed background refresh keeps
-            the rows already on screen rather than replacing them with a wall. */}
+        {/* Error checked first: a failed read leaves data undefined so isLoading stays true.
+            Both states gate on having no rows, so a failed refresh keeps rows on screen. */}
         {error && albums.length === 0 ? (
           <div className="empty-state">
             <p className="empty-state-title">Couldn't load your albums</p>

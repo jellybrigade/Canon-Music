@@ -83,11 +83,8 @@ export function useRadio() {
   const playedTrackIdsRef = useRef(new Set<string>());
   const wasRadioActiveRef = useRef(false);
 
-  // "Stopped at the end of the queue" is the auto-advance trigger, but a queue restored at
-  // startup with radio_active=1 satisfies it without anything ever having played: not playing,
-  // not loading, index at the last entry. That made launching the app start a random radio
-  // track. Auto-advance therefore also requires that playback actually happened since mount.
-  // Subscribed rather than selected so play/pause does not re-render the whole radio effect.
+  // A queue restored at startup with radio_active=1 also satisfies the auto-advance trigger
+  // without anything played, starting a random track on launch; require playback since mount.
   const hasPlayedRef = useRef(false);
   useEffect(() => {
     if (usePlayerStore.getState().isPlaying) hasPlayedRef.current = true;
@@ -106,12 +103,8 @@ export function useRadio() {
     wasRadioActiveRef.current = radioActive;
   }, [radioActive]);
 
-  // Both decay maps are scored as `Math.min(1, gap / decay)`, so once an entry's gap
-  // reaches its decay window it contributes a multiplier of exactly 1 - identical to
-  // not being in the map at all. Evicting past that point is therefore free, and it
-  // bounds each map at roughly its decay window (18 / 8 entries) instead of growing
-  // one entry per artist/album for the whole session. Every lookahead fill iterates
-  // these per candidate, so an unbounded map costs CPU on every fill, not just memory.
+  // Scored as `Math.min(1, gap / decay)`, so an entry past its decay window contributes 1,
+  // same as absent; eviction is free and bounds each map near its decay window (18 / 8).
   function pruneDecayMap(map: Map<string, number>, decay: number) {
     const counter = sessionCounterRef.current;
     for (const [key, last] of map) {
@@ -202,10 +195,8 @@ export function useRadio() {
             replayGain: replayGainFromRow(row2),
           };
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
-          // Re-read live state rather than the closure's isPlaying/isLoading/queue/queueIndex:
-          // this callback runs after several awaits (Last.fm calls, DB queries), and none of
-          // those four are in the effect's deps, so the closure can be holding values from
-          // well before the user paused, skipped, or the track naturally ended.
+          // Re-read live state, not the closure's: this callback runs after several awaits,
+          // and the closure can hold stale values from before the user paused or skipped.
           const live2 = usePlayerStore.getState();
           const wasAtEnd2 = hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
@@ -217,10 +208,8 @@ export function useRadio() {
           return;
         }
 
-        // For all other modes, apply a decaying repetition penalty instead of a hard cap:
-        // recently-played artist/album score near zero, recovering fully after N picks.
-        // Soft penalty (vs. hard filter) avoids dead ends when a genre's pool is thin,
-        // and persists across the whole radio session instead of resetting per fill cycle.
+        // Decaying repetition penalty, not a hard cap: recently-played artist/album score near
+        // zero then recover, avoiding dead ends when a genre's pool is thin.
         let capped = candidates;
         if (!UNCAPPED_MODES.has(radioMode)) {
           const artistDecay = radioMode === "similar-artists" ? ARTIST_DECAY_TRACKS_NARROW : ARTIST_DECAY_TRACKS;

@@ -1,18 +1,8 @@
 import { getDb } from "../../../db";
 import { canonicalKey } from "./canonicalize";
 
-/**
- * Cache for the manual genre mappings table read.
- *
- * `normalizeAlbum` needs the whole `tag_mappings` manual set to decide overrides,
- * and it used to re-read the full table once per album. A bulk pass over a
- * 2000-album library therefore cost O(albums x mappings) rows across the SQL
- * bridge. The set only changes when a mutation writes `tag_mappings`, so it is
- * cached here and dropped explicitly by those mutations.
- *
- * Any new writer of `tag_mappings` MUST call `invalidateManualMappings()` before
- * it returns, or normalization will keep using the pre-write mapping set.
- */
+// Cached so bulk normalization doesn't re-read `tag_mappings` per album. Every writer of
+// `tag_mappings` must call `invalidateManualMappings()` before it returns.
 let cache: Map<string, string> | null = null;
 let inFlight: Promise<Map<string, string>> | null = null;
 let generation = 0;

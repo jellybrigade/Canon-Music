@@ -85,7 +85,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     setCastDevice: async (renderer) => {
       const { isPlaying, elapsed, streamUrl, currentTrack } = get();
 
-      // Tear down old target and park playback.
       runtime.activeTarget.teardown();
 
       if (!renderer) {
@@ -117,7 +116,6 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           if (rows2[0]) castBitrate = parseInt(rows2[0].value, 10) || 320;
         } catch { /* use default */ }
         runtime.activeTarget = new DlnaTarget(renderer, () => {
-          // Called by DlnaTarget when track ends on renderer.
           void get().next(true);
         }, castBitrate, (message) => {
           // The renderer stopped answering. Nothing else on the cast path surfaces this:
@@ -157,10 +155,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     play: async (track, streamUrl) => {
-      // A one-track queue still needs an order covering that track while shuffle is on. Leaving
-      // it empty lets the queue-mutating writers that index shuffleOrder without normalising
-      // first (removeFromQueue, moveQueueItem) read past the end of it. Same case playQueue
-      // handles for its single-track input.
+      // A one-track queue still needs an order covering it while shuffle is on: leaving it empty
+      // lets writers that index shuffleOrder without normalising (removeFromQueue, moveQueueItem) read past the end.
       const { isShuffled } = get();
       set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: isShuffled ? [0] : [] });
       await playTrack(track, streamUrl);
@@ -172,10 +168,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       let workingTracks = tracks;
       let workingStart = startIndex;
 
-      // Cap the queue instead of storing the whole (possibly library-sized) list:
-      // keeps playback-state re-renders, persistence writes, and Up Next rendering
-      // bounded regardless of source size. Window is centered on the clicked track
-      // so skipping in either direction still has room to move.
+      // Cap the queue instead of storing the whole (possibly library-sized) list, windowed
+      // around the clicked track so skipping either direction still has room to move.
       if (maxQueueSize > 0 && tracks.length > maxQueueSize) {
         const half = Math.floor(maxQueueSize / 2);
         let begin = Math.max(0, startIndex - half);
@@ -195,10 +189,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         shuffleOrder = buildShuffleOrder(workingTracks.length, workingStart);
         position = 0;
       } else if (isShuffled && workingTracks.length === 1) {
-        // A one-track shuffled queue still needs an order covering that track. Leaving it empty
-        // lets a later addToQueue/playNext splice into [] and produce an order that is one short
-        // and offset by one, which makes queue[0] unreachable. Reached by every "start radio"
-        // entry point, which seeds playQueue with a single track and then appends to it.
+        // A one-track shuffled queue still needs an order covering it; empty lets a later
+        // addToQueue/playNext splice into [] and produce an order offset by one, making queue[0] unreachable.
         shuffleOrder = [0];
       }
 
@@ -335,11 +327,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       const { queue, queueIndex, streamUrlFor, elapsed, isShuffled, shuffleOrder, error, currentTrack } = get();
       if (queue.length === 0 || !streamUrlFor) return;
       const restart = elapsed > PREV_RESTART_THRESHOLD_S;
-      // Restarting the track the engine already holds is a seek, not a load. Going through
-      // playTrack re-fetched and re-decoded the whole file just to get back to zero, so the
-      // most common use of this button paid a network round trip and a buffering spinner for
-      // something the sink can do instantly. This is what the button's own hold-to-restart
-      // gesture already does. A failed track has no sink to seek, so that still reloads.
+      // Restarting the track the engine already holds is a seek, not a load: playTrack would
+      // re-fetch and re-decode the whole file for something the sink can do instantly. A failed track has no sink, so that still reloads.
       if (restart && currentTrack && !error) {
         await get().seek(0);
         return;
@@ -372,10 +361,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         get().retryCurrent();
         return;
       }
-      // A session restored from queue_state has a currentTrack but has never loaded anything
-      // into the engine, so there is no sink to resume either. Resuming one anyway left the
-      // store claiming to play with the position stuck at 0, which the stall watchdog cannot
-      // recover from because it requires the position to have advanced at least once.
+      // A session restored from queue_state has never loaded into the engine; resuming anyway
+      // left the store claiming to play with position stuck at 0, past the stall watchdog's recovery.
       if (!streamUrl) {
         get().retryCurrent();
         return;

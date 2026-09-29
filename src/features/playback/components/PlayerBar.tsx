@@ -56,13 +56,8 @@ interface Props {
   serverWithCred?: ServerWithCredential;
 }
 
-/**
- * Wheel-to-adjust on a volume control, attached natively rather than through React's onWheel.
- * React registers wheel at the root as a passive listener, so preventDefault() from a JSX
- * handler does nothing except log a console warning, and the page scrolls underneath while the
- * user is adjusting volume. Reading the volume off the store inside the handler keeps the
- * listener registered once instead of re-registering on every 0.01 step.
- */
+/** Attached natively, not via onWheel: React's passive root listener makes preventDefault()
+ * a no-op there, so the page would scroll under the user while they adjust volume. */
 function useVolumeWheel() {
   const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -397,10 +392,8 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               onPointerDown={handlePrevPointerDown}
               onPointerUp={handlePrevPointerUp}
               onPointerLeave={handlePrevPointerLeave}
-              // Enter and Space on a focused button dispatch click and nothing else: no
-              // pointerdown, no pointerup. With only the pointer handlers above, Previous did
-              // nothing at all for a keyboard user. detail === 0 identifies exactly that case,
-              // so a real pointer click is still handled once, by handlePrevPointerUp.
+              // Keyboard activation fires click with no pointerdown/up, so it's invisible
+              // to the pointer handlers above; detail === 0 identifies that case.
               onClick={(e) => { if (e.detail === 0) void prev(); }}
               disabled={queue.length === 0}
               aria-label="Previous"

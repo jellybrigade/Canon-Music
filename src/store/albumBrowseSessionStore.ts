@@ -1,11 +1,8 @@
 import { create } from "zustand";
 import type { AlbumRow } from "../types/library";
 
-// How many distinct (sort, genre-filter) result sets to keep. The list is fully
-// re-fetched whenever the tick bumps, so this only has to cover the sets a user
-// flips between within one sync generation: four sorts, plus a few filter
-// combinations. Small enough that the memory held is bounded by the largest few
-// album lists rather than by the number of filters ever touched.
+// Distinct (sort, genre-filter) result sets to keep; only needs to cover what a user
+// flips between within one sync generation, not every filter ever touched.
 const MAX_ENTRIES = 8;
 
 interface AlbumBrowseSessionState {
@@ -18,14 +15,8 @@ interface AlbumBrowseSessionState {
   setAccent: (albumId: string, accentColor: string) => void;
 }
 
-// Pilot for the RQ -> local-SQLite-mirror migration (psysonic pattern).
-// useAlbums reads SQLite directly instead of react-query; sync/mutation call
-// sites bump this tick to trigger a refetch instead of queryClient.invalidateQueries.
-// Also caches the fetched rows (keyed by sort + genre filter) so re-mounting a view,
-// or returning to a sort the user already visited, reuses them instead of refetching
-// and flashing empty. Keyed rather than single-slot because toggling between two
-// sorts, or a filter on and off, otherwise misses every time and pays a full-library
-// scan for each toggle.
+// Tick-driven SQLite reads for useAlbums, caching rows per sort + genre filter so toggling
+// back to a visited view doesn't rescan the library.
 export const useAlbumBrowseSessionStore = create<AlbumBrowseSessionState>((set, get) => ({
   refreshTick: 0,
   bumpRefresh: () => set((s) => ({ refreshTick: s.refreshTick + 1 })),

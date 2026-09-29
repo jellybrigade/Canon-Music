@@ -1,15 +1,5 @@
-/**
- * Auto-identify an album on mount via MusicBrainz search + fuzzy scoring.
- *
- * Only fires when:
- *   1. The MB auto-identify setting is enabled ("mb.auto_identify" = "true")
- *   2. Artist + album strings are non-empty
- *   3. The identity query has settled AND no row exists yet (never looked up)
- *
- * Returns a result describing the outcome without side effects, AlbumDetail
- * is responsible for calling useSaveAlbumIdentity / useRecordFailedLookup
- * based on the `decision` field.
- */
+// Runs only when `mb.auto_identify` is on, names are non-empty and no identity row exists.
+// Side-effect free: the caller saves or records the lookup based on `decision`.
 import { useQuery } from "@tanstack/react-query";
 import { autoIdentifyAlbum } from "../lib/albumIdentify";
 import type { AutoDecision, AutoIdentifyResult } from "../lib/albumIdentify";

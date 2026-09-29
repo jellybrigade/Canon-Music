@@ -10,31 +10,16 @@ import type { ServerWithCredential } from "../../../hooks/useServer";
 
 const FLUSH_INTERVAL_MS = 60_000;
 
-/**
- * Subsonic error 70 is "the requested data was not found". A scrobble for a track
- * the server has deleted answers with it every single time, so retrying the row is
- * pointless and, because the batch stops at the first failure, it would wall off
- * every scrobble queued behind it. Nothing else is treated as permanent: an auth
- * failure (40/41/50) in particular must not be allowed to delete the user's
- * offline backlog, since re-entering the password makes those rows sendable again.
- */
+// Only "not found" is permanent; auth failures must keep the offline backlog.
 const PERMANENT_SUBSONIC_CODES = new Set([70]);
 
-/**
- * Rows are owned by the server whose id prefixes their `track_id`. Scoping the read in SQL
- * rather than skipping foreign rows in the loop keeps the 60-second tick's cost proportional
- * to what it can actually send: a second server's backlog is unsendable until that server is
- * selected, and re-reading it every minute buys nothing.
- */
+/** Rows are owned by the server whose id prefixes their `track_id`; scope the read in SQL, not the loop. */
 function ownerPattern(serverId: string): string {
   return `${escapeLike(serverId)}:%`;
 }
 
-/**
- * Servers with a flush pass running. Module-scoped because a pass outlives its effect: a
- * credential refetch re-runs the effect while the old pass still awaits a send, and a
- * per-effect guard would let the new pass re-SELECT that undeleted row and send it twice.
- */
+/** Servers with a flush pass running. Module-scoped: a per-effect guard would let a
+ * credential refetch's new pass re-SELECT an undeleted row and send it twice. */
 const serversFlushing = new Set<string>();
 
 /** Queued rows the currently selected server could send, i.e. what a backlog count may claim. */
@@ -54,10 +39,8 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
     if (!serverWithCred) return;
 
     const { server, credential } = serverWithCred;
-    // A scrobble is non-idempotent, so it gets one 12s attempt per route: a handful of
-    // queued rows against a slow server can outlast FLUSH_INTERVAL_MS. Without the
-    // in-flight claim the next tick (or the "online" listener) would re-SELECT rows the
-    // running flush has not deleted yet and send them a second time.
+    // Scrobbles are non-idempotent; without the in-flight claim a slow flush
+    // outlasting FLUSH_INTERVAL_MS would get re-selected and sent twice.
     let cancelled = false;
 
     async function flush() {
@@ -91,12 +74,8 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
             [row.track_id, row.timestamp]
           );
           await db.execute("DELETE FROM scrobble_queue WHERE id = ?", [row.id]);
-          // The server has the play now, but nothing brings the number back: the sync's
-          // track fetch is skipped for any album whose created/songCount are unchanged,
-          // so tracks.play_count would stay frozen at whatever the first sync captured.
-          // Count it locally instead. Deliberately after the DELETE, so a crash in this
-          // window loses a count rather than double-counting it, and a later track fetch
-          // overwrites with the server's value, which by then already includes this play.
+          // Sync's play_count skip-fast-path won't catch this play; count it locally.
+          // After the DELETE so a crash loses a count instead of double-counting it.
           await db.execute(
             "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?",
             [row.track_id]

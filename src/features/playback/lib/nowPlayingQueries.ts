@@ -4,15 +4,7 @@ import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/last
 import type { AlbumRow } from "../../../types/library";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
-/**
- * Queries backing the now-playing overlay's About tab.
- *
- * These live here rather than beside either consumer because there are two: the tab itself
- * and `useNowPlayingPrefetch`, which warms the same React Query keys when the track changes.
- * Held separately they drifted, and a prefetch that runs different SQL under the same key is
- * worse than no prefetch at all. The key derivation (`primaryArtistOf`) is exported for the
- * same reason: the two sides have to agree on the artist name or the warmed entry is never read.
- */
+// Shared by the About tab and useNowPlayingPrefetch so both use the same SQL and keys.
 
 export interface NowPlayingTrack extends ReplayGainColumns {
   id: string;
@@ -32,10 +24,7 @@ export const SUGGESTED_STALE_TIME = 5 * 60 * 1000;
 const TRACK_COLUMNS = `t.id, t.title, t.artist, t.duration, a.name AS album_name,
           t.album_id, a.artwork_url, ${REPLAY_GAIN_COLUMNS}`;
 
-/**
- * "Burial feat. Four Tet" -> "Burial". The About tab is about the artist, not the collaboration,
- * and Last.fm has no entry for the joined name.
- */
+/** "Burial feat. Four Tet" -> "Burial": Last.fm has no entry for the joined name. */
 export function primaryArtistOf(artist: string | null | undefined): string | null {
   if (!artist) return null;
   return artist.match(/^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i)?.[1] ?? artist;
@@ -51,10 +40,7 @@ export async function fetchArtistAlbums(artistName: string, serverId: string): P
   );
 }
 
-/**
- * Last.fm's global popularity ranking, intersected with what the library actually holds.
- * Falls back to local track order when Last.fm has nothing or none of it matches.
- */
+/** Last.fm's popularity ranking intersected with the library; falls back to local track order. */
 export async function fetchArtistTopTracksForNowPlaying(
   artistName: string,
   serverId: string
