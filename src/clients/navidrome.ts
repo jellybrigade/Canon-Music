@@ -1,6 +1,7 @@
 import { md5 } from "js-md5";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { apiPost, callSubsonicVoid, SubsonicError } from "./navidromeTransport";
+import { apiPost, callSubsonicVoid, checkEnvelope, SubsonicError } from "./navidromeTransport";
+import { noteEnvelope } from "../lib/credentialRejections";
 
 export interface NavidromeAlbum {
   id: string;
@@ -56,9 +57,7 @@ export async function fetchAllAlbums(
     };
 
     const response = data["subsonic-response"];
-    if (response.status !== "ok") {
-      throw new SubsonicError("getAlbumList2", response.error?.code ?? null, response.error?.message ?? "Failed to fetch albums");
-    }
+    checkEnvelope(baseUrl, "getAlbumList2", response, "Failed to fetch albums");
 
     const page = response.albumList2?.album ?? [];
     const firstId = page[0]?.id;
@@ -102,9 +101,7 @@ export async function fetchAlbumListByType(
   };
 
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError("getAlbumList2", response.error?.code ?? null, response.error?.message ?? "Failed to fetch album list");
-  }
+  checkEnvelope(baseUrl, "getAlbumList2", response, "Failed to fetch album list");
 
   return response.albumList2?.album ?? [];
 }
@@ -157,9 +154,7 @@ export async function fetchAlbumTracks(
   };
 
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError("getAlbum", response.error?.code ?? null, response.error?.message ?? "Failed to fetch album tracks");
-  }
+  checkEnvelope(baseUrl, "getAlbum", response, "Failed to fetch album tracks");
 
   return response.album?.song ?? [];
 }
@@ -189,8 +184,11 @@ export async function getArtistImageFromServer(
         artistInfo2?: { largeImageUrl?: string; mediumImageUrl?: string; smallImageUrl?: string };
       };
     };
-    const info = data["subsonic-response"]?.artistInfo2;
-    if (data["subsonic-response"]?.status !== "ok" || !info) return null;
+    const response = data["subsonic-response"];
+    if (!response) return null;
+    noteEnvelope(baseUrl, response);
+    const info = response.artistInfo2;
+    if (response.status !== "ok" || !info) return null;
     const url = info.largeImageUrl || info.mediumImageUrl || info.smallImageUrl;
     if (!url || url.includes(LASTFM_PLACEHOLDER_HASH)) return null;
     return url;
@@ -221,9 +219,7 @@ export async function fetchStarred2(
     };
   };
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError("getStarred2", response.error?.code ?? null, response.error?.message ?? "getStarred2 failed");
-  }
+  checkEnvelope(baseUrl, "getStarred2", response, "getStarred2 failed");
   return response.starred2 ?? {};
 }
 
@@ -258,9 +254,7 @@ export async function fetchScanStatus(
     };
   };
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError("getScanStatus", response.error?.code ?? null, response.error?.message ?? "getScanStatus failed");
-  }
+  checkEnvelope(baseUrl, "getScanStatus", response, "getScanStatus failed");
   return {
     lastScan: response.scanStatus?.lastScan ?? null,
     songCount: response.scanStatus?.count ?? null,
@@ -426,6 +420,7 @@ export async function fetchAndStoreOpenSubsonicExtensions(
       };
     };
     const response = data["subsonic-response"];
+    noteEnvelope(baseUrl, response);
     if (response.status !== "ok") return [];
     const extensions = (response.openSubsonicExtensions ?? []).map((e) => e.name);
     const { getDb } = await import("../db");
@@ -493,6 +488,7 @@ export async function fetchLyricsBySongId(
       };
     };
     const sr = data["subsonic-response"];
+    noteEnvelope(baseUrl, sr);
     if (sr.status !== "ok" || !sr.lyricsList?.structuredLyrics?.length) return null;
 
     const lyrics = sr.lyricsList.structuredLyrics;
@@ -595,6 +591,7 @@ export async function getPlayQueue(
       };
     };
     const response = data["subsonic-response"];
+    noteEnvelope(baseUrl, response);
     if (response.status !== "ok" || !response.playQueue) return null;
     const queue = response.playQueue;
     const trackIds = (queue.entry ?? []).map((e) => e.id);

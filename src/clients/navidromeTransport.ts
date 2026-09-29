@@ -4,6 +4,7 @@ import {
   transportStallNotice,
   TransportStalledError,
 } from "../lib/transportHealth";
+import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
 
 // A request stuck in DNS resolution is the dominant transient failure mode on Linux:
@@ -193,6 +194,21 @@ export class SubsonicError extends Error {
   }
 }
 
+/** Throws for a refused request, and tells the credential record what the server said
+ *  either way, so a password rotated on the server shows up as that rather than as every
+ *  request failing. Login pings skip this: they report a refusal of what was just typed. */
+export function checkEnvelope(
+  baseUrl: string,
+  endpoint: string,
+  response: SubsonicEnvelope,
+  fallbackMessage?: string
+): void {
+  noteEnvelope(baseUrl, response);
+  if (response.status !== "ok") {
+    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message ?? fallbackMessage);
+  }
+}
+
 export async function callSubsonicVoid(
   baseUrl: string,
   username: string,
@@ -206,11 +222,6 @@ export async function callSubsonicVoid(
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);
   const res = await apiPost(baseUrl, endpoint, params, altUrl, signal);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
-  const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
-  };
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message);
-  }
+  const data = (await res.json()) as { "subsonic-response": SubsonicEnvelope };
+  checkEnvelope(baseUrl, endpoint, data["subsonic-response"]);
 }

@@ -1,8 +1,5 @@
 import { SubsonicError } from "../../clients/navidromeTransport";
-
-// 40 is Subsonic's wrong-credentials code; OpenSubsonic answers a bad API key with 44.
-const WRONG_CREDENTIALS_CODE = 40;
-const INVALID_API_KEY_CODE = 44;
+import { INVALID_API_KEY_CODE, WRONG_CREDENTIALS_CODE } from "../../lib/credentialRejections";
 
 export function loginFailureMessage(error: unknown, authMethod: "password" | "apikey"): string {
   if (error instanceof SubsonicError) {

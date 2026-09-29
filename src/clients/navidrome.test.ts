@@ -14,10 +14,11 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
 import { resetTransportHealth, TransportStalledError } from "../lib/transportHealth";
-import { authenticate, authenticateWithApiKey, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
+import { authenticate, authenticateWithApiKey, getPlayQueue, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
 import type { NavidromeCredential } from "./navidromeUrls";
 import { SubsonicError } from "./navidromeTransport";
-import { addTrackToNavidromePlaylist } from "./navidromePlaylists";
+import { addTrackToNavidromePlaylist, fetchPlaylists } from "./navidromePlaylists";
+import { isCredentialRejected, resetCredentialRejections } from "../lib/credentialRejections";
 
 const BASE = "http://music.example";
 const ALT = "http://192.168.1.5:4533";
@@ -645,6 +646,62 @@ describe("SubsonicError", () => {
     await settle(scrobbleTrack(BASE, "alice", cred, "tr-9", 1_700_000_000_000));
     expect(body().get("submission")).toBe("true");
     expect(body().get("time")).toBe("1700000000000");
+  });
+});
+
+describe("a refused saved credential", () => {
+  afterEach(() => {
+    resetCredentialRejections();
+  });
+
+  it("is recorded against the server by a read", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded against the server by a write", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(starTrack(BASE, "alice", cred, "tr-1").catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded by a playlist request", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(failed({ code: 44, message: "Invalid API key" })));
+
+    await settle(fetchPlaylists(BASE, "alice", cred).catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded by a read that answers nothing on failure", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    expect(await settle(getPlayQueue(BASE, "alice", cred))).toBeNull();
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("clears on the next request the server accepts", async () => {
+    fetchMock.mockResolvedValueOnce(failed({ code: 40 }));
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined));
+    fetchMock.mockResolvedValueOnce(ok({ status: "ok", starred2: {} }));
+
+    await settle(fetchStarred2(BASE, "alice", cred));
+
+    expect(isCredentialRejected(BASE)).toBe(false);
+  });
+
+  it("is not recorded by a login attempt, which reports its own refusal", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(authenticate(BASE, "alice", "typo").catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(false);
   });
 });
 

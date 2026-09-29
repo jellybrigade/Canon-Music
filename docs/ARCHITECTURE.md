@@ -24,7 +24,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary`, `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
-| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `updater.ts`. |
+| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`. |
 | `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |
@@ -113,7 +113,7 @@ Rust (`src-tauri/src/`):
 | Loved | `useLoved.ts`, `syncLoved.ts` | Local write first, star/unstar fire-and-forget; sync replaces local state from `getStarred2`. Album shows loved if starred or any track loved. |
 | Covers | `cover.rs`, `navidromeUrls.ts`, `useCoverCache.ts` | `getCoverArtUrl` returns `cover://` once proxy config is set; `album_covers`/`artist_covers` are data-URL art caches filled by a background pass (batches of 5). |
 | Settings / logs | `useSetting.ts`, `logger.ts`, `settingsBackup.ts` | `useSetting` returns `loaded`; gate expensive work on it. Logger ring buffer (500) flushes to `app_logs` every 3 s when dirty. |
-| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `net_probe.rs` | `apiPost`: 12 s timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). A Subsonic error envelope throws `SubsonicError` carrying `code`; login copy for 40/44 lives in `features/setup/loginFailureMessage.ts`. |
+| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `credentialRejections.ts`, `net_probe.rs` | `apiPost`: 12 s timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). Every envelope goes through `checkEnvelope`, which throws `SubsonicError` carrying `code` and records 40/44 per server (cleared by the next ok envelope or a saved credential); the Settings server card reads it via `useCredentialRejected`. Login pings skip the record; their copy for 40/44 lives in `features/setup/loginFailureMessage.ts`. |
 
 ## 6. Genre tree
 
