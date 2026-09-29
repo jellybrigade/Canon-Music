@@ -79,6 +79,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **A local-only query must not gate on the network credential.** Gate `enabled` on the token only if `queryFn` uses it. grep: `grep -rn "serverWithCred.*\.server\.id\|serverWithCredential?.server.id" src --include='*.ts*' | grep -v '\.test\.'`
 - **A repair effect invalidating its own trigger loops.** Mark the id attempted before repairing.
 - **Re-keying a collection to ids means re-keying every cursor, anchor, count and gate.** grep: `grep -rn "useRef<number" src --include='*.tsx' | grep -v '\.test\.'`
+- **A source that failed has not said "there is none".** `useLyrics` cached a miss as final when LRClib, lyrics.ovh or the server was unreachable; only a lookup every source answered records one. grep: `grep -rn "\.catch(() => null)" src --include='*.ts*' | grep -v '\.test\.'`
 - **A "has a value" cache test can't cache "there is none".** `useLyrics` uses a `"cleared"` sentinel. grep: `grep -rn "if (cached\|if (rows\[0\]\|if (hit\|cached\.length > 0" src/hooks src/lib src/clients src/features --include='*.ts*' | grep -v '\.test\.'`
 - **Inline `queryKey` means nothing else can invalidate it.** Use shared `QK.*`. grep: `grep -rn "queryKey: \[" src --include='*.ts*' | grep -v '\.test\.' | grep -v "QK\."`
 - **A write updating one cached copy leaves others stale.** For each `UPDATE`, list every copy of the column: RQ keys and session stores (`albumBrowseSessionStore`). grep: `grep -rn "UPDATE \(albums\|artists\|tracks\) SET" src --include='*.ts*' | grep -v '\.test\.'`

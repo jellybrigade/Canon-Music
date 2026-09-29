@@ -471,44 +471,42 @@ export async function fetchLyricsBySongId(
   trackId: string,
   altUrl?: string
 ): Promise<{ plain: string | null; synced: string | null } | null> {
-  try {
-    const params = buildAuthParams(username, credential);
-    params.set("id", trackId);
-    const res = await apiPost(baseUrl, "getLyricsBySongId", params, altUrl);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      "subsonic-response": {
-        status: string;
-        lyricsList?: {
-          structuredLyrics?: Array<{
-            synced: boolean;
-            line: Array<{ start?: number; value: string }>;
-          }>;
-        };
+  const params = buildAuthParams(username, credential);
+  params.set("id", trackId);
+  const res = await apiPost(baseUrl, "getLyricsBySongId", params, altUrl);
+  if (!res.ok) throw new Error(`getLyricsBySongId returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": {
+      status: string;
+      error?: { code: number; message: string };
+      lyricsList?: {
+        structuredLyrics?: Array<{
+          synced: boolean;
+          line: Array<{ start?: number; value: string }>;
+        }>;
       };
     };
-    const sr = data["subsonic-response"];
-    noteEnvelope(baseUrl, sr);
-    if (sr.status !== "ok" || !sr.lyricsList?.structuredLyrics?.length) return null;
+  };
+  const sr = data["subsonic-response"];
+  if (sr.error?.code === SUBSONIC_NOT_FOUND) return null;
+  checkEnvelope(baseUrl, "getLyricsBySongId", sr);
+  if (!sr.lyricsList?.structuredLyrics?.length) return null;
 
-    const lyrics = sr.lyricsList.structuredLyrics;
-    const syncedEntry = lyrics.find((l) => l.synced);
-    const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
+  const lyrics = sr.lyricsList.structuredLyrics;
+  const syncedEntry = lyrics.find((l) => l.synced);
+  const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
 
-    const synced = syncedEntry
-      ? syncedEntry.line.map((l) =>
-          l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
-        ).join("\n")
-      : null;
+  const synced = syncedEntry
+    ? syncedEntry.line.map((l) =>
+        l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
+      ).join("\n")
+    : null;
 
-    const plain = plainEntry
-      ? plainEntry.line.map((l) => l.value).join("\n")
-      : null;
+  const plain = plainEntry
+    ? plainEntry.line.map((l) => l.value).join("\n")
+    : null;
 
-    return { plain, synced };
-  } catch {
-    return null;
-  }
+  return { plain, synced };
 }
 
 // The URL apiPost actually contacted, not its origin: a subpath install would otherwise

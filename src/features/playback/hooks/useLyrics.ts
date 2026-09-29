@@ -88,15 +88,17 @@ export function useLyrics(
       // A null extension list means the probe has not answered yet, so this stage was not
       // asked rather than asked and declined; the write below must not then record a
       // completed lookup, or the server's own .lrc is never consulted for this track again.
-      let serverStageDecided = true;
+      let everySourceAnswered = true;
       if (serverWithCredential) {
         const { server, credential } = serverWithCredential;
         const extensions = await getStoredOpenSubsonicExtensions(server.id);
-        serverStageDecided = extensions !== null;
+        if (extensions === null) everySourceAnswered = false;
         const navTrackId = stripServerPrefix(track.id, server.id);
         const serverLyrics = extensions?.includes("songLyrics")
           ? await fetchLyricsBySongId(server.url, server.username, credential, navTrackId, server.alt_url ?? undefined)
+              .catch(() => undefined)
           : null;
+        if (serverLyrics === undefined) everySourceAnswered = false;
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
           await db.execute(
             `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
@@ -119,22 +121,25 @@ export function useLyrics(
         album: track.album,
         title: track.title,
         durationSec: track.duration ?? null,
-      }).catch(() => null);
+      }).catch(() => undefined);
+      if (lrclibResult === undefined) everySourceAnswered = false;
 
       let plain = lrclibResult?.plain ?? null;
       let synced = lrclibResult?.synced ?? null;
       let source = "lrclib";
 
       if (!plain && !synced) {
-        const ovhPlain = await fetchLyricsOvh(track.artist, track.title).catch(() => null);
+        const ovhPlain = await fetchLyricsOvh(track.artist, track.title).catch(() => undefined);
+        if (ovhPlain === undefined) everySourceAnswered = false;
         if (ovhPlain) {
           plain = ovhPlain;
           source = "lyrics.ovh";
         }
       }
 
-      // Only a lookup that asked every source it has may record "found nothing" as final.
-      const storedSource = plain || synced || serverStageDecided ? source : NO_LOOKUP_SOURCE;
+      // Only a lookup that every source answered may record "found nothing" as final; a source
+      // that was offline or failed has not said the track has no lyrics.
+      const storedSource = plain || synced || everySourceAnswered ? source : NO_LOOKUP_SOURCE;
       await db.execute(
         `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at)
          VALUES (?, ?, ?, ?, datetime('now'))

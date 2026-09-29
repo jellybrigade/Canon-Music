@@ -116,6 +116,32 @@ describe("useLyrics", () => {
     expect(second.result.current.plain).toBe("from the server");
   });
 
+  it.each([
+    ["LRClib", () => vi.mocked(fetchLyrics).mockRejectedValueOnce(new TypeError("Load failed"))],
+    ["lyrics.ovh", () => vi.mocked(fetchLyricsOvh).mockRejectedValueOnce(new Error("lyrics.ovh returned 503"))],
+    ["the server", () => vi.mocked(fetchLyricsBySongId).mockRejectedValueOnce(new TypeError("Load failed"))],
+  ])("does not cache a miss when %s could not be reached", async (_source, failOnce) => {
+    vi.mocked(getStoredOpenSubsonicExtensions).mockResolvedValue(["songLyrics"]);
+    vi.mocked(fetchLyricsBySongId).mockResolvedValue(null);
+    failOnce();
+    const server = {
+      server: { id: "srv-a", url: "https://a.example", username: "u", alt_url: null },
+      credential: "c",
+    } as unknown as ServerWithCredential;
+
+    const first = renderHook(() => useLyrics(TRACK, null, server), { wrapper });
+    await waitFor(() => expect(first.result.current.loading).toBe(false));
+    expect(lyricsRow()?.source).toBe("cleared");
+    first.unmount();
+
+    queryClient.clear();
+    queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.mocked(fetchLyrics).mockResolvedValue({ plain: "loveless", synced: null });
+    const second = renderHook(() => useLyrics(TRACK, null, server), { wrapper });
+    await waitFor(() => expect(second.result.current.loading).toBe(false));
+    expect(second.result.current.plain).toBe("loveless");
+  });
+
   it("looks the track up again after a refresh cleared the stored lyrics", async () => {
     vi.mocked(fetchLyrics).mockResolvedValue({ plain: "loveless", synced: null });
     const view = await mountSettled();
