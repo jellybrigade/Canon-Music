@@ -236,7 +236,7 @@ export function createSettingsActions(
             const volume = parseFloat(row.value);
             if (!isNaN(volume)) {
               set({ volume });
-              // Gain not yet loaded at this point; apply raw volume. Re-applied after all settings loaded.
+              // Raw volume only: ReplayGain is applied by the engine once a track loads.
               await invoke("audio_volume", { volume: volume ** 2 });
             }
           } else if (row.key === "player.pre_mute_volume") {
