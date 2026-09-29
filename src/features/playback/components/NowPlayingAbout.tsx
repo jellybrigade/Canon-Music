@@ -14,6 +14,7 @@ import { TourCard } from "../../../components/TourCard";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
 import "./NowPlayingAbout.css";
+import { replayGainFromRow } from "../../../lib/replayGainRow";
 
 type AboutTrack = TopTrack | SuggestedTrack;
 
@@ -64,6 +65,7 @@ export function NowPlayingAbout({
       artworkRef: t.artwork_url ?? null,
       album: t.album_name ?? null,
       albumId: t.album_id ?? null,
+      replayGain: replayGainFromRow(t),
     };
   }
 

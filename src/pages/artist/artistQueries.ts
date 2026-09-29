@@ -8,10 +8,11 @@ import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../../clients/lastfm";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../lib/replayGainRow";
 
 export const POPULAR_TRACKS_MAX = 10;
 
-export interface TopTrack {
+export interface TopTrack extends ReplayGainColumns {
   id: string;
   title: string;
   artist: string | null;
@@ -34,7 +35,7 @@ export function useArtistTopTracks(artistName: string, serverId: string, options
       const db = await getDb();
       return db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count, t.played_at
+                t.album_id, a.artwork_url, t.play_count, t.played_at, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -59,7 +60,7 @@ export function useArtistSeedTrack(artistName: string, serverId: string, options
       const db = await getDb();
       const rows = await db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count, t.played_at
+                t.album_id, a.artwork_url, t.play_count, t.played_at, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -151,6 +152,7 @@ export function buildTrackObj(track: TopTrack, server: Server, credential: Navid
     artworkRef,
     album: track.album_name ?? null,
     albumId: track.album_id ?? null,
+    replayGain: replayGainFromRow(track),
   };
 }
 

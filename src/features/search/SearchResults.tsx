@@ -16,6 +16,7 @@ import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
 import type { PlaylistRow } from "../playlists/usePlaylists";
 import "./SearchResults.css";
+import { replayGainFromRow } from "../../lib/replayGainRow";
 
 interface Props {
   albums: SearchAlbum[];
@@ -214,14 +215,7 @@ export function SearchResults({
       artworkRef: track.artwork_url,
       album: track.album_name,
       albumId: track.album_id,
-      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
-        ? {
-            trackGain: track.replay_gain_track_gain,
-            trackPeak: track.replay_gain_track_peak,
-            albumGain: track.replay_gain_album_gain,
-            albumPeak: track.replay_gain_album_peak,
-          }
-        : null,
+      replayGain: replayGainFromRow(track),
     };
   }
 

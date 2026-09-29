@@ -1,3 +1,5 @@
+import { type ReplayGainColumns } from "../lib/replayGainRow";
+
 export interface AlbumRow {
   id: string;
   server_id: string;
@@ -43,7 +45,7 @@ export interface TrackRow {
   replay_gain_album_peak: number | null;
 }
 
-export interface PlaylistTrackRow {
+export interface PlaylistTrackRow extends ReplayGainColumns {
   id: string;
   title: string;
   artist: string | null;

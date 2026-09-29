@@ -5,6 +5,7 @@ import { getRadioCandidates } from "../lib/radio";
 import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
 import { escapeLike } from "../../../lib/sql";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
@@ -185,9 +186,10 @@ export function useRadio() {
             id: string; title: string; artist: string | null;
             duration: number | null; artwork_url: string | null;
             album_id: string | null; album_name: string | null;
-          };
+          } & ReplayGainColumns;
           const rows2 = await db2.select<TrackRow2[]>(
-            `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name
+            `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name,
+                    ${REPLAY_GAIN_COLUMNS}
              FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
              WHERE t.id = ?`,
             [pick.id]
@@ -197,6 +199,7 @@ export function useRadio() {
           const track2: CurrentTrack = {
             id: row2.id, title: row2.title, artist: row2.artist, duration: row2.duration,
             artworkRef: row2.artwork_url, albumId: row2.album_id, album: row2.album_name, coverArtUrl: null,
+            replayGain: replayGainFromRow(row2),
           };
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
           // Re-read live state rather than the closure's isPlaying/isLoading/queue/queueIndex:
@@ -244,9 +247,10 @@ export function useRadio() {
           id: string; title: string; artist: string | null;
           duration: number | null; artwork_url: string | null;
           album_id: string | null; album_name: string | null;
-        };
+        } & ReplayGainColumns;
         const rows = await db.select<TrackRow[]>(
-          `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name
+          `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name,
+                    ${REPLAY_GAIN_COLUMNS}
            FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
            WHERE t.id = ?`,
           [pick.id]
@@ -263,6 +267,7 @@ export function useRadio() {
           albumId: row.album_id,
           album: row.album_name,
           coverArtUrl: null,
+          replayGain: replayGainFromRow(row),
         };
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
         // Same staleness concern as the same-album branch above: read live state, not closure.

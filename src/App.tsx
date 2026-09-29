@@ -52,6 +52,7 @@ import { useStartRadio } from "./features/radio/hooks/useStartRadio";
 import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "./lib/replayGainRow";
 
 export default function App() {
   useWakeLock();
@@ -391,14 +392,7 @@ export default function App() {
       artworkRef: artworkUrl,
       album: t.album_name,
       albumId: t.album_id,
-      replayGain: (t.replay_gain_track_gain != null || t.replay_gain_album_gain != null)
-        ? {
-            trackGain: t.replay_gain_track_gain,
-            trackPeak: t.replay_gain_track_peak,
-            albumGain: t.replay_gain_album_gain,
-            albumPeak: t.replay_gain_album_peak,
-          }
-        : null,
+      replayGain: replayGainFromRow(t),
     }, streamUrl);
   }
 
@@ -409,9 +403,9 @@ export default function App() {
     // loader does not order by, so the rows are read again once they are there.
     if ((await loadAlbumTracksForPlay(srv, credential, album)).length === 0) return;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? AND server_id = ? ORDER BY COALESCE(play_count, 0) DESC, track_number ASC",
+      `SELECT t.id, t.title, t.artist, t.duration, ${REPLAY_GAIN_COLUMNS} FROM tracks t WHERE t.album_id = ? AND t.server_id = ? ORDER BY COALESCE(t.play_count, 0) DESC, t.track_number ASC`,
       [album.id, srv.id]
     );
     if (rows.length === 0) return;
@@ -420,7 +414,7 @@ export default function App() {
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
@@ -434,7 +428,7 @@ export default function App() {
       : null;
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     for (const t of rows) {
-      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
       addToQueue(track, streamUrlFn);
     }
   }
@@ -443,9 +437,10 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
+              ${REPLAY_GAIN_COLUMNS}
        FROM tracks t
        JOIN albums a ON t.album_id = a.id
        JOIN album_genres ag ON ag.album_id = a.id
@@ -460,6 +455,7 @@ export default function App() {
       id: t.id, title: t.title, artist: t.artist, duration: t.duration,
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+      replayGain: replayGainFromRow(t),
     }));
     await startRadio({ tracks, streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
   }
@@ -468,9 +464,10 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
+              ${REPLAY_GAIN_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
        WHERE t.server_id = ?
          AND (t.artist = ? OR a.artist = ?)
@@ -482,7 +479,7 @@ export default function App() {
     const coverArtUrl = t.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
       : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id, replayGain: replayGainFromRow(t) };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }

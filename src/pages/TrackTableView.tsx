@@ -17,6 +17,7 @@ import "./AlbumDetail.css";
 import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
 import { useClickOutside } from "../ui/useClickOutside";
+import { replayGainFromRow } from "../lib/replayGainRow";
 
 const ROW_HEIGHT = 40;
 const SKELETON_ROWS = 14;
@@ -260,14 +261,7 @@ export function TrackTableView({ serverWithCredential, tracks, isLoading, error,
       artworkRef: track.album_artwork_url ?? null,
       album: track.album_name,
       albumId: track.album_id,
-      replayGain: (track.replay_gain_track_gain != null || track.replay_gain_album_gain != null)
-        ? {
-            trackGain: track.replay_gain_track_gain,
-            trackPeak: track.replay_gain_track_peak,
-            albumGain: track.replay_gain_album_gain,
-            albumPeak: track.replay_gain_album_peak,
-          }
-        : null,
+      replayGain: replayGainFromRow(track),
     };
   }, [server, credential]);
 

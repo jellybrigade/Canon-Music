@@ -3,8 +3,9 @@ import type { NavidromeCredential } from "../clients/navidromeUrls";
 import type { Server } from "../types/server";
 import { syncAlbumTracks } from "../features/sync/syncTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "./replayGainRow";
 
-export interface AlbumTrackRow {
+export interface AlbumTrackRow extends ReplayGainColumns {
   id: string;
   title: string;
   artist: string | null;
@@ -28,9 +29,9 @@ export function resetAlbumTrackFetches(): void {
 async function readMirrored(albumDbId: string, serverId: string): Promise<AlbumTrackRow[]> {
   const db = await getDb();
   return await db.select<AlbumTrackRow[]>(
-    `SELECT id, title, artist, duration
-     FROM tracks WHERE album_id = ? AND server_id = ?
-     ORDER BY disc_number, track_number`,
+    `SELECT t.id, t.title, t.artist, t.duration, ${REPLAY_GAIN_COLUMNS}
+     FROM tracks t WHERE t.album_id = ? AND t.server_id = ?
+     ORDER BY t.disc_number, t.track_number`,
     [albumDbId, serverId]
   );
 }

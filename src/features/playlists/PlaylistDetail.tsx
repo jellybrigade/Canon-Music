@@ -23,6 +23,7 @@ import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
 import { useClickOutside } from "../../ui/useClickOutside";
+import { replayGainFromRow } from "../../lib/replayGainRow";
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -197,7 +198,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     const coverArtUrl = track.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
       : null;
-    return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id };
+    return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id, replayGain: replayGainFromRow(track) };
   }
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);

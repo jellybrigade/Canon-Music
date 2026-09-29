@@ -6,6 +6,7 @@ import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylis
 import { stripServerPrefix } from "../../lib/ids";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import type { PlaylistTrackRow } from "../../types/library";
+import { REPLAY_GAIN_COLUMNS } from "../../lib/replayGainRow";
 export type { PlaylistTrackRow } from "../../types/library";
 
 const NO_ROWS: PlaylistTrackRow[] = [];
@@ -40,7 +41,7 @@ export function usePlaylistTracks(playlistId: string | null) {
         // list entirely, so the playlist silently rendered fewer tracks than it holds.
         const rows = await db.select<PlaylistTrackRow[]>(
           `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
-                  t.bit_rate, t.suffix,
+                  t.bit_rate, t.suffix, ${REPLAY_GAIN_COLUMNS},
                   pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
            FROM playlist_tracks pt
            JOIN tracks t ON pt.track_id = t.id

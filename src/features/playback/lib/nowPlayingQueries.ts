@@ -2,6 +2,7 @@ import { getDb } from "../../../db";
 import { escapeLike } from "../../../lib/sql";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/lastfm";
 import type { AlbumRow } from "../../../types/library";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
 /**
  * Queries backing the now-playing overlay's About tab.
@@ -13,7 +14,7 @@ import type { AlbumRow } from "../../../types/library";
  * same reason: the two sides have to agree on the artist name or the warmed entry is never read.
  */
 
-export interface NowPlayingTrack {
+export interface NowPlayingTrack extends ReplayGainColumns {
   id: string;
   title: string;
   artist: string | null;
@@ -29,7 +30,7 @@ export const NOW_PLAYING_STALE_TIME = 30 * 60 * 1000;
 export const SUGGESTED_STALE_TIME = 5 * 60 * 1000;
 
 const TRACK_COLUMNS = `t.id, t.title, t.artist, t.duration, a.name AS album_name,
-          t.album_id, a.artwork_url`;
+          t.album_id, a.artwork_url, ${REPLAY_GAIN_COLUMNS}`;
 
 /**
  * "Burial feat. Four Tet" -> "Burial". The About tab is about the artist, not the collaboration,

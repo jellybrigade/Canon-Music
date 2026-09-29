@@ -5,6 +5,7 @@ import { savePlayQueue, getPlayQueue } from "../../../clients/navidrome";
 import { getCoverArtUrl, getStreamUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import { stripServerPrefix } from "../../../lib/ids";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -36,14 +37,14 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       const saved = await getPlayQueue(server.url, server.username, credential, server.alt_url ?? undefined);
       if (!saved || saved.trackIds.length === 0) return;
 
-      type TrackMeta = { id: string; title: string; artist: string | null; duration: number | null; album_id: string | null; artwork_url: string | null; album_name: string | null };
+      type TrackMeta = { id: string; title: string; artist: string | null; duration: number | null; album_id: string | null; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
 
       // Batch-fetch all tracks by native ID
       const placeholders = saved.trackIds.map(() => "?").join(",");
       const canonIds = saved.trackIds.map((nid) => `${server.id}:${nid}`);
       const rows = await db.select<TrackMeta[]>(
         `SELECT t.id, t.title, t.artist, t.duration, t.album_id,
-                a.artwork_url, a.name AS album_name
+                a.artwork_url, a.name AS album_name, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
          WHERE t.id IN (${placeholders})`,
         canonIds
@@ -78,6 +79,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
           ? getCoverArtUrl(server.url, server.username, credential, r.artwork_url, 64)
           : null,
         artworkRef: r.artwork_url,
+        replayGain: replayGainFromRow(r),
       }));
 
       const currentCanonId = saved.currentId ? `${server.id}:${saved.currentId}` : null;

@@ -34,6 +34,7 @@ import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
 import "./HomeView.css";
 import "./GenreView.css";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../lib/replayGainRow";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -235,9 +236,10 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
 
   const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
+              ${REPLAY_GAIN_COLUMNS}
        FROM tracks t
        JOIN albums a ON t.album_id = a.id
        JOIN album_genres ag ON a.id = ag.album_id
@@ -254,6 +256,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     const track: CurrentTrack = {
       id: t.id, title: t.title, artist: t.artist, duration: t.duration,
       coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+      replayGain: replayGainFromRow(t),
     };
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));

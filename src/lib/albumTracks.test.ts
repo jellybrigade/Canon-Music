@@ -45,6 +45,21 @@ describe("loadAlbumTracks", () => {
     expect(tracks.map((t: { id: string }) => t.id)).toEqual([`${SRV}:tr-2`, `${SRV}:tr-1`]);
   });
 
+  it("returns each track's ReplayGain tags so a play from the grid is normalized", async () => {
+    seedAlbum(SRV, ALBUM, [`${SRV}:t1`]);
+    db().raw.exec(
+      `UPDATE tracks SET replay_gain_track_gain = -6.5, replay_gain_track_peak = 0.9,
+         replay_gain_album_gain = -7, replay_gain_album_peak = 0.95 WHERE id = '${SRV}:t1'`
+    );
+    const [track] = await loadAlbumTracks(server(SRV), CRED, ALBUM);
+    expect(track).toMatchObject({
+      replay_gain_track_gain: -6.5,
+      replay_gain_track_peak: 0.9,
+      replay_gain_album_gain: -7,
+      replay_gain_album_peak: 0.95,
+    });
+  });
+
   it("does not go to the server when the album is already mirrored", async () => {
     seedAlbum(SRV, ALBUM, [`${SRV}:tr-1`]);
     await loadAlbumTracks(server(), CRED, ALBUM);

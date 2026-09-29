@@ -24,7 +24,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary`, `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
-| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`. |
+| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`. |
 | `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |
@@ -65,6 +65,7 @@ Rust (`src-tauri/src/`):
 - Mirrored ids are `"{serverId}:{nativeId}"`; strip with `stripServerPrefix` (`src/lib/ids.ts`), never by slicing.
 - Every read of a mirrored table is scoped by `server_id`; `src/lib/serverScoping.test.ts` sweeps artist-filtered SQL.
 - Every LIKE binds through `escapeLike` (`src/lib/sql.ts`) with `ESCAPE '\\'`.
+- Every read that becomes a playable track selects `REPLAY_GAIN_COLUMNS` and builds `replayGain` via `replayGainFromRow` (`src/lib/replayGainRow.ts`).
 - Tables keyed by track id are listed once in `TRACK_ID_TABLES` (`src/db/trackIdTables.ts`) with prune/purge/remap policy; Rust mirror `REMAPPED_TRACK_ID_TABLES` is pinned by test.
 - Every stored genre-tree id is listed in `GENRE_ID_HOLDERS` (`src/db/genreIdTables.ts`); `genreIdTables.test.ts` sweeps migrations and pins the Rust `GENRE_ID_COLUMNS` copy.
 - A multi-statement write whose intermediate state is invalid goes in `library_write/` (the sqlx pool gives no connection affinity, so TS `BEGIN` does not hold). Migration blocks are the one exception.

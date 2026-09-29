@@ -239,6 +239,10 @@ describe("usePlaylistTracks load effect", () => {
       artwork_url: "art-alb1",
       album_name: "album alb1",
       album_id: "srv-a:alb1",
+      replay_gain_track_gain: null,
+      replay_gain_track_peak: null,
+      replay_gain_album_gain: null,
+      replay_gain_album_peak: null,
     });
   });
 
