@@ -54,12 +54,26 @@ function toFtsQuery(tokens: string[]): string {
   return tokens.map((t) => `"${t}"*`).join(" ");
 }
 
-// Score how well a field matches the query.
-// Tiers: exact > starts-with > word-starts-with > substring > no match.
+const BRACKETED = /\(([^)]*)\)|\[([^\]]*)\]/g;
+// Keeps a bracket-only exact match (100) under the lowest plain score, an artist substring (180).
+const BRACKETED_DIVISOR = 10;
+
+// Text in brackets ("(Expanded Edition)", "[Live]") still matches, but ranks below any match
+// in the rest of the field.
 function scoreMatch(field: string | null, query: string): number {
   if (!field || !query) return 0;
   const f = field.toLowerCase();
   const q = query.toLowerCase();
+  const plain = f.replace(BRACKETED, " ").replace(/\s+/g, " ").trim();
+  const bracketed = Array.from(f.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "").join(" ").trim();
+  if (!plain) return scoreTier(bracketed, q);
+  const plainScore = scoreTier(plain, q);
+  if (plainScore > 0) return plainScore;
+  return Math.floor(scoreTier(bracketed, q) / BRACKETED_DIVISOR);
+}
+
+// Tiers: exact > starts-with > word-starts-with > substring > no match.
+function scoreTier(f: string, q: string): number {
   if (f === q) return 1000;
   if (f.startsWith(q)) return 800;
   if (f.split(/\s+/).some(t => t.startsWith(q))) return 600;

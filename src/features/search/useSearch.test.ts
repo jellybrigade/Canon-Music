@@ -463,6 +463,39 @@ describe("useSearch relevance re-ranking", () => {
     expect(res.tracks.map(t => t.id)).toEqual(["by-title", "by-artist"]);
   });
 
+  it("ranks a match only inside brackets below every match outside them", async () => {
+    seedAlbum({ id: "br-alb", name: "Expanded Album", artist: "Br" });
+    // Artist substring scores floor(300 * 0.6) = 180, the lowest unbracketed score.
+    seedTrack({ id: "by-artist", title: "Quiet", artist: "Unexpandedly", albumId: "br-alb" });
+    seedTrack({ id: "bracketed", title: "Halo (Expanded Mix)", artist: "Br", albumId: "br-alb" });
+    seedTrack({ id: "squared", title: "Halo [Expanded]", artist: "Br", albumId: "br-alb" });
+    seedTrack({ id: "word", title: "The Expanded Mind", artist: "Br", albumId: "br-alb" });
+
+    const res = await search("expanded");
+
+    expect(res.tracks.map(t => t.id)).toEqual(["word", "by-artist", "squared", "bracketed"]);
+  });
+
+  it("ranks an album named for the query above its bracketed editions", async () => {
+    seedPair({ key: "ed", albumName: "Ketchup (Expanded Edition)", trackTitle: "Expanded Intro", artist: "S" });
+    seedPair({ key: "plain", albumName: "Plain", trackTitle: "Expanded Outro", artist: "Unexpandedly" });
+    seedPair({ key: "exact", albumName: "Expanded (Remastered)", trackTitle: "Opening", artist: "E" });
+
+    const res = await search("expanded");
+
+    expect(res.albums.map(a => a.id)).toEqual(["exact-alb", "plain-alb", "ed-alb"]);
+  });
+
+  it("scores a fully bracketed title on its bracket text at the normal tier", async () => {
+    seedAlbum({ id: "fb-alb", name: "Untitled Album", artist: "Fb" });
+    seedTrack({ id: "whole", title: "(Untitled)", artist: "Fb", albumId: "fb-alb" });
+    seedTrack({ id: "by-artist", title: "Quiet", artist: "Nountitled", albumId: "fb-alb" });
+
+    const res = await search("untitled");
+
+    expect(res.tracks.map(t => t.id)).toEqual(["whole", "by-artist"]);
+  });
+
   it("drops a track the index matched only through its genre column", async () => {
     seedPair({ key: "title", albumName: "Genre Album", trackTitle: "Techno Dreams", artist: "T" });
     seedPair({ key: "genre", albumName: "Other Album", trackTitle: "Quiet Hours", artist: "Q", genre: "Techno" });
