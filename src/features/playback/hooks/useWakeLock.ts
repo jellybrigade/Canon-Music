@@ -14,13 +14,17 @@ export function useWakeLock() {
     // the screen stayed awake for the rest of the session. Release against the intent
     // recorded here, not against whatever happened to be in the ref when cleanup ran.
     let cancelled = false;
+    // A visibilitychange inside the request window would otherwise start a second
+    // request whose sentinel overwrites the first, leaving that one unreleased.
+    let isRequesting = false;
 
     async function acquire() {
-      if (cancelled) return;
+      if (cancelled || isRequesting) return;
       // The browser auto-releases the lock when the document is hidden, so a stored
       // sentinel is only still ours while `released` is false.
       if (lockRef.current && !lockRef.current.released) return;
       if (!isPlaying || document.visibilityState !== "visible") return;
+      isRequesting = true;
       try {
         const sentinel = await navigator.wakeLock.request("screen");
         if (cancelled) {
@@ -28,7 +32,9 @@ export function useWakeLock() {
           return;
         }
         lockRef.current = sentinel;
-      } catch { /* degraded silently */ }
+      } catch { /* degraded silently */ } finally {
+        isRequesting = false;
+      }
     }
 
     void acquire();
