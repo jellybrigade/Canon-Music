@@ -30,6 +30,13 @@ function ownerPattern(serverId: string): string {
   return `${escapeLike(serverId)}:%`;
 }
 
+/**
+ * Servers with a flush pass running. Module-scoped because a pass outlives its effect: a
+ * credential refetch re-runs the effect while the old pass still awaits a send, and a
+ * per-effect guard would let the new pass re-SELECT that undeleted row and send it twice.
+ */
+const serversFlushing = new Set<string>();
+
 /** Queued rows the currently selected server could send, i.e. what a backlog count may claim. */
 export async function getScrobbleQueueCount(serverId: string): Promise<number> {
   const db = await getDb();
@@ -48,15 +55,14 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
 
     const { server, credential } = serverWithCred;
     // A scrobble is non-idempotent, so it gets one 12s attempt per route: a handful of
-    // queued rows against a slow server can outlast FLUSH_INTERVAL_MS. Without this the
-    // next tick (or the "online" listener) would re-SELECT rows the running flush has
-    // not deleted yet and send them a second time, which the server counts twice.
-    let flushing = false;
+    // queued rows against a slow server can outlast FLUSH_INTERVAL_MS. Without the
+    // in-flight claim the next tick (or the "online" listener) would re-SELECT rows the
+    // running flush has not deleted yet and send them a second time.
     let cancelled = false;
 
     async function flush() {
-      if (flushing || cancelled) return;
-      flushing = true;
+      if (serversFlushing.has(server.id) || cancelled) return;
+      serversFlushing.add(server.id);
       let sent = 0;
       try {
         const db = await getDb();
@@ -104,7 +110,7 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
       } catch (e) {
         console.error("useScrobbleFlush: flush error:", e);
       } finally {
-        flushing = false;
+        serversFlushing.delete(server.id);
       }
 
       if (sent > 0 && !cancelled) {

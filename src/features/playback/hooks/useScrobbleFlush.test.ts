@@ -167,6 +167,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // An unresolved send would hold its server's in-flight claim into the next test.
+  for (const deferred of pending) deferred.resolve();
+  await tick();
   // Explicit, not decorative: vitest runs without `globals: true`, so RTL cannot register
   // its own auto-cleanup. Without this every test leaves its hook mounted, and a later
   // `window.dispatchEvent(new Event("online"))` fires one live listener per earlier test.
@@ -482,6 +485,34 @@ describe("useScrobbleFlush in-flight guard", () => {
     });
 
     expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not resend a row still in flight when the server object is replaced", async () => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedQueue("srv-a:t2", 1700000002);
+    seedTrack("srv-a:t1");
+    seedTrack("srv-a:t2");
+    armDeferredScrobble();
+
+    const { rerender } = renderFlush(swc());
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+
+    // A credential refetch hands the hook an equal but new object, re-running the effect.
+    rerender({ v: swc() });
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending[0]!.resolve();
+    });
+    await tick(FLUSH_MS);
+    await act(async () => {
+      pending[1]!.resolve();
+    });
+
+    expect(vi.mocked(scrobbleTrack).mock.calls.map((c) => c[3])).toEqual(["t1", "t2"]);
+    expect(queueTrackIds()).toEqual([]);
   });
 
   it("flushes when the browser comes back online", async () => {
