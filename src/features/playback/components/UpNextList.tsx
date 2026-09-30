@@ -9,6 +9,7 @@ import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { RadioQueueStatus } from "../../radio/components/RadioQueueStatus";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
+import { useStartRadio } from "../../radio/hooks/useStartRadio";
 import type { AlbumRow } from "../../../types/library";
 import { albumRowOfTrack } from "../lib/trackAlbum";
 import "./UpNextList.css";
@@ -28,7 +29,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   const playFromQueueIndex = usePlayerStore((s) => s.playFromQueueIndex);
   const moveQueueItem = usePlayerStore((s) => s.moveQueueItem);
   const removeFromQueue = usePlayerStore((s) => s.removeFromQueue);
-  const startRadio = usePlayerStore((s) => s.startRadio);
+  const startRadio = useStartRadio();
   const albumDisplayName = useAlbumDisplayName();
   const [upNextMenu, setUpNextMenu] = useState<{ x: number; y: number; position: number } | null>(null);
   const { server, credential } = serverWithCredential;
@@ -152,7 +153,8 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
             onSelect={(mode) => {
               if (menuTrack) {
                 void playFromQueueIndex(upNextMenu.position).then(() => {
-                  startRadio(menuTrack, mode);
+                  const { streamUrlFor } = usePlayerStore.getState();
+                  if (streamUrlFor) return startRadio({ tracks: [], seed: menuTrack, streamUrlFor, mode });
                 });
               }
               setUpNextMenu(null);

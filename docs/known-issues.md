@@ -128,6 +128,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **A hit-area halo grown toward a neighbour steals its clicks.** Grow away from neighbours, else ≤ half the gap. grep: `grep -rn "inset: -" src --include='*.css'`
 - **An overlay sized to a variably-shaped container breaks.** Animate the content directly instead of an `inset: 0` pseudo-element.
 - **A grid cell that can render `null` hands its column to the next sibling.** With `display: contents`/subgrid, the row owns one wrapper per column. grep: `grep -rn "display: contents\|subgrid" src --include='*.css'`
+- **A setting honoured by the shared entry point is skipped by any caller that reaches past it.** The queue's "Start radio" called the store's `startRadio` directly, so "Replace queue" never applied there; every radio start goes through `useStartRadio`. grep: `grep -rn "s\.startRadio\b\|getState().startRadio(" src --include='*.tsx' | grep -v '\.test\.'`
 - **An option's "selected" test must compare to that option.** Store which preset was chosen (`sleepTimerMinutes`), not just that one was.
 - **Popup sub-mode state must die with the popup.** `TrackContextMenu` owns its mode. grep: `grep -rnE 'useState<"main"|[mM]enuMode' src --include='*.tsx' | grep -v '\.test\.'`
 - **A flex item with a fixed basis narrower than its content overflows neighbours.** Not reproducible in jsdom. grep: `grep -rnE "flex: 0 0 [0-9]+px" src --include='*.css'`

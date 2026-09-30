@@ -3,9 +3,11 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../../hooks/useAlbumDisplayName", () => ({ useAlbumDisplayName: () => (name: string) => name }));
+const { startRadio } = vi.hoisted(() => ({ startRadio: vi.fn(() => Promise.resolve()) }));
+vi.mock("../../radio/hooks/useStartRadio", () => ({ useStartRadio: () => startRadio }));
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
 import type { ServerWithCredential } from "../../../hooks/useServer";
@@ -39,6 +41,7 @@ function menuButton(label: string) {
 }
 
 beforeEach(() => {
+  startRadio.mockClear();
   usePlayerStore.setState({ queue: [withAlbum, bare], queueIndex: 0, isShuffled: false, shuffleOrder: [] });
 });
 
@@ -79,5 +82,22 @@ describe("UpNextList context menu", () => {
     openMenu("One");
     expect(menuLabels()).toContain("Go to Album");
     expect(menuLabels()).not.toContain("Go to Artist");
+  });
+
+  it("starts radio through the replace-or-add choice, seeded from the queued track", async () => {
+    const streamUrlFor = (t: CurrentTrack) => t.id;
+    const playFromQueueIndex = vi.fn(() => Promise.resolve());
+    const storeStartRadio = vi.fn();
+    usePlayerStore.setState({ streamUrlFor, playFromQueueIndex, startRadio: storeStartRadio });
+    render(<UpNextList serverWithCredential={serverWithCredential} lovedTrackIds={new Set()} onSelectAlbum={vi.fn()} />);
+    openMenu("Two");
+    const submenu = document.querySelector(".context-submenu");
+    if (!submenu) throw new Error("no radio submenu");
+    fireEvent.mouseEnter(submenu);
+    fireEvent.click(menuButton("Curated"));
+    await waitFor(() => expect(startRadio).toHaveBeenCalledTimes(1));
+    expect(playFromQueueIndex).toHaveBeenCalledWith(1);
+    expect(startRadio).toHaveBeenCalledWith({ tracks: [], seed: bare, streamUrlFor, mode: "curated" });
+    expect(storeStartRadio).not.toHaveBeenCalled();
   });
 });
