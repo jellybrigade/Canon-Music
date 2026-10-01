@@ -11,6 +11,13 @@ import { rankCandidates } from "../lib/fuzzyMatch";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
+import {
+  ARTIST_AUTO_SELECT_SETTING,
+  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
+  parseArtistAutoSelectScore,
+  pickConfidentArtist,
+} from "../lib/artistAutoSelect";
+import { useSetting } from "../../../hooks/useSetting";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -397,7 +404,7 @@ interface ArtistIdentifyDialogProps {
 }
 
 export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDialogProps) {
-  const { data: savedIdentity } = useArtistIdentity(artistName);
+  const { data: savedIdentity, isPending: isSavedIdentityPending } = useArtistIdentity(artistName);
   const saveIdentity = useSaveArtistIdentity();
   const dismiss = useOverlayDismiss(onClose);
   const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
@@ -426,18 +433,32 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     enabled: !!artistName.trim(),
   });
 
-  // If an MBID already confirmed via a matched album or prior artist-identify is among the
-  // search results, pre-select it; no need to make the user pick when we already know the answer.
-  const { data: confirmedArtistMbid } = useConfirmedArtistMbid(artistName);
+  // Pre-select an MBID already confirmed via a matched album or prior identify, else a
+  // match confident enough to clear the auto-select score; the user still saves it.
+  const { data: confirmedArtistMbid, isPending: isConfirmedArtistMbidPending } = useConfirmedArtistMbid(artistName);
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
+  const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
+    ARTIST_AUTO_SELECT_SETTING,
+    String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),
+  );
+  const minAutoSelectScore = parseArtistAutoSelectScore(minAutoSelectScoreRaw);
   useEffect(() => {
-    if (savedIdentity || selectedCandidate || !confirmedArtistMbid || !searchResults) return;
-    const match = searchResults.find((c) => c.id === confirmedArtistMbid);
+    if (hasAutoSelected || selectedCandidate || !searchResults) return;
+    if (isSavedIdentityPending || isConfirmedArtistMbidPending || !isMinAutoSelectScoreLoaded) return;
+    setHasAutoSelected(true);
+    if (savedIdentity?.confirmed_at != null) return;
+    const match = searchResults.find((c) => c.id === confirmedArtistMbid)
+      ?? pickConfidentArtist(searchResults, minAutoSelectScore);
     if (match) {
       setSelectedCandidate(match.id);
       setMbArtistId(match.id);
       setFetchEnabled(true);
     }
-  }, [savedIdentity, selectedCandidate, confirmedArtistMbid, searchResults]);
+  }, [
+    hasAutoSelected, savedIdentity, isSavedIdentityPending, selectedCandidate,
+    confirmedArtistMbid, isConfirmedArtistMbidPending, searchResults,
+    minAutoSelectScore, isMinAutoSelectScoreLoaded,
+  ]);
 
   const { data: lookupResult, isFetching } = useIdentifyArtist({
     artistName: lfmArtist.trim() || artistName,

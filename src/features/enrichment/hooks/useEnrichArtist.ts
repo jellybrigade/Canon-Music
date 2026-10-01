@@ -7,6 +7,12 @@ import { QK } from "../../../lib/queryKeys";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { similarity } from "../lib/fuzzyMatch";
+import {
+  ARTIST_AUTO_SELECT_SETTING,
+  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
+  parseArtistAutoSelectScore,
+  pickConfidentArtist,
+} from "../lib/artistAutoSelect";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../../../clients/fanart";
 import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
 import { getArtistImageFromServer } from "../../../clients/navidrome";
@@ -107,15 +113,7 @@ async function disambiguateArtistByLocalAlbums(
     [artistName, artistName]
   );
   const localAlbums = localRows.map((r) => r.name);
-  if (localAlbums.length === 0) {
-    // No local albums to verify overlap against; fall back to closest name match
-    // (unconfirmed) instead of giving up, still requiring a reasonable match.
-    const ranked = candidates
-      .map((c) => ({ id: c.id, sim: similarity(c.name, artistName) }))
-      .sort((a, b) => b.sim - a.sim);
-    const top = ranked[0];
-    return top && top.sim >= 0.5 ? top.id : null;
-  }
+  if (localAlbums.length === 0) return null;
 
   // Pre-filter by name similarity; only probe top 3 to limit MB requests
   const ranked = candidates
@@ -161,16 +159,25 @@ async function disambiguateArtistByLocalAlbums(
   return null;
 }
 
-async function enrichArtist(
-  artistName: string,
-  lastfmName: string,
-  mbArtistId: string | null,
-  hasWikidataImage: boolean,
-  serverWithCredential: ServerWithCredential | null,
-): Promise<void> {
+interface EnrichArtistOptions {
+  artistName: string;
+  lastfmName: string;
+  mbArtistId: string | null;
+  hasWikidataImage: boolean;
+  serverWithCredential: ServerWithCredential | null;
+  minAutoSelectScore: number;
+}
+
+async function enrichArtist({
+  artistName,
+  lastfmName,
+  mbArtistId,
+  hasWikidataImage,
+  serverWithCredential,
+  minAutoSelectScore,
+}: EnrichArtistOptions): Promise<void> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
-  // Only attempt when no MBID is set and no image is cached.
-  // Single match → use directly. Multiple matches → score against local albums to pick best.
+  // A confident MusicBrainz score wins outright; otherwise local album overlap decides.
   let resolvedMbid = mbArtistId;
   // A failed source has not said there is no portrait, so the run must stay retryable.
   let isPortraitLookupIncomplete = false;
@@ -181,9 +188,10 @@ async function enrichArtist(
   if (!resolvedMbid && !hasWikidataImage) {
     try {
       const candidates = await searchArtists(artistName);
-      if (candidates.length === 1) {
-        resolvedMbid = candidates[0]!.id;
-      } else if (candidates.length > 1) {
+      const confident = pickConfidentArtist(candidates, minAutoSelectScore);
+      if (confident) {
+        resolvedMbid = confident.id;
+      } else if (candidates.length > 0) {
         resolvedMbid = await disambiguateArtistByLocalAlbums(artistName, candidates);
       }
     } catch {
@@ -286,6 +294,11 @@ export function useEnrichArtist(
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
   const staleDays = Number(staleDaysStr) || 30;
+  const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
+    ARTIST_AUTO_SELECT_SETTING,
+    String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),
+  );
+  const minAutoSelectScore = parseArtistAutoSelectScore(minAutoSelectScoreRaw);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -312,7 +325,7 @@ export function useEnrichArtist(
   });
 
   useEffect(() => {
-    if (!enabled || query.isLoading || !artistName) return;
+    if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded) return;
     if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
     if (ranRef.current === artistName) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
@@ -333,7 +346,9 @@ export function useEnrichArtist(
       }
       await slot;
       try {
-        await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
+        await enrichArtist({
+          artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+        });
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
         // The artists grid/search reads portraits off its own query (joined once, not per-artist),
         // so a fresh portrait doesn't show up there until that list is invalidated too.
@@ -347,7 +362,10 @@ export function useEnrichArtist(
       }
     })().finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
-  }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential]);
+  }, [
+    enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential,
+    minAutoSelectScore, isMinAutoSelectScoreLoaded,
+  ]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !artistName) return;
@@ -358,7 +376,9 @@ export function useEnrichArtist(
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
     try {
-      await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
+      await enrichArtist({
+        artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+      });
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
       useArtistBrowseSessionStore.getState().bumpRefresh();
     } catch (e) {
@@ -367,7 +387,7 @@ export function useEnrichArtist(
     } finally {
       setIsRefreshing(false);
     }
-  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential]);
+  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential, minAutoSelectScore]);
 
   return { data: query.data ?? null, isLoading: query.isLoading, isRefreshing, error, refresh };
 }

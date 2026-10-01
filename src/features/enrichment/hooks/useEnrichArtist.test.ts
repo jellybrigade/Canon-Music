@@ -39,6 +39,7 @@ import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { __resetSettingCache } from "../../../hooks/useSetting";
 import { useEnrichArtist } from "./useEnrichArtist";
 
 let db: FakeDatabase;
@@ -65,6 +66,7 @@ function storedIdentity(name: string) {
 const SINGLE_MATCH = [{ id: "mbid-1", name: "slowdive", disambiguation: null, country: null, score: 100 }];
 
 beforeEach(async () => {
+  __resetSettingCache();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -161,5 +163,36 @@ describe("useEnrichArtist", () => {
 
     await waitFor(() => expect(storedIdentity("slowdive")).toBeDefined());
     expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+  });
+
+  it("picks the top MusicBrainz match when no other artist scores close to it", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce([
+      { id: "mbid-weak", name: "slowdive", disambiguation: null, country: null, score: 60 },
+      { id: "mbid-strong", name: "slowdive", disambiguation: null, country: null, score: 100 },
+    ]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-strong");
+  });
+
+  it("leaves the artist unidentified when a single match scores below the minimum", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce([{ ...SINGLE_MATCH[0]!, score: 90 }]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBeNull();
+  });
+
+  it("uses the stored minimum score", async () => {
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('mb.artist_auto_select_score', '80')").run();
+    vi.mocked(searchArtists).mockResolvedValueOnce([{ ...SINGLE_MATCH[0]!, score: 90 }]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1");
   });
 });
