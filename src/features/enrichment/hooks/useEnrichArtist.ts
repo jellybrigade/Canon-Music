@@ -72,6 +72,13 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
+// Session-scoped so an in-library artist with no confident match costs one search per launch.
+const identifyAttempted = new Set<string>();
+
+export function __resetIdentifyAttempts(): void {
+  identifyAttempted.clear();
+}
+
 // Bounds chains fanning out per rendered artist card; uncapped, quick browsing
 // stacks unbounded concurrent chains with no cancellation and crashes the app.
 const MAX_CONCURRENT_ENRICH = 3;
@@ -175,7 +182,7 @@ async function enrichArtist({
   hasWikidataImage,
   serverWithCredential,
   minAutoSelectScore,
-}: EnrichArtistOptions): Promise<void> {
+}: EnrichArtistOptions): Promise<{ isIdentityLookupIncomplete: boolean }> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
   // A confident MusicBrainz score wins outright; otherwise local album overlap decides.
   let resolvedMbid = mbArtistId;
@@ -185,7 +192,8 @@ async function enrichArtist({
     isPortraitLookupIncomplete = true;
     return null;
   };
-  if (!resolvedMbid && !hasWikidataImage) {
+  let isIdentityLookupIncomplete = false;
+  if (!resolvedMbid) {
     try {
       const candidates = await searchArtists(artistName);
       const confident = pickConfidentArtist(candidates, minAutoSelectScore);
@@ -196,6 +204,7 @@ async function enrichArtist({
       }
     } catch {
       markIncomplete();
+      isIdentityLookupIncomplete = true;
     }
   }
 
@@ -283,13 +292,15 @@ async function enrichArtist({
       enrichedAt,
     ]
   );
+  return { isIdentityLookupIncomplete };
 }
 
 export function useEnrichArtist(
   artistName: string,
-  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential }
+  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential; identifyIfUnidentified?: boolean }
 ) {
   const enabled = options?.enabled ?? true;
+  const identifyIfUnidentified = options?.identifyIfUnidentified ?? false;
   const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
@@ -326,7 +337,8 @@ export function useEnrichArtist(
 
   useEffect(() => {
     if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded) return;
-    if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
+    const needsIdentify = identifyIfUnidentified && !query.data?.mb_artist_id && !identifyAttempted.has(artistName);
+    if (!isEnrichmentStale(query.data ?? null, staleDays) && !needsIdentify) return;
     if (ranRef.current === artistName) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
     // permanently prevent this mount from retrying.
@@ -337,18 +349,22 @@ export function useEnrichArtist(
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
+    if (!mbArtistId) identifyAttempted.add(artistName);
+
     const promise = (async () => {
       const slot = acquireEnrichSlot();
       if (!slot) {
         // Queue already saturated: skip for now, isEnrichmentStale will retry next visit.
         if (ranRef.current === artistName) ranRef.current = null;
+        identifyAttempted.delete(artistName);
         return;
       }
       await slot;
       try {
-        await enrichArtist({
+        const { isIdentityLookupIncomplete } = await enrichArtist({
           artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
         });
+        if (isIdentityLookupIncomplete) identifyAttempted.delete(artistName);
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
         // The artists grid/search reads portraits off its own query (joined once, not per-artist),
         // so a fresh portrait doesn't show up there until that list is invalidated too.
@@ -357,6 +373,7 @@ export function useEnrichArtist(
         // Nothing here moves a dep, so the claim has to be released or this mount
         // never retries a transient Last.fm failure.
         if (ranRef.current === artistName) ranRef.current = null;
+        identifyAttempted.delete(artistName);
       } finally {
         releaseEnrichSlot();
       }
@@ -364,7 +381,7 @@ export function useEnrichArtist(
     inFlight.set(artistName, promise);
   }, [
     enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential,
-    minAutoSelectScore, isMinAutoSelectScoreLoaded,
+    minAutoSelectScore, isMinAutoSelectScoreLoaded, identifyIfUnidentified,
   ]);
 
   const refresh = useCallback(async () => {
