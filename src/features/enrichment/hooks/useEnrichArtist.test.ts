@@ -36,6 +36,8 @@ import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getDb } from "../../../db";
 import { fetchArtistInfo } from "../../../clients/lastfm";
+import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
+import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { useEnrichArtist } from "./useEnrichArtist";
 
@@ -53,6 +55,14 @@ function enrichedArtists(): string[] {
       .all() as { artist_name: string }[]
   ).map((r) => r.artist_name);
 }
+
+function storedIdentity(name: string) {
+  return db.raw
+    .prepare("SELECT mb_artist_id, confirmed_at, bio, enriched_at FROM artist_identity WHERE artist_name = ?")
+    .get(name) as { mb_artist_id: string | null; confirmed_at: number | null; bio: string | null; enriched_at: number | null } | undefined;
+}
+
+const SINGLE_MATCH = [{ id: "mbid-1", name: "slowdive", disambiguation: null, country: null, score: 100 }];
 
 beforeEach(async () => {
   db = await createMigratedTestDb();
@@ -102,5 +112,54 @@ describe("useEnrichArtist", () => {
     rerender({ enabled: true });
 
     await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
+
+  it("saves the MusicBrainz id when the name has a single match", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", confirmed_at: null });
+  });
+
+  it("keeps the artist retryable when the MusicBrainz search fails", async () => {
+    vi.mocked(searchArtists).mockRejectedValueOnce(new Error("musicbrainz unreachable"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+  });
+
+  it("keeps the artist retryable when the Wikidata portrait lookup fails", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(fetchWikidataImageByMbid).mockRejectedValueOnce(new Error("wikidata timed out"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", enriched_at: null });
+  });
+
+  it("marks the artist done when Wikidata answers that it has no portrait", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(fetchWikidataImageByMbid).mockResolvedValueOnce(null);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
+
+  it("keeps the artist retryable when the TheAudioDB portrait fallback fails", async () => {
+    vi.mocked(fetchArtistInfo).mockResolvedValueOnce({
+      bio: null, listeners: 1, playcount: 2, similar: [], topTags: [], imageUrl: null,
+    });
+    vi.mocked(fetchTheAudioDbArtist).mockRejectedValueOnce(new Error("theaudiodb unreachable"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")).toBeDefined());
+    expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
   });
 });

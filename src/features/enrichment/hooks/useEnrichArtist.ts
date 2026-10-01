@@ -172,6 +172,12 @@ async function enrichArtist(
   // Only attempt when no MBID is set and no image is cached.
   // Single match → use directly. Multiple matches → score against local albums to pick best.
   let resolvedMbid = mbArtistId;
+  // A failed source has not said there is no portrait, so the run must stay retryable.
+  let isPortraitLookupIncomplete = false;
+  const markIncomplete = (): null => {
+    isPortraitLookupIncomplete = true;
+    return null;
+  };
   if (!resolvedMbid && !hasWikidataImage) {
     try {
       const candidates = await searchArtists(artistName);
@@ -181,25 +187,27 @@ async function enrichArtist(
         resolvedMbid = await disambiguateArtistByLocalAlbums(artistName, candidates);
       }
     } catch {
-      // silent, portrait stays absent if MB is unreachable
+      markIncomplete();
     }
   }
 
   const [info, wikidataImageUrl] = await Promise.all([
     fetchArtistInfo(lastfmName),
-    resolvedMbid && !hasWikidataImage ? fetchWikidataImageByMbid(resolvedMbid) : Promise.resolve(null),
+    resolvedMbid && !hasWikidataImage
+      ? fetchWikidataImageByMbid(resolvedMbid).catch(markIncomplete)
+      : Promise.resolve(null),
   ]);
   let imageUrl = wikidataImageUrl;
   if (!imageUrl && !hasWikidataImage && resolvedMbid) {
     const fanartKey = await getFanartApiKey();
-    if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey);
+    if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey).catch(markIncomplete);
   }
 
   // Bio + portrait fallbacks: TheAudioDB and Wikipedia fetched in parallel when Last.fm returns nothing
   let finalBio = info.bio;
   if (!finalBio) {
     const [adbResult, wikiBio] = await Promise.all([
-      fetchTheAudioDbArtist(artistName).catch(() => null),
+      fetchTheAudioDbArtist(artistName).catch(markIncomplete),
       // Prefer MBID-based Wikipedia lookup to avoid wrong-artist matches on ambiguous names (e.g. "Ye")
       resolvedMbid
         ? fetchWikipediaBioByMbid(resolvedMbid).catch(() => fetchWikipediaBio(artistName).catch(() => null))
@@ -220,7 +228,7 @@ async function enrichArtist(
   let navidromeImageUrl: string | null = null;
   if (!imageUrl && !hasWikidataImage && serverWithCredential) {
     const { server, credential } = serverWithCredential;
-    const nativeId = await findNativeArtistId(artistName, server.id).catch(() => null);
+    const nativeId = await findNativeArtistId(artistName, server.id).catch(markIncomplete);
     if (nativeId) {
       const url = await getArtistImageFromServer(
         server.url, server.username, credential, nativeId, server.alt_url ?? undefined
@@ -233,15 +241,17 @@ async function enrichArtist(
   // Only stamp enriched_at when Last.fm returned primary data, keeps the row retryable
   // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
   const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
-  const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;
+  const hasPortrait = hasWikidataImage || !!imageUrl || !!navidromeImageUrl;
+  const enrichedAt = gotData && (hasPortrait || !isPortraitLookupIncomplete) ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
         wikidata_image_url, navidrome_image_url, enriched_at)
-     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
+       mb_artist_id = COALESCE(artist_identity.mb_artist_id, excluded.mb_artist_id),
        bio = excluded.bio,
        listeners = excluded.listeners,
        playcount = excluded.playcount,
@@ -253,6 +263,7 @@ async function enrichArtist(
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
+      resolvedMbid,
       finalBio,
       info.listeners,
       info.playcount,
