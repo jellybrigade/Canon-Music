@@ -139,10 +139,8 @@ export interface LastfmArtistInfo {
 // Hash of Last.fm's "missing artist" placeholder image, reject it everywhere
 export const LASTFM_PLACEHOLDER = "2a96cbd8b46e442fc41c2b86b821562f";
 
-/** Picks the best available artist portrait: Wikidata (and fanart.tv/TheAudioDB,
- * folded into the same column by useEnrichArtist) first, then the server's own
- * scraped image (Navidrome's getArtistInfo2, no MBID needed), then Last.fm direct,
- * filtering out Last.fm's generic placeholder image. */
+/** Priority: Wikidata (fanart.tv/TheAudioDB folded in by useEnrichArtist), then the server's
+ * own scraped image, then Last.fm direct, filtering the generic Last.fm placeholder. */
 export function resolvePortraitUrl(
   enrichment: {
     lastfm_image_url: string | null;
@@ -175,6 +173,13 @@ function stripBioBoilerplate(html: string): string {
     .trim();
 }
 
+// Last.fm `match` runs 0..1; artist.getInfo only ever lists five, so the list comes from getSimilar.
+export const SIMILAR_ARTIST_MIN_MATCH = 0.3;
+
+export function similarArtistsAboveMatch(entries: SimilarArtistEntry[]): string[] {
+  return entries.filter((entry) => entry.match >= SIMILAR_ARTIST_MIN_MATCH).map((entry) => entry.name);
+}
+
 export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo> {
   const apiKey = await getApiKey();
   if (!apiKey) {
@@ -204,11 +209,15 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
     if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
     const a = data.artist;
     if (!a) throw new Error("No artist data");
+    const similarEntries = await fetchSimilarArtistsFull(artist, apiKey);
     return {
       bio: a.bio?.content ? stripBioBoilerplate(a.bio.content) || null : null,
       listeners: a.stats?.listeners ? parseInt(a.stats.listeners, 10) || null : null,
       playcount: a.stats?.playcount ? parseInt(a.stats.playcount, 10) || null : null,
-      similar: (a.similar?.artist ?? []).map((x) => x.name).slice(0, 10),
+      // getSimilar answers [] on failure too, so an empty list falls back to getInfo's five.
+      similar: similarEntries.length > 0
+        ? similarArtistsAboveMatch(similarEntries)
+        : (a.similar?.artist ?? []).map((x) => x.name),
       topTags: (a.tags?.tag ?? []).map((t) => t.name).slice(0, 10),
       imageUrl: a.image ? pickImage(a.image) : null,
     };
@@ -247,12 +256,13 @@ export interface SimilarArtistEntry {
   match: number;
 }
 
-export async function fetchSimilarArtistsFull(artist: string): Promise<SimilarArtistEntry[]> {
+/** `knownApiKey` lets a caller that already read the keychain skip a second read. */
+export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: string): Promise<SimilarArtistEntry[]> {
   const cacheKey = `artist.getSimilar:${artist.toLowerCase()}`;
   const cached = await getCached<SimilarArtistEntry[]>(cacheKey);
   if (cached) return cached;
 
-  const apiKey = await getApiKey();
+  const apiKey = knownApiKey ?? await getApiKey();
   if (!apiKey) return [];
 
   await rateLimit();
@@ -367,21 +377,13 @@ export async function fetchAlbumInfo(artist: string, album: string): Promise<Las
   }
 }
 
-export async function fetchArtistImage(artist: string): Promise<string | null> {
-  const info = await fetchArtistInfo(artist);
-  return info.imageUrl;
-}
-
 export interface LastfmTopTrack {
   name: string;
   playcount: number;
 }
 
-/**
- * Normalize a track title for owned-vs-Last.fm matching: strips trailing
- * bracket/parenthetical qualifiers (Remastered, Live, feat. X, year mixes)
- * before the usual alphanumeric fold, so "Song (Remastered 2011)" matches "Song".
- */
+/** Strips trailing bracket/parenthetical qualifiers (Remastered, Live, feat. X, year mixes)
+ * so "Song (Remastered 2011)" matches "Song" against Last.fm. */
 export function normalizeTrackTitle(s: string): string {
   return s
     .toLowerCase()
@@ -454,10 +456,8 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   }
 }
 
-// Last.fm has no per-album track lookup, same-titled tracks across releases (e.g.
-// clipping.'s many "Intro" tracks) share one canonical Last.fm track page. This returns
-// whichever album Last.fm considers representative for that page, used to guess which
-// local copy the playcount actually belongs to.
+// Last.fm has no per-album track lookup; same-titled tracks across releases share one
+// canonical track page, so this guesses which local copy the playcount belongs to.
 export async function fetchTrackAlbum(artist: string, track: string): Promise<string | null> {
   const apiKey = await getApiKey();
   if (!apiKey) return null;

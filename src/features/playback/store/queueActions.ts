@@ -26,11 +26,8 @@ export function createQueueActions(
   { persistQueueState }: PlayerPersistence
 ): QueueActions {
   return {
-    // Seeds the queue from a saved session without starting playback. playQueue cannot be used
-    // for this: it calls playTrack, which spawns a download and decode in Rust, so restoring a
-    // session used to fetch a whole track at startup and then race a pause() against it. The
-    // engine stays empty here, and resume() routes a first play through retryCurrent so the
-    // track is loaded on demand.
+    // Seeds the queue from a saved session without starting playback: playQueue calls playTrack,
+    // which used to fetch a whole track at startup and race a pause() against it. resume() routes a first play through retryCurrent instead.
     restoreQueue: (tracks, streamUrlFn, position) => {
       if (tracks.length === 0) return;
       const clamped = Math.max(0, Math.min(position, tracks.length - 1));
@@ -99,10 +96,8 @@ export function createQueueActions(
       get().playNextMany([track], streamUrlFn);
     },
 
-    // Batch appends commit once. Looping the single-track action instead (which is what the
-    // album "queue last" / "queue next" actions used to do) costs one store commit, one full
-    // queue copy and one persist bump per track, so a 20-track album fired 20 re-render passes
-    // and copied the queue 20 times.
+    // Batch appends commit once; looping the single-track action per track fired one re-render
+    // and queue copy each, so a 20-track album used to fire 20 passes.
     addManyToQueue: (tracks, streamUrlFn) => {
       if (tracks.length === 0) return;
       const { queue, queueIndex, isShuffled, shuffleOrder, streamUrlFor, maxQueueSize } = get();

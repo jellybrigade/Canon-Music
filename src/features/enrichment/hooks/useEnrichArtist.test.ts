@@ -36,8 +36,12 @@ import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { getDb } from "../../../db";
 import { fetchArtistInfo } from "../../../clients/lastfm";
+import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
+import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { useEnrichArtist } from "./useEnrichArtist";
+import { __resetSettingCache } from "../../../hooks/useSetting";
+import { QK } from "../../../lib/queryKeys";
+import { __resetIdentifyAttempts, useEnrichArtist } from "./useEnrichArtist";
 
 let db: FakeDatabase;
 let queryClient: QueryClient;
@@ -54,7 +58,17 @@ function enrichedArtists(): string[] {
   ).map((r) => r.artist_name);
 }
 
+function storedIdentity(name: string) {
+  return db.raw
+    .prepare("SELECT mb_artist_id, confirmed_at, bio, enriched_at FROM artist_identity WHERE artist_name = ?")
+    .get(name) as { mb_artist_id: string | null; confirmed_at: number | null; bio: string | null; enriched_at: number | null } | undefined;
+}
+
+const SINGLE_MATCH = [{ id: "mbid-1", name: "slowdive", disambiguation: null, country: null, score: 100 }];
+
 beforeEach(async () => {
+  __resetSettingCache();
+  __resetIdentifyAttempts();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -102,5 +116,142 @@ describe("useEnrichArtist", () => {
     rerender({ enabled: true });
 
     await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
+
+  it("saves the MusicBrainz id when the name has a single match", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", confirmed_at: null });
+  });
+
+  it("keeps the artist retryable when the MusicBrainz search fails", async () => {
+    vi.mocked(searchArtists).mockRejectedValueOnce(new Error("musicbrainz unreachable"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+  });
+
+  it("keeps the artist retryable when the Wikidata portrait lookup fails", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(fetchWikidataImageByMbid).mockRejectedValueOnce(new Error("wikidata timed out"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", enriched_at: null });
+  });
+
+  it("marks the artist done when Wikidata answers that it has no portrait", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(fetchWikidataImageByMbid).mockResolvedValueOnce(null);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
+
+  it("keeps the artist retryable when the TheAudioDB portrait fallback fails", async () => {
+    vi.mocked(fetchArtistInfo).mockResolvedValueOnce({
+      bio: null, listeners: 1, playcount: 2, similar: [], topTags: [], imageUrl: null,
+    });
+    vi.mocked(fetchTheAudioDbArtist).mockRejectedValueOnce(new Error("theaudiodb unreachable"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")).toBeDefined());
+    expect(storedIdentity("slowdive")?.enriched_at).toBeNull();
+  });
+
+  it("picks the top MusicBrainz match when no other artist scores close to it", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce([
+      { id: "mbid-weak", name: "slowdive", disambiguation: null, country: null, score: 60 },
+      { id: "mbid-strong", name: "slowdive", disambiguation: null, country: null, score: 100 },
+    ]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-strong");
+  });
+
+  it("leaves the artist unidentified when a single match scores below the minimum", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce([{ ...SINGLE_MATCH[0]!, score: 90 }]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBeNull();
+  });
+
+  it("uses the stored minimum score", async () => {
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('mb.artist_auto_select_score', '80')").run();
+    vi.mocked(searchArtists).mockResolvedValueOnce([{ ...SINGLE_MATCH[0]!, score: 90 }]);
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+    expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1");
+  });
+
+  describe("identifying an in-library artist", () => {
+    function seedFreshUnidentified(name: string) {
+      db.raw
+        .prepare("INSERT INTO artist_identity (artist_name, bio, enriched_at) VALUES (?, 'bio', ?)")
+        .run(name, Math.floor(Date.now() / 1000));
+    }
+
+    it("identifies an artist enriched recently but never matched", async () => {
+      seedFreshUnidentified("slowdive");
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+
+      renderHook(() => useEnrichArtist("slowdive", { identifyIfUnidentified: true }), { wrapper });
+
+      await waitFor(() => expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1"));
+      expect(storedIdentity("slowdive")?.confirmed_at).toBeNull();
+    });
+
+    it("leaves a recently enriched artist alone unless asked", async () => {
+      seedFreshUnidentified("slowdive");
+
+      renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+      await waitFor(() => expect(queryClient.getQueryData(QK.artistEnrichment("slowdive"))).toBeDefined());
+      expect(vi.mocked(searchArtists)).not.toHaveBeenCalled();
+    });
+
+    it("searches once per session when no match is confident", async () => {
+      seedFreshUnidentified("slowdive");
+      vi.mocked(searchArtists).mockResolvedValueOnce([{ ...SINGLE_MATCH[0]!, score: 50 }]);
+
+      const first = renderHook(() => useEnrichArtist("slowdive", { identifyIfUnidentified: true }), { wrapper });
+      await waitFor(() => expect(vi.mocked(fetchArtistInfo)).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(vi.mocked(searchArtists)).toHaveBeenCalledTimes(1));
+      first.unmount();
+
+      renderHook(() => useEnrichArtist("slowdive", { identifyIfUnidentified: true }), { wrapper });
+      await waitFor(() => expect(queryClient.getQueryData(QK.artistEnrichment("slowdive"))).toBeDefined());
+
+      expect(vi.mocked(searchArtists)).toHaveBeenCalledTimes(1);
+    });
+
+    it("tries again on the next visit when the MusicBrainz search fails", async () => {
+      seedFreshUnidentified("slowdive");
+      vi.mocked(searchArtists).mockRejectedValueOnce(new Error("musicbrainz unreachable"));
+
+      const first = renderHook(() => useEnrichArtist("slowdive", { identifyIfUnidentified: true }), { wrapper });
+      await waitFor(() => expect(vi.mocked(searchArtists)).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(vi.mocked(fetchArtistInfo)).toHaveBeenCalledTimes(1));
+      first.unmount();
+
+      vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+      renderHook(() => useEnrichArtist("slowdive", { identifyIfUnidentified: true }), { wrapper });
+
+      await waitFor(() => expect(storedIdentity("slowdive")?.mb_artist_id).toBe("mbid-1"));
+    });
   });
 });

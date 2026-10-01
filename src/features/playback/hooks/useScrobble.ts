@@ -34,11 +34,8 @@ export function useScrobble(
     timestampRef.current = null;
   }, [playStartedAt]);
 
-  // Navidrome expires its now-playing entry on a timer, so resuming owes the server the
-  // same report starting did: a pause outlasting that timer otherwise leaves it saying
-  // nothing is playing until the next track. Keyed on the id rather than the track
-  // object, which the position tick hands back new on every render, and gated on the
-  // player actually running, or a queue restored at launch reports a track nobody started.
+  // Navidrome expires now-playing on a timer, so a resume after a long pause must re-report.
+  // Keyed on id, not the track object (new every render); gated on isPlaying, or a restored queue reports a track nobody started.
   const trackId = track?.id ?? null;
   useEffect(() => {
     if (!isPlaying || !trackId || !serverWithCred) return;
@@ -97,10 +94,7 @@ export function useScrobble(
   }, [track, elapsed]);
 }
 
-/**
- * Isolates the 200ms `elapsed` store subscription in its own leaf component
- * so the 5x/second tick doesn't re-render the caller (App owns a large tree).
- */
+// Isolated in its own leaf so the 5x/second elapsed tick doesn't re-render App's large tree.
 export function ScrobbleTracker({
   track,
   serverWithCred,

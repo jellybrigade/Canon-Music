@@ -1,15 +1,5 @@
-/**
- * On-open artist enrichment from Last.fm.
- *
- * On mount, checks if the artist_identity row is stale (enriched_at older than
- * staleness_days, or missing). If stale, fetches artist.getInfo and persists:
- * bio, listeners, playcount, similar artists, top tags, image URL, enriched_at.
- *
- * MB columns (mb_artist_id, lastfm_artist_name, confirmed_at) are preserved.
- * Failures are silent, the hook never throws to the UI.
- *
- * Returns { data, isLoading, isRefreshing, error, refresh }.
- */
+// On open, refreshes a stale artist_identity row from Last.fm artist.getInfo, preserving
+// MB columns. Failures are silent.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
@@ -17,6 +7,12 @@ import { QK } from "../../../lib/queryKeys";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { similarity } from "../lib/fuzzyMatch";
+import {
+  ARTIST_AUTO_SELECT_SETTING,
+  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
+  parseArtistAutoSelectScore,
+  pickConfidentArtist,
+} from "../lib/artistAutoSelect";
 import { getFanartApiKey, fetchFanartTvImageByMbid } from "../../../clients/fanart";
 import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
 import { getArtistImageFromServer } from "../../../clients/navidrome";
@@ -76,10 +72,15 @@ function isEnrichmentStale(row: ArtistEnrichmentRow | null, staleDays: number): 
 
 const inFlight = new Map<string, Promise<void>>();
 
-// Enrichment fans out per rendered artist card (e.g. up to 12 similar-artist cards
-// per artist page), and each chain makes several sequential network calls. Without a
-// cap, quickly browsing artist -> similar artist -> similar artist stacks unbounded
-// concurrent chains with no cancellation, degrading the app until it crashes.
+// Session-scoped so an in-library artist with no confident match costs one search per launch.
+const identifyAttempted = new Set<string>();
+
+export function __resetIdentifyAttempts(): void {
+  identifyAttempted.clear();
+}
+
+// Bounds chains fanning out per rendered artist card; uncapped, quick browsing
+// stacks unbounded concurrent chains with no cancellation and crashes the app.
 const MAX_CONCURRENT_ENRICH = 3;
 const MAX_QUEUED_ENRICH = 24;
 let activeEnrichCount = 0;
@@ -105,12 +106,7 @@ function releaseEnrichSlot(): void {
   if (next) next();
 }
 
-/**
- * When MB returns multiple artist candidates, score each against the user's
- * local album titles. The candidate whose release groups best overlap with
- * local albums (score ≥ 0.5, gap ≥ 0.15 to second place) is auto-confirmed
- * and its MBID is persisted with confirmed_at.
- */
+/** Scores MB artist candidates against local album titles; auto-confirms the best (score >= 0.5, gap >= 0.15). */
 async function disambiguateArtistByLocalAlbums(
   artistName: string,
   candidates: import("../../../clients/musicbrainz").MbArtistCandidate[],
@@ -124,17 +120,7 @@ async function disambiguateArtistByLocalAlbums(
     [artistName, artistName]
   );
   const localAlbums = localRows.map((r) => r.name);
-  if (localAlbums.length === 0) {
-    // Not in the library, no album overlap to verify against. Use the closest
-    // name match anyway (not persisted as confirmed) so portrait art still resolves
-    // for "fans also like" style artists instead of silently giving up, but still
-    // require a reasonable name match to avoid attaching an unrelated artist's identity.
-    const ranked = candidates
-      .map((c) => ({ id: c.id, sim: similarity(c.name, artistName) }))
-      .sort((a, b) => b.sim - a.sim);
-    const top = ranked[0];
-    return top && top.sim >= 0.5 ? top.id : null;
-  }
+  if (localAlbums.length === 0) return null;
 
   // Pre-filter by name similarity; only probe top 3 to limit MB requests
   const ranked = candidates
@@ -180,45 +166,65 @@ async function disambiguateArtistByLocalAlbums(
   return null;
 }
 
-async function enrichArtist(
-  artistName: string,
-  lastfmName: string,
-  mbArtistId: string | null,
-  hasWikidataImage: boolean,
-  serverWithCredential: ServerWithCredential | null,
-): Promise<void> {
+interface EnrichArtistOptions {
+  artistName: string;
+  lastfmName: string;
+  mbArtistId: string | null;
+  hasWikidataImage: boolean;
+  serverWithCredential: ServerWithCredential | null;
+  minAutoSelectScore: number;
+}
+
+async function enrichArtist({
+  artistName,
+  lastfmName,
+  mbArtistId,
+  hasWikidataImage,
+  serverWithCredential,
+  minAutoSelectScore,
+}: EnrichArtistOptions): Promise<{ isIdentityLookupIncomplete: boolean }> {
   // Auto-resolve MBID when unconfirmed, so portrait can be fetched without manual Identify.
-  // Only attempt when no MBID is set and no image is cached.
-  // Single match → use directly. Multiple matches → score against local albums to pick best.
+  // A confident MusicBrainz score wins outright; otherwise local album overlap decides.
   let resolvedMbid = mbArtistId;
-  if (!resolvedMbid && !hasWikidataImage) {
+  // A failed source has not said there is no portrait, so the run must stay retryable.
+  let isPortraitLookupIncomplete = false;
+  const markIncomplete = (): null => {
+    isPortraitLookupIncomplete = true;
+    return null;
+  };
+  let isIdentityLookupIncomplete = false;
+  if (!resolvedMbid) {
     try {
       const candidates = await searchArtists(artistName);
-      if (candidates.length === 1) {
-        resolvedMbid = candidates[0]!.id;
-      } else if (candidates.length > 1) {
+      const confident = pickConfidentArtist(candidates, minAutoSelectScore);
+      if (confident) {
+        resolvedMbid = confident.id;
+      } else if (candidates.length > 0) {
         resolvedMbid = await disambiguateArtistByLocalAlbums(artistName, candidates);
       }
     } catch {
-      // silent, portrait stays absent if MB is unreachable
+      markIncomplete();
+      isIdentityLookupIncomplete = true;
     }
   }
 
   const [info, wikidataImageUrl] = await Promise.all([
     fetchArtistInfo(lastfmName),
-    resolvedMbid && !hasWikidataImage ? fetchWikidataImageByMbid(resolvedMbid) : Promise.resolve(null),
+    resolvedMbid && !hasWikidataImage
+      ? fetchWikidataImageByMbid(resolvedMbid).catch(markIncomplete)
+      : Promise.resolve(null),
   ]);
   let imageUrl = wikidataImageUrl;
   if (!imageUrl && !hasWikidataImage && resolvedMbid) {
     const fanartKey = await getFanartApiKey();
-    if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey);
+    if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey).catch(markIncomplete);
   }
 
   // Bio + portrait fallbacks: TheAudioDB and Wikipedia fetched in parallel when Last.fm returns nothing
   let finalBio = info.bio;
   if (!finalBio) {
     const [adbResult, wikiBio] = await Promise.all([
-      fetchTheAudioDbArtist(artistName).catch(() => null),
+      fetchTheAudioDbArtist(artistName).catch(markIncomplete),
       // Prefer MBID-based Wikipedia lookup to avoid wrong-artist matches on ambiguous names (e.g. "Ye")
       resolvedMbid
         ? fetchWikipediaBioByMbid(resolvedMbid).catch(() => fetchWikipediaBio(artistName).catch(() => null))
@@ -239,7 +245,7 @@ async function enrichArtist(
   let navidromeImageUrl: string | null = null;
   if (!imageUrl && !hasWikidataImage && serverWithCredential) {
     const { server, credential } = serverWithCredential;
-    const nativeId = await findNativeArtistId(artistName, server.id).catch(() => null);
+    const nativeId = await findNativeArtistId(artistName, server.id).catch(markIncomplete);
     if (nativeId) {
       const url = await getArtistImageFromServer(
         server.url, server.username, credential, nativeId, server.alt_url ?? undefined
@@ -252,15 +258,17 @@ async function enrichArtist(
   // Only stamp enriched_at when Last.fm returned primary data, keeps the row retryable
   // when only a fallback bio (TheAudioDB/Wikipedia) was found, so stats/similar can still be fetched.
   const gotData = !!(info.bio || info.listeners || info.similar.length > 0);
-  const enrichedAt = gotData ? Math.floor(Date.now() / 1000) : null;
+  const hasPortrait = hasWikidataImage || !!imageUrl || !!navidromeImageUrl;
+  const enrichedAt = gotData && (hasPortrait || !isPortraitLookupIncomplete) ? Math.floor(Date.now() / 1000) : null;
 
   await db.execute(
     `INSERT INTO artist_identity
        (artist_name, mb_artist_id, lastfm_artist_name, confirmed_at,
         bio, listeners, playcount, similar_json, top_tags_json, lastfm_image_url,
         wikidata_image_url, navidrome_image_url, enriched_at)
-     VALUES (?, NULL, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     VALUES (?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(artist_name) DO UPDATE SET
+       mb_artist_id = COALESCE(artist_identity.mb_artist_id, excluded.mb_artist_id),
        bio = excluded.bio,
        listeners = excluded.listeners,
        playcount = excluded.playcount,
@@ -272,6 +280,7 @@ async function enrichArtist(
        enriched_at = COALESCE(excluded.enriched_at, artist_identity.enriched_at)`,
     [
       artistName,
+      resolvedMbid,
       finalBio,
       info.listeners,
       info.playcount,
@@ -283,17 +292,24 @@ async function enrichArtist(
       enrichedAt,
     ]
   );
+  return { isIdentityLookupIncomplete };
 }
 
 export function useEnrichArtist(
   artistName: string,
-  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential }
+  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential; identifyIfUnidentified?: boolean }
 ) {
   const enabled = options?.enabled ?? true;
+  const identifyIfUnidentified = options?.identifyIfUnidentified ?? false;
   const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
   const staleDays = Number(staleDaysStr) || 30;
+  const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
+    ARTIST_AUTO_SELECT_SETTING,
+    String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),
+  );
+  const minAutoSelectScore = parseArtistAutoSelectScore(minAutoSelectScoreRaw);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -320,8 +336,9 @@ export function useEnrichArtist(
   });
 
   useEffect(() => {
-    if (!enabled || query.isLoading || !artistName) return;
-    if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
+    if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded) return;
+    const needsIdentify = identifyIfUnidentified && !query.data?.mb_artist_id && !identifyAttempted.has(artistName);
+    if (!isEnrichmentStale(query.data ?? null, staleDays) && !needsIdentify) return;
     if (ranRef.current === artistName) return;
     // Check inFlight before locking ranRef so a failed in-progress run doesn't
     // permanently prevent this mount from retrying.
@@ -332,16 +349,22 @@ export function useEnrichArtist(
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
 
+    if (!mbArtistId) identifyAttempted.add(artistName);
+
     const promise = (async () => {
       const slot = acquireEnrichSlot();
       if (!slot) {
         // Queue already saturated: skip for now, isEnrichmentStale will retry next visit.
         if (ranRef.current === artistName) ranRef.current = null;
+        identifyAttempted.delete(artistName);
         return;
       }
       await slot;
       try {
-        await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
+        const { isIdentityLookupIncomplete } = await enrichArtist({
+          artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+        });
+        if (isIdentityLookupIncomplete) identifyAttempted.delete(artistName);
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
         // The artists grid/search reads portraits off its own query (joined once, not per-artist),
         // so a fresh portrait doesn't show up there until that list is invalidated too.
@@ -350,12 +373,16 @@ export function useEnrichArtist(
         // Nothing here moves a dep, so the claim has to be released or this mount
         // never retries a transient Last.fm failure.
         if (ranRef.current === artistName) ranRef.current = null;
+        identifyAttempted.delete(artistName);
       } finally {
         releaseEnrichSlot();
       }
     })().finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
-  }, [enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential]);
+  }, [
+    enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential,
+    minAutoSelectScore, isMinAutoSelectScoreLoaded, identifyIfUnidentified,
+  ]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !artistName) return;
@@ -366,7 +393,9 @@ export function useEnrichArtist(
     const mbArtistId = query.data?.mb_artist_id ?? null;
     const hasWikidataImage = !!(query.data?.wikidata_image_url);
     try {
-      await enrichArtist(artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential);
+      await enrichArtist({
+        artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+      });
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
       useArtistBrowseSessionStore.getState().bumpRefresh();
     } catch (e) {
@@ -375,7 +404,7 @@ export function useEnrichArtist(
     } finally {
       setIsRefreshing(false);
     }
-  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential]);
+  }, [artistName, isRefreshing, query.data, queryClient, serverWithCredential, minAutoSelectScore]);
 
   return { data: query.data ?? null, isLoading: query.isLoading, isRefreshing, error, refresh };
 }

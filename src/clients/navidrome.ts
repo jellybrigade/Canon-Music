@@ -1,6 +1,7 @@
 import { md5 } from "js-md5";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { apiPost, callSubsonicVoid } from "./navidromeTransport";
+import { apiPost, callSubsonicVoid, checkEnvelope, SubsonicError } from "./navidromeTransport";
+import { noteEnvelope } from "../lib/credentialRejections";
 
 export interface NavidromeAlbum {
   id: string;
@@ -56,9 +57,7 @@ export async function fetchAllAlbums(
     };
 
     const response = data["subsonic-response"];
-    if (response.status !== "ok") {
-      throw new Error(response.error?.message ?? "Failed to fetch albums");
-    }
+    checkEnvelope(baseUrl, "getAlbumList2", response, "Failed to fetch albums");
 
     const page = response.albumList2?.album ?? [];
     const firstId = page[0]?.id;
@@ -102,9 +101,7 @@ export async function fetchAlbumListByType(
   };
 
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Failed to fetch album list");
-  }
+  checkEnvelope(baseUrl, "getAlbumList2", response, "Failed to fetch album list");
 
   return response.albumList2?.album ?? [];
 }
@@ -157,9 +154,7 @@ export async function fetchAlbumTracks(
   };
 
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Failed to fetch album tracks");
-  }
+  checkEnvelope(baseUrl, "getAlbum", response, "Failed to fetch album tracks");
 
   return response.album?.song ?? [];
 }
@@ -189,8 +184,11 @@ export async function getArtistImageFromServer(
         artistInfo2?: { largeImageUrl?: string; mediumImageUrl?: string; smallImageUrl?: string };
       };
     };
-    const info = data["subsonic-response"]?.artistInfo2;
-    if (data["subsonic-response"]?.status !== "ok" || !info) return null;
+    const response = data["subsonic-response"];
+    if (!response) return null;
+    noteEnvelope(baseUrl, response);
+    const info = response.artistInfo2;
+    if (response.status !== "ok" || !info) return null;
     const url = info.largeImageUrl || info.mediumImageUrl || info.smallImageUrl;
     if (!url || url.includes(LASTFM_PLACEHOLDER_HASH)) return null;
     return url;
@@ -216,14 +214,12 @@ export async function fetchStarred2(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       starred2?: NavidromeStarred;
     };
   };
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getStarred2 failed");
-  }
+  checkEnvelope(baseUrl, "getStarred2", response, "getStarred2 failed");
   return response.starred2 ?? {};
 }
 
@@ -234,12 +230,8 @@ export interface NavidromeScanStatus {
   serverVersion: string | null;
 }
 
-/**
- * `getScanStatus`, the cheapest evidence that the server's own ids may have moved.
- *
- * Some deployments restrict it to admins, so a failure means "no evidence" and the caller
- * has to fall back to probing ids directly - never to assuming nothing changed.
- */
+/** Some deployments restrict `getScanStatus` to admins, so a failure means "no evidence" -
+ * the caller must fall back to probing ids directly, never assume nothing changed. */
 export async function fetchScanStatus(
   baseUrl: string,
   username: string,
@@ -252,15 +244,13 @@ export async function fetchScanStatus(
   const data = (await res.json()) as {
     "subsonic-response": {
       status: string;
-      error?: { message: string };
+      error?: { code?: number; message?: string };
       serverVersion?: string;
       scanStatus?: { lastScan?: string; count?: number };
     };
   };
   const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "getScanStatus failed");
-  }
+  checkEnvelope(baseUrl, "getScanStatus", response, "getScanStatus failed");
   return {
     lastScan: response.scanStatus?.lastScan ?? null,
     songCount: response.scanStatus?.count ?? null,
@@ -268,19 +258,12 @@ export async function fetchScanStatus(
   };
 }
 
-/**
- * "The requested data was not found." After a server-side id migration this is true of most
- * of the library at once, which is why several callers need to tell it from every other
- * rejection rather than treating any failure the same.
- */
+/** "The requested data was not found." After a server-side id migration this is true of
+ * most of the library at once, so callers must tell it apart from every other rejection. */
 export const SUBSONIC_NOT_FOUND = 70;
 
-/**
- * Whether the server still knows a track id, for the sync's skip probe.
- *
- * Only a Subsonic error 70 counts as "gone": every other failure is the transport or the
- * account, which says nothing about the id and must not be read as evidence either way.
- */
+/** Only Subsonic error 70 counts as "gone"; every other failure is the transport or the
+ * account and must not be read as evidence either way. */
 export async function songExists(
   baseUrl: string,
   username: string,
@@ -426,6 +409,7 @@ export async function fetchAndStoreOpenSubsonicExtensions(
       };
     };
     const response = data["subsonic-response"];
+    noteEnvelope(baseUrl, response);
     if (response.status !== "ok") return [];
     const extensions = (response.openSubsonicExtensions ?? []).map((e) => e.name);
     const { getDb } = await import("../db");
@@ -476,43 +460,42 @@ export async function fetchLyricsBySongId(
   trackId: string,
   altUrl?: string
 ): Promise<{ plain: string | null; synced: string | null } | null> {
-  try {
-    const params = buildAuthParams(username, credential);
-    params.set("id", trackId);
-    const res = await apiPost(baseUrl, "getLyricsBySongId", params, altUrl);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      "subsonic-response": {
-        status: string;
-        lyricsList?: {
-          structuredLyrics?: Array<{
-            synced: boolean;
-            line: Array<{ start?: number; value: string }>;
-          }>;
-        };
+  const params = buildAuthParams(username, credential);
+  params.set("id", trackId);
+  const res = await apiPost(baseUrl, "getLyricsBySongId", params, altUrl);
+  if (!res.ok) throw new Error(`getLyricsBySongId returned ${res.status}`);
+  const data = (await res.json()) as {
+    "subsonic-response": {
+      status: string;
+      error?: { code: number; message: string };
+      lyricsList?: {
+        structuredLyrics?: Array<{
+          synced: boolean;
+          line: Array<{ start?: number; value: string }>;
+        }>;
       };
     };
-    const sr = data["subsonic-response"];
-    if (sr.status !== "ok" || !sr.lyricsList?.structuredLyrics?.length) return null;
+  };
+  const sr = data["subsonic-response"];
+  if (sr.error?.code === SUBSONIC_NOT_FOUND) return null;
+  checkEnvelope(baseUrl, "getLyricsBySongId", sr);
+  if (!sr.lyricsList?.structuredLyrics?.length) return null;
 
-    const lyrics = sr.lyricsList.structuredLyrics;
-    const syncedEntry = lyrics.find((l) => l.synced);
-    const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
+  const lyrics = sr.lyricsList.structuredLyrics;
+  const syncedEntry = lyrics.find((l) => l.synced);
+  const plainEntry = lyrics.find((l) => !l.synced) ?? lyrics[0];
 
-    const synced = syncedEntry
-      ? syncedEntry.line.map((l) =>
-          l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
-        ).join("\n")
-      : null;
+  const synced = syncedEntry
+    ? syncedEntry.line.map((l) =>
+        l.start !== undefined ? `[${msToLrcTimestamp(l.start)}] ${l.value}` : l.value
+      ).join("\n")
+    : null;
 
-    const plain = plainEntry
-      ? plainEntry.line.map((l) => l.value).join("\n")
-      : null;
+  const plain = plainEntry
+    ? plainEntry.line.map((l) => l.value).join("\n")
+    : null;
 
-    return { plain, synced };
-  } catch {
-    return null;
-  }
+  return { plain, synced };
 }
 
 // The URL apiPost actually contacted, not its origin: a subpath install would otherwise
@@ -522,33 +505,32 @@ function pingFailureMessage(baseUrl: string, status: number): string {
   return `Server returned ${status}. Check URL (tried: ${normalizeUrl(baseUrl)}/rest/ping.view)`;
 }
 
+async function pingForLogin(
+  baseUrl: string,
+  username: string,
+  credential: NavidromeCredential
+): Promise<NavidromeCredential> {
+  const res = await apiPost(baseUrl, "ping.view", buildAuthParams(username, credential));
+  if (!res.ok) {
+    throw new Error(pingFailureMessage(baseUrl, res.status));
+  }
+  const data = (await res.json()) as {
+    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
+  };
+  const response = data["subsonic-response"];
+  if (response.status !== "ok") {
+    throw new SubsonicError("ping.view", response.error?.code ?? null, response.error?.message ?? "Authentication failed");
+  }
+  return credential;
+}
+
 export async function authenticate(
   baseUrl: string,
   username: string,
   password: string
 ): Promise<NavidromeCredential> {
   const salt = generateSalt();
-  const token = md5(password + salt);
-  const params = new URLSearchParams({ u: username, t: token, s: salt, v: "1.16.1", c: "canon", f: "json" });
-
-  const res = await apiPost(baseUrl, "ping.view", params);
-  if (!res.ok) {
-    throw new Error(pingFailureMessage(baseUrl, res.status));
-  }
-
-  const data = (await res.json()) as {
-    "subsonic-response": {
-      status: string;
-      error?: { code: number; message: string };
-    };
-  };
-
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Authentication failed");
-  }
-
-  return { type: "md5", token, salt };
+  return pingForLogin(baseUrl, username, { type: "md5", token: md5(password + salt), salt });
 }
 
 export interface SavedPlayQueue {
@@ -596,6 +578,7 @@ export async function getPlayQueue(
       };
     };
     const response = data["subsonic-response"];
+    noteEnvelope(baseUrl, response);
     if (response.status !== "ok" || !response.playQueue) return null;
     const queue = response.playQueue;
     const trackIds = (queue.entry ?? []).map((e) => e.id);
@@ -615,17 +598,5 @@ export async function authenticateWithApiKey(
   username: string,
   apiKey: string
 ): Promise<NavidromeCredential> {
-  const params = new URLSearchParams({ u: username, apiKey, v: "1.16.1", c: "canon", f: "json" });
-  const res = await apiPost(baseUrl, "ping.view", params);
-  if (!res.ok) {
-    throw new Error(pingFailureMessage(baseUrl, res.status));
-  }
-  const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { code: number; message: string } };
-  };
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new Error(response.error?.message ?? "Authentication failed");
-  }
-  return { type: "apikey", apiKey };
+  return pingForLogin(baseUrl, username, { type: "apikey", apiKey });
 }

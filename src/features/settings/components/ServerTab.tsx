@@ -2,12 +2,15 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QK } from "../../../lib/queryKeys";
 import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
+import { loginFailureMessage } from "../../setup/loginFailureMessage";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { keychain } from "../../../lib/keychain";
 import { getDb } from "../../../db";
 import { type SyncOptions } from "../../sync/sync";
 import { clearSyncWatermark } from "../../sync/syncWatermark";
 import { purgeServerData } from "../../sync/syncPrune";
+import { clearCredentialRejection } from "../../../lib/credentialRejections";
+import { useCredentialRejected } from "../../../hooks/useCredentialRejected";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
 
@@ -25,6 +28,7 @@ interface Props {
 
 export function ServerTab({ server, serverWithCredential, onRemoveServer, searchQuery, syncStatus, runSync }: Props) {
   const hasCredential = !!serverWithCredential;
+  const isCredentialRejected = useCredentialRejected(server?.url);
   const queryClient = useQueryClient();
 
   const [serverEditing, setServerEditing] = useState(false);
@@ -101,7 +105,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       setServerTestedCredential(cred);
     } catch (err) {
       setServerTestState("error");
-      setServerTestError(err instanceof Error ? err.message : String(err));
+      setServerTestError(loginFailureMessage(err, editAuthMethod));
     }
   }
 
@@ -157,6 +161,8 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
         id,
         cleanAltUrl ?? undefined
       );
+      if (server) clearCredentialRejection(server.url);
+      clearCredentialRejection(cleanUrl);
       await queryClient.invalidateQueries({ queryKey: QK.servers() });
       await queryClient.invalidateQueries({ queryKey: QK.serverCredential(id) });
       setServerEditing(false);
@@ -207,7 +213,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     <section className="settings-section">
       <h3 className="settings-section-title">Server</h3>
       {!serverEditing ? (
-        server && hasCredential ? (
+        server && hasCredential && !isCredentialRejected ? (
           <div className="settings-server-card">
             <div className="settings-server-info">
               <span className="settings-server-name">{server.display_name}</span>
@@ -220,7 +226,11 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
             <div className="settings-server-info">
               <span className="settings-server-name">{server.display_name}</span>
               <span className="settings-server-meta">{server.url} · {server.username}{server.alt_url ? ` · alt: ${server.alt_url}` : ""}</span>
-              <p className="settings-error">Stored credential is missing or unreadable. Re-enter your password or API key to reconnect.</p>
+              <p className="settings-error">
+                {isCredentialRejected
+                  ? "Navidrome refused the saved password or API key, so nothing can sync or play. Enter the current one to reconnect."
+                  : "Stored credential is missing or unreadable. Re-enter your password or API key to reconnect."}
+              </p>
             </div>
             <button className="settings-btn primary" onClick={beginEditServer}>Reconnect</button>
           </div>

@@ -1,12 +1,8 @@
 use super::LibraryWriteStore;
 use rusqlite::Connection;
-/// Tables whose rows are keyed to a track id and are carried when the server rewrites one.
-///
-/// Mirrors `remappedTrackIdTables()` in src/db/trackIdTables.ts, which is the source of truth;
-/// src/db/trackIdTables.test.ts sweeps this list against it so the two cannot drift. `tracks`
-/// itself is rewritten last, below, and `tracks_fts` is deliberately absent: the sync rebuilds it
-/// from `tracks` for every album it touched, and deletes the row left under the old id while it
-/// is there.
+/// Tables keyed to a track id, carried when the server rewrites one. Mirrors (and is swept
+/// against) `remappedTrackIdTables()` in src/db/trackIdTables.ts; `tracks` itself is rewritten
+/// last, below, and `tracks_fts` is deliberately absent, rebuilt by the sync instead.
 const REMAPPED_TRACK_ID_TABLES: &[(&str, &str)] = &[
     ("track_tags", "track_id"),
     ("loved_tracks", "track_id"),
@@ -35,18 +31,9 @@ pub fn remap_track_ids(
     state.with_conn(&app, |conn| remap_track_ids_in(conn, &remaps))
 }
 
-/// Carry every row keyed to `old_id` onto `new_id`, then rewrite the track row itself.
-///
-/// One transaction because the intermediate states are not startable: a process dying between
-/// two tables leaves the lyrics under the new id and the loved flag under the old one, and the
-/// next sync prunes whichever half still carries the dead id. Returns how many track rows moved.
-///
-/// A destination id that somehow already holds a row is a collision this cannot resolve - keeping
-/// both is impossible, and dropping the live one to make room is worse than leaving the stale row
-/// for the prune to clear. That refusal is decided per track, before any table is touched:
-/// `UPDATE OR IGNORE` declines only where a uniqueness constraint exists, and scrobble_queue and
-/// playlist_resume have none on the track id, so leaving it to the statements would move the
-/// user's listening history onto a track that kept its own id.
+/// Carry every row keyed to `old_id` onto `new_id` in one transaction, then rewrite the track
+/// row. A destination id that already exists is refused per track up front, since tables
+/// without a unique track key would otherwise move under `UPDATE OR IGNORE` anyway.
 fn remap_track_ids_in(conn: &mut Connection, remaps: &[TrackIdRemap]) -> Result<u32, String> {
     if remaps.is_empty() {
         return Ok(0);

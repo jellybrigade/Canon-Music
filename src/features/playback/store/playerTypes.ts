@@ -18,10 +18,7 @@ export interface CurrentTrack {
   } | null;
 }
 
-/**
- * A playback failure the UI can offer a specific action for. Carried on the error itself
- * rather than beside it, so a writer that names a message cannot leave a stale cause behind.
- */
+/** Carried on the error itself, not beside it, so a writer naming a message can't leave a stale cause behind. */
 export type PlaybackErrorCause = "stale-track-id";
 
 export interface PlaybackError {

@@ -6,11 +6,8 @@ import { useLoved } from "./useLoved";
 import { isTextEntryTarget } from "../lib/keyboard";
 
 /**
- * `suspended` stands the transport keys down while an overlay that owns the keyboard is
- * painted over the app. `isTextEntryTarget` is not enough on its own: the command palette
- * navigates with the arrow keys, and clicking blank space inside its results blurs its input
- * to `<body>`, after which arrowing the list also moved the volume. Being scoped to an open
- * overlay is not the same as owning the key.
+ * `suspended` stands the transport keys down while an overlay owns the keyboard.
+ * `isTextEntryTarget` alone isn't enough: palette blank-space click blurs input to `<body>`, so arrowing would also move volume.
  */
 export function useGlobalShortcuts(
   serverWithCred: ServerWithCredential | null | undefined,

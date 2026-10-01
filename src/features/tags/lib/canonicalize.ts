@@ -175,9 +175,8 @@ const FUZZY_MIN_KEY_LENGTH = 5;
 const FUZZY_MAX_DISTANCE = 2;
 
 /**
- * Edits allowed scale with the shorter of the two keys, so a tag cannot reach a
- * genre by losing a whole meaningful prefix ("jrock" -> "rock") or by swapping
- * the two characters that tell two real genres apart ("art rock"/"alt rock").
+ * Edits allowed scale with the shorter key, so a tag can't reach a genre by losing
+ * a meaningful prefix ("jrock" -> "rock") or swapping the chars that distinguish two genres.
  */
 function allowedFuzzyDistance(key: string, candidateKey: string): number {
   return Math.min(FUZZY_MAX_DISTANCE, Math.floor(Math.min(key.length, candidateKey.length) / 5));
@@ -248,7 +247,6 @@ export async function findCanonical(
   const tree = await getCanonTree();
   const key = canonicalKey(applyAliases(rawValue));
 
-  // Check saved mapping first
   if (existingMappings) {
     const mappedId = existingMappings.get(`${rawValue}:${kind}`);
     if (mappedId) {
@@ -260,7 +258,6 @@ export async function findCanonical(
   const kindKeyMap = tree.byKindAndKey.get(kind);
   const kindNodes = tree.nodesByKind.get(kind) ?? [];
 
-  // Exact canonical_key match
   const exact = kindKeyMap?.get(key);
   if (exact) return { node: exact, matchType: "exact" };
 

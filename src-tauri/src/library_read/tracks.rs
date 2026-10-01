@@ -64,6 +64,7 @@ fn query_all_tracks(conn: &Connection) -> Result<Vec<AllTrackRowDto>, String> {
                 t.replay_gain_album_gain, t.replay_gain_album_peak
          FROM tracks t
          LEFT JOIN albums a ON a.id = t.album_id
+         WHERE t.album_id IS NOT NULL
          ORDER BY t.artist COLLATE NOCASE, a.name COLLATE NOCASE, t.disc_number, t.track_number";
     let mut stmt = conn.prepare(sql).map_err(|e| e.to_string())?;
     let rows = stmt
@@ -197,15 +198,14 @@ mod tests {
     }
 
     #[test]
-    fn a_track_with_no_album_id_fails_the_whole_all_tracks_call() {
-        // tracks.album_id is nullable in the schema but AllTrackRowDto.album_id is
-        // not Option, so one orphan row errors the entire library list rather than
-        // dropping itself.
+    fn a_track_with_no_album_id_is_left_out_instead_of_failing_the_list() {
         let conn = fixture_conn();
         insert_sentinel_track(&conn, "s1:ok", Some("s1:al"));
         insert_sentinel_track(&conn, "s1:orphan", None);
 
-        assert!(query_all_tracks(&conn).is_err());
+        let rows = query_all_tracks(&conn).expect("query");
+        let ids: Vec<&str> = rows.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, ["s1:ok"]);
     }
 
     #[test]

@@ -6,6 +6,7 @@ import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylis
 import { stripServerPrefix } from "../../lib/ids";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import type { PlaylistTrackRow } from "../../types/library";
+import { REPLAY_GAIN_COLUMNS } from "../../lib/replayGainRow";
 export type { PlaylistTrackRow } from "../../types/library";
 
 const NO_ROWS: PlaylistTrackRow[] = [];
@@ -34,13 +35,11 @@ export function usePlaylistTracks(playlistId: string | null) {
     (async () => {
       try {
         const db = await getDb();
-        // LEFT JOIN on albums, not an inner one: `album_name` and `album_id` are already
-        // nullable on PlaylistTrackRow, and an inner join dropped any track whose album
-        // row is missing (pruned by a sync, or a single not-yet-mirrored album) out of the
-        // list entirely, so the playlist silently rendered fewer tracks than it holds.
+        // LEFT JOIN, not inner: an inner join dropped tracks whose album row is missing
+        // (pruned or not yet mirrored), so the playlist rendered fewer tracks than it holds.
         const rows = await db.select<PlaylistTrackRow[]>(
           `SELECT t.id, t.title, t.artist, t.duration, t.genre, t.year, t.track_number,
-                  t.bit_rate, t.suffix,
+                  t.bit_rate, t.suffix, ${REPLAY_GAIN_COLUMNS},
                   pt.position, a.artwork_url, a.name AS album_name, a.id AS album_id
            FROM playlist_tracks pt
            JOIN tracks t ON pt.track_id = t.id
@@ -78,11 +77,8 @@ export function usePlaylistTracks(playlistId: string | null) {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
     await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position, server.alt_url ?? undefined);
-    // The delete and the position compaction after it run as one transaction in Rust, not
-    // here: tauri-plugin-sql has no connection affinity, so a "BEGIN" issued from TS is only
-    // a real transaction while nothing else queries, which a user-triggered edit overlapping
-    // the 5-minute sync cannot promise. The compaction transits through negative positions,
-    // and a half-applied one is a state nothing repairs (see known-issues.md).
+    // Delete + position compaction run as one Rust transaction: tauri-plugin-sql has no
+    // connection affinity, so a TS "BEGIN" isn't safe against a sync racing this edit.
     await invoke("playlist_remove_track", { playlistId: playlist.id, position });
     usePlaylistSessionStore.getState().bumpPlaylistTracks();
     usePlaylistSessionStore.getState().bumpPlaylists();

@@ -137,13 +137,8 @@ interface CoverRow {
   data_url: string;
 }
 
-// Browsers don't share a decoded-image cache across data: URIs the way they do for
-// blob:/http: URLs, so every <img> that points at the same data: URI (e.g. the same
-// album card re-mounting via the AlbumGrid virtualizer on each route switch) pays a
-// full image decode again. Converting once to a blob: URL and reusing that same URL
-// string lets the browser's normal image cache skip the redundant decode on remount.
-// Bounded so a long-running session (repeated re-syncs replacing data_url content)
-// can't accumulate blob URLs forever; oldest entries are revoked on eviction.
+// Browsers don't share decoded-image cache across data: URIs like they do blob: URLs,
+// so convert once and reuse; bounded and revoked on eviction to avoid unbounded growth.
 const OBJECT_URL_CACHE_LIMIT = 2000;
 const objectUrlCache = new Map<string, string>();
 
@@ -173,29 +168,9 @@ function dataUrlToObjectUrl(dataUrl: string): string {
   return url;
 }
 
-// --- On-demand cover data_url loading ---------------------------------------------------
-// APPROACH (chosen 2026-07-17): eager keyset + on-demand per-id base64 fetch.
-// useAlbumCoverMap used to eagerly run `SELECT album_id, data_url FROM album_covers` over
-// the WHOLE cache (staleTime/gcTime Infinity), pulling multi-MB of base64 resident into JS
-// at startup with a cost that scaled with library size. Now only the keyset (album_id) is
-// loaded eagerly (tiny); each row's data_url is pulled on demand the first time a caller
-// actually .get()s that id, and cached so each id is fetched at most once. Resident base64
-// now scales with the set of covers actually VIEWED in a session, not the whole library.
-//
-// This is a SQLite-flavored port of psysonic's warm-disk-peek pattern
-// (psysonic src/cover/*): a synchronous cache read for consumers
-// (getDiskSrcForGrid), a dedup'd background fetch for misses (coverArtInFlight), a
-// subscriber notification to re-render when a fetch lands (subscribeDiskSrcCache), and a
-// bounded in-memory cache. Psysonic also warms a bounded first-N batch up front; we skip
-// that eager warm because callers already fall back to a server URL for un-warmed ids
-// (`coverMap.get(id) ?? getCoverArtUrl(...)`), so misses show real art immediately rather
-// than a blank, and the on-demand pull swaps in the cached bytes on the next render.
-//
-// CRITICAL: .get() stays SYNCHRONOUS. Every caller invokes it inline in render and uses the
-// result immediately (with a `?? fallback`). It returns the object-URL synchronously when
-// warmed; otherwise it kicks off a one-time background load, returns undefined this render,
-// and a version bump re-renders the consumer once the load lands.
-
+// Only the keyset loads eagerly; each data_url is fetched on first .get() (psysonic's
+// warm-disk-peek pattern). .get() must stay synchronous: callers use it inline in render
+// with a server-URL fallback, and a version bump re-renders when the load lands.
 const DATA_URL_CACHE_LIMIT = 2000;
 // albumId -> data_url, populated on demand, bounded LRU (recency = Map insertion order).
 const dataUrlByAlbum = new Map<string, string>();
@@ -229,10 +204,8 @@ function rememberAlbumDataUrl(albumId: string, dataUrl: string): void {
   }
 }
 
-// Misses arrive one .get() per card during a single render pass of the grid, so loading
-// them individually meant one SQLite round trip per visible card and one store bump (=
-// one re-render of every consumer) per cover that landed. Ids requested within the same
-// render are collected here and drained on a microtask: one `IN (...)` query, one bump.
+// One .get() per visible card per render meant one SQLite round trip and one store bump each;
+// ids requested within the same render are batched here and drained on a microtask instead.
 const pendingAlbumIds = new Set<string>();
 let drainScheduled = false;
 

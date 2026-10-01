@@ -38,7 +38,7 @@ print_status() {
 branch_check() {
   local branch; branch=$(git rev-parse --abbrev-ref HEAD)
   if [ "$branch" = "main" ]; then
-    echo "On main. All work belongs on development (see docs/git-standards.md)." >&2
+    echo "On main. All work belongs on development (see AGENTS.md)." >&2
     return 1
   fi
   echo "On $branch."
@@ -56,7 +56,7 @@ staged_check() {
   echo "No forbidden staged paths."
 }
 
-# Repo bans em/en dashes anywhere under src/ (see coding-standards.md).
+# Repo bans em/en dashes anywhere under src/ (see AGENTS.md).
 dash_check() {
   local hits
   hits=$(grep -rn $'—\|–' src --include='*.ts' --include='*.tsx' --include='*.css' || true)
@@ -68,18 +68,55 @@ dash_check() {
   echo "No em/en dashes in src/."
 }
 
+# Comments cap at 3 content lines per run, and total comments cap at 40% of code lines
+# (min 10) per file (see AGENTS.md); src/ has its own vitest sweep (commentLengthGuard.test.ts),
+# this covers src-tauri/ which that sweep can't reach.
+rust_comment_check() {
+  local hits
+  hits=$(find src-tauri/src -name '*.rs' -not -name '*_test.rs' -print0 | xargs -0 awk '
+    function strip(l) { sub(/^\/\*\*?/, "", l); sub(/\*\/$/, "", l); sub(/^\/\/\/?!?/, "", l); sub(/^\*/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l); return l }
+    function reset(   ) { run_len = 0; comment_lines = 0; code_lines = 0 }
+    FNR == 1 { reset() }
+    /^[ \t]*$/ { next }
+    {
+      line = $0; sub(/^[ \t]+/, "", line)
+      is_comment = (line ~ /^(\/\/|\/\*|\*)/)
+      if (is_comment) {
+        if (run_len == 0) run_start = FNR
+        if (strip(line) != "") { run_len++; comment_lines++ }
+      } else {
+        if (run_len > 3) print FILENAME ":" run_start " run"
+        run_len = 0
+        code_lines++
+      }
+    }
+    ENDFILE {
+      if (run_len > 3) print FILENAME ":" run_start " run"
+      cap = code_lines * 0.4; if (cap < 10) cap = 10
+      if (comment_lines > cap) print FILENAME ": " comment_lines " comments, cap " int(cap) + 1 " density"
+    }
+  ')
+  if [ -n "$hits" ]; then
+    echo "Comment cap exceeded in src-tauri/ (see AGENTS.md):" >&2
+    echo "$hits" >&2
+    return 1
+  fi
+  echo "No comment cap violations in src-tauri/."
+}
+
 echo "Running local checks..."
 
-run_task branch     branch_check
-run_task staged     staged_check
-run_task dashes     dash_check
-run_task typecheck  pnpm tsc --noEmit
-run_task vitest     pnpm test:run
-run_task cargo-test bash -c 'cd src-tauri && cargo test'
-run_task clippy     bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
-run_task rustfmt    bash -c 'cd src-tauri && cargo fmt --check'
+run_task branch      branch_check
+run_task staged      staged_check
+run_task dashes      dash_check
+run_task rustcomment rust_comment_check
+run_task typecheck   pnpm tsc --noEmit
+run_task vitest      pnpm test:run
+run_task cargo-test  bash -c 'cd src-tauri && cargo test'
+run_task clippy      bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
+run_task rustfmt     bash -c 'cd src-tauri && cargo fmt --check'
 
-TASKS=(branch staged dashes typecheck vitest cargo-test clippy rustfmt)
+TASKS=(branch staged dashes rustcomment typecheck vitest cargo-test clippy rustfmt)
 for t in "${TASKS[@]}"; do wait_task "$t"; done
 
 echo

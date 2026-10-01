@@ -14,14 +14,8 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
   );
 }
 
-// Sync loved state via getStarred2, independent of incremental skip logic.
-// Compared against what is already stored so an unchanged starred list writes
-// nothing and leaves the loved session store untouched (~8 mounted consumers).
-//
-// Non-fatal: album and track rows are already committed at this point, so a network
-// failure here skips the loved pass and leaves the stored state alone rather than
-// throwing away a completed library sync. Skipping is also the only safe response,
-// since the pass below treats the fetched list as authoritative and DELETEs first.
+// Loved state via getStarred2; unchanged lists write nothing. Non-fatal: a fetch failure
+// skips the pass rather than letting the delete-first write run on no data.
 export async function syncLoved({ db, server, credential, altUrl, skippedStages }: SyncStageContext): Promise<boolean> {
   let lovedChanged = false;
   const starred = await fetchStarred2(server.url, server.username, credential, altUrl).catch(
@@ -36,14 +30,8 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
     const starredAlbumIds = (starred.album ?? []).map((a) => `${server.id}:${a.id}`);
     const starredTrackIds = (starred.song ?? []).map((s) => `${server.id}:${s.id}`);
 
-    // Scoped by id prefix, not by a join to albums/tracks. The write below is
-    // unscoped (it inserts every starred id the server reported), so a starred item
-    // with no local row - an album whose track fetch failed, a track pruned server
-    // side but still starred - would be written and then be invisible to this read.
-    // The counts could never match again, so lovedChanged stayed true on every sync,
-    // rewriting both tables and bumping the session store (~8 mounted consumers)
-    // every auto-sync tick forever, while the join-scoped DELETE left the orphan in
-    // place. Reading and deleting the same set the write produces closes both.
+    // Scoped by id prefix, matching the unscoped write below; a join-scoped read missed
+    // starred ids with no local row and rewrote loved state every sync.
     const idPrefix = `${escapeLike(server.id)}:%`;
     const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
       db.select<{ album_id: string }[]>(

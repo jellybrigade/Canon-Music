@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CheckCircle, AlertCircle } from "lucide-react";
 import { getDb } from "../../db";
 import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
+import { loginFailureMessage } from "./loginFailureMessage";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { keychain } from "../../lib/keychain";
 import type { Server } from "../../types/server";
@@ -133,7 +134,7 @@ export function Wizard({ onSuccess }: Props) {
       setTestedCredential(credential);
     } catch (err) {
       setTestState("error");
-      setTestError(err instanceof Error ? err.message : String(err));
+      setTestError(loginFailureMessage(err, authMethod));
     }
   }
 

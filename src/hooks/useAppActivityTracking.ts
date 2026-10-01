@@ -1,10 +1,8 @@
 import { useEffect } from "react";
 
 /**
- * Sets `data-app-blurred` on <html> while the window is unfocused, so CSS can
- * pause heavy infinite animations (spinners, pulses). Reduces WebKitGTK GPU
- * compositor load during focus loss/regain - the exact trigger condition for
- * the freeze/thaw crash documented in known-issues.md. Ported from psysonic.
+ * Sets `data-app-blurred` on <html> while unfocused so CSS pauses heavy animations, reducing
+ * WebKitGTK compositor load during focus loss/regain (the freeze/thaw crash trigger, see known-issues.md).
  */
 export function useAppActivityTracking() {
   useEffect(() => {

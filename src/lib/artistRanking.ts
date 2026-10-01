@@ -4,10 +4,7 @@ interface PlayedTrack {
   played_at: string | null;
 }
 
-/** The artist's tracks this server has actually played, most played first.
- *  Play counts are small integers, so ties are the normal case rather than an
- *  edge: the last-played stamp and then the title settle them, or two renders
- *  of the same data disagree. */
+/** Most played first. Play counts are small integers, so ties are common; last-played then title settle them. */
 export function mostPlayedHere<T extends PlayedTrack>(tracks: T[], limit: number): T[] {
   return tracks
     .filter((t) => (t.play_count ?? 0) > 0)

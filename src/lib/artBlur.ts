@@ -1,9 +1,5 @@
-// Precomputed blurred backdrop for NowPlayingView.
-// CSS `filter: blur()` on a viewport-size layer forces the compositor to
-// rasterize the blur on every repaint - expensive on WebKitGTK. Instead blur
-// once here at a tiny canvas size (cheap: pixel count is what blur cost
-// scales with) and let CSS `background-size: cover` upscale the result,
-// which is a plain scale/composite - the part GPUs are actually fast at.
+// CSS `filter: blur()` on a viewport-size layer forces the compositor to rasterize on every
+// repaint (expensive on WebKitGTK); blur once here at a tiny canvas size and let CSS scale it up.
 
 import * as StackBlur from "stackblur-canvas";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
@@ -18,12 +14,8 @@ const BLUR_RADIUS = 24;
 const MAX_CACHE_ENTRIES = 200;
 const blurCache = new Map<string, string>();
 
-// Ceiling on HSL lightness, not a flat brightness multiplier. A flat
-// multiplier darkens shadows and highlights by the same ratio, so a
-// saturated bright red just becomes a dimmer bright red. Clamping lightness
-// instead only pulls down pixels above the ceiling, so a bright red becomes
-// an actual dark red (same hue/saturation, lower lightness) while already-dark
-// pixels are untouched.
+// Ceiling on HSL lightness, not a flat brightness multiplier: a multiplier darkens shadows and
+// highlights by the same ratio, so a bright red just gets dimmer instead of turning dark red.
 const MAX_LIGHTNESS = 0.15;
 
 function clampLightness(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D): void {

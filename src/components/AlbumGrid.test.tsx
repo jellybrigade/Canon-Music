@@ -408,9 +408,7 @@ describe("AlbumGrid scrubber sections", () => {
     expect(scrubberLabels()).toEqual(["D", "#"]);
   });
 
-  it("seeds a section only from the first album of a row", () => {
-    // B lands mid-row, so it gets no button. That is the current behavior of an index
-    // built from row.items[0], not an accident of the fixture.
+  it("gives a letter starting mid-row its own button", () => {
     const albums = [
       album({ id: "srv-a:a0", name: "A one" }),
       album({ id: "srv-a:a1", name: "A two" }),
@@ -419,7 +417,7 @@ describe("AlbumGrid scrubber sections", () => {
       album({ id: "srv-a:c0", name: "C one" }),
     ];
     renderGrid({ albums, sort: "alphabetical" });
-    expect(scrubberLabels()).toEqual(["A", "C"]);
+    expect(scrubberLabels()).toEqual(["A", "B", "C"]);
   });
 
   it("buckets year sections by decade, keeping the first year of each", () => {
@@ -531,6 +529,17 @@ describe("AlbumGrid scrubber position", () => {
 
   it("marks the first section before any scroll", () => {
     renderGrid({ albums: lettered(ALPHABET, perLetter), sort: "alphabetical" });
+    expect(activeLabels()).toEqual(["A"]);
+  });
+
+  it("marks the letter of the top row's first album when a letter starts mid-row", () => {
+    const albums = [
+      album({ id: "srv-a:a0", name: "A one" }),
+      album({ id: "srv-a:b0", name: "B one" }),
+      ...lettered(["C"], perLetter),
+    ];
+    renderGrid({ albums, sort: "alphabetical" });
+    expect(scrubberLabels()).toEqual(["A", "B", "C"]);
     expect(activeLabels()).toEqual(["A"]);
   });
 

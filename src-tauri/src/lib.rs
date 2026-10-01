@@ -35,10 +35,8 @@ fn take_crash_report() -> Option<String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Background threads (audio watcher, download, fade, cover server) panic silently
-    // by default — the thread just dies and whatever it was doing (a lock, a sink)
-    // is left in a bad state with no trace. Log every panic so failures are diagnosable
-    // instead of surfacing later as an unrelated-looking crash elsewhere.
+    // Background threads panic silently by default; log every panic so failures are
+    // diagnosable instead of surfacing later as an unrelated-looking crash elsewhere.
     std::panic::set_hook(Box::new(|info| {
         eprintln!("[panic] {info}");
         // Single write on a rare event, no perf cost on the normal path. Lets the
@@ -57,26 +55,15 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
 
-    // Enlarge the audio output buffer to prevent ALSA underruns (choppy/robotic audio,
-    // "underrun occurred") under CPU/compositor load. rodio 0.19's OutputStream::try_default
-    // uses cpal's default ALSA buffer, which is small enough that the realtime callback can
-    // miss its deadline when the WebProcess or a decode/download thread saturates the CPU.
-    // Most modern Linux desktops route ALSA through PipeWire/PulseAudio, which honors
-    // PULSE_LATENCY_MSEC to size the client buffer; setting it larger gives the callback more
-    // headroom. No-op on a pure-ALSA (no Pulse/PipeWire) setup, and only set if the user
-    // hasn't already chosen a value, so it never overrides an explicit override.
+    // rodio 0.19's default ALSA buffer underruns under load; widen it via PipeWire/Pulse.
+    // No-op on pure ALSA. Only set if unset, so it never overrides a user choice.
     #[cfg(target_os = "linux")]
     if std::env::var_os("PULSE_LATENCY_MSEC").is_none() {
         std::env::set_var("PULSE_LATENCY_MSEC", "60");
     }
 
-    // WebKitGTK instability under GPU compositing is driver-specific, not universal.
-    // The old blanket WEBKIT_DISABLE_COMPOSITING_MODE=1 forced CPU software rendering
-    // on every Linux machine, making all scrolling/painting sluggish. Instead apply
-    // the targeted NVIDIA quirk (dmabuf renderer / explicit-sync workarounds) that
-    // psysonic uses; it is a no-op on Intel/AMD, where compositing is stable. The
-    // web-process-terminated -> reload() handler below remains as the safety net.
-    // Opt out with CANON_WEBKIT_GPU_ACCEL=1 to run fully unpatched.
+    // Targeted NVIDIA quirk instead of blanket CPU-render fallback; no-op on Intel/AMD.
+    // Opt out with CANON_WEBKIT_GPU_ACCEL=1.
     #[cfg(target_os = "linux")]
     if std::env::var("CANON_WEBKIT_GPU_ACCEL").is_err() {
         webkit2gtk_nvidia_quirk::apply_workaround_with_options(
@@ -105,11 +92,8 @@ pub fn run() {
         .expect("Failed to spawn audio thread");
     let handle = rx.recv().unwrap_or(None);
 
-    // Cache stores (bytes, content_type) so the forwarded Content-Type matches the
-    // upstream image format. Served via a registered `cover://` URI scheme handler
-    // (see `handle_cover_request` below) instead of a loopback TCP server - no
-    // socket, so the thread-storm/SIGKILL bug class in `known-issues.md` is
-    // structurally impossible here.
+    // Served via a registered `cover://` scheme handler instead of a loopback TCP server,
+    // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
     let cover_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
@@ -236,12 +220,8 @@ pub fn run() {
             // Hidden by default; TS calls tray_set_visible when setting is on
             _tray.set_visible(false)?;
 
-            // WebKitGTK runs the page in a separate WebProcess by design so a crash
-            // there (e.g. the GTK freeze/thaw compositor race) doesn't have to take
-            // the whole app down. wry doesn't wire up this signal itself, so without
-            // this hook a WebProcess death currently kills the entire Tauri process.
-            // Reload instead of letting it die - doesn't fix the underlying WebKitGTK
-            // bug, just stops it from closing the app on the user.
+            // wry doesn't wire this up itself; without it a WebProcess crash (e.g. the
+            // GTK compositor race) kills the whole app instead of just reloading.
             #[cfg(target_os = "linux")]
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.with_webview(|webview| {
@@ -253,19 +233,9 @@ pub fn run() {
                 });
             }
 
-            // The window is created hidden (`"visible": false` in tauri.conf.json) and
-            // revealed from the on_page_load hook below, once the webview has content to
-            // paint. Mapping an unpainted WebKitGTK webview is a startup-crash and
-            // white-flash trigger; the reference project (psysonic) never maps one.
-            //
-            // This is NOT the reverted `cde9841` reveal, which showed the window, hid it,
-            // then showed it again after first paint - that unmap/remap cycle is itself
-            // the freeze/thaw race. Here the window is mapped exactly once, and never
-            // unmapped.
-            //
-            // Safety net: if the frontend never loads (JS bundle error, dev server down),
-            // on_page_load never fires and the window would stay invisible forever with
-            // no way to reach it. Force it visible after 5s regardless.
+            // Created hidden and shown once from on_page_load, never unmapped: mapping an
+            // unpainted WebKitGTK webview, or an unmap/remap cycle, triggers the focus-loss
+            // crash. Forced visible after 5s in case the frontend never loads.
             if let Some(w) = app.get_webview_window("main") {
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_secs(5));
@@ -276,37 +246,11 @@ pub fn run() {
                 });
             }
 
-            // TEMP DISABLED for crash repro test (2026-07-05): suspected trigger for
-            // the WebKitGTK focus-loss freeze/thaw crash — smooth-scrolling keeps an
-            // active WebKit compositor/animation timer running, which may race the
-            // freeze/thaw counter when the window unmaps on focus loss. No other
-            // reference Tauri app touches webkit2gtk settings this early (during
-            // setup()). If disabling this stops the crash, re-enable only via a
-            // safer path (e.g. deferred until after first Focused event, or dropped
-            // entirely in favor of a different kinetic-scroll approach).
-            //
-            // WebKitGTK only animates kinetic scroll for touch/touchpad input by
-            // default; mouse-wheel scroll is stepped and feels choppy. Opt into
-            // the engine's smooth-scrolling mode for wheel input too.
-            // #[cfg(target_os = "linux")]
-            // if let Some(w) = app.get_webview_window("main") {
-            //     let _ = w.with_webview(|webview| {
-            //         use webkit2gtk::WebViewExt;
-            //         if let Some(settings) = webview.inner().settings() {
-            //             use webkit2gtk::SettingsExt;
-            //             settings.set_enable_smooth_scrolling(true);
-            //         }
-            //     });
-            // }
-
             Ok(())
         })
         .on_page_load(|window, _payload| {
-            // First reveal of the window (created hidden - see the comment in setup()).
-            // Fires on every navigation/reload, not just the first load, so this must be
-            // idempotent: show() on an already-visible window is a no-op, and crucially
-            // there is no hide() anywhere on this path, so a reload (e.g. the
-            // web-process-terminated recovery above) can't unmap and remap the window.
+            // Fires on every reload, not just the first (window is created hidden); show() on an
+            // already-visible window is a no-op, and nothing hides it, so a reload can't unmap it.
             let _ = window.show();
         })
         .on_window_event(|window, event| {

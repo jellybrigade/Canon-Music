@@ -121,7 +121,6 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
     if (manualId === "__ignored__") continue;
 
     if (manualId && manualId !== "__accepted__") {
-      // Manual mapping overrides auto tree-matching
       const node = tree.byId.get(manualId);
       if (!node) {
         unmapped.push({ id: null, name: entry.name, source: entry.source, confidence });
@@ -180,7 +179,6 @@ async function _doNormalizeAlbum(
   // whatever mutation writes tag_mappings (see src/features/tags/lib/manualMappings.ts).
   const manualMap = await getManualGenreMappings();
 
-  // Use confirmed identity strings for Last.fm lookup if available
   const lfmArtist = identity?.lastfmArtistName ?? artist;
   const lfmAlbum = identity?.lastfmAlbumName ?? album;
 
@@ -236,7 +234,7 @@ async function _doNormalizeAlbum(
   const TRACK_GENRE_ALBUM_CONSENSUS = 0.5;
   type ConsensusRow = { canonical_id: string; track_count: number };
   const totalTrackCount = albumTracks.length;
-  const consensusPromoted: string[] = []; // canonical_ids to inject
+  const consensusPromoted: string[] = [];
   if (totalTrackCount > 0) {
     const consensusRows = await db.select<ConsensusRow[]>(
       `SELECT tt.canonical_id, COUNT(DISTINCT tt.track_id) AS track_count
@@ -301,7 +299,6 @@ async function _doNormalizeAlbum(
       3,
       (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`
     );
-    // Apply any pre-existing tag_mappings to the newly inserted lastfm/musicbrainz rows
     await db.execute(
       `UPDATE track_tags
        SET canonical_id = (
@@ -374,8 +371,6 @@ async function _doNormalizeAlbum(
     computed_at: Math.floor(Date.now() / 1000),
   };
 
-  // --- Write album_genres (leaf + full DAG ancestors) and album_unresolved_genres ---
-
   // Build the resolved rows: direct leaves first
   type AlbumGenreRow = { canonical_id: string; relation: "direct" | "ancestor"; name: string };
   const genreRows: AlbumGenreRow[] = [];
@@ -431,8 +426,6 @@ async function _doNormalizeAlbum(
     3,
     (placeholders) => `INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES ${placeholders}`
   );
-
-  // --- End album_genres write ---
 
   await db.execute(
     "UPDATE albums SET normalized_tags_json = ?, computed_at = ? WHERE id = ?",

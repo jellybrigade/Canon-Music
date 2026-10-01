@@ -11,6 +11,13 @@ import { rankCandidates } from "../lib/fuzzyMatch";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
+import {
+  ARTIST_AUTO_SELECT_SETTING,
+  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
+  parseArtistAutoSelectScore,
+  pickConfidentArtist,
+} from "../lib/artistAutoSelect";
+import { useSetting } from "../../../hooks/useSetting";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -95,10 +102,8 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
     enabled: !!(artist.trim() || album.trim()),
   });
 
-  // Re-rank raw MB results by our fuzzy score (title + artist + year + known-artist
-  // bonus) so the best match sorts first, and show that score instead of MB's own
-  // relevance score, MB's score can tie same-titled releases by different
-  // artists/years at 100%, which is exactly the ambiguity this needs to break.
+  // MB's own relevance score can tie same-titled releases by different artists/years at 100%;
+  // our fuzzy score (title + artist + year + known-artist bonus) breaks that ambiguity.
   const rankedSearchResults = rawSearchResults
     ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
     : undefined;
@@ -399,7 +404,7 @@ interface ArtistIdentifyDialogProps {
 }
 
 export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDialogProps) {
-  const { data: savedIdentity } = useArtistIdentity(artistName);
+  const { data: savedIdentity, isPending: isSavedIdentityPending } = useArtistIdentity(artistName);
   const saveIdentity = useSaveArtistIdentity();
   const dismiss = useOverlayDismiss(onClose);
   const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
@@ -428,20 +433,32 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     enabled: !!artistName.trim(),
   });
 
-  // An MBID already confirmed for this artist via a previously matched album
-  // (album_identity) or a prior artist-identify confirmation. If it's among
-  // the search results, pre-select it, no need to make the user pick between
-  // candidates when we already know the answer.
-  const { data: confirmedArtistMbid } = useConfirmedArtistMbid(artistName);
+  // Pre-select an MBID already confirmed via a matched album or prior identify, else a
+  // match confident enough to clear the auto-select score; the user still saves it.
+  const { data: confirmedArtistMbid, isPending: isConfirmedArtistMbidPending } = useConfirmedArtistMbid(artistName);
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
+  const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
+    ARTIST_AUTO_SELECT_SETTING,
+    String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),
+  );
+  const minAutoSelectScore = parseArtistAutoSelectScore(minAutoSelectScoreRaw);
   useEffect(() => {
-    if (savedIdentity || selectedCandidate || !confirmedArtistMbid || !searchResults) return;
-    const match = searchResults.find((c) => c.id === confirmedArtistMbid);
+    if (hasAutoSelected || selectedCandidate || !searchResults) return;
+    if (isSavedIdentityPending || isConfirmedArtistMbidPending || !isMinAutoSelectScoreLoaded) return;
+    setHasAutoSelected(true);
+    if (savedIdentity?.confirmed_at != null) return;
+    const match = searchResults.find((c) => c.id === confirmedArtistMbid)
+      ?? pickConfidentArtist(searchResults, minAutoSelectScore);
     if (match) {
       setSelectedCandidate(match.id);
       setMbArtistId(match.id);
       setFetchEnabled(true);
     }
-  }, [savedIdentity, selectedCandidate, confirmedArtistMbid, searchResults]);
+  }, [
+    hasAutoSelected, savedIdentity, isSavedIdentityPending, selectedCandidate,
+    confirmedArtistMbid, isConfirmedArtistMbidPending, searchResults,
+    minAutoSelectScore, isMinAutoSelectScoreLoaded,
+  ]);
 
   const { data: lookupResult, isFetching } = useIdentifyArtist({
     artistName: lfmArtist.trim() || artistName,

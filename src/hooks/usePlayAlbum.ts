@@ -8,6 +8,7 @@ import { getCoverArtUrl, getStreamUrl } from "../clients/navidromeUrls";
 import { stripServerPrefix } from "../lib/ids";
 import { shuffleArray } from "../lib/shuffle";
 import { loadAlbumTracksForPlay } from "../lib/albumTracks";
+import { replayGainFromRow } from "../lib/replayGainRow";
 
 /** Always appends the album's tracks to the end of the queue (no setting override). */
 export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
@@ -24,7 +25,7 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
       getStreamUrl(server.url, server.username, credential, stripServerPrefix(track.id, server.id));
     for (const t of tracks) {
       addToQueue(
-        { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id },
+        { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) },
         streamUrlFor,
       );
     }
@@ -55,6 +56,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential) {
       artworkRef: album.artwork_url ?? null,
       album: album.name,
       albumId: album.id,
+      replayGain: replayGainFromRow(t),
     }));
 
     const streamUrlFor = (track: CurrentTrack): string =>

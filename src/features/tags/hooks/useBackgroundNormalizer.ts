@@ -6,18 +6,8 @@ import { fetchArtistInfo } from "../../../clients/lastfm";
 import { useSetting } from "../../../hooks/useSetting";
 import { useTagsStore } from "../store/tags";
 
-// Pacing note (rewritten 2026-07-28): there is deliberately no inter-item delay here.
-// This loop used to sleep 2000ms between items, which on a cold library meant ~66 minutes
-// of pure sleeping for 2000 albums. That delay was redundant: every network call this pass
-// makes goes through Last.fm, and `src/clients/lastfm.ts` already funnels all of them through a
-// single process-wide 250ms token bucket (<= 4 req/s). The rate limiter is the real throttle,
-// so the wall clock is now bounded by the API budget instead of by a sleep on top of it.
-//
-// Concurrency exists only to overlap the local work (canon-tree scoring, ~10 SQLite
-// round trips per album) with the rate limiter's waits; it does NOT raise the request rate,
-// because the shared bucket still spaces every Last.fm call 250ms apart no matter how many
-// workers are in flight. Kept low so background writes don't starve UI reads on the
-// tauri-plugin-sql pool.
+// No inter-item delay: Last.fm's shared token bucket is the throttle. Concurrency only
+// overlaps local work with its waits; kept low so writes don't starve UI reads.
 const POOL_CONCURRENCY = 3;
 const AUTO_RUN_THRESHOLD = 300;
 
@@ -171,10 +161,8 @@ export function useBackgroundNormalizer() {
       .catch((e) => console.warn("Background normalizer: stale check failed", e))
       .finally(() => { isRunning = false; });
 
-    // Deliberately NO abort-on-cleanup here. StrictMode mounts this hook twice in dev, so
-    // aborting the first pass on the intervening cleanup would leave the second mount
-    // blocked by `isRunning` (still latched until the aborted pass settles) and no pass
-    // would run at all. `doEnrich` takes an optional signal for callers that can supply one.
+    // Deliberately no abort-on-cleanup: StrictMode's double mount would otherwise leave the
+    // second mount blocked by `isRunning`, still latched until the aborted pass settles.
   }, [autoRefresh, stalenessDays]);
 }
 

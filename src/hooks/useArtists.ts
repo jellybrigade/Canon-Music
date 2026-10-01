@@ -5,13 +5,8 @@ import { getDb } from "../db";
 import type { ArtistRow } from "../types/library";
 export type { ArtistRow } from "../types/library";
 
-// Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
-// split"). Mirrors useAlbums.ts - reads via src-tauri/src/library_read/artists.rs's dedicated
-// read-only connection instead of tauri-plugin-sql's sqlx pool. Writes/migrations for
-// `artists` stay on tauri-plugin-sql.
-// `enabled` lets the app root skip this fetch on routes that never render an artist
-// list. When false the effect returns early without clearing `data` - the session-store
-// seed and last-loaded rows survive, so returning to the route paints instantly.
+// Rusqlite read path (psysonic pattern), mirroring useAlbums.ts; writes/migrations stay on tauri-plugin-sql.
+// `enabled` false skips the fetch without clearing `data`, so returning to the route paints instantly.
 export function useArtists(enabled: boolean = true) {
   const refreshTick = useArtistBrowseSessionStore((s) => s.refreshTick);
 

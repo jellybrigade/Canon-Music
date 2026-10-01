@@ -1,17 +1,11 @@
 use keyring::Entry;
 
-// Marks the two variants meaning "the OS secret store itself is unreachable" so the TS side can
-// retry them. Canon can autostart before gnome-keyring/kwallet is up, or while the collection is
-// still locked, and that failure clears on its own within seconds - unlike NoEntry/BadEncoding,
-// which are per-entry and stay broken until the user re-enters the password. The prefix is
-// stripped before display (see `useServerWithCredential`), so it never reaches the user.
+// Marks variants meaning the OS secret store itself is unreachable (can autostart before
+// gnome-keyring/kwallet is up) so TS retries them; stripped before display, never reaches the user.
 pub const SECRET_STORE_UNAVAILABLE: &str = "secret-store-unavailable: ";
 
-// keyring's Display already includes the platform error detail; this only adds
-// actionable guidance for the two variants that mean "the OS secret store itself
-// is unreachable" (as opposed to NoEntry/BadEncoding/etc., which are per-entry).
-// Surfaced verbatim in the UI (see App.tsx credError banner), so it's worth being
-// specific here rather than showing a bare platform error code to the user.
+// Adds actionable guidance only for the two "store unreachable" variants; surfaced verbatim
+// in the UI (App.tsx credError banner), so worth being specific here.
 pub(crate) fn friendly_keyring_error(e: keyring::Error) -> String {
     match e {
         keyring::Error::PlatformFailure(_) | keyring::Error::NoStorageAccess(_) => format!(
@@ -23,11 +17,8 @@ pub(crate) fn friendly_keyring_error(e: keyring::Error) -> String {
     }
 }
 
-// Deleting a secret that is already gone is the outcome the caller wanted. `ServerTab`
-// removes the keychain entry before the `servers` row so a secret can never outlive its
-// row, and it aborts the whole removal if that fails - so surfacing NoEntry as an error
-// made a server whose entry had been lost (keyring reset, rolled-back insert, a profile
-// copied between machines) impossible to remove for good.
+// A secret that's already gone is the outcome the caller wanted; surfacing NoEntry as an error
+// made a server whose keychain entry was already lost impossible to remove.
 pub(crate) fn ignore_missing_entry(result: Result<(), keyring::Error>) -> Result<(), String> {
     match result {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),

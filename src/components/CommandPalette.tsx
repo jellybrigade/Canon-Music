@@ -80,10 +80,8 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   const [deferred, setDeferred] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const focusedRef = useRef<HTMLButtonElement>(null);
-  // The focused row is held by identity, not by position. `items` is rebuilt whenever results
-  // arrive - later than the query that asked for them, and again on a server switch that never
-  // touches the typed query - so a stored index means the highlight silently lands on whatever
-  // row inherited that ordinal, and Enter opens it.
+  // Held by identity, not position: `items` rebuilds asynchronously, so a stored index would
+  // silently land the highlight (and Enter) on whatever row inherited that ordinal.
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
 
   const trimmedRaw = raw.trim();

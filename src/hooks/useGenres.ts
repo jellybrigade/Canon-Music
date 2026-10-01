@@ -9,10 +9,8 @@ export interface GenreRow {
   album_count: number;
 }
 
-// Rusqlite read path (psysonic pattern), mirroring useAlbums/useArtists/useAllTracks.
-// Both hooks below read via src-tauri/src/library_read/genres.rs instead of
-// tauri-plugin-sql's sqlx pool, and cache rows on the session store keyed by tick so
-// repeat mounts reuse one fetch.
+// Rusqlite read path (psysonic pattern), mirroring useAlbums/useArtists/useAllTracks;
+// caches rows on the session store keyed by tick so repeat mounts reuse one fetch.
 
 // Only shows direct (leaf) canon-tree genres, raw: ids excluded. `enabled` lets the
 // app root skip the fetch on routes that never render the filter sidebar; when false

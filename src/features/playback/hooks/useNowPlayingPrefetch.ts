@@ -11,18 +11,8 @@ import {
   SUGGESTED_STALE_TIME,
 } from "../lib/nowPlayingQueries";
 
-/**
- * Warms the React Query cache for NowPlayingView's About tab when the
- * current track changes, so the tab renders immediately on first open.
- * Call once near the App root.
- *
- * The artist name is run through `primaryArtistOf` because that is what the tab keys on.
- * Keying this on the raw name meant every "X feat. Y" track warmed an entry the tab never
- * read, so the collaboration tracks paid for the prefetch and got none of the benefit.
- *
- * `serverId` is the plain row id, not the credential-bearing one the tab holds: these reads
- * never leave SQLite, so waiting on the keychain would only delay the warm.
- */
+/** Keyed exactly as NowPlayingView's About tab reads (`primaryArtistOf`, plain server id:
+ * the reads are SQLite-only). Call once near the root. */
 export function useNowPlayingPrefetch(serverId: string | null) {
   const queryClient = useQueryClient();
   const rawArtist = usePlayerStore((s) => s.currentTrack?.artist ?? null);

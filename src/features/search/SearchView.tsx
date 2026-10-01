@@ -52,11 +52,8 @@ export function SearchView({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastWrittenRef = useRef(query);
 
-  // The box holds the un-debounced keystrokes, so it cannot be derived from `?q` - but it must
-  // not outlive the param either: aiming at /search with a different query, or none, leaves this
-  // view mounted, and the old term stayed in the box beside a body that had moved on. Only a
-  // write from outside resyncs; `lastWrittenRef` is what this view's own debounce put in the
-  // URL, so typing is never clobbered by the param it is on its way to setting.
+  // Resync only on a write from outside: `lastWrittenRef` is what this view's own debounce
+  // put in the URL, so typing is never clobbered by the param it's about to set.
   if (query !== lastWrittenRef.current) {
     lastWrittenRef.current = query;
     if (debounceRef.current) {

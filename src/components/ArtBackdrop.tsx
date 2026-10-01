@@ -2,18 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { getBlurredBackdrop } from "../lib/artBlur";
 import "./ArtBackdrop.css";
 
-// Crossfading blurred-art backdrop, shared by NowPlayingView and AlbumDetail.
-//
-// Two stacked layers rather than one, because a single layer cannot crossfade:
-// `background-image` is not an interpolatable property, so swapping it is always
-// a hard cut. Clearing it first is worse still - the backdrop drops to flat black
-// for at least a frame, and the fade then runs up from nothing instead of between
-// two covers. Holding the outgoing art underneath while the incoming one fades in
-// over it gives a real crossfade without re-introducing a live `filter: blur()`,
-// which is the expensive thing src/lib/artBlur.ts exists to avoid.
-//
-// Layers carry already-blurred pixels (see artBlur.ts), so this only ever costs a
-// scale/composite of two small images for the length of one transition.
+// Two stacked layers because background-image can't interpolate; layers carry
+// pre-blurred pixels (artBlur.ts) so no live filter: blur() runs.
 
 type Layer = { key: number; src: string };
 

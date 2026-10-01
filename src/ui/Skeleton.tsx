@@ -1,16 +1,8 @@
 import type { CSSProperties } from "react";
 import "./Skeleton.css";
 
-// Shared loading-skeleton primitives. Before this existed every view that wanted one
-// hand-rolled its own bars (AlbumDetail.css, NowPlayingAbout.css, TrackTableView) and the
-// views that did not want to hand-roll a third copy shipped a bare "Loading…" line
-// instead. All of these share the `canon-skeleton-pulse` keyframe in base.css, which the
-// app-wide prefers-reduced-motion rule there already freezes.
-//
-// A skeleton is only worth rendering if it matches the layout it stands in for, so the
-// geometry is passed in by the caller rather than guessed here: `minWidth` and `gap` come
-// from the same constants the real grid's virtualizer uses, handed to CSS through custom
-// properties so there is one writer for the number instead of a copy that can drift.
+// Shared skeletons. Geometry comes from the caller (the real grid's constants via CSS custom
+// properties) so the placeholder matches the layout it stands in for.
 
 interface BarProps {
   /** Any CSS width. Percentages read best in a list, so they are the common case. */

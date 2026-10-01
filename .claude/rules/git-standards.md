@@ -1,1 +1,0 @@
-../../docs/git-standards.md

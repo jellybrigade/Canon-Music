@@ -13,6 +13,10 @@ import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { useTagsStore } from "../../tags/store/tags";
 import { useRapToHipHop } from "../../tags/hooks/useTagMappings";
 import { SettingRow } from "./SettingRow";
+import {
+  ARTIST_AUTO_SELECT_SETTING,
+  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
+} from "../../enrichment/lib/artistAutoSelect";
 
 interface Props {
   searchQuery: string;
@@ -69,6 +73,10 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
   const [enrichTracks, setEnrichTracks] = useBoolSetting("tags.enrich_tracks", true);
   const [stalenessDays, setStalenessDays] = useSetting("tags.staleness_days", "30");
+  const [artistAutoSelectScore, setArtistAutoSelectScore] = useSetting(
+    ARTIST_AUTO_SELECT_SETTING,
+    String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),
+  );
   const [skipYearGenres, setSkipYearGenres] = useBoolSetting("tags.skip_year_genres", true);
   const { enabled: rapToHipHop, toggle: toggleRapToHipHop } = useRapToHipHop();
 
@@ -250,6 +258,20 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               type="checkbox"
               checked={mbAutoIdentify}
               onChange={(e) => void setMbAutoIdentify(e.target.checked)}
+            />
+          </SettingRow>
+          <SettingRow
+            title="Artist auto-select score"
+            description="0-100. MusicBrainz match score needed to pick an artist automatically. Skipped when another match scores within 5."
+          >
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={artistAutoSelectScore}
+              onChange={(e) => void setArtistAutoSelectScore(e.target.value)}
+              className="settings-staleness-input"
             />
           </SettingRow>
           <SettingRow

@@ -1,10 +1,6 @@
 /**
- * Is this keystroke being typed into a text-entry surface?
- *
- * Window/document-level shortcuts have to ask before acting, because they `preventDefault()`
- * and therefore *swallow* the keystroke rather than merely duplicating it. Shared so the two
- * global listeners (`useGlobalShortcuts`, `useSearchShortcuts`) answer it the same way; a
- * second private copy is how one of them ended up with no guard at all.
+ * Is this keystroke going into a text field? Global shortcuts `preventDefault()`, so they must
+ * ask before swallowing it.
  */
 export function isTextEntryTarget(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;

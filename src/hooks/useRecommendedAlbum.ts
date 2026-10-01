@@ -13,10 +13,6 @@ interface RecommendedAlbumRow {
   accent_color: string | null;
 }
 
-/**
- * Returns an album whose direct genres overlap >= 50% with the given album's genres.
- * Used by HomeView to populate the "Because you're listening to…" Spotlight slot.
- */
 export function useRecommendedAlbum(albumId: string | null) {
   return useQuery({
     queryKey: QK.recommendedSpotlight(albumId),

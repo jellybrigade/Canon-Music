@@ -15,10 +15,8 @@ export function useClickOutside(
       if (arr.some((r) => r.current?.contains(e.target as Node))) return;
       handlerRef.current();
     }
-    // Deferred attach and capture phase are both load-bearing, see known-issues.md
-    // "Left-click popup self-closes": on WebKitGTK the tail of the left-click that opened
-    // the popover is still dispatching when this effect runs, and capture keeps a subtree
-    // that swallows bubbling from holding the popover open.
+    // Deferred attach and capture phase are both load-bearing (known-issues.md "Left-click
+    // popup self-closes"): on WebKitGTK the opening click is still dispatching when this runs.
     const timer = setTimeout(() => {
       document.addEventListener("mousedown", onMouseDown, { capture: true });
     }, 0);

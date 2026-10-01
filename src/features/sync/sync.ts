@@ -14,11 +14,8 @@ import { syncPlaylists } from "./syncPlaylists";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
-// Which domains a sync actually wrote to. Callers use this to bump only the
-// session stores whose data moved instead of invalidating every cached table
-// on every auto-sync tick (default every 5 min), which forced a full re-read of
-// albums + artists + tracks + genres + loved even when the server returned
-// byte-identical data.
+// Which domains a sync actually wrote to, so callers bump only the affected session stores
+// instead of invalidating every cached table on every auto-sync tick.
 export interface SyncChanges {
   albums: boolean;
   tracks: boolean;
@@ -71,10 +68,8 @@ export async function syncLibrary(
     }
   );
 
-  // Fatal by design: without the album list there is no sync to run. The scan status
-  // rides alongside it because it is one request and its failure is survivable: some
-  // deployments restrict getScanStatus to admins, and "no evidence" must fall through to
-  // the id probe below rather than read as "nothing changed".
+  // Fatal by design: without the album list there is no sync to run. Scan status is
+  // survivable (some deployments restrict it to admins); its failure falls through to the id probe, not "nothing changed".
   const [albums, scanStatus] = await Promise.all([
     fetchAllAlbums(server.url, server.username, credential, altUrl),
     fetchScanStatus(server.url, server.username, credential, altUrl).catch((err: unknown) => {
@@ -95,10 +90,8 @@ export async function syncLibrary(
     )
   )[0];
   const serverIdentityMoved = watermarkMoved(storedWatermark, scanStatus);
-  // The caller's flag comes first, and not as a cleared watermark: `watermarkMoved` reads
-  // "no scan status" as "no evidence", which on a deployment that restricts getScanStatus to
-  // admins flattens a user asking for a resync into the same skipped sync they already had.
-  // Short-circuit deliberate: a forced full pass has nothing left to learn from the probe.
+  // The caller's flag comes first, not a cleared watermark: `watermarkMoved` reads "no scan
+  // status" as "no evidence", which would flatten an explicit resync into the same skipped sync.
   const passIdentity = scanStatus === null ? null : scanIdentity(scanStatus);
   // Only a pass forced by the identity alone may resume. An explicit resync is a request to
   // read everything, and a failed id probe under an unchanged identity is evidence against
@@ -111,11 +104,8 @@ export async function syncLibrary(
   let failedAlbums = 0;
   let skippedAlbums = 0;
 
-  // Incremental sync: bulk-prefetch existing album state once instead of a
-  // per-album SELECT round trip, so the skip-tracks decision is pure JS.
-  // Every column the upsert below writes is fetched, so an album whose row is
-  // already identical can skip the write entirely and stay out of the change
-  // flags - that is what lets an idle auto-sync bump nothing at all.
+  // Bulk-prefetch existing album state once instead of a per-album SELECT, fetching every
+  // column the upsert writes so an unchanged album can skip the write and stay out of the change flags.
   type ExistingAlbumRow = {
     id: string;
     server_type: string;
@@ -229,12 +219,8 @@ export async function syncLibrary(
          release_type = excluded.release_type`
   );
 
-  // Drop what the server no longer has. `fetchAllAlbums` throws on any failed
-  // page rather than returning a short list, so a returned list is complete and
-  // a missing album is a real deletion, not a partial read. An empty list
-  // against a non-empty stored library is treated as suspect regardless and
-  // prunes nothing, so a misconfigured or freshly-empty server cannot wipe the
-  // local library in one tick.
+  // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
+  // album is a real deletion. An empty list against a non-empty stored library still prunes nothing regardless.
   const fetchedAlbumIds = new Set(albums.map((a) => `${server.id}:${a.id}`));
   const staleAlbumIds = existingAlbumRows.map((r) => r.id).filter((id) => !fetchedAlbumIds.has(id));
   let prunedAlbums = 0;
@@ -248,11 +234,8 @@ export async function syncLibrary(
     artistsDirty = true;
   }
 
-  // `done` counts attempts, not successes: a bar that stalls short of the total
-  // whenever an album fetch fails cannot be told apart from a hung sync, and the
-  // failures are already reported as `failedAlbums`. Gated on the work outstanding
-  // rather than on what the album upsert did, because an album whose row is
-  // unchanged but whose tracks were pruned still has a whole track pass to run.
+  // `done` counts attempts, not successes (failures are separately reported as `failedAlbums`).
+  // Gated on outstanding work, not the album upsert, since an unchanged album can still need a track pass.
   let reportedDone = 0;
   function reportProgress(done: number) {
     if (!onAlbumBatch || albumsNeedingTracks.length === 0) return;
@@ -262,10 +245,8 @@ export async function syncLibrary(
   reportProgress(0);
 
   let fetchedCount = 0;
-  // Each fetch already retries with its own timeout, so a server that went away mid-sync
-  // would otherwise cost that full budget once per remaining album. A run of consecutive
-  // failures means the server, not the album, is the problem: give up on the rest and let
-  // the next sync pick them up (they stay unfetched, so nothing is lost).
+  // Each fetch already retries with its own timeout, so a mid-sync server outage would
+  // otherwise cost that budget per remaining album. Consecutive failures give up on the rest; nothing is lost, they stay unfetched.
   const CONSECUTIVE_FAILURE_LIMIT = 5;
   let consecutiveFailures = 0;
   let albumTracksIncomplete = false;
@@ -334,10 +315,8 @@ export async function syncLibrary(
     }
   }
 
-  // The interval only lands on multiples of BATCH_NOTIFY_INTERVAL, so without this
-  // the last report is up to an interval short of where the pass got. On the
-  // early-break path the shortfall is the point: the bar stays under the total,
-  // which is what `albumTracksIncomplete` is telling the user.
+  // Progress only lands on multiples of BATCH_NOTIFY_INTERVAL; on early-break the shortfall
+  // is the point, since `albumTracksIncomplete` is what tells the user the bar stopped short.
   if (attemptedCount !== reportedDone) reportProgress(attemptedCount);
 
   // Rebuild artists table from albums, only when an album was added or had its
@@ -354,10 +333,8 @@ export async function syncLibrary(
     );
   }
 
-  // Rebuild FTS after all tracks are written, scoped to the albums that actually
-  // moved. Sweeping the whole server rewrote every FTS row in the library for a
-  // single changed album. Album ids are server-prefixed, so scoping by album_id
-  // is already scoped by server.
+  // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row
+  // for a single changed album. Album ids are server-prefixed, so this is already scoped by server.
   await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
 
   const stage = { db, server, credential, altUrl, skippedStages };
@@ -377,8 +354,8 @@ export async function syncLibrary(
   const albumsChanged = albumUpsertParams.length > 0 || prunedAlbums > 0;
   const tracksChanged = fetchedCount > 0 || prunedAlbums > 0 || prunedTracks > 0;
 
-  // Both are whole-table sweeps over tracks / track_tags (see performance-issues
-  // items 9 and 18), so they only run when this sync actually touched that data.
+  // Both are whole-table sweeps over tracks / track_tags, so they only run when
+  // this sync actually touched that data.
   if (albumsChanged || tracksChanged) {
     // Scan for tag issues after all data is updated
     await scanForIssues(server.id);

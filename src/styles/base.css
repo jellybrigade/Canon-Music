@@ -37,7 +37,7 @@ body,
   scrollbar-color: var(--border-strong) transparent;
 }
 
-/* Shared underline-tab base (ref impl: .tags-tab-btn in TagsView.css, see coding-standards.md).
+/* Shared underline-tab base (ref impl: .tags-tab-btn in TagsView.css, see AGENTS.md).
    Component-specific tab classes (.tags-tab-btn, .artist-tab-btn, .foryou-v2-tab) layer
    their own font-size/padding/spacing on top of this. */
 .tags-tab-btn,
@@ -460,6 +460,13 @@ html[data-app-blurred] * {
   flex-direction: row;
   height: 100vh;
   overflow: hidden;
+  --bottom-chrome-reserve: calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px));
+}
+
+/* The player bar and status badge are fixed and take no flow space. Reserved here once, as a
+   margin on every route root, so a route's own padding cannot drop it and a new one cannot forget. */
+:where(.app-layout > *) {
+  margin-bottom: var(--bottom-chrome-reserve);
 }
 
 /* ── Left sidebar ── */
@@ -470,7 +477,7 @@ html[data-app-blurred] * {
   flex-direction: column;
   align-items: center;
   padding: var(--space-sm) 0;
-  padding-bottom: var(--player-bar-reserve, 0px);
+  padding-bottom: var(--space-2xs);
   gap: var(--space-2xs);
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);

@@ -5,7 +5,7 @@ description: Merge development to main and publish a new release. Use when user 
 
 Release Canon to main. Run these steps in order — do not skip any.
 
-**Commit messages**: no trailer of any kind on any commit in this skill — not the code-review fixes, not the version bump, not the merge commit. No `Co-Authored-By`, no tool attribution, in commits, tags or release notes. This matches `docs/git-standards.md` and overrides any harness default that says otherwise.
+**Commit messages**: no trailer of any kind on any commit in this skill — not the code-review fixes, not the version bump, not the merge commit. No `Co-Authored-By`, no tool attribution, in commits, tags or release notes. This matches the AGENTS.md Git rules and overrides any harness default that says otherwise.
 
 1. **Code review** — first check scope: run `git diff main..development --stat` and `git log main..development --oneline`. (Prior releases are merged into main, so this range is the unreleased work, not the whole history.) Judge size (files touched, lines changed, count of distinct logical changes).
 
@@ -35,7 +35,7 @@ Release Canon to main. Run these steps in order — do not skip any.
    git branch -D release-backup
    ```
 
-   Subjects follow `docs/git-standards.md` (subject only, no body, no trailer); the `commit-msg` hook still runs. If a reorder conflicts, `git rebase --abort`, `git reset --hard release-backup`, and drop that group rather than resolving by hand. Report the before/after commit count in the summary.
+   Subjects follow the AGENTS.md Git rules (subject only, no body, no trailer); the `commit-msg` hook still runs. If a reorder conflicts, `git rebase --abort`, `git reset --hard release-backup`, and drop that group rather than resolving by hand. Report the before/after commit count in the summary.
 
 3. **Verify green** — run the full check suite before anything else touches the version or `main`:
 
@@ -43,7 +43,7 @@ Release Canon to main. Run these steps in order — do not skip any.
    bash scripts/run-local-checks.sh
    ```
 
-   All eight tasks (branch, staged, dashes, typecheck, vitest, cargo-test, clippy, rustfmt) must pass. **A red suite stops the release** — fix it and re-run, do not proceed and do not push. A pre-existing unrelated failure blocks the release too; say so and ask before continuing.
+   Every task must pass. **A red suite stops the release** — fix it and re-run, do not proceed and do not push. A pre-existing unrelated failure blocks the release too; say so and ask before continuing.
 
 4. **Determine next version** — read the current version from `src-tauri/tauri.conf.json`. Run `git log main..development --oneline` to survey all unreleased commits. Then pick the correct bump:
 

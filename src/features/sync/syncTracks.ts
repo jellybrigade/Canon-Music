@@ -10,18 +10,9 @@ import { planTrackIdRemap } from "./trackRemap";
 import type { TrackIdRemap } from "./trackRemap";
 import { pruneAlbumTracks } from "./syncPrune";
 
-// Which of an album's mirrored tracks the server merely renamed. Read before the
-// upsert writes the new rows: once it has, the old and new ids both exist locally and
-// nothing can tell a rename from a genuine add.
 /**
- * Bring the FTS mirror back in line with `tracks` for the albums that moved.
- *
- * One writer, because the delete has two halves and a caller doing only the obvious one
- * leaves rows nothing can ever reach again: a renamed track keeps its row (the remap
- * rewrites `tracks.id` rather than deleting it), so the prune never sees the old id and
- * the album subselect below only finds the new one. An orphan is not merely stale - the
- * search ranks and caps its pool before joining `tracks`, so orphans take slots from real
- * matches and return nothing.
+ * Rebuild FTS rows for the moved albums, deleting by stale track id too: a remapped track
+ * keeps its row, so neither the prune nor the album subselect reaches the old FTS entry.
  */
 export async function rebuildTracksFts(
   db: Database,
@@ -48,6 +39,7 @@ export async function rebuildTracksFts(
   );
 }
 
+// Must run before the upsert; afterwards a rename is indistinguishable from an add.
 export async function planRenamedTracks(
   db: Database,
   serverId: string,
@@ -111,10 +103,8 @@ export async function insertTracksBatch(
     trackRows,
     "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     21,
-    // Named-column upsert, not INSERT OR REPLACE: a replace deletes the row and
-    // reinserts it, so every column this statement does not list falls back to its
-    // default. `tags_enriched_at` is one of them, and clearing it makes the next
-    // enrichment pass re-fetch the whole album from Last.fm for nothing.
+    // Named-column upsert, not INSERT OR REPLACE: a replace resets unlisted columns to
+    // default, clearing `tags_enriched_at` and forcing a wasted re-fetch from Last.fm.
     (placeholders) => `INSERT INTO tracks
          (id, server_id, server_type, title, artist, album_id, genre, track_number, disc_number, year, duration, file_path, play_count, played_at, bit_rate, suffix, file_size, replay_gain_track_gain, replay_gain_track_peak, replay_gain_album_gain, replay_gain_album_peak)
        VALUES ${placeholders}
@@ -152,12 +142,8 @@ export async function insertTracksBatch(
 }
 
 /**
- * Re-resolve one album's tracks against the server, carrying the local-only rows of any track
- * whose id was rewritten and dropping the ones it really lost. Returns the pairs it carried.
- *
- * The play-time answer to Subsonic error 70: the server does not know the id Canon just asked
- * for, which after an id migration is true of most of the library at once. Repairing the one
- * album the user is trying to play beats a full 1500-request resync they did not ask for.
+ * Re-resolve one album's tracks, carrying rows for rewritten ids and dropping lost ones.
+ * Returns the carried pairs. The play-time answer to Subsonic 70.
  */
 export async function repairAlbumTrackIds(
   server: Server,

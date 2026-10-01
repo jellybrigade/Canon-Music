@@ -19,14 +19,9 @@ import {
 const DLNA_TRACK_END_POLL_MS = 2000;
 const DLNA_UNKNOWN_DURATION_POLL_MS = 5000;
 
-// How many consecutive SOAP failures against the renderer are tolerated before the target
-// gives up and reports an error. One failure is not enough to conclude anything: since
-// upnp_soap started returning Err on SOAP faults, a single transient fault (or a renderer
-// briefly busy mid-transition) reaches here, and treating that as "the track ended" or
-// "the device is gone" would skip a track or drop the session for no reason.
+// A single SOAP fault can be a transient blip or a renderer briefly busy mid-transition;
+// treating one as "track ended" or "device gone" would skip a track or drop the session for no reason.
 const DLNA_MAX_CONSECUTIVE_FAILURES = 3;
-
-// ── Interface ──────────────────────────────────────────────────────────────
 
 export interface PlaybackTarget {
   load(url: string, track: CurrentTrack, coverArtUrl: string | null): Promise<void>;
@@ -41,8 +36,6 @@ export interface PlaybackTarget {
   setNext(url: string | null, track?: CurrentTrack, coverArtUrl?: string | null): Promise<void>;
   teardown(): void;
 }
-
-// ── Local (rodio) target ───────────────────────────────────────────────────
 
 export class LocalTarget implements PlaybackTarget {
   readonly supportsVolume = true;
@@ -86,15 +79,10 @@ export class LocalTarget implements PlaybackTarget {
   }
 }
 
-// ── DLNA (UPnP AVTransport) target ────────────────────────────────────────
-
 export class DlnaTarget implements PlaybackTarget {
   readonly supportsVolume: boolean;
-  // The renderer, not Canon, owns the gap between tracks, and Canon cannot see the
-  // renderer cross it: its only end signal is a GetTransportInfo poll, which reads
-  // PLAYING straight through a SetNext-driven transition. Handing the next URI over
-  // therefore leaves the UI a whole track behind and plays that track twice. Every
-  // transition goes through load() instead.
+  // Canon's only end signal is a GetTransportInfo poll, which reads PLAYING straight through
+  // a SetNext-driven transition, leaving the UI a track behind; every transition goes through load() instead.
   readonly supportsGapless = false;
 
   private renderer: DlnaRenderer;
@@ -271,10 +259,8 @@ export class DlnaTarget implements PlaybackTarget {
     }, delayMs);
   }
 
-  // Arms a transport-state poll that keeps checking until the renderer reports it is done.
-  // A duration of 0 (track metadata without a length) still gets polled, just from the start
-  // and at a slower interval, because a cast target has no other end-of-track signal: the
-  // elapsed ticker's position-based fallback in player.ts is skipped for cast devices.
+  // A duration of 0 still gets polled (from the start, at a slower interval): cast targets
+  // have no other end-of-track signal, since player.ts skips its position-based fallback for them.
   private scheduleTrackEndTimer(durationSeconds: number) {
     if (this.trackEndTimer) clearTimeout(this.trackEndTimer);
     const known = durationSeconds > 0;
@@ -285,16 +271,13 @@ export class DlnaTarget implements PlaybackTarget {
     const poll = async () => {
       this.trackEndTimer = null;
       if (!this.playing) return;
-      // Confirm via GetTransportInfo that we're actually done.
       let state: string;
       try {
         state = await getTransportInfo(this.renderer.avTransportControlUrl);
         this.noteSuccess();
       } catch (e) {
-        // Not reaching the renderer once is not evidence the track ended: a SOAP fault or
-        // a renderer busy mid-transition lands here too, and advancing on it skips a track
-        // that is still playing. Only a sustained run means the device is really gone, and
-        // that is an error to show, not a cue to advance into another failing load().
+        // Not reaching the renderer once is not evidence the track ended (a transient fault
+        // lands here too); only a sustained run means the device is really gone.
         if (this.noteFailure("Lost contact with the renderer", e)) {
           this.playing = false;
           this.clearTimers();

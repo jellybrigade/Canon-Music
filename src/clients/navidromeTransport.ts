@@ -4,15 +4,11 @@ import {
   transportStallNotice,
   TransportStalledError,
 } from "../lib/transportHealth";
+import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
 
-// A request stuck in DNS resolution is the dominant transient failure mode on Linux:
-// a stale/unreachable resolver entry (corporate VPN nameserver left in the global
-// systemd-resolved scope, for instance) makes every in-flight fetch hang together for
-// ~25s and then reject with an opaque "Load failed" TypeError, even though the network
-// is up and the next attempt succeeds off the resolver cache. Cap each attempt well
-// under that ceiling and retry, so a resolver hiccup costs a few seconds instead of
-// aborting a whole sync.
+// Stuck DNS resolution (stale systemd-resolved entry) hangs fetch ~25s then rejects
+// with an opaque "Load failed"; cap well under that and retry instead of aborting.
 const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 400;
@@ -27,11 +23,8 @@ function isRetriableStatus(status: number): boolean {
   return status === 429 || status === 502 || status === 503 || status === 504;
 }
 
-/** Endpoints that change server state in a way a second call would compound: a timed-out
- *  request may well have been applied before the response was lost, so retrying it would
- *  scrobble a play twice, create a duplicate playlist, or add the same track again.
- *  Everything else here is either a read or an idempotent set-to-this-value write
- *  (star, unstar, setRating, savePlayQueue), which is safe to repeat. */
+/** A timed-out request may have applied before the response was lost, so retrying these would
+ *  scrobble twice or duplicate a playlist; everything else is a read or an idempotent write. */
 const NON_IDEMPOTENT_ENDPOINTS = new Set([
   "scrobble",
   "createPlaylist",
@@ -42,10 +35,8 @@ const NON_IDEMPOTENT_ENDPOINTS = new Set([
 function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean {
   // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
   const name = endpoint.replace(/\.view$/, "");
-  // scrobble carries two different writes. `submission=true` appends a play and cannot be
-  // repeated; `submission=false` only sets which track is on, so it is as safe to repeat
-  // as a star, and giving it one shot leaves the server saying nothing is playing for the
-  // rest of the track whenever a single request is lost.
+  // `submission=true` appends a play and cannot be repeated; `submission=false` only sets
+  // now-playing, so it's as safe to repeat as a star.
   if (name === "scrobble") return params.get("submission") === "false";
   return !NON_IDEMPOTENT_ENDPOINTS.has(name);
 }
@@ -71,15 +62,8 @@ async function fetchWithTimeout(url: string, body: string, signal?: AbortSignal)
       body,
       signal: controller.signal,
     });
-    // fetch resolves once the headers land, so the body is still streaming here and the
-    // abort has to stay armed across the read: a connection dying mid-transfer would
-    // otherwise leave the caller's `res.json()` pending forever, with nothing for the
-    // retry loop to catch and no terminal state for the sync above it. Every caller
-    // parses JSON, so buffering the body costs nothing and leaves them unchanged.
-    //
-    // Rearmed rather than left running: the ceiling exists to bound a stall, not the
-    // total size of an answer, and a 500-album page over a slow link can legitimately
-    // take longer to transfer than the handshake left of the original budget.
+    // Rearm the abort across the body read: headers arriving doesn't bound the transfer, and
+    // a stall mid-body would otherwise hang `res.json()` forever.
     clearTimeout(timer);
     timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     const text = await res.text();
@@ -121,10 +105,8 @@ export async function apiPost(
   // attempt, not only on the first, since either route can be the one that is stalling.
   if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
 
-  // Every request stalls identically when the fault is this machine's HTTP layer rather
-  // than the server, so the ladder below would spend 37s per call for as long as it lasts.
-  // Health is per server: one stalled server must not speak for another, least of all
-  // in a message that names an address the caller never asked about.
+  // Health is tracked per server so a stalled one can't speak for another or name an
+  // address the caller never asked about.
   const stalled = isLivenessCheck(endpoint) ? null : transportStallNotice(server);
   if (stalled) throw new TransportStalledError(`${endpoint} not attempted: ${stalled}`);
 
@@ -164,12 +146,8 @@ export async function apiPost(
     }
   }
 
-  // Opaque fetch rejections ("Load failed") are useless in a log, so name the endpoint
-  // and the attempt count that were actually burned. A ladder spent entirely on timeouts
-  // also feeds the breaker, which answers with a cause once it has seen enough to say one.
-  // Only a full ladder is the ~75s of evidence the threshold is written around. A
-  // single-shot write times out after 12s, and the scrobble queue drains in bursts of
-  // them, so letting those open the breaker would trip it on a third of the evidence.
+  // Name the endpoint and attempt count so "Load failed" is useful in a log; only a
+  // full retry ladder (not a single-shot write) feeds the breaker's timeout evidence.
   const cause = lastWasTimeout && retriable ? await noteTransportTimeout(server) : null;
   throw new Error(
     `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
@@ -177,19 +155,28 @@ export async function apiPost(
   );
 }
 
-/**
- * A rejection the server itself issued, as opposed to a transport failure.
- * The distinction matters to anything that retries: a transport failure is worth
- * trying again later, whereas a Subsonic error code means the request was received
- * and understood and will be refused identically forever (code 70, "not found") or
- * until something else changes (code 40, bad credentials).
- */
+/** A rejection the server itself issued (Subsonic error code), not a transport failure worth retrying. */
 export class SubsonicError extends Error {
   readonly code: number | null;
   constructor(endpoint: string, code: number | null, message?: string) {
     super(message ?? `${endpoint} failed${code === null ? "" : ` with code ${code}`}`);
     this.name = "SubsonicError";
     this.code = code;
+  }
+}
+
+/** Throws for a refused request, and tells the credential record what the server said
+ *  either way, so a password rotated on the server shows up as that rather than as every
+ *  request failing. Login pings skip this: they report a refusal of what was just typed. */
+export function checkEnvelope(
+  baseUrl: string,
+  endpoint: string,
+  response: SubsonicEnvelope,
+  fallbackMessage?: string
+): void {
+  noteEnvelope(baseUrl, response);
+  if (response.status !== "ok") {
+    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message ?? fallbackMessage);
   }
 }
 
@@ -206,11 +193,6 @@ export async function callSubsonicVoid(
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);
   const res = await apiPost(baseUrl, endpoint, params, altUrl, signal);
   if (!res.ok) throw new Error(`${endpoint} returned ${res.status}`);
-  const data = (await res.json()) as {
-    "subsonic-response": { status: string; error?: { code?: number; message?: string } };
-  };
-  const response = data["subsonic-response"];
-  if (response.status !== "ok") {
-    throw new SubsonicError(endpoint, response.error?.code ?? null, response.error?.message);
-  }
+  const data = (await res.json()) as { "subsonic-response": SubsonicEnvelope };
+  checkEnvelope(baseUrl, endpoint, data["subsonic-response"]);
 }

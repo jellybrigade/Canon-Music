@@ -1,7 +1,3 @@
-/**
- * Fuzzy string matching for MusicBrainz candidate scoring.
- * Dependency-free: inline Levenshtein + string normalization.
- */
 import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
 
 const EDITION_NOISE =
@@ -47,11 +43,8 @@ export function similarity(a: string, b: string): number {
   return 1 - prev[lb]! / Math.max(la, lb);
 }
 
-/**
- * Artist similarity that handles collaborative credits.
- * "Filow & Ski Aggu" vs "Filow" → 1.0 because one contains the other.
- * Also splits on feat/ft/& and takes the best component match.
- */
+/** Artist similarity that handles collaborative credits: containment scores 1.0
+ * ("Filow & Ski Aggu" vs "Filow"), otherwise splits on feat/ft/& and best-matches. */
 function artistSimilarity(a: string, b: string): number {
   const base = similarity(a, b);
   const na = normalizeForMatch(a);
@@ -70,12 +63,7 @@ function artistSimilarity(a: string, b: string): number {
   return best;
 }
 
-/**
- * Title similarity with containment boost, checked both directions:
- * "Twin Peaks" inside "Soundtrack From Twin Peaks" scores 0.75 instead of ~0.38,
- * and "BRAT (Dolby Atmos Mix)" against MB's plain "BRAT" gets the same boost
- * (local tag carries a mix/edition suffix MB's canonical title doesn't have).
- */
+/** Title similarity with a containment boost, checked both directions (e.g. edition/mix suffixes). */
 function titleSimilarity(query: string, candidate: string): number {
   const base = similarity(query, candidate);
   const nq = normalizeForMatch(query);
@@ -99,18 +87,8 @@ function extractYear(date: string | null): number | null {
 }
 
 /**
- * Score a release group candidate against query artist + album strings.
- * Title weighted 60%, artist weighted 40% (title match matters more).
- *
- * Two optional disambiguators layer on top of the base text score:
- * - `knownYear`: local release year. Exact/near match nudges the score up;
- *   a real mismatch (same title, different year, two distinct releases
- *   both titled e.g. "Sisterhood") pulls it down so it can't tie a wrong
- *   candidate with the right one.
- * - `confirmedArtistMbid`: an MBID already confirmed for this artist via
- *   another album or the artist-identify dialog. A candidate whose artist
- *   credit matches it is almost certainly correct regardless of text
- *   similarity noise, so it overrides the artist-name component entirely.
+ * Title 60%, artist 40%. `knownYear` nudges up on a match and down on a mismatch so same-titled
+ * releases can't tie; a matching `confirmedArtistMbid` replaces the artist-name component.
  */
 export function scoreReleaseGroup(
   c: MbReleaseGroupCandidate,
@@ -140,10 +118,6 @@ export function scoreReleaseGroup(
   return Math.max(0, Math.min(1, score));
 }
 
-/**
- * Filter candidates to types compatible with the known track count.
- * Falls back to unfiltered if filtering wipes everything out.
- */
 export function filterByTrackCount(
   candidates: MbReleaseGroupCandidate[],
   trackCount: number

@@ -41,7 +41,6 @@ interface Props {
 const POPULAR_TRACKS_MIN = 5;
 const ESSENTIAL_MIN_ALBUMS = 3;
 const ESSENTIAL_RATIO = 0.25;
-const SIMILAR_ARTISTS_MAX = 12;
 
 function timeAgo(unixSecs: number): string {
   const diffDays = Math.floor((Date.now() / 1000 - unixSecs) / 86400);
@@ -55,7 +54,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const { data: appearsOnAlbums } = useAppearsOnAlbums(artist.name, server.id);
   const { data: canonGenres = [] } = useArtistGenres(artist.name, server.id);
   const { data: rawTracks } = useArtistTopTracks(artist.name, server.id);
-  const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name, { serverWithCredential });
+  const { data: enrichment, isRefreshing, error: enrichError, refresh } = useEnrichArtist(artist.name, { serverWithCredential, identifyIfUnidentified: true });
   const [showIdentify, setShowIdentify] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
@@ -181,7 +180,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
     try {
       const parsed: unknown = JSON.parse(enrichment.similar_json);
       if (!Array.isArray(parsed)) return [];
-      return parsed.filter((n): n is string => typeof n === "string").slice(0, SIMILAR_ARTISTS_MAX);
+      return parsed.filter((n): n is string => typeof n === "string");
     } catch {
       return [];
     }

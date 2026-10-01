@@ -1,21 +1,10 @@
 import Database from "@tauri-apps/plugin-sql";
 
-// tauri-plugin-sql's SQLite pool has more than one connection, so a raw
-// BEGIN/COMMIT split across two separate execute() calls can land on
-// different connections and silently fail to wrap anything. Batch writes
-// into fewer, larger multi-row statements instead of relying on transactions.
-// Chunk size is derived per call site from SQLite's bound-parameter ceiling
-// (32766 as of the bundled libsqlite3-sys, kept below that with headroom)
-// divided by the number of "?" placeholders each row needs.
+// tauri-plugin-sql's pool has no connection affinity, so BEGIN/COMMIT across two
+// execute() calls can silently no-op; batch into multi-row statements instead.
 export const SQLITE_MAX_VARIABLES = 32000;
 
-/**
- * Batches `rows` into fewer multi-row INSERT statements. `placeholderRow` is
- * the literal "(?, ...)" (or "(?, 'literal', ?, ...)") group for one row;
- * `paramsPerRow` is how many "?" it actually contains, used to size chunks
- * under SQLite's bound-parameter limit. `buildSql` receives the joined
- * per-chunk placeholder groups and returns the full statement.
- */
+/** Batches `rows` into multi-row INSERT statements, chunked under SQLite's bound-parameter limit. */
 export async function executeBatched(
   db: Database,
   rows: unknown[][],
@@ -33,13 +22,8 @@ export async function executeBatched(
 }
 
 /**
- * Runs one statement per chunk of `ids`, each chunk sized under the same
- * bound-parameter ceiling. `buildSql` receives the comma-joined "?" list for the
- * chunk, e.g. ``(ph) => `DELETE FROM tracks WHERE id IN (${ph})` ``.
- *
- * Only safe for statements whose chunks are independent, which means IN and not
- * NOT IN: chunking a NOT IN would make every chunk delete the rows the other
- * chunks were keeping.
+ * One statement per chunk of `ids` under the parameter ceiling. Chunks must be independent:
+ * `IN`, never `NOT IN`.
  */
 export async function executeIdChunks(
   db: Database,

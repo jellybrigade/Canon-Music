@@ -3,17 +3,12 @@ import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 
-// The OS now-playing panel renders artwork much larger than any list row does, so it
-// gets its own URL built from the track's artwork ref. Reusing `currentTrack.coverArtUrl`
-// would hand the OS the 64px thumbnail the queue rows use (see App.tsx / useQueueSync),
-// upscaled into a panel several times that size.
+// Own URL, not `currentTrack.coverArtUrl`: that's the 64px queue-row thumbnail
+// (see App.tsx / useQueueSync), which would be upscaled into a much larger panel.
 const ART_SIZE = 512;
 
-/** Pushes duration/position once per timeline jump. The OS extrapolates position from
- * the wall clock while `playbackState` is "playing", so this only needs to fire when the
- * timeline genuinely moves: a new track, a play/pause, or a seek. Pushing it on every
- * 200ms tick would be wasted work, and subscribing a React selector to `elapsed` would
- * re-render this hook five times a second. */
+/** Fires only on a genuine timeline jump: the OS extrapolates position from the wall
+ * clock while playing, so a selector on `elapsed` would re-render this needlessly. */
 function pushPositionState() {
   if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
   const { currentTrack, elapsed } = usePlayerStore.getState();

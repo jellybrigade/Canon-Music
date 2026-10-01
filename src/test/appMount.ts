@@ -7,15 +7,8 @@ const DEFAULT_ASYNC_UTIL_TIMEOUT_MS = 1000;
 const SLOW_MOUNT_TIMEOUT_MS = 15000;
 
 /**
- * Call at module scope in a suite that mounts the whole `App`.
- *
- * Such a mount costs a few hundred ms idle and several times that when vitest runs 60 files
- * across every core, or when `scripts/run-local-checks.sh` runs vitest and clippy together.
- * The default 1000ms `findBy*` window then measures the mount rather than the behaviour under
- * test, and the suite fails on machine load instead of on a defect. Raised per suite, not
- * globally, so an ordinary component test keeps the short window that makes a genuinely
- * missing element fail fast - and a wrong value still fails the moment the element appears,
- * whatever this is set to.
+ * Call at module scope in a suite that mounts the whole `App`: raises the `findBy*` window so
+ * a slow mount under load doesn't fail the suite. Per suite, so other tests keep failing fast.
  */
 export function allowSlowAppMounts() {
   configure({ asyncUtilTimeout: SLOW_MOUNT_TIMEOUT_MS });

@@ -1,9 +1,5 @@
-//! Decides whether a stream response is actually audio before it reaches the decoder.
-//!
-//! Subsonic rides its errors on HTTP 200 with a JSON or XML body, so the status line and
-//! the content-type together still cannot tell a track from `{"error":{"code":70}}`. Handed
-//! to `Decoder::new` that body surfaces as "this file could not be decoded", blaming the
-//! file for a stale id.
+//! Checks a stream response is audio before decoding: Subsonic sends errors as HTTP 200
+//! JSON/XML, which `Decoder::new` would misreport as "file could not be decoded".
 
 /// What the response turned out to be.
 #[derive(Debug, PartialEq, Eq)]
@@ -68,10 +64,8 @@ fn first_non_space(head: &[u8]) -> Option<u8> {
     head.iter().copied().find(|b| !b.is_ascii_whitespace())
 }
 
-/// Pull `code` and `message` out of a `subsonic-response` envelope, JSON or XML.
-///
-/// `f=xml` is legal Subsonic and some deployments answer with it regardless of what was
-/// asked for, so both spellings have to be understood here.
+/// Pull `code` and `message` out of a `subsonic-response` envelope, JSON or XML: some
+/// deployments answer with `f=xml` regardless of what was asked for.
 fn parse_subsonic_error(head: &[u8]) -> Option<(i64, String)> {
     let text = String::from_utf8_lossy(head);
     if !text.contains("subsonic-response") {
@@ -139,11 +133,8 @@ fn snippet(head: &[u8]) -> Option<String> {
     Some(trimmed.chars().take(200).collect())
 }
 
-/// Decide what to do with a stream response from its status, content-type and first bytes.
-///
 /// Deliberately conservative about rejecting: an unfamiliar container with no content-type is
-/// passed to the decoder, which knows more formats than this function does. Only a positively
-/// identified error envelope, an empty body, or a body that is plainly text is refused.
+/// passed to the decoder, which knows more formats than this function does.
 pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) -> StreamVerdict {
     if !(200..300).contains(&status) {
         let message = match status {
@@ -214,17 +205,8 @@ pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) ->
     }
 }
 
-/// Whether a 2xx cover-art response actually carried an image.
-///
-/// The same Subsonic-on-200 problem as the stream path, with a longer tail: a rejected cover
-/// id answers with a JSON envelope, and the proxy caches whatever came back under
-/// `{id}:{size}` on disk, so one bad answer outlives the session that got it.
-///
-/// `content_type` is what the response actually carried, so an absent header is `None` rather
-/// than the caller's stand-in: a substituted `image/jpeg` would otherwise vouch for bytes no
-/// one declared anything about. A real `image/` header is still accepted without magic bytes,
-/// since the decoders know more formats than this does (AVIF, HEIC, SVG) - but not over a body
-/// carrying an error envelope, which is the one case the server's own claim is known to be wrong.
+/// Whether a 2xx cover response carried an image; bad answers get cached on disk. A real
+/// `image/` header is trusted without magic bytes, except over a Subsonic error envelope.
 pub fn is_image_response(content_type: Option<&str>, head: &[u8]) -> bool {
     if has_image_magic(head) {
         return true;

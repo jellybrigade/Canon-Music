@@ -14,10 +14,11 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
 import { resetTransportHealth, TransportStalledError } from "../lib/transportHealth";
-import { authenticate, authenticateWithApiKey, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
+import { authenticate, authenticateWithApiKey, getPlayQueue, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
 import type { NavidromeCredential } from "./navidromeUrls";
 import { SubsonicError } from "./navidromeTransport";
-import { addTrackToNavidromePlaylist } from "./navidromePlaylists";
+import { addTrackToNavidromePlaylist, fetchPlaylists } from "./navidromePlaylists";
+import { isCredentialRejected, resetCredentialRejections } from "../lib/credentialRejections";
 
 const BASE = "http://music.example";
 const ALT = "http://192.168.1.5:4533";
@@ -558,6 +559,16 @@ describe("SubsonicError", () => {
     expect(err.message).toBe("Song not found");
   });
 
+  it("carries the code from a read endpoint too", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    const err = (await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(40);
+    expect(err.message).toBe("Wrong username or password");
+  });
+
   it.each([40, 41, 50])("distinguishes auth code %i from the droppable 70", async (code) => {
     fetchMock.mockResolvedValue(failed({ code, message: "nope" }));
 
@@ -635,6 +646,62 @@ describe("SubsonicError", () => {
     await settle(scrobbleTrack(BASE, "alice", cred, "tr-9", 1_700_000_000_000));
     expect(body().get("submission")).toBe("true");
     expect(body().get("time")).toBe("1700000000000");
+  });
+});
+
+describe("a refused saved credential", () => {
+  afterEach(() => {
+    resetCredentialRejections();
+  });
+
+  it("is recorded against the server by a read", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded against the server by a write", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(starTrack(BASE, "alice", cred, "tr-1").catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded by a playlist request", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(failed({ code: 44, message: "Invalid API key" })));
+
+    await settle(fetchPlaylists(BASE, "alice", cred).catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("is recorded by a read that answers nothing on failure", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    expect(await settle(getPlayQueue(BASE, "alice", cred))).toBeNull();
+
+    expect(isCredentialRejected(BASE)).toBe(true);
+  });
+
+  it("clears on the next request the server accepts", async () => {
+    fetchMock.mockResolvedValueOnce(failed({ code: 40 }));
+    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined));
+    fetchMock.mockResolvedValueOnce(ok({ status: "ok", starred2: {} }));
+
+    await settle(fetchStarred2(BASE, "alice", cred));
+
+    expect(isCredentialRejected(BASE)).toBe(false);
+  });
+
+  it("is not recorded by a login attempt, which reports its own refusal", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    await settle(authenticate(BASE, "alice", "typo").catch(() => undefined));
+
+    expect(isCredentialRejected(BASE)).toBe(false);
   });
 });
 
@@ -826,6 +893,25 @@ describe("authenticate / authenticateWithApiKey", () => {
     await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow(
       "Wrong username or password"
     );
+  });
+
+  it("keeps the Subsonic code on a refused password login", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
+
+    const err = (await settle(authenticate(BASE, "alice", "pw").catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(40);
+  });
+
+  it("keeps the Subsonic code on a refused api-key login", async () => {
+    fetchMock.mockResolvedValue(failed({ code: 44, message: "Invalid API key" }));
+
+    const err = (await settle(authenticateWithApiKey(BASE, "alice", "key-1").catch((e: Error) => e))) as SubsonicError;
+
+    expect(err).toBeInstanceOf(SubsonicError);
+    expect(err.code).toBe(44);
+    expect(err.message).toBe("Invalid API key");
   });
 });
 

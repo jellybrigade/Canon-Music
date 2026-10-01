@@ -44,10 +44,6 @@ export interface ArtistLookupResult {
   error: string | null;
 }
 
-/**
- * On-demand MB artist lookup. Only fires when `enabled` is true.
- * Uses saved MBID if available; otherwise searches by name.
- */
 export function useIdentifyArtist({
   artistName,
   overrideMbArtistId,

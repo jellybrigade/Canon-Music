@@ -1,8 +1,5 @@
-// Pilot for the tauri-plugin-sql -> rusqlite migration (psysonic pattern, see
-// instructions/donow.md "rusqlite write/read split"). Read-only connection to the
-// same canon.db file tauri-plugin-sql already writes/migrates - avoids per-query
-// IPC-to-sqlx round trips for hot-path list queries. Writes and migrations stay on
-// tauri-plugin-sql for now; only read commands piloted here (albums first).
+// Read-only connection to the same canon.db file tauri-plugin-sql writes/migrates,
+// avoiding per-query IPC-to-sqlx round trips for hot-path list queries.
 use rusqlite::{Connection, OpenFlags};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -53,15 +50,8 @@ fn open_read_conn(app: &tauri::AppHandle) -> Result<Connection, String> {
 }
 
 fn open_read_conn_at(path: &std::path::Path) -> Result<Connection, String> {
-    // Opened READ_WRITE despite only ever running SELECTs. canon.db is in WAL mode
-    // (src/db/migrations.ts), and a SQLITE_OPEN_READ_ONLY connection cannot create or
-    // recover the -wal/-shm shared-memory files - it can only attach to ones a writer
-    // already owns. Since this connection can open before the tauri-plugin-sql writer
-    // pool has established them, READ_ONLY makes every query here fail with
-    // SQLITE_READONLY / "unable to open database file" depending on launch ordering.
-    // READ_WRITE lets it participate in WAL normally. CREATE is deliberately omitted so
-    // a missing/misresolved path errors out instead of silently creating an empty db
-    // that would shadow the real one.
+    // READ_WRITE despite SELECT-only: a read-only connection can't create the WAL -shm if it
+    // opens first. No CREATE, so a wrong path errors instead of making an empty db.
     let conn = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -152,11 +142,8 @@ mod tests {
 mod test_fixtures {
     use rusqlite::Connection;
 
-    // Hand-written DDL, post-ALTER shape, for only the tables these queries read.
-    // src/db/migrations.ts owns the real schema and this connection never sees it -
-    // tauri-plugin-sql migrates the file before any read command runs. Replaying 50
-    // TS migrations from Rust is not possible, so this mirrors them instead; when a
-    // column below is renamed there, the query tests fail with "no such column".
+    // Mirrors src/db/migrations.ts's post-ALTER shape by hand, since this connection never
+    // runs those migrations; a rename there breaks these queries with "no such column".
     pub(super) const FIXTURE_DDL: &str = "
         CREATE TABLE albums (
           id TEXT PRIMARY KEY, server_id TEXT NOT NULL, name TEXT NOT NULL,

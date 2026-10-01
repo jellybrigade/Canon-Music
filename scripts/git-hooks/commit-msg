@@ -1,6 +1,6 @@
 #!/bin/sh
 # Rejects commit bodies and attribution trailers (Co-Authored-By etc).
-# Canon commits are subject-only, no trailers of any kind. See git-standards.md.
+# Canon commits are subject-only, no trailers of any kind. See the Git rules in AGENTS.md.
 
 msg_file="$1"
 

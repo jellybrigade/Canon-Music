@@ -1,9 +1,5 @@
-// Custom playlist covers are stored as a data URI in `playlists.custom_cover_data`, and
-// `get_playlists` selects that column for every playlist on every refresh tick. Storing
-// the file the user picked verbatim therefore puts a whole camera photo (several MB, ~33%
-// larger again once base64'd) into a row that is read into memory on every playlist load.
-// Downscale to the largest size the UI ever renders (the 300px detail hero) before the
-// value goes anywhere near the database.
+// `get_playlists` reads `custom_cover_data` on every refresh tick, so an unscaled photo
+// bloats every load; downscale to the largest size the UI renders before it hits the DB.
 const COVER_MAX_EDGE = 300;
 const COVER_QUALITY = 0.85;
 

@@ -167,6 +167,9 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  // An unresolved send would hold its server's in-flight claim into the next test.
+  for (const deferred of pending) deferred.resolve();
+  await tick();
   // Explicit, not decorative: vitest runs without `globals: true`, so RTL cannot register
   // its own auto-cleanup. Without this every test leaves its hook mounted, and a later
   // `window.dispatchEvent(new Event("online"))` fires one live listener per earlier test.
@@ -484,6 +487,37 @@ describe("useScrobbleFlush in-flight guard", () => {
     expect(scrobbleTrack).toHaveBeenCalledTimes(1);
   });
 
+  it("does not resend a row still in flight when the server object is replaced", async () => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedQueue("srv-a:t2", 1700000002);
+    seedTrack("srv-a:t1");
+    seedTrack("srv-a:t2");
+    armDeferredScrobble();
+
+    const { rerender } = renderFlush(swc());
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+
+    // A credential refetch hands the hook an equal but new object, re-running the effect.
+    rerender({ v: swc() });
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      pending[0]!.resolve();
+    });
+    // The re-armed pass was refused while the old one held the claim; it runs as soon as
+    // the claim frees, not a whole interval later.
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(2);
+    await act(async () => {
+      pending[1]!.resolve();
+    });
+
+    expect(vi.mocked(scrobbleTrack).mock.calls.map((c) => c[3])).toEqual(["t1", "t2"]);
+    expect(queueTrackIds()).toEqual([]);
+  });
+
   it("flushes when the browser comes back online", async () => {
     renderFlush(swc());
     await tick();
@@ -527,7 +561,27 @@ describe("useScrobbleFlush invalidation", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("does not invalidate after unmount, but still finishes the row already in flight", async () => {
+  it("invalidates when the last queued row lands after the server object is replaced", async () => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedTrack("srv-a:t1");
+    armDeferredScrobble();
+
+    const { rerender, client } = renderFlush(swc());
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await tick();
+    rerender({ v: swc() });
+    await tick();
+
+    await act(async () => {
+      pending[0]!.resolve();
+    });
+    await tick();
+
+    expect(queueTrackIds()).toEqual([]);
+    expect(invalidate).toHaveBeenCalledTimes(3);
+  });
+
+  it("finishes the row in flight after unmount and still invalidates for it", async () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedTrack("srv-a:t1");
@@ -548,7 +602,7 @@ describe("useScrobbleFlush invalidation", () => {
     expect(queueTrackIds()).toEqual(["srv-a:t2"]);
     expect(trackPlayCount("srv-a:t1")).toBe(1);
     expect(scrobbleTrack).toHaveBeenCalledTimes(1);
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledTimes(3);
   });
 });
 

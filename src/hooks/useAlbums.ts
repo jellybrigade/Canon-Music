@@ -5,15 +5,8 @@ import { getDb } from "../db";
 import type { AlbumRow, AlbumSort } from "../types/library";
 export type { AlbumRow, AlbumSort } from "../types/library";
 
-// Pilot for the tauri-plugin-sql -> rusqlite migration (psysonic pattern, see
-// instructions/donow.md "rusqlite write/read split"). This read goes straight to a
-// dedicated Rust read-only connection (src-tauri/src/library_read/albums.rs) instead of
-// round-tripping through tauri-plugin-sql's sqlx pool - no per-query IPC/sqlx overhead,
-// and it can't contend with in-flight sync/enrichment writes. Writes/migrations for
-// `albums` stay on tauri-plugin-sql for now; only this read path is piloted.
-// `enabled` lets the app root skip this fetch on routes that never render an album
-// list. When false the effect returns early without clearing `data` - the session-store
-// seed and last-loaded rows survive, so returning to the route paints instantly.
+// Reads through the Rust read-only connection (library_read/albums.rs). `enabled: false`
+// skips the fetch but keeps `data`, so returning to the route paints instantly.
 export function useAlbums(
   sort: AlbumSort = "artist",
   canonicalIds: string[] = [],

@@ -23,7 +23,6 @@ export function AppShell(props: AppViewProps) {
     handlePlayTrack,
     setCanonicalIdFilters,
     currentTrack,
-    metaBarVisible,
     sidebarExpanded,
     setSidebarExpanded,
     sidebarLiveWidth,
@@ -61,7 +60,6 @@ export function AppShell(props: AppViewProps) {
           className={`sidebar${sidebarExpanded ? " sidebar--expanded" : ""}${sidebarLiveWidth !== null ? " sidebar--dragging" : ""}`}
           style={{
             width: sidebarExpanded ? `${sidebarLiveWidth ?? sidebarWidth}px` : undefined,
-            paddingBottom: `calc(var(--player-bar-reserve) + ${metaBarVisible ? 28 : 4}px)`,
           }}
         >
           {navItems.map(({ id, label, icon, badge }) => (

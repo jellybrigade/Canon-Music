@@ -8,10 +8,11 @@ import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
 import type { LastfmTopTrack, LastfmTopAlbum } from "../../clients/lastfm";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../lib/replayGainRow";
 
 export const POPULAR_TRACKS_MAX = 10;
 
-export interface TopTrack {
+export interface TopTrack extends ReplayGainColumns {
   id: string;
   title: string;
   artist: string | null;
@@ -34,7 +35,7 @@ export function useArtistTopTracks(artistName: string, serverId: string, options
       const db = await getDb();
       return db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count, t.played_at
+                t.album_id, a.artwork_url, t.play_count, t.played_at, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -48,9 +49,7 @@ export function useArtistTopTracks(artistName: string, serverId: string, options
 }
 
 /** One row, purely as a radio seed for a similar-artist card. Kept separate from
- * useArtistTopTracks because that query selects every track the artist has, and a
- * strip of similar artists is entirely on screen at once - twelve whole-table
- * scans to read twelve first rows. */
+ * useArtistTopTracks, which selects every track, to avoid one whole-table scan per card. */
 export function useArtistSeedTrack(artistName: string, serverId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: QK.artistSeedTrack(artistName, serverId),
@@ -59,7 +58,7 @@ export function useArtistSeedTrack(artistName: string, serverId: string, options
       const db = await getDb();
       const rows = await db.select<TopTrack[]>(
         `SELECT t.id, t.title, t.artist, t.duration, a.name AS album_name,
-                t.album_id, a.artwork_url, t.play_count, t.played_at
+                t.album_id, a.artwork_url, t.play_count, t.played_at, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t
          LEFT JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ?
@@ -151,15 +150,13 @@ export function buildTrackObj(track: TopTrack, server: Server, credential: Navid
     artworkRef,
     album: track.album_name ?? null,
     albumId: track.album_id ?? null,
+    replayGain: replayGainFromRow(track),
   };
 }
 
-// Last.fm's per-title playcount can't distinguish which local copy it belongs to when
-// several local tracks share a title (e.g. clipping.'s many "Intro" tracks), Last.fm's
-// own chart merges those into one page. For an ambiguous title, ask Last.fm which album
-// it considers representative and match that against the local copies; if nothing matches,
-// fall back to whichever local copy has the most local plays. Either way the winner is
-// marked `lastfmCombined` since the number is known to span more than this one track.
+// Last.fm's per-title playcount can't tell apart local copies sharing a title (e.g.
+// clipping.'s many "Intro" tracks); pick by Last.fm's representative album, else local plays,
+// and mark the winner `lastfmCombined` since the count spans more than this one track.
 async function matchLastfmTracks(
   tracks: TopTrack[],
   lastfmTracks: LastfmTopTrack[],
@@ -182,13 +179,8 @@ async function matchLastfmTracks(
   const result: TopTrack[] = tracks.map((t) => ({ ...t }));
   const byId = new Map(result.map((t) => [t.id, t]));
 
-  // Every ambiguous group used to cost a `track.getInfo` call, and those calls are
-  // serialized behind Last.fm's shared 250ms limiter, so an artist with many
-  // repeated titles (live sets, compilations) spent seconds of the same budget the
-  // similar-artist cards on this page enrich against, and the Popular list visibly
-  // re-sorted when it finally landed. Only the groups that can reach the visible
-  // list are worth a lookup; the rest fall back to the local play-count heuristic,
-  // which is what a failed lookup uses anyway.
+  // Every ambiguous group used to cost a `track.getInfo` call against Last.fm's shared
+  // 250ms limiter, visibly delaying the Popular list; only lookup groups that can reach it.
   const ambiguous = [...groups.entries()]
     .filter(([key, group]) => group.length > 1 && lastfmByTitle.has(key))
     .sort(([a], [b]) => lastfmByTitle.get(b)!.playcount - lastfmByTitle.get(a)!.playcount);

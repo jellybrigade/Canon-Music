@@ -1,43 +1,11 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 /**
- * Shared chrome for the portal modals: Escape-to-close, a focus trap, focus restoration, and
- * the `role="dialog"` markup that goes with them. Pair it with `useOverlayDismiss`, which owns
- * the backdrop gesture; between them a modal needs no keyboard or pointer handlers of its own.
- *
- * Three things here are deliberate, and each one is a bug that shipped before:
- *
- * 1. **Escape belongs to the topmost layer, and the layer underneath has to be *told*.**
- *    `useSearchShortcuts` already learned this once (`overlayAbove`), but it learned it as a
- *    hand-written list of the two overlays `App.tsx` happens to know about. That list cannot
- *    reach a dialog whose open state lives in `SearchResults`, three levels down - so a modal
- *    opened inside the search overlay was dismissed by the overlay's own Escape handler, taking
- *    the half-filled form with it. The registry below replaces the list: every modal using this
- *    hook registers itself, and the bottom layer reads a count. A new modal is covered the day
- *    it is written rather than the day somebody remembers to edit `App.tsx`.
- *
- * 2. **Registration order is not a stacking mechanism.** Nothing in this app calls
- *    `stopPropagation` on Escape, and the existing handlers are split across `window` and
- *    `document`, so "who registered last" decides nothing. Only the topmost *registered* modal
- *    acts on the press; every other one stands down by identity, not by timing.
- *
- * 3. **A handle another party can invalidate is not a liveness test.** The element focused when
- *    a modal opened is very often a `ContextMenu` item, and the menu unmounts on select - so
- *    "restore focus to the opener" would restore to a detached node and silently drop focus to
- *    nowhere. Restoration checks `isConnected` and falls back to `document.body`.
- *
- * Escape from inside the modal's own text fields *does* close it. These are form fields with no
- * Escape semantics of their own, which is the opposite of the rename inputs in `PlaylistDetail`
- * and `TagTreeTab` - those own Escape to revert and must keep it, which is why this hook scopes
- * itself to the modal container rather than installing a blanket window guard.
+ * Escape-to-close, focus trap, focus restoration and dialog markup for portal modals.
+ * Pair with `useOverlayDismiss` for the backdrop gesture.
  */
 
-// ── The open-modal registry ────────────────────────────────────────────────────
-//
-// Module-level rather than context, because the reader (`App.tsx`) is an ancestor of every
-// writer and a context would have to be threaded through the portal boundary anyway. Ordered,
-// not counted: the Escape branch needs to know *which* modal is topmost, not just how many.
-
+// Ordered, not counted: only the topmost registered modal acts on Escape, by identity.
 let openModals: symbol[] = [];
 const listeners = new Set<() => void>();
 
@@ -64,9 +32,8 @@ function getSnapshot(): boolean {
 }
 
 /**
- * Whether any modal using `useModalChrome` is currently open. Read by `App.tsx` as the third
- * term of `useSearchShortcuts`' `overlayAbove`, so the search overlay stands down while a modal
- * is painted over it.
+ * Whether any modal using `useModalChrome` is open. Feeds `useSearchShortcuts`'
+ * `overlayAbove` so the search overlay stands down while a modal is painted over it.
  */
 export function useAnyModalOpen(): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -99,9 +66,8 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
 
 export interface ModalChromeOptions {
   /**
-   * Whether Escape may close the modal right now. Pass `false` while a save is in flight, so
-   * Escape matches the Cancel button that is already disabled for the same reason - otherwise
-   * Escape is a second route around a gate the modal owns.
+   * Whether Escape may close the modal. Pass `false` while a save is in flight, matching
+   * the disabled Cancel button - otherwise Escape bypasses a gate the modal owns.
    */
   closable?: boolean;
 }
@@ -137,6 +103,7 @@ export function useModalChrome(onClose: () => void, options: ModalChromeOptions 
   useEffect(() => {
     const opener = document.activeElement as HTMLElement | null;
     return () => {
+      // The opener is often a ContextMenu item that unmounted on select.
       if (opener && opener.isConnected && typeof opener.focus === "function") opener.focus();
       else document.body.focus?.();
     };

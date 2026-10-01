@@ -7,16 +7,8 @@ import { makeRateLimiter } from "../lib/rateLimiter";
 import { runPool } from "../lib/asyncPool";
 import { QK } from "../lib/queryKeys";
 
-// Wikimedia Commons rate-limits anonymous fetches aggressively; a batch of 5 concurrent
-// requests reliably trips 429s. Keep the request RATE low and retry 429s with backoff
-// instead of counting a transient rate-limit as a permanent failure.
-//
-// Rate and concurrency are separated deliberately (rewritten 2026-07-28). This used to be
-// `BATCH_SIZE = 2` + a 500ms sleep between batches, which conflated the two: the sleep
-// paced requests, but the batch barrier also meant each pair of portraits cost
-// `max(fetch_a, fetch_b) + 500ms`, so one slow host stalled a fast one. Now a per-host
-// token bucket owns the rate (so a fetch from a host that is not Wikimedia is not slowed
-// by Wikimedia's budget) and a worker pool owns concurrency.
+// Wikimedia 429s on bursts: a per-host token bucket owns the rate, a worker pool owns
+// concurrency, and 429s retry with backoff.
 const PORTRAIT_HOST_INTERVAL_MS = 250; // <= 4 req/s per host
 const POOL_CONCURRENCY = 4;
 const MAX_RETRIES_429 = 4;
@@ -66,10 +58,8 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 const PROXY_WAIT_TIMEOUT_MS = 5000;
 const PROXY_WAIT_POLL_MS = 200;
 
-// Artist portraits are external (Wikidata/Last.fm) hosts that don't send CORS headers, so they must
-// go through the Rust loopback proxy. The proxy's port is assigned asynchronously on app start, so a
-// cache-all run kicked off right away (e.g. a fast "missing count" query resolving before the proxy's
-// invoke() round-trip finishes) would otherwise fetch the raw external URL and fail on every image.
+// Portraits (Wikidata/Last.fm) lack CORS headers so must go through the Rust loopback proxy, whose
+// port is assigned asynchronously on app start; a cache-all run kicked off too early would fail every image.
 async function waitForCoverServer(signal: AbortSignal): Promise<boolean> {
   const deadline = Date.now() + PROXY_WAIT_TIMEOUT_MS;
   while (!isCoverServerReady()) {
@@ -90,10 +80,8 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
       res = await fetch(url);
       if (res.status !== 429) break;
       if (attempt === MAX_RETRIES_429) break;
-      // Back off the whole HOST, not just this request. With several workers in flight a
-      // per-request sleep lets the others keep hammering a host that just said "slow down",
-      // so each of them burns its own retry budget and the run ends with avoidable
-      // permanent failures. Parking the host makes every worker wait it out together.
+      // Back off the whole host, not just this request: a per-request sleep lets other workers
+      // keep hammering a host that just said "slow down", burning their own retry budgets too.
       budget.cooldownUntil = Math.max(budget.cooldownUntil, Date.now() + RETRY_BASE_DELAY_MS * 2 ** attempt);
     }
     if (!res!.ok) {
@@ -202,22 +190,8 @@ interface ArtistCoverRow {
   data_url: string;
 }
 
-// --- On-demand artist-image data_url loading -------------------------------------------
-// APPROACH (chosen 2026-07-17): eager keyset + on-demand per-name base64 fetch. Mirrors the
-// cover-cache rewrite in useCoverCache.ts (see the long comment there). useArtistImageMap
-// used to eagerly `SELECT artist_name, data_url FROM artist_covers` over the WHOLE cache
-// (staleTime/gcTime Infinity), pulling multi-MB of resident base64 into JS at startup with a
-// cost that scaled with library size. Now only the keyset (artist_name) is loaded eagerly;
-// each portrait's data_url is pulled on demand the first time a caller .get()s that name,
-// cached so each name is fetched at most once, bounded LRU.
-//
-// Unlike covers, artist portraits have no object-URL layer: .get() returns the raw data URL
-// string (callers feed it straight into <img src>), so the return contract is preserved
-// exactly. .get() stays SYNCHRONOUS: warmed -> return the data URL; miss -> kick off a
-// one-time background load, return undefined this render, and a version bump re-renders the
-// consumer once it lands. Callers (`resolveArtistImageUrl`) already `?? getArtistImageUrl()`
-// fall back to the loopback-routed source URL for un-warmed names, so a miss shows the live
-// portrait immediately and swaps to cached bytes on the next render.
+// Same on-demand scheme as useCoverCache, minus the object-URL layer: .get() returns the
+// data URL, stays synchronous, and callers fall back to the source URL on a miss.
 
 const ARTIST_DATA_URL_CACHE_LIMIT = 2000;
 // artistName -> data_url, populated on demand, bounded LRU (recency = Map insertion order).

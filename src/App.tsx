@@ -33,7 +33,6 @@ import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
 import { useCoverCachePopulator } from "./hooks/useCoverCache";
 import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
 import { usePlayerStore } from "./features/playback/store/player";
-import { useTagsStore } from "./features/tags/store/tags";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
 import type { RadioMode, CurrentTrack } from "./features/playback/store/playerTypes";
 import { extractAccent } from "./lib/artColor";
@@ -50,9 +49,11 @@ import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
+import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
 import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
+import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "./lib/replayGainRow";
 
 export default function App() {
   useWakeLock();
@@ -69,9 +70,6 @@ export default function App() {
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
 
-  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
-  const pullProgress = useTagsStore((s) => s.pullProgress);
-  const metaBarVisible = !!(enrichmentPending || pullProgress);
 
   const canonicalIdFilters = useLibraryFiltersStore((s) => s.canonicalIdFilters);
   const lovedOnly = useLibraryFiltersStore((s) => s.lovedOnly);
@@ -86,12 +84,8 @@ export default function App() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  // The command palette is the one remaining overlay that is not URL-backed - it paints over
-  // whatever route is showing. So anything that navigates while it is up lands behind it and
-  // the click looks inert. It is dismissed inside useAppNavigation, at the one place every
-  // navigation the app offers is expressed, rather than at each source - the palette used to
-  // rely on the five setCommandPaletteOpen calls in its own handlers, which by construction
-  // could not cover navigation that started anywhere else.
+  // Not URL-backed, so it must be dismissed centrally in useAppNavigation; per-handler
+  // setCommandPaletteOpen calls couldn't cover navigation started elsewhere.
   const dismissOverlays = useCallback(() => {
     setCommandPaletteOpen(false);
   }, []);
@@ -122,10 +116,8 @@ export default function App() {
   const { data: servers, isLoading: serversLoading, error: serversError, refetch: refetchServers } = useServers();
   const server = servers?.[0];
   const { data: serverWithCred, error: credError, refetch: refetchCredential } = useServerWithCredential(server?.id);
-  // Derived rather than read off `isPending` on purpose: that query is `enabled: !!server?.id`,
-  // and a disabled React Query stays `pending` forever, so `isPending` cannot tell "the keychain
-  // read is running" from "there is no server to read one for". Consumers need the distinction
-  // because a falsy `serverWithCred` is otherwise indistinguishable from a permanent failure.
+  // Derived, not `isPending`: the query is `enabled: !!server?.id`, so a disabled query stays
+  // `pending` forever and can't tell "keychain read running" from "no server to read for".
   const credPending = !!server && !serverWithCred && !credError;
   // Needs the credential to build a full-size artwork URL for the OS now-playing panel,
   // so it is mounted here rather than at the top with the other playback hooks.
@@ -153,14 +145,8 @@ export default function App() {
     ? rawSort
     : "artist") as AlbumSort;
 
-  // These four feed exactly one route each (see AppRoutes), so they are gated on the
-  // pathname rather than loaded for every view. Gating skips the fetch only - each
-  // hook keeps its last rows and its session-store seed, so returning to the route
-  // still paints immediately. `pathname` not `view`: view folds /album/:id into
-  // "library", which would drag the whole album list into every album detail page.
-  // Also gated on `sortLoaded`: until the stored sort has been read back, `sort` is
-  // only the "artist" default, and firing here would scan the whole library in the
-  // wrong order, paint it, then scan again once the real sort arrived.
+  // Gated on `pathname` not `view` (folds /album/:id into "library") and on `sortLoaded`
+  // to avoid scanning once with the default sort and again once the real sort arrives.
   const { data: albums, isLoading: albumsLoading, error: albumsError } =
     useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
   const { data: artists, isLoading: artistsLoading, error: artistsError } =
@@ -235,20 +221,16 @@ export default function App() {
     return () => clearInterval(id);
   }, [autoCheckUpdates, autoCheckIntervalMin]);
 
-  // Covers the one navigation that never passes through useAppNavigation, and so cannot be
-  // dismissed on intent: a route sending the user elsewhere itself, as AppRoutes does after
-  // deleting a playlist. Keyed on pathname alone, not the whole location - a `?q` change while
-  // staying on /search must not close the command palette on every keystroke.
+  // Covers navigation that bypasses useAppNavigation (e.g. AppRoutes redirecting after a
+  // playlist delete). Keyed on pathname alone so a `?q` change on /search doesn't close it.
   useDismissOnNavigate(pathname, dismissOverlays);
 
   useSearchShortcuts({
     searchInputRef,
     searchActive: pathname === ROUTES.SEARCH,
     commandPaletteOpen,
-    // The named overlay plus anything registered through `useModalChrome`. Cannot be extended
-    // to cover a modal opened inside /search itself (`SearchResults`' identify dialog) - that
-    // state never reaches this component - so the registry answers "is something painted over
-    // me" for every modal at once.
+    // Registry-based so it also covers modals opened inside /search itself (e.g. the identify
+    // dialog), whose open state never reaches this component directly.
     overlayAbove,
     toggleCommandPalette: useCallback(() => setCommandPaletteOpen((open) => !open), []),
     openSearch: useCallback(() => navigateTo("search"), [navigateTo]),
@@ -395,14 +377,7 @@ export default function App() {
       artworkRef: artworkUrl,
       album: t.album_name,
       albumId: t.album_id,
-      replayGain: (t.replay_gain_track_gain != null || t.replay_gain_album_gain != null)
-        ? {
-            trackGain: t.replay_gain_track_gain,
-            trackPeak: t.replay_gain_track_peak,
-            albumGain: t.replay_gain_album_gain,
-            albumPeak: t.replay_gain_album_peak,
-          }
-        : null,
+      replayGain: replayGainFromRow(t),
     }, streamUrl);
   }
 
@@ -413,9 +388,9 @@ export default function App() {
     // loader does not order by, so the rows are read again once they are there.
     if ((await loadAlbumTracksForPlay(srv, credential, album)).length === 0) return;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      "SELECT id, title, artist, duration FROM tracks WHERE album_id = ? AND server_id = ? ORDER BY COALESCE(play_count, 0) DESC, track_number ASC",
+      `SELECT t.id, t.title, t.artist, t.duration, ${REPLAY_GAIN_COLUMNS} FROM tracks t WHERE t.album_id = ? AND t.server_id = ? ORDER BY COALESCE(t.play_count, 0) DESC, t.track_number ASC`,
       [album.id, srv.id]
     );
     if (rows.length === 0) return;
@@ -424,7 +399,7 @@ export default function App() {
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
@@ -438,7 +413,7 @@ export default function App() {
       : null;
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     for (const t of rows) {
-      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id };
+      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
       addToQueue(track, streamUrlFn);
     }
   }
@@ -446,17 +421,7 @@ export default function App() {
   async function handlePlayGenre(canonicalId: string, genreLabel?: string) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
-    const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
-    const rows = await db.select<TrackRow[]>(
-      `SELECT DISTINCT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
-       FROM tracks t
-       JOIN albums a ON t.album_id = a.id
-       JOIN album_genres ag ON ag.album_id = a.id
-       WHERE ag.canonical_id = ?
-       ORDER BY RANDOM()`,
-      [canonicalId]
-    );
+    const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
@@ -464,6 +429,7 @@ export default function App() {
       id: t.id, title: t.title, artist: t.artist, duration: t.duration,
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+      replayGain: replayGainFromRow(t),
     }));
     await startRadio({ tracks, streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
   }
@@ -472,9 +438,10 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
+    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
+              ${REPLAY_GAIN_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
        WHERE t.server_id = ?
          AND (t.artist = ? OR a.artist = ?)
@@ -486,7 +453,7 @@ export default function App() {
     const coverArtUrl = t.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
       : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id };
+    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id, replayGain: replayGainFromRow(t) };
     const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
   }
@@ -520,11 +487,8 @@ export default function App() {
 
   if (serversLoading) return null;
 
-  // `servers` is undefined for a failed read as well as an empty table, so
-  // falling through to the wizard here would show first-run setup to a fully
-  // configured user. Finishing it would insert a *second* server row, and
-  // `servers?.[0]` orders by created_at, so the app would then keep using the
-  // old row while the user had just entered credentials for the new one.
+  // `servers` is undefined for a failed read as well as an empty table; falling through to
+  // the wizard would insert a second row and `servers?.[0]` would keep using the old one.
   if (serversError) {
     return (
       <DatabaseErrorScreen
@@ -618,7 +582,6 @@ export default function App() {
     setHideTagBadge,
     queryClient,
     currentTrack,
-    metaBarVisible,
     navItems,
     commandPaletteOpen,
     setCommandPaletteOpen,

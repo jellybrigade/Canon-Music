@@ -3,15 +3,8 @@ import { getDb } from "../../../db";
 export async function scanForIssues(serverId: string): Promise<void> {
   const db = await getDb();
 
-  // Remove non-dismissed issues for this server.
-  // Dismissed rows survive (INSERT OR IGNORE won't overwrite them),
-  // so dismissed issues stay dismissed across rescans.
-  //
-  // EXISTS, not `track_id IN (SELECT id FROM tracks WHERE server_id = ?)`: the IN
-  // form makes SQLite scan every track to materialize the id list, then probe
-  // tag_issues once per track. EXISTS drives off tag_issues instead (a far smaller
-  // table) and probes tracks by primary key. Measured 664ms -> 27ms on a
-  // 169k-track library.
+  // Keep dismissed rows (INSERT OR IGNORE won't overwrite them). EXISTS drives off the small
+  // tag_issues table; `IN (SELECT ...)` scanned every track (664ms -> 27ms on 169k tracks).
   await db.execute(
     `DELETE FROM tag_issues
      WHERE dismissed_at IS NULL
@@ -44,9 +37,8 @@ export async function scanForIssues(serverId: string): Promise<void> {
     [serverId]
   );
 
-  // Both grouping queries below were measured against a 169k-track library
-  // (see the item 9 note in instructions/performance-issues.md). The GROUP BY
-  // form beats every EXISTS/index rewrite tried, so leave them alone.
+  // Both grouping queries below were measured against a 169k-track library: the
+  // GROUP BY form beats every EXISTS/index rewrite tried, so leave them alone.
   await db.execute(
     `INSERT OR IGNORE INTO tag_issues (track_id, issue_type, details)
      SELECT t.id, 'inconsistent_album_artist',

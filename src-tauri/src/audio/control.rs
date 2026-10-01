@@ -124,9 +124,7 @@ pub fn audio_pause(state: tauri::State<'_, AudioState>, fade_ms: u64) {
             let steps = (fade_ms / 10).max(1);
             for i in 1..=steps {
                 // Abandon the ramp if another fade took over, but still fall through to the
-                // pause_pending check below: a seek mid-fade bumps fade_gen without meaning
-                // "keep playing", and skipping the pause left audio running with the UI
-                // showing a paused state.
+                // pause_pending check: a seek mid-fade bumps fade_gen without meaning "keep playing".
                 if fade_gen.load(Ordering::Relaxed) != gen {
                     break;
                 }

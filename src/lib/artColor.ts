@@ -1,9 +1,6 @@
-// Canvas-based vibrant color extraction from cover art.
-// Tries a direct <img crossOrigin="anonymous"> load first, works for the local
-// cover-art server and any host that sends Access-Control-Allow-Origin. Only
-// falls back to fetching bytes via Tauri's Rust-backed fetch and drawing from a
-// same-origin blob: URL when that taints the canvas, external hosts
-// (Wikidata/Fanart/TheAudioDB portrait CDNs) rarely send CORS headers.
+// Tries a direct <img crossOrigin="anonymous"> load first; falls back to fetching bytes via
+// Tauri's Rust-backed fetch and drawing from a blob: URL only when that taints the canvas
+// (external hosts like Wikidata/Fanart/TheAudioDB rarely send CORS headers).
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { cappedSet } from "./boundedCache";

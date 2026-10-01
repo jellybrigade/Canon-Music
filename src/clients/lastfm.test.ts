@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { LASTFM_PLACEHOLDER, normalizeTrackTitle, resolvePortraitUrl } from "./lastfm";
+import {
+  LASTFM_PLACEHOLDER,
+  SIMILAR_ARTIST_MIN_MATCH,
+  normalizeTrackTitle,
+  resolvePortraitUrl,
+  similarArtistsAboveMatch,
+} from "./lastfm";
 
 describe("normalizeTrackTitle", () => {
   it("lowercases and strips non-alphanumeric characters", () => {
@@ -92,5 +98,19 @@ describe("resolvePortraitUrl", () => {
     expect(
       resolvePortraitUrl({ lastfm_image_url: null, wikidata_image_url: "https://wikidata/img.jpg" })
     ).toBe("https://wikidata/img.jpg");
+  });
+});
+
+describe("similarArtistsAboveMatch", () => {
+  it("keeps every artist at or above the minimum match, in order, with no count cap", () => {
+    const entries = Array.from({ length: 30 }, (_, i) => ({ name: `artist ${i}`, match: 0.9 }));
+    entries.push({ name: "edge", match: SIMILAR_ARTIST_MIN_MATCH });
+    entries.push({ name: "weak", match: SIMILAR_ARTIST_MIN_MATCH - 0.01 });
+
+    const names = similarArtistsAboveMatch(entries);
+
+    expect(names).toHaveLength(31);
+    expect(names[0]).toBe("artist 0");
+    expect(names[30]).toBe("edge");
   });
 });

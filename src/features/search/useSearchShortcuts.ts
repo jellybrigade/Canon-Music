@@ -9,11 +9,8 @@ export interface SearchShortcutOptions {
   searchActive: boolean;
   /** Whether the command palette is currently open. */
   commandPaletteOpen: boolean;
-  /**
-   * Whether any overlay is painted *over* the search route (the command palette, the feedback
-   * modal). Escape belongs to the topmost layer, so search's own dismissal has to stand down
-   * while one of these is up.
-   */
+  /** Whether an overlay (command palette, feedback modal) sits above /search; its own
+   * Escape must stand down for the topmost layer's. */
   overlayAbove: boolean;
   toggleCommandPalette: () => void;
   openSearch: () => void;
@@ -22,28 +19,8 @@ export interface SearchShortcutOptions {
 }
 
 /**
- * The window-level Ctrl/Cmd+K, Ctrl/Cmd+F and Escape shortcuts.
- *
- * Each branch guards focus *itself* rather than sharing one blanket bail, because the branches
- * disagree about what focus means:
- *
- * - **Ctrl+K** must not steal a keystroke from a text field, but the palette's own input is the
- *   only thing that can hold focus while the palette is open, so the toggle would lose its
- *   "close" half under a blanket guard.
- * - **Ctrl+F** must not steal a keystroke either, except from the search input it exists to
- *   focus - where re-pressing it usefully re-selects the text instead of pushing a duplicate
- *   history entry.
- * - **Escape** leaves the /search route, and is pressed from inside the search input almost
- *   every time. But Escape inside any *other* field belongs to that field (a rename box, a
- *   modal form), so the exemption is by ref identity, not by "an input has focus". And it
- *   belongs to whatever is stacked *above* /search before it belongs to /search at all - focus
- *   alone cannot answer that, because the layer on top may hold no focus (a click on its blank
- *   chrome) while the layer underneath may hold it (Ctrl+F focuses the search input through the
- *   palette). In both of those the ref-identity exemption is precisely what lets one keypress
- *   collapse the whole stack.
- *
- * Options are read through a ref, so the listener is registered once for the lifetime of the
- * app rather than being torn down and re-registered on every keystroke in the search box.
+ * Window-level Ctrl/Cmd+K, Ctrl/Cmd+F and Escape. Each branch guards focus itself: Escape
+ * exempts only the search input (by ref), so other fields keep their own Escape.
  */
 export function useSearchShortcuts(options: SearchShortcutOptions) {
   const optionsRef = useRef(options);
@@ -86,10 +63,8 @@ export function useSearchShortcuts(options: SearchShortcutOptions) {
       }
 
       if (e.key === "Escape" && searchActive) {
-        // Topmost layer first. These overlays run their own Escape handlers (the palette on
-        // `window`, registered later than this one; the feedback modal on `document`, so
-        // earlier), and none of them stops propagation, so without this the press dismisses
-        // the layer the user aimed at *and* leaves /search underneath it.
+        // These overlays run their own Escape handlers and don't stop propagation, so without
+        // this guard the press would dismiss the top layer *and* leave /search underneath it.
         if (overlayAbove) return;
         if (typing && e.target !== searchInputRef.current) return;
         leaveSearch();

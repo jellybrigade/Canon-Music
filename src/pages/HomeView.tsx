@@ -20,7 +20,6 @@ import { usePlayerStore } from "../features/playback/store/player";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import type { RadioMode, CurrentTrack } from "../features/playback/store/playerTypes";
 import { useSearch } from "../features/search/useSearch";
-import { getDb } from "../db";
 import { stripServerPrefix } from "../lib/ids";
 import { SearchResults } from "../features/search/SearchResults";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
@@ -34,6 +33,8 @@ import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
 import "./HomeView.css";
 import "./GenreView.css";
+import { replayGainFromRow } from "../lib/replayGainRow";
+import { loadGenreSeedTracks } from "../features/radio/lib/genreSeed";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -145,10 +146,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
 
-  // Picks sourced from the carousels arrive as NavidromeAlbum rows, which carry no
-  // accent_color. Without this the Spotlight effect re-extracts and re-writes an
-  // accent the albums table already holds, once per mount, and flashes the accent
-  // off in between. Fill it from the local mirror before rendering.
+  // Carousel picks arrive as NavidromeAlbum rows with no accent_color; without filling it
+  // from the local mirror, Spotlight re-extracts on every mount and flashes the accent off.
   const accentByAlbumId = useMemo(() => {
     const map = new Map<string, string>();
     for (const a of allAlbums ?? []) {
@@ -234,18 +233,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const featuredGenres = recentGenres;
 
   const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
-    const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null };
-    const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name
-       FROM tracks t
-       JOIN albums a ON t.album_id = a.id
-       JOIN album_genres ag ON a.id = ag.album_id
-       WHERE ag.canonical_id = ? AND ag.relation = 'direct'
-       ORDER BY RANDOM()
-       LIMIT 1`,
-      [canonicalId]
-    );
+    const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
     const t = rows[0];
     if (!t) return;
     const coverArtUrl = t.artwork_url
@@ -254,6 +242,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     const track: CurrentTrack = {
       id: t.id, title: t.title, artist: t.artist, duration: t.duration,
       coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+      replayGain: replayGainFromRow(t),
     };
     const streamUrlFn = (tr: CurrentTrack) =>
       getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));

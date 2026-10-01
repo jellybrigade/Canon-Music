@@ -61,10 +61,8 @@ export function useListeningStats() {
     gcTime: HOME_GC_TIME,
   });
 
-  // "Finish the album" and "Almost done" used to be two queries that scanned the same
-  // albums x tracks x scrobble_history join and differed only in their HAVING clause.
-  // One partially-heard pass serves both: almost-done is the subset where at least half
-  // the tracks have been heard.
+  // One partially-heard pass serves both "finish the album" and "almost done" (used to be
+  // two queries over the same join, differing only in HAVING); almost-done is the >= half subset.
   const partialQuery = useQuery<PartialAlbumRow[]>({
     queryKey: QK.albumsPartiallyHeard(),
     queryFn: async () => {

@@ -37,7 +37,11 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, 
     return () => observer.disconnect();
   }, [inView]);
 
-  const { data: enrichment } = useEnrichArtist(name, { enabled: inView, serverWithCredential: { server, credential } });
+  const { data: enrichment } = useEnrichArtist(name, {
+    enabled: inView,
+    serverWithCredential: { server, credential },
+    identifyIfUnidentified: owned,
+  });
   const artistImageMap = useArtistImageMap();
   const rawPortraitUrl = resolvePortraitUrl(enrichment);
   const portraitUrl = resolveArtistImageUrl(artistImageMap, name, rawPortraitUrl);

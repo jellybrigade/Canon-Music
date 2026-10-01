@@ -2,13 +2,8 @@ import Database from "@tauri-apps/plugin-sql";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 
-// A track the server no longer has leaves rows behind that still show up in the
-// grid, in search and in radio candidates, and 404 when played. Which tables
-// those are, and why the user's own rows are spared, is db/trackIdTables.ts.
-//
-// Album-keyed album_identity and album_user_genres are left alone for the same
-// reason the user's track rows are: they are user-authored or user-corrected and
-// cost nothing to keep if the album comes back.
+// Which tables carry track-keyed rows, and why the user's own rows are spared, is
+// db/trackIdTables.ts. album_identity/album_user_genres are spared for the same reason.
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
@@ -24,16 +19,8 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
   }
 }
 
-// Drop albums the server no longer lists, along with their tracks and every
-// derived row keyed off either. Dependent rows go first so the subselects can
-// still find the tracks they are keyed to.
-//
-// album_covers goes because it is a pure cache holding a base64 data_url, so a
-// stranded row is tens to hundreds of KB no read path can reach. album_identity,
-// album_user_genres and album_genre_exclusions stay for the reason given above
-// deleteTracksByIds: they are user-authored or user-corrected, and the album ids
-// survive a re-add of the same server. The track-keyed tables come from
-// db/trackIdTables.ts.
+// Drop albums the server no longer lists, plus their tracks and derived rows, dependants
+// first. album_covers goes (pure cache); user-authored album rows stay.
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
   const viaTracks = ({ table, column }: { table: string; column: string }) => (ph: string) =>
@@ -52,27 +39,8 @@ export async function pruneAlbums(db: Database, albumIds: readonly string[]): Pr
   }
 }
 
-// Drop every local row belonging to a server being removed. Without this the
-// `servers` row goes and the mirrored library stays: the album grid does not
-// filter by server_id (see `library_read/albums.rs`), so the old albums keep rendering
-// and 404 when played, because stream URLs are built from whatever server is
-// selected now against the removed server's track ids.
-//
-// Deletes run through subselects on server_id rather than collected id lists, so
-// there is no chunking involved and none of the `NOT IN` hazard that forces
-// `pruneAlbumTracks` below to bail out rather than split. Dependents go first so
-// the subselects can still resolve the rows they are keyed to.
-//
-// Purged here but deliberately kept by the sync prune above: the user's own
-// track-keyed rows (db/trackIdTables.ts names them - queued plays can never be
-// delivered once the server is gone, and the history is dedupe state keyed to
-// track ids that no longer exist), album_identity and album_user_genres (a
-// re-added server mints a fresh UUID, so every id is rewritten and these rows
-// could never be matched again anyway).
-//
-// Deliberately NOT purged: artist_identity, artist_covers, artist_aliases,
-// radio_signal_cache, tag_mappings, user_tree_nodes. Those are keyed by artist
-// name or are global user data, so they stay correct across servers.
+// Subselects on server_id, dependents first. Global/artist-name-keyed user tables
+// (artist_identity/covers/aliases, radio_signal_cache, tag_mappings, user_tree_nodes) are spared.
 export async function purgeServerData(db: Database, serverId: string): Promise<void> {
   const viaTracks = ({ table, column }: { table: string; column: string }) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE server_id = ?)`;
@@ -102,11 +70,8 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   ]);
 }
 
-// Rows whose server is gone are unreachable, not merely stale: every read is scoped by
-// server_id and every prune subselects the server's own albums, so nothing left over from a
-// purge that did not finish - or from a `servers` row lost any other way - can ever be
-// deleted, searched or played again. Run once at startup, since a stranded server by
-// definition never triggers a sync of its own.
+// Every read is scoped by server_id, so rows left by an unfinished purge or a `servers` row
+// lost another way are unreachable, not merely stale. Run once at startup; a stranded server never syncs itself.
 export async function purgeStrandedServers(db: Database): Promise<string[]> {
   const rows = await db.select<{ server_id: string }[]>(
     `SELECT server_id FROM albums
@@ -124,11 +89,8 @@ export async function purgeStrandedServers(db: Database): Promise<string[]> {
   return stranded;
 }
 
-// Drop tracks the album no longer contains. Without this a track deleted on the
-// server keeps its row, the stored track count stays permanently above the
-// album's songCount, and the sync's skipTracks check can never match again - so
-// the album is re-fetched on every sync forever, dragging the FTS rebuild and
-// the tag scans along with it.
+// Without this a deleted track's row lingers, the stored count stays above songCount, and
+// skipTracks can never match again - re-fetching the album (and its FTS/tag work) forever.
 export async function pruneAlbumTracks(
   db: Database,
   albumDbId: string,

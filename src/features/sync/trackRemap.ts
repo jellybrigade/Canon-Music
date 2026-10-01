@@ -28,17 +28,8 @@ function uniqueByPath<T>(rows: readonly T[], path: (row: T) => string | null): M
 }
 
 /**
- * Pair mirrored rows whose id the server has stopped using with the fetched track holding the
- * same file path, so the rows keyed to the old id can be carried instead of pruned.
- *
- * Navidrome 0.64 re-encoded ~87% of track ids without touching a single file, so to the prune
- * every one of those tracks looks deleted and re-added: loved state, lyrics, waveform, play
- * position and queued scrobbles all die with the old row. The file path is the one thing both
- * sides agree on across the rewrite, which is also why it has to be exact - it is the server's
- * own bytes, not a name to normalise.
- *
- * Conservative on every ambiguity: no path, a path claimed twice on either side, or a new id the
- * mirror already holds all mean "no evidence", and an unmatched stale row is left to the prune.
+ * Pairs stale mirrored track ids to the fetched track at the same file path, so rows
+ * carry instead of pruning. Any ambiguity pairs nothing and leaves the row to the prune.
  */
 export function planTrackIdRemap(
   existing: readonly MirroredTrackRow[],

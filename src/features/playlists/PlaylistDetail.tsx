@@ -23,6 +23,7 @@ import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
 import { useClickOutside } from "../../ui/useClickOutside";
+import { replayGainFromRow } from "../../lib/replayGainRow";
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -137,10 +138,8 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     overscan: 5,
   });
 
-  // Restoring the scroll position is a once-per-playlist courtesy, not a reaction to the
-  // track list. `tracks` is a fresh array after every mutation (remove a track, refresh a
-  // smart playlist), and re-running on it yanked the list back to the resume row each
-  // time, undoing wherever the user had scrolled to.
+  // Once per playlist, not a reaction to `tracks`: it's a fresh array after every mutation,
+  // and re-running on it yanked the list back to the resume row, undoing the user's scroll.
   const resumeScrolledFor = useRef<string | null>(null);
   useEffect(() => {
     if (resumeIndex === null || !tracks || resumeIndex >= tracks.length) return;
@@ -197,7 +196,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     const coverArtUrl = track.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
       : null;
-    return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id };
+    return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id, replayGain: replayGainFromRow(track) };
   }
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);

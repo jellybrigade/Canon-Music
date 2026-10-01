@@ -170,10 +170,8 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
           return url;
         }
       })();
-      // An extraction started by the preload pass may already be running for this track.
-      // Its chunk/complete events are broadcast, so the listeners above still receive them;
-      // invoking again would download the track a second time and both runs would write the
-      // same temp file, corrupting the analysis.
+      // A preload pass may already be extracting this track; its events are broadcast, so the
+      // listeners above still receive them. Invoking again would corrupt the shared temp file.
       if (!waveformInFlight.has(trackId)) {
         waveformInFlight.add(trackId);
         void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 })

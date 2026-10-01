@@ -1,17 +1,6 @@
 /**
- * On-open per-track genre enrichment from Last.fm.
- *
- * When an album view mounts, fetches track.getTopTags for each track whose
- * tags_enriched_at is null or older than tags.staleness_days. Tags are
- * written to track_tags with source='lastfm-track' and canonical_id resolved
- * inline via findCanonicalSync (no pre-existing tag_mappings row required).
- *
- * After all tracks are enriched, normalizeAlbum re-runs so:
- *   - Radio scoring picks up the new per-track canonical_ids immediately.
- *   - Genres shared by ≥50% of tracks are promoted into album_genres chips.
- *
- * Gated by settings key 'tags.enrich_tracks' (default true).
- * Failures are silent, never throws to the UI.
+ * On album open, fetches Last.fm track tags for stale tracks, then re-runs normalizeAlbum so
+ * radio and album genres see them. Gated by `tags.enrich_tracks`; failures are silent.
  */
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";

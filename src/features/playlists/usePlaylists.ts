@@ -38,10 +38,8 @@ export interface PlaylistRow {
   rules_json: string | null;
 }
 
-// Load path reads via rusqlite (src-tauri/src/library_read/playlists.rs, psysonic pattern) and
-// caches rows on the session store keyed by tick, so the several components mounting
-// this hook share one fetch. Mutations below stay on tauri-plugin-sql - writes and
-// migrations are not part of the read split.
+// Reads go through rusqlite (src-tauri/src/library_read/playlists.rs); mutations below
+// stay on tauri-plugin-sql, which owns writes and migrations.
 export function usePlaylists() {
   const refreshTick = usePlaylistSessionStore((s) => s.playlistsTick);
   const [data, setData] = useState<PlaylistRow[] | undefined>(() => {

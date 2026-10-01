@@ -15,12 +15,9 @@ import { CardGridSkeleton } from "../ui/Skeleton";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import { useSetting } from "../hooks/useSetting";
 
-/** Lazily triggers portrait enrichment once a grid tile scrolls into view, so
- * artists never opened individually still pick up a portrait (Navidrome scrape,
- * Wikidata, etc.) instead of staying on the album-cover fallback forever.
- * Rendered as a null component (not a hook in the card) so the grid can skip it
- * entirely for artists whose enrichment is already fresh - the common case -
- * instead of mounting a query per card. */
+/** Lazily triggers portrait enrichment once a grid tile scrolls into view, so artists
+ * never opened individually still get one. A null component, not a card hook, so the
+ * grid can skip mounting it for artists whose enrichment is already fresh. */
 function LazyPortraitEnrich({ artistName, serverWithCredential, elRef }: {
   artistName: string;
   serverWithCredential: ServerWithCredential;
@@ -65,10 +62,8 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
   const artistImageMap = useArtistImageMap();
 
-  // Stable, artist-agnostic handlers passed to every ArtistGridCard. The card binds
-  // them to its own artist internally, so these references never change per render
-  // and don't defeat ArtistGridCard's React.memo. (setContextMenu / setFailedPortraits
-  // are stable useState setters, so empty deps are correct.)
+  // Artist-agnostic handlers so their references never change and don't defeat
+  // ArtistGridCard's React.memo; empty deps are correct since the setters are stable.
   const handleContextMenu = useCallback((e: MouseEvent, artist: ArtistRow) => {
     e.preventDefault();
     setContextMenu({ x: e.clientX, y: e.clientY, artist });
@@ -95,10 +90,8 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   const rowHeight = Math.round(cardWidth) + ROW_GAP;
   const rowCount = Math.ceil(artists.length / cols);
 
-  // Padding declared to the virtualizer rather than added to each row's `top` by hand, so
-  // the offsets it computes live in the same coordinate space as the rows the grid paints.
-  // See known-issues, "A layout constant the component applies by hand is invisible to the
-  // library that computes offsets from the same coordinate space".
+  // Padding declared to the virtualizer, not added to each row's `top` by hand, so its
+  // offsets stay in the same coordinate space as the rows painted (see known-issues).
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => containerRef.current,
@@ -119,10 +112,8 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
     }
   }, [cols, rowHeight, virtualizer]);
 
-  // Error before loading: a failed read leaves the caller's data undefined, so `isLoading`
-  // is still true and a skeleton would otherwise pulse forever over the failure. Before
-  // this, both states fell through to the empty state below, which told the user to sync -
-  // advice that cannot fix a failed local read, and that hid the failure entirely.
+  // Check error before loading: a failed read leaves data undefined, so `isLoading` stays
+  // true and a skeleton would pulse forever; falling through to the sync-advice empty state hid the failure entirely.
   if (artists.length === 0 && error) {
     return (
       <div className="empty-state">

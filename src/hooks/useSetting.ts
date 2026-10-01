@@ -10,12 +10,8 @@ export function useBoolSetting(key: string, defaultValue: boolean): [boolean, (v
   return [raw === "true", set, loaded];
 }
 
-// The third element reports whether the stored value has been read back from the
-// settings table yet. Until it is true, `value` is only the caller's default, which
-// is not necessarily what the user chose. Callers that kick off expensive work keyed
-// on the value (useAlbums re-queries the whole library when `sort` changes) should
-// wait for it, otherwise they run once against the default and again against the
-// real value, and the user watches the result change under them.
+// The third element reports whether the stored value has been read back yet; until then
+// `value` is only the caller's default. Callers keying expensive work on the value should wait for it.
 export function useSetting(key: string, defaultValue: string): [string, (v: string) => Promise<void>, boolean] {
   const [value, setValue] = useState(() => settingCache.get(key) ?? defaultValue);
   const [loaded, setLoaded] = useState(() => settingCache.has(key));

@@ -43,14 +43,15 @@ export interface LrcLine {
 export function parseLrc(lrc: string): LrcLine[] {
   const lines: LrcLine[] = [];
   for (const raw of lrc.split("\n")) {
-    const match = /^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/.exec(raw.trim());
-    if (!match) continue;
-    const [, mm, ss, cs, text] = match;
-    const timeSec =
-      parseInt(mm!, 10) * 60 +
-      parseInt(ss!, 10) +
-      parseInt(cs!.padEnd(3, "0"), 10) / 1000;
-    lines.push({ timeSec, text: text!.trim() });
+    // LRC writes a repeated line once with every timestamp prefixed: [00:12.00][01:44.00]chorus
+    const prefix = /^(?:\[\d{2}:\d{2}\.\d{2,3}\])+/.exec(raw.trim());
+    if (!prefix) continue;
+    const text = raw.trim().slice(prefix[0].length).trim();
+    for (const [, mm, ss, cs] of prefix[0].matchAll(/\[(\d{2}):(\d{2})\.(\d{2,3})\]/g)) {
+      const timeSec =
+        parseInt(mm!, 10) * 60 + parseInt(ss!, 10) + parseInt(cs!.padEnd(3, "0"), 10) / 1000;
+      lines.push({ timeSec, text });
+    }
   }
   return lines.sort((a, b) => a.timeSec - b.timeSec);
 }
