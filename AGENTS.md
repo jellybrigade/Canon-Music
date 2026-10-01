@@ -111,4 +111,4 @@ bash scripts/run-local-checks.sh   # all pre-commit checks
 
 ## Status
 
-v0.51.x (`package.json`), schema v52 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.
+v0.52.x (`package.json`), schema v52 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.
