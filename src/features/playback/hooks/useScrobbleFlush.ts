@@ -22,6 +22,9 @@ function ownerPattern(serverId: string): string {
  * credential refetch's new pass re-SELECT an undeleted row and send it twice. */
 const serversFlushing = new Set<string>();
 
+/** A pass refused by the claim, run when the claim frees, so a re-armed effect isn't left waiting a whole interval. */
+const flushRefusedWhileBusy = new Map<string, () => void>();
+
 /** Queued rows the currently selected server could send, i.e. what a backlog count may claim. */
 export async function getScrobbleQueueCount(serverId: string): Promise<number> {
   const db = await getDb();
@@ -44,7 +47,11 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
     let cancelled = false;
 
     async function flush() {
-      if (serversFlushing.has(server.id) || cancelled) return;
+      if (cancelled) return;
+      if (serversFlushing.has(server.id)) {
+        flushRefusedWhileBusy.set(server.id, () => void flush());
+        return;
+      }
       serversFlushing.add(server.id);
       let sent = 0;
       try {
@@ -92,11 +99,16 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
         serversFlushing.delete(server.id);
       }
 
-      if (sent > 0 && !cancelled) {
+      // Not gated on `cancelled`: the rows left the queue whichever effect sent them.
+      if (sent > 0) {
         void queryClient.invalidateQueries({ queryKey: QK.albumsListeningStats() });
         void queryClient.invalidateQueries({ queryKey: QK.albumsPartiallyHeard() });
         void queryClient.invalidateQueries({ queryKey: QK.scrobbleQueueCount(server.id) });
       }
+
+      const refused = flushRefusedWhileBusy.get(server.id);
+      flushRefusedWhileBusy.delete(server.id);
+      refused?.();
     }
 
     void flush();

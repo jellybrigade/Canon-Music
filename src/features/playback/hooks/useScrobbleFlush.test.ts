@@ -506,7 +506,10 @@ describe("useScrobbleFlush in-flight guard", () => {
     await act(async () => {
       pending[0]!.resolve();
     });
-    await tick(FLUSH_MS);
+    // The re-armed pass was refused while the old one held the claim; it runs as soon as
+    // the claim frees, not a whole interval later.
+    await tick();
+    expect(scrobbleTrack).toHaveBeenCalledTimes(2);
     await act(async () => {
       pending[1]!.resolve();
     });
@@ -558,7 +561,27 @@ describe("useScrobbleFlush invalidation", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("does not invalidate after unmount, but still finishes the row already in flight", async () => {
+  it("invalidates when the last queued row lands after the server object is replaced", async () => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedTrack("srv-a:t1");
+    armDeferredScrobble();
+
+    const { rerender, client } = renderFlush(swc());
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await tick();
+    rerender({ v: swc() });
+    await tick();
+
+    await act(async () => {
+      pending[0]!.resolve();
+    });
+    await tick();
+
+    expect(queueTrackIds()).toEqual([]);
+    expect(invalidate).toHaveBeenCalledTimes(3);
+  });
+
+  it("finishes the row in flight after unmount and still invalidates for it", async () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedTrack("srv-a:t1");
@@ -579,7 +602,7 @@ describe("useScrobbleFlush invalidation", () => {
     expect(queueTrackIds()).toEqual(["srv-a:t2"]);
     expect(trackPlayCount("srv-a:t1")).toBe(1);
     expect(scrobbleTrack).toHaveBeenCalledTimes(1);
-    expect(invalidate).not.toHaveBeenCalled();
+    expect(invalidate).toHaveBeenCalledTimes(3);
   });
 });
 
