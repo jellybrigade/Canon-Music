@@ -377,11 +377,6 @@ export async function fetchAlbumInfo(artist: string, album: string): Promise<Las
   }
 }
 
-export async function fetchArtistImage(artist: string): Promise<string | null> {
-  const info = await fetchArtistInfo(artist);
-  return info.imageUrl;
-}
-
 export interface LastfmTopTrack {
   name: string;
   playcount: number;
