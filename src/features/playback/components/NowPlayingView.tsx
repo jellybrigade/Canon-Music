@@ -189,7 +189,7 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <div className="now-playing-info">
             <div className="now-playing-title-row">
-              <p className="now-playing-title">{currentTrack.title}</p>
+              <p className="now-playing-title" title={currentTrack.title}>{currentTrack.title}</p>
             </div>
             {currentTrack.artist && (
               onSelectArtist ? (
