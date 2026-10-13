@@ -2,9 +2,9 @@ import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../store/player";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { savePlayQueue, getPlayQueue } from "../../../clients/navidrome";
-import { getCoverArtUrl, getStreamUrl } from "../../../clients/navidromeUrls";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
-import { stripServerPrefix } from "../../../lib/ids";
+import { makeStreamUrlBuilder } from "../../../lib/track";
 import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
@@ -63,8 +63,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // would overwrite it. Whoever got there first wins.
       if (usePlayerStore.getState().currentTrack) return;
 
-      const streamUrlFn = (t: { id: string }) =>
-        getStreamUrl(server.url, server.username, credential, stripServerPrefix(t.id, server.id));
+      const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
       const trackObjs = orderedTracks.map((r) => ({
         id: r.id,
@@ -88,7 +87,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // Seeds the queue only. Loading the track here would download and decode it at startup
       // for playback the user never asked for, and the pause that followed had to win a race
       // against the download thread appending to the sink.
-      restoreQueue(trackObjs, streamUrlFn, startIndex >= 0 ? startIndex : 0);
+      restoreQueue(trackObjs, streamUrlFor, startIndex >= 0 ? startIndex : 0);
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverWithCred?.server.id]);

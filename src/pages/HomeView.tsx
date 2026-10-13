@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, useCallback } from "react";
 import { Search, X } from "lucide-react";
 import { CanonIcon } from "../ui/CanonIcon";
 import { useSetting } from "../hooks/useSetting";
-import { getCoverArtUrl, getStreamUrl } from "../clients/navidromeUrls";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { sampleFromHead } from "../lib/shuffle";
 import type { ForYouCategoryConfig } from "../lib/forYouGroups";
 import { useForYouGroups } from "../hooks/useForYouGroups";
@@ -20,7 +20,7 @@ import { usePlayerStore } from "../features/playback/store/player";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import type { RadioMode, CurrentTrack } from "../features/playback/store/playerTypes";
 import { useSearch } from "../features/search/useSearch";
-import { stripServerPrefix } from "../lib/ids";
+import { makeStreamUrlBuilder } from "../lib/track";
 import { SearchResults } from "../features/search/SearchResults";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
@@ -244,9 +244,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
       replayGain: replayGainFromRow(t),
     };
-    const streamUrlFn = (tr: CurrentTrack) =>
-      getStreamUrl(server.url, server.username, credential, stripServerPrefix(tr.id, server.id));
-    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
+    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(server, credential), mode: "same-genre", label: genreLabel });
   }, [server, credential, startRadio]);
 
   const play = (album: AlbumRow) => void playAlbum(album);
