@@ -349,7 +349,7 @@ describe("player store - transport intent", () => {
     const { promise: loadPromise, resolve: resolveLoad } = deferred<undefined>();
     onInvoke("audio_play", () => loadPromise);
 
-    const playPromise = usePlayerStore.getState().play(track, "http://test/a");
+    const playPromise = usePlayerStore.getState().play(track, () => "http://test/a");
     expect(usePlayerStore.getState().isLoading).toBe(true);
 
     // Pause races the in-flight load: this must not be lost by the async completion.
@@ -395,7 +395,7 @@ describe("player store - transport intent", () => {
     const { promise: loadA, resolve: resolveLoadA } = deferred<undefined>();
     onInvoke("audio_play", () => loadA);
 
-    const playA = usePlayerStore.getState().play(trackA, "http://test/a");
+    const playA = usePlayerStore.getState().play(trackA, () => "http://test/a");
     usePlayerStore.getState().pause(); // sets pauseRequestedDuringLoad while trackA is loading
     resolveLoadA(undefined);
     await playA;
@@ -405,7 +405,7 @@ describe("player store - transport intent", () => {
 
     const trackB = makeTrack("b");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(trackB, "http://test/b");
+    await usePlayerStore.getState().play(trackB, () => "http://test/b");
 
     expect(usePlayerStore.getState().isPlaying).toBe(true);
   });
@@ -413,7 +413,7 @@ describe("player store - transport intent", () => {
   it("seek() bumps seekGen so an in-flight position poll from before the seek is dropped", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
     expect(usePlayerStore.getState().isPlaying).toBe(true);
 
     const { promise: posPromise, resolve: resolvePos } = deferred<number>();
@@ -943,7 +943,7 @@ describe("player store - buffering vs loading", () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
 
-    const playPromise = usePlayerStore.getState().play(track, "http://test/a");
+    const playPromise = usePlayerStore.getState().play(track, () => "http://test/a");
     expect(usePlayerStore.getState().isBuffering).toBe(true);
 
     await playPromise;
@@ -959,7 +959,7 @@ describe("player store - buffering vs loading", () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
 
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
 
     const state = usePlayerStore.getState();
     expect(state.isLoading).toBe(false);
@@ -969,7 +969,7 @@ describe("player store - buffering vs loading", () => {
   it("buffer deadline force-stops with an error if position never advances past zero", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
     expect(usePlayerStore.getState().isBuffering).toBe(true);
 
     await vi.advanceTimersByTimeAsync(30000);
@@ -983,7 +983,7 @@ describe("player store - buffering vs loading", () => {
   it("buffer deadline does not fire if audio-format already cleared it", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
 
     emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
     await vi.advanceTimersByTimeAsync(30000);
@@ -994,11 +994,11 @@ describe("player store - buffering vs loading", () => {
   it("switching tracks clears the previous track's deadline instead of leaking a second timer", async () => {
     const trackA = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(trackA, "http://test/a");
+    await usePlayerStore.getState().play(trackA, () => "http://test/a");
     const timersAfterA = vi.getTimerCount();
 
     const trackB = makeTrack("b");
-    await usePlayerStore.getState().play(trackB, "http://test/b");
+    await usePlayerStore.getState().play(trackB, () => "http://test/b");
 
     // playTrack re-arms armBufferDeadline, which clears the previous timer first: switching
     // tracks must not leave trackA's deadline running alongside trackB's.
@@ -1011,10 +1011,22 @@ describe("player store - buffering vs loading", () => {
     expect(usePlayerStore.getState().currentTrack?.id).toBe("b");
   });
 
+  it("a track appended after a single-track play streams its own URL, not the first track's", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    const streamUrlFor = (track: CurrentTrack) => `http://test/${track.id}`;
+    await usePlayerStore.getState().play(makeTrack("seed"), streamUrlFor);
+
+    const store = usePlayerStore.getState();
+    store.addToQueue(makeTrack("next"), store.streamUrlFor ?? streamUrlFor);
+    await usePlayerStore.getState().next();
+
+    expect(usePlayerStore.getState().streamUrl).toBe("http://test/next");
+  });
+
   it("a successful audio-error retry re-arms isBuffering rather than leaving it stuck", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
     emitTauriEvent("audio-format", { sample_rate: 44100, channels: 2, codec: "flac" });
     expect(usePlayerStore.getState().isBuffering).toBe(false);
 
@@ -1030,7 +1042,7 @@ describe("player store - buffering vs loading", () => {
   it("an exhausted, unretryable audio-error clears isBuffering and isLoading together", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
 
     emitTauriEvent("audio-error", { url: "http://test/a", message: "404 not found", retryable: false });
 
@@ -1043,7 +1055,7 @@ describe("player store - buffering vs loading", () => {
   it("names a stale track id as the cause when the stream failed with Subsonic error 70", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
 
     emitTauriEvent("audio-error", {
       url: "http://test/a",
@@ -1061,7 +1073,7 @@ describe("player store - buffering vs loading", () => {
   it("leaves the cause unnamed for a stream failure that is not a stale id", async () => {
     const track = makeTrack("a");
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(track, "http://test/a");
+    await usePlayerStore.getState().play(track, () => "http://test/a");
 
     emitTauriEvent("audio-error", {
       url: "http://test/a",
@@ -1075,11 +1087,11 @@ describe("player store - buffering vs loading", () => {
 
   it("drops a named cause when the next track starts", async () => {
     onInvoke("audio_play", () => Promise.resolve(undefined));
-    await usePlayerStore.getState().play(makeTrack("a"), "http://test/a");
+    await usePlayerStore.getState().play(makeTrack("a"), () => "http://test/a");
     emitTauriEvent("audio-error", { url: "http://test/a", message: "gone", retryable: false, subsonicCode: 70 });
     expect(usePlayerStore.getState().error?.cause).toBe("stale-track-id");
 
-    await usePlayerStore.getState().play(makeTrack("b"), "http://test/b");
+    await usePlayerStore.getState().play(makeTrack("b"), () => "http://test/b");
 
     expect(usePlayerStore.getState().error).toBeNull();
   });

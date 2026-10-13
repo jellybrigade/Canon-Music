@@ -42,6 +42,7 @@ import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, upd
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { stripServerPrefix } from "./lib/ids";
+import { makeStreamUrlBuilder } from "./lib/track";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
@@ -363,11 +364,9 @@ export default function App() {
     const t = rows[0];
     if (!t) return;
     const artworkUrl = t.artwork_url;
-    const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = artworkUrl
       ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64)
       : null;
-    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     await play({
       id: t.id,
       title: t.title,
@@ -378,7 +377,7 @@ export default function App() {
       album: t.album_name,
       albumId: t.album_id,
       replayGain: replayGainFromRow(t),
-    }, streamUrl);
+    }, makeStreamUrlBuilder(srv, credential));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
