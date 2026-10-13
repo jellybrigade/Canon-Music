@@ -154,12 +154,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
       set({ waveformPeaks: peaks });
     },
 
-    play: async (track, streamUrl) => {
+    play: async (track, streamUrlFor) => {
       // A one-track queue still needs an order covering it while shuffle is on: leaving it empty
       // lets writers that index shuffleOrder without normalising (removeFromQueue, moveQueueItem) read past the end.
       const { isShuffled } = get();
-      set({ queue: [track], queueIndex: 0, streamUrlFor: () => streamUrl, shuffleOrder: isShuffled ? [0] : [] });
-      await playTrack(track, streamUrl);
+      set({ queue: [track], queueIndex: 0, streamUrlFor, shuffleOrder: isShuffled ? [0] : [] });
+      await playTrack(track, streamUrlFor(track));
       void persistQueueState();
     },
 

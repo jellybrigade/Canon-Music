@@ -41,7 +41,7 @@ import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
 import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { stripServerPrefix } from "./lib/ids";
+import { makeStreamUrlBuilder } from "./lib/track";
 import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
@@ -363,11 +363,9 @@ export default function App() {
     const t = rows[0];
     if (!t) return;
     const artworkUrl = t.artwork_url;
-    const navTrackId = stripServerPrefix(t.id, srv.id);
     const coverArtUrl = artworkUrl
       ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64)
       : null;
-    const streamUrl = getStreamUrl(srv.url, srv.username, credential, navTrackId);
     await play({
       id: t.id,
       title: t.title,
@@ -378,7 +376,7 @@ export default function App() {
       album: t.album_name,
       albumId: t.album_id,
       replayGain: replayGainFromRow(t),
-    }, streamUrl);
+    }, makeStreamUrlBuilder(srv, credential));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -400,8 +398,7 @@ export default function App() {
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
-    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
+    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 
   async function handleAddAlbumToQueue(album: AlbumRow) {
@@ -411,10 +408,10 @@ export default function App() {
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
-    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
+    const streamUrlFor = makeStreamUrlBuilder(srv, credential);
     for (const t of rows) {
       const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
-      addToQueue(track, streamUrlFn);
+      addToQueue(track, streamUrlFor);
     }
   }
 
@@ -423,15 +420,13 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
-    const streamUrlFn = (tr: CurrentTrack) =>
-      getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
     const tracks: CurrentTrack[] = rows.map((t) => ({
       id: t.id, title: t.title, artist: t.artist, duration: t.duration,
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
       artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
       replayGain: replayGainFromRow(t),
     }));
-    await startRadio({ tracks, streamUrlFor: streamUrlFn, mode: "same-genre", label: genreLabel });
+    await startRadio({ tracks, streamUrlFor: makeStreamUrlBuilder(srv, credential), mode: "same-genre", label: genreLabel });
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
@@ -454,8 +449,7 @@ export default function App() {
       ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
       : null;
     const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id, replayGain: replayGainFromRow(t) };
-    const streamUrlFn = (tr: CurrentTrack) => getStreamUrl(srv.url, srv.username, credential, stripServerPrefix(tr.id, srv.id));
-    await startRadio({ tracks: [track], streamUrlFor: streamUrlFn, mode });
+    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 
   // Resolve an album id to a full row, then open it. Used where callers only

@@ -4,8 +4,8 @@ import type { ServerWithCredential } from "./useServer";
 import type { CurrentTrack } from "../features/playback/store/playerTypes";
 import { usePlayerStore } from "../features/playback/store/player";
 import { useSetting } from "./useSetting";
-import { getCoverArtUrl, getStreamUrl } from "../clients/navidromeUrls";
-import { stripServerPrefix } from "../lib/ids";
+import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { makeStreamUrlBuilder } from "../lib/track";
 import { shuffleArray } from "../lib/shuffle";
 import { loadAlbumTracksForPlay } from "../lib/albumTracks";
 import { replayGainFromRow } from "../lib/replayGainRow";
@@ -21,8 +21,7 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
       : null;
-    const streamUrlFor = (track: CurrentTrack): string =>
-      getStreamUrl(server.url, server.username, credential, stripServerPrefix(track.id, server.id));
+    const streamUrlFor = makeStreamUrlBuilder(server, credential);
     for (const t of tracks) {
       addToQueue(
         { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) },
@@ -59,8 +58,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential) {
       replayGain: replayGainFromRow(t),
     }));
 
-    const streamUrlFor = (track: CurrentTrack): string =>
-      getStreamUrl(server.url, server.username, credential, stripServerPrefix(track.id, server.id));
+    const streamUrlFor = makeStreamUrlBuilder(server, credential);
 
     if (playAction === "queue_last") {
       for (const t of trackObjs) addToQueue(t, streamUrlFor);

@@ -152,7 +152,7 @@ export interface PlayerState {
   scanRenderers: () => Promise<void>;
   setCastDevice: (renderer: DlnaRenderer | null) => Promise<void>;
 
-  play: (track: CurrentTrack, streamUrl: string) => Promise<void>;
+  play: (track: CurrentTrack, streamUrlFor: (t: CurrentTrack) => string) => Promise<void>;
   playQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, startIndex?: number) => Promise<void>;
   restoreQueue: (tracks: CurrentTrack[], streamUrlFor: (t: CurrentTrack) => string, position: number) => void;
   next: (fromNaturalEnd?: boolean) => Promise<void>;
