@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { usePlayerStore } from "../store/player";
 import { useBoolSetting } from "../../../hooks/useSetting";
-import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
+import { useSeekBar } from "../hooks/useSeekBar";
+import { formatDuration } from "../../../lib/trackCells";
 import { WaveformBars } from "./WaveformBars";
 import { displayedWaveformPeaks } from "../lib/waveformDisplay";
 

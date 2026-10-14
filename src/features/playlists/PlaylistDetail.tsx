@@ -24,16 +24,11 @@ import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
 import { useClickOutside } from "../../ui/useClickOutside";
 import { replayGainFromRow } from "../../lib/replayGainRow";
+import { bitrateCell, durationCell } from "../../lib/trackCells";
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
 const PLAYLIST_ROW_HEIGHT = 40;
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / SECONDS_PER_MINUTE);
-  const s = seconds % SECONDS_PER_MINUTE;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 function formatTotalDuration(totalSeconds: number): string {
   const totalMinutes = Math.floor(totalSeconds / SECONDS_PER_MINUTE);
@@ -544,9 +539,9 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   {playlistCols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
                   {playlistCols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
                   {playlistCols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
-                  {playlistCols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
+                  {playlistCols.bitrate && <span className="playlist-vrow-bitrate">{bitrateCell(track.bit_rate)}</span>}
                   {playlistCols.duration && <span className="playlist-vrow-duration">
-                    {track.duration ? formatDuration(track.duration) : ""}
+                    {durationCell(track.duration)}
                   </span>}
                   <button
                     className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}

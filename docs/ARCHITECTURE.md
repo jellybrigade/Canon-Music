@@ -24,7 +24,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary` (root; recovery moves to Home, then offers a reload), `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
-| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`, `numberSetting.ts` (`parseNumberOr`, `parseIntegerOr`, `parseStalenessDays`). |
+| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`, `numberSetting.ts` (`parseNumberOr`, `parseIntegerOr`, `parseStalenessDays`), `trackCells.ts` (`formatDuration`, zero-safe `durationCell`/`bitrateCell`). |
 | `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |

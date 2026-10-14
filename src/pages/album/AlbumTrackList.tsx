@@ -5,15 +5,9 @@ import { useTrackListSessionStore } from "../../store/trackListSessionStore";
 import type { TrackRow } from "../../types/library";
 import { trackGenres, type TrackGenre } from "./albumGenres";
 import "./AlbumTrackList.css";
+import { bitrateCell, durationCell } from "../../lib/trackCells";
 
-const SECONDS_PER_MINUTE = 60;
 const TRACK_SKELETON_ROWS = 8;
-
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / SECONDS_PER_MINUTE);
-  const s = seconds % SECONDS_PER_MINUTE;
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 interface Props {
   tracks: TrackRow[] | undefined;
@@ -196,14 +190,14 @@ export function AlbumTrackList({
                 {trackCols.disc && <td className="track-disc">{track.disc_number ?? ""}</td>}
                 {trackCols.duration && (
                   <td className="track-duration">
-                    {track.duration ? formatDuration(track.duration) : ""}
+                    {durationCell(track.duration)}
                   </td>
                 )}
                 {trackCols.format && (
                   <td className="track-format">{track.suffix ? track.suffix.toUpperCase() : ""}</td>
                 )}
                 {trackCols.bitrate && (
-                  <td className="track-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</td>
+                  <td className="track-bitrate">{bitrateCell(track.bit_rate)}</td>
                 )}
                 {trackCols.plays && (
                   <td className="track-plays">{track.play_count ?? ""}</td>

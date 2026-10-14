@@ -18,6 +18,7 @@ import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
 import { useClickOutside } from "../ui/useClickOutside";
 import { replayGainFromRow } from "../lib/replayGainRow";
+import { bitrateCell, durationCell } from "../lib/trackCells";
 
 const ROW_HEIGHT = 40;
 const SKELETON_ROWS = 14;
@@ -26,13 +27,6 @@ const SKELETON_ROWS = 14;
 // collator on every call. The sort runs over the whole library, so on a large one that is
 // hundreds of thousands of constructions per sort change.
 const collator = new Intl.Collator(undefined, { sensitivity: "base" });
-
-const SECONDS_PER_MINUTE = 60;
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / SECONDS_PER_MINUTE);
-  const s = Math.floor(seconds % SECONDS_PER_MINUTE);
-  return `${m}:${s.toString().padStart(2, "0")}`;
-}
 
 type SortField = "title" | "artist" | "album" | "year" | "duration" | "play_count" | "bit_rate" | "suffix";
 type SortDir = "asc" | "desc";
@@ -147,9 +141,9 @@ const TrackRow = memo(function TrackRow({
       {cols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
       {cols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
       {cols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
-      {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate === null ? "" : `${track.bit_rate}k`}</span>}
+      {cols.bitrate && <span className="playlist-vrow-bitrate">{bitrateCell(track.bit_rate)}</span>}
       {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
-      {cols.duration && <span className="playlist-vrow-duration">{track.duration === null ? "" : formatDuration(track.duration)}</span>}
+      {cols.duration && <span className="playlist-vrow-duration">{durationCell(track.duration)}</span>}
       <button
         className={`track-heart${isLoved ? " track-heart--loved" : ""}`}
         aria-label={isLoved ? "Unlove track" : "Love track"}

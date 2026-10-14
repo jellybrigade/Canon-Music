@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Heart, Play } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
-import { formatDuration } from "../hooks/useSeekBar";
+import { formatDuration } from "../../../lib/trackCells";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
