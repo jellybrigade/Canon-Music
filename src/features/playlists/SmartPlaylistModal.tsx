@@ -14,6 +14,8 @@ import {
 } from "./smartPlaylist";
 import "./SmartPlaylistModal.css";
 
+const GENRE_CHIP_LIMIT = 60;
+
 interface Props {
   initialFilters?: SmartFilters;
   onSave: (filters: SmartFilters) => Promise<void>;
@@ -24,18 +26,25 @@ interface Props {
 export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "New Smart Playlist" }: Props) {
   const [filters, setFilters] = useState<SmartFilters>(initialFilters ?? DEFAULT_SMART_FILTERS);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [genreSearch, setGenreSearch] = useState("");
   const dismiss = useOverlayDismiss(onClose);
   // Escape stands down while a save is in flight, matching the Cancel button that is already
   // disabled for the same reason - otherwise Escape is a second route around the same gate.
   const chrome = useModalChrome(onClose, { closable: !saving });
-  const { data: allGenres = [] } = useGenres();
+  const { data: genreRows, isLoading: isLoadingGenres, error: genresError } = useGenres();
+  const allGenres = useMemo(() => genreRows ?? [], [genreRows]);
 
   const availableGenres = useMemo(() => {
     const selected = new Set(filters.selectedGenres);
     const q = genreSearch.toLowerCase().trim();
     return allGenres.filter((g) => !selected.has(g.canonical_id) && (!q || g.name.toLowerCase().includes(q)));
   }, [allGenres, filters.selectedGenres, genreSearch]);
+
+  const isYearRangeInverted =
+    filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
+  const footerError = isYearRangeInverted ? "Year from is after Year to." : saveError;
+  const hiddenGenreCount = Math.max(0, availableGenres.length - GENRE_CHIP_LIMIT);
 
   function set<K extends keyof SmartFilters>(key: K, value: SmartFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -55,13 +64,15 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
 
   async function handleSave() {
     const name = filters.name.trim();
-    if (!name) return;
+    if (!name || isYearRangeInverted) return;
     setSaving(true);
+    setSaveError(null);
     try {
       await onSave({ ...filters, name });
       onClose();
     } catch (e) {
       console.error("Failed to save smart playlist:", e);
+      setSaveError(`Couldn't save playlist: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setSaving(false);
     }
@@ -247,7 +258,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
               onChange={(e) => setGenreSearch(e.target.value)}
             />
             <div className="spm-genre-list">
-              {availableGenres.slice(0, 60).map((g) => (
+              {availableGenres.slice(0, GENRE_CHIP_LIMIT).map((g) => (
                 <button
                   key={g.canonical_id}
                   type="button"
@@ -257,21 +268,36 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   {g.name}
                 </button>
               ))}
-              {availableGenres.length === 0 && (
-                <span className="spm-genre-empty">No genres found</span>
-              )}
+              {availableGenres.length === 0 &&
+                (genresError ? (
+                  <span className="spm-genre-empty spm-genre-empty--error">
+                    Couldn't load genres: {genresError}
+                  </span>
+                ) : isLoadingGenres ? (
+                  <span className="spm-genre-empty">Loading genres…</span>
+                ) : (
+                  <span className="spm-genre-empty">No genres found</span>
+                ))}
             </div>
+            {hiddenGenreCount > 0 && (
+              <span className="spm-genre-more">{hiddenGenreCount} more, search to narrow</span>
+            )}
           </section>
         </div>
 
         <div className="spm-footer">
+          {footerError && (
+            <p className="spm-error" role="alert">
+              {footerError}
+            </p>
+          )}
           <button className="spm-btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button
             className="spm-btn spm-btn--primary"
             onClick={() => void handleSave()}
-            disabled={saving || !filters.name.trim()}
+            disabled={saving || !filters.name.trim() || isYearRangeInverted}
           >
             <RefreshCw size={13} />
             {saving ? "Saving…" : title.startsWith("Edit") ? "Save & Refresh" : "Create"}
