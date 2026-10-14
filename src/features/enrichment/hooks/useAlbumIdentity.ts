@@ -307,18 +307,26 @@ export function useSaveAlbumIdentity() {
 
 // INSERT OR IGNORE so it never clobbers a confirmed row that arrived via the dialog or a race.
 
-/** Returns the set of album IDs that were looked up but yielded no MB match. */
-export function useFailedLookupAlbumIds() {
+export async function readFailedLookupAlbumIds(
+  db: Awaited<ReturnType<typeof getDb>>,
+  serverId: string
+): Promise<string[]> {
+  const rows = await db.select<{ album_id: string }[]>(
+    `SELECT ai.album_id FROM album_identity ai
+     INNER JOIN albums a ON a.id = ai.album_id
+     WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
+     ORDER BY ai.album_id`,
+    [serverId]
+  );
+  return rows.map((r) => r.album_id);
+}
+
+/** Album ids on this server that were looked up but yielded no MB match. */
+export function useFailedLookupAlbumIds(serverId: string | undefined) {
   return useQuery({
-    queryKey: QK.failedLookupAlbumIds(),
-    queryFn: async (): Promise<string[]> => {
-      const db = await getDb();
-      const rows = await db.select<{ album_id: string }[]>(
-        `SELECT album_id FROM album_identity
-         WHERE mb_release_group_id IS NULL AND looked_up_at IS NOT NULL`
-      );
-      return rows.map((r) => r.album_id);
-    },
+    queryKey: QK.failedLookupAlbumIdsFor(serverId ?? ""),
+    queryFn: async () => readFailedLookupAlbumIds(await getDb(), serverId ?? ""),
+    enabled: !!serverId,
   });
 }
 
@@ -347,20 +355,25 @@ export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
 }
 
-/** Returns full album rows (plus track_count) for albums that were looked up but yielded no MB match. */
-export function useFailedLookupAlbums() {
+/** Album rows (plus track_count) on one server that were looked up but yielded no MB match. */
+export async function readFailedLookupAlbums(
+  db: Awaited<ReturnType<typeof getDb>>,
+  serverId: string
+): Promise<FailedAlbumRow[]> {
+  return db.select<FailedAlbumRow[]>(
+    `SELECT a.*,
+            (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+     FROM albums a
+     INNER JOIN album_identity ai ON ai.album_id = a.id
+     WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
+     ORDER BY a.artist, a.name, a.id`,
+    [serverId]
+  );
+}
+
+export function useFailedLookupAlbums(serverId: string) {
   return useQuery({
-    queryKey: QK.failedLookupAlbums(),
-    queryFn: async (): Promise<FailedAlbumRow[]> => {
-      const db = await getDb();
-      return db.select<FailedAlbumRow[]>(
-        `SELECT a.*,
-                (SELECT COUNT(*) FROM tracks WHERE album_id = a.id) AS track_count
-         FROM albums a
-         INNER JOIN album_identity ai ON ai.album_id = a.id
-         WHERE ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
-         ORDER BY a.artist, a.name`
-      );
-    },
+    queryKey: QK.failedLookupAlbumsFor(serverId),
+    queryFn: async () => readFailedLookupAlbums(await getDb(), serverId),
   });
 }

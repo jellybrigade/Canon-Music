@@ -12,6 +12,7 @@ import { normalizeAlbum } from "../../tags/lib/tagNormalize";
 import { useAlbumIdentity } from "./useAlbumIdentity";
 import { useSetting } from "../../../hooks/useSetting";
 import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
+import { parseStalenessDays } from "../../../lib/numberSetting";
 
 // Module-level dedupe: one enrichment run per album at a time across all mounts.
 const inFlight = new Map<string, Promise<void>>();
@@ -130,8 +131,7 @@ export function useEnrichAlbumTracks(
   const queryClient = useQueryClient();
   const [enrichTracks] = useSetting("tags.enrich_tracks", "true");
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
-  const parsed = Number(staleDaysStr);
-  const staleDays = Number.isFinite(parsed) && parsed >= 0 ? parsed : 30;
+  const staleDays = parseStalenessDays(staleDaysStr);
   const { data: identity, isSuccess: identityReady } = useAlbumIdentity(albumId);
   // Holds the album the claim was stamped for, not a bare boolean: `AlbumDetail` has no `key`,
   // so navigating between two cached albums re-runs this effect on the same mount.

@@ -13,6 +13,9 @@ import {
   type SmartFilters,
 } from "./smartPlaylist";
 import "./SmartPlaylistModal.css";
+import { parseIntegerOr, parseNumberOr } from "../../lib/numberSetting";
+
+const GENRE_CHIP_LIMIT = 60;
 
 interface Props {
   initialFilters?: SmartFilters;
@@ -24,18 +27,29 @@ interface Props {
 export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "New Smart Playlist" }: Props) {
   const [filters, setFilters] = useState<SmartFilters>(initialFilters ?? DEFAULT_SMART_FILTERS);
   const [saving, setSaving] = useState(false);
+  // Keyed to the filters it failed on, so any edit retires the message.
+  const [failedSave, setFailedSave] = useState<{ filters: SmartFilters; message: string } | null>(null);
   const [genreSearch, setGenreSearch] = useState("");
   const dismiss = useOverlayDismiss(onClose);
   // Escape stands down while a save is in flight, matching the Cancel button that is already
   // disabled for the same reason - otherwise Escape is a second route around the same gate.
   const chrome = useModalChrome(onClose, { closable: !saving });
-  const { data: allGenres = [] } = useGenres();
+  const { data: genreRows, isLoading: isLoadingGenres, error: genresError } = useGenres();
+  const allGenres = useMemo(() => genreRows ?? [], [genreRows]);
 
   const availableGenres = useMemo(() => {
     const selected = new Set(filters.selectedGenres);
     const q = genreSearch.toLowerCase().trim();
     return allGenres.filter((g) => !selected.has(g.canonical_id) && (!q || g.name.toLowerCase().includes(q)));
   }, [allGenres, filters.selectedGenres, genreSearch]);
+
+  const isYearRangeInverted =
+    filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
+  const saveError = failedSave?.filters === filters ? failedSave.message : null;
+  // A half-typed year reads as inverted ("2" < 1990), so the message waits until focus leaves.
+  const [isEditingYear, setIsEditingYear] = useState(false);
+  const footerError = isYearRangeInverted && !isEditingYear ? "Year from is after Year to." : saveError;
+  const hiddenGenreCount = Math.max(0, availableGenres.length - GENRE_CHIP_LIMIT);
 
   function set<K extends keyof SmartFilters>(key: K, value: SmartFilters[K]) {
     setFilters((f) => ({ ...f, [key]: value }));
@@ -55,13 +69,15 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
 
   async function handleSave() {
     const name = filters.name.trim();
-    if (!name) return;
+    if (!name || isYearRangeInverted) return;
     setSaving(true);
+    setFailedSave(null);
     try {
       await onSave({ ...filters, name });
       onClose();
     } catch (e) {
       console.error("Failed to save smart playlist:", e);
+      setFailedSave({ filters, message: `Couldn't save playlist: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
       setSaving(false);
     }
@@ -103,13 +119,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   min={1}
                   max={LIMIT_MAX}
                   value={filters.limit}
-                  onChange={(e) => {
-                    // `Number(raw) || 50` sent "0" down the falsy branch, so a typed zero
-                    // snapped to the default instead of clamping to the floor beside it.
-                    const raw = e.target.value.trim();
-                    const n = raw === "" ? 50 : Number(raw);
-                    set("limit", Number.isFinite(n) ? Math.max(1, Math.min(LIMIT_MAX, Math.trunc(n))) : 50);
-                  }}
+                  onChange={(e) => set("limit", Math.max(1, Math.min(LIMIT_MAX, parseIntegerOr(e.target.value, DEFAULT_SMART_FILTERS.limit))))}
                 />
               </div>
               <div className="spm-field spm-field--half">
@@ -171,7 +181,9 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   max={YEAR_MAX}
                   placeholder="e.g. 1970"
                   value={filters.yearFrom ?? ""}
-                  onChange={(e) => set("yearFrom", e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => set("yearFrom", parseIntegerOr(e.target.value, null))}
+                  onFocus={() => setIsEditingYear(true)}
+                  onBlur={() => setIsEditingYear(false)}
                 />
               </div>
               <div className="spm-field spm-field--half">
@@ -183,7 +195,9 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   max={YEAR_MAX}
                   placeholder="e.g. 1979"
                   value={filters.yearTo ?? ""}
-                  onChange={(e) => set("yearTo", e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => set("yearTo", parseIntegerOr(e.target.value, null))}
+                  onFocus={() => setIsEditingYear(true)}
+                  onBlur={() => setIsEditingYear(false)}
                 />
               </div>
             </div>
@@ -196,7 +210,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                 min={0}
                 placeholder="0"
                 value={filters.minPlayCount || ""}
-                onChange={(e) => set("minPlayCount", Math.max(0, Number(e.target.value) || 0))}
+                onChange={(e) => set("minPlayCount", Math.max(0, parseNumberOr(e.target.value, 0)))}
               />
             </div>
           </section>
@@ -247,7 +261,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
               onChange={(e) => setGenreSearch(e.target.value)}
             />
             <div className="spm-genre-list">
-              {availableGenres.slice(0, 60).map((g) => (
+              {availableGenres.slice(0, GENRE_CHIP_LIMIT).map((g) => (
                 <button
                   key={g.canonical_id}
                   type="button"
@@ -257,21 +271,36 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   {g.name}
                 </button>
               ))}
-              {availableGenres.length === 0 && (
-                <span className="spm-genre-empty">No genres found</span>
-              )}
+              {availableGenres.length === 0 &&
+                (genresError ? (
+                  <span className="spm-genre-empty spm-genre-empty--error">
+                    Couldn't load genres: {genresError}
+                  </span>
+                ) : isLoadingGenres ? (
+                  <span className="spm-genre-empty">Loading genres…</span>
+                ) : (
+                  <span className="spm-genre-empty">No genres found</span>
+                ))}
             </div>
+            {hiddenGenreCount > 0 && (
+              <span className="spm-genre-more">{hiddenGenreCount} more, search to narrow</span>
+            )}
           </section>
         </div>
 
         <div className="spm-footer">
+          {footerError && (
+            <p className="spm-error" role="alert">
+              {footerError}
+            </p>
+          )}
           <button className="spm-btn" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button
             className="spm-btn spm-btn--primary"
             onClick={() => void handleSave()}
-            disabled={saving || !filters.name.trim()}
+            disabled={saving || !filters.name.trim() || isYearRangeInverted}
           >
             <RefreshCw size={13} />
             {saving ? "Saving…" : title.startsWith("Edit") ? "Save & Refresh" : "Create"}

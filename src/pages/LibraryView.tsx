@@ -18,7 +18,7 @@ const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
 type LibraryViewProps = Pick<
   AppViewProps,
   "server" | "serverWithCred" | "albums" | "albumsLoading" | "albumsError" | "visibleAlbums" |
-  "genres" | "playlists" | "canonicalIdFilters" | "lovedOnly" | "yearFromInput" | "yearToInput" |
+  "genres" | "genresError" | "retryGenres" | "playlists" | "canonicalIdFilters" | "lovedOnly" | "yearFromInput" | "yearToInput" |
   "setCanonicalIdFilters" | "toggleCanonicalIdFilter" | "toggleLovedOnly" | "setYearFromInput" |
   "setYearToInput" | "filterSidebarOpen" | "setFilterSidebarOpen" | "sort" | "setSort" |
   "albumsPaginated" | "setAlbumsPaginated" | "syncStatus" | "syncError" | "syncProgress" |
@@ -36,6 +36,8 @@ export function LibraryView({
   albumsError,
   visibleAlbums,
   genres,
+  genresError,
+  retryGenres,
   playlists,
   canonicalIdFilters,
   lovedOnly,
@@ -168,6 +170,8 @@ export function LibraryView({
       <div className="library-body">
         <FilterSidebar
           genres={genres ?? []}
+          genresError={genresError}
+          onRetryGenres={retryGenres}
           canonicalIdFilters={canonicalIdFilters}
           toggleCanonicalIdFilter={toggleCanonicalIdFilter}
           clearGenreFilters={() => setCanonicalIdFilters([])}

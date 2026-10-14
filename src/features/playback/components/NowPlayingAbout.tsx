@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Play, ListEnd, PlayCircle } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack, RadioMode } from "../store/playerTypes";
-import { formatDuration } from "../hooks/useSeekBar";
+import { formatDuration } from "../../../lib/trackCells";
 import type { TopTrack, SuggestedTrack } from "../hooks/useNowPlayingArtist";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../../../hooks/useServer";
@@ -103,7 +103,7 @@ export function NowPlayingAbout({
           <span className="now-playing-track-title">{track.title}</span>
           {subtitle}
         </div>
-        {track.duration && (
+        {track.duration != null && (
           <span className="now-playing-track-duration">
             {formatDuration(track.duration)}
           </span>

@@ -21,15 +21,15 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/pages/` | Route targets no feature owns: Home, Library, AlbumDetail, ArtistDetail, ArtistGrid, GenreView, YearsView, TrackTableView, plus `album/`, `artist/`, `home/` subparts. |
 | `src/features/<name>/` | Feature-owned code, `components/ hooks/ lib/ store/` (flat for small features): `tags`, `radio`, `search`, `sync`, `enrichment`, `playlists`, `playback`, `settings`, `setup`. |
 | `src/components/` | Shared presentation: `AlbumGrid`, `AlbumGenreEditor`, `FilterSidebar`, `CommandPalette`, `ArtBackdrop`, `FeedbackModal`, banners. |
-| `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary`, `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
+| `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary` (root; recovery moves to Home, then offers a reload), `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
-| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`. |
+| `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`, `numberSetting.ts` (`parseNumberOr`, `parseIntegerOr`, `parseStalenessDays`), `trackCells.ts` (`formatDuration`, zero-safe `durationCell`/`bitrateCell`). |
 | `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |
 | `src/styles/` | `tokens.css`, `base.css`. |
-| `src/test/` | Harness: `setup.ts`, `sqlite.ts` (in-memory SQLite), `perf.ts` (waste probes), `mocks/`. |
+| `src/test/` | Harness: `setup.ts`, `sqlite.ts` (in-memory SQLite), `perf.ts` (waste probes), `renderCatching.tsx` (records errors a boundary caught), `mocks/`. |
 | `src/assets/canon-tree.json` | Generated genre DAG (see Genre tree). |
 | `scripts/` | `parse-rym.mjs`, `data/` (RYM txt, `custom-nodes.json`, `tree-renames.json`), `run-local-checks.sh`, `git-hooks/`. |
 
@@ -66,6 +66,7 @@ Rust (`src-tauri/src/`):
 - Every read of a mirrored table is scoped by `server_id`; `src/lib/serverScoping.test.ts` sweeps artist-filtered SQL.
 - Every LIKE binds through `escapeLike` (`src/lib/sql.ts`) with `ESCAPE '\\'`.
 - Every read that becomes a playable track selects `REPLAY_GAIN_COLUMNS` and builds `replayGain` via `replayGainFromRow` (`src/lib/replayGainRow.ts`).
+- Every numeric parse with a fallback goes through `parseNumberOr` (`src/lib/numberSetting.ts`), so a stored `0` stays `0` (whole-string `Number`, `parseIntegerOr` truncates; staleness floors at 1 day); `src/lib/numericFallbackGuard.test.ts` bans `Number(x) || fallback`.
 - Tables keyed by track id are listed once in `TRACK_ID_TABLES` (`src/db/trackIdTables.ts`) with prune/purge/remap policy; Rust mirror `REMAPPED_TRACK_ID_TABLES` is pinned by test.
 - Every stored genre-tree id is listed in `GENRE_ID_HOLDERS` (`src/db/genreIdTables.ts`); `genreIdTables.test.ts` sweeps migrations and pins the Rust `GENRE_ID_COLUMNS` copy.
 - A multi-statement write whose intermediate state is invalid goes in `library_write/` (the sqlx pool gives no connection affinity, so TS `BEGIN` does not hold). Migration blocks are the one exception.
@@ -73,7 +74,7 @@ Rust (`src-tauri/src/`):
 - React Query `queryFn`s never return a `Set` (structural sharing treats all Sets as equal); return arrays, convert in the hook.
 - `streamUrlFor` is a callback so the player store never holds credentials. Queue position access goes through `resolveTrack` (`queueOrder.ts`).
 - `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load.
-- Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows.
+- Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows. They also return `error`: a failed read is never rendered as an empty list or an endless loading line.
 - Sync prune refuses an empty or partial fetch; a failed stage (loved, playlists) leaves stored data untouched and is reported in `skippedStages`.
 - MusicBrainz calls go through `tauri-plugin-http` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
 - A DB with a schema version above `LATEST_SCHEMA_VERSION` throws `SchemaTooNewError` (fatal screen, no retry).

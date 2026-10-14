@@ -3,6 +3,7 @@ import { keychain } from "../lib/keychain";
 import { canonicalKey } from "../features/tags/lib/canonicalize";
 import type { TagKind } from "../features/tags/lib/canonicalize";
 import { makeRateLimiter } from "../lib/rateLimiter";
+import { parseNumberOr } from "../lib/numberSetting";
 
 const LASTFM_KEYCHAIN_SERVICE = "canon.lastfm";
 const LASTFM_KEYCHAIN_ACCOUNT = "api_key";
@@ -212,8 +213,8 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
     const similarEntries = await fetchSimilarArtistsFull(artist, apiKey);
     return {
       bio: a.bio?.content ? stripBioBoilerplate(a.bio.content) || null : null,
-      listeners: a.stats?.listeners ? parseInt(a.stats.listeners, 10) || null : null,
-      playcount: a.stats?.playcount ? parseInt(a.stats.playcount, 10) || null : null,
+      listeners: parseNumberOr(a.stats?.listeners, null),
+      playcount: parseNumberOr(a.stats?.playcount, null),
       // getSimilar answers [] on failure too, so an empty list falls back to getInfo's five.
       similar: similarEntries.length > 0
         ? similarArtistsAboveMatch(similarEntries)
@@ -283,7 +284,7 @@ export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: stri
     if (data.error) return [];
     const result = (data.similarartists?.artist ?? []).map((a) => ({
       name: a.name,
-      match: parseFloat(a.match) || 0,
+      match: parseNumberOr(a.match, 0),
     }));
     await setCached(cacheKey, result);
     return result;
@@ -420,8 +421,8 @@ export async function fetchArtistTopAlbums(artist: string): Promise<LastfmTopAlb
     if (data.error) return [];
     return (data.topalbums?.album ?? []).map((a) => ({
       name: a.name,
-      playcount: parseInt(a.playcount ?? "0", 10) || 0,
-      listeners: parseInt(a.listeners ?? "0", 10) || 0,
+      playcount: parseNumberOr(a.playcount, 0),
+      listeners: parseNumberOr(a.listeners, 0),
     }));
   } catch {
     return [];
@@ -449,7 +450,7 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
     if (data.error) return [];
     return (data.toptracks?.track ?? []).map((t) => ({
       name: t.name,
-      playcount: parseInt(t.playcount ?? "0", 10) || 0,
+      playcount: parseNumberOr(t.playcount, 0),
     }));
   } catch {
     return [];

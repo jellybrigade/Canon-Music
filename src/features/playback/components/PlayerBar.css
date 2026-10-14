@@ -567,6 +567,7 @@
 .timer-popover,
 .cast-popover {
   position: fixed;
+  margin-bottom: var(--space-xs);
   background: var(--surface-1, #1c1c1c);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

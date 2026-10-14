@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getDb } from "../../../db";
-import { LocalTarget, DlnaTarget } from "./playbackTarget";
+import { CAST_MAX_BITRATE_DEFAULT, LocalTarget, DlnaTarget } from "./playbackTarget";
+import { parseIntegerOr } from "../../../lib/numberSetting";
 import { discoverRenderers } from "../../../clients/dlna";
 import { buildShuffleOrder, resolveTrack } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
@@ -107,13 +108,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           }
         }
       } else {
-        let castBitrate = 320;
+        let castBitrate = CAST_MAX_BITRATE_DEFAULT;
         try {
           const db2 = await getDb();
           const rows2 = await db2.select<{ value: string }[]>(
             "SELECT value FROM settings WHERE key = 'cast.max_bitrate'", []
           );
-          if (rows2[0]) castBitrate = parseInt(rows2[0].value, 10) || 320;
+          if (rows2[0]) castBitrate = parseIntegerOr(rows2[0].value, CAST_MAX_BITRATE_DEFAULT);
         } catch { /* use default */ }
         runtime.activeTarget = new DlnaTarget(renderer, () => {
           void get().next(true);

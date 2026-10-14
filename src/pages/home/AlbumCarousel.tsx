@@ -26,8 +26,8 @@ interface AlbumCarouselProps {
 function cardStride(track: HTMLDivElement): number {
   const card = track.firstElementChild as HTMLElement | null;
   if (!card) return 0;
-  const gap = parseFloat(getComputedStyle(track).columnGap) || 0;
-  return card.offsetWidth + gap;
+  const gap = parseFloat(getComputedStyle(track).columnGap);
+  return card.offsetWidth + (Number.isFinite(gap) ? gap : 0);
 }
 
 export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio, onRefresh }: AlbumCarouselProps) {

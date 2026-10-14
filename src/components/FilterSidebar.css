@@ -252,6 +252,20 @@
   overflow-wrap: anywhere;
 }
 
+.filter-sidebar-genre-error {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  padding: var(--space-2xs) var(--space-xs);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.filter-sidebar-genre-retry {
+  align-self: flex-start;
+  margin: 0 var(--space-xs);
+  font-size: var(--text-sm);
+}
+
 .filter-sidebar-genre-name {
   flex: 1;
   min-width: 0;

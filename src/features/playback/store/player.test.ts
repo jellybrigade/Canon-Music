@@ -10,6 +10,7 @@ import { getDb } from "../../../db";
 import { usePlayerStore } from "./player";
 import { normalizeShuffleOrder, buildShuffleOrder } from "./queueOrder";
 import { isNextDisabled, type CurrentTrack } from "./playerTypes";
+import { runtime } from "./playerRuntime";
 
 // Boundary mock for getDb(): tests configure `select`/`execute` per case, never a real DB.
 function mockDb(
@@ -1630,6 +1631,36 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     const state = usePlayerStore.getState();
     expect(state.replayGainPreAmp).toBe(15);
     expect(state.replayGainFallbackGain).toBe(-15);
+  });
+
+  it("restores a Raw cast quality as raw instead of the 320 kbps default", async () => {
+    const renderer = {
+      name: "Speaker",
+      baseUrl: "http://renderer",
+      avTransportControlUrl: "http://renderer/av",
+      renderingControlUrl: "http://renderer/rc",
+      supportsVolume: true,
+    };
+    mockSettingsDb({ "cast.device": JSON.stringify(renderer), "cast.max_bitrate": "0" });
+    const soapBodies: string[] = [];
+    onInvoke("upnp_soap", (args) => {
+      soapBodies.push(JSON.stringify(args));
+      return "";
+    });
+
+    const localTarget = runtime.activeTarget;
+    try {
+      await usePlayerStore.getState().loadSettings();
+      await runtime.activeTarget.load("http://srv/rest/stream?id=1&maxBitRate=128", makeTrack("1"), null);
+      runtime.activeTarget.pause(0);
+    } finally {
+      runtime.activeTarget = localTarget;
+      usePlayerStore.setState({ castDevice: null });
+    }
+
+    const setUri = soapBodies.find((body) => body.includes("SetAVTransportURI"));
+    expect(setUri).toBeDefined();
+    expect(setUri).not.toContain("maxBitRate");
   });
 
   it("ignores an invalid replay_gain_mode value, leaving the mode unchanged", async () => {

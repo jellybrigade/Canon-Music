@@ -54,6 +54,7 @@ import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
 import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "./lib/replayGainRow";
+import { parseIntegerOr } from "./lib/numberSetting";
 
 export default function App() {
   useWakeLock();
@@ -152,7 +153,7 @@ export default function App() {
   const { data: artists, isLoading: artistsLoading, error: artistsError } =
     useArtists(pathname === "/artists");
   const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
-  const { data: genres } = useGenres(pathname === "/library");
+  const { data: genres, error: genresError, retry: retryGenres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
@@ -161,17 +162,17 @@ export default function App() {
   const { data: unmappedCountRaw } = useUnmappedTagCount();
   const unmappedCount = unmappedCountRaw ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
-  const { data: failedLookupIds } = useFailedLookupAlbumIds();
+  const { data: failedLookupIds } = useFailedLookupAlbumIds(server?.id);
   const unidentifiedCount = failedLookupIds?.length ?? 0;
   const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
   const visibleAlbums = useMemo(() => {
     if (albums === undefined) return [];
-    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
-    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
+    const yearFrom = parseIntegerOr(yearFromInput, null);
+    const yearTo = parseIntegerOr(yearToInput, null);
     let result = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
-    if (yearFrom != null && !isNaN(yearFrom)) result = result.filter((a) => (a.year ?? 0) >= yearFrom);
-    if (yearTo != null && !isNaN(yearTo)) result = result.filter((a) => (a.year ?? 9999) <= yearTo);
+    if (yearFrom !== null) result = result.filter((a) => (a.year ?? 0) >= yearFrom);
+    if (yearTo !== null) result = result.filter((a) => (a.year ?? 9999) <= yearTo);
     return result;
   }, [albums, lovedOnly, lovedAlbumIds, yearFromInput, yearToInput]);
 
@@ -214,7 +215,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!autoCheckUpdates) return;
-    const ms = Math.max(10, parseInt(autoCheckIntervalMin, 10) || 60) * 60 * 1000;
+    const ms = Math.max(10, parseIntegerOr(autoCheckIntervalMin, 60)) * 60 * 1000;
     const id = setInterval(() => {
       void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
     }, ms);
@@ -521,6 +522,8 @@ export default function App() {
     allTracksLoading,
     allTracksError,
     genres,
+    genresError,
+    retryGenres,
     playlists,
     canonicalIdFilters,
     lovedOnly,

@@ -20,6 +20,7 @@ import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useSetting } from "../../../hooks/useSetting";
 import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
+import { parseStalenessDays } from "../../../lib/numberSetting";
 
 /** Probes a URL via Image() (sidesteps CORS, unlike fetch) so a server-scraped
  * portrait that 404s (no image on file) never reaches the cache/UI as a broken image. */
@@ -304,7 +305,7 @@ export function useEnrichArtist(
   const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
-  const staleDays = Number(staleDaysStr) || 30;
+  const staleDays = parseStalenessDays(staleDaysStr);
   const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
     ARTIST_AUTO_SELECT_SETTING,
     String(DEFAULT_ARTIST_AUTO_SELECT_SCORE),

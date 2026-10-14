@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
-import { DlnaTarget } from "./playbackTarget";
+import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget } from "./playbackTarget";
 import type { DlnaRenderer } from "../../../clients/dlna";
 import { isOwnedByServer } from "../../../lib/ids";
 import { computeReplayGainLinear } from "./replayGain";
@@ -17,6 +17,7 @@ import {
   type RepeatMode,
   type ReplayGainMode,
 } from "./playerTypes";
+import { parseIntegerOr } from "../../../lib/numberSetting";
 
 type SettingsActions = Pick<
   PlayerState,
@@ -325,7 +326,7 @@ export function createSettingsActions(
             try {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;
               const bitrateRow = rows.find((r2) => r2.key === "cast.max_bitrate");
-              const savedBitrate = bitrateRow ? (parseInt(bitrateRow.value, 10) || 320) : 320;
+              const savedBitrate = parseIntegerOr(bitrateRow?.value, CAST_MAX_BITRATE_DEFAULT);
               runtime.activeTarget = new DlnaTarget(
                 savedRenderer,
                 () => { void get().next(true); },

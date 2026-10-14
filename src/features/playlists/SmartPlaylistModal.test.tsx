@@ -288,13 +288,13 @@ describe("SmartPlaylistModal save gating", () => {
     expect(savedFilters(onSave).name).toBe("Mix");
   });
 
-  it("leaves save enabled for every other field, however nonsensical", async () => {
-    // The name is the only validation input. A reversed year range, a zero limit and empty
-    // text filters all save happily; the query just returns nothing.
+  it("leaves save enabled for a one-sided or single-year range", async () => {
+    // Only a reversed range is refused; equal bounds or one bound alone are real queries.
     await mount();
     type(field("Name"), "Mix");
     type(field("Year from"), "2020");
-    type(field("Year to"), "1970");
+    expect(saveBtn()).toBeEnabled();
+    type(field("Year to"), "2020");
     type(field("Min play count"), "0");
     expect(saveBtn()).toBeEnabled();
   });
@@ -325,7 +325,7 @@ describe("SmartPlaylistModal save gating", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("stays open with no visible error when onSave rejects", async () => {
+  it("stays open and says why when onSave rejects", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     const onSave = vi.fn(async () => {
       throw new Error("network down");
@@ -338,7 +338,43 @@ describe("SmartPlaylistModal save gating", () => {
     expect(onClose).not.toHaveBeenCalled();
     expect(dialog()).not.toBeNull();
     expect(saveBtn()).toBeEnabled();
-    expect(err).toHaveBeenCalled();
+    expect(document.querySelector(".spm-error")?.textContent).toContain("network down");
+    err.mockRestore();
+  });
+
+  it("drops the save error once the form is edited", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSave = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    await mount({ onSave });
+    type(field("Name"), "Mix");
+    fireEvent.click(saveBtn());
+    await act(async () => {});
+    expect(document.querySelector(".spm-error")?.textContent).toContain("network down");
+
+    type(field("Name"), "Mix 2");
+    expect(document.querySelector(".spm-error")).toBeNull();
+    err.mockRestore();
+  });
+
+  it("clears the save error when the next save starts", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    let shouldFail = true;
+    const onSave = vi.fn(async () => {
+      if (shouldFail) throw new Error("network down");
+      await new Promise(() => {});
+    });
+    await mount({ onSave });
+    type(field("Name"), "Mix");
+    fireEvent.click(saveBtn());
+    await act(async () => {});
+    expect(document.querySelector(".spm-error")).not.toBeNull();
+
+    shouldFail = false;
+    fireEvent.click(saveBtn());
+    await act(async () => {});
+    expect(document.querySelector(".spm-error")).toBeNull();
     err.mockRestore();
   });
 });
@@ -386,9 +422,7 @@ describe("SmartPlaylistModal genre selection", () => {
     expect(selectedChips()).toEqual(["Jazz"]);
   });
 
-  it("shows the same empty message whether the library has no genres or they are still loading", async () => {
-    // Both states render "No genres found"; the component has no loading branch. Pinned as a
-    // known limitation so a future loading state has to update this test deliberately.
+  it("tells an empty library, a pending read and a failed read apart", async () => {
     onInvoke("get_genres", () => []);
     await mount();
     expect(screen.getByText("No genres found")).toBeInTheDocument();
@@ -398,10 +432,23 @@ describe("SmartPlaylistModal genre selection", () => {
     onInvoke("get_genres", () => new Promise(() => {}));
     render(<SmartPlaylistModal onSave={async () => {}} onClose={() => {}} />);
     await act(async () => {});
-    expect(screen.getByText("No genres found")).toBeInTheDocument();
+    expect(screen.getByText("Loading genres…")).toBeInTheDocument();
+    expect(screen.queryByText("No genres found")).toBeNull();
+
+    cleanup();
+    resetGenresCache();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    onInvoke("get_genres", () => {
+      throw new Error("disk gone");
+    });
+    render(<SmartPlaylistModal onSave={async () => {}} onClose={() => {}} />);
+    await act(async () => {});
+    expect(screen.getByText(/Couldn't load genres: disk gone/)).toBeInTheDocument();
+    expect(screen.queryByText("No genres found")).toBeNull();
+    err.mockRestore();
   });
 
-  it("renders at most 60 genres with no overflow affordance", async () => {
+  it("renders at most 60 genres and counts the rest", async () => {
     const many: Genre[] = Array.from({ length: 75 }, (_, i) => ({
       canonical_id: `g-${i}`,
       name: `Genre ${i}`,
@@ -410,7 +457,13 @@ describe("SmartPlaylistModal genre selection", () => {
     onInvoke("get_genres", () => many);
     await mount();
     expect(availableChips()).toHaveLength(60);
-    expect(screen.queryByText(/more/i)).toBeNull();
+    expect(document.querySelector(".spm-genre-more")?.textContent).toBe("15 more, search to narrow");
+  });
+
+  it("shows no overflow line when every genre fits", async () => {
+    await mount();
+    expect(availableChips()).toHaveLength(3);
+    expect(document.querySelector(".spm-genre-more")).toBeNull();
   });
 
   it("swaps IN for NOT IN in the built query when exclude mode is chosen", async () => {
@@ -502,6 +555,41 @@ describe("SmartPlaylistModal numeric fields", () => {
     const filters = savedFilters(onSave);
     expect(filters.yearFrom).toBeNull();
     expect(buildSmartQuery(filters, "srv-a").sql).not.toContain("t.year >=");
+  });
+
+  it("refuses to save an inverted year range and says why", async () => {
+    const { onSave } = await mount();
+    type(field("Name"), "Mix");
+    type(field("Year from"), "1990");
+    type(field("Year to"), "1980");
+    fireEvent.blur(field("Year to"));
+    expect(saveBtn()).toBeDisabled();
+    expect(document.querySelector(".spm-error")?.textContent).toContain("Year from");
+    fireEvent.click(saveBtn());
+    await act(async () => {});
+    expect(onSave).not.toHaveBeenCalled();
+
+    type(field("Year to"), "1990");
+    expect(saveBtn()).toBeEnabled();
+    expect(document.querySelector(".spm-error")).toBeNull();
+  });
+
+  it("holds the inverted-range message while a year is still being typed", async () => {
+    await mount();
+    type(field("Name"), "Mix");
+    type(field("Year from"), "1990");
+    fireEvent.focus(field("Year to"));
+    type(field("Year to"), "2");
+    expect(saveBtn()).toBeDisabled();
+    expect(document.querySelector(".spm-error")).toBeNull();
+
+    fireEvent.blur(field("Year to"));
+    expect(document.querySelector(".spm-error")?.textContent).toContain("Year from");
+
+    fireEvent.focus(field("Year to"));
+    expect(document.querySelector(".spm-error")).toBeNull();
+    type(field("Year to"), "2005");
+    expect(saveBtn()).toBeEnabled();
   });
 
   it("accepts a year outside the min/max attributes, which are markup only", async () => {

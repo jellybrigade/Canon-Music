@@ -14,6 +14,7 @@ import { ArtistIdentifyDialog } from "../features/enrichment/components/Identify
 import { CardGridSkeleton } from "../ui/Skeleton";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import { useSetting } from "../hooks/useSetting";
+import { parseStalenessDays } from "../lib/numberSetting";
 
 /** Lazily triggers portrait enrichment once a grid tile scrolls into view, so artists
  * never opened individually still get one. A null component, not a card hook, so the
@@ -76,7 +77,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
   // the enriched_at already joined into get_artists, so fresh artists (the common
   // case) never mount the per-card enrichment query at all.
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
-  const staleDays = Number(staleDaysStr) || 30;
+  const staleDays = parseStalenessDays(staleDaysStr);
   const staleCutoff = Date.now() - staleDays * 24 * 60 * 60 * 1000;
 
   // The scroller below is rendered only once there are artists, so it has to be measured on

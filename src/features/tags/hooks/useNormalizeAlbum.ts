@@ -6,6 +6,7 @@ import { useSetting } from "../../../hooks/useSetting";
 import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
 import { useTagsStore } from "../store/tags";
 import type { MbGenre } from "../../../clients/musicbrainz";
+import { parseStalenessDays } from "../../../lib/numberSetting";
 
 export type { NormalizedTags };
 
@@ -39,7 +40,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
       (currentMbGenres !== null || currentMbTags !== null);
     prevMbGenresJsonRef.current = currentMbKey;
 
-    if (!mbDataJustArrived && !isStale(query.data ?? null, Number(stalenessDays) || 30)) return;
+    if (!mbDataJustArrived && !isStale(query.data ?? null, parseStalenessDays(stalenessDays))) return;
 
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {

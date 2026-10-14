@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { WaveformBars } from "./WaveformBars";
 import { usePlayerStore } from "../store/player";
-import { useSeekBar, formatDuration } from "../hooks/useSeekBar";
+import { useSeekBar } from "../hooks/useSeekBar";
+import { formatDuration } from "../../../lib/trackCells";
 import "./NowPlayingProgress.css";
 
 export function NowPlayingProgress({

@@ -96,7 +96,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: frequentRaw } = useCarouselAlbums(serverWithCredential, "frequent");
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
   const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums();
-  const { genres: recentGenres } = useRecentGenres();
+  const { genres: recentGenres, error: recentGenresError, retry: retryRecentGenres } = useRecentGenres();
   const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
@@ -315,6 +315,12 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
                 </div>
               )}
             </div>
+          </section>
+        )}
+        {!isSearching && recentGenresError && featuredGenres.length === 0 && (
+          <section className="home-genres-section home-genres-section--error">
+            <p className="home-genres-error">Couldn't load your recent genres: {recentGenresError}</p>
+            <button className="home-genres-retry" onClick={retryRecentGenres}>Try again</button>
           </section>
         )}
         {!isSearching && featuredGenres.length > 0 && (

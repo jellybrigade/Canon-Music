@@ -53,4 +53,19 @@ describe("GenreView", () => {
     const counts = [...container.querySelectorAll(".genre-column .genre-col-count")];
     expect(counts.map((c) => c.textContent)).toEqual(["3 albums"]);
   });
+
+  it("shows a failed read as an error with a retry, not an endless loading line", async () => {
+    vi.mocked(getDb).mockRejectedValueOnce(new Error("db locked"));
+    await seedAlbums("rock", 3);
+    const { container } = await mount();
+
+    expect(container.querySelector(".genre-view__loading")).toBeNull();
+    expect(container.querySelector(".empty-state-hint")?.textContent).toBe("db locked");
+
+    await act(async () => {
+      fireEvent.click(container.querySelector(".empty-state-action")!);
+    });
+    const counts = [...container.querySelectorAll(".genre-column .genre-col-count")];
+    expect(counts.map((c) => c.textContent)).toEqual(["3 albums"]);
+  });
 });

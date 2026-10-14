@@ -7,6 +7,7 @@ import { QK } from "../../../lib/queryKeys";
 import { getDb } from "../../../db";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import { AlbumArt } from "../../../components/AlbumArt";
+import { RowListSkeleton } from "../../../ui/Skeleton";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { AlbumRow } from "../../../types/library";
@@ -20,7 +21,7 @@ interface Props {
 export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props) {
   const { server, credential } = serverWithCredential;
   const queryClient = useQueryClient();
-  const { data: albums = [] } = useFailedLookupAlbums();
+  const { data: albums = [], isPending, error, refetch } = useFailedLookupAlbums(server.id);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
   const [rescanProgress, setRescanProgress] = useState<{ done: number; total: number } | null>(null);
 
@@ -99,7 +100,15 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
         )}
       </div>
 
-      {albums.length === 0 ? (
+      {error && albums.length === 0 ? (
+        <div className="empty-state">
+          <p className="empty-state-title">Couldn't load unidentified albums</p>
+          <p className="empty-state-hint">{error.message}</p>
+          <button className="empty-state-action" onClick={() => { void refetch(); }}>Try again</button>
+        </div>
+      ) : isPending ? (
+        <RowListSkeleton label="Loading unidentified albums" />
+      ) : albums.length === 0 ? (
         <p className="unidentified-empty">No failed matches yet. Albums are auto-identified when opened, so this list fills in as you browse.</p>
       ) : (
         <div className="unidentified-list">

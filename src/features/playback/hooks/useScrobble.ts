@@ -6,6 +6,7 @@ import { reportNowPlaying } from "../../../clients/navidrome";
 import { stripServerPrefix } from "../../../lib/ids";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useSetting } from "../../../hooks/useSetting";
+import { parseNumberOr } from "../../../lib/numberSetting";
 
 // A rejected insert clears the stamp so the next position poll retries, which makes the
 // poll the retry clock: unbounded, a database that stays locked would write five failing
@@ -25,8 +26,8 @@ export function useScrobble(
   const elapsed = usePlayerStore((s) => s.elapsed);
   const [minSecondsRaw] = useSetting("scrobble.min_seconds", "240");
   const [thresholdPctRaw] = useSetting("scrobble.threshold_percent", "50");
-  const minElapsedS = Math.max(0, parseInt(minSecondsRaw, 10) || 0);
-  const fraction = Math.max(0, Math.min(100, parseInt(thresholdPctRaw, 10) || 50)) / 100;
+  const minElapsedS = Math.max(0, parseNumberOr(minSecondsRaw, 0));
+  const fraction = Math.max(0, Math.min(100, parseNumberOr(thresholdPctRaw, 50))) / 100;
 
   useEffect(() => {
     scrobbedRef.current = false;

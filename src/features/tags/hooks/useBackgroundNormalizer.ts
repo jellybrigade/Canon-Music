@@ -5,6 +5,7 @@ import { runPool } from "../../../lib/asyncPool";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { useSetting } from "../../../hooks/useSetting";
 import { useTagsStore } from "../store/tags";
+import { parseStalenessDays } from "../../../lib/numberSetting";
 
 // No inter-item delay: Last.fm's shared token bucket is the throttle. Concurrency only
 // overlaps local work with its waits; kept low so writes don't starve UI reads.
@@ -129,7 +130,7 @@ export function useBackgroundNormalizer() {
     if (autoRefresh !== "true") return;
     if (isRunning) return;
 
-    const staleDays = Number(stalenessDays) || 30;
+    const staleDays = parseStalenessDays(stalenessDays);
     isRunning = true;
 
     async function checkStale() {
@@ -177,7 +178,7 @@ export async function runEnrichment(): Promise<void> {
       "SELECT value FROM settings WHERE key = 'tags.staleness_days'",
       []
     );
-    const staleDays = Number(rows[0]?.value) || 30;
+    const staleDays = parseStalenessDays(rows[0]?.value);
     const { albums, artists } = await queryStale(staleDays);
     await doEnrich(albums, artists);
   } finally {
