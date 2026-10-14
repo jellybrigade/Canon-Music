@@ -27,7 +27,8 @@ interface Props {
 export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "New Smart Playlist" }: Props) {
   const [filters, setFilters] = useState<SmartFilters>(initialFilters ?? DEFAULT_SMART_FILTERS);
   const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
+  // Keyed to the filters it failed on, so any edit retires the message.
+  const [failedSave, setFailedSave] = useState<{ filters: SmartFilters; message: string } | null>(null);
   const [genreSearch, setGenreSearch] = useState("");
   const dismiss = useOverlayDismiss(onClose);
   // Escape stands down while a save is in flight, matching the Cancel button that is already
@@ -44,6 +45,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
 
   const isYearRangeInverted =
     filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
+  const saveError = failedSave?.filters === filters ? failedSave.message : null;
   const footerError = isYearRangeInverted ? "Year from is after Year to." : saveError;
   const hiddenGenreCount = Math.max(0, availableGenres.length - GENRE_CHIP_LIMIT);
 
@@ -67,13 +69,13 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
     const name = filters.name.trim();
     if (!name || isYearRangeInverted) return;
     setSaving(true);
-    setSaveError(null);
+    setFailedSave(null);
     try {
       await onSave({ ...filters, name });
       onClose();
     } catch (e) {
       console.error("Failed to save smart playlist:", e);
-      setSaveError(`Couldn't save playlist: ${e instanceof Error ? e.message : String(e)}`);
+      setFailedSave({ filters, message: `Couldn't save playlist: ${e instanceof Error ? e.message : String(e)}` });
     } finally {
       setSaving(false);
     }

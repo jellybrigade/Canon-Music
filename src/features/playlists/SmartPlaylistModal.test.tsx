@@ -342,6 +342,22 @@ describe("SmartPlaylistModal save gating", () => {
     err.mockRestore();
   });
 
+  it("drops the save error once the form is edited", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const onSave = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    await mount({ onSave });
+    type(field("Name"), "Mix");
+    fireEvent.click(saveBtn());
+    await act(async () => {});
+    expect(document.querySelector(".spm-error")?.textContent).toContain("network down");
+
+    type(field("Name"), "Mix 2");
+    expect(document.querySelector(".spm-error")).toBeNull();
+    err.mockRestore();
+  });
+
   it("clears the save error when the next save starts", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     let shouldFail = true;
