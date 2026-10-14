@@ -125,7 +125,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
   const [paginated] = useBoolSetting("albums.pagination", false);
   const [page, setPage] = useState(1);
-  const { data: failedLookupIds } = useFailedLookupAlbumIds();
+  const { data: failedLookupIds } = useFailedLookupAlbumIds(serverWithCredential.server.id);
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);

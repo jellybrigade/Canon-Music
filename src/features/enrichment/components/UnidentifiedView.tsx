@@ -21,7 +21,7 @@ interface Props {
 export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props) {
   const { server, credential } = serverWithCredential;
   const queryClient = useQueryClient();
-  const { data: albums = [], isPending, error, refetch } = useFailedLookupAlbums();
+  const { data: albums = [], isPending, error, refetch } = useFailedLookupAlbums(server.id);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
   const [rescanProgress, setRescanProgress] = useState<{ done: number; total: number } | null>(null);
 

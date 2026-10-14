@@ -162,7 +162,7 @@ export default function App() {
   const { data: unmappedCountRaw } = useUnmappedTagCount();
   const unmappedCount = unmappedCountRaw ?? 0;
   const [hideTagBadge, setHideTagBadge] = useBoolSetting("ui.hide_tag_badge", false);
-  const { data: failedLookupIds } = useFailedLookupAlbumIds();
+  const { data: failedLookupIds } = useFailedLookupAlbumIds(server?.id);
   const unidentifiedCount = failedLookupIds?.length ?? 0;
   const [albumsPaginated, setAlbumsPaginated] = useBoolSetting("albums.pagination", false);
 
