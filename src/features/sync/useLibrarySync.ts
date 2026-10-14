@@ -13,6 +13,18 @@ import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
+export interface SyncOutcome {
+  status: "done" | "partial" | "error";
+  albumsChanged: boolean;
+  /** Empty when the run finished clean. */
+  error: string;
+}
+
+export interface RunSyncOptions extends SyncOptions {
+  /** Called once when the run this call started ends, after its album refresh was requested. */
+  onSettled?: (outcome: SyncOutcome) => void;
+}
+
 // Clearing the claim immediately on failure would hammer an unreachable server, so retry is
 // delayed and bounded; past the last delay only the manual sync button or a server switch retries.
 const RETRY_DELAYS_MS = [30_000, 120_000, 300_000];
@@ -86,11 +98,13 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   }
 
   /** Returns whether a run actually started. */
-  function runSync(s: ServerWithCredential, options?: SyncOptions): boolean {
+  function runSync(s: ServerWithCredential, options?: RunSyncOptions): boolean {
     if (syncingRef.current) return false;
+    const { onSettled, ...syncOptions } = options ?? {};
     syncingRef.current = true;
     clearRetryTimer();
     let failed = false;
+    let outcome: SyncOutcome = { status: "error", albumsChanged: false, error: "" };
     setSyncStatus("syncing");
     setSyncError("");
     setSyncProgress(null);
@@ -111,13 +125,14 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         lastInvalidate = now;
         useAlbumBrowseSessionStore.getState().bumpRefresh();
       },
-      options
+      syncOptions
     )
       .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
         if (!mountedRef.current) return;
         const hasPartialFailure =
           failedAlbums > 0 || failedPlaylists > 0 || skippedStages.length > 0 || albumTracksIncomplete;
-        setSyncStatus(hasPartialFailure ? "partial" : "done");
+        outcome = { status: hasPartialFailure ? "partial" : "done", albumsChanged: changed.albums, error: "" };
+        setSyncStatus(outcome.status);
         setLastSyncedAt(Date.now());
         if (retryRef.current?.id === s.server.id) retryRef.current = null;
         if (hasPartialFailure) {
@@ -133,7 +148,8 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
           if (albumTracksIncomplete) {
             messages.push("stopped reading album tracks early (server unreachable), the rest follow next sync");
           }
-          setSyncError(`Sync partial: ${messages.join("; ")}.`);
+          outcome.error = `Sync partial: ${messages.join("; ")}.`;
+          setSyncError(outcome.error);
         }
         // Each bump invalidates a session-store snapshot and forces a full
         // re-read of that table, so only bump what this sync actually wrote.
@@ -165,11 +181,14 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         failed = true;
         console.error("Sync failed:", err);
         if (!mountedRef.current) return;
+        outcome = { status: "error", albumsChanged: false, error: err instanceof Error ? err.message : String(err) };
         setSyncStatus("error");
-        setSyncError(err instanceof Error ? err.message : String(err));
+        setSyncError(outcome.error);
       })
       .finally(() => {
         if (!mountedRef.current) return;
+        // Here rather than in `.then`, so a throw later in that handler can't settle the run twice.
+        onSettled?.(outcome);
         syncingRef.current = false;
         setSyncProgress(null);
         // The user may have switched servers while this run was in flight, in

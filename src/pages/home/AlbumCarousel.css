@@ -47,13 +47,29 @@
   transition: color var(--duration-moderate);
 }
 
-.home-section__refresh-btn:hover {
+.home-section__refresh-btn:hover:not(:disabled) {
   color: var(--text-primary);
+}
+
+.home-section__refresh-btn:active:not(:disabled) {
+  color: var(--text-secondary);
 }
 
 .home-section__refresh-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/* The spinning icon is the busy state; no dimming on top of it. */
+.home-section__refresh-btn:disabled {
+  cursor: default;
+}
+
+.home-section__note {
+  align-self: center;
+  margin-left: var(--space-xs);
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
 }
 
 .album-carousel {

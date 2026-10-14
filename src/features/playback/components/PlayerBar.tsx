@@ -4,7 +4,7 @@ import { QK } from "../../../lib/queryKeys";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import {
   Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, VolumeX, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
+  Shuffle, Repeat, Repeat1, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
 } from "lucide-react";
 import { usePlayerStore } from "../store/player";
 import { isNextDisabled, repeatModeLabel } from "../store/playerTypes";
@@ -16,6 +16,9 @@ import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
 import { PlayerProgress } from "./PlayerProgress";
 import { RadioButton } from "../../radio/components/RadioButton";
 import { SleepTimerPopover } from "./SleepTimerPopover";
+import { PlayerMoreControls } from "./PlayerMoreControls";
+import { popoverAbove } from "../lib/popoverAbove";
+import { VolumeControl } from "./VolumeControl";
 import { sleepTimerCountdown } from "../lib/sleepTimer";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { AlbumArt } from "../../../components/AlbumArt";
@@ -31,20 +34,12 @@ import "./PlayerBar.css";
 interface LoveButtonProps {
   isLoved: boolean;
   onToggle: () => void;
-  narrow?: boolean;
 }
 
-/** Anchors a fixed popover's bottom-right corner to the button's top-right; the gap lives in CSS. */
-function popoverAbove(button: HTMLElement): { right: number; bottom: number } {
-  const rect = button.getBoundingClientRect();
-  return { right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.top };
-}
-
-// fallow-ignore-next-line complexity
-function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
+function LoveButton({ isLoved, onToggle }: LoveButtonProps) {
   return (
     <button
-      className={`player-btn player-btn--icon${narrow ? " player-btn--hide-narrow" : ""}${isLoved ? " player-btn--active" : ""}`}
+      className={`player-btn player-btn--icon${isLoved ? " player-btn--active" : ""}`}
       onClick={onToggle}
       title={isLoved ? "Unlove" : "Love"}
       aria-label={isLoved ? "Unlove" : "Love"}
@@ -62,24 +57,6 @@ interface Props {
   serverWithCred?: ServerWithCredential;
 }
 
-/** Attached natively, not via onWheel: React's passive root listener makes preventDefault()
- * a no-op there, so the page would scroll under the user while they adjust volume. */
-function useVolumeWheel() {
-  const ref = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const { volume, setVolume } = usePlayerStore.getState();
-      void setVolume(Math.max(0, Math.min(1, volume - e.deltaY * 0.001)));
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
-  return ref;
-}
-
 export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack  = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
@@ -87,7 +64,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const isLoading     = usePlayerStore((s) => s.isLoading);
   const error         = usePlayerStore((s) => s.error);
   const retryCurrent  = usePlayerStore((s) => s.retryCurrent);
-  const volume        = usePlayerStore((s) => s.volume);
   const queue         = usePlayerStore((s) => s.queue);
   const queueIndex    = usePlayerStore((s) => s.queueIndex);
   const repeat        = usePlayerStore((s) => s.repeat);
@@ -99,8 +75,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const next          = usePlayerStore((s) => s.next);
   const prev          = usePlayerStore((s) => s.prev);
   const seek          = usePlayerStore((s) => s.seek);
-  const setVolume     = usePlayerStore((s) => s.setVolume);
-  const toggleMute    = usePlayerStore((s) => s.toggleMute);
   const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
   const pullProgress        = useTagsStore((s) => s.pullProgress);
@@ -118,10 +92,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const rendererScanError    = usePlayerStore((s) => s.rendererScanError);
   const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
   const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
-
-  const [moreOpen, setMoreOpen] = useState(false);
-  const morePanelRef = useRef<HTMLDivElement>(null);
-  const moreBtnRef = useRef<HTMLButtonElement>(null);
 
   const [castOpen, setCastOpen] = useState(false);
   const [castPopoverPos, setCastPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
@@ -159,8 +129,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
     staleTime: Infinity,
   });
 
-  const volumeWheelRef = useVolumeWheel();
-  const moreVolumeWheelRef = useVolumeWheel();
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -209,13 +177,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   }, [pullProgress, enrichmentPending, albumTracksNotice]);
 
   useEffect(() => {
-    if (!moreOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMoreOpen(false); };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [moreOpen]);
-
-  useEffect(() => {
     if (!artOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
     document.addEventListener("keydown", onKey);
@@ -237,7 +198,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   }, [sleepTimerEndsAt]);
 
   useClickOutside([timerPopoverRef, timerBtnRef], () => setTimerOpen(false), timerOpen);
-  useClickOutside([morePanelRef, moreBtnRef], () => setMoreOpen(false), moreOpen);
   useClickOutside([castPopoverRef, castBtnRef], () => setCastOpen(false), castOpen);
 
   function handleStarClick(star: number) {
@@ -385,7 +345,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
         <div className="player-section player-section--center">
           <div className="player-controls">
             <button
-              className={`player-btn player-btn--icon player-btn--hide-narrow${isShuffled ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
               onClick={toggleShuffle}
               title={shuffleLabel}
               aria-label={shuffleLabel}
@@ -427,7 +387,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               <SkipForward size={24} />
             </button>
             <button
-              className={`player-btn player-btn--icon player-btn--hide-narrow${repeat !== "off" ? " player-btn--active" : ""}`}
+              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
               onClick={() => void toggleRepeat()}
               title={repeatLabel}
               aria-label={repeatLabel}
@@ -450,7 +410,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               <LoveButton
                 isLoved={isLoved}
                 onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-                narrow
               />
               <div
                 className="player-stars player-stars--hide-narrow"
@@ -512,127 +471,23 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
           >
             <Headphones size={22} />
           </button>
-          <div className="player-volume" ref={volumeWheelRef}>
-            <button
-              type="button"
-              className="player-btn player-btn--icon player-volume-mute-btn"
-              onClick={toggleMute}
-              title={volume > 0 ? "Mute" : "Unmute"}
-              aria-label={volume > 0 ? "Mute" : "Unmute"}
-            >
-              {volume > 0
-                ? <Volume2 size={18} className="player-volume-icon" />
-                : <VolumeX size={18} className="player-volume-icon" />}
-            </button>
-            <input
-              type="range"
-              className="player-volume-slider"
-              min={0}
-              max={1}
-              step={0.01}
-              value={volume}
-              onChange={(e) => void setVolume(parseFloat(e.target.value))}
-              aria-label="Volume"
-            />
-          </div>
-          <button
-            ref={moreBtnRef}
-            className={`player-btn player-btn--icon player-more-btn${moreOpen ? " player-btn--active" : ""}`}
-            onClick={() => setMoreOpen((o) => !o)}
-            title="More controls"
-            aria-label="More controls"
-          >
-            <ChevronUp size={18} style={moreOpen ? { transform: "rotate(180deg)" } : undefined} />
-          </button>
+          <VolumeControl className="player-volume" iconSize={18} />
+          <PlayerMoreControls
+            timerLabel={remaining}
+            isTimerActive={timerActive}
+            castDeviceName={castDevice?.name ?? null}
+            onOpenTimer={(anchor) => {
+              setTimerPopoverPos(popoverAbove(anchor));
+              setTimerOpen(true);
+            }}
+            onOpenCast={(anchor) => {
+              setCastPopoverPos(popoverAbove(anchor));
+              if (!castOpen) void scanRenderers();
+              setCastOpen(true);
+            }}
+            onNowPlaying={onNowPlaying}
+          />
         </div>
-        {moreOpen && (
-          <div ref={morePanelRef} className="player-more-panel">
-            <button
-              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
-              onClick={toggleShuffle}
-              title={shuffleLabel}
-              aria-label={shuffleLabel}
-              aria-pressed={isShuffled}
-            >
-              <Shuffle size={18} />
-            </button>
-            <button
-              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
-              onClick={() => void toggleRepeat()}
-              title={repeatLabel}
-              aria-label={repeatLabel}
-              aria-pressed={repeat !== "off"}
-            >
-              {repeat === "repeat-one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
-            </button>
-            {currentTrack && serverWithCred && (
-              <LoveButton
-                isLoved={isLoved}
-                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-              />
-            )}
-            <button
-              className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
-              onClick={() => {
-                // The panel closes on this click, so anchor to the More button that stays.
-                if (moreBtnRef.current) setTimerPopoverPos(popoverAbove(moreBtnRef.current));
-                setTimerOpen((o) => !o);
-                setMoreOpen(false);
-              }}
-              title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
-              aria-label="Sleep timer"
-            >
-              {timerActive && remaining ? (
-                <span className="player-timer-remaining">{remaining}</span>
-              ) : (
-                <Timer size={18} />
-              )}
-            </button>
-            <button
-              className={`player-btn player-btn--icon${castDevice ? " player-btn--active" : ""}`}
-              onClick={() => {
-                // The panel closes on this click, so anchor to the More button that stays.
-                if (moreBtnRef.current) setCastPopoverPos(popoverAbove(moreBtnRef.current));
-                if (!castOpen) void scanRenderers();
-                setCastOpen((o) => !o);
-                setMoreOpen(false);
-              }}
-              title={castDevice ? `Casting to ${castDevice.name}` : "Cast to device"}
-              aria-label="Cast to device"
-            >
-              <Cast size={18} />
-            </button>
-            <button
-              className="player-btn player-btn--icon"
-              onClick={() => { onNowPlaying(); setMoreOpen(false); }}
-              title="Now playing"
-              aria-label="Now playing"
-            >
-              <Headphones size={18} />
-            </button>
-            <div className="player-more-volume" ref={moreVolumeWheelRef}>
-              <button
-                type="button"
-                className="player-btn player-btn--icon player-volume-mute-btn"
-                onClick={toggleMute}
-                title={volume > 0 ? "Mute" : "Unmute"}
-                aria-label={volume > 0 ? "Mute" : "Unmute"}
-              >
-                {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
-              </button>
-              <input
-                type="range"
-                className="player-volume-slider"
-                min={0}
-                max={1}
-                step={0.01}
-                value={volume}
-                onChange={(e) => void setVolume(parseFloat(e.target.value))}
-                aria-label="Volume"
-              />
-            </div>
-          </div>
-        )}
       </div>}
 
       {timerOpen && (
