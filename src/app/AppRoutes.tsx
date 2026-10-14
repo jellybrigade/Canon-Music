@@ -59,6 +59,7 @@ export interface AppViewProps {
   allTracksError: string | null;
   genres: ReturnType<typeof useGenres>["data"];
   genresError: string | null;
+  retryGenres: () => void;
   playlists: PlaylistRow[] | undefined;
 
   // Library filters

@@ -56,6 +56,23 @@ describe("useGenres", () => {
     expect(result.current.error).toBeNull();
   });
 
+  it("retries only its own read, leaving recent genres alone", async () => {
+    onInvoke("get_genres", () => {
+      throw new Error("db locked");
+    });
+    const recentHandler = vi.fn().mockResolvedValue([genre("jazz")]);
+    onInvoke("get_recent_genres", recentHandler);
+    const { result } = renderHook(() => ({ library: useGenres(), recent: useRecentGenres() }));
+    await waitFor(() => expect(result.current.library.error).toBe("db locked"));
+    await waitFor(() => expect(recentHandler).toHaveBeenCalledTimes(1));
+
+    onInvoke("get_genres", () => [genre("rock")]);
+    act(() => result.current.library.retry());
+    await waitFor(() => expect(result.current.library.data).toEqual([genre("rock")]));
+    expect(result.current.library.error).toBeNull();
+    expect(recentHandler).toHaveBeenCalledTimes(1);
+  });
+
   it("serves a cache hit for the same tick without a second invoke", async () => {
     const handler = vi.fn().mockResolvedValue([genre("rock")]);
     onInvoke("get_genres", handler);
@@ -108,6 +125,19 @@ describe("useRecentGenres", () => {
     await waitFor(() => expect(result.current.error).toBe("db locked"));
     expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toBeUndefined();
+  });
+
+  it("retries a failed read", async () => {
+    onInvoke("get_recent_genres", () => {
+      throw new Error("db locked");
+    });
+    const { result } = renderHook(() => useRecentGenres());
+    await waitFor(() => expect(result.current.error).toBe("db locked"));
+
+    onInvoke("get_recent_genres", () => [genre("jazz")]);
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.genres).toEqual([genre("jazz")]));
+    expect(result.current.error).toBeNull();
   });
 
   it("always fetches on mount - there is no enabled gate", async () => {

@@ -216,6 +216,24 @@
   padding: var(--space-md) var(--space-lg) 0;
 }
 
+.home-genres-section--error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.home-genres-error {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.home-genres-retry {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+}
+
 .home-section__radio-btn {
   align-self: center;
   margin-left: var(--space-xs);

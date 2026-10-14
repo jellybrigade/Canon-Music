@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../db";
 import { useGenresSessionStore } from "../store/genresSessionStore";
@@ -24,6 +24,8 @@ export function useGenres(enabled: boolean = true) {
   const [isFetching, setIsFetching] = useState(() => data === undefined);
   // A failed read leaves `data` undefined, which callers would otherwise render as "no genres".
   const [error, setError] = useState<string | null>(null);
+  // Re-runs this read alone; a store tick bump would refetch every genre read with it.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!enabled) return;
@@ -59,10 +61,12 @@ export function useGenres(enabled: boolean = true) {
     return () => {
       cancelled = true;
     };
-  }, [refreshTick, enabled]);
+  }, [refreshTick, enabled, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
-  return { data, isLoading: isFetching && data === undefined, error };
+  return { data, isLoading: isFetching && data === undefined, error, retry };
 }
 
 // Genres drawn from the user's most recently played albums (up to 10 albums).
@@ -78,6 +82,7 @@ export function useRecentGenres() {
   });
   const [isFetching, setIsFetching] = useState(() => data === undefined);
   const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const s = useGenresSessionStore.getState();
@@ -110,9 +115,11 @@ export function useRecentGenres() {
     return () => {
       cancelled = true;
     };
-  }, [refreshTick]);
+  }, [refreshTick, attempt]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
   const genres = useMemo(() => data ?? [], [data]);
   // A tick refetch keeps its rows on screen, so only a read with nothing to show is loading.
-  return { data, isLoading: isFetching && data === undefined, error, genres };
+  return { data, isLoading: isFetching && data === undefined, error, retry, genres };
 }

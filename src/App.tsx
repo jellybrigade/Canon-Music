@@ -153,7 +153,7 @@ export default function App() {
   const { data: artists, isLoading: artistsLoading, error: artistsError } =
     useArtists(pathname === "/artists");
   const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
-  const { data: genres, error: genresError } = useGenres(pathname === "/library");
+  const { data: genres, error: genresError, retry: retryGenres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
   const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
@@ -523,6 +523,7 @@ export default function App() {
     allTracksError,
     genres,
     genresError,
+    retryGenres,
     playlists,
     canonicalIdFilters,
     lovedOnly,
