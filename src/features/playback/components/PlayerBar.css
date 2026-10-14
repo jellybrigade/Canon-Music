@@ -643,12 +643,26 @@
   object-fit: cover;
 }
 
-/* ── More controls panel (narrow only) ── */
+/* ── More controls menu (narrow only) ── */
 .player-more-btn {
   display: none;
+  position: relative;
 }
 
-.player-more-panel {
+/* Timer and cast live behind the more button when narrow, so an armed timer or an active cast
+   would otherwise be invisible. */
+.player-more-btn--has-active::after {
+  content: "";
+  position: absolute;
+  top: var(--space-2xs);
+  right: var(--space-2xs);
+  width: var(--space-xs);
+  height: var(--space-xs);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+
+.player-more-menu {
   display: none;
 }
 
@@ -661,74 +675,124 @@
 }
 
 /* ── Narrow player bar (≤900px) ── */
-/* Below this the right-side buttons, the transport and a usable waveform no longer fit side by
-   side, so the secondary buttons move into the more panel. */
+/* Below this the right side's secondary buttons no longer fit their share beside the transport
+   and waveform, so they move into the more menu. */
 @media (max-width: 900px) {
   .player-bar {
     gap: var(--space-xs);
     padding: 0 var(--space-sm);
   }
 
-  .player-section--left {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-
-  .player-section--center {
-    flex: 0 0 auto;
-  }
-
   .player-section--right {
-    flex: 0 0 auto;
     gap: var(--space-2xs);
   }
 
   .player-btn--hide-narrow,
   .player-stars--hide-narrow,
-  .player-volume,
-  .player-progress-row {
+  .player-volume {
     display: none !important;
-  }
-
-  .player-thumb-wrap {
-    width: 42px;
-    height: 42px;
-  }
-
-  .player-thumb {
-    width: 42px;
-    height: 42px;
   }
 
   .player-more-btn {
     display: inline-flex;
   }
 
-  .player-more-panel {
-    display: flex;
+  .player-more-menu {
     position: fixed;
-    bottom: var(--player-bar-height);
-    left: 0;
-    right: 0;
-    align-items: center;
-    gap: var(--space-2xs);
-    padding: var(--space-xs) var(--space-sm);
-    background: var(--bg-player);
-    border-top: 1px solid var(--border);
-    z-index: calc(var(--z-dropdown) + 1);
-  }
-
-  .player-more-volume {
+    margin-bottom: var(--space-xs);
+    width: 240px;
     display: flex;
-    align-items: center;
-    gap: var(--space-xs);
-    flex: 1;
-    color: var(--text-secondary);
+    flex-direction: column;
+    padding: var(--space-2xs) 0;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg) var(--scrim-3);
+    z-index: var(--z-overlay);
   }
+}
 
-  .player-more-volume .player-volume-slider {
-    flex: 1;
-  }
+.player-more-volume {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-2xs) var(--space-sm) var(--space-2xs) var(--space-xs);
+  color: var(--text-secondary);
+}
+
+.player-more-volume .player-volume-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-more-volume__label {
+  font-size: var(--text-sm);
+}
+
+.player-more-volume__value {
+  min-width: 3ch;
+  text-align: right;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-tertiary);
+}
+
+.player-more-separator {
+  margin: var(--space-2xs) 0;
+  border-top: 1px solid var(--border);
+}
+
+.player-more-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--text-base);
+  font-weight: 500;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--duration-fast);
+}
+
+.player-more-row:hover {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+
+.player-more-row:active {
+  background: var(--bg-hover-strong);
+}
+
+/* Rows run edge to edge inside the menu, so the focus ring sits inset. */
+.player-more-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.player-more-row__icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.player-more-row__label {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-more-row__state {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--text-tertiary);
 }
 
 /* ── Cast device popover ── */
