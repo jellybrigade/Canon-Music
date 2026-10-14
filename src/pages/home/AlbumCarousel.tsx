@@ -7,6 +7,15 @@ import type { AlbumRow } from "../../types/library";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import "./AlbumCarousel.css";
 
+interface CarouselRefresh {
+  onClick: () => void;
+  /** Tooltip and accessible name. */
+  label: string;
+  isBusy?: boolean;
+  note?: string | null;
+  noteDetail?: string;
+}
+
 interface AlbumCarouselProps {
   title: string;
   subtitle?: string;
@@ -17,7 +26,9 @@ interface AlbumCarouselProps {
   playAlbum: (album: AlbumRow) => void;
   onCardContextMenu: (e: React.MouseEvent, album: AlbumRow) => void;
   onRadio?: () => void;
-  onRefresh?: () => void;
+  refresh?: CarouselRefresh;
+  /** Each increment scrolls the carousel back to its first card. */
+  scrollToStartRequest?: number;
 }
 
 /** Card stride is measured off the DOM rather than hardcoded: the card width and the
@@ -30,7 +41,7 @@ function cardStride(track: HTMLDivElement): number {
   return card.offsetWidth + (Number.isFinite(gap) ? gap : 0);
 }
 
-export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio, onRefresh }: AlbumCarouselProps) {
+export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio, refresh, scrollToStartRequest = 0 }: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
@@ -57,6 +68,12 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
     };
   }, [itemCount, isLoading]);
 
+  useEffect(() => {
+    if (scrollToStartRequest === 0) return;
+    // The track's own `scroll-behavior: smooth` animates this.
+    trackRef.current?.scrollTo({ left: 0 });
+  }, [scrollToStartRequest]);
+
   if (!isLoading && (!items || items.length === 0)) return null;
 
   const scroll = (dir: "prev" | "next") => {
@@ -78,10 +95,19 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
             <Radio size={13} />
           </button>
         )}
-        {onRefresh && (
-          <button className="home-section__refresh-btn" onClick={onRefresh} aria-label={`Refresh ${title}`} title="Refresh">
-            <RefreshCw size={13} />
+        {refresh && (
+          <button
+            className="home-section__refresh-btn"
+            onClick={refresh.onClick}
+            disabled={refresh.isBusy}
+            aria-label={refresh.label}
+            title={refresh.label}
+          >
+            <RefreshCw size={13} className={refresh.isBusy ? "player-spin" : undefined} />
           </button>
+        )}
+        {refresh?.note && (
+          <span className="home-section__note" role="status" title={refresh.noteDetail}>{refresh.note}</span>
         )}
       </div>
       <div className="album-carousel">

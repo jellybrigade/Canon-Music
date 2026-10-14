@@ -17,6 +17,7 @@ import type { ServerWithCredential } from "../../hooks/useServer";
 import { useLibrarySync } from "./useLibrarySync";
 import { useGenresSessionStore } from "../../store/genresSessionStore";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
+import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 
 /** Read by the mocked `useSetting` above; assign before rendering. */
 let intervalSetting = "5";
@@ -210,7 +211,66 @@ describe("useLibrarySync options", () => {
     renderSync(SRV_A);
     await tick();
 
-    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toBeUndefined();
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({});
+  });
+
+  it("keeps the caller's settle callback out of the sync's own options", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+
+    act(() => {
+      result.current.runSync(SRV_A, { forceTrackPass: true, onSettled: vi.fn() });
+    });
+
+    expect(vi.mocked(syncLibrary).mock.calls[0]?.[3]).toEqual({ forceTrackPass: true });
+  });
+
+  it("tells the caller once whether the run it started changed albums", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+    const changedRun = vi.fn();
+    const idleRun = vi.fn();
+
+    act(() => {
+      result.current.runSync(SRV_A, { onSettled: changedRun });
+    });
+    await settle(0, { changed: { albums: true } });
+    act(() => {
+      result.current.runSync(SRV_A, { onSettled: idleRun });
+    });
+    await settle(1, { changed: { tracks: true } });
+
+    expect(changedRun.mock.calls).toEqual([[{ status: "done", albumsChanged: true, error: "" }]]);
+    expect(idleRun.mock.calls).toEqual([[{ status: "done", albumsChanged: false, error: "" }]]);
+  });
+
+  it("tells the caller a failed run changed no albums", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+    const onSettled = vi.fn();
+
+    act(() => {
+      result.current.runSync(SRV_A, { onSettled });
+    });
+    await failRun(0, new Error("down"));
+
+    expect(onSettled.mock.calls).toEqual([[{ status: "error", albumsChanged: false, error: "down" }]]);
+  });
+
+  it("settles after the album refresh is requested, so the next album read is this run's", async () => {
+    const { result } = renderSync(undefined);
+    await tick();
+    let tickAtSettle: number | null = null;
+    const before = useAlbumBrowseSessionStore.getState().refreshTick;
+
+    act(() => {
+      result.current.runSync(SRV_A, {
+        onSettled: () => { tickAtSettle = useAlbumBrowseSessionStore.getState().refreshTick; },
+      });
+    });
+    await settle(0, { changed: { albums: true } });
+
+    expect(tickAtSettle).toBe(before + 1);
   });
 });
 

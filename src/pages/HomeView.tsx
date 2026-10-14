@@ -31,6 +31,8 @@ import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, mergeForYouConfig,
 import { GenreChipsLine } from "./home/GenreChipsLine";
 import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
+import { useNewAlbumsCheck } from "./home/useNewAlbumsCheck";
+import type { RunSyncOptions, SyncStatus } from "../features/sync/useLibrarySync";
 import "./HomeView.css";
 import "./GenreView.css";
 import { replayGainFromRow } from "../lib/replayGainRow";
@@ -47,6 +49,8 @@ interface Props {
   homeSearchRaw: string;
   homeSearchQuery: string;
   onHomeSearchRawChange: (v: string) => void;
+  syncStatus: SyncStatus;
+  runSync: (s: ServerWithCredential, options?: RunSyncOptions) => boolean;
 }
 
 /** Oldest-played albums a vault refresh draws from, so a refresh stays long-forgotten. */
@@ -59,7 +63,7 @@ function getGreeting(): string {
   return "Good evening";
 }
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onStartRadioFromArtist, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange }: Props) {
+export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onStartRadioFromArtist, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange, syncStatus, runSync }: Props) {
   const { server, credential } = serverWithCredential;
   const currentTrack = usePlayerStore(s => s.currentTrack);
   const startRadio = useStartRadio();
@@ -228,6 +232,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
     useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
+  const newAlbumsCheck = useNewAlbumsCheck({ serverWithCred: serverWithCredential, runSync, items: newestItems, syncStatus });
   const vaultItems = useMemo(() => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[], [vault, vaultSeed]);
 
   const featuredGenres = recentGenres;
@@ -370,9 +375,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
           <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" refresh={{ onClick: newAlbumsCheck.checkForNewAlbums, label: "Check for new albums", isBusy: newAlbumsCheck.isChecking, note: newAlbumsCheck.note, noteDetail: newAlbumsCheck.noteDetail }} scrollToStartRequest={newAlbumsCheck.scrollToStartRequest} items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
           <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} isLoading={recentlyReleasedLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" onRefresh={refreshVault} items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" refresh={{ onClick: refreshVault, label: "Refresh From the Vault" }} items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
         </>
       )}
       {contextMenu && (

@@ -268,6 +268,8 @@ export function AppRoutes(props: AppViewProps) {
               homeSearchRaw={homeSearchRaw}
               homeSearchQuery={homeSearchQuery}
               onHomeSearchRawChange={setHomeSearchRaw}
+              syncStatus={syncStatus}
+              runSync={runSync}
             />
           ) : <main className="content-main">{credentialNotice}</main>}
         </Suspense>
