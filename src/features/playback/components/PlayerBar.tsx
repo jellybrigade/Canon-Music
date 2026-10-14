@@ -34,6 +34,12 @@ interface LoveButtonProps {
   narrow?: boolean;
 }
 
+/** Anchors a fixed popover's bottom-right corner to the button's top-right; the gap lives in CSS. */
+function popoverAbove(button: HTMLElement): { right: number; bottom: number } {
+  const rect = button.getBoundingClientRect();
+  return { right: window.innerWidth - rect.right, bottom: window.innerHeight - rect.top };
+}
+
 // fallow-ignore-next-line complexity
 function LoveButton({ isLoved, onToggle, narrow }: LoveButtonProps) {
   return (
@@ -473,10 +479,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             ref={timerBtnRef}
             className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}
             onClick={() => {
-              if (timerBtnRef.current) {
-                const r = timerBtnRef.current.getBoundingClientRect();
-                setTimerPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
-              }
+              if (timerBtnRef.current) setTimerPopoverPos(popoverAbove(timerBtnRef.current));
               setTimerOpen((o) => !o);
             }}
             title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
@@ -492,10 +495,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             ref={castBtnRef}
             className={`player-btn player-btn--icon player-btn--hide-narrow${castDevice ? " player-btn--active" : ""}`}
             onClick={() => {
-              if (castBtnRef.current) {
-                const r = castBtnRef.current.getBoundingClientRect();
-                setCastPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
-              }
+              if (castBtnRef.current) setCastPopoverPos(popoverAbove(castBtnRef.current));
               if (!castOpen) void scanRenderers();
               setCastOpen((o) => !o);
             }}
@@ -573,9 +573,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             )}
             <button
               className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setTimerPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+              onClick={() => {
+                // The panel closes on this click, so anchor to the More button that stays.
+                if (moreBtnRef.current) setTimerPopoverPos(popoverAbove(moreBtnRef.current));
                 setTimerOpen((o) => !o);
                 setMoreOpen(false);
               }}
@@ -590,9 +590,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             </button>
             <button
               className={`player-btn player-btn--icon${castDevice ? " player-btn--active" : ""}`}
-              onClick={(e) => {
-                const r = e.currentTarget.getBoundingClientRect();
-                setCastPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
+              onClick={() => {
+                // The panel closes on this click, so anchor to the More button that stays.
+                if (moreBtnRef.current) setCastPopoverPos(popoverAbove(moreBtnRef.current));
                 if (!castOpen) void scanRenderers();
                 setCastOpen((o) => !o);
                 setMoreOpen(false);
