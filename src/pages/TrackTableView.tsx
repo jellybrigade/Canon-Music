@@ -74,7 +74,7 @@ interface Props {
   tracks: AllTrackRow[] | undefined;
   isLoading: boolean;
   error?: string | null;
-  onRetry?: () => void;
+  onRetry: () => void;
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
 }
@@ -147,9 +147,9 @@ const TrackRow = memo(function TrackRow({
       {cols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
       {cols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
       {cols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
-      {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate ? `${track.bit_rate}k` : ""}</span>}
+      {cols.bitrate && <span className="playlist-vrow-bitrate">{track.bit_rate === null ? "" : `${track.bit_rate}k`}</span>}
       {cols.plays && <span className="playlist-vrow-duration">{track.play_count ?? ""}</span>}
-      {cols.duration && <span className="playlist-vrow-duration">{track.duration ? formatDuration(track.duration) : ""}</span>}
+      {cols.duration && <span className="playlist-vrow-duration">{track.duration === null ? "" : formatDuration(track.duration)}</span>}
       <button
         className={`track-heart${isLoved ? " track-heart--loved" : ""}`}
         aria-label={isLoved ? "Unlove track" : "Love track"}

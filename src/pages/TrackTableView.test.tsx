@@ -82,6 +82,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TrackTableView>>
     serverWithCredential: SRV,
     tracks: FIVE,
     isLoading: false,
+    onRetry: vi.fn(),
     ...props,
   } as React.ComponentProps<typeof TrackTableView>;
   const view = render(
@@ -519,6 +520,25 @@ describe("TrackTableView row controls", () => {
     renderTable();
     expect(sortHeader("Artist")).toBeInTheDocument();
     expect(querySortHeader("Year")).not.toBeInTheDocument();
+  });
+
+  it("shows a zero in every numeric column and leaves only a missing value blank", () => {
+    localStorage.setItem(
+      "canon-track-table-cols",
+      JSON.stringify({ year: true, plays: true, bitrate: true, duration: true })
+    );
+    renderTable({
+      tracks: [
+        track({ id: "srv-a:z", title: "Zero", artist: "A", year: 0, play_count: 0, bit_rate: 0, duration: 0 }),
+        track({ id: "srv-a:n", title: "Missing", artist: "B" }),
+      ],
+    });
+    const cells = (title: string) =>
+      [".playlist-vrow-year", ".playlist-vrow-bitrate", ".playlist-vrow-duration"].flatMap((selector) =>
+        Array.from(rowFor(title).querySelectorAll(selector), (cell) => cell.textContent)
+      );
+    expect(cells("Zero")).toEqual(["0", "0k", "0", "0:00"]);
+    expect(cells("Missing")).toEqual(["", "", "", ""]);
   });
 
   it("persists a column toggle", () => {
