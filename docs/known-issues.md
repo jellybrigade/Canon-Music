@@ -135,6 +135,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **A flex item with a fixed basis narrower than its content overflows neighbours.** Not reproducible in jsdom. grep: `grep -rnE "flex: 0 0 [0-9]+px" src --include='*.css'`
 - **An index sampled from one element per group misses what starts mid-group.** A-Z scrubber scans every album, jumps to the row.
 - **TS geometry restating CSS drifts; layout constants applied by hand are invisible to the virtualizer.** Measure from the DOM; pass `paddingStart`/`paddingEnd`. grep: `grep -rn "virtualRow\.start\|virtualItem\.start\|getTotalSize()" src --include='*.tsx' | grep -v '\.test\.' | grep "[+-]"`
+- **A retry that remounts onto the same inputs throws the same error.** The root `ErrorBoundary`'s "Try again" re-rendered the same URL, query cache and stores, so a deterministic crash looked like a dead button; recovery now moves to Home, then offers a reload. grep: `grep -rn "setState({ error: null })" src --include='*.tsx' | grep -v '\.test\.'`
 - **A slide transition on a polled value eases across seeks.** `useSeekBar`'s `isJump` drops it for backward or >1s steps. grep: `grep -rnE "transition:.*(transform|width).*linear" src --include='*.css'`
 
 ## Testing

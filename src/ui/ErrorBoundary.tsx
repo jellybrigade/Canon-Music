@@ -1,5 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { formatLogValue, logger } from "../lib/logger";
+import { reloadApp } from "../lib/reloadApp";
+import { ROUTES } from "../lib/routes";
 
 interface Props {
   children: ReactNode;
@@ -26,11 +28,18 @@ export class ErrorBoundary extends Component<Props, State> {
     void logger.flush();
   }
 
-  private reset = () => this.setState({ error: null });
+  // The crashed subtree is already unmounted, so a plain retry remounts it onto the same URL,
+  // query cache and stores and throws again. Leaving the page is what changes the inputs.
+  // Keep the entry's state: the router stores its history index there.
+  private goHome = () => {
+    window.history.replaceState(window.history.state, "", ROUTES.HOME);
+    this.setState({ error: null });
+  };
 
   render() {
     const { error } = this.state;
     if (!error) return this.props.children;
+    const isOnHome = window.location.pathname === ROUTES.HOME;
 
     return (
       <div
@@ -52,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
           {error.message || "An unexpected error occurred."}
         </p>
         <button
-          onClick={this.reset}
+          onClick={isOnHome ? reloadApp : this.goHome}
           style={{
             padding: "0.5rem 1.25rem",
             borderRadius: "6px",
@@ -62,7 +71,7 @@ export class ErrorBoundary extends Component<Props, State> {
             cursor: "pointer",
           }}
         >
-          Try again
+          {isOnHome ? "Reload Canon" : "Go to Home"}
         </button>
       </div>
     );
