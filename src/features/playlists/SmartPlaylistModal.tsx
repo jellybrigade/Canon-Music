@@ -46,7 +46,9 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
   const isYearRangeInverted =
     filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
   const saveError = failedSave?.filters === filters ? failedSave.message : null;
-  const footerError = isYearRangeInverted ? "Year from is after Year to." : saveError;
+  // A half-typed year reads as inverted ("2" < 1990), so the message waits until focus leaves.
+  const [isEditingYear, setIsEditingYear] = useState(false);
+  const footerError = isYearRangeInverted && !isEditingYear ? "Year from is after Year to." : saveError;
   const hiddenGenreCount = Math.max(0, availableGenres.length - GENRE_CHIP_LIMIT);
 
   function set<K extends keyof SmartFilters>(key: K, value: SmartFilters[K]) {
@@ -180,6 +182,8 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   placeholder="e.g. 1970"
                   value={filters.yearFrom ?? ""}
                   onChange={(e) => set("yearFrom", e.target.value ? Number(e.target.value) : null)}
+                  onFocus={() => setIsEditingYear(true)}
+                  onBlur={() => setIsEditingYear(false)}
                 />
               </div>
               <div className="spm-field spm-field--half">
@@ -192,6 +196,8 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   placeholder="e.g. 1979"
                   value={filters.yearTo ?? ""}
                   onChange={(e) => set("yearTo", e.target.value ? Number(e.target.value) : null)}
+                  onFocus={() => setIsEditingYear(true)}
+                  onBlur={() => setIsEditingYear(false)}
                 />
               </div>
             </div>

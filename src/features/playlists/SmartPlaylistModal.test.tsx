@@ -562,6 +562,7 @@ describe("SmartPlaylistModal numeric fields", () => {
     type(field("Name"), "Mix");
     type(field("Year from"), "1990");
     type(field("Year to"), "1980");
+    fireEvent.blur(field("Year to"));
     expect(saveBtn()).toBeDisabled();
     expect(document.querySelector(".spm-error")?.textContent).toContain("Year from");
     fireEvent.click(saveBtn());
@@ -571,6 +572,24 @@ describe("SmartPlaylistModal numeric fields", () => {
     type(field("Year to"), "1990");
     expect(saveBtn()).toBeEnabled();
     expect(document.querySelector(".spm-error")).toBeNull();
+  });
+
+  it("holds the inverted-range message while a year is still being typed", async () => {
+    await mount();
+    type(field("Name"), "Mix");
+    type(field("Year from"), "1990");
+    fireEvent.focus(field("Year to"));
+    type(field("Year to"), "2");
+    expect(saveBtn()).toBeDisabled();
+    expect(document.querySelector(".spm-error")).toBeNull();
+
+    fireEvent.blur(field("Year to"));
+    expect(document.querySelector(".spm-error")?.textContent).toContain("Year from");
+
+    fireEvent.focus(field("Year to"));
+    expect(document.querySelector(".spm-error")).toBeNull();
+    type(field("Year to"), "2005");
+    expect(saveBtn()).toBeEnabled();
   });
 
   it("accepts a year outside the min/max attributes, which are markup only", async () => {
