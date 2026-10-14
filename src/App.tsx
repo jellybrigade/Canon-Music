@@ -168,11 +168,11 @@ export default function App() {
 
   const visibleAlbums = useMemo(() => {
     if (albums === undefined) return [];
-    const yearFrom = yearFromInput ? parseInt(yearFromInput, 10) : null;
-    const yearTo = yearToInput ? parseInt(yearToInput, 10) : null;
+    const yearFrom = parseIntegerOr(yearFromInput, null);
+    const yearTo = parseIntegerOr(yearToInput, null);
     let result = lovedOnly ? albums.filter((a) => lovedAlbumIds.has(a.id)) : albums;
-    if (yearFrom != null && !isNaN(yearFrom)) result = result.filter((a) => (a.year ?? 0) >= yearFrom);
-    if (yearTo != null && !isNaN(yearTo)) result = result.filter((a) => (a.year ?? 9999) <= yearTo);
+    if (yearFrom !== null) result = result.filter((a) => (a.year ?? 0) >= yearFrom);
+    if (yearTo !== null) result = result.filter((a) => (a.year ?? 9999) <= yearTo);
     return result;
   }, [albums, lovedOnly, lovedAlbumIds, yearFromInput, yearToInput]);
 

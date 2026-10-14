@@ -198,17 +198,6 @@ export async function getTransportInfo(controlUrl: string): Promise<string> {
 
 // ── RenderingControl actions ───────────────────────────────────────────────
 
-export async function getVolume(controlUrl: string): Promise<number> {
-  const xml = await soapAction(
-    controlUrl,
-    RC_SERVICE,
-    "GetVolume",
-    `<InstanceID>0</InstanceID><Channel>Master</Channel>`
-  );
-  const v = xmlTextContent(xml, "CurrentVolume");
-  return v ? parseInt(v, 10) : 50;
-}
-
 export async function setVolume(controlUrl: string, volume: number): Promise<void> {
   const clamped = Math.max(0, Math.min(100, Math.round(volume * 100)));
   await soapAction(

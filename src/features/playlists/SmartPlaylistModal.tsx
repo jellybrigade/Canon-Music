@@ -181,7 +181,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   max={YEAR_MAX}
                   placeholder="e.g. 1970"
                   value={filters.yearFrom ?? ""}
-                  onChange={(e) => set("yearFrom", e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => set("yearFrom", parseIntegerOr(e.target.value, null))}
                   onFocus={() => setIsEditingYear(true)}
                   onBlur={() => setIsEditingYear(false)}
                 />
@@ -195,7 +195,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   max={YEAR_MAX}
                   placeholder="e.g. 1979"
                   value={filters.yearTo ?? ""}
-                  onChange={(e) => set("yearTo", e.target.value ? Number(e.target.value) : null)}
+                  onChange={(e) => set("yearTo", parseIntegerOr(e.target.value, null))}
                   onFocus={() => setIsEditingYear(true)}
                   onBlur={() => setIsEditingYear(false)}
                 />

@@ -1,4 +1,5 @@
 import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
+import { parseNumberOr } from "../../../lib/numberSetting";
 
 const EDITION_NOISE =
   /\b(deluxe|remastered?|expanded|anniversary|edition|disc\s*\d+|\(?\d{4}\s+remaster\)?)\b/gi;
@@ -81,9 +82,7 @@ function titleSimilarity(query: string, candidate: string): number {
 
 /** Extract a 4-digit year from an MB date string ("2023-05-12" → 2023). */
 function extractYear(date: string | null): number | null {
-  if (!date) return null;
-  const m = /^\d{4}/.exec(date);
-  return m ? Number(m[0]) : null;
+  return parseNumberOr(date?.match(/^\d{4}/)?.[0], null);
 }
 
 /**

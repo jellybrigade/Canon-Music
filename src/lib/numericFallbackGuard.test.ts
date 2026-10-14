@@ -1,6 +1,7 @@
 // Repo-wide guard for known-issues: "`Number(x) || fallback` deletes a legal zero." A typed or
 // chosen 0 (Raw cast quality, staleness, a zero threshold) reads as falsy and snaps to the
-// default. Every parse with a fallback goes through `parseNumberOr` instead.
+// default, and a truthy check before the parse lets NaN through. Every parse with a fallback goes
+// through `parseNumberOr` instead.
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -21,38 +22,57 @@ function sourceFiles(dir: string): string[] {
   return out.sort();
 }
 
-const PARSE_THEN_OR = /\b(?:Number|parseInt|parseFloat)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)\s*\|\|/;
+const PARSE_CALL = String.raw`\b(?:Number|parseInt|parseFloat)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)`;
+// `parse(x) || n` eats a zero; `x ? parse(x) : n` passes NaN through for unreadable text.
+// `\s` spans newlines, so a fallback wrapped onto the next line is still seen.
+const FALLBACK_SHAPES = [
+  new RegExp(`${PARSE_CALL}\\s*\\|\\|`, "g"),
+  new RegExp(`\\?\\s*${PARSE_CALL}\\s*:`, "g"),
+];
 
-export function defaultsWithOr(line: string): boolean {
-  if (/^\s*(\/\/|\/?\*)/.test(line)) return false;
-  return PARSE_THEN_OR.test(line);
+/** 1-based lines where a parsed number gets an unsafe fallback; comment lines are blanked first. */
+export function fallbackLines(source: string): number[] {
+  const code = source
+    .split("\n")
+    .map((line) => (/^\s*(\/\/|\/?\*)/.test(line) ? "" : line))
+    .join("\n");
+  const lines = new Set<number>();
+  for (const shape of FALLBACK_SHAPES) {
+    for (const match of code.matchAll(shape)) {
+      lines.add(code.slice(0, match.index).split("\n").length);
+    }
+  }
+  return [...lines].sort((a, b) => a - b);
 }
 
 describe("numeric parse fallbacks", () => {
-  it("never default a parsed number with ||", () => {
-    const hits = sourceFiles(SRC_DIR).flatMap((path) =>
-      readFileSync(path, "utf-8")
-        .split("\n")
-        .flatMap((line, index) =>
-          defaultsWithOr(line) ? [`${path.slice(SRC_DIR.length)}:${index + 1} ${line.trim()}`] : []
-        )
-    );
+  it("never default a parsed number with || or a truthy ternary", () => {
+    const hits = sourceFiles(SRC_DIR).flatMap((path) => {
+      const source = readFileSync(path, "utf-8");
+      const lines = source.split("\n");
+      return fallbackLines(source).map((line) => `${path.slice(SRC_DIR.length)}:${line} ${lines[line - 1]?.trim()}`);
+    });
     expect(hits).toEqual([]);
   });
 });
 
 describe("the sweep's own reach", () => {
   it("sees the shape through nested calls and every parser", () => {
-    expect(defaultsWithOr("const n = Number(x) || 30;")).toBe(true);
-    expect(defaultsWithOr("Math.max(0, parseInt(raw, 10) || 50)")).toBe(true);
-    expect(defaultsWithOr('parseInt(getComputedStyle(el).getPropertyValue("--h")) || 92')).toBe(true);
-    expect(defaultsWithOr("parseFloat(a.match) || 0")).toBe(true);
+    expect(fallbackLines("const n = Number(x) || 30;")).toEqual([1]);
+    expect(fallbackLines("Math.max(0, parseInt(raw, 10) || 50)")).toEqual([1]);
+    expect(fallbackLines('parseInt(getComputedStyle(el).getPropertyValue("--h")) || 92')).toEqual([1]);
+    expect(fallbackLines("parseFloat(a.match) || 0")).toEqual([1]);
+  });
+
+  it("sees a truthy ternary and a fallback wrapped onto the next line", () => {
+    expect(fallbackLines("return v ? parseInt(v, 10) : 50;")).toEqual([1]);
+    expect(fallbackLines("const a = 1;\nconst n = Number(x)\n  || 30;")).toEqual([2]);
   });
 
   it("ignores comments, a bare parse and a ?? fallback", () => {
-    expect(defaultsWithOr("  // `Number(raw) || 50` sent zero down the falsy branch")).toBe(false);
-    expect(defaultsWithOr("/** a `0` that `Number(x) || fallback` loses. */")).toBe(false);
-    expect(defaultsWithOr("const n = Number(x);")).toBe(false);
-    expect(defaultsWithOr("const n = parseNumberOr(x, 30) ?? y || z;")).toBe(false);
+    expect(fallbackLines("  // `Number(raw) || 50` sent zero down the falsy branch")).toEqual([]);
+    expect(fallbackLines("/** a `0` that `Number(x) || fallback` loses. */")).toEqual([]);
+    expect(fallbackLines("const n = Number(x);")).toEqual([]);
+    expect(fallbackLines("const n = parseNumberOr(x, 30) ?? y || z;")).toEqual([]);
   });
 });
