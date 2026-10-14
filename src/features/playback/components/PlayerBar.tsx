@@ -573,9 +573,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             )}
             <button
               className={`player-btn player-btn--icon${timerActive ? " player-btn--active" : ""}`}
-              onClick={() => {
-                const pbh = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--player-bar-height")) || 92;
-                setTimerPopoverPos({ right: 8, bottom: pbh + 56 });
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setTimerPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
                 setTimerOpen((o) => !o);
                 setMoreOpen(false);
               }}
@@ -590,9 +590,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             </button>
             <button
               className={`player-btn player-btn--icon${castDevice ? " player-btn--active" : ""}`}
-              onClick={() => {
-                const pbh = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--player-bar-height")) || 92;
-                setCastPopoverPos({ right: 8, bottom: pbh + 56 });
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setCastPopoverPos({ right: window.innerWidth - r.right, bottom: window.innerHeight - r.top + 8 });
                 if (!castOpen) void scanRenderers();
                 setCastOpen((o) => !o);
                 setMoreOpen(false);

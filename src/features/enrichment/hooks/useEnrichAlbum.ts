@@ -4,6 +4,7 @@ import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { fetchAlbumInfo } from "../../../clients/lastfm";
 import { useSetting } from "../../../hooks/useSetting";
+import { parseStalenessDays } from "../../../lib/numberSetting";
 
 export interface AlbumEnrichmentRow {
   album_bio: string | null;
@@ -36,7 +37,7 @@ async function enrichAlbum(albumId: string, artist: string, album: string): Prom
 export function useEnrichAlbum(albumId: string, artist: string, albumName: string) {
   const queryClient = useQueryClient();
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
-  const staleDays = Number(staleDaysStr) || 30;
+  const staleDays = parseStalenessDays(staleDaysStr);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const ranRef = useRef(false);

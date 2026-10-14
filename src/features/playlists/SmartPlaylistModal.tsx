@@ -13,6 +13,7 @@ import {
   type SmartFilters,
 } from "./smartPlaylist";
 import "./SmartPlaylistModal.css";
+import { parseIntegerOr, parseNumberOr } from "../../lib/numberSetting";
 
 const GENRE_CHIP_LIMIT = 60;
 
@@ -114,13 +115,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   min={1}
                   max={LIMIT_MAX}
                   value={filters.limit}
-                  onChange={(e) => {
-                    // `Number(raw) || 50` sent "0" down the falsy branch, so a typed zero
-                    // snapped to the default instead of clamping to the floor beside it.
-                    const raw = e.target.value.trim();
-                    const n = raw === "" ? 50 : Number(raw);
-                    set("limit", Number.isFinite(n) ? Math.max(1, Math.min(LIMIT_MAX, Math.trunc(n))) : 50);
-                  }}
+                  onChange={(e) => set("limit", Math.max(1, Math.min(LIMIT_MAX, parseIntegerOr(e.target.value, DEFAULT_SMART_FILTERS.limit))))}
                 />
               </div>
               <div className="spm-field spm-field--half">
@@ -207,7 +202,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                 min={0}
                 placeholder="0"
                 value={filters.minPlayCount || ""}
-                onChange={(e) => set("minPlayCount", Math.max(0, Number(e.target.value) || 0))}
+                onChange={(e) => set("minPlayCount", Math.max(0, parseNumberOr(e.target.value, 0)))}
               />
             </div>
           </section>

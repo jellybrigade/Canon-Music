@@ -79,6 +79,8 @@ export class LocalTarget implements PlaybackTarget {
   }
 }
 
+export const CAST_MAX_BITRATE_DEFAULT = 320;
+
 export class DlnaTarget implements PlaybackTarget {
   readonly supportsVolume: boolean;
   // Canon's only end signal is a GetTransportInfo poll, which reads PLAYING straight through
@@ -100,7 +102,7 @@ export class DlnaTarget implements PlaybackTarget {
   constructor(
     renderer: DlnaRenderer,
     onTrackEnd: () => void,
-    castMaxBitrate = 320,
+    castMaxBitrate = CAST_MAX_BITRATE_DEFAULT,
     onError?: (message: string) => void
   ) {
     this.renderer = renderer;

@@ -54,6 +54,7 @@ import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
 import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "./lib/replayGainRow";
+import { parseIntegerOr } from "./lib/numberSetting";
 
 export default function App() {
   useWakeLock();
@@ -214,7 +215,7 @@ export default function App() {
   }, []);
   useEffect(() => {
     if (!autoCheckUpdates) return;
-    const ms = Math.max(10, parseInt(autoCheckIntervalMin, 10) || 60) * 60 * 1000;
+    const ms = Math.max(10, parseIntegerOr(autoCheckIntervalMin, 60)) * 60 * 1000;
     const id = setInterval(() => {
       void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
     }, ms);

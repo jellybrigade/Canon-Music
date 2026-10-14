@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useSetting } from "./useSetting";
+import { parseIntegerOr } from "../lib/numberSetting";
 
 interface UseSidebarResizeOptions {
   /** ltr: drag right to expand (sidebar). rtl: drag left to expand (queue panel). */
@@ -24,7 +25,7 @@ export function useSidebarResize({
   onCollapse,
 }: UseSidebarResizeOptions) {
   const [rawWidth, setRawWidth] = useSetting(settingKey, String(defaultWidth));
-  const savedWidth = Math.max(min, Math.min(max, parseInt(rawWidth, 10) || defaultWidth));
+  const savedWidth = Math.max(min, Math.min(max, parseIntegerOr(rawWidth, defaultWidth)));
   const [liveWidth, setLiveWidth] = useState<number | null>(null);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
   // Drag listeners/body style overrides are installed by a handler, not an effect, so nothing
