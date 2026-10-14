@@ -33,14 +33,27 @@ afterEach(() => {
 });
 
 describe("useGenres", () => {
-  it("has no error state - a failed read just leaves data undefined and stops loading", async () => {
+  it("reports a failed read as an error, not as an empty genre list", async () => {
     onInvoke("get_genres", () => {
       throw new Error("db locked");
     });
     const { result } = renderHook(() => useGenres());
-    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    await waitFor(() => expect(result.current.error).toBe("db locked"));
+    expect(result.current.isLoading).toBe(false);
     expect(result.current.data).toBeUndefined();
-    expect("error" in result.current).toBe(false);
+  });
+
+  it("clears the error once a refresh reads successfully", async () => {
+    onInvoke("get_genres", () => {
+      throw new Error("db locked");
+    });
+    const { result } = renderHook(() => useGenres());
+    await waitFor(() => expect(result.current.error).toBe("db locked"));
+
+    onInvoke("get_genres", () => [genre("rock")]);
+    act(() => useGenresSessionStore.getState().bumpRefresh());
+    await waitFor(() => expect(result.current.data).toEqual([genre("rock")]));
+    expect(result.current.error).toBeNull();
   });
 
   it("serves a cache hit for the same tick without a second invoke", async () => {
@@ -87,6 +100,16 @@ describe("useGenres", () => {
 });
 
 describe("useRecentGenres", () => {
+  it("reports a failed read as an error, not as an empty genre list", async () => {
+    onInvoke("get_recent_genres", () => {
+      throw new Error("db locked");
+    });
+    const { result } = renderHook(() => useRecentGenres());
+    await waitFor(() => expect(result.current.error).toBe("db locked"));
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.data).toBeUndefined();
+  });
+
   it("always fetches on mount - there is no enabled gate", async () => {
     const handler = vi.fn().mockResolvedValue([genre("jazz")]);
     onInvoke("get_recent_genres", handler);

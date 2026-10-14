@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getDb } from "../../../db";
 import { getCanonTree } from "../lib/canonicalize";
 import type { TreeNode, NodeSection } from "../lib/canonicalize";
@@ -81,16 +81,26 @@ async function buildGenreTree(): Promise<GenreTreeData> {
   return cachedData;
 }
 
-export function useGenreTree(): GenreTreeData | null {
+export function useGenreTree(): { data: GenreTreeData | null; error: string | null; retry: () => void } {
   const [data, setData] = useState<GenreTreeData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     buildGenreTree()
       .then((d) => { if (!cancelled) setData(d); })
-      .catch(console.error);
+      .catch((err: unknown) => {
+        console.error("useGenreTree: failed to build genre tree", err);
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
     return () => { cancelled = true; };
+  }, [attempt]);
+
+  const retry = useCallback(() => {
+    setError(null);
+    setAttempt((n) => n + 1);
   }, []);
 
-  return data;
+  return { data, error, retry };
 }

@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
-  const data = useGenreTree();
+  const { data, error, retry } = useGenreTree();
   const [section, setSection] = useState<SectionTab>("genres");
   const [path, setPath] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -45,6 +45,18 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
     }
     return cols;
   }, [rootsBySection, section, path, childrenById]);
+
+  if (error) {
+    return (
+      <div className="genre-view">
+        <div className="empty-state">
+          <p className="empty-state-title">Couldn't load your genres</p>
+          <p className="empty-state-hint">{error}</p>
+          <button className="empty-state-action" onClick={retry}>Try again</button>
+        </div>
+      </div>
+    );
+  }
 
   if (!data) {
     return (

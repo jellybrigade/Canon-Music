@@ -5,6 +5,8 @@ import "./FilterSidebar.css";
 
 interface Props {
   genres: GenreRow[];
+  genresError: string | null;
+  onRetryGenres: () => void;
   canonicalIdFilters: string[];
   toggleCanonicalIdFilter: (id: string) => void;
   clearGenreFilters: () => void;
@@ -29,6 +31,8 @@ function hasActiveFilters(
 
 export function FilterSidebar({
   genres,
+  genresError,
+  onRetryGenres,
   canonicalIdFilters,
   toggleCanonicalIdFilter,
   clearGenreFilters,
@@ -115,7 +119,17 @@ export function FilterSidebar({
             </div>
           </div>
 
-          {genres.length > 0 && (
+          {genresError && genres.length === 0 ? (
+            <div className="filter-sidebar-section">
+              <div className="filter-sidebar-section-header">
+                <span>Genre</span>
+              </div>
+              <p className="filter-sidebar-genre-error">Couldn't load genres: {genresError}</p>
+              <button className="filter-sidebar-genre-retry" onClick={onRetryGenres}>
+                Try again
+              </button>
+            </div>
+          ) : genres.length > 0 && (
             <div className="filter-sidebar-section">
               <div className="filter-sidebar-section-header">
                 <span>Genre</span>

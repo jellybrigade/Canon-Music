@@ -5,6 +5,7 @@ import { FilterSidebar } from "../components/FilterSidebar";
 import { CanonLockup } from "../ui/CanonIcon";
 import { SyncErrorBanner } from "../features/sync/SyncErrorBanner";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { useGenresSessionStore } from "../store/genresSessionStore";
 import type { AlbumSort } from "../types/library";
 import type { AppViewProps } from "../app/AppRoutes";
 
@@ -18,7 +19,7 @@ const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
 type LibraryViewProps = Pick<
   AppViewProps,
   "server" | "serverWithCred" | "albums" | "albumsLoading" | "albumsError" | "visibleAlbums" |
-  "genres" | "playlists" | "canonicalIdFilters" | "lovedOnly" | "yearFromInput" | "yearToInput" |
+  "genres" | "genresError" | "playlists" | "canonicalIdFilters" | "lovedOnly" | "yearFromInput" | "yearToInput" |
   "setCanonicalIdFilters" | "toggleCanonicalIdFilter" | "toggleLovedOnly" | "setYearFromInput" |
   "setYearToInput" | "filterSidebarOpen" | "setFilterSidebarOpen" | "sort" | "setSort" |
   "albumsPaginated" | "setAlbumsPaginated" | "syncStatus" | "syncError" | "syncProgress" |
@@ -36,6 +37,7 @@ export function LibraryView({
   albumsError,
   visibleAlbums,
   genres,
+  genresError,
   playlists,
   canonicalIdFilters,
   lovedOnly,
@@ -168,6 +170,8 @@ export function LibraryView({
       <div className="library-body">
         <FilterSidebar
           genres={genres ?? []}
+          genresError={genresError}
+          onRetryGenres={() => useGenresSessionStore.getState().bumpRefresh()}
           canonicalIdFilters={canonicalIdFilters}
           toggleCanonicalIdFilter={toggleCanonicalIdFilter}
           clearGenreFilters={() => setCanonicalIdFilters([])}

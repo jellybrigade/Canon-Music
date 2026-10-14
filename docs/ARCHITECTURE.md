@@ -73,7 +73,7 @@ Rust (`src-tauri/src/`):
 - React Query `queryFn`s never return a `Set` (structural sharing treats all Sets as equal); return arrays, convert in the hook.
 - `streamUrlFor` is a callback so the player store never holds credentials. Queue position access goes through `resolveTrack` (`queueOrder.ts`).
 - `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load.
-- Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows.
+- Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows. They also return `error`: a failed read is never rendered as an empty list or an endless loading line.
 - Sync prune refuses an empty or partial fetch; a failed stage (loved, playlists) leaves stored data untouched and is reported in `skippedStages`.
 - MusicBrainz calls go through `tauri-plugin-http` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
 - A DB with a schema version above `LATEST_SCHEMA_VERSION` throws `SchemaTooNewError` (fatal screen, no retry).

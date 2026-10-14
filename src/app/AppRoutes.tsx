@@ -58,6 +58,7 @@ export interface AppViewProps {
   allTracksLoading: boolean;
   allTracksError: string | null;
   genres: ReturnType<typeof useGenres>["data"];
+  genresError: string | null;
   playlists: PlaylistRow[] | undefined;
 
   // Library filters
