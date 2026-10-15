@@ -25,6 +25,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 - **Test-only devDependency breaks the release build.** `better-sqlite3` node-gyp broke Windows silently under `fail-fast: false`; install with `--ignore-scripts` + `pnpm rebuild esbuild`. grep: `grep -rn "better-sqlite3" src --include='*.ts*' | grep -v '/test/\|\.test\.'`
 - **Green release page != complete release.** After `/release`, count assets: `gh release view "v$(node -p "require('./src-tauri/tauri.conf.json').version")" --json assets --jq '.assets[].name'`
 - **`commit-msg` runs before git's own cleanup.** Strip `core.commentChar` lines and everything after the `>8` scissors before counting body lines.
+- **A published release is `releases/latest` before its assets are.** The first build job published v0.53.1 seven minutes before `finalize` uploaded `latest.json`, so every update check in between 404ed; the release stays a draft until `finalize` publishes it. grep: `grep -n "releaseDraft\|draft=false" .github/workflows/release.yml`
 - **Message-shape hook must exempt the release merge.** `MERGE_HEAD` present or `HEAD` on `main` skips the body check; trailers stay banned everywhere.
 
 ## Async / lifecycle

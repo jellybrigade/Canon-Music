@@ -106,7 +106,7 @@ jobs:
           tagName: ${{ steps.version.outputs.tag }}
           releaseName: Canon ${{ steps.version.outputs.tag }}
           releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: false
+          releaseDraft: true
           prerelease: false
           includeUpdaterJson: false
           args: ${{ matrix.args }}
@@ -137,7 +137,7 @@ jobs:
           gh release download "$TAG" -D /tmp/assets --pattern "*.sig" --repo "$REPO"
 
           NOTES=$(gh release view "$TAG" --json body --jq '.body' --repo "$REPO")
-          PUB_DATE=$(gh release view "$TAG" --json publishedAt --jq '.publishedAt' --repo "$REPO")
+          PUB_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
           cat > /tmp/build_json.py << 'PYEOF'
           import json, os, glob, sys
@@ -202,3 +202,12 @@ jobs:
 
           NOTES="$NOTES" PUB_DATE="$PUB_DATE" python3 /tmp/build_json.py
           gh release upload "$TAG" /tmp/latest.json --clobber --repo "$REPO"
+
+      # The release stays a draft until latest.json is on it: once published it becomes
+      # releases/latest, and every update check 404s until the feed file lands.
+      - name: Publish release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: gh release edit "$TAG" --draft=false --latest --repo "$REPO"
