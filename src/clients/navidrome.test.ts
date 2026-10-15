@@ -11,14 +11,28 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 
+import { isCredentialRejected, resetCredentialRejections } from "../lib/credentialRejections";
+import { resetTransportHealth, TransportStalledError } from "../lib/transportHealth";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
-import { resetTransportHealth, TransportStalledError } from "../lib/transportHealth";
-import { authenticate, authenticateWithApiKey, getPlayQueue, fetchAlbumListByType, fetchAllAlbums, fetchScanStatus, fetchStarred2, reportNowPlaying, songExists, scrobbleTrack, setRating, starTrack, type NavidromeAlbum } from "./navidrome";
-import type { NavidromeCredential } from "./navidromeUrls";
-import { SubsonicError } from "./navidromeTransport";
+import {
+  authenticate,
+  authenticateWithApiKey,
+  fetchAlbumListByType,
+  fetchAllAlbums,
+  fetchScanStatus,
+  fetchStarred2,
+  getPlayQueue,
+  type NavidromeAlbum,
+  reportNowPlaying,
+  scrobbleTrack,
+  setRating,
+  songExists,
+  starTrack,
+} from "./navidrome";
 import { addTrackToNavidromePlaylist, fetchPlaylists } from "./navidromePlaylists";
-import { isCredentialRejected, resetCredentialRejections } from "../lib/credentialRejections";
+import { SubsonicError } from "./navidromeTransport";
+import type { NavidromeCredential } from "./navidromeUrls";
 
 const BASE = "http://music.example";
 const ALT = "http://192.168.1.5:4533";
@@ -61,9 +75,7 @@ function stalledBody(signal: AbortSignal | undefined): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       controller.enqueue(new TextEncoder().encode('{"subsonic-'));
-      signal?.addEventListener("abort", () =>
-        controller.error(new DOMException("aborted", "AbortError"))
-      );
+      signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
     },
   });
   return new Response(stream, { status: 200 });
@@ -90,7 +102,7 @@ function urls(): string[] {
 async function settle<T>(promise: Promise<T>, advanceMs = 60_000): Promise<T> {
   const raced = promise.then(
     (v) => ({ ok: true as const, v }),
-    (e) => ({ ok: false as const, e })
+    (e) => ({ ok: false as const, e }),
   );
   await vi.advanceTimersByTimeAsync(advanceMs);
   const r = await raced;
@@ -122,9 +134,7 @@ describe("apiPost request shape", () => {
     expect(urls()[0]).toBe("http://music.example/rest/getStarred2");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(init.method).toBe("POST");
-    expect((init.headers as Record<string, string>)["Content-Type"]).toBe(
-      "application/x-www-form-urlencoded"
-    );
+    expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/x-www-form-urlencoded");
     expect(body().get("u")).toBe("alice");
     expect(body().get("t")).toBe("tok");
     expect(body().get("s")).toBe("slt");
@@ -152,9 +162,7 @@ describe("apiPost request shape", () => {
     fetchMock.mockImplementation((_url: string, init: RequestInit) => {
       capturedSignal = init.signal as AbortSignal;
       return new Promise<Response>((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError"))
-        );
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });
     });
 
@@ -172,14 +180,12 @@ describe("apiPost request shape", () => {
 
   it("aborts a response whose body stalls after the headers arrive", async () => {
     fetchMock.mockImplementation((_url: string, init: RequestInit) =>
-      Promise.resolve(stalledBody(init.signal as AbortSignal))
+      Promise.resolve(stalledBody(init.signal as AbortSignal)),
     );
 
     const err = await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e));
 
-    expect((err as Error).message).toBe(
-      "getStarred2 failed after 3 attempts: timed out after 12000ms"
-    );
+    expect((err as Error).message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
@@ -212,13 +218,9 @@ describe("apiPost request shape", () => {
         setTimeout(() => {
           const stream = new ReadableStream<Uint8Array>({
             start(controller) {
-              signal.addEventListener("abort", () =>
-                controller.error(new DOMException("aborted", "AbortError"))
-              );
+              signal.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
               setTimeout(() => {
-                controller.enqueue(
-                  new TextEncoder().encode('{"subsonic-response":{"status":"ok","starred2":{}}}')
-                );
+                controller.enqueue(new TextEncoder().encode('{"subsonic-response":{"status":"ok","starred2":{}}}'));
                 controller.close();
               }, 8_000);
             },
@@ -237,7 +239,7 @@ describe("apiPost request shape", () => {
 
   it("leaves no timer armed once a stalled body has been abandoned", async () => {
     fetchMock.mockImplementation((_url: string, init: RequestInit) =>
-      Promise.resolve(stalledBody(init.signal as AbortSignal))
+      Promise.resolve(stalledBody(init.signal as AbortSignal)),
     );
 
     await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e));
@@ -299,9 +301,7 @@ describe("apiPost retry policy", () => {
   });
 
   it("returns as soon as the alt url answers, without burning a backoff delay", async () => {
-    fetchMock
-      .mockRejectedValueOnce(new TypeError("Load failed"))
-      .mockResolvedValue(ok({ status: "ok", starred2: {} }));
+    fetchMock.mockRejectedValueOnce(new TypeError("Load failed")).mockResolvedValue(ok({ status: "ok", starred2: {} }));
 
     const promise = fetchStarred2(BASE, "alice", cred, ALT);
     await vi.advanceTimersByTimeAsync(0);
@@ -322,9 +322,7 @@ describe("apiPost retry policy", () => {
   it.each([400, 401, 404, 500])("hands HTTP %i straight back without retrying", async (status) => {
     fetchMock.mockResolvedValue(httpStatus(status));
 
-    await expect(settle(fetchStarred2(BASE, "alice", cred))).rejects.toThrow(
-      `getStarred2 returned ${status}`
-    );
+    await expect(settle(fetchStarred2(BASE, "alice", cred))).rejects.toThrow(`getStarred2 returned ${status}`);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -336,9 +334,7 @@ describe("apiPost retry policy", () => {
 
     // Not the "failed after 3 attempts" transport error: the last attempt's response is
     // returned, so the caller's own status check is what throws.
-    await expect(settle(fetchStarred2(BASE, "alice", cred))).rejects.toThrow(
-      "getStarred2 returned 503"
-    );
+    await expect(settle(fetchStarred2(BASE, "alice", cred))).rejects.toThrow("getStarred2 returned 503");
   });
 });
 
@@ -346,9 +342,7 @@ describe("apiPost error naming", () => {
   it("never surfaces a bare 'Load failed'", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
-    const err = (await settle(
-      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e))) as Error;
 
     expect(err.message).toBe("getStarred2 failed after 3 attempts: Load failed");
     expect(err.message).not.toBe("Load failed");
@@ -357,9 +351,7 @@ describe("apiPost error naming", () => {
   it("names the endpoint that burned the attempts", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
-    const err = (await settle(
-      fetchAlbumListByType(BASE, "alice", cred, "recent").catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(fetchAlbumListByType(BASE, "alice", cred, "recent").catch((e: Error) => e))) as Error;
 
     expect(err.message).toContain("getAlbumList2");
   });
@@ -367,21 +359,15 @@ describe("apiPost error naming", () => {
   it("says '1 attempt' singular for a non-idempotent endpoint", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
-    const err = (await settle(
-      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e))) as Error;
 
     expect(err.message).toBe("scrobble.view failed after 1 attempt: Load failed");
   });
 
   it("reports the last failure, not the first", async () => {
-    fetchMock
-      .mockResolvedValueOnce(httpStatus(503))
-      .mockRejectedValue(new TypeError("connection reset"));
+    fetchMock.mockResolvedValueOnce(httpStatus(503)).mockRejectedValue(new TypeError("connection reset"));
 
-    const err = (await settle(
-      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e))) as Error;
 
     expect(err.message).toBe("getStarred2 failed after 3 attempts: connection reset");
   });
@@ -389,9 +375,7 @@ describe("apiPost error naming", () => {
   it("stringifies a non-Error rejection", async () => {
     fetchMock.mockRejectedValue("boom");
 
-    const err = (await settle(
-      fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(fetchStarred2(BASE, "alice", cred).catch((e: Error) => e))) as Error;
 
     expect(err.message).toBe("getStarred2 failed after 3 attempts: boom");
   });
@@ -412,9 +396,7 @@ describe("non-idempotent endpoints", () => {
   it("does not send a timed-out scrobble to the alt url", async () => {
     fetchMock.mockImplementation((_url: string, init: RequestInit) => {
       return new Promise<Response>((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError"))
-        );
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
       });
     });
 
@@ -441,9 +423,7 @@ describe("non-idempotent endpoints", () => {
   it("does not send an opaquely rejected playlist update to the alt url", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
-    await expect(
-      settle(addTrackToNavidromePlaylist(BASE, "alice", cred, "pl-1", "tr-1", ALT))
-    ).rejects.toThrow();
+    await expect(settle(addTrackToNavidromePlaylist(BASE, "alice", cred, "pl-1", "tr-1", ALT))).rejects.toThrow();
 
     expect(urls()).toEqual(["http://music.example/rest/updatePlaylist"]);
   });
@@ -460,7 +440,7 @@ describe("non-idempotent endpoints", () => {
     fetchMock.mockResolvedValue(httpStatus(503));
 
     await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000))).rejects.toThrow(
-      "scrobble.view returned 503"
+      "scrobble.view returned 503",
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -472,9 +452,7 @@ describe("non-idempotent endpoints", () => {
     // leaves Navidrome saying nothing is playing for the rest of the track.
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
-    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1"))).rejects.toThrow(
-      "failed after 3 attempts"
-    );
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1"))).rejects.toThrow("failed after 3 attempts");
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(body(0).get("submission")).toBe("false");
@@ -489,9 +467,7 @@ describe("non-idempotent endpoints", () => {
       return Promise.reject(new TypeError("Load failed"));
     });
 
-    await expect(
-      settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT, controller.signal))
-    ).rejects.toThrow();
+    await expect(settle(reportNowPlaying(BASE, "alice", cred, "tr-1", ALT, controller.signal))).rejects.toThrow();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
@@ -506,9 +482,7 @@ describe("non-idempotent endpoints", () => {
       });
     });
 
-    const report = reportNowPlaying(BASE, "alice", cred, "tr-1", undefined, controller.signal).catch(
-      (e: Error) => e
-    );
+    const report = reportNowPlaying(BASE, "alice", cred, "tr-1", undefined, controller.signal).catch((e: Error) => e);
     await vi.advanceTimersByTimeAsync(1_000);
     controller.abort();
 
@@ -539,9 +513,7 @@ describe("non-idempotent endpoints", () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
     // scrobble.view (suffixed) and createPlaylist (bare) are both in the set.
-    await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000))).rejects.toThrow(
-      "failed after 1 attempt"
-    );
+    await expect(settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000))).rejects.toThrow("failed after 1 attempt");
   });
 });
 
@@ -550,7 +522,7 @@ describe("SubsonicError", () => {
     fetchMock.mockResolvedValue(failed({ code: 70, message: "Song not found" }));
 
     const err = (await settle(
-      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e)
+      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e),
     )) as SubsonicError;
 
     expect(err).toBeInstanceOf(SubsonicError);
@@ -573,7 +545,7 @@ describe("SubsonicError", () => {
     fetchMock.mockResolvedValue(failed({ code, message: "nope" }));
 
     const err = (await settle(
-      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e)
+      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch((e: Error) => e),
     )) as SubsonicError;
 
     expect(err.code).toBe(code);
@@ -584,9 +556,7 @@ describe("SubsonicError", () => {
   it("uses a null code and a suffix-free message when the envelope has no error object", async () => {
     fetchMock.mockResolvedValue(failed(undefined));
 
-    const err = (await settle(
-      starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e)
-    )) as SubsonicError;
+    const err = (await settle(starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e))) as SubsonicError;
 
     expect(err.code).toBeNull();
     expect(err.message).toBe("star.view failed");
@@ -595,9 +565,7 @@ describe("SubsonicError", () => {
   it("builds a default message naming the code when the server sends no message", async () => {
     fetchMock.mockResolvedValue(failed({ code: 70 }));
 
-    const err = (await settle(
-      starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e)
-    )) as SubsonicError;
+    const err = (await settle(starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e))) as SubsonicError;
 
     expect(err.message).toBe("star.view failed with code 70");
   });
@@ -605,9 +573,7 @@ describe("SubsonicError", () => {
   it("keeps code 0 rather than collapsing it to null", async () => {
     fetchMock.mockResolvedValue(failed({ code: 0, message: "generic" }));
 
-    const err = (await settle(
-      starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e)
-    )) as SubsonicError;
+    const err = (await settle(starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e))) as SubsonicError;
 
     expect(err.code).toBe(0);
   });
@@ -615,9 +581,7 @@ describe("SubsonicError", () => {
   it("throws a plain Error, not a SubsonicError, for a non-200 response", async () => {
     fetchMock.mockResolvedValue(httpStatus(500));
 
-    const err = (await settle(
-      starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e)
-    )) as Error;
+    const err = (await settle(starTrack(BASE, "alice", cred, "tr-1").catch((e: Error) => e))) as Error;
 
     expect(err).toBeInstanceOf(Error);
     expect(err).not.toBeInstanceOf(SubsonicError);
@@ -758,11 +722,7 @@ describe("fetchAllAlbums", () => {
     const albums = await settle(fetchAllAlbums(BASE, "alice", cred));
 
     expect(albums).toHaveLength(PAGE_SIZE * 2 + 3);
-    expect(bodies().map((b) => b.get("offset"))).toEqual([
-      "0",
-      String(PAGE_SIZE),
-      String(PAGE_SIZE * 2),
-    ]);
+    expect(bodies().map((b) => b.get("offset"))).toEqual(["0", String(PAGE_SIZE), String(PAGE_SIZE * 2)]);
     expect(body().get("type")).toBe("alphabeticalByName");
     expect(body().get("size")).toBe(String(PAGE_SIZE));
   });
@@ -770,9 +730,7 @@ describe("fetchAllAlbums", () => {
   it("throws rather than returning the pages it already has when a later page 500s", async () => {
     fetchMock.mockResolvedValueOnce(albumPage(PAGE_SIZE)).mockResolvedValue(httpStatus(500));
 
-    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
-      "getAlbumList2 returned 500"
-    );
+    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow("getAlbumList2 returned 500");
   });
 
   it("throws when a later page answers 200 with an error envelope", async () => {
@@ -786,18 +744,14 @@ describe("fetchAllAlbums", () => {
   it("throws a default message when a failed envelope carries no error object", async () => {
     fetchMock.mockResolvedValue(failed(undefined));
 
-    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
-      "Failed to fetch albums"
-    );
+    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow("Failed to fetch albums");
   });
 
   it("propagates the named transport error when a later page's fetch never lands", async () => {
-    fetchMock
-      .mockResolvedValueOnce(albumPage(PAGE_SIZE))
-      .mockRejectedValue(new TypeError("Load failed"));
+    fetchMock.mockResolvedValueOnce(albumPage(PAGE_SIZE)).mockRejectedValue(new TypeError("Load failed"));
 
     await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
-      "getAlbumList2 failed after 3 attempts: Load failed"
+      "getAlbumList2 failed after 3 attempts: Load failed",
     );
   });
 
@@ -805,9 +759,7 @@ describe("fetchAllAlbums", () => {
     // A fresh Response per call: one instance's body can only be read once.
     fetchMock.mockImplementation(() => Promise.resolve(albumPage(PAGE_SIZE)));
 
-    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
-      "getAlbumList2 ignored the offset"
-    );
+    await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow("getAlbumList2 ignored the offset");
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
@@ -827,7 +779,7 @@ describe("fetchAllAlbums", () => {
     });
 
     await expect(settle(fetchAllAlbums(BASE, "alice", cred))).rejects.toThrow(
-      `getAlbumList2 exceeded the ${MAX_ALBUMS} album ceiling`
+      `getAlbumList2 exceeded the ${MAX_ALBUMS} album ceiling`,
     );
 
     expect(fetchMock).toHaveBeenCalledTimes(MAX_ALBUMS / PAGE_SIZE);
@@ -856,7 +808,7 @@ describe("authenticate / authenticateWithApiKey", () => {
     fetchMock.mockResolvedValue(httpStatus(404));
 
     await expect(settle(authenticate(`${BASE}/music`, "alice", "pw"))).rejects.toThrow(
-      "Server returned 404. Check URL (tried: http://music.example/music/rest/ping.view)"
+      "Server returned 404. Check URL (tried: http://music.example/music/rest/ping.view)",
     );
     expect(urls()[0]).toBe("http://music.example/music/rest/ping.view");
   });
@@ -865,7 +817,7 @@ describe("authenticate / authenticateWithApiKey", () => {
     fetchMock.mockResolvedValue(httpStatus(401));
 
     await expect(settle(authenticateWithApiKey(`${BASE}/music`, "alice", "key-1"))).rejects.toThrow(
-      "Server returned 401. Check URL (tried: http://music.example/music/rest/ping.view)"
+      "Server returned 401. Check URL (tried: http://music.example/music/rest/ping.view)",
     );
   });
 
@@ -875,7 +827,7 @@ describe("authenticate / authenticateWithApiKey", () => {
     fetchMock.mockResolvedValue(httpStatus(404));
 
     await expect(settle(authenticate("music.example", "alice", "pw"))).rejects.toThrow(
-      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)",
     );
   });
 
@@ -883,16 +835,14 @@ describe("authenticate / authenticateWithApiKey", () => {
     fetchMock.mockResolvedValue(httpStatus(404));
 
     await expect(settle(authenticateWithApiKey("music.example", "alice", "key-1"))).rejects.toThrow(
-      "Server returned 404. Check URL (tried: music.example/rest/ping.view)"
+      "Server returned 404. Check URL (tried: music.example/rest/ping.view)",
     );
   });
 
   it("passes the server's own message through when the ping is 200 but the login fails", async () => {
     fetchMock.mockResolvedValue(failed({ code: 40, message: "Wrong username or password" }));
 
-    await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow(
-      "Wrong username or password"
-    );
+    await expect(settle(authenticate(BASE, "alice", "pw"))).rejects.toThrow("Wrong username or password");
   });
 
   it("keeps the Subsonic code on a refused password login", async () => {
@@ -915,19 +865,18 @@ describe("authenticate / authenticateWithApiKey", () => {
   });
 });
 
-describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms backoffs, and nothing beyond: advancing past
+describe("transport breaker", () => {
+  /** 3 x 12s of timeout plus the 400/800ms backoffs, and nothing beyond: advancing past
    *  that would expire the breaker's own cooldown inside the call that armed it. */
   const LADDER_MS = 38_000;
 
-
   /** A fetch that never answers, which is what a stalled HTTP layer does to every request. */
   function neverAnswers(): void {
-    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
-      new Promise<Response>((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError"))
-        );
-      })
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
     );
   }
 
@@ -952,11 +901,17 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   it("names the likely cause instead of a bare millisecond count", async () => {
     neverAnswers();
 
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
-      LADDER_MS
+      LADDER_MS,
     )) as Error;
 
     expect(err.message).toContain("Network Proxy");
@@ -966,8 +921,14 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   it("names the endpoint it refused to attempt while the transport is stalled", async () => {
     probeFails();
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
 
     const err = (await fetchStarred2(BASE, "alice", cred).catch((e: Error) => e)) as Error;
 
@@ -979,8 +940,14 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   it("probes the native stack once, not once per failed attempt", async () => {
     probeFails();
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
     await fetchStarred2(BASE, "alice", cred).catch(() => undefined);
 
     expect(invokeCount("probe_server")).toBe(1);
@@ -991,7 +958,7 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
 
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
-      LADDER_MS
+      LADDER_MS,
     )) as Error;
 
     expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
@@ -1003,9 +970,18 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
     // "Body is unusable", which is not a timeout and would pass this test for free.
     fetchMock.mockImplementation(() => httpStatus(503));
 
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(9);
     expect(invokeCount("probe_server")).toBe(0);
@@ -1013,14 +989,17 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
 
   it("forgets a stall the moment a request gets through", async () => {
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
     fetchMock.mockResolvedValue(ok({ status: "ok", starred2: {} }));
     await settle(fetchStarred2(BASE, "alice", cred), LADDER_MS);
 
     neverAnswers();
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
-      LADDER_MS
+      LADDER_MS,
     )) as Error;
 
     expect(err.message).toBe("getStarred2 failed after 3 attempts: timed out after 12000ms");
@@ -1028,10 +1007,13 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
 
   it("keeps sending after a stall the native stack disproves", async () => {
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
     const err = (await settle(
       fetchStarred2(BASE, "alice", cred).catch((e: Error) => e),
-      LADDER_MS
+      LADDER_MS,
     )) as Error;
 
     fetchMock.mockImplementation(() => ok({ status: "ok", starred2: {} }));
@@ -1045,8 +1027,14 @@ describe("transport breaker", () => {  /** 3 x 12s of timeout plus the 400/800ms
   it("lets a healed transport back in once the cooldown passes", async () => {
     probeFails();
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
     const attemptsWhileOpen = fetchMock.mock.calls.length;
 
     vi.setSystemTime(Date.now() + 15_001);
@@ -1062,12 +1050,11 @@ describe("what the transport breaker refuses to speak for", () => {
   const OTHER_SERVER = "http://other.example";
 
   function neverAnswers(): void {
-    fetchMock.mockImplementation((_url: string, init: RequestInit) =>
-      new Promise<Response>((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () =>
-          reject(new DOMException("aborted", "AbortError"))
-        );
-      })
+    fetchMock.mockImplementation(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        }),
     );
   }
 
@@ -1075,8 +1062,14 @@ describe("what the transport breaker refuses to speak for", () => {
   async function stallBase(): Promise<void> {
     onInvoke("probe_server", () => ({ reachable: false, status: null, elapsedMs: 8000, error: "timed out" }));
     neverAnswers();
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
   }
 
   it("leaves a different server alone", async () => {
@@ -1103,11 +1096,20 @@ describe("what the transport breaker refuses to speak for", () => {
 
   it("is not opened by single-shot writes, which spend a third of the evidence", async () => {
     neverAnswers();
-    await settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch(() => undefined), 13_000);
-    await settle(scrobbleTrack(BASE, "alice", cred, "tr-2", 2000).catch(() => undefined), 13_000);
+    await settle(
+      scrobbleTrack(BASE, "alice", cred, "tr-1", 1000).catch(() => undefined),
+      13_000,
+    );
+    await settle(
+      scrobbleTrack(BASE, "alice", cred, "tr-2", 2000).catch(() => undefined),
+      13_000,
+    );
 
     const before = fetchMock.mock.calls.length;
-    await settle(fetchStarred2(BASE, "alice", cred).catch(() => undefined), LADDER_MS);
+    await settle(
+      fetchStarred2(BASE, "alice", cred).catch(() => undefined),
+      LADDER_MS,
+    );
 
     expect(fetchMock).toHaveBeenCalledTimes(before + 3);
     expect(invokeCount("probe_server")).toBe(0);
@@ -1121,7 +1123,7 @@ describe("fetchScanStatus", () => {
         status: "ok",
         serverVersion: "0.64.0 (1072e9f7)",
         scanStatus: { scanning: false, count: 17678, lastScan: "2026-09-13T03:00:26Z" },
-      })
+      }),
     );
     await expect(settle(fetchScanStatus(BASE, "alice", cred))).resolves.toEqual({
       lastScan: "2026-09-13T03:00:26Z",
@@ -1143,9 +1145,7 @@ describe("fetchScanStatus", () => {
     // Some deployments restrict getScanStatus to admins. A rejection has to reach the caller
     // as "no evidence"; swallowed into a null-filled watermark it would read as "unchanged".
     fetchMock.mockResolvedValue(failed({ code: 50, message: "User is not authorized" }));
-    await expect(settle(fetchScanStatus(BASE, "alice", cred))).rejects.toThrow(
-      "User is not authorized"
-    );
+    await expect(settle(fetchScanStatus(BASE, "alice", cred))).rejects.toThrow("User is not authorized");
   });
 });
 

@@ -1,12 +1,12 @@
 import { ArrowUpRight, ListEnd, Play } from "lucide-react";
-import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
-import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import type { NavidromeAlbum } from "../../clients/navidrome";
-import type { ServerWithCredential } from "../../hooks/useServer";
-import type { AlbumRow } from "../../types/library";
+import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { useAlbumAccent } from "../../hooks/useAlbumAccent";
+import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import type { AlbumStatRow } from "../../hooks/useListeningStats";
-import { useAlbumAccent } from "../../hooks/useAlbumAccent";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import type { AlbumRow } from "../../types/library";
 import "./Spotlight.css";
 
 export interface SpotlightPick {
@@ -24,7 +24,6 @@ export function naviToAlbumRow(album: NavidromeAlbum, serverId: string): AlbumRo
     artwork_url: album.coverArt ?? null,
   };
 }
-
 
 const FEAT_RE = /\s*\(?(?:feat\.?|ft\.?|featuring)\s+.*/i;
 
@@ -49,22 +48,18 @@ export function buildSpotlightCandidates(
   if (currentArtist) {
     const displayArtist = stripFeaturedArtists(currentArtist);
     const fromStats =
-      onRepeat.find(a => a.artist === currentArtist && a.id !== currentAlbumId) ??
-      rediscover.find(a => a.artist === currentArtist && a.id !== currentAlbumId);
-    const fromFrequent = frequentRaw?.find(a => {
+      onRepeat.find((a) => a.artist === currentArtist && a.id !== currentAlbumId) ??
+      rediscover.find((a) => a.artist === currentArtist && a.id !== currentAlbumId);
+    const fromFrequent = frequentRaw?.find((a) => {
       const id = `${serverId}:${a.id}`;
       return a.artist === currentArtist && id !== currentAlbumId && !!a.coverArt;
     });
-    const fromAlbums = allAlbums?.find(
-      a => a.artist === currentArtist && a.id !== currentAlbumId && a.artwork_url
-    );
-    const fromArtist = fromStats
-      ?? (fromFrequent ? naviToAlbumRow(fromFrequent, serverId) : undefined)
-      ?? fromAlbums;
+    const fromAlbums = allAlbums?.find((a) => a.artist === currentArtist && a.id !== currentAlbumId && a.artwork_url);
+    const fromArtist = fromStats ?? (fromFrequent ? naviToAlbumRow(fromFrequent, serverId) : undefined) ?? fromAlbums;
     if (fromArtist) picks.push({ kicker: `More from ${displayArtist}`, album: fromArtist });
   }
 
-  const recentNotCurrent = recentRaw?.find(a => `${serverId}:${a.id}` !== currentAlbumId);
+  const recentNotCurrent = recentRaw?.find((a) => `${serverId}:${a.id}` !== currentAlbumId);
   if (recentNotCurrent) picks.push({ kicker: "Jump back in", album: naviToAlbumRow(recentNotCurrent, serverId) });
   if (rediscover[0]) picks.push({ kicker: "Rediscover", album: rediscover[0] });
   if (onRepeat[0]) picks.push({ kicker: "On repeat", album: onRepeat[0] });
@@ -92,8 +87,6 @@ export function dedupePicks(candidates: SpotlightPick[], max: number): Spotlight
   return picks;
 }
 
-
-
 interface SpotlightProps {
   pick: SpotlightPick;
   serverWithCred: ServerWithCredential;
@@ -105,13 +98,23 @@ interface SpotlightProps {
   primary?: boolean;
 }
 
-export function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist, playAlbum, onAddToQueue, onCardContextMenu, primary }: SpotlightProps) {
+export function Spotlight({
+  pick,
+  serverWithCred,
+  onSelectAlbum,
+  onSelectArtist,
+  playAlbum,
+  onAddToQueue,
+  onCardContextMenu,
+  primary,
+}: SpotlightProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
 
-  const artUrl = coverMap.get(pick.album.id)
-    ?? (pick.album.artwork_url
+  const artUrl =
+    coverMap.get(pick.album.id) ??
+    (pick.album.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, pick.album.artwork_url, primary ? 400 : 200)
       : null);
 
@@ -130,9 +133,11 @@ export function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist,
         title="Play"
         aria-label={`Play ${pick.album.name}`}
       >
-        {artUrl
-          ? <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
-          : <div className="home-spotlight__art home-spotlight__art--placeholder" />}
+        {artUrl ? (
+          <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
+        ) : (
+          <div className="home-spotlight__art home-spotlight__art--placeholder" />
+        )}
         <span className="home-spotlight__art-play">
           <Play size={primary ? 28 : 18} fill="currentColor" />
         </span>
@@ -146,31 +151,24 @@ export function Spotlight({ pick, serverWithCred, onSelectAlbum, onSelectArtist,
               <button className="home-spotlight__artist-link" onClick={() => onSelectArtist(pick.album.artist!)}>
                 {pick.album.artist}
               </button>
-            ) : pick.album.artist}
+            ) : (
+              pick.album.artist
+            )}
             {pick.album.artist && pick.album.year && " · "}
             {pick.album.year}
           </p>
         )}
         {primary && (
           <div className="home-spotlight__cta">
-            <button
-              className="home-spotlight__play-btn"
-              onClick={() => playAlbum(pick.album)}
-            >
+            <button className="home-spotlight__play-btn" onClick={() => playAlbum(pick.album)}>
               <Play size={14} fill="currentColor" /> Play
             </button>
             {onAddToQueue && (
-              <button
-                className="home-spotlight__queue-btn"
-                onClick={() => onAddToQueue(pick.album)}
-              >
+              <button className="home-spotlight__queue-btn" onClick={() => onAddToQueue(pick.album)}>
                 <ListEnd size={14} /> Add to Queue
               </button>
             )}
-            <button
-              className="home-spotlight__open-btn"
-              onClick={() => onSelectAlbum(pick.album)}
-            >
+            <button className="home-spotlight__open-btn" onClick={() => onSelectAlbum(pick.album)}>
               Open
             </button>
           </div>

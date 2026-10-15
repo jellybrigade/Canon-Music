@@ -18,9 +18,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -34,10 +32,10 @@ vi.mock("../pages/AlbumDetail", () => ({
 vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";

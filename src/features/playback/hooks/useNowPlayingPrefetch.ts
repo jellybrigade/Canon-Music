@@ -1,15 +1,15 @@
-import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { usePlayerStore } from "../store/player";
+import { useEffect } from "react";
 import { QK } from "../../../lib/queryKeys";
 import {
-  primaryArtistOf,
   fetchArtistAlbums,
   fetchArtistTopTracksForNowPlaying,
   fetchSuggestedTracksForNowPlaying,
   NOW_PLAYING_STALE_TIME,
+  primaryArtistOf,
   SUGGESTED_STALE_TIME,
 } from "../lib/nowPlayingQueries";
+import { usePlayerStore } from "../store/player";
 
 /** Keyed exactly as NowPlayingView's About tab reads (`primaryArtistOf`, plain server id:
  * the reads are SQLite-only). Call once near the root. */

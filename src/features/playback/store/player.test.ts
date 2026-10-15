@@ -1,23 +1,23 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { resetTauriMocks, onInvoke, invoke, emitTauriEvent } from "../../../test/mocks/tauri";
 import { getDb } from "../../../db";
+import { emitTauriEvent, invoke, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { usePlayerStore } from "./player";
-import { normalizeShuffleOrder, buildShuffleOrder } from "./queueOrder";
-import { isNextDisabled, type CurrentTrack } from "./playerTypes";
 import { runtime } from "./playerRuntime";
+import { type CurrentTrack, isNextDisabled } from "./playerTypes";
+import { buildShuffleOrder, normalizeShuffleOrder } from "./queueOrder";
 
 // Boundary mock for getDb(): tests configure `select`/`execute` per case, never a real DB.
 function mockDb(
   overrides: {
     select?: (sql: string, params: unknown[]) => Promise<unknown[]>;
     execute?: (sql: string, params: unknown[]) => Promise<unknown>;
-  } = {}
+  } = {},
 ) {
   const db = {
     select: vi.fn(overrides.select ?? (() => Promise.resolve([]))),
@@ -100,7 +100,10 @@ describe("player store - queue/shuffle invariants", () => {
     it("holds after addManyToQueue under shuffle", async () => {
       usePlayerStore.setState({ isShuffled: true });
       await usePlayerStore.getState().playQueue(makeTracks(3), streamUrlFor);
-      usePlayerStore.getState().addManyToQueue(makeTracks(2).map((t) => makeTrack(`new-${t.id}`)), streamUrlFor);
+      usePlayerStore.getState().addManyToQueue(
+        makeTracks(2).map((t) => makeTrack(`new-${t.id}`)),
+        streamUrlFor,
+      );
       expect(invariantHolds()).toBe(true);
     });
 
@@ -291,7 +294,10 @@ describe("player store - queue/shuffle invariants", () => {
       // playQueue always anchors the shuffled position at 0; advance queueIndex to simulate
       // having already played partway through, which is what makes anything trimmable.
       usePlayerStore.setState({ queueIndex: 3 });
-      usePlayerStore.getState().addManyToQueue(makeTracks(3).map((t) => makeTrack(`x${t.id}`)), streamUrlFor);
+      usePlayerStore.getState().addManyToQueue(
+        makeTracks(3).map((t) => makeTrack(`x${t.id}`)),
+        streamUrlFor,
+      );
       const state = usePlayerStore.getState();
       expect(state.queue.length).toBe(5);
       expect(invariantHolds()).toBe(true);
@@ -303,7 +309,10 @@ describe("player store - queue/shuffle invariants", () => {
       // trim is capped at `queueIndex`, so a smaller starting position would only partially trim,
       // masking a regression that reused the pre-append queue length instead of the real one.
       await usePlayerStore.getState().playQueue(makeTracks(5), streamUrlFor, 4);
-      usePlayerStore.getState().playNextMany(makeTracks(3).map((t) => makeTrack(`y${t.id}`)), streamUrlFor);
+      usePlayerStore.getState().playNextMany(
+        makeTracks(3).map((t) => makeTrack(`y${t.id}`)),
+        streamUrlFor,
+      );
       const state = usePlayerStore.getState();
       expect(state.queue.length).toBe(4);
       expect(state.queueIndex).toBeGreaterThanOrEqual(0);
@@ -333,7 +342,7 @@ describe("player store - queue/shuffle invariants", () => {
       "repeat=%s index=%i length=%i radioOnQueueEnd=%s -> disabled=%s",
       (repeat, index, length, radioOnQueueEnd, expected) => {
         expect(isNextDisabled(repeat, index, length, radioOnQueueEnd)).toBe(expected);
-      }
+      },
     );
 
     it("does not depend on shuffle state for a given position/length", () => {
@@ -367,7 +376,12 @@ describe("player store - transport intent", () => {
   describe("resume()", () => {
     it("with currentTrack set but streamUrl null routes to retryCurrent, never sets isPlaying directly", () => {
       const track = makeTrack("restored");
-      usePlayerStore.setState({ currentTrack: track, streamUrl: null, error: null, streamUrlFor: () => "http://test/restored" });
+      usePlayerStore.setState({
+        currentTrack: track,
+        streamUrl: null,
+        error: null,
+        streamUrlFor: () => "http://test/restored",
+      });
 
       usePlayerStore.getState().resume();
 
@@ -459,7 +473,10 @@ describe("player store - transport intent", () => {
 // threshold the ticker checks every 200ms tick.
 const ENQUEUE_POS = 160;
 
-async function setupPlayingQueue(n: number, opts: { queueIndex?: number; isShuffled?: boolean; shuffleOrder?: number[] } = {}) {
+async function setupPlayingQueue(
+  n: number,
+  opts: { queueIndex?: number; isShuffled?: boolean; shuffleOrder?: number[] } = {},
+) {
   const tracks = makeTracks(n);
   onInvoke("audio_play", () => Promise.resolve(undefined));
   await usePlayerStore.getState().playQueue(tracks, streamUrlFor, opts.queueIndex ?? 0);
@@ -1117,7 +1134,7 @@ describe("player store - waveform prefetch gated on audible playback", () => {
     // fetchWaveform (the *current* track's own waveform) is allowed to have fired here; what must
     // not have happened yet is the next-tracks prefetch pass, which only the ticker triggers.
     const extractCallsAtPlay = invoke.mock.calls.filter(
-      (c) => c[0] === "audio_extract_waveform" && c[1] && (c[1] as { trackId: string }).trackId !== tracks[0]!.id
+      (c) => c[0] === "audio_extract_waveform" && c[1] && (c[1] as { trackId: string }).trackId !== tracks[0]!.id,
     ).length;
     expect(extractCallsAtPlay).toBe(0);
   });
@@ -1335,14 +1352,14 @@ describe("player store - replay gain", () => {
   it("mode 'track' uses trackGain/trackPeak", async () => {
     usePlayerStore.setState({ currentTrack: trackWith({ trackGain: -3, trackPeak: 0.9 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.min(Math.pow(10, -3 / 20), 1.0 / 0.9);
+    const expectedLinear = Math.min(10 ** (-3 / 20), 1.0 / 0.9);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
   it("mode 'album' falls through to trackGain when albumGain is null, not straight to the fallback", async () => {
     usePlayerStore.setState({ currentTrack: trackWith({ albumGain: null, trackGain: -3, trackPeak: 1 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("album");
-    const expectedLinear = Math.pow(10, -3 / 20);
+    const expectedLinear = 10 ** (-3 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1353,7 +1370,7 @@ describe("player store - replay gain", () => {
       replayGainFallbackGain: -6,
     });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.pow(10, -3 / 20);
+    const expectedLinear = 10 ** (-3 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1363,14 +1380,14 @@ describe("player store - replay gain", () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: 0 });
     await usePlayerStore.getState().setReplayGainMode("track");
     await usePlayerStore.getState().setReplayGainPreAmp(6);
-    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 6 / 20), 5);
+    expect(last(volumeCalls())).toBeCloseTo(10 ** (6 / 20), 5);
   });
 
   it("applies a positive fallback gain to a track carrying no peak tag", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainPreAmp: 0 });
     await usePlayerStore.getState().setReplayGainMode("album");
     await usePlayerStore.getState().setReplayGainFallbackGain(4);
-    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 4 / 20), 5);
+    expect(last(volumeCalls())).toBeCloseTo(10 ** (4 / 20), 5);
   });
 
   it("clips against the other scope's peak when the preferred scope has none", async () => {
@@ -1382,7 +1399,7 @@ describe("player store - replay gain", () => {
   it("falls back to replayGainFallbackGain only when both album and track gain are missing", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: -6 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.pow(10, -6 / 20);
+    const expectedLinear = 10 ** (-6 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1390,7 +1407,7 @@ describe("player store - replay gain", () => {
     // +10dB is huge gain; peak 0.5 means the clip ceiling (1/0.5 = 2.0) binds before the raw gain does.
     usePlayerStore.setState({ currentTrack: trackWith({ trackGain: 10, trackPeak: 0.5 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const rawLinear = Math.pow(10, 10 / 20);
+    const rawLinear = 10 ** (10 / 20);
     expect(rawLinear).toBeGreaterThan(2.0);
     expect(last(volumeCalls())).toBeCloseTo(2.0, 5);
   });
@@ -1444,9 +1461,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
   function mockSettingsDb(rows: Record<string, string>, serverIds: string[] = [SRV]) {
     return mockDb({
       select: (sql: string) =>
-        Promise.resolve(
-          sql.includes("FROM servers") ? serverIds.map((id) => ({ id })) : settingsRows(rows)
-        ),
+        Promise.resolve(sql.includes("FROM servers") ? serverIds.map((id) => ({ id })) : settingsRows(rows)),
     });
   }
 
@@ -1478,7 +1493,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
           currentTrack: makeTrack("srv-old:saved"),
         }),
       },
-      [SRV]
+      [SRV],
     );
 
     await usePlayerStore.getState().loadSettings();
@@ -1498,7 +1513,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
           currentTrack: makeTrack(`${SRV}:a`),
         }),
       },
-      [SRV]
+      [SRV],
     );
 
     await usePlayerStore.getState().loadSettings();
@@ -1512,7 +1527,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
         "queue.restore_on_startup": "true",
         queue_state: JSON.stringify({ queue: [makeTrack(`${SRV}:saved`)], queueIndex: 0 }),
       },
-      []
+      [],
     );
 
     await usePlayerStore.getState().loadSettings();
@@ -1552,7 +1567,7 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
         radio_label: "Like ye",
         radio_seed: JSON.stringify(makeTrack("srv-old:seed")),
       },
-      [SRV]
+      [SRV],
     );
 
     await usePlayerStore.getState().loadSettings();
@@ -1678,9 +1693,7 @@ describe("applyTrackIdRemap", () => {
     const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
     usePlayerStore.setState({ queue, currentTrack: queue[1]!, queueIndex: 1 });
 
-    const moved = usePlayerStore
-      .getState()
-      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+    const moved = usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
 
     expect(moved).toBe(true);
     expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
@@ -1691,9 +1704,7 @@ describe("applyTrackIdRemap", () => {
     const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
     usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
 
-    const moved = usePlayerStore
-      .getState()
-      .applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+    const moved = usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
 
     expect(moved).toBe(false);
     expect(usePlayerStore.getState().queue.map((t) => t.id)).toEqual(["srv:a", "srv:b2"]);
@@ -1725,9 +1736,7 @@ describe("applyTrackIdRemap", () => {
     const queue = [makeTrack("srv:a")];
     usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
 
-    const moved = usePlayerStore
-      .getState()
-      .applyTrackIdRemap([{ oldId: "srv:zzz", newId: "srv:zzz2" }]);
+    const moved = usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:zzz", newId: "srv:zzz2" }]);
 
     expect(moved).toBe(false);
     // Reference equality, not contents: a new array here re-renders every queue consumer for
@@ -1754,7 +1763,9 @@ describe("player store - startRadioFrom", () => {
     usePlayerStore.setState({ queue: makeTracks(3), queueIndex: 1, currentTrack: makeTrack("1"), isPlaying: true });
     const seed = makeTrack("seed");
 
-    await usePlayerStore.getState().startRadioFrom("replace", { tracks: [seed], streamUrlFor, mode: "same-genre", label: "Rock" });
+    await usePlayerStore
+      .getState()
+      .startRadioFrom("replace", { tracks: [seed], streamUrlFor, mode: "same-genre", label: "Rock" });
 
     const state = usePlayerStore.getState();
     expect(state.queue.map((t) => t.id)).toEqual(["seed"]);
@@ -1833,7 +1844,14 @@ describe("player store - startRadioFrom", () => {
 
   it("replace seeded from the playing track keeps shuffle order aligned", async () => {
     const tracks = makeTracks(3);
-    usePlayerStore.setState({ queue: tracks, isShuffled: true, shuffleOrder: [2, 0, 1], queueIndex: 1, currentTrack: tracks[0]!, isPlaying: true });
+    usePlayerStore.setState({
+      queue: tracks,
+      isShuffled: true,
+      shuffleOrder: [2, 0, 1],
+      queueIndex: 1,
+      currentTrack: tracks[0]!,
+      isPlaying: true,
+    });
 
     await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: tracks[0]!, streamUrlFor });
 

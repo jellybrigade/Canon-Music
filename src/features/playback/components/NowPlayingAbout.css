@@ -56,8 +56,12 @@
 }
 
 /* Stagger so the rows read as a list settling in, not one block flashing. */
-.now-playing-about-skeleton-row:nth-child(2n) .now-playing-about-skeleton-bar { animation-delay: 0.12s; }
-.now-playing-about-skeleton-row:nth-child(3n) .now-playing-about-skeleton-bar { animation-delay: 0.24s; }
+.now-playing-about-skeleton-row:nth-child(2n) .now-playing-about-skeleton-bar {
+  animation-delay: 0.12s;
+}
+.now-playing-about-skeleton-row:nth-child(3n) .now-playing-about-skeleton-bar {
+  animation-delay: 0.24s;
+}
 
 .now-playing-more-section {
   width: 100%;
@@ -93,7 +97,9 @@
   flex-shrink: 0;
   width: 96px;
   text-align: center;
-  transition: opacity var(--duration-moderate), transform var(--duration-moderate);
+  transition:
+    opacity var(--duration-moderate),
+    transform var(--duration-moderate);
 }
 
 .now-playing-album-chip:hover {
@@ -245,7 +251,9 @@
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
-  transition: opacity var(--duration-fast), background var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .now-playing-track-action-btn:hover {

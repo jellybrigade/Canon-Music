@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SchemaTooNewError } from "../db/migrations";
-import { checkForUpdate, installAndRestart, type DownloadProgress } from "../lib/updater";
+import { checkForUpdate, type DownloadProgress, installAndRestart } from "../lib/updater";
 
 interface Props {
   error: unknown;
@@ -16,12 +16,11 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
       <div className="app-fatal">
         <h1 className="app-fatal-title">This library needs a newer Canon</h1>
         <p className="app-fatal-message">
-          Your library was last opened by Canon with database version {tooNew.found}. This build
-          only understands version {tooNew.supported}, and there is no way back down.
+          Your library was last opened by Canon with database version {tooNew.found}. This build only understands
+          version {tooNew.supported}, and there is no way back down.
         </p>
         <p className="app-fatal-hint">
-          Nothing has been changed on disk. Update Canon to the version you were using and your
-          library opens as before.
+          Nothing has been changed on disk. Update Canon to the version you were using and your library opens as before.
         </p>
         <UpdateButton />
       </div>
@@ -31,13 +30,10 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
   return (
     <div className="app-fatal">
       <h1 className="app-fatal-title">Canon could not read its database</h1>
-      <p className="app-fatal-message">
-        {error instanceof Error ? error.message : String(error)}
-      </p>
+      <p className="app-fatal-message">{error instanceof Error ? error.message : String(error)}</p>
       <p className="app-fatal-hint">
-        Your server settings and library are still on disk. This is usually a locked or
-        in-use database file, so closing any other running copy of Canon and trying again
-        is the first thing to check.
+        Your server settings and library are still on disk. This is usually a locked or in-use database file, so closing
+        any other running copy of Canon and trying again is the first thing to check.
       </p>
       <button className="app-fatal-btn" onClick={onRetry}>
         Try again
@@ -77,7 +73,9 @@ function UpdateButton() {
     <>
       <button
         className="app-fatal-btn"
-        onClick={() => { void handleUpdate(); }}
+        onClick={() => {
+          void handleUpdate();
+        }}
         disabled={isBusy}
       >
         Update Canon

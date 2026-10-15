@@ -51,7 +51,8 @@
   border-radius: var(--radius-2xs);
   box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent);
   /* scaleX rather than width, so the 5x/sec position tick doesn't relayout the row. */
-  transition: transform var(--duration-longest) linear,
+  transition:
+    transform var(--duration-longest) linear,
     background var(--duration-longest) ease,
     box-shadow var(--duration-longest) ease;
 }
@@ -107,5 +108,7 @@
 .now-playing-waveform-bar--filled {
   background-color: var(--accent);
   box-shadow: 0 0 4px color-mix(in srgb, var(--accent) 50%, transparent);
-  transition: background-color var(--duration-longest) ease, box-shadow var(--duration-longest) ease;
+  transition:
+    background-color var(--duration-longest) ease,
+    box-shadow var(--duration-longest) ease;
 }

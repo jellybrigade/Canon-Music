@@ -1,30 +1,42 @@
-import { useState, useEffect, useMemo, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Play, Trash2, Music, Pencil, Check, X, SlidersHorizontal, Camera, ListMusic, RefreshCw, Heart } from "lucide-react";
-import type { PlaylistRow } from "./usePlaylists";
+import {
+  Camera,
+  Check,
+  Heart,
+  ListMusic,
+  Music,
+  Pencil,
+  Play,
+  RefreshCw,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { getDb } from "../../db";
+import { applyGenreMappings, useGenreMappings } from "../../hooks/useGenreDisplay";
+import { useLoved } from "../../hooks/useLoved";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import { fileToScaledDataUri } from "../../lib/imageDataUri";
+import { makeStreamUrlBuilder } from "../../lib/track";
 import type { PlaylistTrackRow } from "../../types/library";
+import { ContextMenu } from "../../ui/ContextMenu";
+import { usePlayerStore } from "../playback/store/player";
+import type { CurrentTrack } from "../playback/store/playerTypes";
+import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
+import { useStartRadio } from "../radio/hooks/useStartRadio";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
-import { fileToScaledDataUri } from "../../lib/imageDataUri";
+import type { PlaylistRow } from "./usePlaylists";
 import { usePlaylistTracks } from "./usePlaylistTracks";
-import type { ServerWithCredential } from "../../hooks/useServer";
-import { getCoverArtUrl } from "../../clients/navidromeUrls";
-import { makeStreamUrlBuilder } from "../../lib/track";
-import type { CurrentTrack } from "../playback/store/playerTypes";
-import { useStartRadio } from "../radio/hooks/useStartRadio";
-import { usePlayerStore } from "../playback/store/player";
-import { useGenreMappings, applyGenreMappings } from "../../hooks/useGenreDisplay";
-import { useLoved } from "../../hooks/useLoved";
-import { getDb } from "../../db";
-import { ContextMenu } from "../../ui/ContextMenu";
-import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import "../../pages/AlbumDetail.css";
 import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
-import { useClickOutside } from "../../ui/useClickOutside";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 import { bitrateCell, durationCell } from "../../lib/trackCells";
+import { useClickOutside } from "../../ui/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
 const MINUTES_PER_HOUR = 60;
@@ -51,7 +63,18 @@ interface Props {
   onSelectArtist?: (artistName: string) => void;
 }
 
-export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDelete, onRename, onRefreshSmart, onUpdateSmartRules, onSetCustomCover, onSelectAlbum, onSelectArtist }: Props) {
+export function PlaylistDetail({
+  playlist,
+  serverWithCredential,
+  onClose,
+  onDelete,
+  onRename,
+  onRefreshSmart,
+  onUpdateSmartRules,
+  onSetCustomCover,
+  onSelectAlbum,
+  onSelectArtist,
+}: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -66,12 +89,28 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: PlaylistTrackRow } | null>(null);
 
   const [playlistCols, setPlaylistCols] = useState<{
-    artist: boolean; genre: boolean; album: boolean; year: boolean;
-    duration: boolean; format: boolean; bitrate: boolean;
+    artist: boolean;
+    genre: boolean;
+    album: boolean;
+    year: boolean;
+    duration: boolean;
+    format: boolean;
+    bitrate: boolean;
   }>(() => {
-    const defaults = { artist: true, genre: true, album: false, year: false, duration: true, format: false, bitrate: false };
-    try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-playlist-cols") ?? "null") }; }
-    catch { return defaults; }
+    const defaults = {
+      artist: true,
+      genre: true,
+      album: false,
+      year: false,
+      duration: true,
+      format: false,
+      bitrate: false,
+    };
+    try {
+      return { ...defaults, ...JSON.parse(localStorage.getItem("canon-playlist-cols") ?? "null") };
+    } catch {
+      return defaults;
+    }
   });
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
@@ -94,8 +133,12 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
   const descInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => { if (editingName) nameInputRef.current?.focus(); }, [editingName]);
-  useEffect(() => { if (editingDesc) descInputRef.current?.focus(); }, [editingDesc]);
+  useEffect(() => {
+    if (editingName) nameInputRef.current?.focus();
+  }, [editingName]);
+  useEffect(() => {
+    if (editingDesc) descInputRef.current?.focus();
+  }, [editingDesc]);
 
   // Reset local state when playlist changes
   useEffect(() => {
@@ -115,15 +158,19 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     // with no stored resume row would otherwise keep the previous playlist's index and
     // scroll the new track list to an unrelated position.
     setResumeIndex(null);
-    getDb().then(async (db) => {
-      type Row = { last_track_id: string; track_position: number };
-      const rows = await db.select<Row[]>(
-        "SELECT last_track_id, track_position FROM playlist_resume WHERE playlist_id = ?",
-        [playlist.id]
-      );
-      if (!cancelled && rows[0]) setResumeIndex(rows[0].track_position);
-    }).catch(() => {});
-    return () => { cancelled = true; };
+    getDb()
+      .then(async (db) => {
+        type Row = { last_track_id: string; track_position: number };
+        const rows = await db.select<Row[]>(
+          "SELECT last_track_id, track_position FROM playlist_resume WHERE playlist_id = ?",
+          [playlist.id],
+        );
+        if (!cancelled && rows[0]) setResumeIndex(rows[0].track_position);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [playlist.id]);
 
   const virtualizer = useVirtualizer({
@@ -154,11 +201,17 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     playlistCols.bitrate ? "4.5rem" : null,
     playlistCols.duration ? "auto" : null,
     "2rem",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   async function commitName() {
     const trimmed = nameValue.trim();
-    if (!trimmed || trimmed === playlist.name) { setEditingName(false); setNameValue(playlist.name); return; }
+    if (!trimmed || trimmed === playlist.name) {
+      setEditingName(false);
+      setNameValue(playlist.name);
+      return;
+    }
     setSaving(true);
     try {
       await onRename(playlist, trimmed, playlist.comment, serverWithCredential);
@@ -173,7 +226,10 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
 
   async function commitDesc() {
     const trimmed = descValue.trim() || null;
-    if (trimmed === playlist.comment) { setEditingDesc(false); return; }
+    if (trimmed === playlist.comment) {
+      setEditingDesc(false);
+      return;
+    }
     setSaving(true);
     try {
       await onRename(playlist, playlist.name, trimmed, serverWithCredential);
@@ -191,7 +247,17 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     const coverArtUrl = track.artwork_url
       ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
       : null;
-    return { id: track.id, title: track.title, artist: track.artist, duration: track.duration, coverArtUrl, artworkRef: track.artwork_url ?? null, album: track.album_name, albumId: track.album_id, replayGain: replayGainFromRow(track) };
+    return {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      duration: track.duration,
+      coverArtUrl,
+      artworkRef: track.artwork_url ?? null,
+      album: track.album_name,
+      albumId: track.album_id,
+      replayGain: replayGainFromRow(track),
+    };
   }
 
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
@@ -201,18 +267,20 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     const startIndex = tracks.findIndex((t) => t.id === track.id && t.position === track.position);
     const idx = startIndex >= 0 ? startIndex : 0;
     playQueue(tracks.map(buildTrackObj), streamUrlFor, idx);
-    getDb().then(async (db) => {
-      await db.execute(
-        `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position, updated_at)
+    getDb()
+      .then(async (db) => {
+        await db.execute(
+          `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position, updated_at)
          VALUES (?, ?, ?, datetime('now'))
          ON CONFLICT(playlist_id) DO UPDATE SET last_track_id=excluded.last_track_id, track_position=excluded.track_position, updated_at=excluded.updated_at`,
-        [playlist.id, track.id, idx]
-      );
-    }).catch((e) => {
-      // Resume position is a convenience, not part of playback: a failed write must not surface
-      // as an error over a track that is already playing fine.
-      console.error("Failed to record playlist resume position:", e);
-    });
+          [playlist.id, track.id, idx],
+        );
+      })
+      .catch((e) => {
+        // Resume position is a convenience, not part of playback: a failed write must not surface
+        // as an error over a track that is already playing fine.
+        console.error("Failed to record playlist resume position:", e);
+      });
   }
 
   function handlePlayAll() {
@@ -251,10 +319,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
     }
   }
 
-  const totalSeconds = useMemo(
-    () => tracks?.reduce((sum, t) => sum + (t.duration ?? 0), 0) ?? 0,
-    [tracks]
-  );
+  const totalSeconds = useMemo(() => tracks?.reduce((sum, t) => sum + (t.duration ?? 0), 0) ?? 0, [tracks]);
 
   function handleCoverPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -265,8 +330,9 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
       .catch((err) => console.error("Failed to set playlist cover:", err));
   }
 
-  const displayCoverUrl = playlist.custom_cover_data
-    ?? (playlist.cover_art_url
+  const displayCoverUrl =
+    playlist.custom_cover_data ??
+    (playlist.cover_art_url
       ? getCoverArtUrl(server.url, server.username, credential, playlist.cover_art_url, 300)
       : null);
 
@@ -279,12 +345,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
         <div className="album-detail-hero">
           <div className="album-detail-art playlist-art-wrapper">
             {displayCoverUrl ? (
-              <img
-                src={displayCoverUrl}
-                alt={playlist.name}
-                className="album-detail-art-img"
-                draggable={false}
-              />
+              <img src={displayCoverUrl} alt={playlist.name} className="album-detail-art-img" draggable={false} />
             ) : (
               <div className="album-detail-art album-art--placeholder playlist-art-placeholder">
                 <Music size={40} />
@@ -329,15 +390,38 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                     onChange={(e) => setNameValue(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") void commitName();
-                      if (e.key === "Escape") { setEditingName(false); setNameValue(playlist.name); }
+                      if (e.key === "Escape") {
+                        setEditingName(false);
+                        setNameValue(playlist.name);
+                      }
                     }}
                     disabled={saving}
                   />
-                  <button className="playlist-inline-btn" onClick={() => void commitName()} disabled={saving} title="Save"><Check size={14} /></button>
-                  <button className="playlist-inline-btn" onClick={() => { setEditingName(false); setNameValue(playlist.name); }} title="Cancel"><X size={14} /></button>
+                  <button
+                    className="playlist-inline-btn"
+                    onClick={() => void commitName()}
+                    disabled={saving}
+                    title="Save"
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    className="playlist-inline-btn"
+                    onClick={() => {
+                      setEditingName(false);
+                      setNameValue(playlist.name);
+                    }}
+                    title="Cancel"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
               ) : (
-                <h2 className="album-detail-title playlist-editable-title" onClick={() => setEditingName(true)} title="Click to rename">
+                <h2
+                  className="album-detail-title playlist-editable-title"
+                  onClick={() => setEditingName(true)}
+                  title="Click to rename"
+                >
                   {playlist.name}
                   <Pencil size={13} className="playlist-edit-icon" />
                 </h2>
@@ -354,12 +438,31 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   onChange={(e) => setDescValue(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") void commitDesc();
-                    if (e.key === "Escape") { setEditingDesc(false); setDescValue(playlist.comment ?? ""); }
+                    if (e.key === "Escape") {
+                      setEditingDesc(false);
+                      setDescValue(playlist.comment ?? "");
+                    }
                   }}
                   disabled={saving}
                 />
-                <button className="playlist-inline-btn" onClick={() => void commitDesc()} disabled={saving} title="Save"><Check size={14} /></button>
-                <button className="playlist-inline-btn" onClick={() => { setEditingDesc(false); setDescValue(playlist.comment ?? ""); }} title="Cancel"><X size={14} /></button>
+                <button
+                  className="playlist-inline-btn"
+                  onClick={() => void commitDesc()}
+                  disabled={saving}
+                  title="Save"
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  className="playlist-inline-btn"
+                  onClick={() => {
+                    setEditingDesc(false);
+                    setDescValue(playlist.comment ?? "");
+                  }}
+                  title="Cancel"
+                >
+                  <X size={14} />
+                </button>
               </div>
             ) : (
               <p
@@ -417,11 +520,7 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   >
                     {deleting ? "Deleting…" : "Delete?"}
                   </button>
-                  <button
-                    className="playlist-inline-btn"
-                    onClick={() => setConfirmDelete(false)}
-                    title="Cancel"
-                  >
+                  <button className="playlist-inline-btn" onClick={() => setConfirmDelete(false)} title="Cancel">
                     <X size={14} />
                   </button>
                 </>
@@ -450,7 +549,9 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
           {playlistCols.year && <span className="playlist-col-header-cell">Year</span>}
           {playlistCols.format && <span className="playlist-col-header-cell">Format</span>}
           {playlistCols.bitrate && <span className="playlist-col-header-cell">Bitrate</span>}
-          {playlistCols.duration && <span className="playlist-col-header-cell playlist-col-header-cell--right">Duration</span>}
+          {playlistCols.duration && (
+            <span className="playlist-col-header-cell playlist-col-header-cell--right">Duration</span>
+          )}
           <span className="playlist-col-header-cell" />
         </div>
         <div className="tracklist-col-picker-anchor" ref={colPickerRef}>
@@ -523,26 +624,39 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
                   }}
                   className={`playlist-vrow${isCurrentTrack ? " playlist-vrow--active" : ""}`}
                   onClick={() => handlePlayTrack(track)}
-                  onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, track }); }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setContextMenu({ x: e.clientX, y: e.clientY, track });
+                  }}
                   role="button"
                   tabIndex={0}
                   onKeyDown={(e) => e.key === "Enter" && handlePlayTrack(track)}
                 >
                   <span className="playlist-vrow-num">
-                    {isCurrentlyPlaying
-                      ? <span className="track-playing-indicator"><Play size={12} /></span>
-                      : track.position + 1}
+                    {isCurrentlyPlaying ? (
+                      <span className="track-playing-indicator">
+                        <Play size={12} />
+                      </span>
+                    ) : (
+                      track.position + 1
+                    )}
                   </span>
                   <span className="playlist-vrow-title">{track.title}</span>
                   {playlistCols.artist && <span className="playlist-vrow-artist">{track.artist ?? ""}</span>}
-                  {playlistCols.genre && <span className="playlist-vrow-genre">{applyGenreMappings(track.genre, genreMappings).join(", ")}</span>}
+                  {playlistCols.genre && (
+                    <span className="playlist-vrow-genre">
+                      {applyGenreMappings(track.genre, genreMappings).join(", ")}
+                    </span>
+                  )}
                   {playlistCols.album && <span className="playlist-vrow-album">{track.album_name ?? ""}</span>}
                   {playlistCols.year && <span className="playlist-vrow-year">{track.year ?? ""}</span>}
-                  {playlistCols.format && <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>}
+                  {playlistCols.format && (
+                    <span className="playlist-vrow-format">{track.suffix ? track.suffix.toUpperCase() : ""}</span>
+                  )}
                   {playlistCols.bitrate && <span className="playlist-vrow-bitrate">{bitrateCell(track.bit_rate)}</span>}
-                  {playlistCols.duration && <span className="playlist-vrow-duration">
-                    {durationCell(track.duration)}
-                  </span>}
+                  {playlistCols.duration && (
+                    <span className="playlist-vrow-duration">{durationCell(track.duration)}</span>
+                  )}
                   <button
                     className={`track-heart${lovedTrackIds.has(track.id) ? " track-heart--loved" : ""}`}
                     aria-label={lovedTrackIds.has(track.id) ? "Unlove track" : "Love track"}
@@ -561,18 +675,29 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
       </div>
 
       {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-        >
-          <button onClick={() => { handlePlayTrack(contextMenu.track); setContextMenu(null); }}>
+        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
+          <button
+            onClick={() => {
+              handlePlayTrack(contextMenu.track);
+              setContextMenu(null);
+            }}
+          >
             Play Now
           </button>
-          <button onClick={() => { playNext(buildTrackObj(contextMenu.track), streamUrlFor); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              playNext(buildTrackObj(contextMenu.track), streamUrlFor);
+              setContextMenu(null);
+            }}
+          >
             Play Next
           </button>
-          <button onClick={() => { addToQueue(buildTrackObj(contextMenu.track), streamUrlFor); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              addToQueue(buildTrackObj(contextMenu.track), streamUrlFor);
+              setContextMenu(null);
+            }}
+          >
             Add to Queue
           </button>
           <StartRadioSubmenu
@@ -583,12 +708,22 @@ export function PlaylistDetail({ playlist, serverWithCredential, onClose, onDele
             }}
           />
           {onSelectAlbum && contextMenu.track.album_id && (
-            <button onClick={() => { onSelectAlbum(contextMenu.track.album_id!); setContextMenu(null); }}>
+            <button
+              onClick={() => {
+                onSelectAlbum(contextMenu.track.album_id!);
+                setContextMenu(null);
+              }}
+            >
               Go to Album
             </button>
           )}
           {onSelectArtist && contextMenu.track.artist && (
-            <button onClick={() => { onSelectArtist(contextMenu.track.artist!); setContextMenu(null); }}>
+            <button
+              onClick={() => {
+                onSelectArtist(contextMenu.track.artist!);
+                setContextMenu(null);
+              }}
+            >
               Go to Artist
             </button>
           )}

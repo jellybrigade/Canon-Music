@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect, useState } from "react";
+import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylists";
 import { stripServerPrefix } from "../../lib/ids";
+import { REPLAY_GAIN_COLUMNS } from "../../lib/replayGainRow";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
 import type { PlaylistTrackRow } from "../../types/library";
-import { REPLAY_GAIN_COLUMNS } from "../../lib/replayGainRow";
+
 export type { PlaylistTrackRow } from "../../types/library";
 
 const NO_ROWS: PlaylistTrackRow[] = [];
@@ -46,7 +47,7 @@ export function usePlaylistTracks(playlistId: string | null) {
            LEFT JOIN albums a ON t.album_id = a.id
            WHERE pt.playlist_id = ?
            ORDER BY pt.position ASC`,
-          [playlistId]
+          [playlistId],
         );
         if (!cancelled) setResult({ playlistId, rows, isLoading: false });
       } catch (err) {
@@ -69,14 +70,17 @@ export function usePlaylistTracks(playlistId: string | null) {
   const data = playlistId ? current?.rows : NO_ROWS;
   const isLoading = !!playlistId && (current?.isLoading ?? true);
 
-  async function removeTrack(
-    position: number,
-    playlist: { id: string },
-    swc: ServerWithCredential
-  ): Promise<void> {
+  async function removeTrack(position: number, playlist: { id: string }, swc: ServerWithCredential): Promise<void> {
     const { server, credential } = swc;
     const nativePlaylistId = stripServerPrefix(playlist.id, server.id);
-    await removeTrackFromNavidromePlaylist(server.url, server.username, credential, nativePlaylistId, position, server.alt_url ?? undefined);
+    await removeTrackFromNavidromePlaylist(
+      server.url,
+      server.username,
+      credential,
+      nativePlaylistId,
+      position,
+      server.alt_url ?? undefined,
+    );
     // Delete + position compaction run as one Rust transaction: tauri-plugin-sql has no
     // connection affinity, so a TS "BEGIN" isn't safe against a sync racing this edit.
     await invoke("playlist_remove_track", { playlistId: playlist.id, position });

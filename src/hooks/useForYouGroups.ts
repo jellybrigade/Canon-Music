@@ -1,7 +1,12 @@
 import { useCallback, useMemo } from "react";
-import { useSetting } from "./useSetting";
-import { buildForYouGroups, FOR_YOU_PER_TAB_DEFAULT, parseForYouPerTab, type ForYouCategoryConfig } from "../lib/forYouGroups";
+import {
+  buildForYouGroups,
+  FOR_YOU_PER_TAB_DEFAULT,
+  type ForYouCategoryConfig,
+  parseForYouPerTab,
+} from "../lib/forYouGroups";
 import type { AlbumRow } from "../types/library";
+import { useSetting } from "./useSetting";
 
 export function useForYouGroups(
   spotlightIds: string[],
@@ -13,11 +18,11 @@ export function useForYouGroups(
   const perTab = parseForYouPerTab(rawPerTab);
   const groups = useMemo(
     () => buildForYouGroups(spotlightIds, sources, config, seed, perTab),
-    [spotlightIds, sources, config, seed, perTab]
+    [spotlightIds, sources, config, seed, perTab],
   );
   const setPerTab = useCallback(
     (count: number) => setRawPerTab(String(parseForYouPerTab(String(count)))),
-    [setRawPerTab]
+    [setRawPerTab],
   );
   return { groups, perTab, setPerTab };
 }

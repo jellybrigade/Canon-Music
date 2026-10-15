@@ -1,13 +1,30 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TagReviewTab } from "./TagReviewTab";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { TagVocabRow } from "../hooks/useTagMappings";
+import { TagReviewTab } from "./TagReviewTab";
 
 const vocab: TagVocabRow[] = [
-  { raw_value: "Techno", kind: "genre", album_count: 2, sources: "file,lastfm", canonical_id: null, mapping_source: null, locked: 0 },
-  { raw_value: "Rave", kind: "genre", album_count: 1, sources: null, canonical_id: null, mapping_source: null, locked: 0 },
+  {
+    raw_value: "Techno",
+    kind: "genre",
+    album_count: 2,
+    sources: "file,lastfm",
+    canonical_id: null,
+    mapping_source: null,
+    locked: 0,
+  },
+  {
+    raw_value: "Rave",
+    kind: "genre",
+    album_count: 1,
+    sources: null,
+    canonical_id: null,
+    mapping_source: null,
+    locked: 0,
+  },
 ];
 
 const albumsByTag: Record<string, { album_id: string; album_name: string; artwork_url: string | null }[]> = {

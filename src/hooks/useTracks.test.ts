@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
-import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
-import { useTracks } from "./useTracks";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
+import { invoke, onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import type { TrackRow } from "../types/library";
+import { useTracks } from "./useTracks";
 
 function track(id: string, albumId: string): TrackRow {
   return {
@@ -67,13 +67,16 @@ describe("useTracks", () => {
       return albumId === "a1" ? [] : new Promise(() => {});
     });
     const seen: Array<{ albumId: string; data: TrackRow[] | undefined; isLoading: boolean }> = [];
-    const { result, rerender } = renderHook(({ albumId }) => {
-      const tracks = useTracks(albumId);
-      useEffect(() => {
-        seen.push({ albumId, data: tracks.data, isLoading: tracks.isLoading });
-      });
-      return tracks;
-    }, { initialProps: { albumId: "a1" } });
+    const { result, rerender } = renderHook(
+      ({ albumId }) => {
+        const tracks = useTracks(albumId);
+        useEffect(() => {
+          seen.push({ albumId, data: tracks.data, isLoading: tracks.isLoading });
+        });
+        return tracks;
+      },
+      { initialProps: { albumId: "a1" } },
+    );
     await waitFor(() => expect(result.current.data).toEqual([]));
 
     seen.length = 0;

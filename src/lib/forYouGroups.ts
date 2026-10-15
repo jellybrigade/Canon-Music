@@ -1,5 +1,5 @@
-import { seededShuffle } from "./shuffle";
 import type { AlbumRow } from "../types/library";
+import { seededShuffle } from "./shuffle";
 
 export interface ForYouGroup {
   /** Category key, not the label: two custom categories can share a kicker. */
@@ -8,9 +8,7 @@ export interface ForYouGroup {
   albums: AlbumRow[];
 }
 
-export type ForYouCustomFilter =
-  | { type: "decade"; decade: number }
-  | { type: "artist"; artist: string };
+export type ForYouCustomFilter = { type: "decade"; decade: number } | { type: "artist"; artist: string };
 
 export interface ForYouCategoryConfig {
   key: string;
@@ -45,8 +43,11 @@ export function buildForYouGroups(
 
   let catIdx = 0;
   const groupFrom = (key: string, kicker: string, source: AlbumRow[]) => {
-    const withArt = source.filter(a => a.artwork_url);
-    if (withArt.length === 0) { catIdx++; return; }
+    const withArt = source.filter((a) => a.artwork_url);
+    if (withArt.length === 0) {
+      catIdx++;
+      return;
+    }
     // Shuffle with a per-category seed so different categories pick independently.
     const shuffled = seededShuffle(withArt, seed * 31 + catIdx);
     catIdx++;

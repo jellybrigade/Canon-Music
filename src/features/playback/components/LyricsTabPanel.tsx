@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import type { LrcLine } from "../../../clients/lrclib";
+import type { LyricsOverride } from "../hooks/useLyrics";
 import { usePlayerStore } from "../store/player";
-import { type LyricsOverride } from "../hooks/useLyrics";
-import { type LrcLine } from "../../../clients/lrclib";
 import "./LyricsTabPanel.css";
 
 interface LyricsTabPanelProps {
@@ -30,21 +30,27 @@ interface LyricLineProps {
 
 const LyricLine = React.memo(function LyricLine({ index, text, isActive }: LyricLineProps) {
   return (
-    <div
-      data-lyric-index={index}
-      className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}
-    >
+    <div data-lyric-index={index} className={`lyrics-line${isActive ? " lyrics-line--active" : ""}`}>
       {text || " "}
     </div>
   );
 });
 
 export function LyricsTabPanel({
-  lyricsLines, lyricsPlain, lyricsLoading, lyricsOffsetMs,
-  lyricsSearchOpen, lyricsSearchArtist, lyricsSearchTitle,
-  setLyricsSearchArtist, setLyricsSearchTitle,
-  lyricsOverride, setLyricsOverride,
-  currentTrackArtist, currentTrackTitle, onSeek,
+  lyricsLines,
+  lyricsPlain,
+  lyricsLoading,
+  lyricsOffsetMs,
+  lyricsSearchOpen,
+  lyricsSearchArtist,
+  lyricsSearchTitle,
+  setLyricsSearchArtist,
+  setLyricsSearchTitle,
+  lyricsOverride,
+  setLyricsOverride,
+  currentTrackArtist,
+  currentTrackTitle,
+  onSeek,
 }: LyricsTabPanelProps) {
   const elapsed = usePlayerStore((s) => s.elapsed);
   const lyricsAdjElapsed = elapsed - lyricsOffsetMs / 1000;
@@ -63,9 +69,14 @@ export function LyricsTabPanel({
     if (!line) return;
     const targetScrollTop = line.offsetTop - container.clientHeight / 2 + line.clientHeight / 2;
     autoScrollingRef.current = true;
-    container.scrollTo({ top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)), behavior: "smooth" });
+    container.scrollTo({
+      top: Math.max(0, Math.min(targetScrollTop, container.scrollHeight - container.clientHeight)),
+      behavior: "smooth",
+    });
     if (resyncTimeoutRef.current) clearTimeout(resyncTimeoutRef.current);
-    resyncTimeoutRef.current = setTimeout(() => { autoScrollingRef.current = false; }, 500);
+    resyncTimeoutRef.current = setTimeout(() => {
+      autoScrollingRef.current = false;
+    }, 500);
   }
 
   useEffect(() => {
@@ -78,7 +89,8 @@ export function LyricsTabPanel({
   const activeLyricIndex = useMemo(() => {
     if (!lyricsLines || lyricsLines.length === 0) return -1;
     const isMatch = (i: number) =>
-      lyricsAdjElapsed >= lyricsLines[i]!.timeSec && (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
+      lyricsAdjElapsed >= lyricsLines[i]!.timeSec &&
+      (i === lyricsLines.length - 1 || lyricsAdjElapsed < lyricsLines[i + 1]!.timeSec);
     // Playback position moves forward almost always, so start the search from the last
     // known index instead of rescanning the whole lyrics file on every 200ms tick.
     const last = activeLyricIndexRef.current;
@@ -108,7 +120,10 @@ export function LyricsTabPanel({
   }
 
   function handleResyncPress() {
-    if (scrollTimeoutRef.current) { clearTimeout(scrollTimeoutRef.current); scrollTimeoutRef.current = null; }
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = null;
+    }
     userScrollingRef.current = false;
     setShowResyncPill(false);
     scrollToActiveLine();

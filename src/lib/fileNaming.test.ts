@@ -2,16 +2,14 @@
 // it exports. Only the stem before the first dot is checked: `player.waste.test.ts` names its
 // module first and its aspect after.
 import { existsSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
 const FEATURES = readdirSync(join(SRC_DIR, "features"));
 const FEATURE_DIRS = FEATURES.flatMap((feature) =>
-  ["lib", "store"]
-    .map((kind) => `features/${feature}/${kind}`)
-    .filter((dir) => existsSync(join(SRC_DIR, dir))),
+  ["lib", "store"].map((kind) => `features/${feature}/${kind}`).filter((dir) => existsSync(join(SRC_DIR, dir))),
 );
 const CHECKED_DIRS = ["lib", "clients", "store", "db", ...FEATURE_DIRS];
 // A feature under ~15 files stays flat, so its components sit beside its logic files: every
@@ -39,7 +37,7 @@ function filesUnder(dir: string): string[] {
   return out.sort();
 }
 
-export function isCamelCaseFileName(name: string): boolean {
+function isCamelCaseFileName(name: string): boolean {
   const stem = name.split(".")[0] ?? "";
   return /^[a-z][a-zA-Z0-9]*$/.test(stem);
 }
@@ -78,8 +76,7 @@ describe.each(FLAT_DIRS)("src/%s file names", (dir) => {
   const files = readdirSync(join(SRC_DIR, dir));
 
   it("are all PascalCase components or camelCase", () => {
-    const isPascalCase = (name: string) =>
-      isCamelCaseFileName(name.charAt(0).toLowerCase() + name.slice(1));
+    const isPascalCase = (name: string) => isCamelCaseFileName(name.charAt(0).toLowerCase() + name.slice(1));
     const offenders = files.filter((name) => !isCamelCaseFileName(name) && !isPascalCase(name));
     expect(offenders).toEqual([]);
   });

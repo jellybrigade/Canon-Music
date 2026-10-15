@@ -17,9 +17,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -33,15 +31,15 @@ vi.mock("./AppRoutes", async () => ({
 vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
+import { usePlayerStore } from "../features/playback/store/player";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { usePlayerStore } from "../features/playback/store/player";
 
 allowSlowAppMounts();
 
@@ -49,10 +47,12 @@ let testDb: FakeDatabase;
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
 }
 
 async function mountApp() {
@@ -104,7 +104,9 @@ describe("App keyboard shortcuts", () => {
     await mountApp();
     expect(paletteInput()).toBeNull();
 
-    await act(async () => { press("k", { ctrlKey: true }); });
+    await act(async () => {
+      press("k", { ctrlKey: true });
+    });
 
     expect(paletteInput()).not.toBeNull();
   });
@@ -112,9 +114,13 @@ describe("App keyboard shortcuts", () => {
   it("opens and focuses the search bar on Ctrl+F when nothing has focus", async () => {
     await mountApp();
 
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     expect(document.activeElement).toBe(searchInput());
   });
@@ -123,12 +129,16 @@ describe("App keyboard shortcuts", () => {
     // The bug: the window listener has no focus guard, so a shortcut fires while the user is
     // typing and `preventDefault` swallows the keystroke rather than merely duplicating it.
     await mountApp();
-    await act(async () => { press("k", { ctrlKey: true }); });
+    await act(async () => {
+      press("k", { ctrlKey: true });
+    });
     const input = paletteInput();
     expect(input).not.toBeNull();
     input!.focus();
 
-    await act(async () => { press("f", { ctrlKey: true, target: input! }); });
+    await act(async () => {
+      press("f", { ctrlKey: true, target: input! });
+    });
 
     expect(searchInput()).toBeNull();
   });
@@ -137,12 +147,16 @@ describe("App keyboard shortcuts", () => {
     // The guard must not cost the palette its toggle: the palette's input is the only thing
     // that can have focus while the palette is open.
     await mountApp();
-    await act(async () => { press("k", { ctrlKey: true }); });
+    await act(async () => {
+      press("k", { ctrlKey: true });
+    });
     const input = paletteInput();
     expect(input).not.toBeNull();
     input!.focus();
 
-    await act(async () => { press("k", { ctrlKey: true, target: input! }); });
+    await act(async () => {
+      press("k", { ctrlKey: true, target: input! });
+    });
 
     expect(paletteInput()).toBeNull();
   });
@@ -153,13 +167,17 @@ describe("App keyboard shortcuts", () => {
     // would strand the user on /search. Escape now navigates back rather than blanking the
     // field in place, so the input is gone, not empty.
     await mountApp();
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
     const input = searchInput()!;
     fireEvent.change(input, { target: { value: "abba" } });
     expect(input.value).toBe("abba");
 
-    await act(async () => { press("Escape", { target: input }); });
+    await act(async () => {
+      press("Escape", { target: input });
+    });
 
     await waitFor(() => expect(searchInput()).toBeNull());
     expect(screen.getByTestId("route-content")).toBeTruthy();
@@ -168,14 +186,18 @@ describe("App keyboard shortcuts", () => {
   it("does not leave search on Escape pressed from an unrelated text input", async () => {
     // Escape inside another field (a rename box, a modal form) belongs to that field.
     await mountApp();
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
     fireEvent.change(searchInput()!, { target: { value: "abba" } });
 
     const stray = document.createElement("input");
     document.body.appendChild(stray);
     stray.focus();
-    await act(async () => { press("Escape", { target: stray }); });
+    await act(async () => {
+      press("Escape", { target: stray });
+    });
     stray.remove();
 
     expect(searchInput()?.value).toBe("abba");
@@ -187,7 +209,9 @@ describe("App keyboard shortcuts", () => {
     await mountApp();
     const before = usePlayerStore.getState().volume;
 
-    await act(async () => { press("ArrowDown", { target: document.body }); });
+    await act(async () => {
+      press("ArrowDown", { target: document.body });
+    });
 
     expect(usePlayerStore.getState().volume).toBeCloseTo(before - 0.05);
   });
@@ -198,12 +222,16 @@ describe("App keyboard shortcuts", () => {
     // then moved the volume as well: being scoped to an open overlay is not the same as
     // owning the key.
     await mountApp();
-    await act(async () => { press("k", { ctrlKey: true }); });
+    await act(async () => {
+      press("k", { ctrlKey: true });
+    });
     expect(paletteInput()).not.toBeNull();
     paletteInput()!.blur();
     const before = usePlayerStore.getState().volume;
 
-    await act(async () => { press("ArrowDown", { target: document.body }); });
+    await act(async () => {
+      press("ArrowDown", { target: document.body });
+    });
 
     expect(usePlayerStore.getState().volume).toBe(before);
   });
@@ -238,12 +266,16 @@ describe("App keyboard shortcuts", () => {
     const { unmount } = await mountApp();
     const afterMount = added.length;
 
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
     fireEvent.change(searchInput()!, { target: { value: "a" } });
     fireEvent.change(searchInput()!, { target: { value: "ab" } });
     fireEvent.change(searchInput()!, { target: { value: "abc" } });
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     expect(added.length).toBe(afterMount);
 

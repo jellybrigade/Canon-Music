@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor } from "@testing-library/react";
+
 import type { Update } from "@tauri-apps/plugin-updater";
-import { UpdatePrompt } from "./UpdatePrompt";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
+import { UpdatePrompt } from "./UpdatePrompt";
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
 // Never resolves: the prompt stays in its installing state for the duration of the case.
@@ -13,7 +14,10 @@ const update = { version: "0.49.0", body: "" } as unknown as Update;
 
 beforeEach(() => {
   __resetModalRegistry();
-  vi.stubGlobal("fetch", vi.fn(() => Promise.reject(new Error("offline"))));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => Promise.reject(new Error("offline"))),
+  );
 });
 afterEach(() => {
   vi.unstubAllGlobals();

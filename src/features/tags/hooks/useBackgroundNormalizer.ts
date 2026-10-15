@@ -1,11 +1,11 @@
 import { useEffect } from "react";
-import { getDb } from "../../../db";
-import { normalizeAlbum } from "../lib/tagNormalize";
-import { runPool } from "../../../lib/asyncPool";
 import { fetchArtistInfo } from "../../../clients/lastfm";
+import { getDb } from "../../../db";
 import { useSetting } from "../../../hooks/useSetting";
-import { useTagsStore } from "../store/tags";
+import { runPool } from "../../../lib/asyncPool";
 import { parseStalenessDays } from "../../../lib/numberSetting";
+import { normalizeAlbum } from "../lib/tagNormalize";
+import { useTagsStore } from "../store/tags";
 
 // No inter-item delay: Last.fm's shared token bucket is the throttle. Concurrency only
 // overlaps local work with its waits; kept low so writes don't starve UI reads.
@@ -44,7 +44,7 @@ async function enrichArtistBackground(artistName: string, lastfmName: string): P
       info.imageUrl,
       gotData ? Math.floor(Date.now() / 1000) : null,
       gotData ? 1 : 0,
-    ]
+    ],
   );
 }
 
@@ -107,7 +107,7 @@ async function queryStale(staleDays: number): Promise<{ albums: AlbumRow[]; arti
      WHERE computed_at IS NULL
         OR computed_at < unixepoch('now', '-' || ? || ' days')
      ORDER BY name`,
-    [staleDays]
+    [staleDays],
   );
   const artists = await db.select<ArtistRow[]>(
     `SELECT DISTINCT a.name,
@@ -117,7 +117,7 @@ async function queryStale(staleDays: number): Promise<{ albums: AlbumRow[]; arti
      WHERE ai.enriched_at IS NULL
         OR ai.enriched_at < unixepoch('now', '-' || ? || ' days')
      ORDER BY a.name`,
-    [staleDays]
+    [staleDays],
   );
   return { albums, artists };
 }
@@ -143,11 +143,11 @@ export function useBackgroundNormalizer() {
       if (total > AUTO_RUN_THRESHOLD) {
         const snoozeDb = await getDb();
         const snoozeRows = await snoozeDb.select<{ value: string }[]>(
-          "SELECT value FROM settings WHERE key = 'enrichment.snooze_until'", []
+          "SELECT value FROM settings WHERE key = 'enrichment.snooze_until'",
+          [],
         );
         const snooze = snoozeRows[0]?.value;
-        const snoozed = snooze === "forever"
-          || (!!snooze && Number(snooze) > Math.floor(Date.now() / 1000));
+        const snoozed = snooze === "forever" || (!!snooze && Number(snooze) > Math.floor(Date.now() / 1000));
         if (!snoozed) setEnrichmentPending(total);
         return;
       }
@@ -160,7 +160,9 @@ export function useBackgroundNormalizer() {
     // the flag latched true and killed the normalizer for the rest of the session.
     void checkStale()
       .catch((e) => console.warn("Background normalizer: stale check failed", e))
-      .finally(() => { isRunning = false; });
+      .finally(() => {
+        isRunning = false;
+      });
 
     // Deliberately no abort-on-cleanup: StrictMode's double mount would otherwise leave the
     // second mount blocked by `isRunning`, still latched until the aborted pass settles.
@@ -176,7 +178,7 @@ export async function runEnrichment(): Promise<void> {
     const db = await getDb();
     const rows = await db.select<{ value: string }[]>(
       "SELECT value FROM settings WHERE key = 'tags.staleness_days'",
-      []
+      [],
     );
     const staleDays = parseStalenessDays(rows[0]?.value);
     const { albums, artists } = await queryStale(staleDays);

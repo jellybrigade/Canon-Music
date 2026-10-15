@@ -3,9 +3,9 @@
 // with no error anywhere, so the start-radio dialog shipped see-through. A fallback only hides the
 // same defect behind a literal. Every custom property read must be declared in a stylesheet or set
 // from TS (inline `style` objects and `setProperty`, both spelled as a quoted `"--name"`).
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -28,7 +28,7 @@ const FILES = sourceFiles(SRC_DIR).map((path) => ({
   text: readFileSync(path, "utf-8"),
 }));
 
-export function definedTokens(text: string): Set<string> {
+function definedTokens(text: string): Set<string> {
   const names = new Set<string>();
   for (const pattern of [/(?<![\w-])(--[\w-]+)\s*:/g, /["'`](--[\w-]+)["'`]/g]) {
     for (const [, name] of text.matchAll(pattern)) if (name) names.add(name);
@@ -36,7 +36,7 @@ export function definedTokens(text: string): Set<string> {
   return names;
 }
 
-export function readTokens(text: string): { line: number; name: string }[] {
+function readTokens(text: string): { line: number; name: string }[] {
   const out: { line: number; name: string }[] = [];
   for (const [index, line] of text.split("\n").entries()) {
     for (const [, name] of line.matchAll(/var\(\s*(--[\w-]+)/g)) if (name) out.push({ line: index + 1, name });

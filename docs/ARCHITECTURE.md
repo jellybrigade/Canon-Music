@@ -25,13 +25,15 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
 | `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`, `numberSetting.ts` (`parseNumberOr`, `parseIntegerOr`, `parseStalenessDays`), `trackCells.ts` (`formatDuration`, zero-safe `durationCell`/`bitrateCell`). |
-| `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. |
+| `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. Every request goes through `boundedFetch.ts`: `boundedFetch` (webview) or `boundedNativeFetch` (`tauri-plugin-http`, for a User-Agent or CORS-blocked hosts); 12 s on headers (`UPLOAD_TIMEOUT_MS` for uploads), 12 s per body chunk, returns a buffered `Response`. `unboundedFetchGuard.test.ts` rejects a bare, `window.` or `globalThis.` `fetch(` and any other `plugin-http` import. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |
 | `src/styles/` | `tokens.css`, `base.css`. |
 | `src/test/` | Harness: `setup.ts`, `sqlite.ts` (in-memory SQLite), `perf.ts` (waste probes), `renderCatching.tsx` (records errors a boundary caught), `mocks/`. |
-| `src/assets/canon-tree.json` | Generated genre DAG (see Genre tree). |
-| `scripts/` | `parse-rym.mjs`, `data/` (RYM txt, `custom-nodes.json`, `tree-renames.json`), `run-local-checks.sh`, `git-hooks/`. |
+| `src/assets/canon-tree.json` | Generated genre DAG (see Genre tree); excluded from Biome so regeneration diffs stay small. |
+| `scripts/` | `parse-rym.mjs`, `data/` (RYM txt, `custom-nodes.json`, `tree-renames.json`), `run-local-checks.sh` (Biome/`cargo fmt`/`clippy --fix` rewrite pass, then checks), `git-hooks/`. Root `biome.jsonc` + `.editorconfig`: 120-col format and lint for TS/CSS/JSON. |
+| `.github/` | `workflows/release.yml` (build + publish on push to main), `workflows/checks.yml` (`run-local-checks.sh --ci`, npm audit, cargo-deny on every push/PR), `dependabot.yml` (npm/cargo weekly, actions monthly, into `development`). `src-tauri/deny.toml`: license allowlist, advisories, git/registry sources. |
+| Root toolchain pins | `package.json` `packageManager` (pnpm), `.node-version`, `rust-toolchain.toml`; CI reads the same files. `prepare` script points `core.hooksPath` at `scripts/git-hooks`. |
 
 Rust (`src-tauri/src/`):
 
@@ -77,7 +79,7 @@ Rust (`src-tauri/src/`):
 - `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load.
 - Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows. They also return `error`: a failed read is never rendered as an empty list or an endless loading line.
 - Sync prune refuses an empty or partial fetch; a failed stage (loved, playlists) leaves stored data untouched and is reported in `skippedStages`.
-- MusicBrainz calls go through `tauri-plugin-http` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
+- MusicBrainz calls go through `boundedNativeFetch` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
 - A DB with a schema version above `LATEST_SCHEMA_VERSION` throws `SchemaTooNewError` (fatal screen, no retry).
 
 ## 5. Feature notes
@@ -106,7 +108,7 @@ Rust (`src-tauri/src/`):
 | Tag issues | `tagIssues.ts` | `scanForIssues` writes `tag_issues` when a sync changed data; nothing reads the table and no UI dismisses rows. |
 | Genre tree | `canonicalize.ts`, `useUserTree.ts`, `genreTreeCarry.ts` | Canon tree + `user_tree_nodes` are resolved together at read time, never merged on disk. User-node delete goes through `delete_user_tree_node`. |
 | Genre tree | `scripts/parse-rym.mjs`, `tree-renames.json` | Renames are data: parser stamps `renames` + hash `version`; at startup `carryGenreTree` runs `carry_genre_renames` once per new version. Dangling ids surface in Review. |
-| Enrichment / MB | `albumIdentify.ts`, `fuzzyMatch.ts`, `useAutoIdentifyAlbum.ts` | `AUTO_CONFIRM_THRESHOLD` 0.90 and `MIN_SCORE_GAP` 0.10; `mb.auto_identify` default true. Zero hits or a weak top score retries with trailing brackets stripped. |
+| Enrichment / MB | `albumIdentify.ts`, `fuzzyMatch.ts`, `useAutoIdentifyAlbum.ts` | `AUTO_CONFIRM_THRESHOLD` 0.90 and `MIN_SCORE_GAP` 0.10; `mb.auto_identify` default true. Zero hits or a weak top score retries with trailing brackets stripped. Auto and the Identify dialog share `pickClearWinner` (a tie goes to the higher release type, album over its same-titled single), differing only in thresholds. Album open waits for tracks and the artist's known MBID before looking up; a failed automatic lookup is retried after `AUTO_IDENTIFY_RETRY_SECONDS` (7 days), a user-confirmed row never. |
 | Enrichment / MB | `artistAutoSelect.ts`, `useEnrichArtist.ts`, `IdentifyDialog.tsx` | Artist auto-select: top MusicBrainz score >= `mb.artist_auto_select_score` (default 95) and no rival within 5; background enrichment saves it, Identify only pre-selects. Otherwise local album overlap decides. In-library artists (artist page, owned similar cards) with no MBID re-run the search once per session even when enrichment is fresh (`identifyIfUnidentified`); a failed search frees the attempt. |
 | Enrichment / MB | `useAlbumIdentity.ts` | `useConfirmedArtistMbid` infers artist MBIDs only from `artist_identity` or manual album matches (`auto_matched = 0`). Enrichment staleness = `tags.staleness_days` (30). |
 | Search | `SearchView.tsx`, `useSearch.ts` | `/search?q=` route; typing replaces history. FTS5 prefix tokens, `"` stripped. bm25 CTE must stay `MATERIALIZED` (pool 2000), then JS re-ranking (text in `()`/`[]` scores a tenth, below any plain match), 200 rows per section. |
@@ -119,7 +121,7 @@ Rust (`src-tauri/src/`):
 | Overlays / modals | `useModalChrome.ts`, `useSearchShortcuts.ts`, `useDismissOnNavigate.ts`, `useAppNavigation.ts` | Modals register in an ordered module registry; only the topmost acts on Escape, and `useAnyModalOpen` feeds `overlayAbove` so /search stands down. Focus restores to the opener only if still connected. The command palette is non-URL state: `useAppNavigation` dismisses it on nav intent, `useDismissOnNavigate` on route-driven navigation (pathname only). |
 | Covers | `cover.rs`, `navidromeUrls.ts`, `useCoverCache.ts` | `getCoverArtUrl` returns `cover://` once proxy config is set; `album_covers`/`artist_covers` are data-URL art caches filled by a background pass (batches of 5). `useAlbumCoverMap` loads only the keyset eagerly; each data_url is fetched on first `.get()` (sync, LRU 2000). |
 | Settings / logs | `useSetting.ts`, `logger.ts`, `settingsBackup.ts` | `useSetting` returns `loaded`; gate expensive work on it. Logger ring buffer (500) flushes to `app_logs` every 3 s when dirty. |
-| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `credentialRejections.ts`, `net_probe.rs` | `apiPost`: 12 s timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). Every envelope goes through `checkEnvelope`, which throws `SubsonicError` carrying `code` and records 40/44 per server (cleared by the next ok envelope or a saved credential); the Settings server card reads it via `useCredentialRejected`. Login pings skip the record; their copy for 40/44 lives in `features/setup/loginFailureMessage.ts`. |
+| Transport | `navidromeTransport.ts`, `transportHealth.ts`, `credentialRejections.ts`, `net_probe.rs` | `apiPost`: `boundedFetch` timeout, 3 attempts, alt URL per attempt, single shot for non-idempotent writes, per-server breaker (ping exempt). Every envelope goes through `checkEnvelope`, which throws `SubsonicError` carrying `code` and records 40/44 per server (cleared by the next ok envelope or a saved credential); the Settings server card reads it via `useCredentialRejected`. Login pings skip the record; their copy for 40/44 lives in `features/setup/loginFailureMessage.ts`. |
 
 ## 6. Genre tree
 
@@ -127,7 +129,7 @@ Rust (`src-tauri/src/`):
 - Sections: genres, descriptors, scenes-and-movements. Top-level `version` + `renames`. Generated by `scripts/parse-rym.mjs` from `scripts/data/rym-hierarchy.txt`; never hand-edited.
 - DAG: a node may have several parents. `getAncestorIds` expands all parents for `album_genres` ancestor rows. User nodes live in `user_tree_nodes` and are resolved beside the canon tree, never merged into it.
 
-## 7. SQLite schema (v52)
+## 7. SQLite schema (v53)
 
 Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids of mirrored rows carry the server prefix.
 

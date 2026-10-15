@@ -16,10 +16,11 @@ export function CredentialNotice({
           {credError ? credError.message : "The stored credential could not be loaded."}
         </p>
         <p className="empty-state-hint">
-          A locked or not-yet-started keyring clears on its own; otherwise re-enter your server
-          password in Settings.
+          A locked or not-yet-started keyring clears on its own; otherwise re-enter your server password in Settings.
         </p>
-        <button className="empty-state-action" onClick={retryCredential}>Try again</button>
+        <button className="empty-state-action" onClick={retryCredential}>
+          Try again
+        </button>
       </div>
     );
   }

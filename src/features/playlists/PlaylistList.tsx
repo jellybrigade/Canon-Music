@@ -1,22 +1,22 @@
-import { useState, useRef, useEffect, useLayoutEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus, Music, ListMusic } from "lucide-react";
-import type { PlaylistRow } from "./usePlaylists";
-import type { ServerWithCredential } from "../../hooks/useServer";
+import { ListMusic, Music, Plus } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
-import { SmartPlaylistModal } from "./SmartPlaylistModal";
-import { ContextMenu } from "../../ui/ContextMenu";
-import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
-import { fileToScaledDataUri } from "../../lib/imageDataUri";
 import { useScrollMemory } from "../../hooks/useScrollMemory";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import { fileToScaledDataUri } from "../../lib/imageDataUri";
+import { ContextMenu } from "../../ui/ContextMenu";
 import { CardGridSkeleton } from "../../ui/Skeleton";
+import { SmartPlaylistModal } from "./SmartPlaylistModal";
+import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
+import type { PlaylistRow } from "./usePlaylists";
 import "./PlaylistList.css";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
-const CARD_MIN = 160;    // minmax(160px, 1fr)
-const GRID_GAP = 16;     // --space-md (row + column gap)
-const GRID_PAD_X = 16;   // --space-md (horizontal padding)
-const ART_MARGIN = 8;    // --space-xs (art margin-bottom)
+const CARD_MIN = 160; // minmax(160px, 1fr)
+const GRID_GAP = 16; // --space-md (row + column gap)
+const GRID_PAD_X = 16; // --space-md (horizontal padding)
+const ART_MARGIN = 8; // --space-xs (art margin-bottom)
 // Info block: name (text-md 18px * 1.5) + gap (--space-2xs 4px) + meta (text-base 16px * 1.5)
 const INFO_HEIGHT = 27 + 4 + 24;
 
@@ -35,7 +35,17 @@ interface Props {
   onSetCustomCover?: (playlistId: string, dataUri: string | null) => Promise<void>;
 }
 
-export function PlaylistList({ playlists: playlistsProp, serverWithCredential, onSelect, onCreatePlaylist, onCreateSmartPlaylist, onDelete, onRename, onUpdateSmartRules, onSetCustomCover }: Props) {
+export function PlaylistList({
+  playlists: playlistsProp,
+  serverWithCredential,
+  onSelect,
+  onCreatePlaylist,
+  onCreateSmartPlaylist,
+  onDelete,
+  onRename,
+  onUpdateSmartRules,
+  onSetCustomCover,
+}: Props) {
   const isLoading = playlistsProp === undefined;
   const playlists = useMemo(() => playlistsProp ?? [], [playlistsProp]);
   const { server, credential } = serverWithCredential;
@@ -52,10 +62,7 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
   const [editSmartPlaylist, setEditSmartPlaylist] = useState<PlaylistRow | null>(null);
   // Parsed outside the render body's JSX: an unparseable `rules_json` used to throw from
   // inside the element tree, which the ErrorBoundary turns into a blank playlists page.
-  const editSmartRules = useMemo(
-    () => parseSmartFilters(editSmartPlaylist?.rules_json ?? null),
-    [editSmartPlaylist]
-  );
+  const editSmartRules = useMemo(() => parseSmartFilters(editSmartPlaylist?.rules_json ?? null), [editSmartPlaylist]);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const coverTargetId = useRef<string | null>(null);
@@ -93,8 +100,7 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
 
   const rows = useMemo<PlaylistRow[][]>(() => {
     const result: PlaylistRow[][] = [];
-    for (let i = 0; i < playlists.length; i += cols)
-      result.push(playlists.slice(i, i + cols));
+    for (let i = 0; i < playlists.length; i += cols) result.push(playlists.slice(i, i + cols));
     return result;
   }, [playlists, cols]);
 
@@ -117,7 +123,9 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
     }
   }, [cols, rowHeight, rows.length, scrollMargin, virtualizer]);
 
-  useEffect(() => { if (renamingId) renameInputRef.current?.focus(); }, [renamingId]);
+  useEffect(() => {
+    if (renamingId) renameInputRef.current?.focus();
+  }, [renamingId]);
 
   function handleContextMenu(e: React.MouseEvent, playlist: PlaylistRow) {
     e.preventDefault();
@@ -197,19 +205,11 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
   return (
     <div className="playlist-list" ref={containerRef}>
       <div className="playlist-list-toolbar">
-        <button
-          className="playlist-create-btn"
-          onClick={() => setCreating((v) => !v)}
-          title="New playlist"
-        >
+        <button className="playlist-create-btn" onClick={() => setCreating((v) => !v)} title="New playlist">
           <Plus size={16} />
           New Playlist
         </button>
-        <button
-          className="playlist-create-btn"
-          onClick={() => setShowSmartModal(true)}
-          title="New smart playlist"
-        >
+        <button className="playlist-create-btn" onClick={() => setShowSmartModal(true)} title="New smart playlist">
           <ListMusic size={16} />
           Smart Playlist
         </button>
@@ -223,7 +223,9 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
             placeholder="Playlist name…"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Escape") handleCancelCreate(); }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") handleCancelCreate();
+            }}
           />
           <button type="submit" disabled={!newName.trim() || saving}>
             {saving ? "Creating…" : "Create"}
@@ -247,8 +249,8 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
         <div className="empty-state">
           <p className="empty-state-title">No playlists yet</p>
           <p className="empty-state-hint">
-            Create one with New Playlist above. Playlists already on your server appear here after
-            the next library sync.
+            Create one with New Playlist above. Playlists already on your server appear here after the next library
+            sync.
           </p>
         </div>
       )}
@@ -273,8 +275,9 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
                 }}
               >
                 {rowItems.map((pl) => {
-                  const artUrl = pl.custom_cover_data
-                    ?? (pl.cover_art_url
+                  const artUrl =
+                    pl.custom_cover_data ??
+                    (pl.cover_art_url
                       ? getCoverArtUrl(server.url, server.username, credential, pl.cover_art_url, 300)
                       : null);
                   return (
@@ -303,7 +306,10 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
                             onChange={(e) => setRenameValue(e.target.value)}
                             onBlur={() => void commitRename(pl)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") { e.preventDefault(); void commitRename(pl); }
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                void commitRename(pl);
+                              }
                               if (e.key === "Escape") setRenamingId(null);
                             }}
                           />
@@ -311,7 +317,8 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
                           <span className="playlist-card-name">{pl.name}</span>
                         )}
                         <span className="playlist-card-meta">
-                          {pl.is_smart ? "Smart · " : ""}{pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
+                          {pl.is_smart ? "Smart · " : ""}
+                          {pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
                         </span>
                       </div>
                     </button>
@@ -329,27 +336,36 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
         />
       )}
       {contextMenu && (
-        <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => { setContextMenu(null); setConfirmDeleteId(null); }}>
-          <button onClick={() => { onSelect(contextMenu.playlist); setContextMenu(null); }}>
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => {
+            setContextMenu(null);
+            setConfirmDeleteId(null);
+          }}
+        >
+          <button
+            onClick={() => {
+              onSelect(contextMenu.playlist);
+              setContextMenu(null);
+            }}
+          >
             Open
           </button>
-          {onRename && (
-            <button onClick={() => startRename(contextMenu.playlist)}>
-              Rename
-            </button>
-          )}
+          {onRename && <button onClick={() => startRename(contextMenu.playlist)}>Rename</button>}
           {onUpdateSmartRules && !!contextMenu.playlist.is_smart && (
-            <button onClick={() => { setEditSmartPlaylist(contextMenu.playlist); setContextMenu(null); }}>
+            <button
+              onClick={() => {
+                setEditSmartPlaylist(contextMenu.playlist);
+                setContextMenu(null);
+              }}
+            >
               Edit Smart Rules
             </button>
           )}
-          {onSetCustomCover && (
-            <button onClick={() => pickCover(contextMenu.playlist)}>
-              Set Cover
-            </button>
-          )}
-          {onDelete && (
-            confirmDeleteId === contextMenu.playlist.id ? (
+          {onSetCustomCover && <button onClick={() => pickCover(contextMenu.playlist)}>Set Cover</button>}
+          {onDelete &&
+            (confirmDeleteId === contextMenu.playlist.id ? (
               <button className="context-menu-danger" onClick={() => void handleDelete(contextMenu.playlist)}>
                 Delete for real?
               </button>
@@ -357,17 +373,10 @@ export function PlaylistList({ playlists: playlistsProp, serverWithCredential, o
               <button className="context-menu-danger" onClick={() => setConfirmDeleteId(contextMenu.playlist.id)}>
                 Delete
               </button>
-            )
-          )}
+            ))}
         </ContextMenu>
       )}
-      <input
-        ref={coverInputRef}
-        type="file"
-        accept="image/*"
-        style={{ display: "none" }}
-        onChange={handleCoverPick}
-      />
+      <input ref={coverInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handleCoverPick} />
       {editSmartPlaylist && onUpdateSmartRules && editSmartRules && (
         <SmartPlaylistModal
           title="Edit Smart Playlist"

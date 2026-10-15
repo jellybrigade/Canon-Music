@@ -1,42 +1,49 @@
-import { useMemo, useRef, useState, useCallback } from "react";
 import { Search, X } from "lucide-react";
-import { CanonIcon } from "../ui/CanonIcon";
-import { useSetting } from "../hooks/useSetting";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
-import { sampleFromHead } from "../lib/shuffle";
-import type { ForYouCategoryConfig } from "../lib/forYouGroups";
-import { useForYouGroups } from "../hooks/useForYouGroups";
-import type { ServerWithCredential } from "../hooks/useServer";
-import type { AlbumRow, ArtistRow } from "../types/library";
+import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
+import { usePlayerStore } from "../features/playback/store/player";
+import type { CurrentTrack, RadioMode } from "../features/playback/store/playerTypes";
+import { usePlaylists } from "../features/playlists/usePlaylists";
+import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
+import { useStartRadio } from "../features/radio/hooks/useStartRadio";
+import { SearchResults } from "../features/search/SearchResults";
+import { useSearch } from "../features/search/useSearch";
+import type { RunSyncOptions, SyncStatus } from "../features/sync/useLibrarySync";
 import { useAlbums } from "../hooks/useAlbums";
 import { useCarouselAlbums } from "../hooks/useCarouselAlbums";
+import { useForYouGroups } from "../hooks/useForYouGroups";
+import { useRecentGenres } from "../hooks/useGenres";
 import { useListeningStats } from "../hooks/useListeningStats";
 import { useLoved } from "../hooks/useLoved";
-import { usePlayAlbum, useAddAlbumToQueue } from "../hooks/usePlayAlbum";
-import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
+import { useAddAlbumToQueue, usePlayAlbum } from "../hooks/usePlayAlbum";
 import { useRecentlyReleasedAlbums } from "../hooks/useRecentlyReleasedAlbums";
-import { useRecentGenres } from "../hooks/useGenres";
-import { usePlayerStore } from "../features/playback/store/player";
-import { useStartRadio } from "../features/radio/hooks/useStartRadio";
-import type { RadioMode, CurrentTrack } from "../features/playback/store/playerTypes";
-import { useSearch } from "../features/search/useSearch";
+import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
+import type { ServerWithCredential } from "../hooks/useServer";
+import { useSetting } from "../hooks/useSetting";
+import type { ForYouCategoryConfig } from "../lib/forYouGroups";
+import { sampleFromHead } from "../lib/shuffle";
 import { makeStreamUrlBuilder } from "../lib/track";
-import { SearchResults } from "../features/search/SearchResults";
+import type { AlbumRow, ArtistRow } from "../types/library";
+import { CanonIcon } from "../ui/CanonIcon";
 import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
-import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
-import { usePlaylists } from "../features/playlists/usePlaylists";
-import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
-import { type SpotlightPick, naviToAlbumRow, stripFeaturedArtists, buildSpotlightCandidates, dedupePicks, Spotlight } from "./home/Spotlight";
-import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, mergeForYouConfig, ForYouRail } from "./home/ForYouRail";
-import { GenreChipsLine } from "./home/GenreChipsLine";
-import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
 import { AlbumCarousel } from "./home/AlbumCarousel";
+import { DEFAULT_FOR_YOU_CONFIG, DEFAULT_FOR_YOU_CONFIG_JSON, ForYouRail, mergeForYouConfig } from "./home/ForYouRail";
+import { getForYouSeed, nextForYouSeed } from "./home/forYouSeed";
+import { GenreChipsLine } from "./home/GenreChipsLine";
+import {
+  buildSpotlightCandidates,
+  dedupePicks,
+  naviToAlbumRow,
+  Spotlight,
+  type SpotlightPick,
+  stripFeaturedArtists,
+} from "./home/Spotlight";
 import { useNewAlbumsCheck } from "./home/useNewAlbumsCheck";
-import type { RunSyncOptions, SyncStatus } from "../features/sync/useLibrarySync";
 import "./HomeView.css";
 import "./GenreView.css";
-import { replayGainFromRow } from "../lib/replayGainRow";
 import { loadGenreSeedTracks } from "../features/radio/lib/genreSeed";
+import { replayGainFromRow } from "../lib/replayGainRow";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -63,15 +70,28 @@ function getGreeting(): string {
   return "Good evening";
 }
 
-export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onStartRadioFromArtist, onPlayTrack, onOpenCommandPalette, homeSearchRaw, homeSearchQuery, onHomeSearchRawChange, syncStatus, runSync }: Props) {
+export function HomeView({
+  serverWithCredential,
+  onSelectAlbum,
+  onSelectArtist,
+  onStartRadio,
+  onStartRadioFromArtist,
+  onPlayTrack,
+  onOpenCommandPalette,
+  homeSearchRaw,
+  homeSearchQuery,
+  onHomeSearchRawChange,
+  syncStatus,
+  runSync,
+}: Props) {
   const { server, credential } = serverWithCredential;
-  const currentTrack = usePlayerStore(s => s.currentTrack);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const startRadio = useStartRadio();
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(getForYouSeed);
   const refreshForYou = useCallback(() => setForYouSeed(nextForYouSeed()), []);
   const [vaultSeed, setVaultSeed] = useState(0);
-  const refreshVault = useCallback(() => setVaultSeed(s => s + 1), []);
+  const refreshVault = useCallback(() => setVaultSeed((s) => s + 1), []);
 
   const [rawCategoryConfig, setRawCategoryConfig] = useSetting("for_you_categories", DEFAULT_FOR_YOU_CONFIG_JSON);
   const categoryConfig = useMemo<ForYouCategoryConfig[]>(() => {
@@ -83,9 +103,12 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       return DEFAULT_FOR_YOU_CONFIG;
     }
   }, [rawCategoryConfig]);
-  const handleForYouConfigChange = useCallback((config: ForYouCategoryConfig[]) => {
-    void setRawCategoryConfig(JSON.stringify(config));
-  }, [setRawCategoryConfig]);
+  const handleForYouConfigChange = useCallback(
+    (config: ForYouCategoryConfig[]) => {
+      void setRawCategoryConfig(JSON.stringify(config));
+    },
+    [setRawCategoryConfig],
+  );
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
   const openCardContextMenu = useCallback((e: React.MouseEvent, album: AlbumRow) => {
@@ -101,27 +124,39 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const { data: allAlbums, isLoading: allLoading } = useAlbums("recently_added");
   const { data: recentlyReleasedRaw, isLoading: recentlyReleasedLoading } = useRecentlyReleasedAlbums();
   const { genres: recentGenres, error: recentGenresError, retry: retryRecentGenres } = useRecentGenres();
-  const { onRepeat, rediscover, vault, hiddenGem, finishTheAlbum, almostDone, playedAlbumIds, isLoading: statsLoading } = useListeningStats();
+  const {
+    onRepeat,
+    rediscover,
+    vault,
+    hiddenGem,
+    finishTheAlbum,
+    almostDone,
+    playedAlbumIds,
+    isLoading: statsLoading,
+  } = useListeningStats();
   const { lovedAlbumIds, lovedTrackAlbumIds } = useLoved();
 
-  const recentItems = useMemo(
-    () => recentRaw?.map(a => naviToAlbumRow(a, server.id)),
-    [recentRaw, server.id]
-  );
+  const recentItems = useMemo(() => recentRaw?.map((a) => naviToAlbumRow(a, server.id)), [recentRaw, server.id]);
 
   const unplayedWithArt = useMemo(
-    () => allAlbums?.filter(a => a.artwork_url && !playedAlbumIds.has(a.id)) ?? [],
-    [allAlbums, playedAlbumIds]
+    () => allAlbums?.filter((a) => a.artwork_url && !playedAlbumIds.has(a.id)) ?? [],
+    [allAlbums, playedAlbumIds],
   );
 
   const spotlightCandidates = useMemo(
-    () => buildSpotlightCandidates(
-      currentTrack?.artist ?? null,
-      currentTrack?.albumId ?? null,
-      onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id,
-      unplayedWithArt,
-    ),
-    [currentTrack, onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id, unplayedWithArt]
+    () =>
+      buildSpotlightCandidates(
+        currentTrack?.artist ?? null,
+        currentTrack?.albumId ?? null,
+        onRepeat,
+        rediscover,
+        recentRaw,
+        frequentRaw,
+        allAlbums,
+        server.id,
+        unplayedWithArt,
+      ),
+    [currentTrack, onRepeat, rediscover, recentRaw, frequentRaw, allAlbums, server.id, unplayedWithArt],
   );
 
   const currentAlbumId = currentTrack?.albumId ?? null;
@@ -141,12 +176,8 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       artwork_url: recommendedAlbum.artwork_url,
       accent_color: recommendedAlbum.accent_color,
     };
-    const primaryArtist = currentTrack.artist
-      ? stripFeaturedArtists(currentTrack.artist)
-      : null;
-    const kicker = primaryArtist
-      ? `Because you're listening to ${primaryArtist}`
-      : "You might also like";
+    const primaryArtist = currentTrack.artist ? stripFeaturedArtists(currentTrack.artist) : null;
+    const kicker = primaryArtist ? `Because you're listening to ${primaryArtist}` : "You might also like";
     return { kicker, album };
   }, [currentTrack, recommendedAlbum, server.id]);
 
@@ -161,14 +192,13 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   }, [allAlbums]);
 
   const spotlightPicks = useMemo(
-    () => dedupePicks(
-      recommendedPick ? [recommendedPick, ...spotlightCandidates] : spotlightCandidates,
-      3
-    ).map(pick => pick.album.accent_color
-      ? pick
-      : { ...pick, album: { ...pick.album, accent_color: accentByAlbumId.get(pick.album.id) ?? null } }
-    ),
-    [recommendedPick, spotlightCandidates, accentByAlbumId]
+    () =>
+      dedupePicks(recommendedPick ? [recommendedPick, ...spotlightCandidates] : spotlightCandidates, 3).map((pick) =>
+        pick.album.accent_color
+          ? pick
+          : { ...pick, album: { ...pick.album, accent_color: accentByAlbumId.get(pick.album.id) ?? null } },
+      ),
+    [recommendedPick, spotlightCandidates, accentByAlbumId],
   );
   const primarySpotlight = spotlightPicks[0] ?? null;
   const secondarySpotlights = spotlightPicks.slice(1);
@@ -176,10 +206,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
   const handleAddToQueue = useAddAlbumToQueue(serverWithCredential);
   const { data: playlists, addAlbumToPlaylist } = usePlaylists();
 
-  const lovedItems = useMemo(
-    () => allAlbums?.filter(a => lovedAlbumIds.has(a.id)),
-    [allAlbums, lovedAlbumIds]
-  );
+  const lovedItems = useMemo(() => allAlbums?.filter((a) => lovedAlbumIds.has(a.id)), [allAlbums, lovedAlbumIds]);
   // Loved-sort fix: explicitly-loved albums come before track-only-loved albums
   const lovedSource = useMemo(() => {
     if (!allAlbums) return undefined;
@@ -206,51 +233,91 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
       if (!cat.customFilter) continue;
       const f = cat.customFilter;
       if (f.type === "decade") {
-        result[cat.key] = allAlbums.filter(a => a.artwork_url && a.year != null && a.year >= f.decade && a.year < f.decade + 10);
+        result[cat.key] = allAlbums.filter(
+          (a) => a.artwork_url && a.year != null && a.year >= f.decade && a.year < f.decade + 10,
+        );
       } else if (f.type === "artist") {
         const lower = f.artist.toLowerCase();
-        result[cat.key] = allAlbums.filter(a => a.artwork_url && a.artist?.toLowerCase().includes(lower));
+        result[cat.key] = allAlbums.filter((a) => a.artwork_url && a.artist?.toLowerCase().includes(lower));
       }
     }
     return result;
   }, [allAlbums, categoryConfig]);
 
-  const forYouSources = useMemo<Record<string, AlbumRow[]>>(() => ({
-    "jump-back-in":     recentItems ?? [],
-    "on-repeat":        onRepeat as AlbumRow[],
-    "rediscover":       rediscover as AlbumRow[],
-    "finish-the-album": finishTheAlbum as AlbumRow[],
-    "hidden-gem":       hiddenGem as AlbumRow[],
-    "loved":            lovedSource ?? [],
-    "unplayed":         unplayedWithArt,
-    "almost-done":      almostDone as AlbumRow[],
-    ...customCategorySources,
-  }), [recentItems, onRepeat, rediscover, finishTheAlbum, hiddenGem, lovedSource, unplayedWithArt, almostDone, customCategorySources]);
+  const forYouSources = useMemo<Record<string, AlbumRow[]>>(
+    () => ({
+      "jump-back-in": recentItems ?? [],
+      "on-repeat": onRepeat as AlbumRow[],
+      rediscover: rediscover as AlbumRow[],
+      "finish-the-album": finishTheAlbum as AlbumRow[],
+      "hidden-gem": hiddenGem as AlbumRow[],
+      loved: lovedSource ?? [],
+      unplayed: unplayedWithArt,
+      "almost-done": almostDone as AlbumRow[],
+      ...customCategorySources,
+    }),
+    [
+      recentItems,
+      onRepeat,
+      rediscover,
+      finishTheAlbum,
+      hiddenGem,
+      lovedSource,
+      unplayedWithArt,
+      almostDone,
+      customCategorySources,
+    ],
+  );
 
-  const spotlightIds = useMemo(() => spotlightPicks.map(p => p.album.id), [spotlightPicks]);
-  const { groups: forYouGroups, perTab: forYouPerTab, setPerTab: setForYouPerTab } =
-    useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
+  const spotlightIds = useMemo(() => spotlightPicks.map((p) => p.album.id), [spotlightPicks]);
+  const {
+    groups: forYouGroups,
+    perTab: forYouPerTab,
+    setPerTab: setForYouPerTab,
+  } = useForYouGroups(spotlightIds, forYouSources, categoryConfig, forYouSeed);
   const onRepeatItems = useMemo(() => onRepeat.slice(0, 20) as AlbumRow[], [onRepeat]);
   const newestItems = useMemo(() => allAlbums?.slice(0, 20), [allAlbums]);
-  const newAlbumsCheck = useNewAlbumsCheck({ serverWithCred: serverWithCredential, runSync, items: newestItems, syncStatus });
-  const vaultItems = useMemo(() => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[], [vault, vaultSeed]);
+  const newAlbumsCheck = useNewAlbumsCheck({
+    serverWithCred: serverWithCredential,
+    runSync,
+    items: newestItems,
+    syncStatus,
+  });
+  const vaultItems = useMemo(
+    () => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[],
+    [vault, vaultSeed],
+  );
 
   const featuredGenres = recentGenres;
 
-  const handlePlayGenre = useCallback(async (canonicalId: string, genreLabel?: string) => {
-    const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
-    const t = rows[0];
-    if (!t) return;
-    const coverArtUrl = t.artwork_url
-      ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
-      : null;
-    const track: CurrentTrack = {
-      id: t.id, title: t.title, artist: t.artist, duration: t.duration,
-      coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
-      replayGain: replayGainFromRow(t),
-    };
-    await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(server, credential), mode: "same-genre", label: genreLabel });
-  }, [server, credential, startRadio]);
+  const handlePlayGenre = useCallback(
+    async (canonicalId: string, genreLabel?: string) => {
+      const rows = await loadGenreSeedTracks({ serverId: server.id, canonicalId, isDirectOnly: true, limit: 1 });
+      const t = rows[0];
+      if (!t) return;
+      const coverArtUrl = t.artwork_url
+        ? getCoverArtUrl(server.url, server.username, credential, t.artwork_url, 64)
+        : null;
+      const track: CurrentTrack = {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        duration: t.duration,
+        coverArtUrl,
+        artworkRef: t.artwork_url ?? null,
+        album: t.album_name ?? null,
+        albumId: t.album_id,
+        replayGain: replayGainFromRow(t),
+      };
+      await startRadio({
+        tracks: [track],
+        streamUrlFor: makeStreamUrlBuilder(server, credential),
+        mode: "same-genre",
+        label: genreLabel,
+      });
+    },
+    [server, credential, startRadio],
+  );
 
   const play = (album: AlbumRow) => void playAlbum(album);
 
@@ -275,11 +342,23 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
               onChange={(e) => onHomeSearchRawChange(e.target.value)}
             />
             {homeSearchRaw ? (
-              <button className="search-bar-clear" onClick={(e) => { searchInputRef.current?.blur(); e.currentTarget.blur(); onHomeSearchRawChange(""); }} title="Clear">
+              <button
+                className="search-bar-clear"
+                onClick={(e) => {
+                  searchInputRef.current?.blur();
+                  e.currentTarget.blur();
+                  onHomeSearchRawChange("");
+                }}
+                title="Clear"
+              >
                 <X size={13} />
               </button>
             ) : (
-              <button className="home-search-palette-hint" onClick={onOpenCommandPalette} title="Command palette: search tracks, artists, albums, and navigate anywhere">
+              <button
+                className="home-search-palette-hint"
+                onClick={onOpenCommandPalette}
+                title="Command palette: search tracks, artists, albums, and navigate anywhere"
+              >
                 <kbd>⌘K</kbd>
               </button>
             )}
@@ -305,7 +384,7 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
               />
               {secondarySpotlights.length > 0 && (
                 <div className="home-fusion__spotlights-secondary">
-                  {secondarySpotlights.map(pick => (
+                  {secondarySpotlights.map((pick) => (
                     <Spotlight
                       key={pick.album.id}
                       pick={pick}
@@ -325,7 +404,9 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
         {!isSearching && recentGenresError && featuredGenres.length === 0 && (
           <section className="home-genres-section home-genres-section--error">
             <p className="home-genres-error">Couldn't load your recent genres: {recentGenresError}</p>
-            <button className="home-genres-retry" onClick={retryRecentGenres}>Try again</button>
+            <button className="home-genres-retry" onClick={retryRecentGenres}>
+              Try again
+            </button>
           </section>
         )}
         {!isSearching && featuredGenres.length > 0 && (
@@ -345,7 +426,10 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             artists={searchResults.artists}
             serverWithCredential={serverWithCredential}
             onSelectAlbum={onSelectAlbum}
-            onSelectArtist={(artist) => { onHomeSearchRawChange(""); onSelectArtist?.(artist.name); }}
+            onSelectArtist={(artist) => {
+              onHomeSearchRawChange("");
+              onSelectArtist?.(artist.name);
+            }}
             onPlayTrack={onPlayTrack}
             onStartRadioFromAlbum={(album, mode) => onStartRadio(album, mode)}
             onStartRadioFromArtist={(artist, mode) => onStartRadioFromArtist(artist, mode)}
@@ -372,38 +456,146 @@ export function HomeView({ serverWithCredential, onSelectAlbum, onSelectArtist, 
             onPerTabChange={setForYouPerTab}
           />
 
-          <AlbumCarousel title="Recently Played" subtitle="Where you left off" items={recentItems} isLoading={recentLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="On Repeat" subtitle="Your most-played" items={onRepeatItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Loved" subtitle="Starred albums" items={lovedItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Newly Added" subtitle="Fresh arrivals" refresh={{ onClick: newAlbumsCheck.checkForNewAlbums, label: "Check for new albums", isBusy: newAlbumsCheck.isChecking, note: newAlbumsCheck.note, noteDetail: newAlbumsCheck.noteDetail }} scrollToStartRequest={newAlbumsCheck.scrollToStartRequest} items={newestItems} isLoading={allLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="Recently Released" subtitle="Sorted by release year" items={recentlyReleasedRaw} isLoading={recentlyReleasedLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
-          <AlbumCarousel title="From the Vault" subtitle="Long-forgotten listens" refresh={{ onClick: refreshVault, label: "Refresh From the Vault" }} items={vaultItems} isLoading={statsLoading} serverWithCred={serverWithCredential} onSelectAlbum={onSelectAlbum} playAlbum={play} onCardContextMenu={openCardContextMenu} onRadio={() => { const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))]; if (a) onStartRadio(a, "same-genre"); }} />
+          <AlbumCarousel
+            title="Recently Played"
+            subtitle="Where you left off"
+            items={recentItems}
+            isLoading={recentLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = recentItems?.[Math.floor(Math.random() * (recentItems?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
+          <AlbumCarousel
+            title="On Repeat"
+            subtitle="Your most-played"
+            items={onRepeatItems}
+            isLoading={statsLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = onRepeatItems?.[Math.floor(Math.random() * (onRepeatItems?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
+          <AlbumCarousel
+            title="Loved"
+            subtitle="Starred albums"
+            items={lovedItems}
+            isLoading={allLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = lovedItems?.[Math.floor(Math.random() * (lovedItems?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
+          <AlbumCarousel
+            title="Newly Added"
+            subtitle="Fresh arrivals"
+            refresh={{
+              onClick: newAlbumsCheck.checkForNewAlbums,
+              label: "Check for new albums",
+              isBusy: newAlbumsCheck.isChecking,
+              note: newAlbumsCheck.note,
+              noteDetail: newAlbumsCheck.noteDetail,
+            }}
+            scrollToStartRequest={newAlbumsCheck.scrollToStartRequest}
+            items={newestItems}
+            isLoading={allLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = newestItems?.[Math.floor(Math.random() * (newestItems?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
+          <AlbumCarousel
+            title="Recently Released"
+            subtitle="Sorted by release year"
+            items={recentlyReleasedRaw}
+            isLoading={recentlyReleasedLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = recentlyReleasedRaw?.[Math.floor(Math.random() * (recentlyReleasedRaw?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
+          <AlbumCarousel
+            title="From the Vault"
+            subtitle="Long-forgotten listens"
+            refresh={{ onClick: refreshVault, label: "Refresh From the Vault" }}
+            items={vaultItems}
+            isLoading={statsLoading}
+            serverWithCred={serverWithCredential}
+            onSelectAlbum={onSelectAlbum}
+            playAlbum={play}
+            onCardContextMenu={openCardContextMenu}
+            onRadio={() => {
+              const a = vaultItems?.[Math.floor(Math.random() * (vaultItems?.length ?? 0))];
+              if (a) onStartRadio(a, "same-genre");
+            }}
+          />
         </>
       )}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          <button onClick={() => { onSelectAlbum(contextMenu.album); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelectAlbum(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
             Open album
           </button>
-          <button onClick={() => { handleAddToQueue(contextMenu.album); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              handleAddToQueue(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
             Add to Queue
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
+            onSelect={(mode) => {
+              onStartRadio(contextMenu.album, mode);
+              setContextMenu(null);
+            }}
           />
           {playlists && playlists.length > 0 && (
             <ContextMenuSubmenu label="Add to Playlist">
               {playlists.map((pl) => (
                 <button
                   key={pl.id}
-                  onClick={() => { void addAlbumToPlaylist(pl, contextMenu.album.id, serverWithCredential); setContextMenu(null); }}
+                  onClick={() => {
+                    void addAlbumToPlaylist(pl, contextMenu.album.id, serverWithCredential);
+                    setContextMenu(null);
+                  }}
                 >
                   {pl.name}
                 </button>
               ))}
             </ContextMenuSubmenu>
           )}
-          <button onClick={() => { setIdentifyAlbum(contextMenu.album); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              setIdentifyAlbum(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
             Identify on MusicBrainz…
           </button>
         </ContextMenu>

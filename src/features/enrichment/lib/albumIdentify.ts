@@ -1,21 +1,16 @@
 import {
-  searchReleaseGroups,
-  lookupReleaseGroup,
-  lookupRelease,
   combineGenres,
-  type MbReleaseGroupDetail,
-  type MbReleaseDetail,
+  lookupRelease,
+  lookupReleaseGroup,
   type MbGenre,
+  type MbReleaseDetail,
   type MbReleaseGroupCandidate,
+  type MbReleaseGroupDetail,
+  searchReleaseGroups,
 } from "../../../clients/musicbrainz";
-import { rankCandidates, filterByTrackCount } from "./fuzzyMatch";
+import { filterByTrackCount, pickClearWinner, rankCandidates } from "./fuzzyMatch";
 
-export type AutoDecision =
-  | "auto_confirmed"
-  | "not_found"
-  | "ambiguous"
-  | "needs_review"
-  | "error";
+export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
 
 export interface AutoIdentifyResult {
   decision: AutoDecision;
@@ -28,11 +23,22 @@ export interface AutoIdentifyResult {
   error: string | null;
 }
 
-const AUTO_CONFIRM_THRESHOLD = 0.90;
-const MIN_SCORE_GAP = 0.10;
+const AUTO_CONFIRM_THRESHOLD = 0.9;
+const MIN_SCORE_GAP = 0.1;
+export const AUTO_IDENTIFY_RETRY_SECONDS = 7 * 24 * 60 * 60;
+
+/** Never looked up, or an automatic lookup that found nothing long enough ago that MusicBrainz may have it now. */
+export function needsAutoIdentify(
+  identity: { mb_release_group_id: string | null; confirmed_at: number | null; looked_up_at: number | null } | null,
+  nowSeconds: number,
+): boolean {
+  if (identity === null) return true;
+  if (identity.mb_release_group_id !== null || identity.confirmed_at !== null) return false;
+  return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
+}
 
 export function stripTrailingBrackets(title: string): string | null {
-  const stripped = title.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
+  const stripped = title.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
   return stripped !== title && stripped.length > 0 ? stripped : null;
 }
 
@@ -63,7 +69,16 @@ export async function autoIdentifyAlbum({
     }
 
     if (candidates.length === 0) {
-      return { decision: "not_found", score: 0, top: null, detail: null, release: null, combinedGenres: [], combinedTags: [], error: null };
+      return {
+        decision: "not_found",
+        score: 0,
+        top: null,
+        detail: null,
+        release: null,
+        combinedGenres: [],
+        combinedTags: [],
+        error: null,
+      };
     }
 
     candidates = filterByTrackCount(candidates, trackCount);
@@ -85,22 +100,27 @@ export async function autoIdentifyAlbum({
     }
 
     const top = ranked[0]!;
-    const second = ranked[1];
-    const gap = second ? top.score - second.score : Infinity;
 
-    if (top.score < AUTO_CONFIRM_THRESHOLD || gap < MIN_SCORE_GAP) {
-      const decision = top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous";
-      return { decision, score: top.score, top: top.candidate, detail: null, release: null, combinedGenres: [], combinedTags: [], error: null };
+    if (!pickClearWinner(ranked, { minScore: AUTO_CONFIRM_THRESHOLD, minGap: MIN_SCORE_GAP })) {
+      return {
+        decision: top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous",
+        score: top.score,
+        top: top.candidate,
+        detail: null,
+        release: null,
+        combinedGenres: [],
+        combinedTags: [],
+        error: null,
+      };
     }
 
     const rgDetail = await lookupReleaseGroup(top.candidate.id);
 
     // Dated release is the likely canonical pressing, but bonus/live/reissue editions
     // share the same dated entry with different tracklists; try a couple more on mismatch.
-    const orderedReleaseIds = [
-      rgDetail.releases.find((r) => r.date)?.id,
-      ...rgDetail.releases.map((r) => r.id),
-    ].filter((id, i, arr): id is string => id != null && arr.indexOf(id) === i);
+    const orderedReleaseIds = [rgDetail.releases.find((r) => r.date)?.id, ...rgDetail.releases.map((r) => r.id)].filter(
+      (id, i, arr): id is string => id != null && arr.indexOf(id) === i,
+    );
 
     let releaseDetail: MbReleaseDetail | null = null;
     for (const candidateReleaseId of orderedReleaseIds.slice(0, 3)) {
@@ -120,11 +140,7 @@ export async function autoIdentifyAlbum({
 
     // Title similarity can't distinguish a same-titled deluxe/live edition;
     // downgrade to manual review if no tried release's track count matches.
-    if (
-      trackCount > 0 &&
-      releaseDetail?.trackCount &&
-      Math.abs(releaseDetail.trackCount - trackCount) > 1
-    ) {
+    if (trackCount > 0 && releaseDetail?.trackCount && Math.abs(releaseDetail.trackCount - trackCount) > 1) {
       return {
         decision: "needs_review",
         score: top.score,

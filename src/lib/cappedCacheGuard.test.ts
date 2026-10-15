@@ -9,9 +9,9 @@
 // the write is `>= MAX` and needs an explicit `!cache.has(key)` beside it, while a cap checked
 // *after* a delete-then-set write is `> MAX` and is already overwrite-safe (re-inserting refreshes
 // insertion order, and the size only exceeds the cap when the write genuinely added an entry).
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -41,7 +41,7 @@ const OWNER = "lib/boundedCache.ts";
  * Pre-write cap checks: a `.size >= <cap>` whose eviction (`keys().next()`) follows within three
  * lines. Reports only the ones missing a same-line `.has(` guard, which is the defect.
  */
-export function unguardedCapChecks(text: string): { line: number; source: string }[] {
+function unguardedCapChecks(text: string): { line: number; source: string }[] {
   const lines = text.split("\n");
   const out: { line: number; source: string }[] = [];
   for (const [index, line] of lines.entries()) {

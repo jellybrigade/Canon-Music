@@ -1,4 +1,5 @@
 import { cappedSet } from "../lib/boundedCache";
+import { boundedFetch } from "./boundedFetch";
 
 const APP_ID = "js_app_id";
 const BASE_URL = "https://rest.bandsintown.com";
@@ -25,6 +26,7 @@ function cacheKey(name: string): string {
   return name.trim().toLowerCase();
 }
 
+/** Rejects when Bandsintown didn't answer, so a failure is never cached as "no events". */
 export async function fetchBandsintownEvents(artistName: string): Promise<BandsintownEvent[]> {
   const key = cacheKey(artistName);
   if (!key) return [];
@@ -36,11 +38,12 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
   const promise = (async () => {
     try {
       const encoded = encodeURIComponent(artistName.trim());
-      const res = await fetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
-      if (!res.ok) {
+      const res = await boundedFetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
+      if (res.status === 404) {
         setCached(key, []);
         return [];
       }
+      if (!res.ok) throw new Error(`Bandsintown returned ${res.status}`);
       const raw = (await res.json()) as Array<Record<string, unknown>>;
       if (!Array.isArray(raw)) {
         setCached(key, []);
@@ -63,9 +66,6 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
       });
       setCached(key, events);
       return events;
-    } catch {
-      setCached(key, []);
-      return [];
     } finally {
       inflight.delete(key);
     }

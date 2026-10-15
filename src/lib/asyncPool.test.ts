@@ -21,7 +21,7 @@ describe("runPool", () => {
         await Promise.resolve();
         inFlight--;
       },
-      { concurrency: 4 }
+      { concurrency: 4 },
     );
     expect(maxInFlight).toBe(4);
   });
@@ -35,7 +35,7 @@ describe("runPool", () => {
         started.push(item);
         await gate.promise;
       },
-      { concurrency: 3 }
+      { concurrency: 3 },
     );
     await Promise.resolve();
     expect(started).toEqual([0, 1, 2]);
@@ -58,7 +58,7 @@ describe("runPool", () => {
         if (item === 2) throw new Error("bad item");
         seen.push(item);
       },
-      { concurrency: 1 }
+      { concurrency: 1 },
     );
     expect(seen).toEqual([1, 3, 4]);
   });
@@ -70,7 +70,7 @@ describe("runPool", () => {
       async (item) => {
         if (item === 2) throw new Error("bad item");
       },
-      { concurrency: 1, onProgress }
+      { concurrency: 1, onProgress },
     );
     expect(onProgress.mock.calls).toEqual([
       [0, 3],
@@ -89,7 +89,7 @@ describe("runPool", () => {
         seen.push(item);
         if (item === 2) controller.abort();
       },
-      { concurrency: 1, signal: controller.signal }
+      { concurrency: 1, signal: controller.signal },
     );
     expect(seen).toEqual([0, 1, 2]);
   });

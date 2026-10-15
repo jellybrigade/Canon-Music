@@ -8,7 +8,7 @@
  * as long as the view is open. The clear must not re-enter on its own either - the deps are what
  * re-trigger the effect, so a failed run costs exactly one attempt.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../../clients/lastfm", () => ({ fetchTrackTags: vi.fn() }));
@@ -18,11 +18,11 @@ vi.mock("../../tags/lib/canonicalize", () => ({
   findCanonicalSync: vi.fn().mockReturnValue({ node: null }),
 }));
 
-import { renderHook, act, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { getDb } from "../../../db";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { fetchTrackTags } from "../../../clients/lastfm";
+import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { useEnrichAlbumTracks } from "./useEnrichAlbumTracks";
@@ -43,7 +43,7 @@ let realSelect: FakeDatabase["select"];
 /** Makes the hook's opening read of `tracks` reject, as a locked database would. */
 function failTrackRead() {
   realSelect = db.select.bind(db);
-  db.select = <T,>(sql: string, binds?: unknown[]): Promise<T> => {
+  db.select = <T>(sql: string, binds?: unknown[]): Promise<T> => {
     if (sql.trim().startsWith(TRACKS_SELECT)) {
       db.queryLog.push({ kind: "select", sql: sql.trim() });
       return Promise.reject(new Error("database is locked"));
@@ -60,21 +60,22 @@ function restoreTrackRead() {
 function insertOtherAlbum() {
   db.raw
     .prepare(
-      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine')`
+      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine')`,
     )
     .run(OTHER_ALBUM_ID, "Isn't Anything");
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id)
-       VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`
+       VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`,
     )
     .run("srv-a:t2", "Soft As Snow", OTHER_ALBUM_ID);
 }
 
 function trackTagRows(): { track_id: string; raw_value: string }[] {
-  return db.raw
-    .prepare("SELECT track_id, raw_value FROM track_tags ORDER BY track_id, raw_value")
-    .all() as { track_id: string; raw_value: string }[];
+  return db.raw.prepare("SELECT track_id, raw_value FROM track_tags ORDER BY track_id, raw_value").all() as {
+    track_id: string;
+    raw_value: string;
+  }[];
 }
 
 /**
@@ -83,9 +84,7 @@ function trackTagRows(): { track_id: string; raw_value: string }[] {
  * React Query's structural sharing hands back the same reference when the row is unchanged.
  */
 async function reidentifyAlbum() {
-  db.raw
-    .prepare("UPDATE album_identity SET lastfm_album_name = 'loveless (deluxe)' WHERE album_id = ?")
-    .run(ALBUM_ID);
+  db.raw.prepare("UPDATE album_identity SET lastfm_album_name = 'loveless (deluxe)' WHERE album_id = ?").run(ALBUM_ID);
   await act(async () => {
     await queryClient.invalidateQueries({ queryKey: QK.albumIdentity(ALBUM_ID) });
   });
@@ -98,13 +97,13 @@ beforeEach(async () => {
 
   db.raw
     .prepare(
-      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', 'Loveless', 'my bloody valentine')`
+      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', 'Loveless', 'my bloody valentine')`,
     )
     .run(ALBUM_ID);
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id)
-       VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`
+       VALUES (?, 'srv-a', 'navidrome', ?, 'my bloody valentine', ?)`,
     )
     .run("srv-a:t1", "Only Shallow", ALBUM_ID);
   // A stored identity row, so the identity query resolves to an object that can later change.
@@ -112,7 +111,7 @@ beforeEach(async () => {
   db.raw
     .prepare(
       `INSERT INTO album_identity (album_id, lastfm_artist_name, lastfm_album_name, lastfm_match_confirmed, auto_matched)
-       VALUES (?, 'my bloody valentine', 'loveless', 1, 0)`
+       VALUES (?, 'my bloody valentine', 'loveless', 1, 0)`,
     )
     .run(ALBUM_ID);
 
@@ -137,9 +136,7 @@ describe("useEnrichAlbumTracks", () => {
     failTrackRead();
     renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
 
-    await waitFor(() =>
-      expect(db.queryLog.some((q) => q.sql.startsWith(TRACKS_SELECT))).toBe(true)
-    );
+    await waitFor(() => expect(db.queryLog.some((q) => q.sql.startsWith(TRACKS_SELECT))).toBe(true));
     expect(trackTagRows()).toHaveLength(0);
 
     // Database recovers, then re-identifying the album re-triggers the effect.
@@ -152,9 +149,8 @@ describe("useEnrichAlbumTracks", () => {
   it("enriches the second album when the view swaps albums without remounting", async () => {
     insertOtherAlbum();
     const { rerender } = renderHook(
-      ({ id, name }: { id: string; name: string }) =>
-        useEnrichAlbumTracks(id, "my bloody valentine", name),
-      { wrapper, initialProps: { id: ALBUM_ID, name: "Loveless" } }
+      ({ id, name }: { id: string; name: string }) => useEnrichAlbumTracks(id, "my bloody valentine", name),
+      { wrapper, initialProps: { id: ALBUM_ID, name: "Loveless" } },
     );
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
@@ -169,9 +165,7 @@ describe("useEnrichAlbumTracks", () => {
     failTrackRead();
     renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
 
-    await waitFor(() =>
-      expect(db.queryLog.filter((q) => q.sql.startsWith(TRACKS_SELECT))).toHaveLength(1)
-    );
+    await waitFor(() => expect(db.queryLog.filter((q) => q.sql.startsWith(TRACKS_SELECT))).toHaveLength(1));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();

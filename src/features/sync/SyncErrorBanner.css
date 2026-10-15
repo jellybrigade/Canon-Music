@@ -9,7 +9,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--duration-base), background-color var(--duration-base), border-color var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background-color var(--duration-base),
+    border-color var(--duration-base);
 }
 
 .sync-retry-btn:hover {

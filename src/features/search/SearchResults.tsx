@@ -1,20 +1,20 @@
-import { useState, useRef, useMemo, useLayoutEffect, type ReactNode, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { Music, User } from "lucide-react";
-import type { SearchAlbum, SearchTrack, SearchArtist } from "./useSearch";
-import type { ServerWithCredential } from "../../hooks/useServer";
-import type { AlbumRow, ArtistRow } from "../../types/library";
-import type { RadioMode } from "../playback/store/playerTypes";
-import { usePlayerStore } from "../playback/store/player";
-import { makeStreamUrlBuilder } from "../../lib/track";
-import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { type ReactNode, type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
-import { useArtistImageMap, resolveArtistImageUrl } from "../../hooks/useArtistImageCache";
+import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
+import { resolveArtistImageUrl, useArtistImageMap } from "../../hooks/useArtistImageCache";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import { makeStreamUrlBuilder } from "../../lib/track";
+import type { AlbumRow, ArtistRow } from "../../types/library";
 import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
-import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
+import { usePlayerStore } from "../playback/store/player";
+import type { RadioMode } from "../playback/store/playerTypes";
 import type { PlaylistRow } from "../playlists/usePlaylists";
+import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
+import type { SearchAlbum, SearchArtist, SearchTrack } from "./useSearch";
 import "./SearchResults.css";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 
@@ -41,17 +41,17 @@ const ALBUM_LIMIT = 12;
 const TRACK_LIMIT = 16;
 
 // Row geometry for the virtualized result lists (mirrors SearchResults.css).
-const SEARCH_PAD_X = 16;   // --space-md horizontal padding on .search-results
-const GRID_GAP = 4;        // --space-2xs (column + row gap on the result grids)
+const SEARCH_PAD_X = 16; // --space-md horizontal padding on .search-results
+const GRID_GAP = 4; // --space-2xs (column + row gap on the result grids)
 // Row content: info block (primary text-md 18px*1.5 + gap 4px + secondary text-base 16px*1.5)
 // plus row vertical padding (--space-xs 8px * 2). This is the tallest case (two text lines,
 // taller than any thumbnail); rows with a single text line get a little extra gap.
 const ROW_CONTENT_HEIGHT = 27 + 4 + 24 + 16;
 const ROW_HEIGHT = ROW_CONTENT_HEIGHT + GRID_GAP;
 
-const ARTIST_CARD_MIN = 180;  // .search-artist-list minmax
-const ALBUM_CARD_MIN = 260;   // .search-album-list minmax
-const TRACK_CARD_MIN = 300;   // .search-track-list minmax
+const ARTIST_CARD_MIN = 180; // .search-artist-list minmax
+const ALBUM_CARD_MIN = 260; // .search-album-list minmax
+const TRACK_CARD_MIN = 300; // .search-track-list minmax
 
 // All sections share the single .search-results scroller, so each measures its own
 // offset within it (offsetTop) and feeds it as scrollMargin.
@@ -154,11 +154,25 @@ function formatDuration(seconds: number | null): string {
 // stamping the selection onto a row produces something internally consistent
 // that streams from the wrong host (see known-issues.md).
 function toAlbumRow(album: SearchAlbum): AlbumRow {
-  return { id: album.id, server_id: album.server_id, name: album.name, artist: album.artist, year: null, artwork_url: album.artwork_url };
+  return {
+    id: album.id,
+    server_id: album.server_id,
+    name: album.name,
+    artist: album.artist,
+    year: null,
+    artwork_url: album.artwork_url,
+  };
 }
 
 function trackAlbumRow(track: SearchTrack): AlbumRow {
-  return { id: track.album_id, server_id: track.server_id, name: track.album_name ?? "", artist: track.artist, year: null, artwork_url: null };
+  return {
+    id: track.album_id,
+    server_id: track.server_id,
+    name: track.album_name ?? "",
+    artist: track.artist,
+    year: null,
+    artwork_url: null,
+  };
 }
 
 function toArtistRow(artist: SearchArtist): ArtistRow {
@@ -208,7 +222,9 @@ export function SearchResults({
       title: track.title,
       artist: track.artist,
       duration: track.duration,
-      coverArtUrl: track.artwork_url ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512) : null,
+      coverArtUrl: track.artwork_url
+        ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 512)
+        : null,
       artworkRef: track.artwork_url,
       album: track.album_name,
       albumId: track.album_id,
@@ -227,7 +243,8 @@ export function SearchResults({
       <div className="search-empty">
         <p className="search-empty-title">No matches in your library</p>
         <p className="search-empty-hint">
-          Search looks at track titles, artists, album names and genres. Try fewer words, or sync the server if the music is new.
+          Search looks at track titles, artists, album names and genres. Try fewer words, or sync the server if the
+          music is new.
         </p>
       </div>
     );
@@ -247,17 +264,16 @@ export function SearchResults({
                 key={artist.name}
                 className="search-artist-row"
                 onClick={() => onSelectArtist(artist)}
-                onContextMenu={(e) => { e.preventDefault(); setArtistMenu({ x: e.clientX, y: e.clientY, artist }); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setArtistMenu({ x: e.clientX, y: e.clientY, artist });
+                }}
               >
                 <div className="search-artist-icon">
                   {(() => {
                     const portraitUrl = resolvePortraitUrl(artist);
                     const imgUrl = resolveArtistImageUrl(artistImageMap, artist.name, portraitUrl);
-                    return imgUrl ? (
-                      <img src={imgUrl} alt={artist.name} loading="lazy" />
-                    ) : (
-                      <User size={16} />
-                    );
+                    return imgUrl ? <img src={imgUrl} alt={artist.name} loading="lazy" /> : <User size={16} />;
                   })()}
                 </div>
                 <div className="search-artist-info">
@@ -289,7 +305,10 @@ export function SearchResults({
                 key={album.id}
                 className="search-album-row"
                 onClick={() => onSelectAlbum(toAlbumRow(album))}
-                onContextMenu={(e) => { e.preventDefault(); setAlbumMenu({ x: e.clientX, y: e.clientY, album }); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setAlbumMenu({ x: e.clientX, y: e.clientY, album });
+                }}
               >
                 <div className="search-album-thumb">
                   {album.artwork_url ? (
@@ -304,9 +323,7 @@ export function SearchResults({
                 </div>
                 <div className="search-album-info">
                   <span className="search-item-primary">{albumDisplayName(album.name)}</span>
-                  {album.artist && (
-                    <span className="search-item-secondary">{album.artist}</span>
-                  )}
+                  {album.artist && <span className="search-item-secondary">{album.artist}</span>}
                 </div>
               </button>
             )}
@@ -331,7 +348,10 @@ export function SearchResults({
                 key={track.id}
                 className="search-track-row"
                 onClick={() => onPlayTrack(track.id)}
-                onContextMenu={(e) => { e.preventDefault(); setTrackMenu({ x: e.clientX, y: e.clientY, track }); }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  setTrackMenu({ x: e.clientX, y: e.clientY, track });
+                }}
               >
                 <div className="search-track-thumb">
                   {track.artwork_url ? (
@@ -366,25 +386,41 @@ export function SearchResults({
 
       {albumMenu && (
         <ContextMenu x={albumMenu.x} y={albumMenu.y} onClose={() => setAlbumMenu(null)}>
-          <button onClick={() => { onSelectAlbum(toAlbumRow(albumMenu.album)); setAlbumMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelectAlbum(toAlbumRow(albumMenu.album));
+              setAlbumMenu(null);
+            }}
+          >
             Open album
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode); setAlbumMenu(null); }}
+            onSelect={(mode) => {
+              onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode);
+              setAlbumMenu(null);
+            }}
           />
           {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
             <ContextMenuSubmenu label="Add to Playlist">
               {playlists.map((pl) => (
                 <button
                   key={pl.id}
-                  onClick={() => { onAddAlbumToPlaylist(toAlbumRow(albumMenu.album), pl); setAlbumMenu(null); }}
+                  onClick={() => {
+                    onAddAlbumToPlaylist(toAlbumRow(albumMenu.album), pl);
+                    setAlbumMenu(null);
+                  }}
                 >
                   {pl.name}
                 </button>
               ))}
             </ContextMenuSubmenu>
           )}
-          <button onClick={() => { setIdentifyAlbum(albumMenu.album); setAlbumMenu(null); }}>
+          <button
+            onClick={() => {
+              setIdentifyAlbum(albumMenu.album);
+              setAlbumMenu(null);
+            }}
+          >
             Identify on MusicBrainz…
           </button>
         </ContextMenu>
@@ -392,23 +428,54 @@ export function SearchResults({
 
       {trackMenu && (
         <ContextMenu x={trackMenu.x} y={trackMenu.y} onClose={() => setTrackMenu(null)}>
-          <button onClick={() => { onPlayTrack(trackMenu.track.id); setTrackMenu(null); }}>Play Now</button>
-          <button onClick={() => { playNext(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+          <button
+            onClick={() => {
+              onPlayTrack(trackMenu.track.id);
+              setTrackMenu(null);
+            }}
+          >
+            Play Now
+          </button>
+          <button
+            onClick={() => {
+              playNext(buildTrackObj(trackMenu.track), streamUrlFor);
+              setTrackMenu(null);
+            }}
+          >
             Play Next
           </button>
-          <button onClick={() => { addToQueue(buildTrackObj(trackMenu.track), streamUrlFor); setTrackMenu(null); }}>
+          <button
+            onClick={() => {
+              addToQueue(buildTrackObj(trackMenu.track), streamUrlFor);
+              setTrackMenu(null);
+            }}
+          >
             Add to Queue
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode); setTrackMenu(null); }}
+            onSelect={(mode) => {
+              onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode);
+              setTrackMenu(null);
+            }}
           />
-          <button onClick={() => { onSelectAlbum(trackAlbumRow(trackMenu.track)); setTrackMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelectAlbum(trackAlbumRow(trackMenu.track));
+              setTrackMenu(null);
+            }}
+          >
             Go to Album
           </button>
           {trackMenu.track.artist && (
             <button
               onClick={() => {
-                onSelectArtist({ name: trackMenu.track.artist!, album_count: 0, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null });
+                onSelectArtist({
+                  name: trackMenu.track.artist!,
+                  album_count: 0,
+                  lastfm_image_url: null,
+                  wikidata_image_url: null,
+                  navidrome_image_url: null,
+                });
                 setTrackMenu(null);
               }}
             >
@@ -420,13 +487,26 @@ export function SearchResults({
 
       {artistMenu && (
         <ContextMenu x={artistMenu.x} y={artistMenu.y} onClose={() => setArtistMenu(null)}>
-          <button onClick={() => { onSelectArtist(artistMenu.artist); setArtistMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelectArtist(artistMenu.artist);
+              setArtistMenu(null);
+            }}
+          >
             Open artist
           </button>
           <StartRadioSubmenu
-            onSelect={(mode) => { onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode); setArtistMenu(null); }}
+            onSelect={(mode) => {
+              onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode);
+              setArtistMenu(null);
+            }}
           />
-          <button onClick={() => { setIdentifyArtistName(artistMenu.artist.name); setArtistMenu(null); }}>
+          <button
+            onClick={() => {
+              setIdentifyArtistName(artistMenu.artist.name);
+              setArtistMenu(null);
+            }}
+          >
             Identify on MusicBrainz…
           </button>
         </ContextMenu>
@@ -442,10 +522,7 @@ export function SearchResults({
       )}
 
       {identifyArtistName && (
-        <ArtistIdentifyDialog
-          artistName={identifyArtistName}
-          onClose={() => setIdentifyArtistName(null)}
-        />
+        <ArtistIdentifyDialog artistName={identifyArtistName} onClose={() => setIdentifyArtistName(null)} />
       )}
     </div>
   );

@@ -1,14 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { CRED, OTHER, SRV, server } from "../test/navidromeFixtures";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { CRED, server, SRV, OTHER } from "../test/navidromeFixtures";
 
 const holder: { db: FakeDatabase | null } = { db: null };
 vi.mock("../db", () => ({ getDb: async () => holder.db }));
 vi.mock("../features/sync/syncTracks", () => ({ syncAlbumTracks: vi.fn() }));
 
 import { syncAlbumTracks } from "../features/sync/syncTracks";
-import { fetchAlbumTracks, loadAlbumTracks, loadAlbumTracksForPlay, resetAlbumTrackFetches, shouldFetchMissingTracks } from "./albumTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import {
+  fetchAlbumTracks,
+  loadAlbumTracks,
+  loadAlbumTracksForPlay,
+  resetAlbumTrackFetches,
+  shouldFetchMissingTracks,
+} from "./albumTracks";
 
 const mSync = vi.mocked(syncAlbumTracks);
 const ALBUM = `${SRV}:al-1`;
@@ -25,9 +31,9 @@ function seedAlbum(serverId: string, albumId: string, trackIds: string[]): void 
         .map(
           (id, i) =>
             `INSERT INTO tracks (id, server_id, server_type, title, album_id, disc_number, track_number)` +
-            ` VALUES ('${id}', '${serverId}', 'navidrome', 'T${i}', '${albumId}', 1, ${i + 1});`
+            ` VALUES ('${id}', '${serverId}', 'navidrome', 'T${i}', '${albumId}', 1, ${i + 1});`,
         )
-        .join("")
+        .join(""),
   );
 }
 
@@ -49,7 +55,7 @@ describe("loadAlbumTracks", () => {
     seedAlbum(SRV, ALBUM, [`${SRV}:t1`]);
     db().raw.exec(
       `UPDATE tracks SET replay_gain_track_gain = -6.5, replay_gain_track_peak = 0.9,
-         replay_gain_album_gain = -7, replay_gain_album_peak = 0.95 WHERE id = '${SRV}:t1'`
+         replay_gain_album_gain = -7, replay_gain_album_peak = 0.95 WHERE id = '${SRV}:t1'`,
     );
     const [track] = await loadAlbumTracks(server(SRV), CRED, ALBUM);
     expect(track).toMatchObject({
@@ -72,7 +78,7 @@ describe("loadAlbumTracks", () => {
       seedAlbum(SRV, "tmp", []);
       db().raw.exec(
         `INSERT INTO tracks (id, server_id, server_type, title, album_id, disc_number, track_number)
-         VALUES ('${SRV}:tr-1', '${SRV}', 'navidrome', 'T', '${ALBUM}', 1, 1)`
+         VALUES ('${SRV}:tr-1', '${SRV}', 'navidrome', 'T', '${ALBUM}', 1, 1)`,
       );
     });
     const tracks = await loadAlbumTracks(server(), CRED, ALBUM);
@@ -107,20 +113,14 @@ describe("loadAlbumTracks", () => {
   it("shares one fetch between a play click and the album page repairing the same album", async () => {
     seedAlbum(SRV, ALBUM, []);
     mSync.mockResolvedValue(undefined);
-    await Promise.all([
-      loadAlbumTracks(server(), CRED, ALBUM),
-      fetchAlbumTracks(server(), CRED, ALBUM),
-    ]);
+    await Promise.all([loadAlbumTracks(server(), CRED, ALBUM), fetchAlbumTracks(server(), CRED, ALBUM)]);
     expect(mSync).toHaveBeenCalledTimes(1);
   });
 
   it("fetches once for two callers racing on the same album", async () => {
     seedAlbum(SRV, ALBUM, []);
     mSync.mockResolvedValue(undefined);
-    await Promise.all([
-      loadAlbumTracks(server(), CRED, ALBUM),
-      loadAlbumTracks(server(), CRED, ALBUM),
-    ]);
+    await Promise.all([loadAlbumTracks(server(), CRED, ALBUM), loadAlbumTracks(server(), CRED, ALBUM)]);
     expect(mSync).toHaveBeenCalledTimes(1);
   });
 
@@ -137,7 +137,7 @@ describe("loadAlbumTracks", () => {
     db().raw.exec(
       `INSERT INTO albums (id, server_id, server_type, name) VALUES ('${ALBUM}', '${OTHER}', 'navidrome', 'A');
        INSERT INTO tracks (id, server_id, server_type, title, album_id, disc_number, track_number)
-       VALUES ('${OTHER}:tr-1', '${OTHER}', 'navidrome', 'T', '${ALBUM}', 1, 1)`
+       VALUES ('${OTHER}:tr-1', '${OTHER}', 'navidrome', 'T', '${ALBUM}', 1, 1)`,
     );
     mSync.mockResolvedValue(undefined);
     expect(await loadAlbumTracks(server(), CRED, ALBUM)).toEqual([]);
@@ -173,7 +173,13 @@ describe("loadAlbumTracksForPlay", () => {
 });
 
 describe("shouldFetchMissingTracks", () => {
-  const base = { isLoading: false, error: null, tracks: [] as { length: number }[], albumId: "al-1", attemptedAlbumId: null };
+  const base = {
+    isLoading: false,
+    error: null,
+    tracks: [] as { length: number }[],
+    albumId: "al-1",
+    attemptedAlbumId: null,
+  };
 
   it("fetches for an album whose track list came back empty", () => {
     expect(shouldFetchMissingTracks(base)).toBe(true);

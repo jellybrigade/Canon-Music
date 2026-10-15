@@ -10,16 +10,16 @@ import { GENRE_ID_HOLDERS } from "./genreIdTables";
 const MIGRATIONS = readFileSync(fileURLToPath(new URL("./migrations.ts", import.meta.url)), "utf-8");
 const GENRE_CARRY_RS = readFileSync(
   fileURLToPath(new URL("../../src-tauri/src/library_write/genre_carry.rs", import.meta.url)),
-  "utf-8"
+  "utf-8",
 );
 
 /** Every live `table.column` in the schema holding a tree id: `canonical_id` or a `parent_ids` list. */
 function schemaGenreIdColumns(): Set<string> {
   const found = new Set<string>();
   const scratch = new Set(
-    [...MIGRATIONS.matchAll(/ALTER TABLE (\w+) RENAME TO|DROP TABLE(?: IF EXISTS)? (\w+)/g)].flatMap(
-      (match) => [match[1], match[2]].filter((name): name is string => name !== undefined)
-    )
+    [...MIGRATIONS.matchAll(/ALTER TABLE (\w+) RENAME TO|DROP TABLE(?: IF EXISTS)? (\w+)/g)].flatMap((match) =>
+      [match[1], match[2]].filter((name): name is string => name !== undefined),
+    ),
   );
   for (const match of MIGRATIONS.matchAll(/CREATE TABLE(?: IF NOT EXISTS)? (\w+) \(([^;]*?)\)\s*;/g)) {
     const [, table, body] = match;
@@ -40,7 +40,7 @@ function rustTuples(constant: string): string[] {
   const block = GENRE_CARRY_RS.match(new RegExp(`${constant}: &\\[[^=]*=\\s*&\\[([^\\]]*)\\]`));
   expect(block, constant).not.toBeNull();
   return [...(block?.[1] ?? "").matchAll(/\(([^)]*)\)/g)].map((m) =>
-    [...(m[1] ?? "").matchAll(/"([^"]*)"/g)].map((s) => s[1]).join(".")
+    [...(m[1] ?? "").matchAll(/"([^"]*)"/g)].map((s) => s[1]).join("."),
   );
 }
 
@@ -68,13 +68,13 @@ describe("genre id table registry", () => {
   it("agrees with the Rust lists the carry writes through", () => {
     // The carry runs in one transaction, so it lives in Rust and keeps its own copy.
     expect(rustTuples("GENRE_ID_COLUMNS")).toEqual(
-      GENRE_ID_HOLDERS.filter((h) => h.jsonPath === null).map((h) => `${h.table}.${h.column}`)
+      GENRE_ID_HOLDERS.filter((h) => h.jsonPath === null).map((h) => `${h.table}.${h.column}`),
     );
     expect(rustTuples("GENRE_NAME_COLUMNS")).toEqual(
-      GENRE_ID_HOLDERS.flatMap((h) => (h.nameColumn === null ? [] : [`${h.table}.${h.nameColumn}`]))
+      GENRE_ID_HOLDERS.flatMap((h) => (h.nameColumn === null ? [] : [`${h.table}.${h.nameColumn}`])),
     );
     expect(rustTuples("GENRE_ID_JSON_COLUMNS")).toEqual(
-      GENRE_ID_HOLDERS.flatMap((h) => (h.jsonPath === null ? [] : [`${h.table}.${h.column}.${h.jsonPath}`]))
+      GENRE_ID_HOLDERS.flatMap((h) => (h.jsonPath === null ? [] : [`${h.table}.${h.column}.${h.jsonPath}`])),
     );
   });
 });

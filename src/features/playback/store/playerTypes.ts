@@ -41,7 +41,7 @@ export function isNextDisabled(
   repeat: RepeatMode,
   queueIndex: number,
   queueLength: number,
-  radioOnQueueEnd: boolean
+  radioOnQueueEnd: boolean,
 ): boolean {
   return repeat === "off" && !radioOnQueueEnd && queueIndex >= queueLength - 1;
 }
@@ -74,14 +74,14 @@ export interface RadioStartRequest {
 }
 
 export const RADIO_MODES: { mode: RadioMode; label: string }[] = [
-  { mode: "curated",          label: "Curated" },
-  { mode: "same-genre",       label: "Same Genre" },
-  { mode: "similar-artists",  label: "Similar Artists" },
-  { mode: "same-artist",      label: "Same Artist" },
-  { mode: "same-album",       label: "Same Album" },
-  { mode: "era",              label: "Same Era" },
-  { mode: "loved",            label: "Loved Tracks" },
-  { mode: "random",           label: "Random" },
+  { mode: "curated", label: "Curated" },
+  { mode: "same-genre", label: "Same Genre" },
+  { mode: "similar-artists", label: "Similar Artists" },
+  { mode: "same-artist", label: "Same Artist" },
+  { mode: "same-album", label: "Same Album" },
+  { mode: "era", label: "Same Era" },
+  { mode: "loved", label: "Loved Tracks" },
+  { mode: "random", label: "Random" },
 ];
 
 export interface QueueSnapshot {

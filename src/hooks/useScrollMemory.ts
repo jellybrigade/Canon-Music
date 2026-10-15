@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 
 // Module-level, not persisted: session memory only, since a stored offset could point
 // into a re-synced library. Bounded since keys include detail-route ids (/playlist/<id>).
@@ -18,11 +18,7 @@ function remember(key: string, top: number) {
 }
 
 /** Remembers `ref`'s scrollTop under `key`; pass `ready` as "content has height" or restores clamp to 0. */
-export function useScrollMemory(
-  ref: RefObject<HTMLElement | null>,
-  key: string,
-  ready: boolean
-) {
+export function useScrollMemory(ref: RefObject<HTMLElement | null>, key: string, ready: boolean) {
   const restoredFor = useRef<string | null>(null);
 
   // Restore before paint so the view never renders at the top and then jumps.

@@ -1,5 +1,5 @@
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 
 export type DownloadProgress = { downloaded: number; total: number | null };
 
@@ -14,10 +14,7 @@ export async function checkForUpdate(): Promise<Update | null> {
 }
 
 /** Downloads and installs with a progress callback, then relaunches. Throws on failure. */
-export async function installAndRestart(
-  update: Update,
-  onProgress: (p: DownloadProgress) => void
-): Promise<void> {
+export async function installAndRestart(update: Update, onProgress: (p: DownloadProgress) => void): Promise<void> {
   let downloaded = 0;
   let total: number | null = null;
   await update.downloadAndInstall((event) => {

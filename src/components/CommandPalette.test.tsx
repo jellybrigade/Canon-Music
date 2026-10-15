@@ -15,15 +15,15 @@ vi.mock("../hooks/useSetting", () => ({
   ],
 }));
 
-import React from "react";
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CommandPalette } from "./CommandPalette";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import type React from "react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
-import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
-import { resetTauriMocks } from "../test/mocks/tauri";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { resetTauriMocks } from "../test/mocks/tauri";
+import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+import { CommandPalette } from "./CommandPalette";
 
 const SRV: ServerWithCredential = {
   server: {
@@ -49,12 +49,21 @@ function seedAlbum(opts: { id: string; name: string; artist?: string | null; ser
     .run(opts.id, opts.serverId ?? "srv-a", opts.name, opts.artist ?? null);
 }
 
-function seedTrack(opts: { id: string; title: string; artist?: string | null; albumId: string | null; serverId?: string }) {
+function seedTrack(opts: {
+  id: string;
+  title: string;
+  artist?: string | null;
+  albumId: string | null;
+  serverId?: string;
+}) {
   db.raw
-    .prepare(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, ?, ?)`)
+    .prepare(
+      `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, ?, ?)`,
+    )
     .run(opts.id, opts.serverId ?? "srv-a", opts.title, opts.artist ?? null, opts.albumId);
   const albumName = opts.albumId
-    ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as { name: string } | undefined)?.name ?? "")
+    ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as { name: string } | undefined)
+        ?.name ?? "")
     : "";
   db.raw
     .prepare(`INSERT INTO tracks_fts (id, title, artist, album, genre) VALUES (?, ?, ?, ?, '')`)
@@ -93,7 +102,7 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
   const view = render(
     <QueryClientProvider client={client}>
       <CommandPalette {...all} />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
   return {
     ...view,
@@ -101,7 +110,7 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
       view.rerender(
         <QueryClientProvider client={client}>
           <CommandPalette {...all} {...next} />
-        </QueryClientProvider>
+        </QueryClientProvider>,
       ),
   };
 }
@@ -274,22 +283,26 @@ describe("CommandPalette listener churn", () => {
     const removed: string[] = [];
     const realAdd = window.addEventListener.bind(window);
     const realRemove = window.removeEventListener.bind(window);
-    spies.push(vi.spyOn(window, "addEventListener").mockImplementation(((
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      opts?: boolean | AddEventListenerOptions
-    ) => {
-      if (type === "keydown") added.push(type);
-      realAdd(type, listener, opts);
-    }) as typeof window.addEventListener));
-    spies.push(vi.spyOn(window, "removeEventListener").mockImplementation(((
-      type: string,
-      listener: EventListenerOrEventListenerObject,
-      opts?: boolean | EventListenerOptions
-    ) => {
-      if (type === "keydown") removed.push(type);
-      realRemove(type, listener, opts);
-    }) as typeof window.removeEventListener));
+    spies.push(
+      vi.spyOn(window, "addEventListener").mockImplementation(((
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        opts?: boolean | AddEventListenerOptions,
+      ) => {
+        if (type === "keydown") added.push(type);
+        realAdd(type, listener, opts);
+      }) as typeof window.addEventListener),
+    );
+    spies.push(
+      vi.spyOn(window, "removeEventListener").mockImplementation(((
+        type: string,
+        listener: EventListenerOrEventListenerObject,
+        opts?: boolean | EventListenerOptions,
+      ) => {
+        if (type === "keydown") removed.push(type);
+        realRemove(type, listener, opts);
+      }) as typeof window.removeEventListener),
+    );
     return { added, removed };
   }
 
@@ -442,8 +455,8 @@ describe("CommandPalette keyboard navigation", () => {
 describe("CommandPalette mouse interaction", () => {
   it("activates a nav command on mousedown, not click", () => {
     renderPalette();
-    const library = Array.from(document.querySelectorAll<HTMLElement>(".cp-nav-item")).find(
-      (b) => b.textContent?.includes("Library")
+    const library = Array.from(document.querySelectorAll<HTMLElement>(".cp-nav-item")).find((b) =>
+      b.textContent?.includes("Library"),
     )!;
     // The handler is onMouseDown with preventDefault, so the input never blurs out from
     // under the selection. A click alone must therefore do nothing.
@@ -488,7 +501,7 @@ describe("CommandPalette result states", () => {
     setQuery("wilco2");
     await settleDebounce();
     expect(document.querySelector(".cp-empty")!.textContent).toBe(
-      "Search failed. The library database could not be read."
+      "Search failed. The library database could not be read.",
     );
     expect(resultPrimaries()).toEqual([]);
   });

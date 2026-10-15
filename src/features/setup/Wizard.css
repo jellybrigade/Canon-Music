@@ -39,7 +39,9 @@
   height: 6px;
   border-radius: 50%;
   background: var(--surface-3);
-  transition: background var(--motion-fast), transform var(--motion-fast);
+  transition:
+    background var(--motion-fast),
+    transform var(--motion-fast);
   flex-shrink: 0;
 }
 

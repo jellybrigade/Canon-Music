@@ -19,7 +19,7 @@
 
 /* Gradient fade at bottom, tall enough to blend blurred art into page background */
 .album-detail-header::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -149,8 +149,12 @@
 }
 
 /* Stagger so the rows read as a list settling in, not one block flashing. */
-.album-track-skeleton-row:nth-child(2n) .album-track-skeleton-bar { animation-delay: 0.12s; }
-.album-track-skeleton-row:nth-child(3n) .album-track-skeleton-bar { animation-delay: 0.24s; }
+.album-track-skeleton-row:nth-child(2n) .album-track-skeleton-bar {
+  animation-delay: 0.12s;
+}
+.album-track-skeleton-row:nth-child(3n) .album-track-skeleton-bar {
+  animation-delay: 0.24s;
+}
 
 .album-tag-chip--musicbrainz-folksonomy {
   border-style: dotted;
@@ -242,7 +246,6 @@
   color: var(--text-primary);
 }
 
-
 .album-tag-actions {
   display: flex;
   align-items: center;
@@ -263,7 +266,9 @@
   font-weight: 500;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--duration-moderate), color var(--duration-moderate);
+  transition:
+    background var(--duration-moderate),
+    color var(--duration-moderate);
 }
 
 .album-tag-action-btn:hover:not(:disabled) {
@@ -271,7 +276,10 @@
   color: var(--text-primary);
 }
 
-.album-tag-action-btn:disabled { opacity: var(--opacity-40); cursor: default; }
+.album-tag-action-btn:disabled {
+  opacity: var(--opacity-40);
+  cursor: default;
+}
 
 .album-tag-action-msg {
   font-size: var(--text-base);
@@ -311,7 +319,9 @@
   color: var(--text-tertiary);
   cursor: pointer;
   border-radius: var(--radius-xs);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .tracklist-col-picker-btn:hover {
@@ -345,7 +355,9 @@
   font-size: var(--text-base);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
 }
 
 .tracklist-col-picker-popup label:hover {
@@ -499,7 +511,10 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: color var(--duration-moderate), background var(--duration-moderate), border-color var(--duration-moderate);
+  transition:
+    color var(--duration-moderate),
+    background var(--duration-moderate),
+    border-color var(--duration-moderate);
   box-shadow: none;
 }
 

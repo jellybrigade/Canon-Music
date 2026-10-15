@@ -1,12 +1,12 @@
+import { LayoutList, Search } from "lucide-react";
 import type { ReactNode } from "react";
-import { Search, LayoutList } from "lucide-react";
+import type { AppViewProps } from "../app/AppRoutes";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { FilterSidebar } from "../components/FilterSidebar";
-import { CanonLockup } from "../ui/CanonIcon";
 import { SyncErrorBanner } from "../features/sync/SyncErrorBanner";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumSort } from "../types/library";
-import type { AppViewProps } from "../app/AppRoutes";
+import { CanonLockup } from "../ui/CanonIcon";
 
 const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
   { value: "recently_added", label: "Recent" },
@@ -17,13 +17,42 @@ const SORT_OPTIONS: { value: AlbumSort; label: string }[] = [
 
 type LibraryViewProps = Pick<
   AppViewProps,
-  "server" | "serverWithCred" | "albums" | "albumsLoading" | "albumsError" | "visibleAlbums" |
-  "genres" | "genresError" | "retryGenres" | "playlists" | "canonicalIdFilters" | "lovedOnly" | "yearFromInput" | "yearToInput" |
-  "setCanonicalIdFilters" | "toggleCanonicalIdFilter" | "toggleLovedOnly" | "setYearFromInput" |
-  "setYearToInput" | "filterSidebarOpen" | "setFilterSidebarOpen" | "sort" | "setSort" |
-  "albumsPaginated" | "setAlbumsPaginated" | "syncStatus" | "syncError" | "syncProgress" |
-  "nextRetryAt" | "runSync" | "navigateTo" | "openAlbum" | "handleStartRadioFromAlbum" |
-  "handleAddAlbumToQueue" | "addAlbumToPlaylist" | "queueClass"
+  | "server"
+  | "serverWithCred"
+  | "albums"
+  | "albumsLoading"
+  | "albumsError"
+  | "visibleAlbums"
+  | "genres"
+  | "genresError"
+  | "retryGenres"
+  | "playlists"
+  | "canonicalIdFilters"
+  | "lovedOnly"
+  | "yearFromInput"
+  | "yearToInput"
+  | "setCanonicalIdFilters"
+  | "toggleCanonicalIdFilter"
+  | "toggleLovedOnly"
+  | "setYearFromInput"
+  | "setYearToInput"
+  | "filterSidebarOpen"
+  | "setFilterSidebarOpen"
+  | "sort"
+  | "setSort"
+  | "albumsPaginated"
+  | "setAlbumsPaginated"
+  | "syncStatus"
+  | "syncError"
+  | "syncProgress"
+  | "nextRetryAt"
+  | "runSync"
+  | "navigateTo"
+  | "openAlbum"
+  | "handleStartRadioFromAlbum"
+  | "handleAddAlbumToQueue"
+  | "addAlbumToPlaylist"
+  | "queueClass"
 > & {
   credentialNotice: ReactNode;
 };
@@ -92,9 +121,19 @@ export function LibraryView({
         albums={visibleAlbums}
         serverWithCredential={serverWithCred}
         onSelect={openAlbum}
-        onStartRadio={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
-        onAddAlbumToQueue={(album) => { void handleAddAlbumToQueue(album); }}
-        onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
+        onStartRadio={(album, mode) => {
+          void handleStartRadioFromAlbum(album, mode);
+        }}
+        onAddAlbumToQueue={(album) => {
+          void handleAddAlbumToQueue(album);
+        }}
+        onAddAlbumToPlaylist={
+          serverWithCred
+            ? (album, pl) => {
+                void addAlbumToPlaylist(pl, album.id, serverWithCred);
+              }
+            : undefined
+        }
         playlists={playlists}
         emptyMessage={emptyMessage}
         sort={sort}
@@ -133,27 +172,21 @@ export function LibraryView({
             <button
               key={opt.value}
               className={`sort-btn${sort === opt.value ? " sort-btn--active" : ""}`}
-              onClick={() => { void setSort(opt.value); }}
+              onClick={() => {
+                void setSort(opt.value);
+              }}
             >
               {opt.label}
             </button>
           ))}
         </div>
         <div className="library-header-zone library-header-zone--end">
-          <button
-            className="search-trigger-btn"
-            onClick={() => navigateTo("search")}
-            title="Search (Ctrl+F)"
-          >
+          <button className="search-trigger-btn" onClick={() => navigateTo("search")} title="Search (Ctrl+F)">
             <Search size={15} />
             Search…
           </button>
           {serverWithCred && (
-            <button
-              className="rescan-btn"
-              onClick={() => runSync(serverWithCred)}
-              disabled={syncStatus === "syncing"}
-            >
+            <button className="rescan-btn" onClick={() => runSync(serverWithCred)} disabled={syncStatus === "syncing"}>
               Rescan
             </button>
           )}
@@ -184,9 +217,7 @@ export function LibraryView({
           isOpen={filterSidebarOpen}
           onToggle={() => void setFilterSidebarOpen(!filterSidebarOpen)}
         />
-        <div className="library-content">
-          {renderLibraryContent()}
-        </div>
+        <div className="library-content">{renderLibraryContent()}</div>
       </div>
     </main>
   );

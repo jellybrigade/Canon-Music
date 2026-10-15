@@ -15,22 +15,17 @@ import { bustCanonTreeCache } from "../../tags/lib/canonicalize";
 const holder: { db: FakeDatabase | null } = { db: null };
 vi.mock("../../../db", () => ({ getDb: async () => holder.db }));
 
-import {
-  scaleWeights,
-  buildAncestorWeights,
-  getRadioCandidates,
-  MOOD_WEIGHT,
-  CANDIDATE_LIMIT,
-} from "./radio";
+import { buildAncestorWeights, CANDIDATE_LIMIT, getRadioCandidates, MOOD_WEIGHT, scaleWeights } from "./radio";
 
 const SRV = "srv-a";
 const OTHER = "srv-b";
 
 async function insertAlbum(db: FakeDatabase, id: string, serverId = SRV): Promise<void> {
-  await db.execute(
-    "INSERT INTO albums (id, server_id, server_type, name) VALUES (?, ?, 'navidrome', ?)",
-    [id, serverId, `Album ${id}`]
-  );
+  await db.execute("INSERT INTO albums (id, server_id, server_type, name) VALUES (?, ?, 'navidrome', ?)", [
+    id,
+    serverId,
+    `Album ${id}`,
+  ]);
 }
 
 async function insertTrack(
@@ -43,7 +38,7 @@ async function insertTrack(
     year?: number | null;
     discNumber?: number;
     trackNumber?: number;
-  }
+  },
 ): Promise<void> {
   await db.execute(
     `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, disc_number, track_number)
@@ -57,7 +52,7 @@ async function insertTrack(
       opts.year ?? null,
       opts.discNumber ?? 1,
       opts.trackNumber ?? 1,
-    ]
+    ],
   );
 }
 
@@ -65,18 +60,18 @@ async function insertTag(
   db: FakeDatabase,
   trackId: string,
   canonicalId: string,
-  kind: "genre" | "mood" = "genre"
+  kind: "genre" | "mood" = "genre",
 ): Promise<void> {
   await db.execute(
     "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES (?, ?, ?, ?, 'server')",
-    [trackId, kind, canonicalId, canonicalId]
+    [trackId, kind, canonicalId, canonicalId],
   );
 }
 
 async function insertTreeNode(db: FakeDatabase, id: string, parents: string[] = []): Promise<void> {
   await db.execute(
     "INSERT INTO user_tree_nodes (id, name, type, canonical_key, parent_ids) VALUES (?, ?, 'genre', ?, ?)",
-    [id, id, id, JSON.stringify(parents)]
+    [id, id, id, JSON.stringify(parents)],
   );
 }
 
@@ -257,7 +252,7 @@ describe("getRadioCandidates", () => {
       expect(ids.indexOf("genre-cand")).toBeLessThan(ids.indexOf("mood-cand"));
       expect(result.find((r) => r.id === "mood-cand")!.score).toBeCloseTo(
         result.find((r) => r.id === "genre-cand")!.score * MOOD_WEIGHT,
-        6
+        6,
       );
     });
 
@@ -523,7 +518,7 @@ describe("getRadioCandidates", () => {
       // seed's album_id is left null by omission below via a direct track insert
       await db.execute(
         "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES ('seed', ?, 'navidrome', 'Seed', NULL, NULL)",
-        [SRV]
+        [SRV],
       );
       await insertTag(db, "seed", "x");
       await insertTrack(db, { id: "cand", albumId: "alb" });

@@ -29,7 +29,9 @@ export function useWakeLock() {
           return;
         }
         lockRef.current = sentinel;
-      } catch { /* degraded silently */ } finally {
+      } catch {
+        /* degraded silently */
+      } finally {
         isRequesting = false;
       }
     }

@@ -1,9 +1,9 @@
 // Repo-wide guard for AGENTS.md: "Comments: default none... 1-2 lines." A comment past a
 // couple lines is usually WHAT not WHY, or a stale essay. Cap every run at 3 lines; longer
 // belongs in ARCHITECTURE.md/known-issues.md instead.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -41,7 +41,7 @@ function hasContent(line: string): boolean {
   return stripped.length > 0;
 }
 
-export function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
+function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
   const starts: number[] = [];
   let runStart = -1;
   let runLength = 0;
@@ -60,7 +60,7 @@ export function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
 
 // A file that comments most of its lines is gaming the per-run cap with many short
 // comments; cap total comment lines at 40% of code lines (min 10, so tiny files have slack).
-export function commentDensityExcess(text: string): { comment: number; cap: number } | null {
+function commentDensityExcess(text: string): { comment: number; cap: number } | null {
   const nonBlank = text.split("\n").filter((line) => line.trim().length > 0);
   const comment = nonBlank.filter((line) => COMMENT_LINE.test(line) && hasContent(line)).length;
   const code = nonBlank.length - comment;
@@ -83,9 +83,7 @@ describe("comment length", () => {
   });
 
   it("no source file has a comment run past the cap", () => {
-    const violations = FILES.flatMap((file) =>
-      longCommentRuns(file.text).map((line) => `${file.path}:${line}`),
-    );
+    const violations = FILES.flatMap((file) => longCommentRuns(file.text).map((line) => `${file.path}:${line}`));
     expect(violations).toEqual([]);
   });
 

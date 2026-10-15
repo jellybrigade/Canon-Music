@@ -21,14 +21,14 @@ async function countIdColumn(db: Database, holder: GenreIdHolder): Promise<Holde
   return db.select<HolderCount[]>(
     `SELECT ${holder.column} AS id, COUNT(*) AS count, ${name} AS name
      FROM ${holder.table} WHERE ${holder.column} IS NOT NULL
-     GROUP BY ${holder.column}`
+     GROUP BY ${holder.column}`,
   );
 }
 
 async function countJsonColumn(db: Database, holder: GenreIdHolder): Promise<HolderCount[]> {
   const rows = await db.select<{ value: string }[]>(
     `SELECT ${holder.column} AS value FROM ${holder.table}
-     WHERE ${holder.column} IS NOT NULL AND json_valid(${holder.column})`
+     WHERE ${holder.column} IS NOT NULL AND json_valid(${holder.column})`,
   );
   const field = holder.jsonPath === "$.selectedGenres" ? "selectedGenres" : null;
   const counts = new Map<string, number>();
@@ -48,10 +48,7 @@ async function countJsonColumn(db: Database, holder: GenreIdHolder): Promise<Hol
  * Every stored genre id that is neither a tree node nor a sentinel, with where it is held. A
  * true RYM removal or a missed rename entry lands here instead of vanishing from its albums.
  */
-export async function findDanglingGenreIds(
-  db: Database,
-  liveIds: ReadonlySet<string>
-): Promise<DanglingGenreId[]> {
+export async function findDanglingGenreIds(db: Database, liveIds: ReadonlySet<string>): Promise<DanglingGenreId[]> {
   const byId = new Map<string, DanglingGenreId>();
   for (const holder of GENRE_ID_HOLDERS) {
     const counts = holder.jsonPath === null ? await countIdColumn(db, holder) : await countJsonColumn(db, holder);
@@ -70,9 +67,6 @@ export async function findDanglingGenreIds(
 }
 
 /** Moves every reference onto `to`, or removes them all when `to` is null. One transaction. */
-export async function repairDanglingGenreId(
-  from: string,
-  to: { id: string; name: string } | null
-): Promise<void> {
+export async function repairDanglingGenreId(from: string, to: { id: string; name: string } | null): Promise<void> {
   await invoke("repair_dangling_genre_id", { from, to });
 }

@@ -1,17 +1,17 @@
+import { AlertCircle, CheckCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle, AlertCircle } from "lucide-react";
-import { getDb } from "../../db";
+import { getFanartApiKey, setFanartApiKey } from "../../clients/fanart";
+import { setApiKey as setLastfmApiKey } from "../../clients/lastfm";
 import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
-import { loginFailureMessage } from "./loginFailureMessage";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { getDb } from "../../db";
+import { refreshAllSettings, useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { keychain } from "../../lib/keychain";
 import type { Server } from "../../types/server";
 import { CanonIcon } from "../../ui/CanonIcon";
-import { setApiKey as setLastfmApiKey } from "../../clients/lastfm";
-import { getFanartApiKey, setFanartApiKey } from "../../clients/fanart";
-import { importSettingsFile } from "../settings/lib/settingsBackup";
-import { useBoolSetting, useSetting, refreshAllSettings } from "../../hooks/useSetting";
 import { SettingRow } from "../settings/components/SettingRow";
+import { importSettingsFile } from "../settings/lib/settingsBackup";
+import { loginFailureMessage } from "./loginFailureMessage";
 import "../settings/components/SettingsView.css";
 import "./Wizard.css";
 
@@ -67,7 +67,11 @@ export function Wizard({ onSuccess }: Props) {
   const importInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    getFanartApiKey().then((k) => { if (k) setFanartKeyState(k); }).catch(() => {});
+    getFanartApiKey()
+      .then((k) => {
+        if (k) setFanartKeyState(k);
+      })
+      .catch(() => {});
   }, []);
 
   async function handleSetLastfmKey(k: string) {
@@ -126,9 +130,10 @@ export function Wizard({ onSuccess }: Props) {
     setTestState("testing");
     setTestError("");
     try {
-      const credential = authMethod === "apikey"
-        ? await authenticateWithApiKey(url, username, apiKey)
-        : await authenticate(url, username, password);
+      const credential =
+        authMethod === "apikey"
+          ? await authenticateWithApiKey(url, username, apiKey)
+          : await authenticate(url, username, password);
       setTestState("ok");
       setTestedSnapshot({ url, username, password, apiKey, authMethod });
       setTestedCredential(credential);
@@ -145,7 +150,9 @@ export function Wizard({ onSuccess }: Props) {
     testedSnapshot.authMethod === authMethod &&
     (authMethod === "apikey" ? testedSnapshot.apiKey === apiKey : testedSnapshot.password === password);
 
-  const canTest = url.trim() !== "" && username.trim() !== "" &&
+  const canTest =
+    url.trim() !== "" &&
+    username.trim() !== "" &&
     (authMethod === "apikey" ? apiKey.trim() !== "" : password.trim() !== "");
   const step2Complete = testState === "ok" && snapshotMatch && displayName.trim() !== "";
 
@@ -161,13 +168,7 @@ export function Wizard({ onSuccess }: Props) {
         const trimmedAltUrl = altUrl.trim().replace(/\/+$/, "") || null;
         await db.execute(
           `INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)`,
-          [
-            id,
-            url.trim().replace(/\/+$/, ""),
-            trimmedAltUrl,
-            displayName.trim(),
-            username.trim(),
-          ]
+          [id, url.trim().replace(/\/+$/, ""), trimmedAltUrl, displayName.trim(), username.trim()],
         );
         const rows = await db.select<Server[]>("SELECT * FROM servers WHERE id = ?", [id]);
         const server = rows[0];
@@ -192,7 +193,9 @@ export function Wizard({ onSuccess }: Props) {
         <div className="wizard-steps">
           {([1, 2, 3, 4] as Step[]).map((s) => (
             <div key={s} className="wizard-step-dot-wrap">
-              <div className={`wizard-step-dot${step === s ? " wizard-step-dot--active" : step > s ? " wizard-step-dot--done" : ""}`} />
+              <div
+                className={`wizard-step-dot${step === s ? " wizard-step-dot--active" : step > s ? " wizard-step-dot--done" : ""}`}
+              />
               {s < 4 && <div className={`wizard-step-track${step > s ? " wizard-step-track--done" : ""}`} />}
             </div>
           ))}
@@ -206,19 +209,18 @@ export function Wizard({ onSuccess }: Props) {
               <h1 className="wizard-title">Welcome to Canon</h1>
             </div>
             <p className="wizard-desc">
-              Canon is a music player for Navidrome that normalizes your tags automatically: genres,
-              descriptors, and scenes pulled from Last.fm and your library, organized in the background.
-              Your files are never modified.
+              Canon is a music player for Navidrome that normalizes your tags automatically: genres, descriptors, and
+              scenes pulled from Last.fm and your library, organized in the background. Your files are never modified.
             </p>
-            <p className="wizard-desc">
-              To get started, connect Canon to your Navidrome server.
-            </p>
+            <p className="wizard-desc">To get started, connect Canon to your Navidrome server.</p>
             <p className="settings-alpha-notice">
-              <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash.
-              Thanks for trying it out this early, it means a lot.
+              <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash. Thanks for trying
+              it out this early, it means a lot.
             </p>
             <div className="wizard-actions">
-              <button className="primary" onClick={() => setStep(2)}>Continue</button>
+              <button className="primary" onClick={() => setStep(2)}>
+                Continue
+              </button>
             </div>
           </div>
         )}
@@ -260,12 +262,16 @@ export function Wizard({ onSuccess }: Props) {
                   type="button"
                   className={`wizard-auth-tab${authMethod === "password" ? " wizard-auth-tab--active" : ""}`}
                   onClick={() => handleAuthMethodChange("password")}
-                >Password</button>
+                >
+                  Password
+                </button>
                 <button
                   type="button"
                   className={`wizard-auth-tab${authMethod === "apikey" ? " wizard-auth-tab--active" : ""}`}
                   onClick={() => handleAuthMethodChange("apikey")}
-                >API Key</button>
+                >
+                  API Key
+                </button>
               </div>
               {authMethod === "password" ? (
                 <label>
@@ -315,17 +321,14 @@ export function Wizard({ onSuccess }: Props) {
               <div className="wizard-actions">
                 <button
                   type="button"
-                  onClick={() => { void handleTest(); }}
+                  onClick={() => {
+                    void handleTest();
+                  }}
                   disabled={!canTest || testState === "testing"}
                 >
                   {testState === "testing" ? "Testing…" : "Test connection"}
                 </button>
-                <button
-                  type="button"
-                  className="primary"
-                  onClick={() => setStep(3)}
-                  disabled={!step2Complete}
-                >
+                <button type="button" className="primary" onClick={() => setStep(3)} disabled={!step2Complete}>
                   Continue
                 </button>
               </div>
@@ -336,9 +339,7 @@ export function Wizard({ onSuccess }: Props) {
         {step === 3 && (
           <div className="wizard-body">
             <h1 className="wizard-title">Optional setup</h1>
-            <p className="wizard-desc">
-              Everything below is optional and can be changed later in Settings.
-            </p>
+            <p className="wizard-desc">Everything below is optional and can be changed later in Settings.</p>
 
             <section className="settings-section">
               <h3 className="settings-section-title">Last.fm</h3>
@@ -347,7 +348,9 @@ export function Wizard({ onSuccess }: Props) {
                   type="text"
                   placeholder="Paste your Last.fm API key"
                   value={lastfmKey}
-                  onChange={(e) => { void handleSetLastfmKey(e.target.value); }}
+                  onChange={(e) => {
+                    void handleSetLastfmKey(e.target.value);
+                  }}
                 />
               </SettingRow>
             </section>
@@ -359,7 +362,9 @@ export function Wizard({ onSuccess }: Props) {
                   type="text"
                   placeholder="Paste your Fanart.tv API key"
                   value={fanartKey}
-                  onChange={(e) => { void handleSetFanartKey(e.target.value); }}
+                  onChange={(e) => {
+                    void handleSetFanartKey(e.target.value);
+                  }}
                 />
               </SettingRow>
             </section>
@@ -370,7 +375,9 @@ export function Wizard({ onSuccess }: Props) {
                 <input
                   type="checkbox"
                   checked={autoRefresh}
-                  onChange={(e) => { void setAutoRefresh(e.target.checked); }}
+                  onChange={(e) => {
+                    void setAutoRefresh(e.target.checked);
+                  }}
                 />
               </SettingRow>
               <SettingRow title="Stale after (days)">
@@ -379,7 +386,9 @@ export function Wizard({ onSuccess }: Props) {
                   min={1}
                   max={9999}
                   value={stalenessDays}
-                  onChange={(e) => { void setStalenessDays(e.target.value); }}
+                  onChange={(e) => {
+                    void setStalenessDays(e.target.value);
+                  }}
                   className="settings-staleness-input"
                 />
               </SettingRow>
@@ -391,7 +400,9 @@ export function Wizard({ onSuccess }: Props) {
                 <input
                   type="checkbox"
                   checked={autoCheck}
-                  onChange={(e) => { void setAutoCheck(e.target.checked); }}
+                  onChange={(e) => {
+                    void setAutoCheck(e.target.checked);
+                  }}
                 />
               </SettingRow>
               <SettingRow title="Check interval">
@@ -399,7 +410,9 @@ export function Wizard({ onSuccess }: Props) {
                   className="settings-select"
                   value={intervalMin}
                   disabled={!autoCheck}
-                  onChange={(e) => { void setIntervalMin(e.target.value); }}
+                  onChange={(e) => {
+                    void setIntervalMin(e.target.value);
+                  }}
                 >
                   <option value="10">Every 10 minutes</option>
                   <option value="30">Every 30 minutes</option>
@@ -434,8 +447,12 @@ export function Wizard({ onSuccess }: Props) {
             </section>
 
             <div className="wizard-actions">
-              <button type="button" onClick={() => setStep(4)}>I&rsquo;ll do it later</button>
-              <button type="button" className="primary" onClick={() => setStep(4)}>Continue</button>
+              <button type="button" onClick={() => setStep(4)}>
+                I&rsquo;ll do it later
+              </button>
+              <button type="button" className="primary" onClick={() => setStep(4)}>
+                Continue
+              </button>
             </div>
           </div>
         )}
@@ -443,9 +460,7 @@ export function Wizard({ onSuccess }: Props) {
         {step === 4 && (
           <div className="wizard-body">
             <h1 className="wizard-title">You&rsquo;re all set</h1>
-            <p className="wizard-desc">
-              Library syncing in background, start listening.
-            </p>
+            <p className="wizard-desc">Library syncing in background, start listening.</p>
             {saveError && (
               <p className="wizard-feedback wizard-feedback--error">
                 <AlertCircle size={14} />
@@ -456,7 +471,9 @@ export function Wizard({ onSuccess }: Props) {
               <button
                 type="button"
                 className="primary"
-                onClick={() => { void handleFinish(); }}
+                onClick={() => {
+                  void handleFinish();
+                }}
                 disabled={saving}
               >
                 {saving ? "Opening…" : "Open Canon"}

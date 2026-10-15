@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { getDb } from "../db";
 import { SchemaTooNewError } from "../db/migrations";
 import { keychain } from "../lib/keychain";
-import type { Server } from "../types/server";
-import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { QK } from "../lib/queryKeys";
+import type { Server } from "../types/server";
 
 export interface ServerWithCredential {
   server: Server;
@@ -44,8 +44,7 @@ export function useServers() {
     queryKey: QK.servers(),
     // A library written by a newer build stays too new however often it is read, and `getDb()`
     // caches the one rejected promise, so the default three retries only delay the message.
-    retry: (failureCount, error) =>
-      !(error instanceof SchemaTooNewError) && failureCount < 3,
+    retry: (failureCount, error) => !(error instanceof SchemaTooNewError) && failureCount < 3,
     queryFn: async () => {
       const db = await getDb();
       return db.select<Server[]>("SELECT * FROM servers ORDER BY created_at ASC");
@@ -67,10 +66,7 @@ export function useServerWithCredential(serverId: string | undefined) {
     gcTime: Infinity,
     queryFn: async (): Promise<ServerWithCredential> => {
       const db = await getDb();
-      const rows = await db.select<Server[]>(
-        "SELECT * FROM servers WHERE id = ?",
-        [serverId]
-      );
+      const rows = await db.select<Server[]>("SELECT * FROM servers WHERE id = ?", [serverId]);
       const server = rows[0];
       if (!server) throw new Error(`Server ${serverId} not found`);
       // `get_credential` rejects on a missing entry rather than resolving to an empty

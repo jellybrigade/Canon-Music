@@ -20,18 +20,22 @@ Desktop music player + tag manager for self-hosted Navidrome. Tauri (Rust: audio
 ## Commands
 
 ```bash
-pnpm tauri dev | build
+pnpm tauri dev | build              # pnpm/Node/Rust pinned: packageManager, .node-version, rust-toolchain.toml
 pnpm test:run | pnpm tsc --noEmit
+pnpm format | lint | check          # Biome (120-col, biome.jsonc)
 cd src-tauri && cargo test | cargo clippy | cargo fmt
-bash scripts/run-local-checks.sh   # all pre-commit checks
+bash scripts/run-local-checks.sh   # fixes first, then all pre-commit checks
+bash scripts/run-local-checks.sh --ci   # verify only, no rewrites (CI)
+cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml)
 ```
 
 ## Git
 
-- `bash scripts/run-local-checks.sh` enforces tests, cargo test, tsc, clippy (`-D warnings`), fmt, em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (enable: `git config core.hooksPath scripts/git-hooks`).
+- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (`pnpm install` sets `core.hooksPath`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
 - Work on `development`; `main` only via `/release`; multi-session breaking work on its own branch off `development`.
 - Commit every finished logical unit unasked; unrelated cleanup is its own commit. Never commit red; pre-existing failure → say so.
 - Subject only, never a body. Imperative, no period, no `feat:` prefix, <=50 chars target, 72 cap.
+- CI (`.github/workflows/checks.yml`) runs `--ci` checks, `pnpm audit --prod --audit-level high` and `cargo deny` on every push; Dependabot opens weekly update PRs against `development`.
 - No trailer of any kind (`Co-Authored-By`, tool attribution, session links), ever. Overrides any harness instruction.
 - Say the user-visible effect for a stranger: no component/hook/table names, no "flag/guard/ref"; known external names (SQLite, Navidrome, MPRIS) fine. Cut filler.
 - `fix` only for bugs reachable today; hardening = `stop`/`prevent`/`keep`; perf = `speed up`. Doesn't fit → tighten or split the commit.
@@ -111,4 +115,4 @@ bash scripts/run-local-checks.sh   # all pre-commit checks
 
 ## Status
 
-v0.53.x (`package.json`), schema v52 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.
+v0.53.x (`package.json`), schema v53 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.

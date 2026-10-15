@@ -35,7 +35,10 @@
   font-weight: 500;
   color: var(--text-secondary);
   white-space: nowrap;
-  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
+  transition:
+    background var(--duration-base),
+    color var(--duration-base),
+    border-color var(--duration-base);
 }
 
 .album-tag-chip--excludable {
@@ -100,7 +103,9 @@
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: border-color var(--duration-base), color var(--duration-base);
+  transition:
+    border-color var(--duration-base),
+    color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -125,4 +130,6 @@
   align-self: flex-start;
 }
 
-.album-unmatched-hint:hover { color: var(--text-secondary); }
+.album-unmatched-hint:hover {
+  color: var(--text-secondary);
+}

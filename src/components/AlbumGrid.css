@@ -42,7 +42,9 @@
   cursor: pointer;
   line-height: 1;
   border-radius: var(--radius-xs);
-  transition: color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast);
   text-align: center;
   min-width: 1.5rem;
 }
@@ -75,7 +77,9 @@
   border-radius: var(--radius-base);
   overflow: hidden;
   aspect-ratio: 1 / 1;
-  transition: transform var(--motion-fast), box-shadow var(--motion-fast);
+  transition:
+    transform var(--motion-fast),
+    box-shadow var(--motion-fast);
   /* WebKitGTK paint-skip for off-screen grid tiles (psysonic pattern); if tiles blank/flash on some GPUs, drop content-visibility here. */
   content-visibility: auto;
   contain-intrinsic-size: 0 220px;
@@ -193,7 +197,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity var(--duration-moderate), color var(--duration-moderate);
+  transition:
+    opacity var(--duration-moderate),
+    color var(--duration-moderate);
 }
 
 .tracklist-row:hover .track-heart,
@@ -228,7 +234,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: opacity var(--duration-moderate), color var(--duration-moderate);
+  transition:
+    opacity var(--duration-moderate),
+    color var(--duration-moderate);
   z-index: 2;
 }
 
@@ -266,7 +274,6 @@
   color: var(--accent);
   border-color: var(--accent-border);
 }
-
 
 /* ── Year group header ─────────────────────────────────────────────── */
 
@@ -313,7 +320,6 @@
   pointer-events: none;
 }
 
-
 .album-grid-pagination {
   padding: var(--space-sm) var(--space-md);
   display: flex;
@@ -340,15 +346,29 @@
   padding: 0 var(--space-xs);
   cursor: pointer;
   box-shadow: none;
-  transition: color var(--duration-fast), background var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast),
+    border-color var(--duration-fast);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.album-grid-pagination .pg-btn:hover:not(:disabled) { color: var(--text-primary); background: var(--bg-hover); border-color: transparent; }
-.album-grid-pagination .pg-btn:disabled { opacity: var(--opacity-30); cursor: default; }
-.album-grid-pagination .pg-btn--active { background: var(--accent-subtle); border-color: var(--accent); color: var(--accent); }
+.album-grid-pagination .pg-btn:hover:not(:disabled) {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+.album-grid-pagination .pg-btn:disabled {
+  opacity: var(--opacity-30);
+  cursor: default;
+}
+.album-grid-pagination .pg-btn--active {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 .album-grid-pagination .pg-ellipsis {
   color: var(--text-tertiary);

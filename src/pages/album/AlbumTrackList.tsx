@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
 import { Heart, Play, SlidersHorizontal } from "lucide-react";
-import { useClickOutside } from "../../ui/useClickOutside";
+import { useEffect, useRef, useState } from "react";
 import { useTrackListSessionStore } from "../../store/trackListSessionStore";
 import type { TrackRow } from "../../types/library";
-import { trackGenres, type TrackGenre } from "./albumGenres";
+import { useClickOutside } from "../../ui/useClickOutside";
+import { type TrackGenre, trackGenres } from "./albumGenres";
 import "./AlbumTrackList.css";
 import { bitrateCell, durationCell } from "../../lib/trackCells";
 
@@ -26,12 +26,28 @@ interface Props {
 
 function useTrackColumns() {
   const [trackCols, setTrackCols] = useState<{
-    artist: boolean; genre: boolean; disc: boolean;
-    duration: boolean; format: boolean; bitrate: boolean; plays: boolean;
+    artist: boolean;
+    genre: boolean;
+    disc: boolean;
+    duration: boolean;
+    format: boolean;
+    bitrate: boolean;
+    plays: boolean;
   }>(() => {
-    const defaults = { artist: true, genre: true, disc: false, duration: true, format: false, bitrate: false, plays: true };
-    try { return { ...defaults, ...JSON.parse(localStorage.getItem("canon-album-track-cols") ?? "null") }; }
-    catch { return defaults; }
+    const defaults = {
+      artist: true,
+      genre: true,
+      disc: false,
+      duration: true,
+      format: false,
+      bitrate: false,
+      plays: true,
+    };
+    try {
+      return { ...defaults, ...JSON.parse(localStorage.getItem("canon-album-track-cols") ?? "null") };
+    } catch {
+      return defaults;
+    }
   });
 
   useEffect(() => {
@@ -78,10 +94,7 @@ export function AlbumTrackList({
       <div className="empty-state">
         <p className="empty-state-title">Couldn't load this album's tracks</p>
         <p className="empty-state-hint">{tracksError}</p>
-        <button
-          className="empty-state-action"
-          onClick={() => useTrackListSessionStore.getState().bumpRefresh()}
-        >
+        <button className="empty-state-action" onClick={() => useTrackListSessionStore.getState().bumpRefresh()}>
           Try again
         </button>
       </div>
@@ -101,7 +114,9 @@ export function AlbumTrackList({
         <div className="empty-state">
           <p className="empty-state-title">Couldn't get this album's tracks</p>
           <p className="empty-state-hint">{missingTracks.error}</p>
-          <button className="empty-state-action" onClick={missingTracks.retry}>Try again</button>
+          <button className="empty-state-action" onClick={missingTracks.retry}>
+            Try again
+          </button>
         </div>
       );
     }
@@ -109,7 +124,9 @@ export function AlbumTrackList({
       <div className="empty-state">
         <p className="empty-state-title">No tracks in this album</p>
         <p className="empty-state-hint">The server lists no tracks for it.</p>
-        <button className="empty-state-action" onClick={missingTracks.retry}>Check again</button>
+        <button className="empty-state-action" onClick={missingTracks.retry}>
+          Check again
+        </button>
       </div>
     );
   }
@@ -175,7 +192,7 @@ export function AlbumTrackList({
                       <Play size={12} />
                     </span>
                   ) : (
-                    track.track_number ?? "-"
+                    (track.track_number ?? "-")
                   )}
                 </td>
                 <td className="track-title">{track.title}</td>
@@ -183,25 +200,17 @@ export function AlbumTrackList({
                 {trackCols.genre && (
                   <td className="track-genre">
                     {shownGenres.map((g, i) => (
-                      <span key={i} className="track-genre-chip">{g.display}</span>
+                      <span key={i} className="track-genre-chip">
+                        {g.display}
+                      </span>
                     ))}
                   </td>
                 )}
                 {trackCols.disc && <td className="track-disc">{track.disc_number ?? ""}</td>}
-                {trackCols.duration && (
-                  <td className="track-duration">
-                    {durationCell(track.duration)}
-                  </td>
-                )}
-                {trackCols.format && (
-                  <td className="track-format">{track.suffix ? track.suffix.toUpperCase() : ""}</td>
-                )}
-                {trackCols.bitrate && (
-                  <td className="track-bitrate">{bitrateCell(track.bit_rate)}</td>
-                )}
-                {trackCols.plays && (
-                  <td className="track-plays">{track.play_count ?? ""}</td>
-                )}
+                {trackCols.duration && <td className="track-duration">{durationCell(track.duration)}</td>}
+                {trackCols.format && <td className="track-format">{track.suffix ? track.suffix.toUpperCase() : ""}</td>}
+                {trackCols.bitrate && <td className="track-bitrate">{bitrateCell(track.bit_rate)}</td>}
+                {trackCols.plays && <td className="track-plays">{track.play_count ?? ""}</td>}
                 <td className="track-heart-cell">
                   <button
                     className={`track-heart${isLoved ? " track-heart--loved" : ""}`}
@@ -211,11 +220,7 @@ export function AlbumTrackList({
                       onToggleLove(track.id);
                     }}
                   >
-                    <Heart
-                      size={15}
-                      fill={isLoved ? "currentColor" : "none"}
-                      strokeWidth={2}
-                    />
+                    <Heart size={15} fill={isLoved ? "currentColor" : "none"} strokeWidth={2} />
                   </button>
                 </td>
               </tr>

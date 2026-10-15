@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+
 import { renderHook } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { useDismissOnNavigate } from "./useDismissOnNavigate";
 
 describe("useDismissOnNavigate", () => {
@@ -60,7 +61,7 @@ describe("useDismissOnNavigate", () => {
     const second = vi.fn();
     const { rerender } = renderHook(
       ({ path, clear }: { path: string; clear: () => void }) => useDismissOnNavigate(path, clear),
-      { initialProps: { path: "/home", clear: first } }
+      { initialProps: { path: "/home", clear: first } },
     );
     rerender({ path: "/album/abc", clear: second });
     expect(first).not.toHaveBeenCalled();

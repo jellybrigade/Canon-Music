@@ -7,7 +7,10 @@ describe("combineGenres", () => {
   });
 
   it("passes through one side unchanged (still sorted) when the other is empty", () => {
-    const rg = [{ name: "Rock", count: 3 }, { name: "Jazz", count: 5 }];
+    const rg = [
+      { name: "Rock", count: 3 },
+      { name: "Jazz", count: 5 },
+    ];
     expect(combineGenres(rg, [])).toEqual([
       { name: "Jazz", count: 5 },
       { name: "Rock", count: 3 },
@@ -31,8 +34,11 @@ describe("combineGenres", () => {
 
   it("merges duplicate names within a single side, not only across sides", () => {
     const result = combineGenres(
-      [{ name: "Rock", count: 1 }, { name: "rock", count: 4 }],
-      []
+      [
+        { name: "Rock", count: 1 },
+        { name: "rock", count: 4 },
+      ],
+      [],
     );
     expect(result).toEqual([{ name: "Rock", count: 5 }]);
   });
@@ -44,8 +50,12 @@ describe("combineGenres", () => {
 
   it("sorts strictly descending by count, including zero and negative counts", () => {
     const result = combineGenres(
-      [{ name: "A", count: -1 }, { name: "B", count: 0 }, { name: "C", count: 5 }],
-      []
+      [
+        { name: "A", count: -1 },
+        { name: "B", count: 0 },
+        { name: "C", count: 5 },
+      ],
+      [],
     );
     expect(result.map((g) => g.name)).toEqual(["C", "B", "A"]);
   });

@@ -92,7 +92,10 @@
   border-radius: var(--radius-sm-md);
   padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast);
   white-space: nowrap;
   box-shadow: none;
 }
@@ -229,7 +232,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   white-space: nowrap;
   overflow: hidden;
 }

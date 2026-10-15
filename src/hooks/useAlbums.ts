@@ -1,17 +1,14 @@
-import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumRow, AlbumSort } from "../types/library";
+
 export type { AlbumRow, AlbumSort } from "../types/library";
 
 // Reads through the Rust read-only connection (library_read/albums.rs). `enabled: false`
 // skips the fetch but keeps `data`, so returning to the route paints instantly.
-export function useAlbums(
-  sort: AlbumSort = "artist",
-  canonicalIds: string[] = [],
-  enabled: boolean = true
-) {
+export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [], enabled: boolean = true) {
   const refreshTick = useAlbumBrowseSessionStore((s) => s.refreshTick);
   const canonicalIdsKey = canonicalIds.join(",");
   const cacheKey = `${sort}|${canonicalIdsKey}`;

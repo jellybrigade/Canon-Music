@@ -1,9 +1,9 @@
-import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
-import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
+import { useState } from "react";
 import type { RadioMode } from "../../features/playback/store/playerTypes";
 import type { PlaylistRow } from "../../features/playlists/usePlaylists";
+import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
+import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
 import type { TrackGenre } from "./albumGenres";
 
 interface Props {
@@ -58,9 +58,7 @@ export function TrackContextMenu({
               onClose();
             }}
           />
-          <button onClick={then(onToggleLove)}>
-            {isLoved ? "Unlove track" : "Love track"}
-          </button>
+          <button onClick={then(onToggleLove)}>{isLoved ? "Unlove track" : "Love track"}</button>
           <button onClick={then(onShowTags)}>Show tags</button>
           {overflowGenres.length > 0 && (
             <ContextMenuSubmenu label="More genres">

@@ -26,21 +26,30 @@ export function SleepTimerPopover({ popoverRef, position, onClose }: Props) {
         <button
           key={min}
           className={`timer-popover-item${sleepTimerMinutes === min ? " timer-popover-item--active" : ""}`}
-          onClick={() => { setSleepTimer(min); onClose(); }}
+          onClick={() => {
+            setSleepTimer(min);
+            onClose();
+          }}
         >
           {min} min
         </button>
       ))}
       <button
         className={`timer-popover-item${sleepTimerEndOfTrack ? " timer-popover-item--active" : ""}`}
-        onClick={() => { setSleepTimer("end-of-track"); onClose(); }}
+        onClick={() => {
+          setSleepTimer("end-of-track");
+          onClose();
+        }}
       >
         End of track
       </button>
       {timerActive && (
         <button
           className="timer-popover-item timer-popover-item--off"
-          onClick={() => { clearSleepTimer(); onClose(); }}
+          onClick={() => {
+            clearSleepTimer();
+            onClose();
+          }}
         >
           Off
         </button>

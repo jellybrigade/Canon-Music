@@ -1,7 +1,13 @@
-import { adjustIndexAfterMove, buildShuffleOrder, normalizeShuffleOrder, resolveTrack, trimQueueToCap } from "./queueOrder";
 import type { PlayerEngine } from "./playerEngine";
 import type { PlayerPersistence } from "./playerPersistence";
 import type { CurrentTrack, PlayerGet, PlayerSet, PlayerState } from "./playerTypes";
+import {
+  adjustIndexAfterMove,
+  buildShuffleOrder,
+  normalizeShuffleOrder,
+  resolveTrack,
+  trimQueueToCap,
+} from "./queueOrder";
 
 type QueueActions = Pick<
   PlayerState,
@@ -23,7 +29,7 @@ export function createQueueActions(
   set: PlayerSet,
   get: PlayerGet,
   { playTrack }: PlayerEngine,
-  { persistQueueState }: PlayerPersistence
+  { persistQueueState }: PlayerPersistence,
 ): QueueActions {
   return {
     // Seeds the queue from a saved session without starting playback: playQueue calls playTrack,
@@ -72,9 +78,7 @@ export function createQueueActions(
       const { isShuffled, queue, queueIndex, shuffleOrder } = get();
       if (isShuffled) {
         // Restore: resolve current position back to its actual queue index
-        const actualIndex = shuffleOrder.length > 0
-          ? (shuffleOrder[queueIndex] ?? queueIndex)
-          : queueIndex;
+        const actualIndex = shuffleOrder.length > 0 ? (shuffleOrder[queueIndex] ?? queueIndex) : queueIndex;
         set({ isShuffled: false, shuffleOrder: [], queueIndex: actualIndex });
       } else {
         if (queue.length <= 1) {
@@ -153,9 +157,7 @@ export function createQueueActions(
         const actualIdx = order[position]!;
         newQueue = [...queue];
         newQueue.splice(actualIdx, 1);
-        newShuffleOrder = order
-          .filter((_, i) => i !== position)
-          .map((idx) => (idx > actualIdx ? idx - 1 : idx));
+        newShuffleOrder = order.filter((_, i) => i !== position).map((idx) => (idx > actualIdx ? idx - 1 : idx));
         newQueueIndex = position < queueIndex ? queueIndex - 1 : queueIndex;
       } else {
         newQueue = [...queue];
@@ -188,7 +190,7 @@ export function createQueueActions(
       // Sort descending so we remove high indices first, avoids index drift
       const sorted = [...new Set(positions)].sort((a, b) => b - a);
 
-      let newQueue = [...queue];
+      const newQueue = [...queue];
       let newShuffleOrder = isShuffled ? normalizeShuffleOrder(shuffleOrder, queue.length) : [...shuffleOrder];
       let newQueueIndex = queueIndex;
       let removedCurrentTrack = false;
@@ -198,9 +200,7 @@ export function createQueueActions(
         if (isShuffled && newShuffleOrder.length > 0) {
           const actualIdx = newShuffleOrder[pos]!;
           newQueue.splice(actualIdx, 1);
-          newShuffleOrder = newShuffleOrder
-            .filter((_, i) => i !== pos)
-            .map((idx) => (idx > actualIdx ? idx - 1 : idx));
+          newShuffleOrder = newShuffleOrder.filter((_, i) => i !== pos).map((idx) => (idx > actualIdx ? idx - 1 : idx));
           if (pos < newQueueIndex) newQueueIndex--;
           else if (pos === newQueueIndex) removedCurrentTrack = true;
         } else {

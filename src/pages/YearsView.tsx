@@ -1,9 +1,9 @@
 import { AlbumGrid } from "../components/AlbumGrid";
+import type { RadioMode } from "../features/playback/store/playerTypes";
 import { useAlbums } from "../hooks/useAlbums";
+import type { ServerWithCredential } from "../hooks/useServer";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumRow } from "../types/library";
-import type { ServerWithCredential } from "../hooks/useServer";
-import type { RadioMode } from "../features/playback/store/playerTypes";
 
 interface Props {
   serverWithCredential: ServerWithCredential;

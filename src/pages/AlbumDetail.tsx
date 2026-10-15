@@ -1,38 +1,47 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { QK } from "../lib/queryKeys";
-import { TagDrawer } from "../features/tags/components/TagDrawer";
-import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
-import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
-import { AlbumGrid } from "../components/AlbumGrid";
-import { shuffleArray } from "../lib/shuffle";
-import type { AlbumRow, TrackRow } from "../types/library";
-import type { ServerWithCredential } from "../hooks/useServer";
-import { useTracks } from "../hooks/useTracks";
-import { useTrackListSessionStore } from "../store/trackListSessionStore";
-import { useLoved } from "../hooks/useLoved";
-import { usePlaylists } from "../features/playlists/usePlaylists";
-import { useNormalizeAlbum } from "../features/tags/hooks/useNormalizeAlbum";
-import { useEnrichAlbumTracks } from "../features/enrichment/hooks/useEnrichAlbumTracks";
-import { useEnrichAlbum } from "../features/enrichment/hooks/useEnrichAlbum";
-import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
-import { useArtistAlbums } from "../hooks/useArtistAlbums";
-import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
-import { useSimilarArtistAlbums } from "../features/enrichment/hooks/useSimilarArtistAlbums";
-import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
-import { useAlbumIdentity, useSaveAlbumIdentity, useRecordFailedLookup, useConfirmedArtistMbid } from "../features/enrichment/hooks/useAlbumIdentity";
-import { useAutoIdentifyAlbum } from "../features/enrichment/hooks/useAutoIdentifyAlbum";
-import { useBoolSetting, useSetting } from "../hooks/useSetting";
-import { useGenreMappings } from "../hooks/useGenreDisplay";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
-import { useAlbumAccent } from "../hooks/useAlbumAccent";
-import { syncAlbumTracks } from "../features/sync/syncTracks";
-import { fetchAlbumTracks } from "../lib/albumTracks";
-import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
-import { makeStreamUrlBuilder } from "../lib/track";
-import type { CurrentTrack } from "../features/playback/store/playerTypes";
-import { useStartRadio } from "../features/radio/hooks/useStartRadio";
+import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
+import { AlbumGrid } from "../components/AlbumGrid";
+import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
+import {
+  useAlbumIdentity,
+  useConfirmedArtistMbid,
+  useRecordFailedLookup,
+  useSaveAlbumIdentity,
+} from "../features/enrichment/hooks/useAlbumIdentity";
+import { useAutoIdentifyAlbum } from "../features/enrichment/hooks/useAutoIdentifyAlbum";
+import { useEnrichAlbum } from "../features/enrichment/hooks/useEnrichAlbum";
+import { useEnrichAlbumTracks } from "../features/enrichment/hooks/useEnrichAlbumTracks";
+import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
+import { useSimilarArtistAlbums } from "../features/enrichment/hooks/useSimilarArtistAlbums";
+import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
 import { usePlayerStore } from "../features/playback/store/player";
+import type { CurrentTrack } from "../features/playback/store/playerTypes";
+import { usePlaylists } from "../features/playlists/usePlaylists";
+import { useStartRadio } from "../features/radio/hooks/useStartRadio";
+import { syncAlbumTracks } from "../features/sync/syncTracks";
+import { TagDrawer } from "../features/tags/components/TagDrawer";
+import { useNormalizeAlbum } from "../features/tags/hooks/useNormalizeAlbum";
+import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
+import { useAlbumAccent } from "../hooks/useAlbumAccent";
+import { useArtistAlbums } from "../hooks/useArtistAlbums";
+import { useGenreMappings } from "../hooks/useGenreDisplay";
+import { useLoved } from "../hooks/useLoved";
+import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
+import type { ServerWithCredential } from "../hooks/useServer";
+import { useBoolSetting, useSetting } from "../hooks/useSetting";
+import { useTracks } from "../hooks/useTracks";
+import { fetchAlbumTracks } from "../lib/albumTracks";
+import { QK } from "../lib/queryKeys";
+import { shuffleArray } from "../lib/shuffle";
+import { makeStreamUrlBuilder } from "../lib/track";
+import { useTrackListSessionStore } from "../store/trackListSessionStore";
+import type { AlbumRow, TrackRow } from "../types/library";
+import { AlbumBio } from "./album/AlbumBio";
+import { AlbumHero } from "./album/AlbumHero";
+import { AlbumTagBand } from "./album/AlbumTagBand";
+import { AlbumTrackList } from "./album/AlbumTrackList";
 import {
   buildDisplayGenres,
   groupGenresBySource,
@@ -41,10 +50,6 @@ import {
   useTrackTagGenres,
   useUnmatchedGenreCount,
 } from "./album/albumGenres";
-import { AlbumHero } from "./album/AlbumHero";
-import { AlbumTagBand } from "./album/AlbumTagBand";
-import { AlbumBio } from "./album/AlbumBio";
-import { AlbumTrackList } from "./album/AlbumTrackList";
 import { TrackContextMenu } from "./album/TrackContextMenu";
 import "./AlbumDetail.css";
 import { replayGainFromRow } from "../lib/replayGainRow";
@@ -65,7 +70,14 @@ interface DrawerState {
   trackId?: string;
 }
 
-export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbum, onSelectArtist, onTagFilter }: Props) {
+export function AlbumDetail({
+  album,
+  serverWithCredential,
+  onClose,
+  onSelectAlbum,
+  onSelectArtist,
+  onTagFilter,
+}: Props) {
   const { server, credential } = serverWithCredential;
   const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
@@ -86,25 +98,25 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const genreMappings = useGenreMappings();
 
   const isVariousArtists = (album.artist ?? "").trim().toLowerCase() === "various artists";
-  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : album.artist ?? "", server.id);
+  const { data: moreFromArtist } = useArtistAlbums(isVariousArtists ? "" : (album.artist ?? ""), server.id);
   const moreFromArtistAlbums = useMemo(
     () => (moreFromArtist ?? []).filter((a) => a.id !== album.id).slice(0, RELATED_SHELF_LIMIT),
-    [moreFromArtist, album.id]
+    [moreFromArtist, album.id],
   );
-  const { data: artistEnrichment } = useEnrichArtist(isVariousArtists ? "" : album.artist ?? "");
+  const { data: artistEnrichment } = useEnrichArtist(isVariousArtists ? "" : (album.artist ?? ""));
   const similarArtistNames = useMemo<string[]>(
     () => (artistEnrichment?.similar_json ? (JSON.parse(artistEnrichment.similar_json) as string[]) : []),
-    [artistEnrichment?.similar_json]
+    [artistEnrichment?.similar_json],
   );
   const { data: similarInLibrarySet } = useSimilarInLibrary(similarArtistNames);
   const similarArtistNamesInLibrary = useMemo(
     () => similarArtistNames.filter((n) => similarInLibrarySet?.has(n)),
-    [similarArtistNames, similarInLibrarySet]
+    [similarArtistNames, similarInLibrarySet],
   );
   const { data: fansAlsoLikeAlbumsRaw = [] } = useSimilarArtistAlbums(similarArtistNamesInLibrary, server.id);
   const fansAlsoLikeAlbums = useMemo(
     () => fansAlsoLikeAlbumsRaw.slice(0, RELATED_SHELF_LIMIT),
-    [fansAlsoLikeAlbumsRaw]
+    [fansAlsoLikeAlbumsRaw],
   );
 
   const trackTagGenresMap = useTrackTagGenres(album.id, genreMappings);
@@ -185,7 +197,6 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     confirmedArtistMbid,
     mbAutoIdentify,
     existingIdentity: albumIdentity,
-    identityLoaded,
   });
 
   useEffect(() => {
@@ -214,7 +225,7 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
     } else if (decision !== "error") {
       recordFailed.mutate({ albumId: album.id, matchScore: Math.round(score * 100) });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoResult?.decision, album.id]);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TrackRow } | null>(null);
@@ -268,24 +279,27 @@ export function AlbumDetail({ album, serverWithCredential, onClose, onSelectAlbu
   const rawSourcesByCanonicalId = useRawSourcesByCanonicalId(album.id);
   const displayGenres = useMemo(
     () => buildDisplayGenres(normalizedTags, tracks, genreMappings),
-    [normalizedTags, tracks, genreMappings]
+    [normalizedTags, tracks, genreMappings],
   );
   const genreGroups = useMemo(() => groupGenresBySource(displayGenres), [displayGenres]);
   const unmatchedCount = useUnmatchedGenreCount(album.id);
   const isAlbumLoved = lovedAlbumIds.has(album.id);
 
   return (
-    <div
-      className="album-detail"
-      style={(accentColor ? { "--album-accent": accentColor } : {}) as React.CSSProperties}
-    >
+    <div className="album-detail" style={(accentColor ? { "--album-accent": accentColor } : {}) as React.CSSProperties}>
       <AlbumHero
         album={album}
         coverArtUrl={coverArtUrl}
         albumIdentity={albumIdentity}
         showUnidentified={mbAutoIdentify && identityLoaded && !autoIdentifyFetching}
         tagsComputedAt={normalizedTags?.computed_at ?? null}
-        tagRefresh={{ isRefreshing: isTagRefreshing, error: tagRefreshError, onRefresh: () => { void refreshTags(); } }}
+        tagRefresh={{
+          isRefreshing: isTagRefreshing,
+          error: tagRefreshError,
+          onRefresh: () => {
+            void refreshTags();
+          },
+        }}
         playAction={playAction}
         canPlay={!!tracks && tracks.length > 0}
         onPlayAlbum={handlePlayAlbum}

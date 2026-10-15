@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
 import { Cast, Headphones, MoreHorizontal, Timer } from "lucide-react";
-import { usePlayerStore } from "../store/player";
-import { popoverAbove } from "../lib/popoverAbove";
-import { VolumeControl } from "./VolumeControl";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { useAnyModalOpen } from "../../../ui/useModalChrome";
+import { popoverAbove } from "../lib/popoverAbove";
+import { usePlayerStore } from "../store/player";
+import { VolumeControl } from "./VolumeControl";
 
 interface Props {
   /** Receives the more button, which stays mounted to anchor the popover after the menu closes. */
@@ -16,7 +16,14 @@ interface Props {
   castDeviceName: string | null;
 }
 
-export function PlayerMoreControls({ onOpenTimer, onOpenCast, onNowPlaying, timerLabel, isTimerActive, castDeviceName }: Props) {
+export function PlayerMoreControls({
+  onOpenTimer,
+  onOpenCast,
+  onNowPlaying,
+  timerLabel,
+  isTimerActive,
+  castDeviceName,
+}: Props) {
   const isAnyModalOpen = useAnyModalOpen();
   const [menuPosition, setMenuPosition] = useState<{ right: number; bottom: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -29,7 +36,9 @@ export function PlayerMoreControls({ onOpenTimer, onOpenCast, onNowPlaying, time
   // A modal painted over the menu owns Escape.
   useEffect(() => {
     if (!isOpen || isAnyModalOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenuPosition(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuPosition(null);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [isOpen, isAnyModalOpen]);
@@ -72,7 +81,10 @@ export function PlayerMoreControls({ onOpenTimer, onOpenCast, onNowPlaying, time
           castDeviceName={castDeviceName}
           onOpenTimer={() => handOff(onOpenTimer)}
           onOpenCast={() => handOff(onOpenCast)}
-          onNowPlaying={() => { onNowPlaying(); close(); }}
+          onNowPlaying={() => {
+            onNowPlaying();
+            close();
+          }}
         />
       )}
     </>
@@ -90,17 +102,22 @@ interface MenuProps {
   onNowPlaying: () => void;
 }
 
-function PlayerMoreMenu({ menuRef, position, timerLabel, isTimerActive, castDeviceName, onOpenTimer, onOpenCast, onNowPlaying }: MenuProps) {
+function PlayerMoreMenu({
+  menuRef,
+  position,
+  timerLabel,
+  isTimerActive,
+  castDeviceName,
+  onOpenTimer,
+  onOpenCast,
+  onNowPlaying,
+}: MenuProps) {
   const sleepTimerEndOfTrack = usePlayerStore((s) => s.sleepTimerEndOfTrack);
   // The countdown text trails the timer by an effect, so it can't be what says "Off".
   const timerState = sleepTimerEndOfTrack ? "End of track" : isTimerActive ? timerLabel || "On" : "Off";
 
   return (
-    <div
-      ref={menuRef}
-      className="player-more-menu"
-      style={{ right: position.right, bottom: position.bottom }}
-    >
+    <div ref={menuRef} className="player-more-menu" style={{ right: position.right, bottom: position.bottom }}>
       <VolumeControl className="player-more-volume" iconSize={16} isLabelled />
       <div className="player-more-separator" />
       <button className="player-more-row" onClick={onOpenTimer}>

@@ -18,7 +18,12 @@ interface GenreSeedOptions {
   limit?: number;
 }
 
-export async function loadGenreSeedTracks({ serverId, canonicalId, isDirectOnly, limit }: GenreSeedOptions): Promise<GenreSeedRow[]> {
+export async function loadGenreSeedTracks({
+  serverId,
+  canonicalId,
+  isDirectOnly,
+  limit,
+}: GenreSeedOptions): Promise<GenreSeedRow[]> {
   const db = await getDb();
   const relationFilter = isDirectOnly ? "AND ag.relation = 'direct'" : "";
   const limitClause = limit === undefined ? "" : "LIMIT ?";

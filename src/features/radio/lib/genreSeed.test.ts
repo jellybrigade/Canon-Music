@@ -13,7 +13,9 @@ function seedAlbum(serverId: string, albumId: string, relation: "direct" | "ance
     .prepare("INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, 'Artist')")
     .run(albumId, serverId, albumId);
   db.raw
-    .prepare("INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', 'Song', 'Artist', ?)")
+    .prepare(
+      "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', 'Song', 'Artist', ?)",
+    )
     .run(`${albumId}-t`, serverId, albumId);
   db.raw
     .prepare("INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES (?, 'shoegaze', ?, 'Shoegaze')")

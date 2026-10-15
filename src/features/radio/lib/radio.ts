@@ -1,6 +1,6 @@
 import { getDb } from "../../../db";
-import { getCanonTree } from "../../tags/lib/canonicalize";
 import type { RadioMode } from "../../playback/store/playerTypes";
+import { getCanonTree } from "../../tags/lib/canonicalize";
 
 export interface RadioCandidate {
   id: string;
@@ -19,9 +19,9 @@ export const CANDIDATE_LIMIT = 200;
 export function scaleWeights(scale: number): { tagW: number; trackCfW: number; artistCfW: number } {
   const s = Math.max(0, Math.min(1, scale));
   return {
-    tagW:      0.60 - 0.40 * s,
-    trackCfW:  0.25 + 0.20 * s,
-    artistCfW: 0.15 + 0.20 * s,
+    tagW: 0.6 - 0.4 * s,
+    trackCfW: 0.25 + 0.2 * s,
+    artistCfW: 0.15 + 0.2 * s,
   };
 }
 
@@ -73,7 +73,7 @@ function rowToCandidate(r: TrackRow, score: number): RadioCandidate {
 export function buildAncestorWeights(
   nodeId: string,
   byId: Map<string, { id: string; parents: string[] }>,
-  maxDepth = 4
+  maxDepth = 4,
 ): Map<string, number> {
   const weights = new Map<string, number>();
   weights.set(nodeId, 1.0);
@@ -87,7 +87,7 @@ export function buildAncestorWeights(
     for (const parentId of node.parents) {
       if (visited.has(parentId)) continue;
       visited.add(parentId);
-      const w = 1 / Math.pow(2, item.depth + 1);
+      const w = 1 / 2 ** (item.depth + 1);
       const existing = weights.get(parentId) ?? 0;
       weights.set(parentId, Math.max(existing, w));
       queue.push({ id: parentId, depth: item.depth + 1 });
@@ -102,7 +102,7 @@ async function getCuratedCandidates(
   excludeIds: Set<string>,
   artistSimilarity: Map<string, number>,
   trackSimilarity: Map<string, number>,
-  scale = 0.5
+  scale = 0.5,
 ): Promise<RadioCandidate[]> {
   const db = await getDb();
   const tree = await getCanonTree();
@@ -110,7 +110,7 @@ async function getCuratedCandidates(
   type TagRow = { canonical_id: string; kind: string };
   const seedTags = await db.select<TagRow[]>(
     "SELECT canonical_id, kind FROM track_tags WHERE track_id = ? AND canonical_id IS NOT NULL",
-    [seedTrackId]
+    [seedTrackId],
   );
 
   if (seedTags.length === 0) {
@@ -120,7 +120,7 @@ async function getCuratedCandidates(
        FROM tracks t JOIN albums a ON t.album_id = a.id
        WHERE t.server_id = ? AND t.id != ?
        ORDER BY RANDOM() LIMIT ?`,
-      [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
+      [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
     );
     return fallback.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 0.1));
   }
@@ -164,7 +164,7 @@ async function getCuratedCandidates(
      GROUP BY t.id
      ORDER BY sum_score DESC
      LIMIT ?`,
-    [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
+    [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
   );
 
   // Dampen by sqrt(tag_count) in JS, not SQL, since target SQLite builds may lack SQRT().
@@ -198,10 +198,9 @@ export async function getRadioCandidates({
   const db = await getDb();
 
   type SeedRow = { server_id: string; artist: string | null; year: number | null; album_id: string | null };
-  const seedRows = await db.select<SeedRow[]>(
-    "SELECT server_id, artist, year, album_id FROM tracks WHERE id = ?",
-    [seedTrackId]
-  );
+  const seedRows = await db.select<SeedRow[]>("SELECT server_id, artist, year, album_id FROM tracks WHERE id = ?", [
+    seedTrackId,
+  ]);
   const seedRow = seedRows[0];
   if (!seedRow) return [];
 
@@ -229,7 +228,7 @@ export async function getRadioCandidates({
          WHERE t.server_id = ? AND t.id != ?
            AND lower(t.artist) IN (${placeholders})
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, ...similarArtistNames, CANDIDATE_LIMIT],
       );
       return rows
         .filter((r) => !excludeIds.has(r.id))
@@ -247,23 +246,25 @@ export async function getRadioCandidates({
          FROM tracks t JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ? AND t.id != ? AND lower(t.artist) = lower(?)
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, seed.artist, CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, seed.artist, CANDIDATE_LIMIT],
       );
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
 
     case "same-album": {
-      if (!seed.albumId) return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map(), similarityScale);
+      if (!seed.albumId)
+        return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map(), similarityScale);
       const rows = await db.select<TrackRow[]>(
         `SELECT ${TRACK_PROJECTION}
          FROM tracks t JOIN albums a ON t.album_id = a.id
          WHERE t.album_id = ? AND t.id != ?
          ORDER BY t.disc_number, t.track_number`,
-        [seed.albumId, seedTrackId]
+        [seed.albumId, seedTrackId],
       );
       const filtered = rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
       // Fall back to curated when album exhausted
-      if (filtered.length === 0) return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map(), similarityScale);
+      if (filtered.length === 0)
+        return getCuratedCandidates(seedTrackId, seed, excludeIds, new Map(), new Map(), similarityScale);
       return filtered;
     }
 
@@ -275,7 +276,7 @@ export async function getRadioCandidates({
            FROM tracks t JOIN albums a ON t.album_id = a.id
            WHERE t.server_id = ? AND t.id != ?
            ORDER BY RANDOM() LIMIT ?`,
-          [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
+          [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
         );
         return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
       }
@@ -288,7 +289,7 @@ export async function getRadioCandidates({
          WHERE t.server_id = ? AND t.id != ?
            AND t.year BETWEEN ? AND ?
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, decadeStart, decadeEnd, CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, decadeStart, decadeEnd, CANDIDATE_LIMIT],
       );
       return rows
         .filter((r) => !excludeIds.has(r.id))
@@ -307,7 +308,7 @@ export async function getRadioCandidates({
          JOIN loved_tracks lt ON lt.track_id = t.id
          WHERE t.server_id = ? AND t.id != ?
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
       );
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }
@@ -318,7 +319,7 @@ export async function getRadioCandidates({
          FROM tracks t JOIN albums a ON t.album_id = a.id
          WHERE t.server_id = ? AND t.id != ?
          ORDER BY RANDOM() LIMIT ?`,
-        [seed.serverId, seedTrackId, CANDIDATE_LIMIT]
+        [seed.serverId, seedTrackId, CANDIDATE_LIMIT],
       );
       return rows.filter((r) => !excludeIds.has(r.id)).map((r) => rowToCandidate(r, 1.0));
     }

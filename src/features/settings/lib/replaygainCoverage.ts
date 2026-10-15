@@ -33,7 +33,7 @@ function decibels(db: number): string {
 export function describeReplayGainCoverage(
   coverage: ReplayGainCoverage,
   mode: ReplayGainMode,
-  fallbackDb: number
+  fallbackDb: number,
 ): CoverageSummary {
   const { total, withTrackGain, withAlbumGain, withAnyGain } = coverage;
   if (total === 0) {
@@ -69,7 +69,7 @@ export function describeReplayGainCoverage(
   parts.push(
     untagged > 0
       ? `${count(untagged)} have no tags and play at the fallback gain (${decibels(fallbackDb)}).`
-      : "Every track in this library is normalized."
+      : "Every track in this library is normalized.",
   );
   return { headline, detail: parts.join(" ") };
 }

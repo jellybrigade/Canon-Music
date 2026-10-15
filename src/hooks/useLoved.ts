@@ -1,10 +1,10 @@
-import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useEffect } from "react";
+import { starAlbum, starTrack, unstarAlbum, unstarTrack } from "../clients/navidrome";
 import { getDb } from "../db";
-import type { ServerWithCredential } from "./useServer";
-import { starTrack, unstarTrack, starAlbum, unstarAlbum } from "../clients/navidrome";
 import { stripServerPrefix } from "../lib/ids";
-import { useLovedSessionStore, type LovedSets } from "../store/lovedSessionStore";
+import { type LovedSets, useLovedSessionStore } from "../store/lovedSessionStore";
+import type { ServerWithCredential } from "./useServer";
 
 interface LovedDto {
   trackIds: string[];
@@ -37,7 +37,7 @@ async function loadLoved(tick: number): Promise<void> {
           albumIds: new Set(dto.albumIds),
           trackAlbumIds: new Set(dto.trackAlbumIds),
         },
-        tick
+        tick,
       );
     } catch (err) {
       console.error("useLoved: failed to load loved ids", err);
@@ -79,17 +79,15 @@ export function useLoved() {
     void loadLoved(refreshTick);
   }, [refreshTick]);
 
-  const { trackIds: lovedTrackIds, albumIds: lovedAlbumIds, trackAlbumIds: lovedTrackAlbumIds } =
-    sets ?? EMPTY_SETS;
+  const { trackIds: lovedTrackIds, albumIds: lovedAlbumIds, trackAlbumIds: lovedTrackAlbumIds } = sets ?? EMPTY_SETS;
 
   function toggleTrackLove(trackId: string, serverWithCred: ServerWithCredential) {
     return serializeByKey(`track:${trackId}`, async () => {
       const { server, credential } = serverWithCred;
       const db = await getDb();
-      const rows = await db.select<{ track_id: string }[]>(
-        "SELECT track_id FROM loved_tracks WHERE track_id = ?",
-        [trackId]
-      );
+      const rows = await db.select<{ track_id: string }[]>("SELECT track_id FROM loved_tracks WHERE track_id = ?", [
+        trackId,
+      ]);
       const loved = rows.length > 0;
       if (loved) {
         await db.execute("DELETE FROM loved_tracks WHERE track_id = ?", [trackId]);
@@ -101,11 +99,11 @@ export function useLoved() {
       const altUrl = server.alt_url ?? undefined;
       if (loved) {
         unstarTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-          console.error("unstar track failed:", err)
+          console.error("unstar track failed:", err),
         );
       } else {
         starTrack(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-          console.error("star track failed:", err)
+          console.error("star track failed:", err),
         );
       }
     });
@@ -115,10 +113,9 @@ export function useLoved() {
     return serializeByKey(`album:${albumId}`, async () => {
       const { server, credential } = serverWithCred;
       const db = await getDb();
-      const rows = await db.select<{ album_id: string }[]>(
-        "SELECT album_id FROM loved_albums WHERE album_id = ?",
-        [albumId]
-      );
+      const rows = await db.select<{ album_id: string }[]>("SELECT album_id FROM loved_albums WHERE album_id = ?", [
+        albumId,
+      ]);
       const loved = rows.length > 0;
       if (loved) {
         await db.execute("DELETE FROM loved_albums WHERE album_id = ?", [albumId]);
@@ -130,11 +127,11 @@ export function useLoved() {
       const altUrl = server.alt_url ?? undefined;
       if (loved) {
         unstarAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-          console.error("unstar album failed:", err)
+          console.error("unstar album failed:", err),
         );
       } else {
         starAlbum(server.url, server.username, credential, nativeId, altUrl).catch((err) =>
-          console.error("star album failed:", err)
+          console.error("star album failed:", err),
         );
       }
     });

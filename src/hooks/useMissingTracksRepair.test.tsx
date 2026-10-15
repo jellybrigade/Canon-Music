@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { useMissingTracksRepair } from "./useMissingTracksRepair";
 
 interface Props {
@@ -61,7 +62,10 @@ describe("useMissingTracksRepair", () => {
   });
 
   it("keeps the next album's fetch running when the previous album's fetch finishes", async () => {
-    const fetches = new Map([["a1", deferred()], ["a2", deferred()]]);
+    const fetches = new Map([
+      ["a1", deferred()],
+      ["a2", deferred()],
+    ]);
     const fetchTracks = (albumId: string) => fetches.get(albumId)!.promise;
     const { result, rerender } = mount({ albumId: "a1", tracks: [], fetchTracks });
     rerender({ albumId: "a2", tracks: [], fetchTracks });
@@ -71,7 +75,10 @@ describe("useMissingTracksRepair", () => {
   });
 
   it("does not paint the previous album's failure on the next album", async () => {
-    const fetches = new Map([["a1", deferred()], ["a2", deferred()]]);
+    const fetches = new Map([
+      ["a1", deferred()],
+      ["a2", deferred()],
+    ]);
     const fetchTracks = (albumId: string) => fetches.get(albumId)!.promise;
     const { result, rerender } = mount({ albumId: "a1", tracks: [], fetchTracks });
     rerender({ albumId: "a2", tracks: [], fetchTracks });

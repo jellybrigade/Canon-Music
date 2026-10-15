@@ -29,9 +29,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -44,10 +42,10 @@ vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <
 vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn().mockResolvedValue("0.6.0") }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
@@ -59,10 +57,12 @@ let testDb: FakeDatabase;
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
 }
 
 /** `AppRoutes` is stubbed, so nothing else in the tree reports where the router actually is. */
@@ -113,7 +113,9 @@ const expectPaletteClosed = () => waitFor(() => expect(paletteInput()).toBeNull(
 
 /** Ctrl+K from `body`. `useSearchShortcuts` bails while a text field has focus. */
 async function openPalette() {
-  await act(async () => { press("k", { ctrlKey: true }); });
+  await act(async () => {
+    press("k", { ctrlKey: true });
+  });
   await waitFor(() => expect(paletteInput()).not.toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(paletteInput()));
 }
@@ -130,10 +132,30 @@ const windowNavSources: Array<{
   /** Index to start at so the navigation is not clamped to a no-op. */
   index: number;
 }> = [
-  { name: "Alt+ArrowLeft", fire: () => fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }), lands: "/library", index: 1 },
-  { name: "Alt+ArrowRight", fire: () => fireEvent.keyDown(window, { key: "ArrowRight", altKey: true }), lands: "/artists", index: 0 },
-  { name: "mouse thumb button 3 (back)", fire: () => fireEvent.mouseUp(window, { button: 3 }), lands: "/library", index: 1 },
-  { name: "mouse thumb button 4 (forward)", fire: () => fireEvent.mouseUp(window, { button: 4 }), lands: "/artists", index: 0 },
+  {
+    name: "Alt+ArrowLeft",
+    fire: () => fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }),
+    lands: "/library",
+    index: 1,
+  },
+  {
+    name: "Alt+ArrowRight",
+    fire: () => fireEvent.keyDown(window, { key: "ArrowRight", altKey: true }),
+    lands: "/artists",
+    index: 0,
+  },
+  {
+    name: "mouse thumb button 3 (back)",
+    fire: () => fireEvent.mouseUp(window, { button: 3 }),
+    lands: "/library",
+    index: 1,
+  },
+  {
+    name: "mouse thumb button 4 (forward)",
+    fire: () => fireEvent.mouseUp(window, { button: 4 }),
+    lands: "/artists",
+    index: 0,
+  },
 ];
 
 beforeEach(async () => {
@@ -160,7 +182,9 @@ describe("command palette dismissed by navigation it did not originate", () => {
     it(`${source.name} closes the palette it left painted over the new route`, async () => {
       await mountApp(["/library", "/artists"], source.index);
       await openPalette();
-      await act(async () => { source.fire(); });
+      await act(async () => {
+        source.fire();
+      });
       await waitFor(() => expect(pathname()).toBe(source.lands));
       await expectPaletteClosed();
     });
@@ -172,13 +196,17 @@ describe("command palette dismissed by navigation it did not originate", () => {
     // (/library) - which is what a single press used to cost while search was an overlay the
     // router could not see. The palette is stacked on to prove one press still collapses both.
     await mountApp(["/library", "/artists"], 1);
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
     fireEvent.change(searchInput()!, { target: { value: "abba" } });
     searchInput()!.blur();
     await openPalette();
 
-    await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }); });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    });
 
     await waitFor(() => expect(pathname()).toBe("/artists"));
     await expectPaletteClosed();
@@ -191,7 +219,9 @@ describe("command palette dismissed by navigation it did not originate", () => {
     // Alt. Nothing moved, so nothing should be dismissed.
     await mountApp(["/library", "/artists"], 1);
     await openPalette();
-    await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft" }); });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "ArrowLeft" });
+    });
     expect(pathname()).toBe("/artists");
     expectPaletteOpen();
   });
@@ -203,7 +233,9 @@ describe("command palette dismissed by navigation it did not originate", () => {
     // user asking to be somewhere else, and an overlay that survives it is the bug.
     await mountApp(["/library"], 0);
     await openPalette();
-    await act(async () => { fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true }); });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "ArrowLeft", altKey: true });
+    });
     expect(pathname()).toBe("/library");
     await expectPaletteClosed();
   });
@@ -214,7 +246,9 @@ describe("command palette dismissed by navigation it did not originate", () => {
     // own dismissal must keep working regardless of whether the route actually changes.
     await mountApp(["/library"], 0);
     await openPalette();
-    await act(async () => { press("Escape", { target: paletteInput()! }); });
+    await act(async () => {
+      press("Escape", { target: paletteInput()! });
+    });
     await expectPaletteClosed();
   });
 });

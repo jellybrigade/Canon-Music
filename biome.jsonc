@@ -1,0 +1,61 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": [
+      "src/**",
+      "scripts/**",
+      "*.ts",
+      "*.json",
+      "!src-tauri",
+      "!**/*.json.bak",
+      "!src/assets/canon-tree.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
+  "javascript": {
+    "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" }
+  },
+  "assist": { "enabled": true, "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        // Desktop app with no forms a stray button could submit.
+        "useButtonType": "off",
+        // Icons are decorative; the button around them carries the label.
+        "noSvgWithoutTitle": "off",
+        // Autofocus is deliberate in search and inline-edit fields.
+        "noAutofocus": "off",
+        // Backlog: keyboard access audit, then turn these back on.
+        "useSemanticElements": "off",
+        "useKeyWithClickEvents": "off",
+        "noStaticElementInteractions": "off",
+        "useAriaPropsSupportedByRole": "off",
+        "noLabelWithoutControl": "off",
+        "noNoninteractiveTabindex": "off"
+      },
+      "correctness": {
+        // Backlog: AGENTS.md wants the narrowest dep (`track?.id`), which this rule calls wrong;
+        // the ~40 missing deps need a per-site review, since adding one can re-arm a listener.
+        "useExhaustiveDependencies": "off"
+      },
+      "style": {
+        // Backlog: 124 sites outside tests to narrow by hand.
+        "noNonNullAssertion": "off",
+        "noDescendingSpecificity": "off"
+      },
+      "complexity": { "noImportantStyles": "off" },
+      "suspicious": {
+        // Lists here are rendered once from static data, never reordered in place.
+        "noArrayIndexKey": "off"
+      }
+    }
+  }
+}

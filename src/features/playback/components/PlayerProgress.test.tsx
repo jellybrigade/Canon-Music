@@ -6,8 +6,8 @@ vi.mock("../../../hooks/useSetting", () => ({
   useBoolSetting: () => [showWaveform, vi.fn(), true],
 }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, act } from "@testing-library/react";
+import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlayerStore } from "../store/player";
 import { PlayerProgress } from "./PlayerProgress";
 
@@ -61,7 +61,7 @@ describe("PlayerProgress", () => {
       usePlayerStore.setState({
         currentTrack: { id: "t1", title: "T", artist: "A", duration: 100, albumId: "al-1" },
         elapsed: 50,
-      })
+      }),
     );
     render(<PlayerProgress />);
 

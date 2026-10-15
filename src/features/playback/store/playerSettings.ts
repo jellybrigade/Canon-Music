@@ -1,23 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
-import { getDb } from "../../../db";
-import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget } from "./playbackTarget";
 import type { DlnaRenderer } from "../../../clients/dlna";
+import { getDb } from "../../../db";
 import { isOwnedByServer } from "../../../lib/ids";
-import { computeReplayGainLinear } from "./replayGain";
-import { runtime } from "./playerRuntime";
+import { parseIntegerOr } from "../../../lib/numberSetting";
+import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget } from "./playbackTarget";
 import type { PlayerEngine } from "./playerEngine";
+import { runtime } from "./playerRuntime";
 import {
-  plainError,
   type CurrentTrack,
   type PlayerGet,
   type PlayerSet,
   type PlayerState,
+  plainError,
   type QueueSnapshot,
   type RadioMode,
   type RepeatMode,
   type ReplayGainMode,
 } from "./playerTypes";
-import { parseIntegerOr } from "../../../lib/numberSetting";
+import { computeReplayGainLinear } from "./replayGain";
 
 type SettingsActions = Pick<
   PlayerState,
@@ -38,7 +38,7 @@ type SettingsActions = Pick<
 export function createSettingsActions(
   set: PlayerSet,
   get: PlayerGet,
-  { stopElapsedTimer }: PlayerEngine
+  { stopElapsedTimer }: PlayerEngine,
 ): SettingsActions {
   return {
     toggleConsumeMode: async () => {
@@ -46,10 +46,9 @@ export function createSettingsActions(
       set({ consumeMode: next });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_mode', ?)",
-          [next ? "true" : "false"]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_mode', ?)", [
+          next ? "true" : "false",
+        ]);
       } catch (e) {
         console.error("Failed to persist consume mode:", e);
       }
@@ -60,10 +59,9 @@ export function createSettingsActions(
       set({ consumeOnSkip: next });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_on_skip', ?)",
-          [next ? "true" : "false"]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.consume_on_skip', ?)", [
+          next ? "true" : "false",
+        ]);
       } catch (e) {
         console.error("Failed to persist consume on skip:", e);
       }
@@ -74,10 +72,9 @@ export function createSettingsActions(
       set({ gapless: next });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.gapless', ?)",
-          [next ? "true" : "false"]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.gapless', ?)", [
+          next ? "true" : "false",
+        ]);
       } catch (e) {
         console.error("Failed to persist gapless:", e);
       }
@@ -88,10 +85,9 @@ export function createSettingsActions(
       set({ radioOnQueueEnd: next });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.radio_on_queue_end', ?)",
-          [next ? "true" : "false"]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.radio_on_queue_end', ?)", [
+          next ? "true" : "false",
+        ]);
       } catch (e) {
         console.error("Failed to persist radio_on_queue_end:", e);
       }
@@ -103,10 +99,7 @@ export function createSettingsActions(
       await invoke("audio_set_speed", { speed: clamped });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.speed', ?)",
-          [String(clamped)]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.speed', ?)", [String(clamped)]);
       } catch (e) {
         console.error("Failed to persist speed:", e);
       }
@@ -117,10 +110,9 @@ export function createSettingsActions(
       set({ maxQueueSize: clamped });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.max_queue_size', ?)",
-          [String(clamped)]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.max_queue_size', ?)", [
+          String(clamped),
+        ]);
       } catch (e) {
         console.error("Failed to persist max queue size:", e);
       }
@@ -131,10 +123,9 @@ export function createSettingsActions(
       set({ pauseFadeMs: clamped });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.pause_fade_ms', ?)",
-          [String(clamped)]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.pause_fade_ms', ?)", [
+          String(clamped),
+        ]);
       } catch (e) {
         console.error("Failed to persist pause fade:", e);
       }
@@ -149,10 +140,7 @@ export function createSettingsActions(
       await runtime.activeTarget.setVolume(volume * Math.sqrt(runtime.currentReplayGainLinear));
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_mode', ?)",
-          [mode]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_mode', ?)", [mode]);
       } catch (e) {
         console.error("Failed to persist replay_gain_mode:", e);
       }
@@ -168,10 +156,9 @@ export function createSettingsActions(
       await runtime.activeTarget.setVolume(volume * Math.sqrt(runtime.currentReplayGainLinear));
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_pre_amp', ?)",
-          [String(clamped)]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_pre_amp', ?)", [
+          String(clamped),
+        ]);
       } catch (e) {
         console.error("Failed to persist replay_gain_pre_amp:", e);
       }
@@ -189,7 +176,7 @@ export function createSettingsActions(
         const db = await getDb();
         await db.execute(
           "INSERT OR REPLACE INTO settings (key, value) VALUES ('player.replay_gain_fallback_gain', ?)",
-          [String(clamped)]
+          [String(clamped)],
         );
       } catch (e) {
         console.error("Failed to persist replay_gain_fallback_gain:", e);
@@ -198,15 +185,11 @@ export function createSettingsActions(
 
     toggleRepeat: async () => {
       const { repeat } = get();
-      const next: RepeatMode =
-        repeat === "off" ? "repeat-all" : repeat === "repeat-all" ? "repeat-one" : "off";
+      const next: RepeatMode = repeat === "off" ? "repeat-all" : repeat === "repeat-all" ? "repeat-one" : "off";
       set({ repeat: next });
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('repeat', ?)",
-          [next]
-        );
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('repeat', ?)", [next]);
       } catch (e) {
         console.error("Failed to persist repeat:", e);
       }
@@ -217,15 +200,13 @@ export function createSettingsActions(
         const db = await getDb();
         const rows = await db.select<{ key: string; value: string }[]>(
           "SELECT key, value FROM settings WHERE key IN ('volume', 'player.pre_mute_volume', 'repeat', 'queue_state', 'radio_active', 'radio_seed', 'radio_mode', 'radio_label', 'queue.restore_on_startup', 'player.speed', 'player.pause_fade_ms', 'player.consume_mode', 'player.consume_on_skip', 'player.gapless', 'player.radio_on_queue_end', 'player.show_waveform', 'cast.device', 'cast.max_bitrate', 'player.replay_gain_mode', 'player.replay_gain_pre_amp', 'player.replay_gain_fallback_gain', 'player.max_queue_size')",
-          []
+          [],
         );
         const restoreQueue = rows.find((r) => r.key === "queue.restore_on_startup")?.value === "true";
         let showWaveform = true;
         // queue_state and radio_seed carry server-scoped track ids in a global settings row;
         // removing a server strands ids the mirror no longer holds, so check only these two keys.
-        const carriesTrackIds = rows.some(
-          (r) => (r.key === "queue_state" || r.key === "radio_seed") && r.value
-        );
+        const carriesTrackIds = rows.some((r) => (r.key === "queue_state" || r.key === "radio_seed") && r.value);
         const serverIds = carriesTrackIds
           ? (await db.select<{ id: string }[]>("SELECT id FROM servers", [])).map((r) => r.id)
           : [];
@@ -233,7 +214,7 @@ export function createSettingsActions(
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
-            if (!isNaN(volume)) {
+            if (!Number.isNaN(volume)) {
               set({ volume });
               // Raw volume only: ReplayGain is applied by the engine once a track loads.
               await invoke("audio_volume", { volume: volume ** 2 });
@@ -243,7 +224,7 @@ export function createSettingsActions(
             // muted loads volume 0 with preMuteVolume back at its 1.0 default, so the first
             // unmute jumps to full instead of returning to the level the user was using.
             const preMute = parseFloat(row.value);
-            if (!isNaN(preMute) && preMute > 0) runtime.preMuteVolume = preMute;
+            if (!Number.isNaN(preMute) && preMute > 0) runtime.preMuteVolume = preMute;
           } else if (row.key === "repeat") {
             const valid: RepeatMode[] = ["off", "repeat-all", "repeat-one"];
             if (valid.includes(row.value as RepeatMode)) {
@@ -254,8 +235,9 @@ export function createSettingsActions(
               const saved = JSON.parse(row.value) as QueueSnapshot;
               // All or nothing: a queue restored past the stranded entries leaves queueIndex
               // and shuffleOrder pointing at the holes they left.
-              const owned = [...(saved.queue ?? []), ...(saved.currentTrack ? [saved.currentTrack] : [])]
-                .every((t) => isOwnedByServer(t.id, serverIds));
+              const owned = [...(saved.queue ?? []), ...(saved.currentTrack ? [saved.currentTrack] : [])].every((t) =>
+                isOwnedByServer(t.id, serverIds),
+              );
               if (owned && Array.isArray(saved.queue) && saved.queue.length > 0 && get().currentTrack === null) {
                 set({
                   queue: saved.queue,
@@ -281,7 +263,16 @@ export function createSettingsActions(
               }
             }
           } else if (row.key === "radio_mode") {
-            const VALID_MODES: RadioMode[] = ["curated", "same-genre", "similar-artists", "same-artist", "same-album", "era", "loved", "random"];
+            const VALID_MODES: RadioMode[] = [
+              "curated",
+              "same-genre",
+              "similar-artists",
+              "same-artist",
+              "same-album",
+              "era",
+              "loved",
+              "random",
+            ];
             if (VALID_MODES.includes(row.value as RadioMode)) {
               set({ radioMode: row.value as RadioMode });
             }
@@ -289,20 +280,20 @@ export function createSettingsActions(
             set({ radioLabel: row.value || null });
           } else if (row.key === "radio.similarity_scale") {
             const scale = parseFloat(row.value);
-            if (!isNaN(scale)) set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
+            if (!Number.isNaN(scale)) set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
           } else if (row.key === "player.speed") {
             const speed = parseFloat(row.value);
-            if (!isNaN(speed)) {
+            if (!Number.isNaN(speed)) {
               const clamped = Math.max(0.5, Math.min(2.0, speed));
               set({ speed: clamped });
               void invoke("audio_set_speed", { speed: clamped });
             }
           } else if (row.key === "player.pause_fade_ms") {
             const ms = parseInt(row.value, 10);
-            if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
+            if (!Number.isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
           } else if (row.key === "player.max_queue_size") {
             const n = parseInt(row.value, 10);
-            if (!isNaN(n)) set({ maxQueueSize: Math.max(1, Math.min(1000, n)) });
+            if (!Number.isNaN(n)) set({ maxQueueSize: Math.max(1, Math.min(1000, n)) });
           } else if (row.key === "player.consume_mode") {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {
@@ -318,10 +309,10 @@ export function createSettingsActions(
             if (valid.includes(row.value as ReplayGainMode)) set({ replayGainMode: row.value as ReplayGainMode });
           } else if (row.key === "player.replay_gain_pre_amp") {
             const v = parseFloat(row.value);
-            if (!isNaN(v)) set({ replayGainPreAmp: Math.max(-15, Math.min(15, v)) });
+            if (!Number.isNaN(v)) set({ replayGainPreAmp: Math.max(-15, Math.min(15, v)) });
           } else if (row.key === "player.replay_gain_fallback_gain") {
             const v = parseFloat(row.value);
-            if (!isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
+            if (!Number.isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
           } else if (row.key === "cast.device" && row.value) {
             try {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;
@@ -329,15 +320,19 @@ export function createSettingsActions(
               const savedBitrate = parseIntegerOr(bitrateRow?.value, CAST_MAX_BITRATE_DEFAULT);
               runtime.activeTarget = new DlnaTarget(
                 savedRenderer,
-                () => { void get().next(true); },
+                () => {
+                  void get().next(true);
+                },
                 savedBitrate,
                 (message) => {
                   set({ error: plainError(message), isPlaying: false, isBuffering: false });
                   stopElapsedTimer();
-                }
+                },
               );
               set({ castDevice: savedRenderer });
-            } catch { /* malformed, ignore */ }
+            } catch {
+              /* malformed, ignore */
+            }
           }
         }
         // Decided after the loop: `radio_active` and `radio_label` are separate rows and
@@ -351,10 +346,9 @@ export function createSettingsActions(
           const restoredTrack = get().currentTrack;
           if (restoredTrack) {
             type WRow = { peaks_json: string };
-            const wrows = await db.select<WRow[]>(
-              "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
-              [restoredTrack.id]
-            );
+            const wrows = await db.select<WRow[]>("SELECT peaks_json FROM waveform_cache WHERE track_id = ?", [
+              restoredTrack.id,
+            ]);
             if (wrows[0]) {
               try {
                 const peaks = JSON.parse(wrows[0].peaks_json) as number[];
@@ -363,7 +357,9 @@ export function createSettingsActions(
                 if (coverage >= 0.5 && get().currentTrack?.id === restoredTrack.id) {
                   set({ waveformPeaks: peaks });
                 }
-              } catch { /* malformed peaks, ignore */ }
+              } catch {
+                /* malformed peaks, ignore */
+              }
             }
           }
         }

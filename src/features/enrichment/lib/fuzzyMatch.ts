@@ -1,8 +1,7 @@
 import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
 import { parseNumberOr } from "../../../lib/numberSetting";
 
-const EDITION_NOISE =
-  /\b(deluxe|remastered?|expanded|anniversary|edition|disc\s*\d+|\(?\d{4}\s+remaster\)?)\b/gi;
+const EDITION_NOISE = /\b(deluxe|remastered?|expanded|anniversary|edition|disc\s*\d+|\(?\d{4}\s+remaster\)?)\b/gi;
 const LEADING_ARTICLES = /^(the|a|an)\s+/i;
 // Combining diacritical marks range (after NFD decomposition)
 const COMBINING_MARKS = /[̀-ͯ]/g;
@@ -94,12 +93,10 @@ export function scoreReleaseGroup(
   artist: string,
   album: string,
   knownYear?: number | null,
-  confirmedArtistMbid?: string | null
+  confirmedArtistMbid?: string | null,
 ): number {
   const artistScore =
-    confirmedArtistMbid && c.artistMbid === confirmedArtistMbid
-      ? 1.0
-      : artistSimilarity(c.artistName, artist);
+    confirmedArtistMbid && c.artistMbid === confirmedArtistMbid ? 1.0 : artistSimilarity(c.artistName, artist);
 
   const titleScore = titleSimilarity(album, c.title);
   let score = 0.6 * titleScore + 0.4 * artistScore;
@@ -119,7 +116,7 @@ export function scoreReleaseGroup(
 
 export function filterByTrackCount(
   candidates: MbReleaseGroupCandidate[],
-  trackCount: number
+  trackCount: number,
 ): MbReleaseGroupCandidate[] {
   if (trackCount <= 0) return candidates;
 
@@ -136,9 +133,7 @@ export function filterByTrackCount(
     allowed.add("Other");
   }
 
-  const filtered = candidates.filter(
-    (c) => c.primaryType === null || allowed.has(c.primaryType)
-  );
+  const filtered = candidates.filter((c) => c.primaryType === null || allowed.has(c.primaryType));
   return filtered.length > 0 ? filtered : candidates;
 }
 
@@ -155,7 +150,7 @@ export function rankCandidates(
   artist: string,
   album: string,
   knownYear?: number | null,
-  confirmedArtistMbid?: string | null
+  confirmedArtistMbid?: string | null,
 ): RankedCandidate[] {
   return cands
     .map((c) => ({
@@ -170,4 +165,20 @@ export function rankCandidates(
       if (typeB !== typeA) return typeB - typeA;
       return (b.candidate.score ?? 0) - (a.candidate.score ?? 0);
     });
+}
+
+/**
+ * The top candidate if it clears `minScore` and beats the runner-up by `minGap`, or shares its title
+ * while outranking it by type: an album and its same-titled lead single score identically.
+ */
+export function pickClearWinner(
+  ranked: RankedCandidate[],
+  { minScore, minGap }: { minScore: number; minGap: number },
+): RankedCandidate | null {
+  const [top, second] = ranked;
+  if (!top || top.score < minScore) return null;
+  if (!second || top.score - second.score >= minGap) return top;
+  const typeRank = (r: RankedCandidate) => TYPE_RANK[r.candidate.primaryType ?? ""] ?? 1;
+  const isSameTitle = normalizeForMatch(top.candidate.title) === normalizeForMatch(second.candidate.title);
+  return isSameTitle && typeRank(top) > typeRank(second) ? top : null;
 }

@@ -10,9 +10,10 @@
 // time (see `src/app/App.routeParamDecode.test.tsx`), and every character except `%` is
 // idempotent under a second decode - so a hand-decoding test agrees with a broken route on
 // almost every input.
+
+import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useParams } from "react-router-dom";
 import { describe, expect, it } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
-import { MemoryRouter, Routes, Route, useParams } from "react-router-dom";
 import { albumPath, artistPath, playlistPath } from "./routes";
 
 const AWKWARD = [

@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
+
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 
@@ -16,7 +17,7 @@ function setup(cause: "stale-track-id" | null) {
       onSkip={onSkip}
       skipDisabled={false}
       onOpenResync={onOpenResync}
-    />
+    />,
   );
   return { onRetry, onSkip, onOpenResync };
 }
@@ -58,7 +59,7 @@ describe("PlaybackErrorActions", () => {
         onSkip={onSkip}
         skipDisabled
         onOpenResync={onOpenResync}
-      />
+      />,
     );
 
     expect((screen.getByText("Skip") as HTMLButtonElement).disabled).toBe(true);

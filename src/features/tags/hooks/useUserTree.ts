@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { getDb } from "../../../db";
-import { canonicalKey, bustCanonTreeCache } from "../lib/canonicalize";
 import canonTreeData from "../../../assets/canon-tree.json";
-import type { TreeNode } from "../lib/canonicalize";
+import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
+import type { TreeNode } from "../lib/canonicalize";
+import { bustCanonTreeCache, canonicalKey } from "../lib/canonicalize";
 import { invalidateManualMappings } from "../lib/manualMappings";
 
 export interface UserTreeNode {
@@ -32,7 +32,12 @@ export function isSuperseeded(node: UserTreeNode): boolean {
 }
 
 function nodeToJson(node: Omit<UserTreeNode, "parent_ids"> & { parentIds: string[] }): string {
-  return JSON.stringify({ name: node.name, type: node.type, canonical_key: node.canonical_key, parent_ids: node.parentIds });
+  return JSON.stringify({
+    name: node.name,
+    type: node.type,
+    canonical_key: node.canonical_key,
+    parent_ids: node.parentIds,
+  });
 }
 
 export function useUserNodes() {
@@ -50,9 +55,7 @@ export function useUserTreeChangelog() {
     queryKey: QK.userTreeChangelog(),
     queryFn: async (): Promise<ChangelogEntry[]> => {
       const db = await getDb();
-      return db.select<ChangelogEntry[]>(
-        "SELECT * FROM user_tree_changelog ORDER BY created_at DESC LIMIT 100"
-      );
+      return db.select<ChangelogEntry[]>("SELECT * FROM user_tree_changelog ORDER BY created_at DESC LIMIT 100");
     },
   });
 }
@@ -74,20 +77,17 @@ export function useCreateUserNode() {
       const id = `user:${key}`;
       const parentJson = JSON.stringify(parentIds);
 
-      const existing = await db.select<{ id: string }[]>(
-        "SELECT id FROM user_tree_nodes WHERE id = ?",
-        [id]
-      );
+      const existing = await db.select<{ id: string }[]>("SELECT id FROM user_tree_nodes WHERE id = ?", [id]);
       if (existing.length > 0) throw new Error(`Node "${name}" already exists.`);
 
       await db.execute(
         "INSERT INTO user_tree_nodes (id, name, type, canonical_key, parent_ids) VALUES (?, ?, ?, ?, ?)",
-        [id, name, type, key, parentJson]
+        [id, name, type, key, parentJson],
       );
       await db.execute(
         `INSERT INTO user_tree_changelog (node_id, node_name, action, before_json, after_json)
          VALUES (?, ?, 'create', NULL, ?)`,
-        [id, name, nodeToJson({ id, name, type, canonical_key: key, parentIds })]
+        [id, name, nodeToJson({ id, name, type, canonical_key: key, parentIds })],
       );
 
       bustCanonTreeCache();
@@ -119,25 +119,17 @@ export function useUpdateUserNode() {
       const key = canonicalKey(name);
       const parentJson = JSON.stringify(parentIds);
 
-      const existing = await db.select<UserTreeNode[]>(
-        "SELECT * FROM user_tree_nodes WHERE id = ?",
-        [id]
-      );
+      const existing = await db.select<UserTreeNode[]>("SELECT * FROM user_tree_nodes WHERE id = ?", [id]);
       if (!existing[0]) throw new Error("Node not found.");
 
       await db.execute(
         `INSERT INTO user_tree_changelog (node_id, node_name, action, before_json, after_json)
          VALUES (?, ?, 'update', ?, ?)`,
-        [
-          id,
-          name,
-          JSON.stringify(existing[0]),
-          nodeToJson({ id, name, type, canonical_key: key, parentIds }),
-        ]
+        [id, name, JSON.stringify(existing[0]), nodeToJson({ id, name, type, canonical_key: key, parentIds })],
       );
       await db.execute(
         "UPDATE user_tree_nodes SET name = ?, type = ?, canonical_key = ?, parent_ids = ? WHERE id = ?",
-        [name, type, key, parentJson, id]
+        [name, type, key, parentJson, id],
       );
 
       bustCanonTreeCache();

@@ -9,9 +9,10 @@
  * re-runs unless something in its deps moves. `ArtistGrid` is shaped exactly that way, so
  * it recorded no offsets at all and its restore could only ever be a no-op.
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { act, cleanup, render } from "@testing-library/react";
 import { useRef } from "react";
-import { render, act, cleanup } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { useScrollMemory } from "./useScrollMemory";
 
 /**
@@ -48,7 +49,10 @@ function LateScroller({
             // it was scrolled while connected. jsdom does not model that on its own, and
             // without it a teardown that re-reads the DOM looks like it still works.
             get: () => (el.isConnected ? current : 0),
-            set: (v: number) => { writes?.push(v); current = v; },
+            set: (v: number) => {
+              writes?.push(v);
+              current = v;
+            },
           });
         }
         ref.current = el;
@@ -73,7 +77,9 @@ describe("useScrollMemory", () => {
   it("records the offset of a scroller that only appears once content arrives", async () => {
     const view = render(<LateScroller memKey="late-1" ready={false} />);
     view.rerender(<LateScroller memKey="late-1" ready={true} scrollTop={240} />);
-    await act(async () => { scroller().dispatchEvent(new Event("scroll")); });
+    await act(async () => {
+      scroller().dispatchEvent(new Event("scroll"));
+    });
     await nextFrame();
     view.unmount();
 
@@ -85,7 +91,9 @@ describe("useScrollMemory", () => {
   it("keeps the offset it recorded when the scroller leaves the tree mid-mount", async () => {
     const view = render(<LateScroller memKey="late-3" ready={false} />);
     view.rerender(<LateScroller memKey="late-3" ready={true} scrollTop={310} />);
-    await act(async () => { scroller().dispatchEvent(new Event("scroll")); });
+    await act(async () => {
+      scroller().dispatchEvent(new Event("scroll"));
+    });
     await nextFrame();
 
     // An empty refetch drops the scroller back to the loading branch; the teardown that

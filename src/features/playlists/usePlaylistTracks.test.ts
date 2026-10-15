@@ -20,25 +20,27 @@
  * Adjacent but out of scope: the playlist-refresh DELETE-then-INSERT entry belongs to
  * `src/features/sync/sync.ts` - this hook never writes `playlists` columns other than `track_count`.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
 vi.mock("../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../clients/navidromePlaylists", async () => {
-  const actual = await vi.importActual<typeof import("../../clients/navidromePlaylists")>("../../clients/navidromePlaylists");
+  const actual = await vi.importActual<typeof import("../../clients/navidromePlaylists")>(
+    "../../clients/navidromePlaylists",
+  );
   return { ...actual, removeTrackFromNavidromePlaylist: vi.fn() };
 });
 
-import { renderHook, act, cleanup, waitFor } from "@testing-library/react";
-import { getDb } from "../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { removeTrackFromNavidromePlaylist } from "../../clients/navidromePlaylists";
-import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
-import type { Server } from "../../types/server";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
+import { invoke, onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
+import type { Server } from "../../types/server";
 import { usePlaylistTracks } from "./usePlaylistTracks";
 
 const SRV: Server = {
@@ -68,14 +70,14 @@ function seedTrack(nativeId: string, albumId: string | null = `${nativeId}-alb`,
   if (canonAlbumId) {
     db.raw
       .prepare(
-        "INSERT OR IGNORE INTO albums (id, server_id, server_type, name, artwork_url) VALUES (?, ?, 'navidrome', ?, ?)"
+        "INSERT OR IGNORE INTO albums (id, server_id, server_type, name, artwork_url) VALUES (?, ?, 'navidrome', ?, ?)",
       )
       .run(canonAlbumId, server.id, `album ${albumId}`, `art-${albumId}`);
   }
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, genre, year, track_number, duration, bit_rate, suffix)
-       VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?, 'Rock', 1999, 3, 210, 320, 'flac')`
+       VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?, 'Rock', 1999, 3, 210, 320, 'flac')`,
     )
     .run(canonId, server.id, `title ${nativeId}`, canonAlbumId);
 }
@@ -84,7 +86,7 @@ function seedTrack(nativeId: string, albumId: string | null = `${nativeId}-alb`,
 function seedTrackWithMissingAlbum(nativeId: string, server: Server = SRV) {
   db.raw
     .prepare(
-      "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?)"
+      "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?)",
     )
     .run(`${server.id}:${nativeId}`, server.id, `title ${nativeId}`, `${server.id}:ghost-alb`);
 }
@@ -99,13 +101,11 @@ function seedPlaylist(nativeId: string, server: Server = SRV, trackCount = 0) {
 
 /** Puts native track ids into a playlist at consecutive 0-based positions. */
 function seedPlaylistTracks(playlistId: string, nativeTrackIds: string[], server: Server = SRV) {
-  const stmt = db.raw.prepare(
-    "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)"
-  );
-  nativeTrackIds.forEach((nativeId, position) => stmt.run(playlistId, `${server.id}:${nativeId}`, position));
-  db.raw
-    .prepare("UPDATE playlists SET track_count = ? WHERE id = ?")
-    .run(nativeTrackIds.length, playlistId);
+  const stmt = db.raw.prepare("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)");
+  nativeTrackIds.forEach((nativeId, position) => {
+    stmt.run(playlistId, `${server.id}:${nativeId}`, position);
+  });
+  db.raw.prepare("UPDATE playlists SET track_count = ? WHERE id = ?").run(nativeTrackIds.length, playlistId);
 }
 
 function positionsOf(playlistId: string): { position: number; track_id: string }[] {
@@ -139,20 +139,14 @@ async function flush() {
  */
 function applyNativeRemoval(playlistId: string, position: number): void {
   db.raw.transaction(() => {
+    db.raw.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?").run(playlistId, position);
     db.raw
-      .prepare("DELETE FROM playlist_tracks WHERE playlist_id = ? AND position = ?")
-      .run(playlistId, position);
-    db.raw
-      .prepare(
-        "UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?"
-      )
+      .prepare("UPDATE playlist_tracks SET position = -(position - 1) WHERE playlist_id = ? AND position > ?")
       .run(playlistId, position);
     db.raw
       .prepare("UPDATE playlist_tracks SET position = -position WHERE playlist_id = ? AND position < 0")
       .run(playlistId);
-    db.raw
-      .prepare("UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?")
-      .run(playlistId);
+    db.raw.prepare("UPDATE playlists SET track_count = MAX(0, track_count - 1) WHERE id = ?").run(playlistId);
   })();
 }
 
@@ -198,7 +192,9 @@ describe("usePlaylistTracks load effect", () => {
 
   it("reads the playlist's tracks in position order regardless of insertion order", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => {
+      seedTrack(id);
+    });
     // Inserted out of order on purpose: only ORDER BY pt.position can rescue this.
     db.raw
       .prepare("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)")
@@ -284,8 +280,12 @@ describe("usePlaylistTracks load effect", () => {
   it("does not leak rows from another playlist holding the same positions", async () => {
     const plA = seedPlaylist("pl1", SRV);
     const plB = seedPlaylist("pl2", SRV_B);
-    ["a", "b"].forEach((id) => seedTrack(id));
-    ["x", "y"].forEach((id) => seedTrack(id, `${id}-alb`, SRV_B));
+    ["a", "b"].forEach((id) => {
+      seedTrack(id);
+    });
+    ["x", "y"].forEach((id) => {
+      seedTrack(id, `${id}-alb`, SRV_B);
+    });
     seedPlaylistTracks(plA, ["a", "b"]);
     seedPlaylistTracks(plB, ["x", "y"], SRV_B);
 
@@ -322,11 +322,14 @@ describe("usePlaylistTracks load effect", () => {
     seedPlaylistTracks(plA, ["a"]);
 
     const seen: Array<{ id: string | null; firstRow: string | undefined; isLoading: boolean }> = [];
-    const { result, rerender } = renderHook(({ id }: { id: string | null }) => {
-      const r = usePlaylistTracks(id);
-      seen.push({ id, firstRow: r.data?.[0]?.id, isLoading: r.isLoading });
-      return r;
-    }, { initialProps: { id: plA as string | null } });
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string | null }) => {
+        const r = usePlaylistTracks(id);
+        seen.push({ id, firstRow: r.data?.[0]?.id, isLoading: r.isLoading });
+        return r;
+      },
+      { initialProps: { id: plA as string | null } },
+    );
     await waitFor(() => expect(result.current.data).toHaveLength(1));
 
     seen.length = 0;
@@ -423,7 +426,7 @@ describe("usePlaylistTracks load effect", () => {
     vi.mocked(getDb).mockReturnValueOnce(
       new Promise((resolve) => {
         release = () => resolve(db as never);
-      }) as never
+      }) as never,
     );
 
     const { unmount } = renderHook(() => usePlaylistTracks(pl));
@@ -449,7 +452,9 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("sends the stripped playlist id and the raw position to the server", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b"].forEach((id) => seedTrack(id));
+    ["a", "b"].forEach((id) => {
+      seedTrack(id);
+    });
     seedPlaylistTracks(pl, ["a", "b"]);
     const { result } = await mount(pl);
 
@@ -457,14 +462,7 @@ describe("usePlaylistTracks removeTrack", () => {
       await result.current.removeTrack(1, { id: pl }, swc());
     });
 
-    expect(removeTrackFromNavidromePlaylist).toHaveBeenCalledWith(
-      SRV.url,
-      SRV.username,
-      CRED,
-      "pl1",
-      1,
-      undefined
-    );
+    expect(removeTrackFromNavidromePlaylist).toHaveBeenCalledWith(SRV.url, SRV.username, CRED, "pl1", 1, undefined);
   });
 
   it("passes the alternate url through when the server has one", async () => {
@@ -482,7 +480,9 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("writes nothing locally when the server call fails", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => {
+      seedTrack(id);
+    });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
     vi.mocked(removeTrackFromNavidromePlaylist).mockRejectedValueOnce(new Error("http 500"));
@@ -509,7 +509,9 @@ describe("usePlaylistTracks removeTrack", () => {
     // desyncs the second removal." Without compaction the survivor B would still sit at
     // position 1 and the second removal would send index 1, deleting C server side.
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => {
+      seedTrack(id);
+    });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
 
@@ -543,7 +545,9 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("re-renders the list from the compacted table after a removal", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => {
+      seedTrack(id);
+    });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
     await waitFor(() => expect(result.current.data).toHaveLength(3));
@@ -559,7 +563,9 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("invokes the removal command exactly once per removal", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => {
+      seedTrack(id);
+    });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
 

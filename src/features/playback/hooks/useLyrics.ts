@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../../db";
+import { useCallback, useEffect, useState } from "react";
 import { fetchLyrics } from "../../../clients/lrclib";
-import { fetchLyricsBySongId, getStoredOpenSubsonicExtensions } from "../../../clients/navidrome";
 import { fetchLyricsOvh } from "../../../clients/lyricsOvh";
-import { QK } from "../../../lib/queryKeys";
-import { stripServerPrefix } from "../../../lib/ids";
+import { fetchLyricsBySongId, getStoredOpenSubsonicExtensions } from "../../../clients/navidrome";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { stripServerPrefix } from "../../../lib/ids";
+import { QK } from "../../../lib/queryKeys";
 import type { CurrentTrack } from "../store/playerTypes";
 
 // Distinguishes "asked every source, found nothing" from "row exists only for offset_ms";
@@ -63,16 +63,15 @@ export function useLyrics(
                synced = excluded.synced,
                source = excluded.source,
                fetched_at = excluded.fetched_at`,
-            [track.id, plain, synced]
+            [track.id, plain, synced],
           );
         }
         return { plain, synced };
       }
       type CacheRow = { plain: string | null; synced: string | null; source: string };
-      const cached = await db.select<CacheRow[]>(
-        "SELECT plain, synced, source FROM lyrics WHERE track_id = ?",
-        [track.id]
-      );
+      const cached = await db.select<CacheRow[]>("SELECT plain, synced, source FROM lyrics WHERE track_id = ?", [
+        track.id,
+      ]);
       // A completed lookup that found nothing is still a cache hit, otherwise every open of
       // the tab re-asks three services for tracks that will never have lyrics.
       const hit = cached[0];
@@ -89,8 +88,13 @@ export function useLyrics(
         if (extensions === null) everySourceAnswered = false;
         const navTrackId = stripServerPrefix(track.id, server.id);
         const serverLyrics = extensions?.includes("songLyrics")
-          ? await fetchLyricsBySongId(server.url, server.username, credential, navTrackId, server.alt_url ?? undefined)
-              .catch(() => undefined)
+          ? await fetchLyricsBySongId(
+              server.url,
+              server.username,
+              credential,
+              navTrackId,
+              server.alt_url ?? undefined,
+            ).catch(() => undefined)
           : null;
         if (serverLyrics === undefined) everySourceAnswered = false;
         if (serverLyrics && (serverLyrics.plain || serverLyrics.synced)) {
@@ -102,7 +106,7 @@ export function useLyrics(
                synced = excluded.synced,
                source = excluded.source,
                fetched_at = excluded.fetched_at`,
-            [track.id, serverLyrics.plain, serverLyrics.synced]
+            [track.id, serverLyrics.plain, serverLyrics.synced],
           );
           return serverLyrics;
         }
@@ -119,7 +123,7 @@ export function useLyrics(
       if (lrclibResult === undefined) everySourceAnswered = false;
 
       let plain = lrclibResult?.plain ?? null;
-      let synced = lrclibResult?.synced ?? null;
+      const synced = lrclibResult?.synced ?? null;
       let source = "lrclib";
 
       if (!plain && !synced) {
@@ -142,7 +146,7 @@ export function useLyrics(
            synced = excluded.synced,
            source = excluded.source,
            fetched_at = excluded.fetched_at`,
-        [track.id, plain, synced, storedSource]
+        [track.id, plain, synced, storedSource],
       );
 
       return { plain, synced };
@@ -157,36 +161,46 @@ export function useLyrics(
     // Clears the lyrics without dropping the row: `offset_ms` is the user's own work, and a
     // DELETE threw it away every time they re-fetched a badly-timed set of lyrics, which is
     // exactly when they had already spent effort lining it up.
-    await db.execute(
-      "UPDATE lyrics SET plain = NULL, synced = NULL, source = ? WHERE track_id = ?",
-      [NO_LOOKUP_SOURCE, track.id]
-    );
+    await db.execute("UPDATE lyrics SET plain = NULL, synced = NULL, source = ? WHERE track_id = ?", [
+      NO_LOOKUP_SOURCE,
+      track.id,
+    ]);
     await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, queryClient]);
 
   const [offsetMs, setOffsetMsState] = useState(0);
 
   useEffect(() => {
-    if (!track) { setOffsetMsState(0); return; }
+    if (!track) {
+      setOffsetMsState(0);
+      return;
+    }
     let cancelled = false;
     getDb()
       .then((db) => db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [track.id]))
-      .then((rows) => { if (!cancelled) setOffsetMsState(rows[0]?.offset_ms ?? 0); })
+      .then((rows) => {
+        if (!cancelled) setOffsetMsState(rows[0]?.offset_ms ?? 0);
+      })
       .catch(() => {});
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [track?.id]);
 
-  const setOffsetMs = useCallback(async (ms: number) => {
-    if (!track) return;
-    setOffsetMsState(ms);
-    const db = await getDb();
-    await db.execute(
-      `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
+  const setOffsetMs = useCallback(
+    async (ms: number) => {
+      if (!track) return;
+      setOffsetMsState(ms);
+      const db = await getDb();
+      await db.execute(
+        `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
        VALUES (?, NULL, NULL, ?, datetime('now'), ?)
        ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
-      [track.id, NO_LOOKUP_SOURCE, ms]
-    );
-  }, [track?.id]);
+        [track.id, NO_LOOKUP_SOURCE, ms],
+      );
+    },
+    [track?.id],
+  );
 
   return {
     plain: query.data?.plain ?? null,

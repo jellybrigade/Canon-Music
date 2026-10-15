@@ -21,15 +21,15 @@ vi.mock("./SearchResults", () => ({
   ),
 }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Suspense } from "react";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { Suspense } from "react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import { SearchView } from "./SearchView";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 import type { Server } from "../../types/server";
+import { SearchView } from "./SearchView";
 
 const SRV = "srv-a";
 const DEBOUNCE_MS = 200;
@@ -57,9 +57,7 @@ const serverWithCred: ServerWithCredential = {
  */
 function seedAbba() {
   db.raw
-    .prepare(
-      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, ?)`,
-    )
+    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, ?)`)
     .run("alb-1", SRV, "Arrival", "ABBA");
   db.raw
     .prepare(
@@ -87,10 +85,7 @@ function LocationProbe() {
 
 const leaveSearch = vi.fn();
 
-function mount(
-  entry = "/search",
-  overrides: Partial<Parameters<typeof SearchView>[0]> = {},
-) {
+function mount(entry = "/search", overrides: Partial<Parameters<typeof SearchView>[0]> = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } },
   });
@@ -101,24 +96,24 @@ function mount(
       <MemoryRouter initialEntries={[entry]}>
         <Suspense fallback={null}>
           {show ? (
-          <SearchView
-            server={server}
-            serverWithCred={serverWithCred}
-            credError={null}
-            credPending={false}
-            retryCredential={vi.fn()}
-            playlists={[]}
-            searchInputRef={{ current: null }}
-            queueClass=""
-            leaveSearch={leaveSearch}
-            openAlbum={vi.fn()}
-            openArtist={vi.fn()}
-            handlePlayTrack={vi.fn().mockResolvedValue(undefined)}
-            handleStartRadioFromAlbum={vi.fn().mockResolvedValue(undefined)}
-            handleStartRadioFromArtist={vi.fn().mockResolvedValue(undefined)}
-            addAlbumToPlaylist={vi.fn()}
-            {...overrides}
-          />
+            <SearchView
+              server={server}
+              serverWithCred={serverWithCred}
+              credError={null}
+              credPending={false}
+              retryCredential={vi.fn()}
+              playlists={[]}
+              searchInputRef={{ current: null }}
+              queueClass=""
+              leaveSearch={leaveSearch}
+              openAlbum={vi.fn()}
+              openArtist={vi.fn()}
+              handlePlayTrack={vi.fn().mockResolvedValue(undefined)}
+              handleStartRadioFromAlbum={vi.fn().mockResolvedValue(undefined)}
+              handleStartRadioFromArtist={vi.fn().mockResolvedValue(undefined)}
+              addAlbumToPlaylist={vi.fn()}
+              {...overrides}
+            />
           ) : null}
         </Suspense>
         <LocationProbe />
@@ -137,7 +132,9 @@ const emptyState = () => document.querySelector(".empty-state")?.textContent ?? 
 /** Let the debounce fire and the FTS round trip commit. Polled, not slept through. */
 async function settle(ready: () => boolean, what: string) {
   for (let waited = 0; waited < 3000; waited += 25) {
-    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 25));
+    });
     if (ready()) return;
   }
   throw new Error(`timed out waiting for ${what}`);
@@ -236,10 +233,16 @@ describe("SearchView", () => {
     // keystroke and the unmount, and then the write it is asserting against has already landed.
     vi.useFakeTimers();
     fireEvent.change(input()!, { target: { value: "abba" } });
-    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS / 2); });
+    await act(async () => {
+      vi.advanceTimersByTime(DEBOUNCE_MS / 2);
+    });
 
-    await act(async () => { hideSearchView(); });
-    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS * 2); });
+    await act(async () => {
+      hideSearchView();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(DEBOUNCE_MS * 2);
+    });
 
     expect(input()).toBeNull();
     expect(url()).toBe("/search");
@@ -253,7 +256,9 @@ describe("SearchView", () => {
     mount("/search?q=abba");
     expect(input()!.value).toBe("abba");
 
-    await act(async () => { navigateFromOutside!("/search"); });
+    await act(async () => {
+      navigateFromOutside!("/search");
+    });
 
     expect(input()!.value).toBe("");
     expect(document.querySelector(".search-bar-clear")).toBeNull();
@@ -264,7 +269,9 @@ describe("SearchView", () => {
     seedAbba();
     mount("/search?q=abba");
 
-    await act(async () => { navigateFromOutside!("/search?q=beatles"); });
+    await act(async () => {
+      navigateFromOutside!("/search?q=beatles");
+    });
 
     expect(input()!.value).toBe("beatles");
   });
@@ -276,7 +283,9 @@ describe("SearchView", () => {
     mount();
 
     fireEvent.change(input()!, { target: { value: "  " } });
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2));
+    });
 
     expect(input()!.value).toBe("  ");
     expect(url()).toBe("/search");
@@ -300,9 +309,7 @@ describe("SearchView", () => {
     const retryCredential = vi.fn();
     mount("/search?q=abba", { serverWithCred: null, credPending: false, retryCredential });
 
-    expect(document.querySelector(".empty-state-title")!.textContent).toBe(
-      "Canon could not read the saved credential",
-    );
+    expect(document.querySelector(".empty-state-title")!.textContent).toBe("Canon could not read the saved credential");
     fireEvent.click(document.querySelector(".empty-state-action") as HTMLElement);
     expect(retryCredential).toHaveBeenCalledTimes(1);
   });

@@ -4,10 +4,11 @@
 // decodes every `ESCAPE '...'` literal in `src/` the way the JS parser would, and asserts it is
 // exactly one character - plus it pins which `LIKE ?` sites are allowed to have no ESCAPE clause
 // at all, so a new unescaped one fails here rather than over-matching in production.
-import BetterSqlite3 from "better-sqlite3";
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import BetterSqlite3 from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -36,7 +37,7 @@ const FILES = sourceFiles(SRC_DIR).map((path) => ({
  * the quote as a literal and runs on to the next quote, which is exactly why the bug is silent
  * in review. Returns null when no closing quote is found.
  */
-export function decodeSingleQuoted(source: string, open: number): string | null {
+function decodeSingleQuoted(source: string, open: number): string | null {
   if (source[open] !== "'") return null;
   let out = "";
   for (let i = open + 1; i < source.length; i++) {
@@ -148,7 +149,7 @@ describe("LIKE with a bound parameter carries an ESCAPE clause", () => {
       const file = FILES.find((f) => f.path === path);
       expect(file, `${path} is exempted but no longer exists`).toBeDefined();
       const unescaped = [...(file?.text.matchAll(/LIKE\s+\?/g) ?? [])].filter(
-        (m) => !/ESCAPE/.test(file!.text.slice(m.index, m.index + 40))
+        (m) => !/ESCAPE/.test(file!.text.slice(m.index, m.index + 40)),
       );
       expect(unescaped.length, `${path} no longer needs its exemption`).toBeGreaterThan(0);
     }

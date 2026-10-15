@@ -67,21 +67,20 @@ jobs:
             libssl-dev \
             pkg-config
 
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install
+
       - name: Set up Rust targets (macOS universal)
         if: matrix.platform == 'macos-latest'
         run: |
           rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version-file: .node-version
           cache: pnpm
-
-      - uses: dtolnay/rust-toolchain@stable
 
       - uses: swatinem/rust-cache@v2
         with:

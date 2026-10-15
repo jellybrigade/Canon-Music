@@ -1,6 +1,6 @@
-import { buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { apiPost, callSubsonicVoid, checkEnvelope } from "./navidromeTransport";
 import type { NavidromeTrack } from "./navidrome";
+import { apiPost, callSubsonicVoid, checkEnvelope } from "./navidromeTransport";
+import { buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
 
 export interface NavidromePlaylist {
   id: string;
@@ -14,7 +14,7 @@ export async function fetchPlaylists(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<NavidromePlaylist[]> {
   const params = buildAuthParams(username, credential);
   const res = await apiPost(baseUrl, "getPlaylists", params, altUrl);
@@ -31,7 +31,11 @@ export async function fetchPlaylists(
   // Navidrome returns shared playlists twice (owner view + shared view); deduplicate by id.
   const raw = response.playlists?.playlist ?? [];
   const seen = new Set<string>();
-  return raw.filter(pl => { if (seen.has(pl.id)) return false; seen.add(pl.id); return true; });
+  return raw.filter((pl) => {
+    if (seen.has(pl.id)) return false;
+    seen.add(pl.id);
+    return true;
+  });
 }
 
 export async function fetchPlaylistTracks(
@@ -39,7 +43,7 @@ export async function fetchPlaylistTracks(
   username: string,
   credential: NavidromeCredential,
   playlistId: string,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<NavidromeTrack[]> {
   const params = buildAuthParams(username, credential);
   params.set("id", playlistId);
@@ -62,7 +66,7 @@ export async function createNavidromePlaylist(
   username: string,
   credential: NavidromeCredential,
   name: string,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<NavidromePlaylist> {
   const params = buildAuthParams(username, credential);
   params.set("name", name);
@@ -86,7 +90,7 @@ export function deleteNavidromePlaylist(
   username: string,
   credential: NavidromeCredential,
   nativePlaylistId: string,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
   return callSubsonicVoid(baseUrl, username, credential, "deletePlaylist", { id: nativePlaylistId }, altUrl);
 }
@@ -97,12 +101,19 @@ export function addTrackToNavidromePlaylist(
   credential: NavidromeCredential,
   nativePlaylistId: string,
   nativeTrackId: string,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", {
-    playlistId: nativePlaylistId,
-    songIdToAdd: nativeTrackId,
-  }, altUrl);
+  return callSubsonicVoid(
+    baseUrl,
+    username,
+    credential,
+    "updatePlaylist",
+    {
+      playlistId: nativePlaylistId,
+      songIdToAdd: nativeTrackId,
+    },
+    altUrl,
+  );
 }
 
 export async function addTracksToNavidromePlaylist(
@@ -111,7 +122,7 @@ export async function addTracksToNavidromePlaylist(
   credential: NavidromeCredential,
   nativePlaylistId: string,
   nativeTrackIds: string[],
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   params.set("playlistId", nativePlaylistId);
@@ -132,10 +143,10 @@ export async function updateNavidromePlaylist(
   nativePlaylistId: string,
   name: string,
   comment?: string,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
   const extra: Record<string, string> = { playlistId: nativePlaylistId, name };
-  if (comment !== undefined) extra["comment"] = comment;
+  if (comment !== undefined) extra.comment = comment;
   return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", extra, altUrl);
 }
 
@@ -145,12 +156,19 @@ export function removeTrackFromNavidromePlaylist(
   credential: NavidromeCredential,
   nativePlaylistId: string,
   songIndex: number,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
-  return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", {
-    playlistId: nativePlaylistId,
-    songIndexToRemove: String(songIndex),
-  }, altUrl);
+  return callSubsonicVoid(
+    baseUrl,
+    username,
+    credential,
+    "updatePlaylist",
+    {
+      playlistId: nativePlaylistId,
+      songIndexToRemove: String(songIndex),
+    },
+    altUrl,
+  );
 }
 
 export async function replaceNavidromePlaylistTracks(
@@ -160,7 +178,7 @@ export async function replaceNavidromePlaylistTracks(
   nativePlaylistId: string,
   nativeTrackIds: string[],
   currentTrackCount: number,
-  altUrl?: string
+  altUrl?: string,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   params.set("playlistId", nativePlaylistId);

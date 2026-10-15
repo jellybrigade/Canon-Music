@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
 import {
   BUILTIN_PATTERNS,
+  extractSuffix,
   useAlbumSuffixAllowlist,
   useAlbumSuffixExclusions,
   useDisabledBuiltinIds,
-  extractSuffix,
 } from "../../../hooks/useAlbumDisplayName";
 import { useAlbums } from "../../../hooks/useAlbums";
 import "./TitleCleanupTab.css";
@@ -60,15 +60,20 @@ function AlbumList({
   );
 }
 
-function CountBtn({ albums, open, onToggle }: { albums: { id: string; name: string; artist: string | null }[]; open: boolean; onToggle: () => void }) {
+function CountBtn({
+  albums,
+  open,
+  onToggle,
+}: {
+  albums: { id: string; name: string; artist: string | null }[];
+  open: boolean;
+  onToggle: () => void;
+}) {
   if (albums.length === 0) {
     return <span className="title-cleanup-count title-cleanup-count--zero">0 albums</span>;
   }
   return (
-    <button
-      className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`}
-      onClick={onToggle}
-    >
+    <button className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`} onClick={onToggle}>
       {albums.length} album{albums.length !== 1 ? "s" : ""}
     </button>
   );
@@ -96,22 +101,16 @@ function BuiltinRow({
   return (
     <li className={`title-cleanup-item${disabled || zero ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
-        <span className="title-cleanup-builtin-label" title={label}>{label}</span>
+        <span className="title-cleanup-builtin-label" title={label}>
+          {label}
+        </span>
         <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
-        <button
-          className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`}
-          onClick={onToggle}
-        >
+        <button className={`title-cleanup-toggle${disabled ? " title-cleanup-toggle--off" : ""}`} onClick={onToggle}>
           {disabled ? "Enable" : "Disable"}
         </button>
       </div>
       {open && (
-        <AlbumList
-          albums={affectedAlbums}
-          excludedIds={excludedIds}
-          onExclude={onExclude}
-          onUnexclude={onUnexclude}
-        />
+        <AlbumList albums={affectedAlbums} excludedIds={excludedIds} onExclude={onExclude} onUnexclude={onUnexclude} />
       )}
     </li>
   );
@@ -155,11 +154,22 @@ function CustomRow({
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") save();
-              if (e.key === "Escape") { setDraft(suffix); setEditing(false); }
+              if (e.key === "Escape") {
+                setDraft(suffix);
+                setEditing(false);
+              }
             }}
           />
-          <button className="title-cleanup-action" onClick={save}>Save</button>
-          <button className="title-cleanup-action title-cleanup-action--muted" onClick={() => { setDraft(suffix); setEditing(false); }}>
+          <button className="title-cleanup-action" onClick={save}>
+            Save
+          </button>
+          <button
+            className="title-cleanup-action title-cleanup-action--muted"
+            onClick={() => {
+              setDraft(suffix);
+              setEditing(false);
+            }}
+          >
             Cancel
           </button>
         </div>
@@ -171,9 +181,17 @@ function CustomRow({
   return (
     <li className={`title-cleanup-item${zero ? " title-cleanup-item--disabled" : ""}`}>
       <div className="title-cleanup-row">
-        <span className="title-cleanup-suffix" title={`(${suffix})`}>({suffix})</span>
+        <span className="title-cleanup-suffix" title={`(${suffix})`}>
+          ({suffix})
+        </span>
         <CountBtn albums={affectedAlbums} open={open} onToggle={() => setOpen((v) => !v)} />
-        <button className="title-cleanup-action title-cleanup-action--muted" onClick={() => { setDraft(suffix); setEditing(true); }}>
+        <button
+          className="title-cleanup-action title-cleanup-action--muted"
+          onClick={() => {
+            setDraft(suffix);
+            setEditing(true);
+          }}
+        >
           Edit
         </button>
         <button className="title-cleanup-action title-cleanup-action--remove" onClick={onRemove} title="Remove">
@@ -181,12 +199,7 @@ function CustomRow({
         </button>
       </div>
       {open && (
-        <AlbumList
-          albums={affectedAlbums}
-          excludedIds={excludedIds}
-          onExclude={onExclude}
-          onUnexclude={onUnexclude}
-        />
+        <AlbumList albums={affectedAlbums} excludedIds={excludedIds} onExclude={onExclude} onUnexclude={onUnexclude} />
       )}
     </li>
   );
@@ -268,9 +281,8 @@ export function TitleCleanupTab() {
     <div className="title-cleanup-tab">
       <div className="title-cleanup-inner">
         <p className="title-cleanup-intro">
-          When "Hide album suffixes" is on, Canon strips known edition labels like{" "}
-          <em>(Deluxe Edition)</em> from album titles. Turn off any built-in rule or add
-          your own.
+          When "Hide album suffixes" is on, Canon strips known edition labels like <em>(Deluxe Edition)</em> from album
+          titles. Turn off any built-in rule or add your own.
         </p>
 
         <div className="title-cleanup-filter-row">
@@ -291,8 +303,13 @@ export function TitleCleanupTab() {
               type="text"
               placeholder="e.g. Special Edition"
               value={inputValue}
-              onChange={(e) => { setInputValue(e.target.value); setInputError(null); }}
-              onKeyDown={(e) => { if (e.key === "Enter") handleAdd(); }}
+              onChange={(e) => {
+                setInputValue(e.target.value);
+                setInputError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleAdd();
+              }}
             />
             <button className="title-cleanup-add-btn" onClick={handleAdd} disabled={!inputValue.trim()}>
               Add
@@ -301,8 +318,7 @@ export function TitleCleanupTab() {
           {inputError && <div className="title-cleanup-error">{inputError}</div>}
           {allowlist.length === 0 ? (
             <p className="title-cleanup-empty">
-              No custom rules yet. Albums with unrecognized parentheticals show a
-              "Strip…" button in their detail view.
+              No custom rules yet. Albums with unrecognized parentheticals show a "Strip…" button in their detail view.
             </p>
           ) : sortedAllowlist.length === 0 ? (
             <p className="title-cleanup-empty">No rules match "{filter}".</p>
@@ -330,12 +346,15 @@ export function TitleCleanupTab() {
             onClick={() => setBuiltinsOpen((v) => !v)}
             aria-expanded={showBuiltins}
           >
-            <ChevronRight size={13} className={`title-cleanup-disclosure-icon${showBuiltins ? " title-cleanup-disclosure-icon--open" : ""}`} />
+            <ChevronRight
+              size={13}
+              className={`title-cleanup-disclosure-icon${showBuiltins ? " title-cleanup-disclosure-icon--open" : ""}`}
+            />
             Built-in rules
             <span className="title-cleanup-disclosure-count">{BUILTIN_PATTERNS.length}</span>
           </button>
-          {showBuiltins && (
-            sortedBuiltins.length === 0 ? (
+          {showBuiltins &&
+            (sortedBuiltins.length === 0 ? (
               <p className="title-cleanup-empty">No rules match "{filter}".</p>
             ) : (
               <ul className="title-cleanup-list">
@@ -352,8 +371,7 @@ export function TitleCleanupTab() {
                   />
                 ))}
               </ul>
-            )
-          )}
+            ))}
         </section>
       </div>
     </div>

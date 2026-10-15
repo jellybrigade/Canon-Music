@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import type { ArtistRow } from "../types/library";
+
 export type { ArtistRow } from "../types/library";
 
 // Rusqlite read path (psysonic pattern), mirroring useAlbums.ts; writes/migrations stay on tauri-plugin-sql.

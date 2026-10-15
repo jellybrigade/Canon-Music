@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   bustCanonTreeCache,
+  type CanonTree,
   canonicalKey,
   findCanonicalSync,
   getAncestorIds,
   getParentChain,
   rawGenreId,
   sqlNorm,
-  type CanonTree,
   type TreeNode,
 } from "./canonicalize";
 
@@ -247,19 +247,14 @@ describe("findCanonicalSync", () => {
     expect(result).toEqual({ node: null, matchType: "none" });
   });
 
-  it.each([
-    ["rnb"],
-    ["r n b"],
-    ["r and b"],
-    ["r'n'b"],
-    ["r.n.b"],
-    ["rhythm and blues"],
-    ["rhythm & blues"],
-  ])("resolves alias %s to r&b", (raw) => {
-    const rnb = node({ id: "rnb", name: "R&B" });
-    const tree = buildTree([rnb]);
-    expect(findCanonicalSync(raw, "genre", tree)).toEqual({ node: rnb, matchType: "exact" });
-  });
+  it.each([["rnb"], ["r n b"], ["r and b"], ["r'n'b"], ["r.n.b"], ["rhythm and blues"], ["rhythm & blues"]])(
+    "resolves alias %s to r&b",
+    (raw) => {
+      const rnb = node({ id: "rnb", name: "R&B" });
+      const tree = buildTree([rnb]);
+      expect(findCanonicalSync(raw, "genre", tree)).toEqual({ node: rnb, matchType: "exact" });
+    },
+  );
 
   it("does not rewrite an alias substring embedded in a longer word", () => {
     // "rnb" is a whole-word alias; "urban" contains no alias boundary match.
@@ -307,9 +302,7 @@ describe("bustCanonTreeCache", () => {
   it("forces the next getCanonTree call to re-read from the db", async () => {
     const select = vi.fn(async () => [] as unknown[]);
     vi.doMock("../../../db", () => ({ getDb: async () => ({ select }) }));
-    const { getCanonTree: freshGetCanonTree, bustCanonTreeCache: freshBust } = await import(
-      "./canonicalize"
-    );
+    const { getCanonTree: freshGetCanonTree, bustCanonTreeCache: freshBust } = await import("./canonicalize");
 
     await freshGetCanonTree();
     await freshGetCanonTree();

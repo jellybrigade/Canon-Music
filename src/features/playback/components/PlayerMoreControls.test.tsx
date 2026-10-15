@@ -3,11 +3,11 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, act } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetModalRegistry, useModalChrome } from "../../../ui/useModalChrome";
 import { usePlayerStore } from "../store/player";
 import { PlayerMoreControls } from "./PlayerMoreControls";
-import { __resetModalRegistry, useModalChrome } from "../../../ui/useModalChrome";
 
 function OpenModal() {
   const chrome = useModalChrome(() => {});
@@ -23,7 +23,14 @@ interface Handlers {
   castDeviceName?: string | null;
 }
 
-function controls({ onOpenTimer = () => {}, onOpenCast = () => {}, onNowPlaying = () => {}, timerLabel = "", isTimerActive = false, castDeviceName = null }: Handlers = {}) {
+function controls({
+  onOpenTimer = () => {},
+  onOpenCast = () => {},
+  onNowPlaying = () => {},
+  timerLabel = "",
+  isTimerActive = false,
+  castDeviceName = null,
+}: Handlers = {}) {
   return (
     <PlayerMoreControls
       onOpenTimer={onOpenTimer}
@@ -42,8 +49,7 @@ function mount(handlers: Handlers = {}) {
 
 const moreButton = () => document.querySelector<HTMLButtonElement>(".player-more-btn")!;
 const menu = () => document.querySelector(".player-more-menu");
-const rowLabels = () =>
-  Array.from(document.querySelectorAll(".player-more-row__label")).map((el) => el.textContent);
+const rowLabels = () => Array.from(document.querySelectorAll(".player-more-row__label")).map((el) => el.textContent);
 const rowNamed = (label: string) =>
   Array.from(document.querySelectorAll<HTMLElement>(".player-more-row")).find(
     (el) => el.querySelector(".player-more-row__label")?.textContent === label,

@@ -1,13 +1,13 @@
-import { useState, useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, Plus } from "lucide-react";
-import { QK } from "../lib/queryKeys";
+import { Plus, X } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { getDb } from "../db";
-import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
-import { getCanonTree, rawGenreId } from "../features/tags/lib/canonicalize";
 import { useAlbumIdentity } from "../features/enrichment/hooks/useAlbumIdentity";
 import { UnmatchedSection } from "../features/tags/components/TagDrawer";
 import type { TreeNode } from "../features/tags/lib/canonicalize";
+import { getCanonTree, rawGenreId } from "../features/tags/lib/canonicalize";
+import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
+import { QK } from "../lib/queryKeys";
 import "./AlbumGenreEditor.css";
 
 export type DisplayGenre = {
@@ -63,7 +63,7 @@ export function AlbumGenreEditor({
         ? (JSON.parse(albumIdentity.combined_tags_json) as Array<{ name: string; count: number }>)
         : null,
     }),
-    [albumIdentity]
+    [albumIdentity],
   );
 
   const runNormalize = useCallback(async () => {
@@ -78,16 +78,17 @@ export function AlbumGenreEditor({
       setAutocomplete([]);
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name) VALUES (?, ?, ?)",
-          [albumId, canonicalId, name]
-        );
+        await db.execute("INSERT OR IGNORE INTO album_user_genres (album_id, canonical_id, name) VALUES (?, ?, ?)", [
+          albumId,
+          canonicalId,
+          name,
+        ]);
         await runNormalize();
       } finally {
         setIsUpdating(false);
       }
     },
-    [albumId, runNormalize]
+    [albumId, runNormalize],
   );
 
   const handleRemove = useCallback(
@@ -95,16 +96,16 @@ export function AlbumGenreEditor({
       setIsUpdating(true);
       try {
         const db = await getDb();
-        await db.execute(
-          "DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?",
-          [albumId, canonicalId]
-        );
+        await db.execute("DELETE FROM album_user_genres WHERE album_id = ? AND canonical_id = ?", [
+          albumId,
+          canonicalId,
+        ]);
         await runNormalize();
       } finally {
         setIsUpdating(false);
       }
     },
-    [albumId, runNormalize]
+    [albumId, runNormalize],
   );
 
   const handleExclude = useCallback(
@@ -112,10 +113,10 @@ export function AlbumGenreEditor({
       setIsUpdating(true);
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR IGNORE INTO album_genre_exclusions (album_id, canonical_id) VALUES (?, ?)",
-          [albumId, canonicalId]
-        );
+        await db.execute("INSERT OR IGNORE INTO album_genre_exclusions (album_id, canonical_id) VALUES (?, ?)", [
+          albumId,
+          canonicalId,
+        ]);
         await normalizeAlbum(albumId, albumArtist, albumName, buildNormalizeArgs());
         await queryClient.invalidateQueries({ queryKey: QK.normalizedTags(albumId) });
         await queryClient.invalidateQueries({ queryKey: QK.albumGenreExclusions(albumId) });
@@ -123,7 +124,7 @@ export function AlbumGenreEditor({
         setIsUpdating(false);
       }
     },
-    [albumId, albumArtist, albumName, buildNormalizeArgs, queryClient]
+    [albumId, albumArtist, albumName, buildNormalizeArgs, queryClient],
   );
 
   const handleInputChange = useCallback(async (value: string) => {
@@ -134,9 +135,7 @@ export function AlbumGenreEditor({
     }
     const tree = await getCanonTree();
     const q = value.toLowerCase();
-    setAutocomplete(
-      tree.nodes.filter((n) => n.type === "genre" && n.name.toLowerCase().includes(q)).slice(0, 8)
-    );
+    setAutocomplete(tree.nodes.filter((n) => n.type === "genre" && n.name.toLowerCase().includes(q)).slice(0, 8));
   }, []);
 
   const renderGroup = (label: string | null, genres: DisplayGenre[], removable: boolean) => {
@@ -149,15 +148,10 @@ export function AlbumGenreEditor({
             const rawSrc = g.id ? (rawSourcesByCanonicalId.get(g.id) ?? []) : [];
             const chipTitle =
               rawSrc.length > 0
-                ? rawSrc
-                    .map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`)
-                    .join(", ")
+                ? rawSrc.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
                 : undefined;
             return (
-              <span
-                key={g.id ?? g.name}
-                className={`age-chip${g.source ? ` age-chip--${g.source}` : ""}`}
-              >
+              <span key={g.id ?? g.name} className={`age-chip${g.source ? ` age-chip--${g.source}` : ""}`}>
                 <button
                   className="age-chip-label"
                   title={chipTitle}
@@ -221,11 +215,7 @@ export function AlbumGenreEditor({
             {autocomplete.length > 0 && (
               <ul className="age-autocomplete">
                 {autocomplete.map((n) => (
-                  <li
-                    key={n.id}
-                    className="age-autocomplete-item"
-                    onClick={() => void handleAdd(n.id, n.name)}
-                  >
+                  <li key={n.id} className="age-autocomplete-item" onClick={() => void handleAdd(n.id, n.name)}>
                     {n.name}
                   </li>
                 ))}

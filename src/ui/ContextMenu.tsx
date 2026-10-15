@@ -35,7 +35,9 @@ export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
     "context-submenu-content",
     flipLeft ? "context-submenu-content--flip" : "",
     flipUp ? "context-submenu-content--flip-up" : "",
-  ].filter(Boolean).join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
@@ -45,11 +47,7 @@ export function ContextMenuSubmenu({ label, children }: SubmenuProps) {
       onMouseLeave={() => setOpen(false)}
     >
       <button className="context-submenu-trigger">{label} ▸</button>
-      {open && (
-        <div className={cls}>
-          {children}
-        </div>
-      )}
+      {open && <div className={cls}>{children}</div>}
     </div>
   );
 }
@@ -76,7 +74,9 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
   useClickOutside(menuRef, onClose);
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onCloseRef.current(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onCloseRef.current();
+    };
     // The menu is positioned once at open time (fixed x/y) and never re-anchored,
     // so if the page underneath scrolls, close instead of leaving it floating
     // detached from whatever opened it.
@@ -98,6 +98,6 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
     >
       {children}
     </div>,
-    document.body
+    document.body,
   );
 }

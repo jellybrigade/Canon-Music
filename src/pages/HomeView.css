@@ -41,7 +41,10 @@
   border-radius: var(--radius-base);
   padding: 0.3em 0.6em;
   width: 440px;
-  transition: border-color var(--duration-slower), width var(--duration-slower) var(--ease-standard), background var(--duration-slower);
+  transition:
+    border-color var(--duration-slower),
+    width var(--duration-slower) var(--ease-standard),
+    background var(--duration-slower);
 }
 
 .home-search-bar:focus-within {
@@ -211,7 +214,6 @@
   }
 }
 
-
 .home-genres-section {
   padding: var(--space-md) var(--space-lg) 0;
 }
@@ -263,6 +265,11 @@
 }
 
 @keyframes skeleton-pulse {
-  0%, 100% { opacity: 0.35; }
-  50%       { opacity: 0.7;  }
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
 }

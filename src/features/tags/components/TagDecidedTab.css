@@ -32,8 +32,12 @@
   transition: border-color var(--duration-fast);
 }
 
-.decided-search::placeholder { color: var(--text-tertiary); }
-.decided-search:focus { border-color: var(--border-strong); }
+.decided-search::placeholder {
+  color: var(--text-tertiary);
+}
+.decided-search:focus {
+  border-color: var(--border-strong);
+}
 
 .decided-filter-tabs {
   display: flex;
@@ -59,7 +63,9 @@
   gap: var(--space-2xs);
 }
 
-.dtab:hover { color: var(--text-secondary); }
+.dtab:hover {
+  color: var(--text-secondary);
+}
 
 .dtab--active {
   color: var(--text-primary);
@@ -128,7 +134,6 @@
   white-space: nowrap;
 }
 
-
 /* alias chips */
 .decided-aliases {
   display: flex;
@@ -163,12 +168,19 @@
   line-height: 1;
   padding: 0 1px;
   flex-shrink: 0;
-  transition: opacity var(--duration-fast), color var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    color var(--duration-fast);
 }
 
 .decided-alias-chip:hover .decided-alias-remove,
-.decided-alias-chip:focus-within .decided-alias-remove { opacity: 1; }
-.decided-alias-remove:hover, .decided-alias-remove:focus-visible { color: var(--danger); }
+.decided-alias-chip:focus-within .decided-alias-remove {
+  opacity: 1;
+}
+.decided-alias-remove:hover,
+.decided-alias-remove:focus-visible {
+  color: var(--danger);
+}
 
 /* ── Simple row (accepted / ignored) ─────────────────────────────────────── */
 
@@ -220,7 +232,6 @@
   min-width: 28px;
 }
 
-
 .d-undo {
   background: none;
   border: none;
@@ -235,15 +246,24 @@
   justify-content: center;
   border-radius: var(--radius-xs);
   cursor: pointer;
-  transition: color var(--duration-fast), background var(--duration-fast), opacity var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    background var(--duration-fast),
+    opacity var(--duration-fast);
   flex-shrink: 0;
 }
 
 .decided-group:hover .d-undo,
 .decided-simple-row:hover .d-undo,
 .decided-group:focus-within .d-undo,
-.decided-simple-row:focus-within .d-undo { opacity: 1; }
-.d-undo:hover, .d-undo:focus-visible { color: var(--text-primary); background: var(--bg-hover-strong); }
+.decided-simple-row:focus-within .d-undo {
+  opacity: 1;
+}
+.d-undo:hover,
+.d-undo:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-hover-strong);
+}
 
 .d-lock {
   background: none;
@@ -258,16 +278,28 @@
   border-radius: var(--radius-xs);
   cursor: pointer;
   opacity: var(--opacity-45);
-  transition: opacity var(--duration-fast), background var(--duration-fast), color var(--duration-fast);
+  transition:
+    opacity var(--duration-fast),
+    background var(--duration-fast),
+    color var(--duration-fast);
   flex-shrink: 0;
 }
 
 .decided-group:hover .d-lock,
 .decided-simple-row:hover .d-lock,
 .decided-group:focus-within .d-lock,
-.decided-simple-row:focus-within .d-lock { opacity: 1; }
-.d-lock--active { opacity: 1; color: var(--accent); }
-.d-lock:hover, .d-lock:focus-visible { color: var(--text-primary); background: var(--bg-hover-strong); }
+.decided-simple-row:focus-within .d-lock {
+  opacity: 1;
+}
+.d-lock--active {
+  opacity: 1;
+  color: var(--accent);
+}
+.d-lock:hover,
+.d-lock:focus-visible {
+  color: var(--text-primary);
+  background: var(--bg-hover-strong);
+}
 
 .decided-empty {
   padding: var(--space-2xl) var(--space-lg);

@@ -12,11 +12,11 @@ vi.mock("../../../clients/musicbrainz", () => ({
   combineGenres: vi.fn().mockReturnValue([]),
 }));
 
-import { render, waitFor, cleanup } from "@testing-library/react";
-import { createElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { createElement } from "react";
+import { type MbArtistCandidate, searchArtists } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
-import { searchArtists, type MbArtistCandidate } from "../../../clients/musicbrainz";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { ArtistIdentifyDialog } from "./IdentifyDialog";
@@ -39,8 +39,9 @@ function renderDialog() {
 }
 
 function selectedTitles(): string[] {
-  return Array.from(document.querySelectorAll(".identify-candidate--selected .identify-candidate-title"))
-    .map((el) => el.textContent ?? "");
+  return Array.from(document.querySelectorAll(".identify-candidate--selected .identify-candidate-title")).map(
+    (el) => el.textContent ?? "",
+  );
 }
 
 function candidateCount(): number {

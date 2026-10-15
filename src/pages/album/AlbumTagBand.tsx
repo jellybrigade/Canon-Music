@@ -1,7 +1,7 @@
 import { Pencil } from "lucide-react";
+import type { DisplayGenre } from "../../components/AlbumGenreEditor";
 import { rawGenreId } from "../../features/tags/lib/canonicalize";
 import type { NormalizedTags } from "../../features/tags/lib/tagNormalize";
-import type { DisplayGenre } from "../../components/AlbumGenreEditor";
 import type { RawSourcesByCanonicalId } from "./albumGenres";
 import "./AlbumTagBand.css";
 
@@ -27,9 +27,10 @@ interface TagChipProps {
 
 function TagChip({ tag, fallbackTitle, rawSourcesByCanonicalId, onTagFilter, onOpenDrawer }: TagChipProps) {
   const rawSources = tag.id ? (rawSourcesByCanonicalId.get(tag.id) ?? []) : [];
-  const chipTitle = rawSources.length > 0
-    ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
-    : fallbackTitle;
+  const chipTitle =
+    rawSources.length > 0
+      ? rawSources.map((r) => `"${r.raw_value}" (${r.source === "server" ? "file" : r.source})`).join(", ")
+      : fallbackTitle;
   const sourceClass = tag.source ? ` album-tag-chip--${tag.source}` : "";
   return (
     <button
@@ -62,7 +63,12 @@ export function AlbumTagBand({
     <section className="album-tag-band" aria-label="Album tags">
       <div className="album-tag-column">
         <div className="album-tag-column-header">
-          <h3 className="album-tag-column-title" title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)">Genres</h3>
+          <h3
+            className="album-tag-column-title"
+            title="Genre tags aggregated from track files and enrichment services (Last.fm, MusicBrainz)"
+          >
+            Genres
+          </h3>
           <button
             className="album-tag-add-genre-btn"
             onClick={onToggleGenreEditor}
@@ -88,7 +94,9 @@ export function AlbumTagBand({
       </div>
       {normalizedTags && normalizedTags.descriptors.length > 0 && (
         <div className="album-tag-column">
-          <h3 className="album-tag-column-title" title="Mood and style descriptors from enrichment services">Descriptors</h3>
+          <h3 className="album-tag-column-title" title="Mood and style descriptors from enrichment services">
+            Descriptors
+          </h3>
           {normalizedTags.descriptors.map((tag) => (
             <TagChip key={tag.id ?? tag.name} tag={tag} fallbackTitle={undefined} {...chipProps} />
           ))}
@@ -96,7 +104,9 @@ export function AlbumTagBand({
       )}
       {normalizedTags && normalizedTags.scenes.length > 0 && (
         <div className="album-tag-column">
-          <h3 className="album-tag-column-title" title="Musical scenes, movements and subgenre contexts">Scenes & Movements</h3>
+          <h3 className="album-tag-column-title" title="Musical scenes, movements and subgenre contexts">
+            Scenes & Movements
+          </h3>
           {normalizedTags.scenes.map((tag) => (
             <TagChip key={tag.id ?? tag.name} tag={tag} fallbackTitle={undefined} {...chipProps} />
           ))}

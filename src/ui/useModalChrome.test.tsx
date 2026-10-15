@@ -5,10 +5,10 @@
 // level in `src/app/App.modalInOverlay.test.tsx`; this file pins the hook's own contract, which
 // that test can only observe through one modal at a time.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
-import { useModalChrome, useAnyModalOpen, __resetModalRegistry } from "./useModalChrome";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __resetModalRegistry, useAnyModalOpen, useModalChrome } from "./useModalChrome";
 
 /** A minimal modal: two focusables, plus whatever the case needs. */
 function Modal({
@@ -279,7 +279,9 @@ describe("useModalChrome focus", () => {
     opener.focus();
     fireEvent.click(opener);
     expect(document.activeElement).toBe(screen.getByText("first"));
-    act(() => { press("Escape"); });
+    act(() => {
+      press("Escape");
+    });
     expect(document.activeElement).toBe(opener);
   });
 
@@ -301,7 +303,9 @@ describe("useModalChrome focus", () => {
     opener.focus();
     fireEvent.click(opener);
     expect(opener.isConnected).toBe(false);
-    act(() => { press("Escape"); });
+    act(() => {
+      press("Escape");
+    });
     expect(document.activeElement).toBe(document.body);
   });
 });

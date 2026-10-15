@@ -1,9 +1,9 @@
-import { memo } from "react";
 import { Play } from "lucide-react";
-import type { Server } from "../../types/server";
+import { memo } from "react";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
-import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import type { CurrentTrack } from "../../features/playback/store/playerTypes";
+import type { Server } from "../../types/server";
 import type { TopTrack } from "./artistQueries";
 
 const SECONDS_PER_MINUTE = 60;
@@ -35,7 +35,19 @@ interface TrackRowProps {
   onContextMenu?: (e: React.MouseEvent, track: TopTrack) => void;
 }
 
-export const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPlaying, server, credential, onPlay, lastfmPlaycount, lastfmCombined, onAlbumClick, onContextMenu }: TrackRowProps) {
+export const TrackRow = memo(function TrackRow({
+  track,
+  rank,
+  currentTrack,
+  isPlaying,
+  server,
+  credential,
+  onPlay,
+  lastfmPlaycount,
+  lastfmCombined,
+  onAlbumClick,
+  onContextMenu,
+}: TrackRowProps) {
   const isCurrentlyPlaying = currentTrack?.id === track.id && isPlaying;
   const isActive = currentTrack?.id === track.id;
   const artUrl = track.artwork_url
@@ -49,7 +61,10 @@ export const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPl
     <div
       className={`artist-track-row${isActive ? " artist-track-row--active" : ""}`}
       onClick={() => onPlay(track)}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu?.(e, track); }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu?.(e, track);
+      }}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onPlay(track)}
@@ -73,7 +88,10 @@ export const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPl
         {track.album_name && track.album_id && onAlbumClick ? (
           <button
             className="artist-track-album-link"
-            onClick={(e) => { e.stopPropagation(); onAlbumClick(track.album_id!); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onAlbumClick(track.album_id!);
+            }}
           >
             {track.album_name}
           </button>
@@ -84,7 +102,11 @@ export const TrackRow = memo(function TrackRow({ track, rank, currentTrack, isPl
       {showPlaycount ? (
         <span
           className="artist-track-playcount"
-          title={lastfmCombined ? `Combined across multiple tracks named "${track.title}" by ${track.artist ?? "this artist"}` : undefined}
+          title={
+            lastfmCombined
+              ? `Combined across multiple tracks named "${track.title}" by ${track.artist ?? "this artist"}`
+              : undefined
+          }
         >
           {formatCount(lastfmPlaycount!)} plays{lastfmCombined ? " · combined" : ""}
         </span>

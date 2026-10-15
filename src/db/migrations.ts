@@ -20,7 +20,7 @@ export class SchemaTooNewError extends Error {
 
   constructor(found: number, supported: number) {
     super(
-      `This library was created by a newer version of Canon (database schema v${found}, this build understands up to v${supported}). Update Canon to open it.`
+      `This library was created by a newer version of Canon (database schema v${found}, this build understands up to v${supported}). Update Canon to open it.`,
     );
     this.name = "SchemaTooNewError";
     this.found = found;
@@ -70,14 +70,14 @@ function rymRenameSql(): string {
       `UPDATE OR IGNORE album_user_genres SET canonical_id = '${to}', name = '${toName}' WHERE canonical_id = '${from}'`,
       `DELETE FROM album_user_genres WHERE canonical_id = '${from}'`,
       `UPDATE OR IGNORE album_genre_exclusions SET canonical_id = '${to}' WHERE canonical_id = '${from}'`,
-      `DELETE FROM album_genre_exclusions WHERE canonical_id = '${from}'`
+      `DELETE FROM album_genre_exclusions WHERE canonical_id = '${from}'`,
     );
     if (seedName) {
       const norm = seedName.toLowerCase();
       statements.push(
         `INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value)
            SELECT '${seedName}', 'genre', '${to}', 'manual', '${norm}'
-           WHERE NOT EXISTS (SELECT 1 FROM tag_mappings WHERE norm_value = '${norm}' AND kind = 'genre')`
+           WHERE NOT EXISTS (SELECT 1 FROM tag_mappings WHERE norm_value = '${norm}' AND kind = 'genre')`,
       );
     }
   }
@@ -96,9 +96,7 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
   `);
 
   type Row = { version: number };
-  const rows = await database.select<Row[]>(
-    "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
-  );
+  const rows = await database.select<Row[]>("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1");
   const current = rows[0]?.version ?? 0;
 
   // Without this check, an older build silently runs its own queries against a newer schema,
@@ -130,10 +128,7 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
             if (!message.includes("duplicate column name")) throw e;
           }
         }
-        await database.execute(
-          "INSERT INTO schema_migrations (version) VALUES (?)",
-          [migration.version]
-        );
+        await database.execute("INSERT INTO schema_migrations (version) VALUES (?)", [migration.version]);
         await database.execute("COMMIT");
       } catch (e) {
         // A ROLLBACK that fails must not replace the error that says what actually went wrong.
@@ -781,6 +776,12 @@ export const migrations: Migration[] = [
   {
     version: 52,
     sql: rymRenameSql(),
+  },
+  {
+    // Automatic lookups used to run before an album's tracks loaded, so a lead single sharing the
+    // album's title read as a tie; mark those failures due so the next open asks again.
+    version: 53,
+    sql: `UPDATE album_identity SET looked_up_at = 0 WHERE mb_release_group_id IS NULL AND confirmed_at IS NULL;`,
   },
 ];
 

@@ -5,17 +5,16 @@ vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../sync/syncWatermark", () => ({ clearSyncWatermark: vi.fn() }));
 vi.mock("../../sync/syncPrune", () => ({ purgeServerData: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-import { ServerTab } from "./ServerTab";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
-import { type SyncOptions } from "../../sync/sync";
-import { clearSyncWatermark } from "../../sync/syncWatermark";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
+import type { SyncOptions } from "../../sync/sync";
+import { clearSyncWatermark } from "../../sync/syncWatermark";
+import { ServerTab } from "./ServerTab";
 
 const SERVER = {
   id: "srv",
@@ -41,7 +40,7 @@ function renderTab(overrides: { syncStatus?: "idle" | "syncing"; withCredential?
         syncStatus={overrides.syncStatus ?? "idle"}
         runSync={runSync}
       />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -83,7 +82,7 @@ describe("ServerTab resync", () => {
     // The watermark has to be gone before the sync reads it, or the pass it is asking for is
     // the one the skip would have made anyway.
     expect(vi.mocked(clearSyncWatermark).mock.invocationCallOrder[0]!).toBeLessThan(
-      runSync.mock.invocationCallOrder[0]!
+      runSync.mock.invocationCallOrder[0]!,
     );
   });
 

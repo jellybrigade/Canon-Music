@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
+
+import { cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
-import { render, cleanup, fireEvent } from "@testing-library/react";
-import { TrackContextMenu } from "./TrackContextMenu";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlaylistRow } from "../../features/playlists/usePlaylists";
+import { TrackContextMenu } from "./TrackContextMenu";
 
 afterEach(cleanup);
 
@@ -24,7 +25,9 @@ function Harness({ onAddToPlaylist }: { onAddToPlaylist: (pl: PlaylistRow) => vo
   const noop = () => {};
   return (
     <>
-      <button className="reopen" onClick={() => setOpen(true)}>reopen</button>
+      <button className="reopen" onClick={() => setOpen(true)}>
+        reopen
+      </button>
       {open && (
         <TrackContextMenu
           x={10}
@@ -51,8 +54,8 @@ function menuButtons(): string[] {
 }
 
 function clickMenuButton(label: string) {
-  const button = [...document.querySelectorAll<HTMLButtonElement>(".context-menu button")].find(
-    (b) => b.textContent?.startsWith(label),
+  const button = [...document.querySelectorAll<HTMLButtonElement>(".context-menu button")].find((b) =>
+    b.textContent?.startsWith(label),
   );
   if (!button) throw new Error(`no menu button "${label}"`);
   fireEvent.click(button);

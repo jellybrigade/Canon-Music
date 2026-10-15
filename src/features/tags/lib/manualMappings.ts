@@ -24,7 +24,7 @@ export async function getManualGenreMappings(): Promise<Map<string, string>> {
     try {
       const db = await getDb();
       const rows = await db.select<MappingRow[]>(
-        "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'"
+        "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre' AND source = 'manual'",
       );
       const map = new Map(rows.map((r) => [canonicalKey(r.raw_value), r.canonical_id]));
       // A write that landed while this read was in flight bumped the generation,

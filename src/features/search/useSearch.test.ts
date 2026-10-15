@@ -1,17 +1,17 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
 vi.mock("../../db", () => ({ getDb: vi.fn() }));
 
-import React from "react";
-import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { renderHook, waitFor } from "@testing-library/react";
+import React from "react";
 import { getDb } from "../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 import { QK } from "../../lib/queryKeys";
-import { useSearch, type SearchResults } from "./useSearch";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
+import { type SearchResults, useSearch } from "./useSearch";
 
 const SRV = "srv-a";
 const OTHER = "srv-b";
@@ -34,7 +34,7 @@ function seedAlbum(opts: {
   db.raw
     .prepare(
       `INSERT INTO albums (id, server_id, server_type, name, artist, artwork_url)
-       VALUES (?, ?, 'navidrome', ?, ?, ?)`
+       VALUES (?, ?, 'navidrome', ?, ?, ?)`,
     )
     .run(opts.id, opts.serverId ?? SRV, opts.name, opts.artist ?? null, opts.artworkUrl ?? null);
 }
@@ -55,7 +55,7 @@ function seedTrack(opts: {
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, genre, duration)
-       VALUES (?, ?, 'navidrome', ?, ?, ?, ?, ?)`
+       VALUES (?, ?, 'navidrome', ?, ?, ?, ?, ?)`,
     )
     .run(
       opts.id,
@@ -64,15 +64,14 @@ function seedTrack(opts: {
       opts.artist ?? null,
       opts.albumId,
       opts.genre ?? null,
-      opts.duration ?? null
+      opts.duration ?? null,
     );
   if (opts.noFts) return;
   const albumName =
     opts.ftsAlbum ??
     (opts.albumId
-      ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as
-          | { name: string }
-          | undefined)?.name ?? "")
+      ? ((db.raw.prepare(`SELECT name FROM albums WHERE id = ?`).get(opts.albumId) as { name: string } | undefined)
+          ?.name ?? "")
       : "");
   db.raw
     .prepare(`INSERT INTO tracks_fts (id, title, artist, album, genre) VALUES (?, ?, ?, ?, ?)`)
@@ -118,7 +117,7 @@ function wrapperFor(client: QueryClient) {
 async function search(
   query: string,
   serverId: string | undefined = SRV,
-  client: QueryClient = makeClient()
+  client: QueryClient = makeClient(),
 ): Promise<SearchResults> {
   const { result } = renderHook(() => useSearch(query, serverId), { wrapper: wrapperFor(client) });
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -144,10 +143,10 @@ describe("useSearch FTS pool ranking and caps", () => {
     seedAlbum({ id: "bulk-alb", name: "Bulk Album" });
     const insertTrack = db.raw.prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, genre)
-       VALUES (?, ?, 'navidrome', ?, 'Filler', 'bulk-alb', NULL)`
+       VALUES (?, ?, 'navidrome', ?, 'Filler', 'bulk-alb', NULL)`,
     );
     const insertFts = db.raw.prepare(
-      `INSERT INTO tracks_fts (id, title, artist, album, genre) VALUES (?, ?, 'Filler', 'Bulk Album', '')`
+      `INSERT INTO tracks_fts (id, title, artist, album, genre) VALUES (?, ?, 'Filler', 'Bulk Album', '')`,
     );
     db.raw.transaction(() => {
       for (let i = 0; i < 2100; i++) {
@@ -161,7 +160,7 @@ describe("useSearch FTS pool ranking and caps", () => {
 
     const res = await search("love");
 
-    expect(res.tracks.some(t => t.id === "exact")).toBe(true);
+    expect(res.tracks.some((t) => t.id === "exact")).toBe(true);
     expect(res.tracks[0]!.id).toBe("exact");
   });
 
@@ -171,7 +170,7 @@ describe("useSearch FTS pool ranking and caps", () => {
 
     const res = await search("jazz hands");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["t-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["t-trk"]);
   });
 
   // MATERIALIZED cannot be proven by executing the un-materialized variant: on SQLite 3.53 the
@@ -182,7 +181,7 @@ describe("useSearch FTS pool ranking and caps", () => {
 
     await search("song");
 
-    const selects = db.queryLog.filter(q => q.kind === "select").map(q => q.sql);
+    const selects = db.queryLog.filter((q) => q.kind === "select").map((q) => q.sql);
     expect(selects).toHaveLength(3);
     for (const sql of selects) {
       expect(sql).toContain("WITH ranked AS MATERIALIZED");
@@ -227,9 +226,9 @@ describe("useSearch server scoping", () => {
 
     const res = await search("blue");
 
-    expect(res.albums.map(a => a.id)).toEqual(["mine-alb"]);
-    expect(res.tracks.map(t => t.id)).toEqual(["mine-trk"]);
-    expect(res.artists.map(a => a.name)).toEqual(["Blue Artist"]);
+    expect(res.albums.map((a) => a.id)).toEqual(["mine-alb"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["mine-trk"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Blue Artist"]);
   });
 
   // Regression, known-issues "A mirror not scoped by owner": the shipped bug was call sites
@@ -243,10 +242,10 @@ describe("useSearch server scoping", () => {
     seedPair({ key: "same", albumName: "Odd Sibling", trackTitle: "Odd Sibling Song", artist: "Odd" });
 
     const mine = await search("odd", SRV);
-    expect(mine.albums.map(a => [a.id, a.server_id])).toEqual([["same-alb", SRV]]);
+    expect(mine.albums.map((a) => [a.id, a.server_id])).toEqual([["same-alb", SRV]]);
 
     const theirs = await search("odd", OTHER, makeClient());
-    expect(theirs.albums.map(a => [a.id, a.server_id])).toEqual([["odd-alb", OTHER]]);
+    expect(theirs.albums.map((a) => [a.id, a.server_id])).toEqual([["odd-alb", OTHER]]);
   });
 
   it("reads server_id off the track row itself", async () => {
@@ -256,7 +255,7 @@ describe("useSearch server scoping", () => {
 
     const res = await search("grey");
 
-    expect(res.tracks.map(t => [t.id, t.server_id])).toEqual([["mine-trk", SRV]]);
+    expect(res.tracks.map((t) => [t.id, t.server_id])).toEqual([["mine-trk", SRV]]);
   });
 
   it("refetches for the other server when only serverId changes", async () => {
@@ -270,15 +269,15 @@ describe("useSearch server scoping", () => {
     });
     const client = makeClient();
 
-    const { result, rerender } = renderHook(
-      ({ serverId }: { serverId: string }) => useSearch("red", serverId),
-      { wrapper: wrapperFor(client), initialProps: { serverId: SRV } }
-    );
+    const { result, rerender } = renderHook(({ serverId }: { serverId: string }) => useSearch("red", serverId), {
+      wrapper: wrapperFor(client),
+      initialProps: { serverId: SRV },
+    });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data!.tracks.map(t => t.id)).toEqual(["mine-trk"]);
+    expect(result.current.data!.tracks.map((t) => t.id)).toEqual(["mine-trk"]);
 
     rerender({ serverId: OTHER });
-    await waitFor(() => expect(result.current.data!.tracks.map(t => t.id)).toEqual(["theirs-trk"]));
+    await waitFor(() => expect(result.current.data!.tracks.map((t) => t.id)).toEqual(["theirs-trk"]));
   });
 });
 
@@ -301,7 +300,7 @@ describe("useSearch row shape and joins", () => {
 
     const res = await search("nameless");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["n-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["n-trk"]);
     expect(res.tracks[0]!.artist).toBeNull();
     expect(res.artists).toEqual([]);
   });
@@ -327,7 +326,7 @@ describe("useSearch row shape and joins", () => {
 
     const res = await search("amber");
 
-    expect(res.albums.map(a => a.id)).toEqual(["one-alb"]);
+    expect(res.albums.map((a) => a.id)).toEqual(["one-alb"]);
     expect(res.tracks).toHaveLength(3);
   });
 
@@ -337,13 +336,13 @@ describe("useSearch row shape and joins", () => {
     db.raw
       .prepare(
         `INSERT INTO artist_identity (artist_name, lastfm_image_url, wikidata_image_url, navidrome_image_url)
-         VALUES ('Ivory Known', 'lf.jpg', 'wd.jpg', 'nd.jpg')`
+         VALUES ('Ivory Known', 'lf.jpg', 'wd.jpg', 'nd.jpg')`,
       )
       .run();
 
     const res = await search("ivory");
-    const known = res.artists.find(a => a.name === "Ivory Known")!;
-    const unknown = res.artists.find(a => a.name === "Ivory Unknown")!;
+    const known = res.artists.find((a) => a.name === "Ivory Known")!;
+    const unknown = res.artists.find((a) => a.name === "Ivory Unknown")!;
 
     expect([known.lastfm_image_url, known.wikidata_image_url, known.navidrome_image_url]).toEqual([
       "lf.jpg",
@@ -360,9 +359,7 @@ describe("useSearch row shape and joins", () => {
   it("passes replay-gain columns through unchanged, nulls included", async () => {
     seedPair({ key: "rg", albumName: "Gain Album", trackTitle: "Gain Song", artist: "Gain" });
     db.raw
-      .prepare(
-        `UPDATE tracks SET replay_gain_track_gain = -7.5, replay_gain_track_peak = 0.98 WHERE id = 'rg-trk'`
-      )
+      .prepare(`UPDATE tracks SET replay_gain_track_gain = -7.5, replay_gain_track_peak = 0.98 WHERE id = 'rg-trk'`)
       .run();
 
     const res = await search("gain song");
@@ -381,7 +378,7 @@ describe("useSearch query parsing", () => {
 
     const res = await search("love song");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["both-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["both-trk"]);
   });
 
   it("matches on a prefix of a word", async () => {
@@ -389,7 +386,7 @@ describe("useSearch query parsing", () => {
 
     const res = await search("lov");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["p-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["p-trk"]);
   });
 
   it("ignores surrounding whitespace", async () => {
@@ -397,7 +394,7 @@ describe("useSearch query parsing", () => {
 
     const res = await search("  love song  ");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["w-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["w-trk"]);
   });
 
   it("matches when interior whitespace is doubled", async () => {
@@ -405,7 +402,7 @@ describe("useSearch query parsing", () => {
 
     const res = await search("love  song");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["w-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["w-trk"]);
   });
 
   it("treats FTS5 operator words as literal tokens, not operators", async () => {
@@ -422,10 +419,10 @@ describe("useSearch query parsing", () => {
 
     const res = await search('he"llo');
 
-    expect(
-      db.raw.prepare(`SELECT COUNT(*) c FROM tracks_fts WHERE tracks_fts MATCH '"hello"*'`).get()
-    ).toEqual({ c: 1 });
-    expect(res.tracks.map(t => t.id)).toEqual(["q-trk"]);
+    expect(db.raw.prepare(`SELECT COUNT(*) c FROM tracks_fts WHERE tracks_fts MATCH '"hello"*'`).get()).toEqual({
+      c: 1,
+    });
+    expect(res.tracks.map((t) => t.id)).toEqual(["q-trk"]);
   });
 
   it("returns empty for a punctuation-only query rather than failing the query", async () => {
@@ -449,7 +446,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("halo");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["exact", "starts", "word", "sub"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["exact", "starts", "word", "sub"]);
   });
 
   it("weights an artist match at 0.6 of the equivalent title match", async () => {
@@ -460,7 +457,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("nova");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["by-title", "by-artist"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["by-title", "by-artist"]);
   });
 
   it("ranks a match only inside brackets below every match outside them", async () => {
@@ -473,7 +470,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("expanded");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["word", "by-artist", "squared", "bracketed"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["word", "by-artist", "squared", "bracketed"]);
   });
 
   it("ranks an album named for the query above its bracketed editions", async () => {
@@ -483,7 +480,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("expanded");
 
-    expect(res.albums.map(a => a.id)).toEqual(["exact-alb", "plain-alb", "ed-alb"]);
+    expect(res.albums.map((a) => a.id)).toEqual(["exact-alb", "plain-alb", "ed-alb"]);
   });
 
   it("scores a fully bracketed title on its bracket text at the normal tier", async () => {
@@ -493,7 +490,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("untitled");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["whole", "by-artist"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["whole", "by-artist"]);
   });
 
   it("drops a track the index matched only through its genre column", async () => {
@@ -503,9 +500,10 @@ describe("useSearch relevance re-ranking", () => {
     const res = await search("techno");
 
     // The genre-only track is in the FTS pool - it just scores 0 and never reaches the caller.
-    expect(db.raw.prepare(`SELECT COUNT(*) c FROM tracks_fts WHERE tracks_fts MATCH '"techno"*'`).get())
-      .toEqual({ c: 2 });
-    expect(res.tracks.map(t => t.id)).toEqual(["title-trk"]);
+    expect(db.raw.prepare(`SELECT COUNT(*) c FROM tracks_fts WHERE tracks_fts MATCH '"techno"*'`).get()).toEqual({
+      c: 2,
+    });
+    expect(res.tracks.map((t) => t.id)).toEqual(["title-trk"]);
   });
 
   it("drops an album whose only match was a track title, not its own name or artist", async () => {
@@ -514,7 +512,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("thunder");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["loud-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["loud-trk"]);
     expect(res.albums).toEqual([]);
   });
 
@@ -526,8 +524,8 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("mist");
 
-    expect(res.tracks.map(t => t.title)).toEqual(["Mist Alpha", "Mist Zulu"]);
-    expect(res.albums.map(a => a.name)).toEqual(["Alpha Mist", "Zeta Mist"]);
+    expect(res.tracks.map((t) => t.title)).toEqual(["Mist Alpha", "Mist Zulu"]);
+    expect(res.albums.map((a) => a.name)).toEqual(["Alpha Mist", "Zeta Mist"]);
   });
 
   it("breaks a score tie between artists by album count, not alphabetically", async () => {
@@ -540,7 +538,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("zenith");
 
-    expect(res.artists.map(a => [a.name, a.album_count])).toEqual([
+    expect(res.artists.map((a) => [a.name, a.album_count])).toEqual([
       ["Zenith Zulu", 2],
       ["Zenith Alpha", 1],
     ]);
@@ -552,7 +550,7 @@ describe("useSearch relevance re-ranking", () => {
     const res = await search("LOVE");
 
     // Exact tier, so it outranks a mere substring; the point is that it scored at all.
-    expect(res.tracks.map(t => t.id)).toEqual(["c-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["c-trk"]);
   });
 
   it("scores on the title alone when the artist is null", async () => {
@@ -561,7 +559,7 @@ describe("useSearch relevance re-ranking", () => {
 
     const res = await search("solace");
 
-    expect(res.tracks.map(t => t.id)).toEqual(["na-trk"]);
+    expect(res.tracks.map((t) => t.id)).toEqual(["na-trk"]);
   });
 });
 
@@ -573,7 +571,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("nomad");
 
-    expect(res.artists.map(a => a.name)).toEqual(["Nomad"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Nomad"]);
   });
 
   it("keeps a 'feat.' credit when the primary artist is not in the results", async () => {
@@ -582,7 +580,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("wanderer");
 
-    expect(res.artists.map(a => a.name)).toEqual(["Wanderer feat. Guest"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Wanderer feat. Guest"]);
   });
 
   it("collapses feat., ft. and featuring, ignoring case", async () => {
@@ -594,7 +592,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("pilot");
 
-    expect(res.artists.map(a => a.name)).toEqual(["Pilot"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Pilot"]);
   });
 
   it("matches the primary artist case-insensitively when collapsing", async () => {
@@ -604,7 +602,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("vector");
 
-    expect(res.artists.map(a => a.name)).toEqual(["Vector"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Vector"]);
   });
 
   // FEAT_RE's `(.+?)` is non-greedy, so a chained credit's prefix is cut at the *first*
@@ -617,7 +615,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("rider");
 
-    expect(res.artists.map(a => a.name).sort()).toEqual(["Rider feat. A", "Rider feat. A feat. B"]);
+    expect(res.artists.map((a) => a.name).sort()).toEqual(["Rider feat. A", "Rider feat. A feat. B"]);
   });
 
   it("collapses the whole chain once the bare primary artist is present", async () => {
@@ -628,7 +626,7 @@ describe("useSearch featured-artist collapsing", () => {
 
     const res = await search("rider");
 
-    expect(res.artists.map(a => a.name)).toEqual(["Rider"]);
+    expect(res.artists.map((a) => a.name)).toEqual(["Rider"]);
   });
 });
 
@@ -698,7 +696,7 @@ describe("useSearch query wiring", () => {
     // Hold the second query open so the placeholder window is observable.
     const inner = db.select.bind(db);
     let release: (() => void) | null = null;
-    const gate = new Promise<void>(resolve => {
+    const gate = new Promise<void>((resolve) => {
       release = resolve;
     });
     let gated = false;
@@ -712,16 +710,16 @@ describe("useSearch query wiring", () => {
       initialProps: { q: "ember song" },
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data!.tracks.map(t => t.id)).toEqual(["one-trk"]);
+    expect(result.current.data!.tracks.map((t) => t.id)).toEqual(["one-trk"]);
 
     gated = true;
     rerender({ q: "ember reprise" });
     await waitFor(() => expect(result.current.isPlaceholderData).toBe(true));
-    expect(result.current.data!.tracks.map(t => t.id)).toEqual(["one-trk"]);
+    expect(result.current.data!.tracks.map((t) => t.id)).toEqual(["one-trk"]);
 
     gated = false;
     release!();
-    await waitFor(() => expect(result.current.data!.tracks.map(t => t.id)).toEqual(["two-trk"]));
+    await waitFor(() => expect(result.current.data!.tracks.map((t) => t.id)).toEqual(["two-trk"]));
     expect(result.current.isPlaceholderData).toBe(false);
   });
 

@@ -8,18 +8,18 @@
  * work the settle handler does - `tree.nodes` is a counting getter, so a handler that
  * runs after unmount is visible as a read that a guarded handler never performs.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 vi.mock("../features/tags/lib/canonicalize", () => ({ getCanonTree: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { getDb } from "../db";
-import { getCanonTree } from "../features/tags/lib/canonicalize";
 import type { CanonTree, TreeNode } from "../features/tags/lib/canonicalize";
-import { useGenreMappings, applyGenreMappings } from "./useGenreDisplay";
+import { getCanonTree } from "../features/tags/lib/canonicalize";
+import { applyGenreMappings, useGenreMappings } from "./useGenreDisplay";
 
 const SHOEGAZE: TreeNode = {
   id: "shoegaze",
@@ -54,7 +54,9 @@ function countingTree(nodes: TreeNode[]) {
 /** Holds `getCanonTree` open until the returned `resolve` is called. */
 function deferredTree(tree: CanonTree) {
   let release!: () => void;
-  const gate = new Promise<void>((r) => { release = r; });
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
   vi.mocked(getCanonTree).mockImplementation(() => gate.then(() => tree));
   return async () => {
     release();

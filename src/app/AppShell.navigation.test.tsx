@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { AppShell } from "./AppShell";
-import type { AppViewProps } from "./AppRoutes";
+import { MemoryRouter, useNavigate } from "react-router-dom";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { useAppNavigation } from "../hooks/useAppNavigation";
 import { useDismissOnNavigate } from "../hooks/useDismissOnNavigate";
+import type { AppViewProps } from "./AppRoutes";
+import { AppShell } from "./AppShell";
 
 /**
  * Guards known-issues.md's "State deciding which subtree renders, but absent
@@ -34,8 +35,7 @@ const suspendControl = vi.hoisted(() => ({
 }));
 
 vi.mock("./AppRoutes", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  AppRoutes: (props: any) => {
+  AppRoutes: (props: { pathnameForTest?: string }) => {
     if (suspendControl.pathname !== null && props.pathnameForTest === suspendControl.pathname) {
       suspendControl.pending ??= new Promise<void>((resolve) => {
         suspendControl.release = () => {
@@ -51,25 +51,46 @@ vi.mock("./AppRoutes", () => ({
 }));
 
 vi.mock("../features/playback/components/PlayerBar", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  PlayerBar: (props: any) => (
+  PlayerBar: (props: {
+    onNowPlaying: () => void;
+    onSelectArtist: (artist: { name: string }) => void;
+    onSelectAlbumById: (albumId: string) => void;
+  }) => (
     <div data-testid="player-bar-stub">
-      <button data-testid="pb-now-playing" onClick={props.onNowPlaying}>now</button>
-      <button data-testid="pb-select-artist" onClick={() => props.onSelectArtist({ name: "Artist Y" })}>artist</button>
-      <button data-testid="pb-select-album-by-id" onClick={() => props.onSelectAlbumById("srv:alb2")}>albumbyid</button>
+      <button data-testid="pb-now-playing" onClick={props.onNowPlaying}>
+        now
+      </button>
+      <button data-testid="pb-select-artist" onClick={() => props.onSelectArtist({ name: "Artist Y" })}>
+        artist
+      </button>
+      <button data-testid="pb-select-album-by-id" onClick={() => props.onSelectAlbumById("srv:alb2")}>
+        albumbyid
+      </button>
     </div>
   ),
 }));
 
 vi.mock("../components/CommandPalette", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  CommandPalette: (props: any) =>
+  CommandPalette: (props: {
+    open: boolean;
+    onNavigate: (view: string) => void;
+    onSelectAlbum: (album: { id: string; title: string }) => void;
+    onSelectArtist: (name: string, albumCount: number) => void;
+  }) =>
     !props.open ? null : (
       <div data-testid="command-palette-stub">
-        <button data-testid="cp-navigate" onClick={() => props.onNavigate("home")}>nav-home</button>
-        <button data-testid="cp-navigate-library" onClick={() => props.onNavigate("library")}>nav-library</button>
-        <button data-testid="cp-select-album" onClick={() => props.onSelectAlbum({ id: "srv:alb1", title: "A" })}>album</button>
-        <button data-testid="cp-select-artist" onClick={() => props.onSelectArtist("Artist X", 3)}>artist</button>
+        <button data-testid="cp-navigate" onClick={() => props.onNavigate("home")}>
+          nav-home
+        </button>
+        <button data-testid="cp-navigate-library" onClick={() => props.onNavigate("library")}>
+          nav-library
+        </button>
+        <button data-testid="cp-select-album" onClick={() => props.onSelectAlbum({ id: "srv:alb1", title: "A" })}>
+          album
+        </button>
+        <button data-testid="cp-select-artist" onClick={() => props.onSelectArtist("Artist X", 3)}>
+          artist
+        </button>
       </div>
     ),
 }));
@@ -89,21 +110,23 @@ beforeAll(async () => {
   render(
     <MemoryRouter initialEntries={["/library"]}>
       <Inner startPaletteOpen={false} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
   await waitFor(() => expect(screen.getByTestId("route-content")).toBeInTheDocument());
   cleanup();
   render(
     <MemoryRouter initialEntries={["/library"]}>
       <Inner startPaletteOpen={true} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
   await waitFor(() => expect(screen.getByTestId("command-palette-stub")).toBeInTheDocument());
   cleanup();
 });
 
 function makeAlbumRow(id: string) {
-  return { id, server_id: "srv", title: id } as unknown as Parameters<ReturnType<typeof useAppNavigation>["openAlbum"]>[0];
+  return { id, server_id: "srv", title: id } as unknown as Parameters<
+    ReturnType<typeof useAppNavigation>["openAlbum"]
+  >[0];
 }
 
 async function mockLookupAlbum(id: string) {
@@ -122,10 +145,20 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     openAlbum(row);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const props: any = {
+  const props: Partial<AppViewProps> & { pathnameForTest: string } = {
     server: undefined,
-    serverWithCred: { server: {}, credential: "x" },
+    serverWithCred: {
+      server: {
+        id: "srv",
+        type: "navidrome",
+        url: "https://srv.example",
+        alt_url: null,
+        display_name: "Srv",
+        username: "u",
+        created_at: "2026-01-01",
+      },
+      credential: { type: "apikey", apiKey: "k" },
+    },
     playlists: [],
     view,
     navItems: [
@@ -144,7 +177,7 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     queueClass: "",
     currentTrack: null,
     sidebarExpanded: false,
-    setSidebarExpanded: () => {},
+    setSidebarExpanded: async () => {},
     sidebarLiveWidth: null,
     sidebarWidth: 180,
     handleSidebarResizeMouseDown: () => {},
@@ -166,7 +199,9 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     <>
       {/* A route-owned navigation, the one kind that never passes through
           useAppNavigation. AppRoutes does this after deleting a playlist. */}
-      <button data-testid="raw-navigate" onClick={() => rawNavigate("/playlists")}>raw</button>
+      <button data-testid="raw-navigate" onClick={() => rawNavigate("/playlists")}>
+        raw
+      </button>
       <AppShell {...(props as AppViewProps)} />
     </>
   );
@@ -176,7 +211,7 @@ function renderHarness(opts: { entries: string[]; index?: number; startPaletteOp
   return render(
     <MemoryRouter initialEntries={opts.entries} initialIndex={opts.index}>
       <Inner startPaletteOpen={opts.startPaletteOpen ?? true} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -242,9 +277,7 @@ describe("AppShell: command palette dismissed by every navigation source", () =>
     // never reads as inert, while the router commits the location as a transition. So the route
     // is still painting the path this navigation came *from* when the dismissal lands, and the
     // destination has to be waited for rather than read off the same tick.
-    await waitFor(() =>
-      expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2")
-    );
+    await waitFor(() => expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2"));
   });
 
   it("Alt+ArrowLeft dismisses the palette by navigating back", () => {

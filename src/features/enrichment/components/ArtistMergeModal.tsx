@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { GitMerge, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useArtists } from "../../../hooks/useArtists";
-import { useSetArtistAlias } from "../hooks/useArtistAliases";
-import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useModalChrome } from "../../../ui/useModalChrome";
+import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import { useSetArtistAlias } from "../hooks/useArtistAliases";
 import "./ArtistMergeModal.css";
 
 interface Props {
@@ -49,8 +49,8 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
 
         <div className="merge-body">
           <p className="merge-description">
-            Treat <strong>{aliasArtistName}</strong> as an alias of another artist.
-            Their albums will appear under the canonical artist.
+            Treat <strong>{aliasArtistName}</strong> as an alias of another artist. Their albums will appear under the
+            canonical artist.
           </p>
 
           <label className="merge-field">
@@ -60,7 +60,10 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
               type="text"
               placeholder="Search artists…"
               value={query}
-              onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setSelected(null);
+              }}
               autoFocus
             />
           </label>
@@ -78,14 +81,14 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
                 </span>
               </button>
             ))}
-            {candidates.length === 0 && (
-              <p className="merge-empty">No artists match.</p>
-            )}
+            {candidates.length === 0 && <p className="merge-empty">No artists match.</p>}
           </div>
         </div>
 
         <div className="merge-footer">
-          <button className="merge-btn" onClick={onClose}>Cancel</button>
+          <button className="merge-btn" onClick={onClose}>
+            Cancel
+          </button>
           <button
             className="merge-btn merge-btn--primary"
             onClick={() => void handleConfirm()}
@@ -96,6 +99,6 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

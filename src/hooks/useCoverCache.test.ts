@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { getDb } from "../db";
-import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { QK } from "../lib/queryKeys";
+import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { useAlbumCoverMap } from "./useCoverCache";
 
 let db: FakeDatabase;
@@ -20,10 +20,11 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 async function seedCover(albumId: string, bytes: string): Promise<void> {
-  await db.execute(
-    "INSERT INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)",
-    [albumId, `data:image/jpeg;base64,${bytes}`, 0],
-  );
+  await db.execute("INSERT INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)", [
+    albumId,
+    `data:image/jpeg;base64,${bytes}`,
+    0,
+  ]);
 }
 
 function coverReads(): number {

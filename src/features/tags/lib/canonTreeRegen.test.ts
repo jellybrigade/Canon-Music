@@ -40,18 +40,24 @@ const SMALL_HIERARCHY = "Genres\n    Rock::genre\n        Punk Rock::genre\n    
 
 function parseSmall(renames: Rename[], hierarchy = SMALL_HIERARCHY): ParsedTree {
   const args = [
-    "--input", writeTemp("h.txt", hierarchy),
-    "--custom", writeTemp("c.json", "[]"),
-    "--renames", writeTemp("r.json", JSON.stringify(renames)),
+    "--input",
+    writeTemp("h.txt", hierarchy),
+    "--custom",
+    writeTemp("c.json", "[]"),
+    "--renames",
+    writeTemp("r.json", JSON.stringify(renames)),
   ];
   return JSON.parse(runParser(args)) as ParsedTree;
 }
 
 function renameError(renames: Rename[]): string {
   return parserError([
-    "--input", writeTemp("h.txt", SMALL_HIERARCHY),
-    "--custom", writeTemp("c.json", "[]"),
-    "--renames", writeTemp("r.json", JSON.stringify(renames)),
+    "--input",
+    writeTemp("h.txt", SMALL_HIERARCHY),
+    "--custom",
+    writeTemp("c.json", "[]"),
+    "--renames",
+    writeTemp("r.json", JSON.stringify(renames)),
   ]);
 }
 
@@ -81,8 +87,11 @@ describe("canon tree regeneration", () => {
       "Descriptors\n    Futurism::mood\nGenres\n    Classical Music::genre\n        Futurism::genre\nScenes & Movements\n    Futurism::genre\n",
     );
     const futurism = (hierarchy: string) =>
-      (JSON.parse(runParser(["--input", hierarchy, "--custom", custom, "--renames", NO_RENAMES])) as { nodes: { id: string; sections: string[] }[] })
-        .nodes.find((n) => n.id === "futurism");
+      (
+        JSON.parse(runParser(["--input", hierarchy, "--custom", custom, "--renames", NO_RENAMES])) as {
+          nodes: { id: string; sections: string[] }[];
+        }
+      ).nodes.find((n) => n.id === "futurism");
     expect(futurism(scenesFirst)?.sections).toEqual(["genres", "descriptors", "scenes-and-movements"]);
     expect(futurism(genresFirst)?.sections).toEqual(["genres", "descriptors", "scenes-and-movements"]);
   });
@@ -90,7 +99,9 @@ describe("canon tree regeneration", () => {
   it("refuses a custom node whose id the hierarchy already has", () => {
     const custom = writeTemp(
       "c.json",
-      JSON.stringify([{ id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], sections: ["genres"] }]),
+      JSON.stringify([
+        { id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], sections: ["genres"] },
+      ]),
     );
     expect(parserError(["--custom", custom])).toContain('custom node "rock" already exists');
   });
@@ -98,7 +109,16 @@ describe("canon tree regeneration", () => {
   it("refuses a custom node naming a parent the tree does not have", () => {
     const custom = writeTemp(
       "c.json",
-      JSON.stringify([{ id: "x-rock", name: "X Rock", type: "genre", canonical_key: "x rock", parents: ["no-such-genre"], sections: ["genres"] }]),
+      JSON.stringify([
+        {
+          id: "x-rock",
+          name: "X Rock",
+          type: "genre",
+          canonical_key: "x rock",
+          parents: ["no-such-genre"],
+          sections: ["genres"],
+        },
+      ]),
     );
     expect(parserError(["--custom", custom])).toContain('custom node "x-rock" names missing parent "no-such-genre"');
   });
@@ -160,7 +180,7 @@ describe("canon tree version", () => {
     const versions = new Set([
       parseSmall([]).version,
       parseSmall([{ from: "pyschedelic", fromName: "Pyschedelic", to: "psychedelic" }]).version,
-      parseSmall([], SMALL_HIERARCHY + "    Jazz::genre\n").version,
+      parseSmall([], `${SMALL_HIERARCHY}    Jazz::genre\n`).version,
     ]);
     expect(versions.size).toBe(3);
   });

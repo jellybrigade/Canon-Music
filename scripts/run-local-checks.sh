@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 REPO_ROOT="$SCRIPT_DIR/.."
 cd "$REPO_ROOT"
 
+# --ci: verify only. CI must fail on unformatted code rather than rewrite it, and it builds main.
+IS_CI=0
+[ "${1:-}" = "--ci" ] && IS_CI=1
+
 TMP_DIR=$(mktemp -d -t canon-checks-XXXXXXXX)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -76,7 +80,13 @@ rust_comment_check() {
   hits=$(find src-tauri/src -name '*.rs' -not -name '*_test.rs' -print0 | xargs -0 awk '
     function strip(l) { sub(/^\/\*\*?/, "", l); sub(/\*\/$/, "", l); sub(/^\/\/\/?!?/, "", l); sub(/^\*/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l); return l }
     function reset(   ) { run_len = 0; comment_lines = 0; code_lines = 0 }
-    FNR == 1 { reset() }
+    # Per-file totals flush on the next file and at END: ENDFILE is gawk-only and CI awk is mawk.
+    function flush(file,   cap) {
+      if (run_len > 3) print file ":" run_start " run"
+      cap = code_lines * 0.4; if (cap < 10) cap = 10
+      if (comment_lines > cap) print file ": " comment_lines " comments, cap " int(cap) + 1 " density"
+    }
+    FNR == 1 { if (NR > 1) flush(previous_file); reset(); previous_file = FILENAME }
     /^[ \t]*$/ { next }
     {
       line = $0; sub(/^[ \t]+/, "", line)
@@ -90,11 +100,7 @@ rust_comment_check() {
         code_lines++
       }
     }
-    ENDFILE {
-      if (run_len > 3) print FILENAME ":" run_start " run"
-      cap = code_lines * 0.4; if (cap < 10) cap = 10
-      if (comment_lines > cap) print FILENAME ": " comment_lines " comments, cap " int(cap) + 1 " density"
-    }
+    END { if (NR > 0) flush(previous_file) }
   ')
   if [ -n "$hits" ]; then
     echo "Comment cap exceeded in src-tauri/ (see AGENTS.md):" >&2
@@ -104,19 +110,62 @@ rust_comment_check() {
   echo "No comment cap violations in src-tauri/."
 }
 
+# Fingerprint of every modified or untracked file, so the fix phase can name what it rewrote.
+dirty_fingerprint() {
+  { git diff HEAD --name-only; git ls-files --others --exclude-standard; } | sort -u | while read -r f; do
+    [ -f "$f" ] && md5sum "$f"
+  done | LC_ALL=C sort
+}
+
+# Fixers rewrite files in place, so they run one at a time before the checks read anything.
+fix_phase() {
+  local before after changed restage failed=0
+  before=$(dirty_fingerprint)
+  echo "Fixing formatting and lint..."
+  pnpm biome check --write . >"$TMP_DIR/fix-biome.log" 2>&1 || true
+  (cd src-tauri && cargo fmt) >"$TMP_DIR/fix-rustfmt.log" 2>&1 || failed=1
+  (cd src-tauri && cargo clippy --fix --allow-dirty --allow-staged --all-targets) >"$TMP_DIR/fix-clippy.log" 2>&1 || true
+  after=$(dirty_fingerprint)
+  changed=$(LC_ALL=C comm -13 <(echo "$before") <(echo "$after") | awk '{print $2}')
+  if [ -n "$changed" ]; then
+    echo -e "${YELLOW}Rewrote these files; review and stage them again:${NC}"
+    echo "$changed" | sed -e 's/^/  /'
+  fi
+  if [ "$failed" -ne 0 ]; then
+    echo -e "${RED}cargo fmt failed:${NC}"
+    sed -e 's/^/  /' "$TMP_DIR/fix-rustfmt.log"
+  fi
+  # Checks read the working tree, so a staged copy the fixers rewrote would pass here and commit unfixed.
+  restage=$(LC_ALL=C comm -12 <(echo "$changed" | LC_ALL=C sort) <(git diff --cached --name-only | LC_ALL=C sort))
+  if [ -n "$restage" ]; then
+    echo -e "${RED}Staged files were rewritten; stage them again before committing:${NC}"
+    echo "$restage" | sed -e 's/^/  /'
+    failed=1
+  fi
+  return "$failed"
+}
+
+if [ "$IS_CI" -eq 1 ]; then
+  TASKS=(rustfmt)
+  run_task rustfmt bash -c 'cd src-tauri && cargo fmt --check'
+else
+  fix_phase || exit 1
+  TASKS=(branch staged)
+  run_task branch branch_check
+  run_task staged staged_check
+fi
+
 echo "Running local checks..."
 
-run_task branch      branch_check
-run_task staged      staged_check
 run_task dashes      dash_check
 run_task rustcomment rust_comment_check
 run_task typecheck   pnpm tsc --noEmit
 run_task vitest      pnpm test:run
 run_task cargo-test  bash -c 'cd src-tauri && cargo test'
 run_task clippy      bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
-run_task rustfmt     bash -c 'cd src-tauri && cargo fmt --check'
+run_task biome       pnpm biome check .
 
-TASKS=(branch staged dashes rustcomment typecheck vitest cargo-test clippy rustfmt)
+TASKS+=(dashes rustcomment biome typecheck vitest cargo-test clippy)
 for t in "${TASKS[@]}"; do wait_task "$t"; done
 
 echo

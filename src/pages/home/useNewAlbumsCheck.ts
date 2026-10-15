@@ -65,7 +65,7 @@ export function useNewAlbumsCheck({ serverWithCred, runSync, items, syncStatus }
         setWatch((current) =>
           current && outcome.albumsChanged
             ? { ...current, phase: "awaiting-read", itemsAtSettle: committedItemsRef.current }
-            : null
+            : null,
         );
       },
     });
@@ -79,7 +79,7 @@ export function useNewAlbumsCheck({ serverWithCred, runSync, items, syncStatus }
   return {
     checkForNewAlbums,
     isChecking: ownRun?.phase === "running",
-    note: outcome ? NOTES[outcome.status] ?? null : null,
+    note: outcome ? (NOTES[outcome.status] ?? null) : null,
     noteDetail: outcome?.error ?? "",
     scrollToStartRequest,
   };

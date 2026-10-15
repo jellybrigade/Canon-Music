@@ -4,7 +4,7 @@ const YEAR_MIN = 1900;
 const YEAR_MAX = new Date().getFullYear() + 1;
 const LIMIT_MAX = 500;
 
-export { YEAR_MIN, YEAR_MAX, LIMIT_MAX };
+export { LIMIT_MAX, YEAR_MAX, YEAR_MIN };
 
 export type GenreMode = "include" | "exclude";
 
@@ -64,19 +64,22 @@ export const SORT_OPTIONS = [
 
 function sortToSql(sort: string): string {
   switch (sort) {
-    case "+title": return "t.title ASC";
-    case "-title": return "t.title DESC";
-    case "-year": return "t.year DESC";
-    case "+year": return "t.year ASC";
-    case "-playcount": return "t.play_count DESC";
-    default: return "RANDOM()";
+    case "+title":
+      return "t.title ASC";
+    case "-title":
+      return "t.title DESC";
+    case "-year":
+      return "t.year DESC";
+    case "+year":
+      return "t.year ASC";
+    case "-playcount":
+      return "t.play_count DESC";
+    default:
+      return "RANDOM()";
   }
 }
 
-export function buildSmartQuery(
-  filters: SmartFilters,
-  serverId: string
-): { sql: string; params: (string | number)[] } {
+export function buildSmartQuery(filters: SmartFilters, serverId: string): { sql: string; params: (string | number)[] } {
   const conditions: string[] = ["t.server_id = ?"];
   const params: (string | number)[] = [serverId];
 
@@ -111,11 +114,11 @@ export function buildSmartQuery(
     const placeholders = filters.selectedGenres.map(() => "?").join(", ");
     if (filters.genreMode === "include") {
       conditions.push(
-        `t.album_id IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders}))`
+        `t.album_id IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders}))`,
       );
     } else {
       conditions.push(
-        `t.album_id NOT IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders}))`
+        `t.album_id NOT IN (SELECT album_id FROM album_genres WHERE relation = 'direct' AND canonical_id IN (${placeholders}))`,
       );
     }
     params.push(...filters.selectedGenres);
@@ -126,9 +129,7 @@ export function buildSmartQuery(
   const limit = Math.max(1, Math.min(LIMIT_MAX, filters.limit));
 
   const needsAlbumJoin = filters.albumContains.trim() !== "";
-  const joinClause = needsAlbumJoin
-    ? "LEFT JOIN albums a ON t.album_id = a.id"
-    : "";
+  const joinClause = needsAlbumJoin ? "LEFT JOIN albums a ON t.album_id = a.id" : "";
 
   const sql = `SELECT DISTINCT t.id FROM tracks t ${joinClause} WHERE ${where} ORDER BY ${order} LIMIT ${limit}`;
   return { sql, params };

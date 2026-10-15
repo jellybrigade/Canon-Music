@@ -33,7 +33,7 @@ function uniqueByPath<T>(rows: readonly T[], path: (row: T) => string | null): M
  */
 export function planTrackIdRemap(
   existing: readonly MirroredTrackRow[],
-  fetched: readonly FetchedTrackIdentity[]
+  fetched: readonly FetchedTrackIdentity[],
 ): TrackIdRemap[] {
   const fetchedIds = new Set(fetched.map((track) => track.id));
   const stale = existing.filter((row) => !fetchedIds.has(row.id));
@@ -43,7 +43,7 @@ export function planTrackIdRemap(
   const staleByPath = uniqueByPath(stale, (row) => row.file_path);
   const arrivedByPath = uniqueByPath(
     fetched.filter((track) => !existingIds.has(track.id)),
-    (track) => track.path
+    (track) => track.path,
   );
 
   const remaps: TrackIdRemap[] = [];

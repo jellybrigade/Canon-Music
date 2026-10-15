@@ -6,18 +6,18 @@
  * against sets that were empty because the read had failed. The success path is the default
  * here; the failure shape is asserted deliberately instead of incidentally.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getDb } from "../db";
-import { createMigratedTestDb } from "../test/sqlite";
+import { useLovedSessionStore } from "../store/lovedSessionStore";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { invokeCount } from "../test/perf";
-import { useLovedSessionStore } from "../store/lovedSessionStore";
+import { createMigratedTestDb } from "../test/sqlite";
 import { useLoved } from "./useLoved";
 
 beforeEach(async () => {

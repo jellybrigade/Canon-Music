@@ -95,7 +95,10 @@
   font-size: var(--text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--duration-base), color var(--duration-base), border-color var(--duration-base);
+  transition:
+    background var(--duration-base),
+    color var(--duration-base),
+    border-color var(--duration-base);
 }
 
 .genre-tab:hover {
@@ -355,7 +358,9 @@
   background: var(--tint-4);
   color: var(--overlay-90);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   flex-shrink: 0;
 }
 

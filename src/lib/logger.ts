@@ -47,16 +47,16 @@ async function flush(): Promise<void> {
   try {
     const db = await getDb();
     for (const entry of toWrite) {
-      await db.execute(
-        "INSERT INTO app_logs (ts, level, message) VALUES (?, ?, ?)",
-        [entry.ts, entry.level, entry.message]
-      );
+      await db.execute("INSERT INTO app_logs (ts, level, message) VALUES (?, ?, ?)", [
+        entry.ts,
+        entry.level,
+        entry.message,
+      ]);
     }
     buffer.splice(0, toWrite.length);
-    await db.execute(
-      "DELETE FROM app_logs WHERE id NOT IN (SELECT id FROM app_logs ORDER BY id DESC LIMIT ?)",
-      [MAX_LINES]
-    );
+    await db.execute("DELETE FROM app_logs WHERE id NOT IN (SELECT id FROM app_logs ORDER BY id DESC LIMIT ?)", [
+      MAX_LINES,
+    ]);
   } catch {
     // Logging must never itself throw / break the app.
   }
@@ -75,12 +75,26 @@ export function initLogger(): void {
     error: console.error.bind(console),
   };
 
-  console.log = (...args: unknown[]) => { push("log", args); original.log(...args); };
-  console.info = (...args: unknown[]) => { push("info", args); original.info(...args); };
-  console.warn = (...args: unknown[]) => { push("warn", args); original.warn(...args); };
-  console.error = (...args: unknown[]) => { push("error", args); original.error(...args); };
+  console.log = (...args: unknown[]) => {
+    push("log", args);
+    original.log(...args);
+  };
+  console.info = (...args: unknown[]) => {
+    push("info", args);
+    original.info(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    push("warn", args);
+    original.warn(...args);
+  };
+  console.error = (...args: unknown[]) => {
+    push("error", args);
+    original.error(...args);
+  };
 
-  flushTimer = setInterval(() => { void flush(); }, FLUSH_INTERVAL_MS);
+  flushTimer = setInterval(() => {
+    void flush();
+  }, FLUSH_INTERVAL_MS);
 }
 
 export const logger = {
@@ -94,7 +108,7 @@ export const logger = {
       const db = await getDb();
       const rows = await db.select<{ ts: number; level: string; message: string }[]>(
         "SELECT ts, level, message FROM app_logs ORDER BY id DESC LIMIT ?",
-        [n]
+        [n],
       );
       return rows
         .reverse()

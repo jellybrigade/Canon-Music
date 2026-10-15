@@ -7,7 +7,5 @@ import { ROUTES } from "../lib/routes";
  * real `SearchView`, other routes render an inert placeholder.
  */
 export function AppRoutesSearchStub(props: SearchViewProps) {
-  return useLocation().pathname === ROUTES.SEARCH
-    ? <SearchView {...props} />
-    : <div data-testid="route-content" />;
+  return useLocation().pathname === ROUTES.SEARCH ? <SearchView {...props} /> : <div data-testid="route-content" />;
 }

@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { fetchAlbumListByType } from "../clients/navidrome";
 import type { NavidromeAlbum } from "../clients/navidrome";
-import type { ServerWithCredential } from "./useServer";
-import { QK } from "../lib/queryKeys";
+import { fetchAlbumListByType } from "../clients/navidrome";
 import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
+import { QK } from "../lib/queryKeys";
+import type { ServerWithCredential } from "./useServer";
 
 export function useCarouselAlbums(
   serverWithCred: ServerWithCredential | null | undefined,
-  type: "recent" | "frequent" | "newest"
+  type: "recent" | "frequent" | "newest",
 ) {
   return useQuery<NavidromeAlbum[]>({
     queryKey: QK.carousel(type, serverWithCred?.server.id),

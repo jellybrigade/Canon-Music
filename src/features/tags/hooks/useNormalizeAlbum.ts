@@ -1,12 +1,12 @@
-import { useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
-import { readNormalizedTags, normalizeAlbum, isStale, type NormalizedTags } from "../lib/tagNormalize";
-import { useSetting } from "../../../hooks/useSetting";
-import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
-import { useTagsStore } from "../store/tags";
+import { useEffect, useRef } from "react";
 import type { MbGenre } from "../../../clients/musicbrainz";
+import { useSetting } from "../../../hooks/useSetting";
 import { parseStalenessDays } from "../../../lib/numberSetting";
+import { QK } from "../../../lib/queryKeys";
+import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
+import { isStale, type NormalizedTags, normalizeAlbum, readNormalizedTags } from "../lib/tagNormalize";
+import { useTagsStore } from "../store/tags";
 
 export type { NormalizedTags };
 

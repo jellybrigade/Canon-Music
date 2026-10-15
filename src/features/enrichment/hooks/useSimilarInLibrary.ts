@@ -1,7 +1,7 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
+import { useMemo } from "react";
 import { getDb } from "../../../db";
+import { QK } from "../../../lib/queryKeys";
 
 /** Last.fm's spelling of an artist rarely matches the local one byte for byte
  * ("Tyler, The Creator" vs "Tyler, the Creator"), so ownership is decided on a
@@ -25,7 +25,7 @@ export function useSimilarInLibrary(names: string[]) {
         `SELECT name FROM artists WHERE LOWER(TRIM(name)) IN (${placeholders})
          UNION
          SELECT alias_name AS name FROM artist_aliases WHERE LOWER(TRIM(alias_name)) IN (${placeholders})`,
-        [...keys, ...keys]
+        [...keys, ...keys],
       );
       const owned = new Set(rows.map((r) => ownershipKey(r.name)));
       // Returning the caller's own spelling, so the consumer's `set.has(name)`

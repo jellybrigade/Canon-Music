@@ -1,8 +1,9 @@
 {
   "name": "canon",
   "private": true,
-  "version": "0.53.0",
+  "version": "0.53.1",
   "type": "module",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -10,7 +11,11 @@
     "tauri": "tauri",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "format": "biome check --write . && cd src-tauri && cargo fmt",
+    "lint": "biome check .",
+    "check": "bash scripts/run-local-checks.sh",
+    "prepare": "git config core.hooksPath scripts/git-hooks || true"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.13",
@@ -25,11 +30,12 @@
     "lucide-react": "^1.16.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "react-router-dom": "^7.18.0",
+    "react-router-dom": "^7.18.4",
     "stackblur-canvas": "^3.0.1",
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

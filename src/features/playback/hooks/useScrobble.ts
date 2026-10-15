@@ -1,22 +1,19 @@
 import { useEffect, useRef } from "react";
-import { getDb } from "../../../db";
-import { usePlayerStore } from "../store/player";
-import type { CurrentTrack } from "../store/playerTypes";
 import { reportNowPlaying } from "../../../clients/navidrome";
-import { stripServerPrefix } from "../../../lib/ids";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useSetting } from "../../../hooks/useSetting";
+import { stripServerPrefix } from "../../../lib/ids";
 import { parseNumberOr } from "../../../lib/numberSetting";
+import { usePlayerStore } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 
 // A rejected insert clears the stamp so the next position poll retries, which makes the
 // poll the retry clock: unbounded, a database that stays locked would write five failing
 // statements a second for the rest of the track.
 const MAX_QUEUE_WRITE_ATTEMPTS = 3;
 
-export function useScrobble(
-  track: CurrentTrack | null,
-  serverWithCred: ServerWithCredential | undefined
-) {
+export function useScrobble(track: CurrentTrack | null, serverWithCred: ServerWithCredential | undefined) {
   const scrobbedRef = useRef(false);
   const writeAttemptsRef = useRef(0);
   // One timestamp per play, so a retry can ask whether the row it failed to confirm is there.
@@ -41,11 +38,18 @@ export function useScrobble(
   useEffect(() => {
     if (!isPlaying || !trackId || !serverWithCred) return;
     const { server, credential } = serverWithCred;
-    if (!trackId.startsWith(server.id + ":")) return;
+    if (!trackId.startsWith(`${server.id}:`)) return;
     const nativeId = stripServerPrefix(trackId, server.id);
     const report = new AbortController();
-    reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined, report.signal).catch(
-      () => {} // server unreachable, transport stalled or withdrawn, nothing to do for this play
+    reportNowPlaying(
+      server.url,
+      server.username,
+      credential,
+      nativeId,
+      server.alt_url ?? undefined,
+      report.signal,
+    ).catch(
+      () => {}, // server unreachable, transport stalled or withdrawn, nothing to do for this play
     );
     return () => report.abort();
   }, [playStartedAt, trackId, serverWithCred, isPlaying]);
@@ -55,8 +59,7 @@ export function useScrobble(
 
     const duration = track.duration ?? null;
     const thresholdMet =
-      elapsed >= minElapsedS ||
-      (duration !== null && duration > 0 && elapsed / duration >= fraction);
+      elapsed >= minElapsedS || (duration !== null && duration > 0 && elapsed / duration >= fraction);
 
     if (!thresholdMet) return;
 
@@ -68,10 +71,12 @@ export function useScrobble(
 
     getDb()
       .then((db) =>
-        db.execute(
-          "INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES (?, ?, ?, ?)",
-          [trackId, track.title, track.artist ?? "", timestamp]
-        )
+        db.execute("INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES (?, ?, ?, ?)", [
+          trackId,
+          track.title,
+          track.artist ?? "",
+          timestamp,
+        ]),
       )
       .catch(async (e) => {
         console.error("Failed to write scrobble_queue:", e);
@@ -82,7 +87,7 @@ export function useScrobble(
           const db = await getDb();
           const rows = await db.select<{ id: number }[]>(
             "SELECT id FROM scrobble_queue WHERE track_id = ? AND timestamp = ? LIMIT 1",
-            [trackId, timestamp]
+            [trackId, timestamp],
           );
           if (rows.length > 0) return;
         } catch {

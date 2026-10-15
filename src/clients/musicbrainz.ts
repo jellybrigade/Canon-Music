@@ -1,7 +1,8 @@
 // plugin-http rather than fetch so the User-Agent MB requires can be set. 1100 ms between
 // requests; genres are RG plus the matched release only, not every pressing.
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+
 import { makeRateLimiter } from "../lib/rateLimiter";
+import { boundedNativeFetch } from "./boundedFetch";
 
 const MB_BASE = "https://musicbrainz.org/ws/2/";
 // Kept in sync with tauri.conf.json / package.json version
@@ -82,7 +83,7 @@ async function mbGet<T>(path: string, params: Record<string, string> = {}): Prom
   url.searchParams.set("fmt", "json");
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const res = await tauriFetch(url.toString(), {
+  const res = await boundedNativeFetch(url.toString(), {
     method: "GET",
     headers: { "User-Agent": USER_AGENT },
   });
@@ -106,10 +107,7 @@ interface MbSearchRGResponse {
   }>;
 }
 
-export async function searchReleaseGroups(
-  artist: string,
-  album: string
-): Promise<MbReleaseGroupCandidate[]> {
+export async function searchReleaseGroups(artist: string, album: string): Promise<MbReleaseGroupCandidate[]> {
   type RgHit = NonNullable<MbSearchRGResponse["release-groups"]>[number];
   const toCandidate = (rg: RgHit) => {
     const credit = rg["artist-credit"]?.[0]?.artist;
@@ -131,7 +129,7 @@ export async function searchReleaseGroups(
   });
 
   const results = data["release-groups"] ?? [];
-  const bestScore = results.length > 0 ? Math.max(...results.map(r => r.score ?? 0)) : 0;
+  const bestScore = results.length > 0 ? Math.max(...results.map((r) => r.score ?? 0)) : 0;
   if (bestScore >= 50) return results.map(toCandidate);
 
   // Fallback: artist-name exact match can fail for aliases/credits (e.g. "Brian Eno" vs "Eno"),
@@ -205,9 +203,7 @@ export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetai
   });
 
   const labelInfo = data["label-info"]?.[0];
-  const trackCount = data.media
-    ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0)
-    : null;
+  const trackCount = data.media ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0) : null;
   return {
     id: data.id,
     title: data.title,
@@ -305,31 +301,22 @@ interface WikidataSparqlResponse {
   };
 }
 
-const WIKIDATA_TIMEOUT_MS = 8000;
-
 /** Resolves null only when Wikidata answered without an image; rejects when it didn't answer. */
 export async function fetchWikidataImageByMbid(mbid: string): Promise<string | null> {
   const sparql = `SELECT ?image WHERE { ?item wdt:P434 "${mbid}" . ?item wdt:P18 ?image . } LIMIT 1`;
   const body = new URLSearchParams({ query: sparql, format: "json" }).toString();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), WIKIDATA_TIMEOUT_MS);
-  try {
-    const res = await tauriFetch("https://query.wikidata.org/sparql", {
-      method: "POST",
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/sparql-results+json",
-      },
-      body,
-      signal: controller.signal,
-    });
-    if (!res.ok) throw new Error(`Wikidata returned ${res.status}`);
-    const data = (await res.json()) as WikidataSparqlResponse;
-    return data.results?.bindings?.[0]?.image?.value ?? null;
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await boundedNativeFetch("https://query.wikidata.org/sparql", {
+    method: "POST",
+    headers: {
+      "User-Agent": USER_AGENT,
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/sparql-results+json",
+    },
+    body,
+  });
+  if (!res.ok) throw new Error(`Wikidata returned ${res.status}`);
+  const data = (await res.json()) as WikidataSparqlResponse;
+  return data.results?.bindings?.[0]?.image?.value ?? null;
 }
 
 const MIN_FOLKSONOMY_COUNT_DEFAULT = 2;
@@ -338,19 +325,18 @@ export async function getMinFolksonomyCount(): Promise<number> {
   const { getDb } = await import("../db");
   const db = await getDb();
   const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'"
+    "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'",
   );
   const val = parseInt(rows[0]?.value ?? "", 10);
-  return isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
+  return Number.isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
 }
 
 export async function setMinFolksonomyCount(count: number): Promise<void> {
   const { getDb } = await import("../db");
   const db = await getDb();
-  await db.execute(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES ('musicbrainz.min_folksonomy_count', ?)",
-    [String(count)]
-  );
+  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('musicbrainz.min_folksonomy_count', ?)", [
+    String(count),
+  ]);
 }
 
 // RG genres are an aggregate community view; release genres are pressing-specific.

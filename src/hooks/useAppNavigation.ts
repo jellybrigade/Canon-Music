@@ -1,11 +1,23 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useNavigate, useLocation, useNavigationType } from "react-router-dom";
+import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../features/playback/store/player";
+import type { PlaylistRow } from "../features/playlists/usePlaylists";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
-import type { PlaylistRow } from "../features/playlists/usePlaylists";
 
-export type AppView = "home" | "nowplaying" | "library" | "artists" | "genres" | "years" | "playlists" | "tracks" | "tags" | "unidentified" | "settings" | "search";
+export type AppView =
+  | "home"
+  | "nowplaying"
+  | "library"
+  | "artists"
+  | "genres"
+  | "years"
+  | "playlists"
+  | "tracks"
+  | "tags"
+  | "unidentified"
+  | "settings"
+  | "search";
 
 const VIEW_TO_PATH: Record<AppView, string> = {
   home: "/home",

@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import { usePlayerStore } from "../store/player";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { usePlayerStore } from "../store/player";
 
 // Own URL, not `currentTrack.coverArtUrl`: that's the 64px queue-row thumbnail
 // (see App.tsx / useQueueSync), which would be upscaled into a much larger panel.
@@ -25,7 +25,9 @@ function pushPositionState() {
       // communicated by playbackState rather than by the rate.
       playbackRate: 1,
     });
-  } catch { /* engines reject transient out-of-range values; next push corrects it */ }
+  } catch {
+    /* engines reject transient out-of-range values; next push corrects it */
+  }
 }
 
 export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
@@ -122,14 +124,26 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
         if (details.seekTime == null) return;
         void usePlayerStore.getState().seek(details.seekTime);
       });
-    } catch { /* unsupported action */ }
+    } catch {
+      /* unsupported action */
+    }
 
     return () => {
-      const actions: MediaSessionAction[] = ["play", "pause", "previoustrack", "nexttrack", "seekbackward", "seekforward", "seekto"];
+      const actions: MediaSessionAction[] = [
+        "play",
+        "pause",
+        "previoustrack",
+        "nexttrack",
+        "seekbackward",
+        "seekforward",
+        "seekto",
+      ];
       for (const action of actions) {
         try {
           navigator.mediaSession.setActionHandler(action, null);
-        } catch { /* unsupported action */ }
+        } catch {
+          /* unsupported action */
+        }
       }
     };
   }, []); // mounted once; handlers read live state from store

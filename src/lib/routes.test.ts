@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ROUTES, albumPath, artistPath, playlistPath } from "./routes";
+import { albumPath, artistPath, playlistPath, ROUTES } from "./routes";
 
 // React Router decodes a `:param` segment with decodeURIComponent, so the round trip a route
 // actually performs is encodeURIComponent -> decodeURIComponent. Ids and artist names carry

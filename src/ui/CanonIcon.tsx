@@ -1,5 +1,5 @@
-import markSvg from "../assets/canon-logo-kit/canon-mark-currentcolor.svg?raw";
 import lockupSvg from "../assets/canon-logo-kit/canon-lockup-currentcolor.svg?raw";
+import markSvg from "../assets/canon-logo-kit/canon-mark-currentcolor.svg?raw";
 import "./CanonIcon.css";
 
 interface Props {
@@ -16,6 +16,7 @@ export function CanonIcon({ size = 24, className }: Props) {
       className={["canon-logo-mark", className].filter(Boolean).join(" ")}
       style={{ width: size, height: size * MARK_ASPECT }}
       aria-hidden="true"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: bundled SVG asset, never server text
       dangerouslySetInnerHTML={{ __html: markSvg }}
     />
   );
@@ -28,6 +29,7 @@ export function CanonLockup({ height = 28, className }: { height?: number; class
       style={{ width: height * LOCKUP_ASPECT, height }}
       role="img"
       aria-label="Canon"
+      // biome-ignore lint/security/noDangerouslySetInnerHtml: bundled SVG asset, never server text
       dangerouslySetInnerHTML={{ __html: lockupSvg }}
     />
   );

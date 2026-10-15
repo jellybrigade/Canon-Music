@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
-import { Download } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
 import type { Update } from "@tauri-apps/plugin-updater";
-import { installAndRestart, type DownloadProgress } from "../lib/updater";
+import { Download } from "lucide-react";
+import { useEffect, useState } from "react";
+import { type DownloadProgress, installAndRestart } from "../lib/updater";
 import { useModalChrome } from "../ui/useModalChrome";
 import "./UpdatePrompt.css";
+import { boundedFetch } from "../clients/boundedFetch";
 
 interface ChangelogSection {
   heading: string;
@@ -69,19 +70,14 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
     void (async () => {
       try {
         const currentVersion = await getVersion();
-        const resp = await fetch(
-          "https://api.github.com/repos/jellybrigade/Canon-Music/releases?per_page=50"
-        );
+        const resp = await boundedFetch("https://api.github.com/repos/jellybrigade/Canon-Music/releases?per_page=50");
         if (!resp.ok) throw new Error("fetch failed");
         const releases = (await resp.json()) as { tag_name: string; body: string }[];
 
         const filtered = releases
           .filter((r) => {
             const ver = r.tag_name.replace(/^v/, "");
-            return (
-              semverCompare(ver, currentVersion) > 0 &&
-              semverCompare(ver, update.version) <= 0
-            );
+            return semverCompare(ver, currentVersion) > 0 && semverCompare(ver, update.version) <= 0;
           })
           .sort((a, b) => semverCompare(b.tag_name, a.tag_name));
 
@@ -91,7 +87,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
               version: r.tag_name.replace(/^v/, ""),
               sections: parseChangelog(r.body ?? ""),
               raw: r.body ?? "",
-            }))
+            })),
           );
           return;
         }
@@ -123,10 +119,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
     }
   }
 
-  const pct =
-    progress && progress.total && progress.total > 0
-      ? Math.round((progress.downloaded / progress.total) * 100)
-      : null;
+  const pct = progress?.total && progress.total > 0 ? Math.round((progress.downloaded / progress.total) * 100) : null;
 
   // No backdrop dismissal: the two actions are the point of the prompt. Escape is the
   // keyboard route to Later, so it stands down with the button, mid-install.
@@ -150,19 +143,13 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
             <div className="update-prompt-changelog-sections">
               {changelogs.map((cl) => (
                 <div key={cl.version} className="changelog-release">
-                  {multiVersion && (
-                    <p className="changelog-version-label">v{cl.version}</p>
-                  )}
+                  {multiVersion && <p className="changelog-version-label">v{cl.version}</p>}
                   {cl.sections ? (
                     cl.sections.map((section) => {
-                      const colorClass =
-                        SECTION_COLORS[section.heading.toLowerCase()] ??
-                        "changelog-badge--changed";
+                      const colorClass = SECTION_COLORS[section.heading.toLowerCase()] ?? "changelog-badge--changed";
                       return (
                         <div key={section.heading} className="changelog-section">
-                          <span className={`changelog-badge ${colorClass}`}>
-                            {section.heading}
-                          </span>
+                          <span className={`changelog-badge ${colorClass}`}>{section.heading}</span>
                           {section.items.length > 0 && (
                             <ul className="changelog-items">
                               {section.items.map((item, i) => (
@@ -200,16 +187,14 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
         {error && <p className="update-prompt-error">{error}</p>}
 
         <div className="update-prompt-actions">
-          <button
-            className="update-prompt-btn"
-            onClick={onDismiss}
-            disabled={installing}
-          >
+          <button className="update-prompt-btn" onClick={onDismiss} disabled={installing}>
             Later
           </button>
           <button
             className="update-prompt-btn update-prompt-btn--primary"
-            onClick={() => { void handleInstall(); }}
+            onClick={() => {
+              void handleInstall();
+            }}
             disabled={installing}
           >
             {installing ? "Installing…" : "Install & Restart"}

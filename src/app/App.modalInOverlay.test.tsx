@@ -29,9 +29,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -49,10 +47,10 @@ vi.mock("../clients/musicbrainz", () => ({
   searchArtists: vi.fn().mockResolvedValue([]),
 }));
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
@@ -111,7 +109,9 @@ const searchResults = () => document.querySelector(".search-results") as HTMLEle
 /** Go to `/search` with a query that hits, and wait for the album card to render. */
 async function openSearchWithResults(query = "abba") {
   await mountApp();
-  await act(async () => { press("f", { ctrlKey: true }); });
+  await act(async () => {
+    press("f", { ctrlKey: true });
+  });
   await waitFor(() => expect(searchInput()).not.toBeNull());
   fireEvent.change(searchInput()!, { target: { value: query } });
   await actUntil(() => screen.queryByText("Arrival") !== null, "the album card to render");
@@ -128,7 +128,9 @@ async function actUntil(ready: () => boolean, what: string) {
   const STEP_MS = 25;
   const LIMIT_MS = 5000;
   for (let waited = 0; waited < LIMIT_MS; waited += STEP_MS) {
-    await act(async () => { await new Promise((r) => setTimeout(r, STEP_MS)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, STEP_MS));
+    });
     if (ready()) return;
   }
   throw new Error(`timed out waiting for ${what}`);
@@ -140,7 +142,9 @@ async function openIdentifyDialogFromSearch() {
   const card = screen.getByText("Arrival").closest("[class*='album']") as HTMLElement;
   fireEvent.contextMenu(card, { clientX: 10, clientY: 10 });
   const item = await screen.findByText("Identify on MusicBrainz…");
-  await act(async () => { fireEvent.click(item); });
+  await act(async () => {
+    fireEvent.click(item);
+  });
   await waitFor(() => expect(identifyDialog()).not.toBeNull());
 }
 
@@ -182,7 +186,9 @@ describe("a modal opened inside the search route", { timeout: 20000 }, () => {
     // dialog holds focus (neither `IdentifyDialog` variant autofocuses anything). This is the
     // reachable hole - `useSearchShortcuts`' `typing` guard does not fire, and the dialog is
     // absent from `overlayAbove`.
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
 
     expect(identifyDialog()).toBeNull();
     expect(searchResults()).not.toBeNull();
@@ -194,7 +200,9 @@ describe("a modal opened inside the search route", { timeout: 20000 }, () => {
     await openIdentifyDialogFromSearch();
     const field = identifyDialog()!.querySelector("input") as HTMLInputElement;
     field.focus();
-    await act(async () => { press("Escape", { target: field }); });
+    await act(async () => {
+      press("Escape", { target: field });
+    });
 
     // These are form fields with no Escape semantics of their own, unlike the rename inputs in
     // `PlaylistDetail`/`TagTreeTab` which own Escape to revert. The dialog closes, and the
@@ -206,10 +214,14 @@ describe("a modal opened inside the search route", { timeout: 20000 }, () => {
 
   it("hands Escape back to the search route once the modal is gone", async () => {
     await openIdentifyDialogFromSearch();
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
     expect(identifyDialog()).toBeNull();
 
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
 
     // The registry has to be empty again, or the search route is permanently unleavable by
     // keyboard after any modal has ever been opened over it.
@@ -220,7 +232,9 @@ describe("a modal opened inside the search route", { timeout: 20000 }, () => {
   it("still leaves the search route on Escape when no modal is open", async () => {
     // Positive control against a fix that over-broadens `overlayAbove` into always-true.
     await openSearchWithResults();
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
 
     expect(searchResults()).toBeNull();
     expect(routeContent()).not.toBeNull();

@@ -1,9 +1,9 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { getDb } from "../db";
-import type { AlbumRow } from "../types/library";
-import { QK } from "../lib/queryKeys";
 import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
+import { QK } from "../lib/queryKeys";
+import type { AlbumRow } from "../types/library";
 
 export interface AlbumStatRow extends AlbumRow {
   plays: number;
@@ -54,7 +54,7 @@ export function useListeningStats() {
          GROUP BY a.id
          HAVING plays > 0
          ORDER BY plays DESC`,
-        []
+        [],
       );
     },
     staleTime: HOME_STALE_TIME,
@@ -80,7 +80,7 @@ export function useListeningStats() {
          GROUP BY a.id
          HAVING heard > 0 AND heard < total
          ORDER BY a.name`,
-        []
+        [],
       );
     },
     staleTime: HOME_STALE_TIME,
@@ -92,27 +92,23 @@ export function useListeningStats() {
   const cutoff = useMemo(
     () => new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [Math.floor(Date.now() / (60 * 60 * 1000))] // re-derive at most once per hour
+    [Math.floor(Date.now() / (60 * 60 * 1000))], // re-derive at most once per hour
   );
 
   // High-play albums heard within the last 30 days, sorted by plays desc
   const onRepeat = useMemo(() => {
-    return stats.filter(s => s.last_played >= cutoff);
+    return stats.filter((s) => s.last_played >= cutoff);
   }, [stats, cutoff]);
 
   // Albums with any play history, not heard in last 30 days, oldest first
   const rediscover = useMemo(() => {
-    const recentIds = new Set(onRepeat.map(s => s.id));
-    return stats
-      .filter(s => !recentIds.has(s.id))
-      .sort((a, b) => a.last_played.localeCompare(b.last_played));
+    const recentIds = new Set(onRepeat.map((s) => s.id));
+    return stats.filter((s) => !recentIds.has(s.id)).sort((a, b) => a.last_played.localeCompare(b.last_played));
   }, [stats, onRepeat]);
 
   // Albums with 1-3 total plays, oldest last_played first
   const hiddenGem = useMemo(() => {
-    return stats
-      .filter(s => s.plays >= 1 && s.plays <= 3)
-      .sort((a, b) => a.last_played.localeCompare(b.last_played));
+    return stats.filter((s) => s.plays >= 1 && s.plays <= 3).sort((a, b) => a.last_played.localeCompare(b.last_played));
   }, [stats]);
 
   // Least-recently-played albums overall
@@ -122,14 +118,11 @@ export function useListeningStats() {
 
   // Set of album ids that have any play history, built from stats (not returned
   // from queryFn directly to avoid React Query structuralSharing Set-ref bug)
-  const playedAlbumIds = useMemo(() => new Set(stats.map(s => s.id)), [stats]);
+  const playedAlbumIds = useMemo(() => new Set(stats.map((s) => s.id)), [stats]);
 
   const finishTheAlbum = partialQuery.data ?? [];
   // Albums where >=50% of tracks have been played, but not 100%
-  const almostDone = useMemo(
-    () => finishTheAlbum.filter(a => a.heard * 2 >= a.total),
-    [finishTheAlbum]
-  );
+  const almostDone = useMemo(() => finishTheAlbum.filter((a) => a.heard * 2 >= a.total), [finishTheAlbum]);
 
   return {
     ...query,

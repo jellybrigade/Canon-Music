@@ -1,17 +1,17 @@
-import { useMemo, useState } from "react";
 import { Heart, Play } from "lucide-react";
-import { usePlayerStore } from "../store/player";
-import type { CurrentTrack } from "../store/playerTypes";
-import { formatDuration } from "../../../lib/trackCells";
+import { useMemo, useState } from "react";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import { getCoverArtUrl } from "../../../clients/navidromeUrls";
-import { RadioQueueStatus } from "../../radio/components/RadioQueueStatus";
+import { formatDuration } from "../../../lib/trackCells";
+import type { AlbumRow } from "../../../types/library";
 import { ContextMenu } from "../../../ui/ContextMenu";
+import { RadioQueueStatus } from "../../radio/components/RadioQueueStatus";
 import { StartRadioSubmenu } from "../../radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../../radio/hooks/useStartRadio";
-import type { AlbumRow } from "../../../types/library";
 import { albumRowOfTrack } from "../lib/trackAlbum";
+import { usePlayerStore } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 import "./UpNextList.css";
 
 interface Props {
@@ -35,11 +35,12 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   const { server, credential } = serverWithCredential;
 
   const orderedTracks = useMemo(
-    () => Array.from({ length: queue.length }, (_, pos) => {
-      const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
-      return { position: pos, track: queue[idx] };
-    }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
-    [queue, isShuffled, shuffleOrder]
+    () =>
+      Array.from({ length: queue.length }, (_, pos) => {
+        const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[pos] ?? pos) : pos;
+        return { position: pos, track: queue[idx] };
+      }).filter((row): row is { position: number; track: CurrentTrack } => row.track != null),
+    [queue, isShuffled, shuffleOrder],
   );
   const menuTrack = upNextMenu ? orderedTracks.find((t) => t.position === upNextMenu.position)?.track : undefined;
   const menuArtist = menuTrack?.artist ?? null;
@@ -48,7 +49,9 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
   return (
     <>
       {orderedTracks.length === 0 ? (
-        <p className="now-playing-empty">Nothing queued. Play an album or track, or use "Add to queue" from any track menu.</p>
+        <p className="now-playing-empty">
+          Nothing queued. Play an album or track, or use "Add to queue" from any track menu.
+        </p>
       ) : (
         orderedTracks.map(({ position, track }) => (
           <button
@@ -57,16 +60,16 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
               "now-playing-up-next-row",
               position === queueIndex ? "now-playing-up-next-row--active" : "",
               position < queueIndex ? "now-playing-up-next-row--past" : "",
-            ].filter(Boolean).join(" ")}
+            ]
+              .filter(Boolean)
+              .join(" ")}
             onClick={() => void playFromQueueIndex(position)}
             onContextMenu={(e) => {
               e.preventDefault();
               setUpNextMenu({ x: e.clientX, y: e.clientY, position });
             }}
           >
-            <span className="now-playing-up-next-indicator">
-              {position === queueIndex ? <Play size={12} /> : null}
-            </span>
+            <span className="now-playing-up-next-indicator">{position === queueIndex ? <Play size={12} /> : null}</span>
             {track.artworkRef ? (
               <img
                 className="now-playing-up-next-thumb"
@@ -76,7 +79,13 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
                 decoding="async"
               />
             ) : track.coverArtUrl ? (
-              <img className="now-playing-up-next-thumb" src={track.coverArtUrl} alt="" loading="lazy" decoding="async" />
+              <img
+                className="now-playing-up-next-thumb"
+                src={track.coverArtUrl}
+                alt=""
+                loading="lazy"
+                decoding="async"
+              />
             ) : (
               <div className="now-playing-up-next-thumb now-playing-up-next-thumb--placeholder" />
             )}
@@ -92,9 +101,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
             </div>
             <div className="now-playing-up-next-side">
               {track.duration != null && (
-                <span className="now-playing-up-next-duration">
-                  {formatDuration(track.duration)}
-                </span>
+                <span className="now-playing-up-next-duration">{formatDuration(track.duration)}</span>
               )}
               <span className="now-playing-up-next-loved-slot">
                 {lovedTrackIds.has(track.id) && (
@@ -119,16 +126,18 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
               Move to Top
             </button>
           )}
-          {queueIndex + 1 < queue.length && upNextMenu.position !== queueIndex + 1 && upNextMenu.position !== queueIndex && (
-            <button
-              onClick={() => {
-                moveQueueItem(upNextMenu.position, queueIndex + 1);
-                setUpNextMenu(null);
-              }}
-            >
-              Play Next
-            </button>
-          )}
+          {queueIndex + 1 < queue.length &&
+            upNextMenu.position !== queueIndex + 1 &&
+            upNextMenu.position !== queueIndex && (
+              <button
+                onClick={() => {
+                  moveQueueItem(upNextMenu.position, queueIndex + 1);
+                  setUpNextMenu(null);
+                }}
+              >
+                Play Next
+              </button>
+            )}
           {upNextMenu.position !== queue.length - 1 && (
             <button
               onClick={() => {
@@ -140,12 +149,22 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
             </button>
           )}
           {menuAlbum && (
-            <button onClick={() => { onSelectAlbum(menuAlbum); setUpNextMenu(null); }}>
+            <button
+              onClick={() => {
+                onSelectAlbum(menuAlbum);
+                setUpNextMenu(null);
+              }}
+            >
               Go to Album
             </button>
           )}
           {onSelectArtist && menuArtist && (
-            <button onClick={() => { onSelectArtist(menuArtist); setUpNextMenu(null); }}>
+            <button
+              onClick={() => {
+                onSelectArtist(menuArtist);
+                setUpNextMenu(null);
+              }}
+            >
               Go to Artist
             </button>
           )}

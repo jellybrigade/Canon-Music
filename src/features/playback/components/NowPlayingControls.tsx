@@ -1,10 +1,20 @@
-import { useState } from "react";
 import {
-  Play, Pause, SkipBack, SkipForward, Shuffle, Repeat, Repeat1, Heart, Loader, Volume2, VolumeX,
+  Heart,
+  Loader,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
+import { useState } from "react";
+import { RadioButton } from "../../radio/components/RadioButton";
 import { usePlayerStore } from "../store/player";
 import { repeatModeLabel } from "../store/playerTypes";
-import { RadioButton } from "../../radio/components/RadioButton";
 import "./NowPlayingControls.css";
 
 interface Props {
@@ -44,12 +54,7 @@ export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Prop
         >
           <Shuffle size={18} />
         </button>
-        <button
-          className="player-btn"
-          onClick={() => void prev()}
-          disabled={queueLength === 0}
-          aria-label="Previous"
-        >
+        <button className="player-btn" onClick={() => void prev()} disabled={queueLength === 0} aria-label="Previous">
           <SkipBack size={26} />
         </button>
         <button
@@ -58,18 +63,15 @@ export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Prop
           disabled={isLoading}
           aria-label={isPlaying ? "Pause" : "Play"}
         >
-          {isLoading
-            ? <Loader size={24} className="player-spin" />
-            : isPlaying
-              ? <Pause size={24} fill="currentColor" strokeWidth={0} />
-              : <Play size={24} fill="currentColor" strokeWidth={0} />}
+          {isLoading ? (
+            <Loader size={24} className="player-spin" />
+          ) : isPlaying ? (
+            <Pause size={24} fill="currentColor" strokeWidth={0} />
+          ) : (
+            <Play size={24} fill="currentColor" strokeWidth={0} />
+          )}
         </button>
-        <button
-          className="player-btn"
-          onClick={() => void next()}
-          disabled={nextDisabled}
-          aria-label="Next"
-        >
+        <button className="player-btn" onClick={() => void next()} disabled={nextDisabled} aria-label="Next">
           <SkipForward size={26} />
         </button>
         <button
@@ -105,7 +107,10 @@ export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Prop
                   step={0.01}
                   value={volume}
                   onChange={(e) => void setVolume(parseFloat(e.target.value))}
-                  onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    toggleMute();
+                  }}
                   aria-label="Volume"
                 />
               </div>
@@ -113,7 +118,10 @@ export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Prop
             <button
               className={`player-btn player-btn--icon${volumeOpen ? " player-btn--active" : ""}`}
               onClick={() => setVolumeOpen((o) => !o)}
-              onContextMenu={(e) => { e.preventDefault(); toggleMute(); }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                toggleMute();
+              }}
               title="Volume"
             >
               {volume > 0 ? <Volume2 size={18} /> : <VolumeX size={18} />}

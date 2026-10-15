@@ -23,9 +23,8 @@ export function AlbumArt({ src, artist, album, alt = "", className, loading, dec
   async function handleError() {
     if (triedFallback.current) return;
     triedFallback.current = true;
-    const fallback = await fetchItunesCoverArt(artist, album);
-    if (fallback) setCurrentSrc(fallback);
-    else setCurrentSrc(null);
+    const fallback = await fetchItunesCoverArt(artist, album).catch(() => null);
+    setCurrentSrc(fallback);
   }
 
   if (!currentSrc) return null;
@@ -37,7 +36,9 @@ export function AlbumArt({ src, artist, album, alt = "", className, loading, dec
       className={className}
       loading={loading}
       decoding={decoding}
-      onError={() => { void handleError(); }}
+      onError={() => {
+        void handleError();
+      }}
     />
   );
 }

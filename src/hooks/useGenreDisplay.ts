@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../lib/queryKeys";
+import { useEffect, useMemo, useState } from "react";
 import { getDb } from "../db";
-import { getCanonTree } from "../features/tags/lib/canonicalize";
 import type { TreeNode } from "../features/tags/lib/canonicalize";
+import { getCanonTree } from "../features/tags/lib/canonicalize";
+import { QK } from "../lib/queryKeys";
 
 const IGNORED = "__ignored__";
 const ACCEPTED = "__accepted__";
@@ -22,9 +22,7 @@ export function useGenreMappings(): Map<string, string | null> {
     queryKey: QK.genreDisplayMappings(),
     queryFn: async (): Promise<MappingRow[]> => {
       const db = await getDb();
-      return db.select<MappingRow[]>(
-        "SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre'"
-      );
+      return db.select<MappingRow[]>("SELECT raw_value, canonical_id FROM tag_mappings WHERE kind = 'genre'");
     },
   });
 
@@ -38,7 +36,9 @@ export function useGenreMappings(): Map<string, string | null> {
         setNodeById(new Map(tree.nodes.map((n) => [n.id, n])));
       })
       .catch(console.error);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return useMemo(() => {
@@ -61,18 +61,21 @@ export function useGenreMappings(): Map<string, string | null> {
  * Splits a raw genre string, applies mappings, de-dupes. Raw values with no mapping
  * decision yet are dropped, not shown as-is.
  */
-export function applyGenreMappings(
-  rawGenreString: string | null,
-  mappings: Map<string, string | null>
-): string[] {
+export function applyGenreMappings(rawGenreString: string | null, mappings: Map<string, string | null>): string[] {
   if (!rawGenreString) return [];
   const seen = new Set<string>();
   const result: string[] = [];
-  for (const raw of rawGenreString.split(/[,;]/).map((g) => g.trim()).filter(Boolean)) {
+  for (const raw of rawGenreString
+    .split(/[,;]/)
+    .map((g) => g.trim())
+    .filter(Boolean)) {
     if (!mappings.has(raw)) continue;
     const mapped = mappings.get(raw) ?? null;
     if (mapped === null) continue;
-    if (!seen.has(mapped)) { seen.add(mapped); result.push(mapped); }
+    if (!seen.has(mapped)) {
+      seen.add(mapped);
+      result.push(mapped);
+    }
   }
   return result;
 }

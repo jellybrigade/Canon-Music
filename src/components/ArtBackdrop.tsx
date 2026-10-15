@@ -48,7 +48,9 @@ export function ArtBackdrop({ imageUrl, className }: ArtBackdropProps) {
       .then(apply)
       .catch(() => apply(null));
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [imageUrl]);
 
   if (layers.length === 0) return null;
@@ -63,11 +65,7 @@ export function ArtBackdrop({ imageUrl, className }: ArtBackdropProps) {
           // Only the topmost layer animates; the one beneath is already opaque.
           // Pruning on animation end drops the outgoing layer once it is fully
           // covered, so the steady state is a single layer.
-          onAnimationEnd={
-            i === layers.length - 1
-              ? () => setLayers((prev) => prev.slice(-1))
-              : undefined
-          }
+          onAnimationEnd={i === layers.length - 1 ? () => setLayers((prev) => prev.slice(-1)) : undefined}
         />
       ))}
     </div>

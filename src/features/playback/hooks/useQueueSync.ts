@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
-import { usePlayerStore } from "../store/player";
-import type { ServerWithCredential } from "../../../hooks/useServer";
-import { savePlayQueue, getPlayQueue } from "../../../clients/navidrome";
+import { getPlayQueue, savePlayQueue } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
+import type { ServerWithCredential } from "../../../hooks/useServer";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
 import { makeStreamUrlBuilder } from "../../../lib/track";
-import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../../lib/replayGainRow";
+import { usePlayerStore } from "../store/player";
 
 export function useQueueSync(serverWithCred: ServerWithCredential | null | undefined) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
@@ -28,14 +28,22 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
       // the server put the queue back after the local snapshot is suppressed.
       const settingRows = await db.select<{ value: string }[]>(
         "SELECT value FROM settings WHERE key = 'queue.restore_on_startup'",
-        []
+        [],
       );
       if (settingRows[0]?.value !== "true") return;
 
       const saved = await getPlayQueue(server.url, server.username, credential, server.alt_url ?? undefined);
       if (!saved || saved.trackIds.length === 0) return;
 
-      type TrackMeta = { id: string; title: string; artist: string | null; duration: number | null; album_id: string | null; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
+      type TrackMeta = {
+        id: string;
+        title: string;
+        artist: string | null;
+        duration: number | null;
+        album_id: string | null;
+        artwork_url: string | null;
+        album_name: string | null;
+      } & ReplayGainColumns;
 
       // Batch-fetch all tracks by native ID
       const placeholders = saved.trackIds.map(() => "?").join(",");
@@ -45,16 +53,14 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
                 a.artwork_url, a.name AS album_name, ${REPLAY_GAIN_COLUMNS}
          FROM tracks t LEFT JOIN albums a ON a.id = t.album_id
          WHERE t.id IN (${placeholders})`,
-        canonIds
+        canonIds,
       );
 
       if (rows.length === 0) return;
 
       // Build an id→row map to preserve queue order
       const rowMap = new Map(rows.map((r) => [r.id, r]));
-      const orderedTracks = canonIds
-        .map((cid) => rowMap.get(cid))
-        .filter((r): r is TrackMeta => r != null);
+      const orderedTracks = canonIds.map((cid) => rowMap.get(cid)).filter((r): r is TrackMeta => r != null);
 
       if (orderedTracks.length === 0) return;
 
@@ -72,24 +78,20 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         duration: r.duration,
         album: r.album_name ?? null,
         albumId: r.album_id,
-        coverArtUrl: r.artwork_url
-          ? getCoverArtUrl(server.url, server.username, credential, r.artwork_url, 64)
-          : null,
+        coverArtUrl: r.artwork_url ? getCoverArtUrl(server.url, server.username, credential, r.artwork_url, 64) : null,
         artworkRef: r.artwork_url,
         replayGain: replayGainFromRow(r),
       }));
 
       const currentCanonId = saved.currentId ? `${server.id}:${saved.currentId}` : null;
-      const startIndex = currentCanonId
-        ? trackObjs.findIndex((t) => t.id === currentCanonId)
-        : 0;
+      const startIndex = currentCanonId ? trackObjs.findIndex((t) => t.id === currentCanonId) : 0;
 
       // Seeds the queue only. Loading the track here would download and decode it at startup
       // for playback the user never asked for, and the pause that followed had to win a race
       // against the download thread appending to the sink.
       restoreQueue(trackObjs, streamUrlFor, startIndex >= 0 ? startIndex : 0);
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [serverWithCred?.server.id]);
 
   // Save queue to server (debounced 10s)
@@ -118,11 +120,13 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         nativeIds,
         currentNativeId,
         Math.round((el ?? 0) * 1000),
-        server.alt_url ?? undefined
+        server.alt_url ?? undefined,
       );
     }, 10_000);
 
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
     // Depends on the queue array itself, not its length: a reorder, or a removal paired with
     // an addition, changes the queue without changing how long it is, and keying on length
     // meant the server kept the stale order.
@@ -148,7 +152,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
         nativeIds,
         currentNativeId,
         Math.round((el ?? 0) * 1000),
-        server.alt_url ?? undefined
+        server.alt_url ?? undefined,
       );
     }
 

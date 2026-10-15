@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
 import { Lock, Unlock } from "lucide-react";
-import { useTagVocab, useTagMappings } from "../hooks/useTagMappings";
+import { useEffect, useMemo, useState } from "react";
 import type { TagVocabRow } from "../hooks/useTagMappings";
+import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { TagKind, TreeNode } from "../lib/canonicalize";
-import { ACCEPTED, IGNORED, applySearch, Pagination } from "./TagsViewHelpers";
+import { ACCEPTED, applySearch, IGNORED, Pagination } from "./TagsViewHelpers";
 import "./TagDecidedTab.css";
 
 // ── MappedGroup ───────────────────────────────────────────────────────────────
@@ -23,28 +23,28 @@ interface MappedGroupProps {
 
 function MappedGroup({ group, onUndo, onLock }: MappedGroupProps) {
   const isLocked = group.variants.every((v) => v.locked === 1);
-  const aliasVariants = group.variants.filter(
-    (v) => v.raw_value.toLowerCase() !== group.nodeName.toLowerCase(),
-  );
+  const aliasVariants = group.variants.filter((v) => v.raw_value.toLowerCase() !== group.nodeName.toLowerCase());
 
   return (
     <div className="decided-group">
       <div className="decided-group-main">
         <span className="decided-group-name">{group.nodeName}</span>
-        {group.albumCount > 0 && (
-          <span className="decided-group-albums">{group.albumCount}</span>
-        )}
+        {group.albumCount > 0 && <span className="decided-group-albums">{group.albumCount}</span>}
         <button
           className="d-undo"
           title="Revert all variants to unresolved"
-          onClick={() => { for (const v of group.variants) onUndo(v.raw_value, v.kind); }}
+          onClick={() => {
+            for (const v of group.variants) onUndo(v.raw_value, v.kind);
+          }}
         >
           ↩
         </button>
         <button
           className={`d-lock${isLocked ? " d-lock--active" : ""}`}
           title={isLocked ? "Locked, click to unlock" : "Lock (prevents auto-remap)"}
-          onClick={() => { for (const v of group.variants) onLock(v.raw_value, v.kind, !isLocked); }}
+          onClick={() => {
+            for (const v of group.variants) onLock(v.raw_value, v.kind, !isLocked);
+          }}
         >
           <div>{isLocked ? <Lock size={14} /> : <Unlock size={14} />}</div>
         </button>
@@ -82,7 +82,9 @@ function SimpleRow({ row, onUndo }: SimpleRowProps) {
       <span className="d-name">{row.raw_value}</span>
       {row.album_count > 0 && <span className="d-albums">{row.album_count}</span>}
       {row.album_count === 0 && <span className="d-stale">not in library</span>}
-      <button className="d-undo" title="Revert to unresolved" onClick={onUndo}>↩</button>
+      <button className="d-undo" title="Revert to unresolved" onClick={onUndo}>
+        ↩
+      </button>
     </div>
   );
 }
@@ -106,28 +108,16 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
 
   const PAGE_SIZE = 20;
 
-  const nodeById = useMemo(
-    () => new Map(treeNodes.map((n) => [n.id, n])),
-    [treeNodes],
-  );
+  const nodeById = useMemo(() => new Map(treeNodes.map((n) => [n.id, n])), [treeNodes]);
 
-  const decidedRows = useMemo(
-    () => vocab.filter((r) => !!r.canonical_id),
-    [vocab],
-  );
+  const decidedRows = useMemo(() => vocab.filter((r) => !!r.canonical_id), [vocab]);
 
   const mappedRows = useMemo(
     () => decidedRows.filter((r) => r.canonical_id !== ACCEPTED && r.canonical_id !== IGNORED),
     [decidedRows],
   );
-  const acceptedRows = useMemo(
-    () => decidedRows.filter((r) => r.canonical_id === ACCEPTED),
-    [decidedRows],
-  );
-  const ignoredRows = useMemo(
-    () => decidedRows.filter((r) => r.canonical_id === IGNORED),
-    [decidedRows],
-  );
+  const acceptedRows = useMemo(() => decidedRows.filter((r) => r.canonical_id === ACCEPTED), [decidedRows]);
+  const ignoredRows = useMemo(() => decidedRows.filter((r) => r.canonical_id === IGNORED), [decidedRows]);
 
   const counts = {
     all: decidedRows.length,
@@ -159,25 +149,30 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
   }, [mappedRows, nodeById, filter, search]);
 
   const filteredAccepted = useMemo(
-    () => (filter === "mapped" || filter === "ignored") ? [] : applySearch(acceptedRows, search),
+    () => (filter === "mapped" || filter === "ignored" ? [] : applySearch(acceptedRows, search)),
     [acceptedRows, filter, search],
   );
   const filteredIgnored = useMemo(
-    () => (filter === "mapped" || filter === "accepted") ? [] : applySearch(ignoredRows, search),
+    () => (filter === "mapped" || filter === "accepted" ? [] : applySearch(ignoredRows, search)),
     [ignoredRows, filter, search],
   );
 
-  useEffect(() => { setPage(1); }, [search, filter]);
+  useEffect(() => {
+    setPage(1);
+  }, [search, filter]);
 
   const pagedGroups = mappedGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pagedAccepted = filteredAccepted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const pagedIgnored = filteredIgnored.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   const paginationTotal =
-    filter === "accepted" ? filteredAccepted.length
-    : filter === "ignored" ? filteredIgnored.length
-    : filter === "mapped" ? mappedGroups.length
-    : Math.max(mappedGroups.length, filteredAccepted.length, filteredIgnored.length);
+    filter === "accepted"
+      ? filteredAccepted.length
+      : filter === "ignored"
+        ? filteredIgnored.length
+        : filter === "mapped"
+          ? mappedGroups.length
+          : Math.max(mappedGroups.length, filteredAccepted.length, filteredIgnored.length);
 
   function handleUndo(rawValue: string, kind: TagKind) {
     deleteMapping.mutate({ rawValue, kind });
@@ -234,12 +229,7 @@ export function TagDecidedTab({ treeNodes }: TagDecidedTabProps) {
                   <div className="decided-section-label">Mapped</div>
                 )}
                 {pagedGroups.map((group) => (
-                  <MappedGroup
-                    key={group.canonicalId}
-                    group={group}
-                    onUndo={handleUndo}
-                    onLock={handleLock}
-                  />
+                  <MappedGroup key={group.canonicalId} group={group} onUndo={handleUndo} onLock={handleLock} />
                 ))}
               </div>
             )}

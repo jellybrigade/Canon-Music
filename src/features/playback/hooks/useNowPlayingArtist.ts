@@ -1,7 +1,14 @@
-import type { AlbumRow } from "../../../types/library";
-import { fetchArtistAlbums, fetchArtistTopTracksForNowPlaying, fetchSuggestedTracksForNowPlaying, NOW_PLAYING_STALE_TIME, SUGGESTED_STALE_TIME, type NowPlayingTrack } from "../lib/nowPlayingQueries";
 import { useQuery } from "@tanstack/react-query";
 import { QK } from "../../../lib/queryKeys";
+import type { AlbumRow } from "../../../types/library";
+import {
+  fetchArtistAlbums,
+  fetchArtistTopTracksForNowPlaying,
+  fetchSuggestedTracksForNowPlaying,
+  NOW_PLAYING_STALE_TIME,
+  type NowPlayingTrack,
+  SUGGESTED_STALE_TIME,
+} from "../lib/nowPlayingQueries";
 
 export type TopTrack = NowPlayingTrack;
 export type SuggestedTrack = NowPlayingTrack;
@@ -29,8 +36,7 @@ export function useNowPlayingTopTracks(artistName: string | null, serverId: stri
 export function useSuggestedTracks(artistName: string | null, currentTrackId: string | null, serverId: string) {
   return useQuery({
     queryKey: QK.suggestedTracks(artistName, currentTrackId, serverId),
-    queryFn: (): Promise<SuggestedTrack[]> =>
-      fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId, serverId),
+    queryFn: (): Promise<SuggestedTrack[]> => fetchSuggestedTracksForNowPlaying(artistName!, currentTrackId, serverId),
     enabled: !!artistName,
     staleTime: SUGGESTED_STALE_TIME,
   });

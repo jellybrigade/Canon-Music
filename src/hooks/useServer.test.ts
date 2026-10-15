@@ -4,19 +4,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import React from "react";
-import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import React from "react";
 import { getDb } from "../db";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import type { Server } from "../types/server";
 import {
-  SECRET_STORE_UNAVAILABLE,
   credentialReadError,
   credentialRetryDelay,
+  SECRET_STORE_UNAVAILABLE,
   shouldRetryCredentialRead,
   useServerWithCredential,
 } from "./useServer";
-import type { Server } from "../types/server";
 
 const SERVER: Server = {
   id: "srv-1",
@@ -77,7 +77,7 @@ describe("useServerWithCredential", () => {
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(
-      new Error("Could not read the stored credential: No matching entry found in secure storage")
+      new Error("Could not read the stored credential: No matching entry found in secure storage"),
     );
   });
 
@@ -141,9 +141,7 @@ describe("useServerWithCredential", () => {
       // The ladder is spent, so nothing further is scheduled; real timers let waitFor settle the
       // last render without paying for another fake-time sweep.
       expect(result.current.isError).toBe(true);
-      expect(result.current.error?.message).toBe(
-        "Could not read the stored credential: keyring is locked"
-      );
+      expect(result.current.error?.message).toBe("Could not read the stored credential: keyring is locked");
     } finally {
       vi.useRealTimers();
     }
@@ -171,7 +169,7 @@ describe("useServerWithCredential", () => {
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.error).toEqual(
-      new Error(`Corrupt credentials for server ${SERVER.id}. Re-enter in Settings.`)
+      new Error(`Corrupt credentials for server ${SERVER.id}. Re-enter in Settings.`),
     );
   });
 

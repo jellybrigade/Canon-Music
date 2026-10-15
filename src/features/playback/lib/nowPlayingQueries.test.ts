@@ -7,8 +7,8 @@ vi.mock("../../../clients/lastfm", () => ({
   fetchSimilarArtists: vi.fn(async () => []),
 }));
 
-import { getDb } from "../../../db";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/lastfm";
+import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import {
   fetchArtistAlbums,
@@ -80,7 +80,7 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
       db.raw
         .prepare(
           `INSERT INTO tracks (id, server_id, server_type, title, artist, track_number)
-           VALUES (?, 'srv', 'navidrome', ?, ?, ?)`
+           VALUES (?, 'srv', 'navidrome', ?, ?, ?)`,
         )
         .run(`srv:t${i}`, `Title ${i}`, artist, i);
     });
@@ -118,7 +118,7 @@ describe("fetchArtistTopTracksForNowPlaying: LIKE escaping in the feat.-variant 
       "Burial ft. Four Tet",
       "Burial featuring Four Tet",
       "Burialist feat. Someone",
-      "Burial Mix"
+      "Burial Mix",
     );
     expect(await artistsFor("Burial")).toEqual([
       "Burial",
@@ -212,7 +212,7 @@ describe("server scoping", () => {
     db.raw
       .prepare(
         `INSERT INTO albums (id, server_id, server_type, name, artist, year)
-         VALUES (?, ?, 'navidrome', ?, ?, 2000)`
+         VALUES (?, ?, 'navidrome', ?, ?, 2000)`,
       )
       .run(`${serverId}:al${suffix}`, serverId, `Album ${suffix}`, artist);
   }
@@ -221,7 +221,7 @@ describe("server scoping", () => {
     db.raw
       .prepare(
         `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, track_number)
-         VALUES (?, ?, 'navidrome', ?, ?, ?, 1)`
+         VALUES (?, ?, 'navidrome', ?, ?, ?, 1)`,
       )
       .run(`${serverId}:t${suffix}`, serverId, `Title ${suffix}`, artist, `${serverId}:al${suffix}`);
   }

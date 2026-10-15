@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { sectionRoots } from "./useGenreTree";
 import type { NodeSection, TreeNode } from "../lib/canonicalize";
+import { sectionRoots } from "./useGenreTree";
 
 function node(id: string, parents: string[], ...sections: NodeSection[]): TreeNode {
   return { id, name: id, type: "genre", canonical_key: id, parents, sections };
@@ -27,7 +27,10 @@ describe("sectionRoots", () => {
   });
 
   it("roots a node in a section where none of its live parents is listed", () => {
-    const nodes = [node("classical-music", [], "genres"), node("futurism", ["classical-music"], "genres", "scenes-and-movements")];
+    const nodes = [
+      node("classical-music", [], "genres"),
+      node("futurism", ["classical-music"], "genres", "scenes-and-movements"),
+    ];
     expect(sectionRoots(nodes)).toEqual({
       genres: ["classical-music"],
       descriptors: [],

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 vi.mock("../../hooks/useAlbumDisplayName", () => ({ useAlbumDisplayName: () => (name: string) => name }));
 vi.mock("../../hooks/useCoverCache", () => ({ useAlbumCoverMap: () => new Map<string, string>() }));
 
@@ -79,7 +80,9 @@ describe("AlbumCarousel refresh button", () => {
   });
 
   it("shows a failure note with the full reason on hover", () => {
-    renderCarousel({ refresh: { onClick: vi.fn(), label: "Check", note: "Sync incomplete", noteDetail: "playlists unchanged" } });
+    renderCarousel({
+      refresh: { onClick: vi.fn(), label: "Check", note: "Sync incomplete", noteDetail: "playlists unchanged" },
+    });
 
     expect(screen.getByText("Sync incomplete").getAttribute("title")).toBe("playlists unchanged");
   });

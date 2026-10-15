@@ -1,18 +1,15 @@
 import { useEffect, useRef } from "react";
 import { usePlayerStore } from "../features/playback/store/player";
 import { isNextDisabled } from "../features/playback/store/playerTypes";
-import type { ServerWithCredential } from "./useServer";
-import { useLoved } from "./useLoved";
 import { isTextEntryTarget } from "../lib/keyboard";
+import { useLoved } from "./useLoved";
+import type { ServerWithCredential } from "./useServer";
 
 /**
  * `suspended` stands the transport keys down while an overlay owns the keyboard.
  * `isTextEntryTarget` alone isn't enough: palette blank-space click blurs input to `<body>`, so arrowing would also move volume.
  */
-export function useGlobalShortcuts(
-  serverWithCred: ServerWithCredential | null | undefined,
-  suspended: boolean,
-) {
+export function useGlobalShortcuts(serverWithCred: ServerWithCredential | null | undefined, suspended: boolean) {
   const { toggleTrackLove } = useLoved();
 
   // Read through a ref so opening an overlay does not tear down and re-register the listener.

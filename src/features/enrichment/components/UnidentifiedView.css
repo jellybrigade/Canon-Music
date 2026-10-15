@@ -45,7 +45,9 @@
   color: var(--text-secondary);
   font-size: var(--text-xs);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   margin-left: auto;
 }
 
@@ -60,7 +62,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .unidentified-rescan-spin {
@@ -140,7 +144,9 @@
   color: var(--text-secondary);
   font-size: var(--text-sm);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
 }
 
 .unidentified-identify-btn:hover {

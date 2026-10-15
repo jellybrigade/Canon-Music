@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { SyncErrorBanner, bannerMessage, formatCountdown } from "./SyncErrorBanner";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { bannerMessage, formatCountdown, SyncErrorBanner } from "./SyncErrorBanner";
 
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
@@ -51,15 +52,11 @@ describe("formatCountdown", () => {
 
 describe("bannerMessage", () => {
   it("names the mirror rather than the failure once the backoff is spent", () => {
-    expect(bannerMessage("error", "Navi", null, 0)).toBe(
-      "Can't reach Navi. Showing your saved library.",
-    );
+    expect(bannerMessage("error", "Navi", null, 0)).toBe("Can't reach Navi. Showing your saved library.");
   });
 
   it("counts a pending retry down", () => {
-    expect(bannerMessage("error", "Navi", 1_000, 28 * SECOND)).toBe(
-      "Can't reach Navi. Retrying in 28s.",
-    );
+    expect(bannerMessage("error", "Navi", 1_000, 28 * SECOND)).toBe("Can't reach Navi. Retrying in 28s.");
   });
 
   it("says the retry is happening once the countdown runs out", () => {
@@ -67,9 +64,7 @@ describe("bannerMessage", () => {
   });
 
   it("distinguishes a partial sync from an unreachable server", () => {
-    expect(bannerMessage("partial", "Navi", null, 0)).toBe(
-      "Couldn't fully sync Navi. Showing your saved library.",
-    );
+    expect(bannerMessage("partial", "Navi", null, 0)).toBe("Couldn't fully sync Navi. Showing your saved library.");
   });
 });
 
@@ -97,7 +92,9 @@ describe("SyncErrorBanner", () => {
     const { container } = renderBanner({ nextRetryAt: Date.now() + 30 * SECOND });
 
     expect(text(container)).toContain("Retrying in 30s.");
-    await act(async () => { await vi.advanceTimersByTimeAsync(2 * SECOND); });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2 * SECOND);
+    });
     expect(text(container)).toContain("Retrying in 28s.");
   });
 

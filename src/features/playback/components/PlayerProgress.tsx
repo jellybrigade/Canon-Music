@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { usePlayerStore } from "../store/player";
 import { useBoolSetting } from "../../../hooks/useSetting";
-import { useSeekBar } from "../hooks/useSeekBar";
 import { formatDuration } from "../../../lib/trackCells";
-import { WaveformBars } from "./WaveformBars";
+import { useSeekBar } from "../hooks/useSeekBar";
 import { displayedWaveformPeaks } from "../lib/waveformDisplay";
+import { usePlayerStore } from "../store/player";
+import { WaveformBars } from "./WaveformBars";
 
 export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
@@ -15,10 +15,7 @@ export function PlayerProgress() {
   const { barRef, elapsed, progress, isJump, sliderProps } = useSeekBar(duration);
 
   const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
-  const filledCount = useMemo(
-    () => (peaks ? Math.round(progress * peaks.length) : 0),
-    [progress, peaks]
-  );
+  const filledCount = useMemo(() => (peaks ? Math.round(progress * peaks.length) : 0), [progress, peaks]);
 
   return (
     <div className="player-progress">
@@ -43,9 +40,7 @@ export function PlayerProgress() {
           />
         )}
       </div>
-      <span className="player-duration">
-        {duration > 0 ? formatDuration(duration) : ""}
-      </span>
+      <span className="player-duration">{duration > 0 ? formatDuration(duration) : ""}</span>
     </div>
   );
 }

@@ -1,8 +1,8 @@
-import { getDb } from "../../../db";
-import { escapeLike } from "../../../lib/sql";
 import { fetchArtistTopTracks, fetchSimilarArtists } from "../../../clients/lastfm";
-import type { AlbumRow } from "../../../types/library";
+import { getDb } from "../../../db";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "../../../lib/replayGainRow";
+import { escapeLike } from "../../../lib/sql";
+import type { AlbumRow } from "../../../types/library";
 
 // Shared by the About tab and useNowPlayingPrefetch so both use the same SQL and keys.
 
@@ -36,14 +36,14 @@ export async function fetchArtistAlbums(artistName: string, serverId: string): P
     `SELECT id, server_id, name, artist, year, artwork_url
      FROM albums WHERE server_id = ? AND artist = ?
      ORDER BY year IS NULL, year DESC, name`,
-    [serverId, artistName]
+    [serverId, artistName],
   );
 }
 
 /** Last.fm's popularity ranking intersected with the library; falls back to local track order. */
 export async function fetchArtistTopTracksForNowPlaying(
   artistName: string,
-  serverId: string
+  serverId: string,
 ): Promise<NowPlayingTrack[]> {
   const db = await getDb();
   const like = escapeLike(artistName);
@@ -62,7 +62,7 @@ export async function fetchArtistTopTracksForNowPlaying(
       `SELECT ${TRACK_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
        WHERE ${artistMatch}`,
-      featParams
+      featParams,
     );
     const byTitle = new Map(localTracks.map((t) => [t.title.toLowerCase(), t]));
     const matched: NowPlayingTrack[] = [];
@@ -84,14 +84,14 @@ export async function fetchArtistTopTracksForNowPlaying(
      WHERE ${artistMatch}
      ORDER BY t.track_number, t.title
      LIMIT 10`,
-    featParams
+    featParams,
   );
 }
 
 export async function fetchSuggestedTracksForNowPlaying(
   artistName: string,
   currentTrackId: string | null,
-  serverId: string
+  serverId: string,
 ): Promise<NowPlayingTrack[]> {
   const similarArtists = await fetchSimilarArtists(artistName).catch(() => []);
   if (similarArtists.length === 0) return [];
@@ -105,6 +105,6 @@ export async function fetchSuggestedTracksForNowPlaying(
        AND t.id != ?
      ORDER BY random()
      LIMIT 10`,
-    [serverId, ...similarArtists, currentTrackId ?? ""]
+    [serverId, ...similarArtists, currentTrackId ?? ""],
   );
 }

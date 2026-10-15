@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContextMenu } from "./ContextMenu";
 
 beforeEach(() => {
@@ -21,7 +22,7 @@ describe("ContextMenu", () => {
     const { container } = render(
       <ContextMenu x={10} y={10} onClose={vi.fn()}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     expect(container.querySelector(".context-menu")).toBeNull();
@@ -34,7 +35,7 @@ describe("ContextMenu", () => {
     render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     // The mousedown that opened the menu is still propagating to document when
@@ -51,7 +52,7 @@ describe("ContextMenu", () => {
     render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -66,7 +67,7 @@ describe("ContextMenu", () => {
     render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button onClick={onSelect}>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -86,7 +87,7 @@ describe("ContextMenu", () => {
     render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -103,7 +104,7 @@ describe("ContextMenu", () => {
     render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -118,7 +119,7 @@ describe("ContextMenu", () => {
     const { rerender } = render(
       <ContextMenu x={10} y={10} onClose={firstOnClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -127,7 +128,7 @@ describe("ContextMenu", () => {
     rerender(
       <ContextMenu x={10} y={10} onClose={latestOnClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
     fireEvent.mouseDown(document.body);
 
@@ -140,7 +141,7 @@ describe("ContextMenu", () => {
     const { unmount } = render(
       <ContextMenu x={10} y={10} onClose={onClose}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     vi.advanceTimersByTime(0);
@@ -157,7 +158,7 @@ describe("ContextMenu", () => {
     const { unmount } = render(
       <ContextMenu x={10} y={10} onClose={vi.fn()}>
         <button>Play</button>
-      </ContextMenu>
+      </ContextMenu>,
     );
 
     const removeSpy = vi.spyOn(document, "removeEventListener");
@@ -170,8 +171,7 @@ describe("ContextMenu", () => {
     unmount();
     vi.advanceTimersByTime(0);
 
-    const count = (spy: typeof addSpy, type: string) =>
-      spy.mock.calls.filter((c) => c[0] === type).length;
+    const count = (spy: typeof addSpy, type: string) => spy.mock.calls.filter((c) => c[0] === type).length;
 
     // The outside-click attach is the deferred one, so cancelling it means it never
     // happens at all.

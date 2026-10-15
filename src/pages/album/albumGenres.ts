@@ -1,12 +1,12 @@
-import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../../lib/queryKeys";
-import { getDb } from "../../db";
-import { useBoolSetting } from "../../hooks/useSetting";
-import { isYearLikeGenre, type NormalizedTags } from "../../features/tags/lib/tagNormalize";
-import { rawGenreId } from "../../features/tags/lib/canonicalize";
-import { applyGenreMappings } from "../../hooks/useGenreDisplay";
+import { useMemo } from "react";
 import type { DisplayGenre, GenreGroups } from "../../components/AlbumGenreEditor";
+import { getDb } from "../../db";
+import { rawGenreId } from "../../features/tags/lib/canonicalize";
+import { isYearLikeGenre, type NormalizedTags } from "../../features/tags/lib/tagNormalize";
+import { applyGenreMappings } from "../../hooks/useGenreDisplay";
+import { useBoolSetting } from "../../hooks/useSetting";
+import { QK } from "../../lib/queryKeys";
 import type { TrackRow } from "../../types/library";
 
 export interface TrackGenre {
@@ -17,7 +17,7 @@ export interface TrackGenre {
 export function trackGenres(
   track: TrackRow,
   trackTagGenresMap: Map<string, TrackGenre[]>,
-  genreMappings: Map<string, string | null>
+  genreMappings: Map<string, string | null>,
 ): TrackGenre[] {
   return (
     trackTagGenresMap.get(track.id) ??
@@ -43,7 +43,7 @@ export function useTrackTagGenres(albumId: string, genreMappings: Map<string, st
          WHERE t.album_id = ? AND tt.kind = 'genre'
          ORDER BY tt.track_id,
                   CASE tt.source WHEN 'server' THEN 0 WHEN 'lastfm-track' THEN 1 ELSE 2 END`,
-        [albumId]
+        [albumId],
       );
     },
     staleTime: Infinity,
@@ -75,7 +75,7 @@ export function useRawSourcesByCanonicalId(albumId: string): RawSourcesByCanonic
         `SELECT DISTINCT tt.canonical_id, tt.raw_value, tt.source
          FROM tracks t JOIN track_tags tt ON tt.track_id = t.id
          WHERE t.album_id = ? AND tt.kind = 'genre'`,
-        [albumId]
+        [albumId],
       );
     },
     staleTime: Infinity,
@@ -106,7 +106,7 @@ export function useUnmatchedGenreCount(albumId: string): number {
              WHERE tm.raw_value = ug.raw_value AND tm.kind = 'genre'
            )
          ORDER BY ug.source, ug.raw_value`,
-        [albumId]
+        [albumId],
       );
     },
     staleTime: Infinity,
@@ -117,7 +117,7 @@ export function useUnmatchedGenreCount(albumId: string): number {
 export function buildDisplayGenres(
   normalizedTags: NormalizedTags | null | undefined,
   tracks: TrackRow[] | undefined,
-  genreMappings: Map<string, string | null>
+  genreMappings: Map<string, string | null>,
 ): DisplayGenre[] {
   let raw: DisplayGenre[];
   if (normalizedTags?.genres.length) {
@@ -141,7 +141,7 @@ export function buildDisplayGenres(
     if (g.id !== null) return true;
     const mapped = genreMappings.get(g.name);
     if (mapped === undefined) return false; // no decision yet, hide from band
-    if (mapped === null) return false;      // ignored
+    if (mapped === null) return false; // ignored
     if (shownNames.has(mapped)) return false; // already shown as canonical
     return true;
   });

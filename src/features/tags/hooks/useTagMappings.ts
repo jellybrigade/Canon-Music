@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
-import { sqlNorm } from "../lib/canonicalize";
-import type { TagKind } from "../lib/canonicalize";
 import { QK } from "../../../lib/queryKeys";
+import type { TagKind } from "../lib/canonicalize";
+import { sqlNorm } from "../lib/canonicalize";
 import { invalidateManualMappings } from "../lib/manualMappings";
 
 export const ACCEPTED = "__accepted__";
@@ -55,15 +55,16 @@ export function useTagMappings() {
       invalidateManualMappings();
       // Sentinels must NOT land in track_tags.canonical_id, only real canon ids go there
       if (canonicalId === ACCEPTED || canonicalId === IGNORED) {
-        await db.execute(
-          "UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?",
-          [rawValue, kind],
-        );
+        await db.execute("UPDATE track_tags SET canonical_id = NULL WHERE raw_value = ? AND kind = ?", [
+          rawValue,
+          kind,
+        ]);
       } else {
-        await db.execute(
-          "UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?",
-          [canonicalId, rawValue, kind],
-        );
+        await db.execute("UPDATE track_tags SET canonical_id = ? WHERE raw_value = ? AND kind = ?", [
+          canonicalId,
+          rawValue,
+          kind,
+        ]);
       }
     },
     onSuccess: () => {
@@ -105,20 +106,13 @@ export function useTagMappings() {
   });
 
   const lockMapping = useMutation({
-    mutationFn: async ({
-      rawValue,
-      kind,
-      locked,
-    }: {
-      rawValue: string;
-      kind: TagKind;
-      locked: boolean;
-    }) => {
+    mutationFn: async ({ rawValue, kind, locked }: { rawValue: string; kind: TagKind; locked: boolean }) => {
       const db = await getDb();
-      await db.execute(
-        "UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?",
-        [locked ? 1 : 0, rawValue, kind],
-      );
+      await db.execute("UPDATE tag_mappings SET locked = ? WHERE raw_value = ? AND kind = ?", [
+        locked ? 1 : 0,
+        rawValue,
+        kind,
+      ]);
       invalidateManualMappings();
     },
     onSuccess: () => {
@@ -223,9 +217,7 @@ export function useAutoMapExact() {
       const tree = await getCanonTree();
 
       type LockedRow = { raw_value: string; kind: string };
-      const lockedRows = await db.select<LockedRow[]>(
-        "SELECT raw_value, kind FROM tag_mappings WHERE locked = 1",
-      );
+      const lockedRows = await db.select<LockedRow[]>("SELECT raw_value, kind FROM tag_mappings WHERE locked = 1");
       const lockedSet = new Set(lockedRows.map((r) => `${r.kind}:${r.raw_value}`));
 
       type Row = { raw_value: string; kind: string };
@@ -311,9 +303,7 @@ export function useRapToHipHop() {
     queryKey: QK.tagRapToHipHop(),
     queryFn: async () => {
       const db = await getDb();
-      const rows = await db.select<{ value: string }[]>(
-        "SELECT value FROM settings WHERE key = 'tags.rap_to_hiphop'",
-      );
+      const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'tags.rap_to_hiphop'");
       return rows[0]?.value === "true";
     },
   });
@@ -321,18 +311,15 @@ export function useRapToHipHop() {
   const toggle = useMutation({
     mutationFn: async (enable: boolean) => {
       const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)",
-        [enable ? "true" : "false"],
-      );
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('tags.rap_to_hiphop', ?)", [
+        enable ? "true" : "false",
+      ]);
       if (enable) {
         await db.execute(
           "INSERT OR REPLACE INTO tag_mappings (raw_value, kind, canonical_id, source, match_type, created_at, norm_value) VALUES ('Rap', 'genre', 'hip-hop', 'auto', 'exact', datetime('now'), 'rap')",
         );
         invalidateManualMappings();
-        await db.execute(
-          "UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'",
-        );
+        await db.execute("UPDATE track_tags SET canonical_id = 'hip-hop' WHERE raw_value = 'Rap' AND kind = 'genre'");
       } else {
         const rows = await db.select<{ canonical_id: string }[]>(
           "SELECT canonical_id FROM tag_mappings WHERE raw_value = 'Rap' AND kind = 'genre'",

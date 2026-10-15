@@ -1,9 +1,9 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 
 export function useClickOutside(
   refs: RefObject<Element | null> | RefObject<Element | null>[],
   handler: () => void,
-  enabled = true
+  enabled = true,
 ) {
   const handlerRef = useRef(handler);
   handlerRef.current = handler;

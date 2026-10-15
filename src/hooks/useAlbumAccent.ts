@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
 import { QK } from "../lib/queryKeys";
@@ -13,7 +13,7 @@ export function useAlbumAccent(
   albumId: string,
   storedAccent: string | null | undefined,
   artUrl: string | null,
-  serverId: string | undefined
+  serverId: string | undefined,
 ): string | null {
   const queryClient = useQueryClient();
   const [accentColor, setAccentColor] = useState<string | null>(storedAccent ?? null);
@@ -42,7 +42,9 @@ export function useAlbumAccent(
         // it silently would hide a failing db handle.
         console.error(`Accent extraction failed for ${albumId}`, err);
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [artUrl, storedAccent, albumId, serverId, queryClient]);
 
   return accentColor;

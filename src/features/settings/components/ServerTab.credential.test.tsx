@@ -10,22 +10,17 @@ vi.mock("../../../clients/navidrome", () => ({
   fetchAndStoreOpenSubsonicExtensions: vi.fn(),
 }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { act, render, cleanup, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-
-import { ServerTab } from "./ServerTab";
-import { getDb } from "../../../db";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { authenticate } from "../../../clients/navidrome";
-import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
-import {
-  isCredentialRejected,
-  noteEnvelope,
-  resetCredentialRejections,
-} from "../../../lib/credentialRejections";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { isCredentialRejected, noteEnvelope, resetCredentialRejections } from "../../../lib/credentialRejections";
+import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import type { Server as ServerRow } from "../../../types/server";
+import { ServerTab } from "./ServerTab";
 
 const SERVER = {
   id: "srv",
@@ -55,7 +50,7 @@ function renderTab() {
         syncStatus="idle"
         runSync={() => true}
       />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 

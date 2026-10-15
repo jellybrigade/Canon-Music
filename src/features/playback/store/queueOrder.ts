@@ -33,7 +33,7 @@ export function trimQueueToCap(
   shuffleOrder: number[],
   queueIndex: number,
   isShuffled: boolean,
-  maxQueueSize: number
+  maxQueueSize: number,
 ): { queue: CurrentTrack[]; shuffleOrder: number[]; queueIndex: number } | null {
   if (maxQueueSize <= 0 || queue.length <= maxQueueSize) return null;
   const drop = Math.min(queue.length - maxQueueSize, queueIndex);
@@ -62,11 +62,9 @@ export function resolveTrack(
   queue: CurrentTrack[],
   shuffleOrder: number[],
   isShuffled: boolean,
-  position: number
+  position: number,
 ): CurrentTrack | null {
-  const idx = isShuffled && shuffleOrder.length > 0
-    ? (shuffleOrder[position] ?? position)
-    : position;
+  const idx = isShuffled && shuffleOrder.length > 0 ? (shuffleOrder[position] ?? position) : position;
   return queue[idx] ?? null;
 }
 

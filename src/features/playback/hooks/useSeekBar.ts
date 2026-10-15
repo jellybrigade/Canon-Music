@@ -1,6 +1,7 @@
-import React, { useCallback, useRef, useState } from "react";
-import { usePlayerStore } from "../store/player";
+import type React from "react";
+import { useCallback, useRef, useState } from "react";
 import { formatDuration } from "../../../lib/trackCells";
+import { usePlayerStore } from "../store/player";
 
 /** Fraction of the track a single arrow-key press moves. */
 const KEY_STEP_RATIO = 0.05;
@@ -60,7 +61,7 @@ export function useSeekBar(duration: number): SeekBarState {
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
       void seek(ratio * duration);
     },
-    [duration, seek]
+    [duration, seek],
   );
 
   const onKeyDown = useCallback(
@@ -81,7 +82,7 @@ export function useSeekBar(duration: number): SeekBarState {
         void seek(duration);
       }
     },
-    [duration, elapsed, seek]
+    [duration, elapsed, seek],
   );
 
   return {
@@ -95,9 +96,7 @@ export function useSeekBar(duration: number): SeekBarState {
       "aria-valuemin": 0,
       "aria-valuemax": Math.round(duration),
       "aria-valuenow": Math.round(elapsed),
-      "aria-valuetext": seekable
-        ? `${formatDuration(elapsed)} of ${formatDuration(duration)}`
-        : "No track playing",
+      "aria-valuetext": seekable ? `${formatDuration(elapsed)} of ${formatDuration(duration)}` : "No track playing",
       ...(seekable ? {} : { "aria-disabled": true as const }),
       tabIndex: seekable ? 0 : -1,
       onClick,

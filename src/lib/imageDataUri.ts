@@ -5,10 +5,7 @@ const COVER_QUALITY = 0.85;
 
 export { COVER_MAX_EDGE };
 
-export async function fileToScaledDataUri(
-  file: File,
-  maxEdge: number = COVER_MAX_EDGE
-): Promise<string> {
+export async function fileToScaledDataUri(file: File, maxEdge: number = COVER_MAX_EDGE): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

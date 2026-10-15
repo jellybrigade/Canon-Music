@@ -1,14 +1,14 @@
-import Database from "@tauri-apps/plugin-sql";
 import { invoke } from "@tauri-apps/api/core";
-import { getDb } from "../../db";
-import type { Server } from "../../types/server";
-import { fetchAlbumTracks } from "../../clients/navidrome";
+import type Database from "@tauri-apps/plugin-sql";
 import type { NavidromeTrack } from "../../clients/navidrome";
+import { fetchAlbumTracks } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { getDb } from "../../db";
 import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
-import { planTrackIdRemap } from "./trackRemap";
-import type { TrackIdRemap } from "./trackRemap";
+import type { Server } from "../../types/server";
 import { pruneAlbumTracks } from "./syncPrune";
+import type { TrackIdRemap } from "./trackRemap";
+import { planTrackIdRemap } from "./trackRemap";
 
 /**
  * Rebuild FTS rows for the moved albums, deleting by stale track id too: a remapped track
@@ -27,7 +27,7 @@ export async function rebuildTracksFts(
   await executeIdChunks(
     db,
     albumIds,
-    (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`
+    (ph) => `DELETE FROM tracks_fts WHERE id IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`,
   );
   await executeIdChunks(
     db,
@@ -35,7 +35,7 @@ export async function rebuildTracksFts(
     (ph) => `INSERT INTO tracks_fts (id, title, artist, album, genre)
        SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
        FROM tracks t JOIN albums a ON t.album_id = a.id
-       WHERE t.album_id IN (${ph})`
+       WHERE t.album_id IN (${ph})`,
   );
 }
 
@@ -48,11 +48,11 @@ export async function planRenamedTracks(
 ): Promise<TrackIdRemap[]> {
   const existing = await db.select<{ id: string; file_path: string | null }[]>(
     "SELECT id, file_path FROM tracks WHERE album_id = ? AND server_id = ?",
-    [albumDbId, serverId]
+    [albumDbId, serverId],
   );
   return planTrackIdRemap(
     existing,
-    tracks.map((track) => ({ id: `${serverId}:${track.id}`, path: track.path ?? null }))
+    tracks.map((track) => ({ id: `${serverId}:${track.id}`, path: track.path ?? null })),
   );
 }
 
@@ -128,7 +128,7 @@ export async function insertTracksBatch(
          replay_gain_track_gain = excluded.replay_gain_track_gain,
          replay_gain_track_peak = excluded.replay_gain_track_peak,
          replay_gain_album_gain = excluded.replay_gain_album_gain,
-         replay_gain_album_peak = excluded.replay_gain_album_peak`
+         replay_gain_album_peak = excluded.replay_gain_album_peak`,
   );
 
   const genreRows = tracks.filter((t) => t.genre).map((t) => [`${serverId}:${t.id}`, t.genre]);
@@ -137,7 +137,7 @@ export async function insertTracksBatch(
     genreRows,
     "(?, 'genre', ?, 'server')",
     2,
-    (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`
+    (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
   );
 }
 
@@ -156,7 +156,7 @@ export async function repairAlbumTrackIds(
     server.username,
     credential,
     navidromeAlbumId,
-    server.alt_url ?? undefined
+    server.alt_url ?? undefined,
   );
   // Same reasoning as pruneAlbumTracks: an album that returned nothing is a server hiccup far
   // more often than an emptied album, and acting on it would delete the rows being repaired.
@@ -165,8 +165,16 @@ export async function repairAlbumTrackIds(
   const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
   await carryRenamedTracks(dbAlbumId, remaps);
   await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
-  await pruneAlbumTracks(db, dbAlbumId, tracks.map((track) => `${server.id}:${track.id}`));
-  await rebuildTracksFts(db, [dbAlbumId], remaps.map((remap) => remap.oldId));
+  await pruneAlbumTracks(
+    db,
+    dbAlbumId,
+    tracks.map((track) => `${server.id}:${track.id}`),
+  );
+  await rebuildTracksFts(
+    db,
+    [dbAlbumId],
+    remaps.map((remap) => remap.oldId),
+  );
   return remaps;
 }
 

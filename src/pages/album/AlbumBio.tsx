@@ -27,7 +27,9 @@ export function AlbumBio({ bio }: { bio: string }) {
   return (
     <div className="album-bio-section">
       <div className={`album-bio-wrap${bioNeedsClamp && !bioExpanded ? " album-bio-wrap--clamped" : ""}`}>
-        <p className="album-bio" ref={bioTextRef}>{bio}</p>
+        <p className="album-bio" ref={bioTextRef}>
+          {bio}
+        </p>
       </div>
       {bioNeedsClamp && (
         <button className="album-bio-toggle" onClick={() => setBioExpanded((v) => !v)}>

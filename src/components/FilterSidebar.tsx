@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, Heart, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import type { GenreRow } from "../hooks/useGenres";
 import "./FilterSidebar.css";
 
@@ -24,7 +24,7 @@ function hasActiveFilters(
   canonicalIdFilters: string[],
   yearFromInput: string,
   yearToInput: string,
-  lovedOnly: boolean
+  lovedOnly: boolean,
 ): boolean {
   return canonicalIdFilters.length > 0 || yearFromInput !== "" || yearToInput !== "" || lovedOnly;
 }
@@ -89,7 +89,10 @@ export function FilterSidebar({
               {(yearFromInput !== "" || yearToInput !== "") && (
                 <button
                   className="filter-sidebar-clear-btn"
-                  onClick={() => { setYearFromInput(""); setYearToInput(""); }}
+                  onClick={() => {
+                    setYearFromInput("");
+                    setYearToInput("");
+                  }}
                   title="Clear year filter"
                 >
                   <X size={10} />
@@ -129,46 +132,42 @@ export function FilterSidebar({
                 Try again
               </button>
             </div>
-          ) : genres.length > 0 && (
-            <div className="filter-sidebar-section">
-              <div className="filter-sidebar-section-header">
-                <span>Genre</span>
-                {canonicalIdFilters.length > 0 && (
-                  <button
-                    className="filter-sidebar-clear-btn"
-                    onClick={clearGenreFilters}
-                    title="Clear genre filter"
-                  >
-                    <X size={10} />
-                  </button>
-                )}
-              </div>
-              <input
-                className="filter-sidebar-genre-search"
-                type="text"
-                placeholder="Search…"
-                value={genreSearch}
-                onChange={(e) => setGenreSearch(e.target.value)}
-              />
-              <div className="filter-sidebar-genre-list">
-                {matchingGenres.length === 0 ? (
-                  <p className="filter-sidebar-genre-empty">
-                    No genre matches "{genreSearch}".
-                  </p>
-                ) : (
-                  matchingGenres.map((g) => (
-                    <button
-                      key={g.canonical_id}
-                      className={`filter-sidebar-genre-item${canonicalIdFilters.includes(g.canonical_id) ? " filter-sidebar-genre-item--active" : ""}`}
-                      onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
-                    >
-                      <span className="filter-sidebar-genre-name">{g.name}</span>
-                      <span className="filter-sidebar-genre-count">{g.album_count}</span>
+          ) : (
+            genres.length > 0 && (
+              <div className="filter-sidebar-section">
+                <div className="filter-sidebar-section-header">
+                  <span>Genre</span>
+                  {canonicalIdFilters.length > 0 && (
+                    <button className="filter-sidebar-clear-btn" onClick={clearGenreFilters} title="Clear genre filter">
+                      <X size={10} />
                     </button>
-                  ))
-                )}
+                  )}
+                </div>
+                <input
+                  className="filter-sidebar-genre-search"
+                  type="text"
+                  placeholder="Search…"
+                  value={genreSearch}
+                  onChange={(e) => setGenreSearch(e.target.value)}
+                />
+                <div className="filter-sidebar-genre-list">
+                  {matchingGenres.length === 0 ? (
+                    <p className="filter-sidebar-genre-empty">No genre matches "{genreSearch}".</p>
+                  ) : (
+                    matchingGenres.map((g) => (
+                      <button
+                        key={g.canonical_id}
+                        className={`filter-sidebar-genre-item${canonicalIdFilters.includes(g.canonical_id) ? " filter-sidebar-genre-item--active" : ""}`}
+                        onClick={() => toggleCanonicalIdFilter(g.canonical_id)}
+                      >
+                        <span className="filter-sidebar-genre-name">{g.name}</span>
+                        <span className="filter-sidebar-genre-count">{g.album_count}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
         </div>
       )}

@@ -1,22 +1,19 @@
-import { useCallback, useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
-import { getDb } from "../../../db";
-import { normalizeAlbum } from "../../tags/lib/tagNormalize";
-import { autoIdentifyAlbum } from "../../enrichment/lib/albumIdentify";
-import { persistAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
-import { getMinTagCount, setMinTagCount, setApiKey as setLastfmApiKey } from "../../../clients/lastfm";
+import { useCallback, useEffect, useState } from "react";
 import { getFanartApiKey, setFanartApiKey } from "../../../clients/fanart";
+import { getMinTagCount, setApiKey as setLastfmApiKey, setMinTagCount } from "../../../clients/lastfm";
 import { getMinFolksonomyCount, setMinFolksonomyCount } from "../../../clients/musicbrainz";
-import { keychain } from "../../../lib/keychain";
+import { getDb } from "../../../db";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
-import { useTagsStore } from "../../tags/store/tags";
+import { keychain } from "../../../lib/keychain";
+import { QK } from "../../../lib/queryKeys";
+import { persistAlbumIdentity, recordFailedLookup } from "../../enrichment/hooks/useAlbumIdentity";
+import { autoIdentifyAlbum } from "../../enrichment/lib/albumIdentify";
+import { ARTIST_AUTO_SELECT_SETTING, DEFAULT_ARTIST_AUTO_SELECT_SCORE } from "../../enrichment/lib/artistAutoSelect";
 import { useRapToHipHop } from "../../tags/hooks/useTagMappings";
+import { normalizeAlbum } from "../../tags/lib/tagNormalize";
+import { useTagsStore } from "../../tags/store/tags";
 import { SettingRow } from "./SettingRow";
-import {
-  ARTIST_AUTO_SELECT_SETTING,
-  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
-} from "../../enrichment/lib/artistAutoSelect";
 
 interface Props {
   searchQuery: string;
@@ -42,32 +39,35 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   const [lastfmKey, setLastfmKeyState] = useState("");
   const [lastfmKeyFocused, setLastfmKeyFocused] = useState(false);
   useEffect(() => {
-    keychain.get("canon.lastfm", "api_key")
-      .then((k) => { if (k) setLastfmKeyState(k); })
+    keychain
+      .get("canon.lastfm", "api_key")
+      .then((k) => {
+        if (k) setLastfmKeyState(k);
+      })
       .catch(() => {});
   }, []);
   async function setLastfmKey(k: string) {
     setLastfmKeyState(k);
     await setLastfmApiKey(k);
   }
-  const lastfmKeyDisplay = !lastfmKeyFocused && lastfmKey.length > 8
-    ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}`
-    : lastfmKey;
+  const lastfmKeyDisplay =
+    !lastfmKeyFocused && lastfmKey.length > 8 ? `${lastfmKey.slice(0, 4)}••••••••${lastfmKey.slice(-4)}` : lastfmKey;
 
   const [fanartKey, setFanartKeyState] = useState("");
   const [fanartKeyFocused, setFanartKeyFocused] = useState(false);
   useEffect(() => {
     getFanartApiKey()
-      .then((k) => { if (k) setFanartKeyState(k); })
+      .then((k) => {
+        if (k) setFanartKeyState(k);
+      })
       .catch(() => {});
   }, []);
   async function handleSetFanartKey(k: string) {
     setFanartKeyState(k);
     await setFanartApiKey(k);
   }
-  const fanartKeyDisplay = !fanartKeyFocused && fanartKey.length > 8
-    ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}`
-    : fanartKey;
+  const fanartKeyDisplay =
+    !fanartKeyFocused && fanartKey.length > 8 ? `${fanartKey.slice(0, 4)}••••••••${fanartKey.slice(-4)}` : fanartKey;
 
   const [mbAutoIdentify, setMbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
   const [autoRefresh, setAutoRefresh] = useBoolSetting("tags.auto_refresh", true);
@@ -95,22 +95,29 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
 
   const handleRefreshAll = useCallback(async () => {
     const db = await getDb();
-    type Row = { id: string; artist: string | null; name: string; year: number | null };
+    type Row = { id: string; artist: string | null; name: string; year: number | null; track_count: number };
 
     const unmatched = await db.select<Row[]>(
-      `SELECT a.id, a.artist, a.name, a.year FROM albums a
+      `SELECT a.id, a.artist, a.name, a.year,
+              (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+       FROM albums a
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
        )
-       ORDER BY a.name`
+       ORDER BY a.name`,
     );
     if (unmatched.length > 0) {
       setPullProgress({ done: 0, total: unmatched.length });
       for (let i = 0; i < unmatched.length; i++) {
         const album = unmatched[i]!;
         try {
-          const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, year: album.year });
+          const result = await autoIdentifyAlbum({
+            artist: album.artist ?? "",
+            album: album.name,
+            trackCount: album.track_count,
+            year: album.year,
+          });
           if (result.decision === "auto_confirmed" && result.detail) {
             const now = Math.floor(Date.now() / 1000);
             await persistAlbumIdentity({
@@ -132,13 +139,12 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               matchScore: Math.round(result.score * 100),
               confirmedAt: now,
             });
-          } else {
-            const now = Math.floor(Date.now() / 1000);
-            await db.execute(
-              `INSERT OR IGNORE INTO album_identity (album_id, auto_matched, match_score, looked_up_at)
-               VALUES (?, 0, ?, ?)`,
-              [album.id, Math.round(result.score * 100), now]
-            );
+          } else if (result.decision !== "error") {
+            await recordFailedLookup(db, {
+              albumId: album.id,
+              matchScore: Math.round(result.score * 100),
+              lookedUpAt: Math.floor(Date.now() / 1000),
+            });
           }
         } catch (e) {
           console.warn("MB sync failed for:", album.name, e);
@@ -149,16 +155,20 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     }
 
     type FullRow = {
-      id: string; artist: string | null; name: string;
-      lastfm_artist_name: string | null; lastfm_album_name: string | null;
-      combined_genres_json: string | null; combined_tags_json: string | null;
+      id: string;
+      artist: string | null;
+      name: string;
+      lastfm_artist_name: string | null;
+      lastfm_album_name: string | null;
+      combined_genres_json: string | null;
+      combined_tags_json: string | null;
     };
     const albums = await db.select<FullRow[]>(
       `SELECT a.id, a.artist, a.name,
               ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
        FROM albums a
        LEFT JOIN album_identity ai ON ai.album_id = a.id
-       ORDER BY a.name`
+       ORDER BY a.name`,
     );
     setPullProgress({ done: 0, total: albums.length });
     for (let i = 0; i < albums.length; i++) {
@@ -188,7 +198,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
   }, [refetchLastRefreshed, queryClient, setPullProgress]);
 
   const fl = searchQuery.toLowerCase().trim();
-  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+  const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
 
   return (
     <>
@@ -196,8 +206,8 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
         <section className="settings-section">
           <h3 className="settings-section-title">Last.fm</h3>
           <p className="settings-section-desc">
-            Canon keeps tags clean and enriched automatically. Genres are pulled from Last.fm in the background.
-            Nothing is written to your files.
+            Canon keeps tags clean and enriched automatically. Genres are pulled from Last.fm in the background. Nothing
+            is written to your files.
           </p>
           <SettingRow title="API key" stacked>
             <input
@@ -213,16 +223,9 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             title="Enrich per-track genres"
             description="Fetch track.getTopTags from Last.fm when you open an album. Gives radio finer-grained genre data per track."
           >
-            <input
-              type="checkbox"
-              checked={enrichTracks}
-              onChange={(e) => void setEnrichTracks(e.target.checked)}
-            />
+            <input type="checkbox" checked={enrichTracks} onChange={(e) => void setEnrichTracks(e.target.checked)} />
           </SettingRow>
-          <SettingRow
-            title="Min tag popularity"
-            description="0-100. Lower = more tags included. Raise to cut noise."
-          >
+          <SettingRow title="Min tag popularity" description="0-100. Lower = more tags included. Raise to cut noise.">
             <input
               type="number"
               min={0}
@@ -231,7 +234,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               value={minTagCount ?? 25}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 0 && v <= 100) {
+                if (!Number.isNaN(v) && v >= 0 && v <= 100) {
                   void setMinTagCount(v).then(() => {
                     void queryClient.invalidateQueries({ queryKey: QK.settingsLastfmMinTagCount() });
                   });
@@ -247,8 +250,8 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
         <section className="settings-section">
           <h3 className="settings-section-title">MusicBrainz</h3>
           <p className="settings-section-desc">
-            No API key required. Use the <strong>Identify…</strong> button on any album or artist to confirm
-            MusicBrainz IDs. Confirmed identity enriches genres, label, country, and release date.
+            No API key required. Use the <strong>Identify…</strong> button on any album or artist to confirm MusicBrainz
+            IDs. Confirmed identity enriches genres, label, country, and release date.
           </p>
           <SettingRow
             title="Auto-identify albums when opened"
@@ -286,7 +289,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               value={minFolksonomyCount ?? 2}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 0 && v <= 100) {
+                if (!Number.isNaN(v) && v >= 0 && v <= 100) {
                   void setMinFolksonomyCount(v).then(() => {
                     void queryClient.invalidateQueries({ queryKey: QK.settingsMbMinFolksonomy() });
                   });
@@ -302,8 +305,8 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
         <section className="settings-section">
           <h3 className="settings-section-title">Fanart.tv</h3>
           <p className="settings-section-desc">
-            Richer artist portraits as a fallback when MusicBrainz / Wikidata has no image.
-            Get a free personal API key at fanart.tv.
+            Richer artist portraits as a fallback when MusicBrainz / Wikidata has no image. Get a free personal API key
+            at fanart.tv.
           </p>
           <SettingRow title="API key" stacked>
             <input
@@ -325,11 +328,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             title="Auto-refresh metadata on launch"
             description="Re-pulls Last.fm tags for stale albums when Canon starts."
           >
-            <input
-              type="checkbox"
-              checked={autoRefresh}
-              onChange={(e) => void setAutoRefresh(e.target.checked)}
-            />
+            <input type="checkbox" checked={autoRefresh} onChange={(e) => void setAutoRefresh(e.target.checked)} />
           </SettingRow>
           <SettingRow
             title="Stale after (days)"
@@ -347,13 +346,13 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
           <div className="settings-field settings-field--row">
             <button
               className="settings-btn"
-              onClick={() => { void handleRefreshAll(); }}
+              onClick={() => {
+                void handleRefreshAll();
+              }}
               disabled={pullProgress !== null}
               title="Identify unmatched albums on MusicBrainz, then re-pull all Last.fm tags"
             >
-              {pullProgress
-                ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}`
-                : "Refresh all now"}
+              {pullProgress ? `Refreshing… ${pullProgress.done} / ${pullProgress.total}` : "Refresh all now"}
             </button>
             {lastRefreshedAt && pullProgress === null && (
               <span className="settings-hint">
@@ -367,14 +366,13 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       {show("mapping", "rap", "hip hop", "genre", "badge", "tag issues", "hide", "year", "decade", "skip") && (
         <section className="settings-section">
           <h3 className="settings-section-title">Display</h3>
-          <SettingRow
-            title='Map "Rap" to Hip Hop'
-            description="Treats Rap as an alias for Hip Hop in the genre tree."
-          >
+          <SettingRow title='Map "Rap" to Hip Hop' description="Treats Rap as an alias for Hip Hop in the genre tree.">
             <input
               type="checkbox"
               checked={rapToHipHop}
-              onChange={(e) => { void toggleRapToHipHop.mutate(e.target.checked); }}
+              onChange={(e) => {
+                void toggleRapToHipHop.mutate(e.target.checked);
+              }}
             />
           </SettingRow>
           <SettingRow
@@ -391,11 +389,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             title="Hide tag issues badge"
             description="Suppresses the badge counter on the Tags sidebar item."
           >
-            <input
-              type="checkbox"
-              checked={hideTagBadge}
-              onChange={(e) => void setHideTagBadge(e.target.checked)}
-            />
+            <input type="checkbox" checked={hideTagBadge} onChange={(e) => void setHideTagBadge(e.target.checked)} />
           </SettingRow>
         </section>
       )}

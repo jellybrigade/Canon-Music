@@ -23,6 +23,5 @@ export const useLovedSessionStore = create<LovedSessionState>((set) => ({
   cachedTick: -1,
   // Reads fire per tick and can resolve out of order; dropping results older than what's
   // cached stops a slow stale read from clobbering fresher sets and sticking forever.
-  setSets: (sets, tick) =>
-    set((s) => (tick < s.cachedTick ? s : { sets, cachedTick: tick })),
+  setSets: (sets, tick) => set((s) => (tick < s.cachedTick ? s : { sets, cachedTick: tick })),
 }));

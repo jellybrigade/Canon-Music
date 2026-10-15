@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
 import {
   filterByTrackCount,
   normalizeForMatch,
+  pickClearWinner,
   rankCandidates,
   scoreReleaseGroup,
   similarity,
 } from "./fuzzyMatch";
-import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
 
 function candidate(over: Partial<MbReleaseGroupCandidate> = {}): MbReleaseGroupCandidate {
   return {
@@ -106,7 +107,7 @@ describe("scoreReleaseGroup", () => {
     const right = candidate({ ...base, firstReleaseDate: "2019-04-01" });
     const wrong = candidate({ ...base, firstReleaseDate: "1994-04-01", title: "Sisterhod" });
     expect(scoreReleaseGroup(right, "Some Artist", "Sisterhood", 2019)).toBeGreaterThan(
-      scoreReleaseGroup(wrong, "Some Artist", "Sisterhood", 2019)
+      scoreReleaseGroup(wrong, "Some Artist", "Sisterhood", 2019),
     );
   });
 
@@ -141,7 +142,7 @@ describe("filterByTrackCount", () => {
         candidate({ id: "a", primaryType: "Album" }),
         candidate({ id: "e", primaryType: "EP" }),
       ],
-      2
+      2,
     );
     expect(kept.map((c) => c.id)).toEqual(["s", "a"]);
   });
@@ -149,7 +150,7 @@ describe("filterByTrackCount", () => {
   it("allows EP and Album for a five-track release", () => {
     const kept = filterByTrackCount(
       [candidate({ id: "s", primaryType: "Single" }), candidate({ id: "e", primaryType: "EP" })],
-      5
+      5,
     );
     expect(kept.map((c) => c.id)).toEqual(["e"]);
   });
@@ -173,7 +174,7 @@ describe("rankCandidates", () => {
         candidate({ id: "right", title: "Kid A", artistName: "Radiohead" }),
       ],
       "Radiohead",
-      "Kid A"
+      "Kid A",
     );
     expect(ranked[0]!.candidate.id).toBe("right");
   });
@@ -185,19 +186,16 @@ describe("rankCandidates", () => {
         candidate({ id: "album", primaryType: "Album", score: 100 }),
       ],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked[0]!.candidate.id).toBe("album");
   });
 
   it("falls back to MusicBrainz's own score at an equal type and fuzzy score", () => {
     const ranked = rankCandidates(
-      [
-        candidate({ id: "low", score: 40 }),
-        candidate({ id: "high", score: 95 }),
-      ],
+      [candidate({ id: "low", score: 40 }), candidate({ id: "high", score: 95 })],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked[0]!.candidate.id).toBe("high");
   });
@@ -206,12 +204,60 @@ describe("rankCandidates", () => {
     const ranked = rankCandidates(
       [candidate({ id: "first" }), candidate({ id: "second" }), candidate({ id: "third" })],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked.map((r) => r.candidate.id)).toEqual(["first", "second", "third"]);
   });
 
   it("returns an empty array for no candidates", () => {
     expect(rankCandidates([], "a", "b")).toEqual([]);
+  });
+});
+
+describe("pickClearWinner", () => {
+  const rules = { minScore: 0.9, minGap: 0.1 };
+  const ranked = (...entries: Array<[Partial<MbReleaseGroupCandidate>, number]>) =>
+    entries.map(([over, score]) => ({ candidate: candidate(over), score }));
+
+  it("picks a lone confident candidate", () => {
+    expect(pickClearWinner(ranked([{ id: "album" }, 1]), rules)?.candidate.id).toBe("album");
+  });
+
+  it("picks an album tied with its own same-titled single", () => {
+    const winner = pickClearWinner(
+      ranked([{ id: "album", primaryType: "Album" }, 1], [{ id: "single", primaryType: "Single" }, 1]),
+      rules,
+    );
+    expect(winner?.candidate.id).toBe("album");
+  });
+
+  it("refuses a near-tie between differently titled releases of different types", () => {
+    expect(
+      pickClearWinner(
+        ranked(
+          [{ id: "album", title: "Night Drive", primaryType: "Album" }, 0.95],
+          [{ id: "ep", title: "Night Driver", primaryType: "EP" }, 0.9],
+        ),
+        rules,
+      ),
+    ).toBeNull();
+  });
+
+  it("refuses two tied candidates of the same type", () => {
+    expect(
+      pickClearWinner(ranked([{ id: "a", primaryType: "Album" }, 1], [{ id: "b", primaryType: "Album" }, 0.95]), rules),
+    ).toBeNull();
+  });
+
+  it("refuses a top score under the threshold", () => {
+    expect(pickClearWinner(ranked([{ id: "a" }, 0.89]), rules)).toBeNull();
+  });
+
+  it("picks a top candidate that clears the gap", () => {
+    expect(pickClearWinner(ranked([{ id: "a" }, 1], [{ id: "b" }, 0.85]), rules)?.candidate.id).toBe("a");
+  });
+
+  it("returns null for no candidates", () => {
+    expect(pickClearWinner([], rules)).toBeNull();
   });
 });

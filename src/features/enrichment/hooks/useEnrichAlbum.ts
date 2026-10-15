@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../../db";
-import { QK } from "../../../lib/queryKeys";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { fetchAlbumInfo } from "../../../clients/lastfm";
+import { getDb } from "../../../db";
 import { useSetting } from "../../../hooks/useSetting";
 import { parseStalenessDays } from "../../../lib/numberSetting";
+import { QK } from "../../../lib/queryKeys";
 
 export interface AlbumEnrichmentRow {
   album_bio: string | null;
@@ -30,7 +30,7 @@ async function enrichAlbum(albumId: string, artist: string, album: string): Prom
        album_bio = excluded.album_bio,
        lastfm_url = COALESCE(excluded.lastfm_url, album_identity.lastfm_url),
        album_enriched_at = excluded.album_enriched_at`,
-    [albumId, info.bio, info.url, enrichedAt]
+    [albumId, info.bio, info.url, enrichedAt],
   );
 }
 
@@ -54,7 +54,7 @@ export function useEnrichAlbum(albumId: string, artist: string, albumName: strin
       const db = await getDb();
       const rows = await db.select<AlbumEnrichmentRow[]>(
         "SELECT album_bio, lastfm_url, album_enriched_at FROM album_identity WHERE album_id = ?",
-        [albumId]
+        [albumId],
       );
       return rows[0] ?? null;
     },
@@ -71,7 +71,9 @@ export function useEnrichAlbum(albumId: string, artist: string, albumName: strin
     if (inFlight.has(albumId)) return;
     const promise = enrichAlbum(albumId, artist, albumName)
       .then(() => queryClient.invalidateQueries({ queryKey: QK.albumEnrichment(albumId) }))
-      .catch(() => { /* silent */ })
+      .catch(() => {
+        /* silent */
+      })
       .finally(() => inFlight.delete(albumId));
     inFlight.set(albumId, promise);
   }, [query.isLoading, query.data, albumId, artist, albumName, staleDays, queryClient]);

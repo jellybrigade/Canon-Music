@@ -1,13 +1,13 @@
+import { Activity, ChevronRight, Play, Server, Tag } from "lucide-react";
 import { useState } from "react";
-import { Server, Tag, Play, ChevronRight, Activity } from "lucide-react";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
 import type { SyncOptions } from "../../sync/sync";
-import { ServerTab } from "./ServerTab";
-import { TagsTab } from "./TagsTab";
-import { PlaybackTab } from "./PlaybackTab";
 import { AboutTab } from "./AboutTab";
 import { DiagnosticsTab } from "./DiagnosticsTab";
+import { PlaybackTab } from "./PlaybackTab";
+import { ServerTab } from "./ServerTab";
+import { TagsTab } from "./TagsTab";
 import "./SettingsView.css";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
@@ -26,20 +26,39 @@ interface Props {
 }
 
 const NAV_ITEMS: { id: NavId; label: string; icon: React.ReactNode }[] = [
-  { id: "server",   label: "Server",   icon: <Server size={15} /> },
+  { id: "server", label: "Server", icon: <Server size={15} /> },
   { id: "metadata", label: "Metadata", icon: <Tag size={15} /> },
   { id: "playback", label: "Playback", icon: <Play size={15} /> },
   { id: "advanced", label: "Advanced", icon: <Activity size={15} /> },
 ];
 
-export function SettingsView({ server, syncStatus, runSync, syncError, lastSyncedAt, serverWithCredential, onRemoveServer, hideTagBadge, setHideTagBadge }: Props) {
+export function SettingsView({
+  server,
+  syncStatus,
+  runSync,
+  syncError,
+  lastSyncedAt,
+  serverWithCredential,
+  onRemoveServer,
+  hideTagBadge,
+  setHideTagBadge,
+}: Props) {
   const [activeNav, setActiveNav] = useState<NavId>("server");
   const [search, setSearch] = useState("");
 
   const panelContent = (nav: NavId, query: string) => {
     switch (nav) {
       case "server":
-        return <ServerTab server={server} serverWithCredential={serverWithCredential} onRemoveServer={onRemoveServer} searchQuery={query} syncStatus={syncStatus} runSync={runSync} />;
+        return (
+          <ServerTab
+            server={server}
+            serverWithCredential={serverWithCredential}
+            onRemoveServer={onRemoveServer}
+            searchQuery={query}
+            syncStatus={syncStatus}
+            runSync={runSync}
+          />
+        );
       case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":
@@ -49,7 +68,14 @@ export function SettingsView({ server, syncStatus, runSync, syncError, lastSynce
           <>
             <AboutTab searchQuery={query} />
             <div className="settings-advanced-divider" />
-            <DiagnosticsTab syncStatus={syncStatus} syncError={syncError} lastSyncedAt={lastSyncedAt} searchQuery={query} serverWithCredential={serverWithCredential} serverId={server?.id} />
+            <DiagnosticsTab
+              syncStatus={syncStatus}
+              syncError={syncError}
+              lastSyncedAt={lastSyncedAt}
+              searchQuery={query}
+              serverWithCredential={serverWithCredential}
+              serverId={server?.id}
+            />
           </>
         );
     }

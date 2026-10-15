@@ -68,7 +68,11 @@ describe("useWakeLock", () => {
       const sentinel = makeSentinel();
       return { resolve, sentinel };
     });
-    await act(async () => granted.forEach(({ resolve, sentinel }) => resolve(sentinel)));
+    await act(async () =>
+      granted.forEach(({ resolve, sentinel }) => {
+        resolve(sentinel);
+      }),
+    );
 
     act(() => usePlayerStore.setState({ isPlaying: false }));
 

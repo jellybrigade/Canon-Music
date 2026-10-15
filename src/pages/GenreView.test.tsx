@@ -1,22 +1,23 @@
 // @vitest-environment jsdom
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent, act } from "@testing-library/react";
-import { GenreView } from "./GenreView";
+import { act, fireEvent, render } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
-import { bustCanonTreeCache } from "../features/tags/lib/canonicalize";
 import { invalidateGenreTreeCache } from "../features/tags/hooks/useGenreTree";
+import { bustCanonTreeCache } from "../features/tags/lib/canonicalize";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
+import { GenreView } from "./GenreView";
 
 let db: FakeDatabase;
 
 async function seedAlbums(canonicalId: string, count: number) {
   for (let i = 0; i < count; i++) {
-    await db.execute(
-      `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES (?, ?, 'direct', ?)`,
-      [`${canonicalId}-${i}`, canonicalId, canonicalId],
-    );
+    await db.execute(`INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES (?, ?, 'direct', ?)`, [
+      `${canonicalId}-${i}`,
+      canonicalId,
+      canonicalId,
+    ]);
   }
 }
 

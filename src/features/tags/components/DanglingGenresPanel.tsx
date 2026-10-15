@@ -1,6 +1,6 @@
 import { useDanglingGenreIds, useRepairDanglingGenreId } from "../hooks/useDanglingGenreIds";
-import type { DanglingGenreId } from "../lib/danglingGenreIds";
 import type { TreeNode } from "../lib/canonicalize";
+import type { DanglingGenreId } from "../lib/danglingGenreIds";
 import { CanonCombobox } from "./CanonCombobox";
 
 const USE_LABELS: Record<string, [string, string]> = {
@@ -44,8 +44,8 @@ export function DanglingGenresPanel({ treeNodes }: { treeNodes: TreeNode[] }) {
   return (
     <section className="review-dangling" aria-label="Genres missing from the tree">
       <p className="review-dangling-note">
-        {dangling.length === 1 ? "1 genre is" : `${dangling.length} genres are`} still used but no longer in
-        the genre tree. Map each to a genre, or remove it everywhere.
+        {dangling.length === 1 ? "1 genre is" : `${dangling.length} genres are`} still used but no longer in the genre
+        tree. Map each to a genre, or remove it everywhere.
       </p>
       {repair.isError && (
         <p className="review-dangling-note review-dangling-error" role="alert">

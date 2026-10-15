@@ -1,10 +1,10 @@
-import { Suspense, lazy, type CSSProperties } from "react";
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
+import { type CSSProperties, lazy, Suspense } from "react";
+import { FeedbackModal } from "../components/FeedbackModal";
+import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
+import { UpdatePrompt } from "../components/UpdatePrompt";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
-import { UpdatePrompt } from "../components/UpdatePrompt";
-import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
-import { FeedbackModal } from "../components/FeedbackModal";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
@@ -67,7 +67,10 @@ export function AppShell(props: AppViewProps) {
               key={id}
               className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
               title={badge ? `${label} (${badge} unmapped)` : label}
-              onClick={() => { setCanonicalIdFilters([]); navigateTo(id); }}
+              onClick={() => {
+                setCanonicalIdFilters([]);
+                navigateTo(id);
+              }}
             >
               <span className="sidebar-btn-icon">
                 {icon}
@@ -78,11 +81,7 @@ export function AppShell(props: AppViewProps) {
           ))}
           {view !== "nowplaying" && (
             <>
-              <button
-                className="sidebar-feedback-btn"
-                title="Send feedback"
-                onClick={() => setFeedbackOpen(true)}
-              >
+              <button className="sidebar-feedback-btn" title="Send feedback" onClick={() => setFeedbackOpen(true)}>
                 <MessageSquare size={15} />
                 {sidebarExpanded && <span className="sidebar-btn-label">Feedback</span>}
               </button>
@@ -95,12 +94,7 @@ export function AppShell(props: AppViewProps) {
               </button>
             </>
           )}
-          {sidebarExpanded && (
-            <div
-              className="sidebar-resize-handle"
-              onMouseDown={handleSidebarResizeMouseDown}
-            />
-          )}
+          {sidebarExpanded && <div className="sidebar-resize-handle" onMouseDown={handleSidebarResizeMouseDown} />}
         </nav>
         {renderContent()}
       </div>
@@ -110,7 +104,9 @@ export function AppShell(props: AppViewProps) {
           onNowPlaying={() => navigateTo("nowplaying")}
           onOpenResync={() => navigateTo("settings")}
           onSelectArtist={openArtist}
-          onSelectAlbumById={async (albumId: string) => { await openAlbumById(albumId); }}
+          onSelectAlbumById={async (albumId: string) => {
+            await openAlbumById(albumId);
+          }}
           serverWithCred={serverWithCred ?? undefined}
         />
       )}
@@ -119,19 +115,27 @@ export function AppShell(props: AppViewProps) {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={navigateTo}
         onSelectAlbum={openAlbum}
-        onSelectArtist={(name, albumCount) => openArtist({ name, album_count: albumCount, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null })}
+        onSelectArtist={(name, albumCount) =>
+          openArtist({
+            name,
+            album_count: albumCount,
+            artwork_url: null,
+            lastfm_image_url: null,
+            wikidata_image_url: null,
+            navidrome_image_url: null,
+            enriched_at: null,
+          })
+        }
         // The only handler here that does not navigate, so the only one still
         // closing the palette itself.
-        onPlayTrack={(id) => { void handlePlayTrack(id); setCommandPaletteOpen(false); }}
+        onPlayTrack={(id) => {
+          void handlePlayTrack(id);
+          setCommandPaletteOpen(false);
+        }}
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
       />
-      {pendingUpdate && (
-        <UpdatePrompt
-          update={pendingUpdate}
-          onDismiss={() => setPendingUpdate(null)}
-        />
-      )}
+      {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
       {remoteNotice && (
         <RemoteNoticeBanner
           notice={remoteNotice}
@@ -144,7 +148,10 @@ export function AppShell(props: AppViewProps) {
       {feedbackOpen && (
         <FeedbackModal
           serverUrl={server?.url}
-          onClose={() => { setFeedbackOpen(false); setCrashReport(null); }}
+          onClose={() => {
+            setFeedbackOpen(false);
+            setCrashReport(null);
+          }}
           initialCategory={crashReport ? "bug" : undefined}
           initialText={crashReport ? `Canon crashed last session:\n\n${crashReport}` : undefined}
         />

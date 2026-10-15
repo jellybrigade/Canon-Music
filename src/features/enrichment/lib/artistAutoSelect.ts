@@ -5,10 +5,7 @@ export const DEFAULT_ARTIST_AUTO_SELECT_SCORE = 95;
 const RIVAL_SCORE_MARGIN = 5;
 
 /** Top MusicBrainz match if it clears `minScore` and no other match is within the rival margin. */
-export function pickConfidentArtist(
-  candidates: MbArtistCandidate[],
-  minScore: number,
-): MbArtistCandidate | null {
+export function pickConfidentArtist(candidates: MbArtistCandidate[], minScore: number): MbArtistCandidate | null {
   const ranked = candidates
     .filter((c): c is MbArtistCandidate & { score: number } => c.score !== null)
     .sort((a, b) => b.score - a.score);

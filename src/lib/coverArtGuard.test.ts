@@ -3,9 +3,9 @@
 // server for a cover named "undefined" and Rust caches that 404 forever under "undefined:300",
 // once per album with no artwork. 30 call sites branch correctly; a per-call-site test cannot
 // see the 31st, so this sweeps every `getCoverArtUrl` call in `src/`.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -74,7 +74,7 @@ function endOfTemplate(text: string, open: number): number {
  * otherwise shift every later argument, and the cover id would stop being `args[3]` in exactly
  * the call nobody looked at.
  */
-export function callSites(text: string): { line: number; args: string[] }[] {
+function callSites(text: string): { line: number; args: string[] }[] {
   const sites: { line: number; args: string[] }[] = [];
   const CALL = /\bgetCoverArtUrl\s*\(/g;
   for (const match of text.matchAll(CALL)) {
@@ -123,7 +123,7 @@ export function callSites(text: string): { line: number; args: string[] }[] {
  * reaches the call through a ternary or a `??`, where a trailing-only test sees nothing. `!==`
  * and a leading `!negation` are operators, not assertions.
  */
-export function assertsNonNull(arg: string): boolean {
+function assertsNonNull(arg: string): boolean {
   return /[\w$)\]]!(?!=)/.test(arg);
 }
 
@@ -141,7 +141,7 @@ describe("getCoverArtUrl call sites", () => {
     const asserted = FILES.flatMap(({ path, text }) =>
       callSites(text)
         .filter((site) => assertsNonNull(site.args[3] ?? ""))
-        .map((site) => `${path}:${site.line} ${site.args[3]}`)
+        .map((site) => `${path}:${site.line} ${site.args[3]}`),
     );
     expect(asserted).toEqual([]);
   });

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { useSetting } from "./useSetting";
 import { parseIntegerOr } from "../lib/numberSetting";
+import { useSetting } from "./useSetting";
 
 interface UseSidebarResizeOptions {
   /** ltr: drag right to expand (sidebar). rtl: drag left to expand (queue panel). */
@@ -32,7 +32,12 @@ export function useSidebarResize({
   // frees them if the handle unmounts mid-drag; this ref carries the teardown to unmount cleanup.
   const teardownRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => () => { teardownRef.current?.(); }, []);
+  useEffect(
+    () => () => {
+      teardownRef.current?.();
+    },
+    [],
+  );
 
   function handleMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -43,9 +48,7 @@ export function useSidebarResize({
 
     function computeWidth(clientX: number) {
       if (!dragRef.current) return startWidth;
-      const delta = direction === "ltr"
-        ? clientX - dragRef.current.startX
-        : dragRef.current.startX - clientX;
+      const delta = direction === "ltr" ? clientX - dragRef.current.startX : dragRef.current.startX - clientX;
       return Math.max(min, Math.min(max, dragRef.current.startWidth + delta));
     }
 

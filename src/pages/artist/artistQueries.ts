@@ -1,14 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../../lib/queryKeys";
+import type { LastfmTopAlbum, LastfmTopTrack } from "../../clients/lastfm";
+import { fetchArtistTopAlbums, fetchArtistTopTracks, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
+import type { CurrentTrack } from "../../features/playback/store/playerTypes";
+import { QK } from "../../lib/queryKeys";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../lib/replayGainRow";
 import type { AlbumRow } from "../../types/library";
 import type { Server } from "../../types/server";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
-import type { CurrentTrack } from "../../features/playback/store/playerTypes";
-import { getCoverArtUrl } from "../../clients/navidromeUrls";
-import { fetchArtistTopTracks, fetchArtistTopAlbums, fetchTrackAlbum, normalizeTrackTitle } from "../../clients/lastfm";
-import type { LastfmTopTrack, LastfmTopAlbum } from "../../clients/lastfm";
-import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../lib/replayGainRow";
 
 export const POPULAR_TRACKS_MAX = 10;
 
@@ -42,7 +42,7 @@ export function useArtistTopTracks(artistName: string, serverId: string, options
            AND (t.artist = ?
             OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
          ORDER BY t.track_number, t.title`,
-        [serverId, artistName, artistName]
+        [serverId, artistName, artistName],
       );
     },
   });
@@ -66,7 +66,7 @@ export function useArtistSeedTrack(artistName: string, serverId: string, options
             OR t.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
          ORDER BY t.play_count DESC, t.track_number, t.title
          LIMIT 1`,
-        [serverId, artistName, artistName]
+        [serverId, artistName, artistName],
       );
       return rows[0] ?? null;
     },
@@ -89,7 +89,7 @@ export function useArtistGenres(artistName: string, serverId: string) {
          GROUP BY ag.canonical_id
          ORDER BY n DESC
          LIMIT 5`,
-        [serverId, artistName, artistName]
+        [serverId, artistName, artistName],
       );
       return rows.map((r) => r.name);
     },
@@ -113,7 +113,7 @@ export function useAppearsOnAlbums(artistName: string, serverId: string) {
            AND a.artist NOT IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
          ORDER BY a.year IS NULL, a.year DESC, a.name
          LIMIT 24`,
-        [serverId, artistName, artistName, artistName, artistName]
+        [serverId, artistName, artistName, artistName, artistName],
       );
     },
     enabled: !!artistName,
@@ -138,9 +138,7 @@ export function useLastfmTopTracks(artistName: string) {
 
 export function buildTrackObj(track: TopTrack, server: Server, credential: NavidromeCredential): CurrentTrack {
   const artworkRef = track.artwork_url ?? null;
-  const coverArtUrl = artworkRef
-    ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500)
-    : null;
+  const coverArtUrl = artworkRef ? getCoverArtUrl(server.url, server.username, credential, artworkRef, 500) : null;
   return {
     id: track.id,
     title: track.title,
@@ -160,7 +158,7 @@ export function buildTrackObj(track: TopTrack, server: Server, credential: Navid
 async function matchLastfmTracks(
   tracks: TopTrack[],
   lastfmTracks: LastfmTopTrack[],
-  artistName: string
+  artistName: string,
 ): Promise<TopTrack[]> {
   const lastfmByTitle = new Map<string, { rank: number; playcount: number }>();
   lastfmTracks.forEach((t, i) => {
@@ -221,10 +219,13 @@ async function matchLastfmTracks(
 export function useMatchedTracks(
   artistName: string,
   tracks: TopTrack[] | undefined,
-  lastfmTracks: LastfmTopTrack[] | undefined
+  lastfmTracks: LastfmTopTrack[] | undefined,
 ) {
   return useQuery({
-    queryKey: QK.lastfmTrackMatch(artistName, (tracks ?? []).map((t) => t.id)),
+    queryKey: QK.lastfmTrackMatch(
+      artistName,
+      (tracks ?? []).map((t) => t.id),
+    ),
     queryFn: () => matchLastfmTracks(tracks ?? [], lastfmTracks ?? [], artistName),
     enabled: !!tracks && !!lastfmTracks,
     staleTime: 7 * 24 * 60 * 60 * 1000,

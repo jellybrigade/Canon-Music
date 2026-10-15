@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { invokeArgs, invokeCount } from "../../../test/perf";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 
@@ -20,7 +21,7 @@ function renderPanel() {
     <QueryClientProvider client={client}>
       <DanglingGenresPanel treeNodes={[]} />
       <span className="probe">mounted</span>
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -33,7 +34,7 @@ beforeEach(async () => {
 
 async function seedDangling(): Promise<void> {
   await holder.db?.execute(
-    "INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('a1', 'gone', 'Gone Genre'), ('a2', 'gone', 'Gone Genre')"
+    "INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('a1', 'gone', 'Gone Genre'), ('a2', 'gone', 'Gone Genre')",
   );
 }
 

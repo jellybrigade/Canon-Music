@@ -60,7 +60,7 @@ describe("sampleFromHead", () => {
   it("draws a different set from the head pool for a non-zero seed", () => {
     const out = sampleFromHead(items, 1, 5, 40);
     expect(out).toHaveLength(5);
-    expect(out.every(n => n < 40)).toBe(true);
+    expect(out.every((n) => n < 40)).toBe(true);
     expect(out).not.toEqual([0, 1, 2, 3, 4]);
   });
 

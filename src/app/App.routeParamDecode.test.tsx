@@ -27,26 +27,18 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
 vi.mock("../pages/AlbumDetail", () => ({
-  AlbumDetail: ({ album }: { album: { id: string } }) => (
-    <div data-testid="album-detail" data-album-id={album.id} />
-  ),
+  AlbumDetail: ({ album }: { album: { id: string } }) => <div data-testid="album-detail" data-album-id={album.id} />,
 }));
 vi.mock("../pages/ArtistDetail", () => ({
   ArtistDetail: ({ artist }: { artist: { name: string; album_count: number } }) => (
-    <div
-      data-testid="artist-detail"
-      data-artist-name={artist.name}
-      data-album-count={String(artist.album_count)}
-    />
+    <div data-testid="artist-detail" data-artist-name={artist.name} data-album-count={String(artist.album_count)} />
   ),
 }));
 vi.mock("../features/playlists/PlaylistDetail", () => ({
@@ -57,15 +49,15 @@ vi.mock("../features/playlists/PlaylistDetail", () => ({
 vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import { allowSlowAppMounts } from "../test/appMount";
 import { albumPath, artistPath, playlistPath } from "../lib/routes";
-import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { usePlaylistSessionStore } from "../store/playlistSessionStore";
+import { allowSlowAppMounts } from "../test/appMount";
+import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 
 allowSlowAppMounts();
@@ -90,10 +82,12 @@ const BENIGN = ["AC/DC", "Sigur Rós", "a b", "#1 Record", "P!nk", "a&b", "中�
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
 }
 
 async function seedAlbum(id: string) {
@@ -169,10 +163,7 @@ describe("the album route resolves the id the path was built from", () => {
     await seedAlbum("srv-a:al b");
     mountAt(albumPath("srv-a:al%20b"));
 
-    expect(await screen.findByTestId("album-detail")).toHaveAttribute(
-      "data-album-id",
-      "srv-a:al%20b",
-    );
+    expect(await screen.findByTestId("album-detail")).toHaveAttribute("data-album-id", "srv-a:al%20b");
   });
 });
 

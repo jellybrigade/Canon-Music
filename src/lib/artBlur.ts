@@ -2,7 +2,7 @@
 // repaint (expensive on WebKitGTK); blur once here at a tiny canvas size and let CSS scale it up.
 
 import * as StackBlur from "stackblur-canvas";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { boundedNativeFetch } from "../clients/boundedFetch";
 import { cappedSet } from "./boundedCache";
 
 // Small enough that StackBlur runs in well under a millisecond, large enough
@@ -82,7 +82,7 @@ function renderBlurredDataUrl(img: HTMLImageElement): string | null {
 async function renderViaProxyFetch(imageUrl: string): Promise<string | null> {
   let objectUrl: string | null = null;
   try {
-    const res = await tauriFetch(imageUrl);
+    const res = await boundedNativeFetch(imageUrl);
     if (!res.ok) return null;
     const blob = await res.blob();
     objectUrl = URL.createObjectURL(blob);

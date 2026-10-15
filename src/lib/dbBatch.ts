@@ -1,4 +1,4 @@
-import Database from "@tauri-apps/plugin-sql";
+import type Database from "@tauri-apps/plugin-sql";
 
 // tauri-plugin-sql's pool has no connection affinity, so BEGIN/COMMIT across two
 // execute() calls can silently no-op; batch into multi-row statements instead.
@@ -38,7 +38,9 @@ export async function executeIdChunks(
     const sql = buildSql(placeholders);
     if (first) {
       if (/\bnot\s+in\b/i.test(sql)) {
-        throw new Error("executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep");
+        throw new Error(
+          "executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep",
+        );
       }
       first = false;
     }

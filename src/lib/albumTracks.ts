@@ -1,8 +1,8 @@
-import { getDb } from "../db";
 import type { NavidromeCredential } from "../clients/navidromeUrls";
-import type { Server } from "../types/server";
+import { getDb } from "../db";
 import { syncAlbumTracks } from "../features/sync/syncTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import type { Server } from "../types/server";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "./replayGainRow";
 
 export interface AlbumTrackRow extends ReplayGainColumns {
@@ -30,18 +30,14 @@ async function readMirrored(albumDbId: string, serverId: string): Promise<AlbumT
     `SELECT t.id, t.title, t.artist, t.duration, ${REPLAY_GAIN_COLUMNS}
      FROM tracks t WHERE t.album_id = ? AND t.server_id = ?
      ORDER BY t.disc_number, t.track_number`,
-    [albumDbId, serverId]
+    [albumDbId, serverId],
   );
 }
 
 /**
  * Pull the album's tracks from the server, sharing any fetch already running for it.
  */
-export function fetchAlbumTracks(
-  server: Server,
-  credential: NavidromeCredential,
-  albumDbId: string
-): Promise<void> {
+export function fetchAlbumTracks(server: Server, credential: NavidromeCredential, albumDbId: string): Promise<void> {
   reportedEmpty.delete(albumDbId);
   let fetch = inFlight.get(albumDbId);
   if (!fetch) {
@@ -63,7 +59,7 @@ export function fetchAlbumTracks(
 export async function loadAlbumTracks(
   server: Server,
   credential: NavidromeCredential,
-  albumDbId: string
+  albumDbId: string,
 ): Promise<AlbumTrackRow[]> {
   const mirrored = await readMirrored(albumDbId, server.id);
   if (mirrored.length > 0 || reportedEmpty.has(albumDbId)) return mirrored;
@@ -76,7 +72,7 @@ export async function loadAlbumTracks(
 export async function loadAlbumTracksForPlay(
   server: Server,
   credential: NavidromeCredential,
-  album: { id: string; name: string }
+  album: { id: string; name: string },
 ): Promise<AlbumTrackRow[]> {
   const { report } = useAlbumTracksNoticeStore.getState();
   try {

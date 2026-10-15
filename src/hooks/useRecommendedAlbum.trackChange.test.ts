@@ -8,9 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { getDb } from "../db";
 import { useRecommendedAlbum } from "./useRecommendedAlbum";
 
@@ -35,7 +35,12 @@ beforeEach(() => {
   const select = vi
     .fn()
     .mockResolvedValueOnce([row("srv-a:rec1")])
-    .mockImplementationOnce(() => new Promise(resolve => { resolveSecond = resolve; }));
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSecond = resolve;
+        }),
+    );
   vi.mocked(getDb).mockResolvedValue({ select } as unknown as Awaited<ReturnType<typeof getDb>>);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });

@@ -1,15 +1,15 @@
+import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import {
   noteTransportTimeout,
   recordTransportSuccess,
-  transportStallNotice,
   TransportStalledError,
+  transportStallNotice,
 } from "../lib/transportHealth";
-import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
-import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
+import { boundedFetch, REQUEST_TIMEOUT_MS } from "./boundedFetch";
+import { buildAuthParams, type NavidromeCredential, normalizeUrl } from "./navidromeUrls";
 
 // Stuck DNS resolution (stale systemd-resolved entry) hangs fetch ~25s then rejects
 // with an opaque "Load failed"; cap well under that and retry instead of aborting.
-const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 400;
 
@@ -25,12 +25,7 @@ function isRetriableStatus(status: number): boolean {
 
 /** A timed-out request may have applied before the response was lost, so retrying these would
  *  scrobble twice or duplicate a playlist; everything else is a read or an idempotent write. */
-const NON_IDEMPOTENT_ENDPOINTS = new Set([
-  "scrobble",
-  "createPlaylist",
-  "updatePlaylist",
-  "deletePlaylist",
-]);
+const NON_IDEMPOTENT_ENDPOINTS = new Set(["scrobble", "createPlaylist", "updatePlaylist", "deletePlaylist"]);
 
 function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean {
   // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
@@ -46,37 +41,6 @@ function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean
  *  network is fixed, so it always gets its ladder. */
 function isLivenessCheck(endpoint: string): boolean {
   return endpoint.replace(/\.view$/, "") === "ping";
-}
-
-async function fetchWithTimeout(url: string, body: string, signal?: AbortSignal): Promise<Response> {
-  // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
-  // the older WebKitGTK builds Canon still runs against on Linux.
-  const controller = new AbortController();
-  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const abortFromCaller = () => controller.abort();
-  signal?.addEventListener("abort", abortFromCaller);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      signal: controller.signal,
-    });
-    // Rearm the abort across the body read: headers arriving doesn't bound the transfer, and
-    // a stall mid-body would otherwise hang `res.json()` forever.
-    clearTimeout(timer);
-    timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const text = await res.text();
-    // A null-body status (204/304) rejects a non-null body, and "" is non-null.
-    return new Response(text === "" ? null : text, {
-      status: res.status,
-      statusText: res.statusText,
-      headers: res.headers,
-    });
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", abortFromCaller);
-  }
 }
 
 function isTimeout(err: unknown): boolean {
@@ -96,7 +60,7 @@ export async function apiPost(
   endpoint: string,
   params: URLSearchParams,
   altUrl?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Response> {
   const body = params.toString();
   const server = normalizeUrl(baseUrl);
@@ -124,7 +88,12 @@ export async function apiPost(
       // Not `throwIfAborted`, which older WebKitGTK builds lack.
       if (signal?.aborted) throw new DOMException(`${endpoint} withdrawn`, "AbortError");
       try {
-        const res = await fetchWithTimeout(url, body, signal);
+        const res = await boundedFetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          signal,
+        });
         recordTransportSuccess(server);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
@@ -151,7 +120,7 @@ export async function apiPost(
   const cause = lastWasTimeout && retriable ? await noteTransportTimeout(server) : null;
   throw new Error(
     `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
-      (cause ? `. ${cause}` : "")
+      (cause ? `. ${cause}` : ""),
   );
 }
 
@@ -172,7 +141,7 @@ export function checkEnvelope(
   baseUrl: string,
   endpoint: string,
   response: SubsonicEnvelope,
-  fallbackMessage?: string
+  fallbackMessage?: string,
 ): void {
   noteEnvelope(baseUrl, response);
   if (response.status !== "ok") {
@@ -187,7 +156,7 @@ export async function callSubsonicVoid(
   endpoint: string,
   extraParams: Record<string, string>,
   altUrl?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);

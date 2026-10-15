@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
-import type { AlbumRow } from "../types/library";
-import { QK } from "../lib/queryKeys";
 import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
+import { QK } from "../lib/queryKeys";
+import type { AlbumRow } from "../types/library";
 
 export function useRecentlyReleasedAlbums(limit = 20) {
   return useQuery<AlbumRow[]>({
@@ -15,7 +15,7 @@ export function useRecentlyReleasedAlbums(limit = 20) {
          WHERE year IS NOT NULL
          ORDER BY year DESC, name
          LIMIT ?`,
-        [limit]
+        [limit],
       );
     },
     staleTime: HOME_STALE_TIME,

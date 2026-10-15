@@ -1,16 +1,27 @@
-import { getDb } from "../../db";
-import type { Server } from "../../types/server";
-import { fetchAllAlbums, fetchAlbumTracks, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus } from "../../clients/navidrome";
+import {
+  fetchAlbumTracks,
+  fetchAllAlbums,
+  fetchAndStoreOpenSubsonicExtensions,
+  fetchScanStatus,
+} from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
-import { scanForIssues } from "../tags/lib/tagIssues";
-import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
+import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { TransportStalledError } from "../../lib/transportHealth";
-import { mirroredTrackIdsStillResolve, sameValue, scanIdentity, watermarkMoved, type ServerWatermark } from "./syncWatermark";
-import { pruneAlbums, pruneAlbumTracks } from "./syncPrune";
-import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
+import type { Server } from "../../types/server";
+import { scanForIssues } from "../tags/lib/tagIssues";
+import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
 import { syncLoved } from "./syncLoved";
 import { syncPlaylists } from "./syncPlaylists";
+import { pruneAlbums, pruneAlbumTracks } from "./syncPrune";
+import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
+import {
+  mirroredTrackIdsStillResolve,
+  type ServerWatermark,
+  sameValue,
+  scanIdentity,
+  watermarkMoved,
+} from "./syncWatermark";
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -65,7 +76,7 @@ export async function syncLibrary(
   fetchAndStoreOpenSubsonicExtensions(server.url, server.username, credential, server.id, altUrl).catch(
     (err: unknown) => {
       console.error("sync: failed to fetch OpenSubsonic extensions:", err);
-    }
+    },
   );
 
   // Fatal by design: without the album list there is no sync to run. Scan status is
@@ -84,10 +95,9 @@ export async function syncLibrary(
   // version bump is exactly when a migration rewrites ids, and a scan stamp or song count
   // that moved means rows were rewritten under album metadata that can look unchanged.
   const storedWatermark = (
-    await db.select<ServerWatermark[]>(
-      "SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?",
-      [server.id]
-    )
+    await db.select<ServerWatermark[]>("SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?", [
+      server.id,
+    ])
   )[0];
   const serverIdentityMoved = watermarkMoved(storedWatermark, scanStatus);
   // The caller's flag comes first, not a cleared watermark: `watermarkMoved` reads "no scan
@@ -124,19 +134,18 @@ export async function syncLibrary(
     db.select<ExistingAlbumRow[]>(
       `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, tracks_read_scan
        FROM albums WHERE server_id = ?`,
-      [server.id]
+      [server.id],
     ),
-    db.select<TrackCountRow[]>(
-      "SELECT album_id, COUNT(*) AS c FROM tracks WHERE server_id = ? GROUP BY album_id",
-      [server.id]
-    ),
+    db.select<TrackCountRow[]>("SELECT album_id, COUNT(*) AS c FROM tracks WHERE server_id = ? GROUP BY album_id", [
+      server.id,
+    ]),
   ]);
   const existingAlbumById = new Map(existingAlbumRows.map((r) => [r.id, r]));
   const trackCountByAlbumId = new Map(trackCountRows.map((r) => [r.album_id, r.c]));
 
   const albumUpsertParams: unknown[][] = [];
   const albumsNeedingTracks: {
-    album: typeof albums[number];
+    album: (typeof albums)[number];
     albumDbId: string;
     existingTrackCount: number;
   }[] = [];
@@ -162,8 +171,17 @@ export async function syncLibrary(
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
     const row = [
-      albumDbId, server.id, server.type, album.name, album.artist, album.year ?? null,
-      album.coverArt ?? null, album.created ?? null, album.playCount ?? 0, album.played ?? null, releaseType,
+      albumDbId,
+      server.id,
+      server.type,
+      album.name,
+      album.artist,
+      album.year ?? null,
+      album.coverArt ?? null,
+      album.created ?? null,
+      album.playCount ?? 0,
+      album.played ?? null,
+      releaseType,
     ];
 
     if (existing === undefined) {
@@ -204,7 +222,9 @@ export async function syncLibrary(
     albumUpsertParams,
     "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     11,
-    (placeholders) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type)
+    (
+      placeholders,
+    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -216,7 +236,7 @@ export async function syncLibrary(
          navidrome_created = excluded.navidrome_created,
          play_count = excluded.play_count,
          played_at = excluded.played_at,
-         release_type = excluded.release_type`
+         release_type = excluded.release_type`,
   );
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
@@ -253,7 +273,7 @@ export async function syncLibrary(
   let attemptedCount = 0;
   const readAlbumIds: string[] = [];
   for (const { album, albumDbId, existingTrackCount } of albumsNeedingTracks) {
-    let tracks;
+    let tracks: Awaited<ReturnType<typeof fetchAlbumTracks>>;
     attemptedCount++;
     try {
       tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);
@@ -269,7 +289,7 @@ export async function syncLibrary(
       consecutiveFailures++;
       if (consecutiveFailures >= CONSECUTIVE_FAILURE_LIMIT) {
         console.error(
-          `sync: ${consecutiveFailures} album track fetches failed in a row, stopping the album pass early`
+          `sync: ${consecutiveFailures} album track fetches failed in a row, stopping the album pass early`,
         );
         albumTracksIncomplete = true;
         break;
@@ -291,7 +311,7 @@ export async function syncLibrary(
       prunedTracks += await pruneAlbumTracks(
         db,
         albumDbId,
-        tracks.map((t) => `${server.id}:${t.id}`)
+        tracks.map((t) => `${server.id}:${t.id}`),
       );
     }
     fetchedCount++;
@@ -308,10 +328,10 @@ export async function syncLibrary(
     const chunkSize = SQLITE_MAX_VARIABLES - 1;
     for (let start = 0; start < readAlbumIds.length; start += chunkSize) {
       const chunk = readAlbumIds.slice(start, start + chunkSize);
-      await db.execute(
-        `UPDATE albums SET tracks_read_scan = ? WHERE id IN (${chunk.map(() => "?").join(", ")})`,
-        [passIdentity, ...chunk]
-      );
+      await db.execute(`UPDATE albums SET tracks_read_scan = ? WHERE id IN (${chunk.map(() => "?").join(", ")})`, [
+        passIdentity,
+        ...chunk,
+      ]);
     }
   }
 
@@ -329,7 +349,7 @@ export async function syncLibrary(
        SELECT lower(hex(randomblob(8))), ?, ?, artist, COUNT(DISTINCT id), datetime('now')
        FROM albums WHERE server_id = ? AND artist IS NOT NULL AND artist != ''
        GROUP BY artist`,
-      [server.id, server.type, server.id]
+      [server.id, server.type, server.id],
     );
   }
 
@@ -345,10 +365,12 @@ export async function syncLibrary(
   // broke early or lost albums to failures would tell the next sync those albums were read
   // when they were not, and the evidence that they need re-reading is gone.
   if (scanStatus !== null && serverIdentityMoved && !albumTracksIncomplete && failedAlbums === 0) {
-    await db.execute(
-      "UPDATE servers SET last_scan_at = ?, server_version = ?, song_count = ? WHERE id = ?",
-      [scanStatus.lastScan, scanStatus.serverVersion, scanStatus.songCount, server.id]
-    );
+    await db.execute("UPDATE servers SET last_scan_at = ?, server_version = ?, song_count = ? WHERE id = ?", [
+      scanStatus.lastScan,
+      scanStatus.serverVersion,
+      scanStatus.songCount,
+      server.id,
+    ]);
   }
 
   const albumsChanged = albumUpsertParams.length > 0 || prunedAlbums > 0;

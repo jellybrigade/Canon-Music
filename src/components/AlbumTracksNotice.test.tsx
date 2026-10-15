@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+
 import { act, fireEvent, render } from "@testing-library/react";
-import { AlbumTracksNotice } from "./AlbumTracksNotice";
+import { beforeEach, describe, expect, it } from "vitest";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
+import { AlbumTracksNotice } from "./AlbumTracksNotice";
 
 beforeEach(() => {
   useAlbumTracksNoticeStore.setState({ notice: null });
@@ -17,7 +18,9 @@ describe("AlbumTracksNotice", () => {
   it("shows why an album click played nothing", () => {
     const { container } = render(<AlbumTracksNotice abovePlayer={false} />);
     act(() => useAlbumTracksNoticeStore.getState().report("Couldn't get the tracks for Blue Train: offline"));
-    expect(container.querySelector(".normalizing-bar")?.textContent).toContain("Couldn't get the tracks for Blue Train: offline");
+    expect(container.querySelector(".normalizing-bar")?.textContent).toContain(
+      "Couldn't get the tracks for Blue Train: offline",
+    );
   });
 
   it("goes away when dismissed", () => {

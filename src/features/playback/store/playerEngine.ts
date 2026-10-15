@@ -1,12 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
+import type { PlayerPersistence } from "./playerPersistence";
+import { runtime } from "./playerRuntime";
+import { type CurrentTrack, type PlayerGet, type PlayerSet, plainError } from "./playerTypes";
+import type { PlayerWaveform } from "./playerWaveform";
 import { buildShuffleOrder, resolveTrack } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
-import { runtime } from "./playerRuntime";
-import type { PlayerPersistence } from "./playerPersistence";
-import type { PlayerWaveform } from "./playerWaveform";
-import { plainError, type CurrentTrack, type PlayerGet, type PlayerSet } from "./playerTypes";
 
 const BUFFER_DEADLINE_MS = 30000;
 
@@ -14,14 +14,18 @@ export function createPlayerEngine(
   set: PlayerSet,
   get: PlayerGet,
   { persistQueueState }: PlayerPersistence,
-  { preloadWaveforms, fetchWaveform }: PlayerWaveform
+  { preloadWaveforms, fetchWaveform }: PlayerWaveform,
 ) {
   // Rust emits this immediately after sink.append(source): earliest, most accurate signal
   // that the fetch/probe wait is over. The ticker's position check below backstops paths with no format event.
   void listen<{ sample_rate: number; channels: number; codec: string }>("audio-format", (event) => {
     clearBufferDeadline();
     set({
-      audioFormat: { sampleRate: event.payload.sample_rate, channels: event.payload.channels, codec: event.payload.codec },
+      audioFormat: {
+        sampleRate: event.payload.sample_rate,
+        channels: event.payload.channels,
+        codec: event.payload.codec,
+      },
       isBuffering: false,
     });
   });
@@ -92,9 +96,10 @@ export function createPlayerEngine(
         newShuffleOrder = carried;
       } else {
         const anchorIdx = enqueued ? queue.findIndex((t) => t.id === enqueued.track.id) : 0;
-        newShuffleOrder = isShuffled && queue.length > 1
-          ? buildShuffleOrder(queue.length, anchorIdx >= 0 ? anchorIdx : 0)
-          : shuffleOrder;
+        newShuffleOrder =
+          isShuffled && queue.length > 1
+            ? buildShuffleOrder(queue.length, anchorIdx >= 0 ? anchorIdx : 0)
+            : shuffleOrder;
       }
       newQueueIndex = 0;
       nextTrack = resolveTrack(queue, newShuffleOrder, isShuffled, newQueueIndex);
@@ -175,7 +180,8 @@ export function createPlayerEngine(
     let hasAdvanced = false;
     runtime.elapsedInterval = setInterval(() => {
       const genAtPoll = runtime.seekGen;
-      runtime.activeTarget.getPosition()
+      runtime.activeTarget
+        .getPosition()
         .then((pos) => {
           // A seek landed while this poll was in flight, so `pos` predates it. Dropping the
           // whole tick (not just the set) keeps the stall watchdog and the natural-end check
@@ -206,19 +212,32 @@ export function createPlayerEngine(
             } else if (stallSince !== null && Date.now() - stallSince >= 5000) {
               stallSince = null;
               if (streamUrl && currentTrack) {
-                void runtime.activeTarget.load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null).then(() => {
-                  if (get().streamUrl !== streamUrl) return;
-                  // The stream is being fetched from scratch again, so the wait is real.
-                  set({ isPlaying: true, isLoading: false, isBuffering: true });
-                  startElapsedTimer();
-                }).catch(() => {});
+                void runtime.activeTarget
+                  .load(streamUrl, currentTrack, currentTrack.coverArtUrl ?? null)
+                  .then(() => {
+                    if (get().streamUrl !== streamUrl) return;
+                    // The stream is being fetched from scratch again, so the wait is real.
+                    set({ isPlaying: true, isLoading: false, isBuffering: true });
+                    startElapsedTimer();
+                  })
+                  .catch(() => {});
               }
             }
           } else {
             stallPos = null;
             stallSince = null;
           }
-          const { queue, queueIndex, streamUrlFor, isShuffled, shuffleOrder, gapless, repeat, consumeMode, sleepTimerEndOfTrack } = get();
+          const {
+            queue,
+            queueIndex,
+            streamUrlFor,
+            isShuffled,
+            shuffleOrder,
+            gapless,
+            repeat,
+            consumeMode,
+            sleepTimerEndOfTrack,
+          } = get();
           const duration = currentTrack?.duration ?? null;
           const nextPosition = queueIndex + 1;
           const wrapping = nextPosition >= queue.length;
@@ -249,9 +268,8 @@ export function createPlayerEngine(
             } else {
               // A repeat-all loop-back under shuffle installs a fresh order; the opening track is
               // position 0 of that order. rodio can't un-append, so decide the order here and carry it to track-advanced.
-              const wrapOrder = canGapless && wrapping && isShuffled && queue.length > 1
-                ? buildShuffleOrder(queue.length, -1)
-                : null;
+              const wrapOrder =
+                canGapless && wrapping && isShuffled && queue.length > 1 ? buildShuffleOrder(queue.length, -1) : null;
               const effectiveNext = wrapping ? 0 : nextPosition;
               const nextTrack = resolveTrack(queue, wrapOrder ?? shuffleOrder, isShuffled, effectiveNext);
               if (nextTrack) {
@@ -261,7 +279,12 @@ export function createPlayerEngine(
                   // is already claimed. Re-recording gaplessEnqueued would name a track the engine never received.
                   if (!runtime.gaplessActive) {
                     runtime.gaplessActive = true;
-                    runtime.gaplessEnqueued = { track: nextTrack, position: effectiveNext, wraps: wrapping, ...(wrapOrder ? { wrapOrder } : {}) };
+                    runtime.gaplessEnqueued = {
+                      track: nextTrack,
+                      position: effectiveNext,
+                      wraps: wrapping,
+                      ...(wrapOrder ? { wrapOrder } : {}),
+                    };
                     void invoke<void>("audio_enqueue_next", { url: nextUrl }).catch(() => {
                       runtime.gaplessActive = false;
                       runtime.gaplessEnqueued = null;
@@ -280,7 +303,14 @@ export function createPlayerEngine(
           }
           // Fallback: advance when pos reaches end in case track-ended doesn't fire (suppressed
           // for gapless/DLNA). Requires isPlaying, or position drift while paused (e.g. the seek-while-paused bug) skips a track.
-          if (isPlaying && !castDevice && !runtime.gaplessActive && duration && pos >= duration - 0.25 && runtime.naturalEndFiredForIndex !== queueIndex) {
+          if (
+            isPlaying &&
+            !castDevice &&
+            !runtime.gaplessActive &&
+            duration &&
+            pos >= duration - 0.25 &&
+            runtime.naturalEndFiredForIndex !== queueIndex
+          ) {
             runtime.naturalEndFiredForIndex = queueIndex;
             void get().next(true);
           }
@@ -303,7 +333,13 @@ export function createPlayerEngine(
     const retryDelays = [2000, 4000, 8000, 16000];
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const unlisten = await listen<{ url: string; message: string; detail?: string; retryable?: boolean; subsonicCode?: number | null }>("audio-error", (event) => {
+    const unlisten = await listen<{
+      url: string;
+      message: string;
+      detail?: string;
+      retryable?: boolean;
+      subsonicCode?: number | null;
+    }>("audio-error", (event) => {
       if (event.payload.url !== url) return;
       if (get().streamUrl !== url) return;
 
@@ -360,7 +396,18 @@ export function createPlayerEngine(
     runtime.gaplessActive = false;
     runtime.gaplessEnqueued = null;
     runtime.pauseRequestedDuringLoad = false;
-    set({ currentTrack: track, streamUrl: url, isPlaying: false, isLoading: true, isBuffering: true, error: null, elapsed: 0, playStartedAt: Date.now(), waveformPeaks: null, audioFormat: null });
+    set({
+      currentTrack: track,
+      streamUrl: url,
+      isPlaying: false,
+      isLoading: true,
+      isBuffering: true,
+      error: null,
+      elapsed: 0,
+      playStartedAt: Date.now(),
+      waveformPeaks: null,
+      audioFormat: null,
+    });
     stopElapsedTimer();
     armBufferDeadline(url);
 
@@ -377,7 +424,11 @@ export function createPlayerEngine(
         runtime.pauseRequestedDuringLoad = false;
         // isBuffering deliberately not re-asserted: on a prefetch-cache hit, audio-format may
         // already have landed, and setting it back to true would leave it stuck until the ticker cleared it.
-        set(get().castDevice ? { isPlaying: !paused, isLoading: false, isBuffering: false } : { isPlaying: !paused, isLoading: false });
+        set(
+          get().castDevice
+            ? { isPlaying: !paused, isLoading: false, isBuffering: false }
+            : { isPlaying: !paused, isLoading: false },
+        );
         const { volume, replayGainMode, replayGainPreAmp, replayGainFallbackGain, castDevice } = get();
         runtime.currentReplayGainLinear = castDevice
           ? 1.0
@@ -395,7 +446,12 @@ export function createPlayerEngine(
         // preloadWaveforms is deliberately not called here, see the elapsed ticker.
       } catch (e) {
         if (get().currentTrack?.id !== track.id) return;
-        set({ isPlaying: false, isLoading: false, isBuffering: false, error: plainError(e instanceof Error ? e.message : String(e)) });
+        set({
+          isPlaying: false,
+          isLoading: false,
+          isBuffering: false,
+          error: plainError(e instanceof Error ? e.message : String(e)),
+        });
       }
     };
 

@@ -2,9 +2,9 @@
 // chosen 0 (Raw cast quality, staleness, a zero threshold) reads as falsy and snaps to the
 // default, and a truthy check before the parse lets NaN through. Every parse with a fallback goes
 // through `parseNumberOr` instead.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -25,13 +25,10 @@ function sourceFiles(dir: string): string[] {
 const PARSE_CALL = String.raw`\b(?:Number|parseInt|parseFloat)\((?:[^()]|\((?:[^()]|\([^()]*\))*\))*\)`;
 // `parse(x) || n` eats a zero; `x ? parse(x) : n` passes NaN through for unreadable text.
 // `\s` spans newlines, so a fallback wrapped onto the next line is still seen.
-const FALLBACK_SHAPES = [
-  new RegExp(`${PARSE_CALL}\\s*\\|\\|`, "g"),
-  new RegExp(`\\?\\s*${PARSE_CALL}\\s*:`, "g"),
-];
+const FALLBACK_SHAPES = [new RegExp(`${PARSE_CALL}\\s*\\|\\|`, "g"), new RegExp(`\\?\\s*${PARSE_CALL}\\s*:`, "g")];
 
 /** 1-based lines where a parsed number gets an unsafe fallback; comment lines are blanked first. */
-export function fallbackLines(source: string): number[] {
+function fallbackLines(source: string): number[] {
   const code = source
     .split("\n")
     .map((line) => (/^\s*(\/\/|\/?\*)/.test(line) ? "" : line))

@@ -3,6 +3,6 @@ import { isCredentialRejected, subscribeCredentialRejections } from "../lib/cred
 
 export function useCredentialRejected(baseUrl: string | undefined): boolean {
   return useSyncExternalStore(subscribeCredentialRejections, () =>
-    baseUrl === undefined ? false : isCredentialRejected(baseUrl)
+    baseUrl === undefined ? false : isCredentialRejected(baseUrl),
   );
 }

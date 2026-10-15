@@ -8,7 +8,7 @@
 // Regressions pinned: known-issues "A 'the thing just finished' test built only from state that
 // restore also produces fires at startup" (hasPlayedRef, ANDed into *both* wasAtEnd sites, and
 // subscribed rather than selected so play/pause does not re-render the effect).
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
@@ -19,13 +19,13 @@ vi.mock("../../../clients/lastfm", () => ({
   fetchSimilarTracks: vi.fn(async () => []),
 }));
 
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getDb } from "../../../db";
-import { getRadioCandidates } from "../lib/radio";
-import type { RadioCandidate } from "../lib/radio";
-import { usePlayerStore } from "../../playback/store/player";
-import { type CurrentTrack } from "../../playback/store/playerTypes";
 import { trackRenders } from "../../../test/perf";
+import { usePlayerStore } from "../../playback/store/player";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
+import type { RadioCandidate } from "../lib/radio";
+import { getRadioCandidates } from "../lib/radio";
 import { useRadio } from "./useRadio";
 
 const PICK_ID = "srv:pick";
@@ -171,7 +171,10 @@ describe("useRadio auto-advance", () => {
     // The closure holds isPlaying=false from before the awaits; live state says otherwise.
     let release!: (c: RadioCandidate[]) => void;
     candidatesMock().mockImplementation(
-      () => new Promise<RadioCandidate[]>((resolve) => { release = resolve; })
+      () =>
+        new Promise<RadioCandidate[]>((resolve) => {
+          release = resolve;
+        }),
     );
 
     renderHook(() => useRadio());
@@ -251,7 +254,10 @@ describe("useRadio auto-advance", () => {
     it("runs one fill at a time while a fill is in flight", async () => {
       const releases: ((c: RadioCandidate[]) => void)[] = [];
       candidatesMock().mockImplementation(
-        () => new Promise<RadioCandidate[]>((resolve) => { releases.push(resolve); })
+        () =>
+          new Promise<RadioCandidate[]>((resolve) => {
+            releases.push(resolve);
+          }),
       );
 
       const { rerender } = renderHook(() => useRadio());
@@ -355,7 +361,12 @@ describe("useRadio auto-advance", () => {
       act(() => {
         // Fresh queue too, otherwise the pick stays excluded by queue membership rather than
         // by the session memory this test is about.
-        usePlayerStore.setState({ radioActive: true, queue: [makeTrack("srv:9")], queueIndex: 0, currentTrack: makeTrack("srv:9") });
+        usePlayerStore.setState({
+          radioActive: true,
+          queue: [makeTrack("srv:9")],
+          queueIndex: 0,
+          currentTrack: makeTrack("srv:9"),
+        });
       });
       rerender();
 
@@ -378,10 +389,7 @@ describe("useRadio auto-advance", () => {
     it("ranks a just-played artist below a lower-scoring fresh one", async () => {
       serveCandidates(
         [candidate(PICK_ID, 1, "Other", "srv:alb2")],
-        [
-          candidate("srv:same-artist", 1, "Other", "srv:alb3"),
-          candidate("srv:fresh", 0.5, "Fresh", "srv:alb4"),
-        ]
+        [candidate("srv:same-artist", 1, "Other", "srv:alb3"), candidate("srv:fresh", 0.5, "Fresh", "srv:alb4")],
       );
       renderHook(() => useRadio());
 
@@ -393,10 +401,7 @@ describe("useRadio auto-advance", () => {
       usePlayerStore.setState({ radioMode: "same-artist" });
       serveCandidates(
         [candidate(PICK_ID, 1, "Other", "srv:alb2")],
-        [
-          candidate("srv:same-artist", 1, "Other", "srv:alb3"),
-          candidate("srv:fresh", 0.5, "Fresh", "srv:alb4"),
-        ]
+        [candidate("srv:same-artist", 1, "Other", "srv:alb3"), candidate("srv:fresh", 0.5, "Fresh", "srv:alb4")],
       );
       renderHook(() => useRadio());
 
@@ -408,7 +413,7 @@ describe("useRadio auto-advance", () => {
       // Soft penalty, not a filter: a thin pool must not starve into a dead end.
       serveCandidates(
         [candidate(PICK_ID, 1, "Other", "srv:alb2")],
-        [candidate("srv:same-artist", 1, "Other", "srv:alb2")]
+        [candidate("srv:same-artist", 1, "Other", "srv:alb2")],
       );
       renderHook(() => useRadio());
 

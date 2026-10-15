@@ -3,15 +3,15 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor, act, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { Profiler } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
+import { __resetSettingCache } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../../playback/store/player";
-import { type CurrentTrack } from "../../playback/store/playerTypes";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
-import { __resetSettingCache } from "../../../hooks/useSetting";
 import { RadioButton } from "./RadioButton";
 
 let db: FakeDatabase;
@@ -68,8 +68,9 @@ describe("RadioButton", () => {
     await mount();
 
     fireEvent.click(toggle());
-    const sameArtist = Array.from(document.querySelectorAll<HTMLButtonElement>(".radio-menu-item"))
-      .find((item) => item.textContent === "Same Artist")!;
+    const sameArtist = Array.from(document.querySelectorAll<HTMLButtonElement>(".radio-menu-item")).find(
+      (item) => item.textContent === "Same Artist",
+    )!;
     fireEvent.click(sameArtist);
 
     const pending = useRadioStartStore.getState().pending;
@@ -113,9 +114,14 @@ describe("RadioButton", () => {
   it("does not re-render on playback ticks", async () => {
     let commits = 0;
     render(
-      <Profiler id="radio" onRender={() => { commits++; }}>
+      <Profiler
+        id="radio"
+        onRender={() => {
+          commits++;
+        }}
+      >
         <RadioButton />
-      </Profiler>
+      </Profiler>,
     );
     await waitFor(() => expect(db.selectCount).toBe(1));
     await act(async () => {});

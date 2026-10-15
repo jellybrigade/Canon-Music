@@ -112,7 +112,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    color var(--motion-fast, 120ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
 }
 
 .home-spotlight__open:hover {
@@ -133,7 +135,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: var(--radius-md);
-  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    color var(--motion-fast, 120ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
 }
 
 .home-spotlight__play-icon:hover {

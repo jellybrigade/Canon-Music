@@ -17,7 +17,7 @@ afterEach(() => {
 describe("fetchFanartTvImageByMbid", () => {
   it("returns the artist thumb", async () => {
     vi.mocked(tauriFetch).mockImplementation(async () =>
-      jsonResponse(200, { artistthumb: [{ url: "https://img/thumb.jpg" }] })
+      jsonResponse(200, { artistthumb: [{ url: "https://img/thumb.jpg" }] }),
     );
 
     await expect(fetchFanartTvImageByMbid("mbid-1", "key")).resolves.toBe("https://img/thumb.jpg");

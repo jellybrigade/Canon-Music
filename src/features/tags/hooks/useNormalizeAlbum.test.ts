@@ -7,7 +7,7 @@
  * A claim holding only the latest id lets the same album decrement the pending counter
  * twice, and the PlayerBar's "enriching" count then undercounts or clears early.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../lib/tagNormalize", () => ({
   readNormalizedTags: vi.fn().mockResolvedValue(null),
@@ -17,9 +17,9 @@ vi.mock("../lib/tagNormalize", () => ({
 vi.mock("../../enrichment/hooks/useAlbumIdentity", () => ({ useAlbumIdentity: vi.fn(() => ({ data: null })) }));
 vi.mock("../../../hooks/useSetting", () => ({ useSetting: vi.fn(() => ["30"]) }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { normalizeAlbum } from "../lib/tagNormalize";
 import { useTagsStore } from "../store/tags";
 import { useNormalizeAlbum } from "./useNormalizeAlbum";
@@ -50,10 +50,10 @@ describe("useNormalizeAlbum", () => {
   });
 
   it("counts each album once when the view returns to an album it already normalized", async () => {
-    const { rerender } = renderHook(
-      ({ id }: { id: string }) => useNormalizeAlbum(id, "slowdive", "Souvlaki"),
-      { wrapper, initialProps: { id: "srv-a:alb-1" } }
-    );
+    const { rerender } = renderHook(({ id }: { id: string }) => useNormalizeAlbum(id, "slowdive", "Souvlaki"), {
+      wrapper,
+      initialProps: { id: "srv-a:alb-1" },
+    });
 
     await waitFor(() => expect(useTagsStore.getState().enrichmentPending).toBe(9));
 

@@ -175,8 +175,12 @@
 }
 
 @keyframes progress-slide {
-  0%   { transform: translateX(-150%); }
-  100% { transform: translateX(350%); }
+  0% {
+    transform: translateX(-150%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 .update-prompt-progress-label {

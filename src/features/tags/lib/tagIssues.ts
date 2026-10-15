@@ -12,21 +12,21 @@ export async function scanForIssues(serverId: string): Promise<void> {
          SELECT 1 FROM tracks t
          WHERE t.id = tag_issues.track_id AND t.server_id = ?
        )`,
-    [serverId]
+    [serverId],
   );
 
   await db.execute(
     `INSERT OR IGNORE INTO tag_issues (track_id, issue_type, details)
      SELECT id, 'missing_genre', 'Track has no genre tag'
      FROM tracks WHERE server_id = ? AND (genre IS NULL OR genre = '')`,
-    [serverId]
+    [serverId],
   );
 
   await db.execute(
     `INSERT OR IGNORE INTO tag_issues (track_id, issue_type, details)
      SELECT id, 'missing_artist', 'Track has no artist tag'
      FROM tracks WHERE server_id = ? AND (artist IS NULL OR artist = '')`,
-    [serverId]
+    [serverId],
   );
 
   await db.execute(
@@ -34,7 +34,7 @@ export async function scanForIssues(serverId: string): Promise<void> {
      SELECT id, 'suspicious_genre', 'Genre looks like a URL or is unusually long'
      FROM tracks WHERE server_id = ? AND genre IS NOT NULL
        AND (genre LIKE 'http%' OR LENGTH(genre) > 60)`,
-    [serverId]
+    [serverId],
   );
 
   // Both grouping queries below were measured against a 169k-track library: the
@@ -50,7 +50,7 @@ export async function scanForIssues(serverId: string): Promise<void> {
          GROUP BY album_id
          HAVING COUNT(DISTINCT COALESCE(artist, '')) > 1
        )`,
-    [serverId, serverId]
+    [serverId, serverId],
   );
 
   await db.execute(
@@ -70,6 +70,6 @@ export async function scanForIssues(serverId: string): Promise<void> {
              HAVING COUNT(*) > 1
            )
        )`,
-    [serverId, serverId, serverId]
+    [serverId, serverId, serverId],
   );
 }

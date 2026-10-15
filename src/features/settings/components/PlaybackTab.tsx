@@ -1,19 +1,19 @@
 import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
+import { usePlayerStore } from "../../playback/store/player";
 import { RADIO_START_ACTION_SETTING } from "../../radio/hooks/useStartRadio";
+import { SegToggle } from "../../tags/components/TagsViewHelpers";
 import { useReplayGainCoverage } from "../hooks/useReplayGainCoverage";
 import { describeReplayGainCoverage } from "../lib/replaygainCoverage";
-import { usePlayerStore } from "../../playback/store/player";
 import { SettingRow } from "./SettingRow";
-import { SegToggle } from "../../tags/components/TagsViewHelpers";
 import "../../tags/components/TagsView.css";
 
 const RADIO_SIMILARITY_STEPS = [
-  { label: "Narrow",   value: "0"    },
-  { label: "Tight",    value: "0.25" },
-  { label: "Balanced", value: "0.5"  },
-  { label: "Broad",    value: "0.75" },
-  { label: "Wide",     value: "1"    },
+  { label: "Narrow", value: "0" },
+  { label: "Tight", value: "0.25" },
+  { label: "Balanced", value: "0.5" },
+  { label: "Broad", value: "0.75" },
+  { label: "Wide", value: "1" },
 ];
 
 interface Props {
@@ -67,11 +67,11 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
   const [showTrayIcon, setShowTrayIcon] = useBoolSetting("tray.show_icon", false);
   const [closeToTray, setCloseToTray] = useBoolSetting("tray.close_to_tray", false);
 
-  const availableRenderers  = usePlayerStore((s) => s.availableRenderers);
+  const availableRenderers = usePlayerStore((s) => s.availableRenderers);
   const isScanningRenderers = usePlayerStore((s) => s.isScanningRenderers);
-  const scanRenderers       = usePlayerStore((s) => s.scanRenderers);
-  const castDevice          = usePlayerStore((s) => s.castDevice);
-  const setCastDevice       = usePlayerStore((s) => s.setCastDevice);
+  const scanRenderers = usePlayerStore((s) => s.scanRenderers);
+  const castDevice = usePlayerStore((s) => s.castDevice);
+  const setCastDevice = usePlayerStore((s) => s.setCastDevice);
   const [scanRan, setScanRan] = useState(false);
 
   const fl = searchQuery.toLowerCase().trim();
@@ -108,11 +108,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             title="Restore queue on startup"
             description="Restores your last queue and position when Canon starts. Playback does not resume automatically."
           >
-            <input
-              type="checkbox"
-              checked={restoreQueue}
-              onChange={(e) => void setRestoreQueue(e.target.checked)}
-            />
+            <input type="checkbox" checked={restoreQueue} onChange={(e) => void setRestoreQueue(e.target.checked)} />
           </SettingRow>
           <SettingRow
             title="Max queue size"
@@ -130,11 +126,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             </select>
           </SettingRow>
           <SettingRow title="Play album action" description="What clicking ▶ Play Album does to the current queue.">
-            <select
-              value={playAction}
-              onChange={(e) => void setPlayAction(e.target.value)}
-              className="settings-select"
-            >
+            <select value={playAction} onChange={(e) => void setPlayAction(e.target.value)} className="settings-select">
               <option value="replace">Replace queue</option>
               <option value="queue_next">Play next</option>
               <option value="queue_last">Add to end</option>
@@ -161,11 +153,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             description="When your queue runs out, Canon automatically starts radio from the last track that played."
           >
             <label className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={radioOnQueueEnd}
-                onChange={() => void toggleRadioOnQueueEnd()}
-              />
+              <input type="checkbox" checked={radioOnQueueEnd} onChange={() => void toggleRadioOnQueueEnd()} />
               <span className="toggle-track" />
             </label>
           </SettingRow>
@@ -190,11 +178,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             title="Gapless playback"
             description="Eliminates silence between tracks by queuing the next track before the current one ends. Disabled during casting, repeat-one, and consume mode."
           >
-            <input
-              type="checkbox"
-              checked={gapless}
-              onChange={() => void toggleGapless()}
-            />
+            <input type="checkbox" checked={gapless} onChange={() => void toggleGapless()} />
           </SettingRow>
         </section>
       )}
@@ -244,7 +228,9 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
               max={2000}
               step={50}
               value={pauseFadeMs}
-              onChange={(e) => { void setPauseFadeMs(parseInt(e.target.value, 10)); }}
+              onChange={(e) => {
+                void setPauseFadeMs(parseInt(e.target.value, 10));
+              }}
             />
           </SettingRow>
         </section>
@@ -357,11 +343,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             title="Consume mode"
             description="Remove each track from the queue after it finishes playing. Disabled in shuffle mode."
           >
-            <input
-              type="checkbox"
-              checked={consumeMode}
-              onChange={() => void toggleConsumeMode()}
-            />
+            <input type="checkbox" checked={consumeMode} onChange={() => void toggleConsumeMode()} />
           </SettingRow>
           <SettingRow
             title="Also consume on manual skip"
@@ -448,7 +430,10 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
               <button
                 className="settings-btn"
                 disabled={isScanningRenderers}
-                onClick={() => { setScanRan(true); void scanRenderers(); }}
+                onClick={() => {
+                  setScanRan(true);
+                  void scanRenderers();
+                }}
               >
                 {isScanningRenderers ? "Scanning…" : "Scan now"}
               </button>
@@ -473,11 +458,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             title="Show waveform progress bar"
             description="Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally."
           >
-            <input
-              type="checkbox"
-              checked={showWaveform}
-              onChange={(e) => void setShowWaveform(e.target.checked)}
-            />
+            <input type="checkbox" checked={showWaveform} onChange={(e) => void setShowWaveform(e.target.checked)} />
           </SettingRow>
           <SettingRow
             title="Show album edition suffixes"

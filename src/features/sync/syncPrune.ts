@@ -1,6 +1,6 @@
-import Database from "@tauri-apps/plugin-sql";
-import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
+import type Database from "@tauri-apps/plugin-sql";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
+import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 
 // Which tables carry track-keyed rows, and why the user's own rows are spared, is
 // db/trackIdTables.ts. album_identity/album_user_genres are spared for the same reason.
@@ -10,7 +10,7 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
     ...prunedTrackIdTables().map(
       ({ table, column }) =>
         (ph: string) =>
-          `DELETE FROM ${table} WHERE ${column} IN (${ph})`
+          `DELETE FROM ${table} WHERE ${column} IN (${ph})`,
     ),
     (ph: string) => `DELETE FROM tracks WHERE id IN (${ph})`,
   ];
@@ -23,8 +23,10 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
 // first. album_covers goes (pure cache); user-authored album rows stay.
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
-  const viaTracks = ({ table, column }: { table: string; column: string }) => (ph: string) =>
-    `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
+  const viaTracks =
+    ({ table, column }: { table: string; column: string }) =>
+    (ph: string) =>
+      `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE album_id IN (${ph}))`;
   const statements = [
     ...prunedTrackIdTables().map(viaTracks),
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
@@ -65,9 +67,7 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
   for (const sql of statements) {
     await db.execute(sql, [serverId]);
   }
-  await db.execute("DELETE FROM settings WHERE key = ?", [
-    `server.opensub_extensions.${serverId}`,
-  ]);
+  await db.execute("DELETE FROM settings WHERE key = ?", [`server.opensub_extensions.${serverId}`]);
 }
 
 // Every read is scoped by server_id, so rows left by an unfinished purge or a `servers` row
@@ -77,9 +77,8 @@ export async function purgeStrandedServers(db: Database): Promise<string[]> {
     `SELECT server_id FROM albums
      UNION SELECT server_id FROM tracks
      UNION SELECT server_id FROM artists
-     UNION SELECT server_id FROM playlists`
-    + ` EXCEPT SELECT id FROM servers`,
-    []
+     UNION SELECT server_id FROM playlists` + ` EXCEPT SELECT id FROM servers`,
+    [],
   );
   const stranded = rows.map((r) => r.server_id).filter((id): id is string => id !== null);
   for (const serverId of stranded) {
@@ -106,9 +105,12 @@ export async function pruneAlbumTracks(
   const placeholders = keepTrackIds.map(() => "?").join(", ");
   const stale = await db.select<{ id: string }[]>(
     `SELECT id FROM tracks WHERE album_id = ? AND id NOT IN (${placeholders})`,
-    [albumDbId, ...keepTrackIds]
+    [albumDbId, ...keepTrackIds],
   );
   if (stale.length === 0) return 0;
-  await deleteTracksByIds(db, stale.map((r) => r.id));
+  await deleteTracksByIds(
+    db,
+    stale.map((r) => r.id),
+  );
   return stale.length;
 }

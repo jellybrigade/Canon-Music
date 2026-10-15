@@ -1,16 +1,21 @@
-import { useState, useCallback } from "react";
-import { Disc, RefreshCw } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useFailedLookupAlbums, persistAlbumIdentity, type FailedAlbumRow } from "../hooks/useAlbumIdentity";
-import { autoIdentifyAlbum } from "../lib/albumIdentify";
-import { QK } from "../../../lib/queryKeys";
-import { getDb } from "../../../db";
-import { AlbumIdentifyDialog } from "./IdentifyDialog";
-import { AlbumArt } from "../../../components/AlbumArt";
-import { RowListSkeleton } from "../../../ui/Skeleton";
+import { Disc, RefreshCw } from "lucide-react";
+import { useCallback, useState } from "react";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { AlbumArt } from "../../../components/AlbumArt";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
+import { RowListSkeleton } from "../../../ui/Skeleton";
+import {
+  type FailedAlbumRow,
+  persistAlbumIdentity,
+  recordFailedLookup,
+  useFailedLookupAlbums,
+} from "../hooks/useAlbumIdentity";
+import { autoIdentifyAlbum } from "../lib/albumIdentify";
+import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import "./UnidentifiedView.css";
 
 interface Props {
@@ -33,7 +38,12 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i] as FailedAlbumRow;
       try {
-        const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, trackCount: album.track_count, year: album.year });
+        const result = await autoIdentifyAlbum({
+          artist: album.artist ?? "",
+          album: album.name,
+          trackCount: album.track_count,
+          year: album.year,
+        });
         if (result.decision === "auto_confirmed" && result.detail) {
           await persistAlbumIdentity({
             albumId: album.id,
@@ -55,15 +65,12 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
           });
           void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(album.id) });
           void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-        } else {
-          // Update the failed row so looked_up_at reflects this rescan
-          const now = Math.floor(Date.now() / 1000);
-          await db.execute(
-            `UPDATE album_identity
-             SET auto_matched = 0, match_score = ?, looked_up_at = ?
-             WHERE album_id = ? AND mb_release_group_id IS NULL`,
-            [Math.round(result.score * 100), now, album.id]
-          );
+        } else if (result.decision !== "error") {
+          await recordFailedLookup(db, {
+            albumId: album.id,
+            matchScore: Math.round(result.score * 100),
+            lookedUpAt: Math.floor(Date.now() / 1000),
+          });
         }
       } catch (e) {
         console.warn("Rescan failed for:", album.name, e);
@@ -82,20 +89,18 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
     <main className="content-main unidentified-view">
       <div className="unidentified-header">
         <h2 className="unidentified-title">Unidentified Albums</h2>
-        {albums.length > 0 && (
-          <span className="unidentified-count">{albums.length}</span>
-        )}
+        {albums.length > 0 && <span className="unidentified-count">{albums.length}</span>}
         {albums.length > 0 && (
           <button
             className="unidentified-rescan-btn"
-            onClick={() => { void handleRescanAll(); }}
+            onClick={() => {
+              void handleRescanAll();
+            }}
             disabled={scanning}
             title="Re-run auto-identification on all unidentified albums"
           >
             <RefreshCw size={13} className={scanning ? "unidentified-rescan-spin" : ""} />
-            {scanning
-              ? `${rescanProgress.done} / ${rescanProgress.total}`
-              : "Rescan All"}
+            {scanning ? `${rescanProgress.done} / ${rescanProgress.total}` : "Rescan All"}
           </button>
         )}
       </div>
@@ -104,16 +109,27 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
         <div className="empty-state">
           <p className="empty-state-title">Couldn't load unidentified albums</p>
           <p className="empty-state-hint">{error.message}</p>
-          <button className="empty-state-action" onClick={() => { void refetch(); }}>Try again</button>
+          <button
+            className="empty-state-action"
+            onClick={() => {
+              void refetch();
+            }}
+          >
+            Try again
+          </button>
         </div>
       ) : isPending ? (
         <RowListSkeleton label="Loading unidentified albums" />
       ) : albums.length === 0 ? (
-        <p className="unidentified-empty">No failed matches yet. Albums are auto-identified when opened, so this list fills in as you browse.</p>
+        <p className="unidentified-empty">
+          No failed matches yet. Albums are auto-identified when opened, so this list fills in as you browse.
+        </p>
       ) : (
         <div className="unidentified-list">
           {albums.map((album) => {
-            const artUrl = album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null;
+            const artUrl = album.artwork_url
+              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url)
+              : null;
             return (
               <div key={album.id} className="unidentified-row">
                 <div
