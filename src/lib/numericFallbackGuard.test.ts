@@ -31,7 +31,7 @@ const FALLBACK_SHAPES = [
 ];
 
 /** 1-based lines where a parsed number gets an unsafe fallback; comment lines are blanked first. */
-export function fallbackLines(source: string): number[] {
+function fallbackLines(source: string): number[] {
   const code = source
     .split("\n")
     .map((line) => (/^\s*(\/\/|\/?\*)/.test(line) ? "" : line))

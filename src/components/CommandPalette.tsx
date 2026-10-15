@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
 import { useSearch } from "../features/search/useSearch";

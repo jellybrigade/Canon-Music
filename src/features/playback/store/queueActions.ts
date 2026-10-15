@@ -188,7 +188,7 @@ export function createQueueActions(
       // Sort descending so we remove high indices first, avoids index drift
       const sorted = [...new Set(positions)].sort((a, b) => b - a);
 
-      let newQueue = [...queue];
+      const newQueue = [...queue];
       let newShuffleOrder = isShuffled ? normalizeShuffleOrder(shuffleOrder, queue.length) : [...shuffleOrder];
       let newQueueIndex = queueIndex;
       let removedCurrentTrack = false;

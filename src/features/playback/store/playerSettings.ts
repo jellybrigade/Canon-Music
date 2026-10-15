@@ -233,7 +233,7 @@ export function createSettingsActions(
         for (const row of rows) {
           if (row.key === "volume") {
             const volume = parseFloat(row.value);
-            if (!isNaN(volume)) {
+            if (!Number.isNaN(volume)) {
               set({ volume });
               // Raw volume only: ReplayGain is applied by the engine once a track loads.
               await invoke("audio_volume", { volume: volume ** 2 });
@@ -243,7 +243,7 @@ export function createSettingsActions(
             // muted loads volume 0 with preMuteVolume back at its 1.0 default, so the first
             // unmute jumps to full instead of returning to the level the user was using.
             const preMute = parseFloat(row.value);
-            if (!isNaN(preMute) && preMute > 0) runtime.preMuteVolume = preMute;
+            if (!Number.isNaN(preMute) && preMute > 0) runtime.preMuteVolume = preMute;
           } else if (row.key === "repeat") {
             const valid: RepeatMode[] = ["off", "repeat-all", "repeat-one"];
             if (valid.includes(row.value as RepeatMode)) {
@@ -289,20 +289,20 @@ export function createSettingsActions(
             set({ radioLabel: row.value || null });
           } else if (row.key === "radio.similarity_scale") {
             const scale = parseFloat(row.value);
-            if (!isNaN(scale)) set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
+            if (!Number.isNaN(scale)) set({ radioSimilarityScale: Math.max(0, Math.min(1, scale)) });
           } else if (row.key === "player.speed") {
             const speed = parseFloat(row.value);
-            if (!isNaN(speed)) {
+            if (!Number.isNaN(speed)) {
               const clamped = Math.max(0.5, Math.min(2.0, speed));
               set({ speed: clamped });
               void invoke("audio_set_speed", { speed: clamped });
             }
           } else if (row.key === "player.pause_fade_ms") {
             const ms = parseInt(row.value, 10);
-            if (!isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
+            if (!Number.isNaN(ms)) set({ pauseFadeMs: Math.max(0, Math.min(2000, ms)) });
           } else if (row.key === "player.max_queue_size") {
             const n = parseInt(row.value, 10);
-            if (!isNaN(n)) set({ maxQueueSize: Math.max(1, Math.min(1000, n)) });
+            if (!Number.isNaN(n)) set({ maxQueueSize: Math.max(1, Math.min(1000, n)) });
           } else if (row.key === "player.consume_mode") {
             set({ consumeMode: row.value === "true" });
           } else if (row.key === "player.consume_on_skip") {
@@ -318,10 +318,10 @@ export function createSettingsActions(
             if (valid.includes(row.value as ReplayGainMode)) set({ replayGainMode: row.value as ReplayGainMode });
           } else if (row.key === "player.replay_gain_pre_amp") {
             const v = parseFloat(row.value);
-            if (!isNaN(v)) set({ replayGainPreAmp: Math.max(-15, Math.min(15, v)) });
+            if (!Number.isNaN(v)) set({ replayGainPreAmp: Math.max(-15, Math.min(15, v)) });
           } else if (row.key === "player.replay_gain_fallback_gain") {
             const v = parseFloat(row.value);
-            if (!isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
+            if (!Number.isNaN(v)) set({ replayGainFallbackGain: Math.max(-15, Math.min(15, v)) });
           } else if (row.key === "cast.device" && row.value) {
             try {
               const savedRenderer = JSON.parse(row.value) as DlnaRenderer;

@@ -324,8 +324,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                 />
               </div>
             ) : (
-              <>
-                {currentTrack.artist && (
+              currentTrack.artist && (
                   onSelectArtist ? (
                     <button
                       className="player-artist player-artist--link"
@@ -336,8 +335,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                   ) : (
                     <span className="player-artist">{currentTrack.artist}</span>
                   )
-                )}
-              </>
+                )
             )}
           </div>
         </div>

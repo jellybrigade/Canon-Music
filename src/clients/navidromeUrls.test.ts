@@ -443,8 +443,8 @@ describe("authenticate credential generation", () => {
     const fetchMock = stubFetch();
     const c = await authenticate(BASE, "alice", "sesame");
     const sentSalt = sentBody(fetchMock).get("s")!;
-    expect(sentBody(fetchMock).get("t")).toBe(md5("sesame" + sentSalt));
-    expect(c.type === "md5" && c.token).toBe(md5("sesame" + sentSalt));
+    expect(sentBody(fetchMock).get("t")).toBe(md5(`sesame${sentSalt}`));
+    expect(c.type === "md5" && c.token).toBe(md5(`sesame${sentSalt}`));
     vi.unstubAllGlobals();
   });
 

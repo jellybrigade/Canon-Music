@@ -160,7 +160,7 @@ describe("canon tree version", () => {
     const versions = new Set([
       parseSmall([]).version,
       parseSmall([{ from: "pyschedelic", fromName: "Pyschedelic", to: "psychedelic" }]).version,
-      parseSmall([], SMALL_HIERARCHY + "    Jazz::genre\n").version,
+      parseSmall([], `${SMALL_HIERARCHY}    Jazz::genre\n`).version,
     ]);
     expect(versions.size).toBe(3);
   });

@@ -1,4 +1,4 @@
-import Database from "@tauri-apps/plugin-sql";
+import type Database from "@tauri-apps/plugin-sql";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 

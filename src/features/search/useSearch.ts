@@ -169,7 +169,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
   const artists: SearchArtist[] = scoredArtists
     .filter(({ item }) => {
       const m = FEAT_RE.exec(item.name);
-      return !m || !m[1] || !primaryNames.has(m[1].toLowerCase());
+      return !m?.[1] || !primaryNames.has(m[1].toLowerCase());
     })
     .map(x => x.item);
 

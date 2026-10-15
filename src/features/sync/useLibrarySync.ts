@@ -234,7 +234,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
 
   useEffect(() => {
     const intervalMin = parseInt(autoSyncIntervalMin, 10);
-    if (!target || isNaN(intervalMin) || intervalMin <= 0) return;
+    if (!target || Number.isNaN(intervalMin) || intervalMin <= 0) return;
     // Keyed on the id, not the object: `App.tsx` yields an equal-but-new object on any
     // refetch, and re-arming on each one would reset the countdown before a tick could land.
     const id = setInterval(() => {

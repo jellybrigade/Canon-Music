@@ -41,7 +41,7 @@ const OWNER = "lib/boundedCache.ts";
  * Pre-write cap checks: a `.size >= <cap>` whose eviction (`keys().next()`) follows within three
  * lines. Reports only the ones missing a same-line `.has(` guard, which is the defect.
  */
-export function unguardedCapChecks(text: string): { line: number; source: string }[] {
+function unguardedCapChecks(text: string): { line: number; source: string }[] {
   const lines = text.split("\n");
   const out: { line: number; source: string }[] = [];
   for (const [index, line] of lines.entries()) {

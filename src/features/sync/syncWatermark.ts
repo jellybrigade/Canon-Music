@@ -1,4 +1,4 @@
-import Database from "@tauri-apps/plugin-sql";
+import type Database from "@tauri-apps/plugin-sql";
 import type { Server } from "../../types/server";
 import { songExists } from "../../clients/navidrome";
 import type { NavidromeScanStatus } from "../../clients/navidrome";

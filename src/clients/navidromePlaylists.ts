@@ -135,7 +135,7 @@ export async function updateNavidromePlaylist(
   altUrl?: string
 ): Promise<void> {
   const extra: Record<string, string> = { playlistId: nativePlaylistId, name };
-  if (comment !== undefined) extra["comment"] = comment;
+  if (comment !== undefined) extra.comment = comment;
   return callSubsonicVoid(baseUrl, username, credential, "updatePlaylist", extra, altUrl);
 }
 

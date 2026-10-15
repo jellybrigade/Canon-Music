@@ -9,7 +9,7 @@ vi.mock("../../sync/syncTracks", () => ({ repairAlbumTrackIds: vi.fn() }));
 import { emitTauriEvent, listenerCount, resetTauriMocks } from "../../../test/mocks/tauri";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
-import { type CurrentTrack } from "../store/playerTypes";
+import type { CurrentTrack } from "../store/playerTypes";
 import { useTrackIdRepair } from "./useTrackIdRepair";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 

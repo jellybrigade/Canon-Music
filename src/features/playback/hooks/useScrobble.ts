@@ -41,7 +41,7 @@ export function useScrobble(
   useEffect(() => {
     if (!isPlaying || !trackId || !serverWithCred) return;
     const { server, credential } = serverWithCred;
-    if (!trackId.startsWith(server.id + ":")) return;
+    if (!trackId.startsWith(`${server.id}:`)) return;
     const nativeId = stripServerPrefix(trackId, server.id);
     const report = new AbortController();
     reportNowPlaying(server.url, server.username, credential, nativeId, server.alt_url ?? undefined, report.signal).catch(

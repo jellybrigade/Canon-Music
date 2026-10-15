@@ -60,7 +60,7 @@ export async function getMinTagCount(): Promise<number> {
     "SELECT value FROM settings WHERE key = 'lastfm.min_tag_count'"
   );
   const val = parseInt(rows[0]?.value ?? "", 10);
-  return isNaN(val) ? MIN_TAG_COUNT_DEFAULT : val;
+  return Number.isNaN(val) ? MIN_TAG_COUNT_DEFAULT : val;
 }
 
 export async function setMinTagCount(count: number): Promise<void> {

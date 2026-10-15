@@ -25,7 +25,7 @@ vi.mock("../hooks/useSetting", () => ({
   ],
 }));
 
-import React from "react";
+import type React from "react";
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

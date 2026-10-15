@@ -22,7 +22,7 @@ import { renderHook, act, cleanup } from "@testing-library/react";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../store/player";
-import { type CurrentTrack } from "../store/playerTypes";
+import type { CurrentTrack } from "../store/playerTypes";
 import { reportNowPlaying } from "../../../clients/navidrome";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import type { Server } from "../../../types/server";

@@ -36,7 +36,7 @@ const FILES = sourceFiles(SRC_DIR).map((path) => ({
  * the quote as a literal and runs on to the next quote, which is exactly why the bug is silent
  * in review. Returns null when no closing quote is found.
  */
-export function decodeSingleQuoted(source: string, open: number): string | null {
+function decodeSingleQuoted(source: string, open: number): string | null {
   if (source[open] !== "'") return null;
   let out = "";
   for (let i = open + 1; i < source.length; i++) {

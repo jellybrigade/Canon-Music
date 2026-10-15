@@ -187,7 +187,7 @@ async function _doNormalizeAlbum(
     const result = await fetchAlbumTags(lfmArtist, lfmAlbum);
     lastfmRaw = result.genres;
     if (lastfmRaw.length === 0) {
-      const stripped = lfmAlbum.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
+      const stripped = lfmAlbum.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
       if (stripped && stripped !== lfmAlbum) {
         const retry = await fetchAlbumTags(lfmArtist, stripped);
         lastfmRaw = retry.genres;

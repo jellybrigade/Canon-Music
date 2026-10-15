@@ -39,7 +39,7 @@ function filesUnder(dir: string): string[] {
   return out.sort();
 }
 
-export function isCamelCaseFileName(name: string): boolean {
+function isCamelCaseFileName(name: string): boolean {
   const stem = name.split(".")[0] ?? "";
   return /^[a-z][a-zA-Z0-9]*$/.test(stem);
 }

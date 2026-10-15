@@ -12,7 +12,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { ServerTab } from "./ServerTab";
 import { getDb } from "../../../db";
-import { type SyncOptions } from "../../sync/sync";
+import type { SyncOptions } from "../../sync/sync";
 import { clearSyncWatermark } from "../../sync/syncWatermark";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";

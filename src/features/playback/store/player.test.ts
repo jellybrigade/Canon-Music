@@ -1335,14 +1335,14 @@ describe("player store - replay gain", () => {
   it("mode 'track' uses trackGain/trackPeak", async () => {
     usePlayerStore.setState({ currentTrack: trackWith({ trackGain: -3, trackPeak: 0.9 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.min(Math.pow(10, -3 / 20), 1.0 / 0.9);
+    const expectedLinear = Math.min(10 ** (-3 / 20), 1.0 / 0.9);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
   it("mode 'album' falls through to trackGain when albumGain is null, not straight to the fallback", async () => {
     usePlayerStore.setState({ currentTrack: trackWith({ albumGain: null, trackGain: -3, trackPeak: 1 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("album");
-    const expectedLinear = Math.pow(10, -3 / 20);
+    const expectedLinear = 10 ** (-3 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1353,7 +1353,7 @@ describe("player store - replay gain", () => {
       replayGainFallbackGain: -6,
     });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.pow(10, -3 / 20);
+    const expectedLinear = 10 ** (-3 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1363,14 +1363,14 @@ describe("player store - replay gain", () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: 0 });
     await usePlayerStore.getState().setReplayGainMode("track");
     await usePlayerStore.getState().setReplayGainPreAmp(6);
-    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 6 / 20), 5);
+    expect(last(volumeCalls())).toBeCloseTo(10 ** (6 / 20), 5);
   });
 
   it("applies a positive fallback gain to a track carrying no peak tag", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainPreAmp: 0 });
     await usePlayerStore.getState().setReplayGainMode("album");
     await usePlayerStore.getState().setReplayGainFallbackGain(4);
-    expect(last(volumeCalls())).toBeCloseTo(Math.pow(10, 4 / 20), 5);
+    expect(last(volumeCalls())).toBeCloseTo(10 ** (4 / 20), 5);
   });
 
   it("clips against the other scope's peak when the preferred scope has none", async () => {
@@ -1382,7 +1382,7 @@ describe("player store - replay gain", () => {
   it("falls back to replayGainFallbackGain only when both album and track gain are missing", async () => {
     usePlayerStore.setState({ currentTrack: trackWith(undefined), volume: 1, replayGainFallbackGain: -6 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const expectedLinear = Math.pow(10, -6 / 20);
+    const expectedLinear = 10 ** (-6 / 20);
     expect(last(volumeCalls())).toBeCloseTo(expectedLinear, 5);
   });
 
@@ -1390,7 +1390,7 @@ describe("player store - replay gain", () => {
     // +10dB is huge gain; peak 0.5 means the clip ceiling (1/0.5 = 2.0) binds before the raw gain does.
     usePlayerStore.setState({ currentTrack: trackWith({ trackGain: 10, trackPeak: 0.5 }), volume: 1 });
     await usePlayerStore.getState().setReplayGainMode("track");
-    const rawLinear = Math.pow(10, 10 / 20);
+    const rawLinear = 10 ** (10 / 20);
     expect(rawLinear).toBeGreaterThan(2.0);
     expect(last(volumeCalls())).toBeCloseTo(2.0, 5);
   });

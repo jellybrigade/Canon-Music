@@ -87,7 +87,7 @@ export function buildAncestorWeights(
     for (const parentId of node.parents) {
       if (visited.has(parentId)) continue;
       visited.add(parentId);
-      const w = 1 / Math.pow(2, item.depth + 1);
+      const w = 1 / 2 ** (item.depth + 1);
       const existing = weights.get(parentId) ?? 0;
       weights.set(parentId, Math.max(existing, w));
       queue.push({ id: parentId, depth: item.depth + 1 });

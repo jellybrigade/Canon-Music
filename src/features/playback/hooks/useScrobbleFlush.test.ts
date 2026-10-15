@@ -185,7 +185,7 @@ describe("useScrobbleFlush drain", () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedQueue("srv-a:t3", 1700000003);
-    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => seedTrack(id));
+    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
 
     renderFlush(swc());
     await tick();
@@ -337,7 +337,7 @@ describe("useScrobbleFlush error handling", () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedQueue("srv-a:t3", 1700000003);
-    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => seedTrack(id));
+    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
     vi.mocked(scrobbleTrack).mockRejectedValueOnce(new SubsonicError("scrobble.view", 70));
 
     renderFlush(swc());
@@ -357,7 +357,7 @@ describe("useScrobbleFlush error handling", () => {
       seedQueue("srv-a:t1", 1700000001);
       seedQueue("srv-a:t2", 1700000002);
       seedQueue("srv-a:t3", 1700000003);
-      ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => seedTrack(id));
+      ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
       vi.mocked(scrobbleTrack).mockRejectedValue(new SubsonicError("scrobble.view", code));
 
       const { client } = renderFlush(swc());

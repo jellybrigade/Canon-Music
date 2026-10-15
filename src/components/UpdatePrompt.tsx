@@ -125,7 +125,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
   }
 
   const pct =
-    progress && progress.total && progress.total > 0
+    progress?.total && progress.total > 0
       ? Math.round((progress.downloaded / progress.total) * 100)
       : null;
 

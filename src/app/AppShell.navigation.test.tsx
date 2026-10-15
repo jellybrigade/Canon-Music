@@ -34,8 +34,7 @@ const suspendControl = vi.hoisted(() => ({
 }));
 
 vi.mock("./AppRoutes", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  AppRoutes: (props: any) => {
+  AppRoutes: (props: { pathnameForTest?: string }) => {
     if (suspendControl.pathname !== null && props.pathnameForTest === suspendControl.pathname) {
       suspendControl.pending ??= new Promise<void>((resolve) => {
         suspendControl.release = () => {
@@ -51,8 +50,11 @@ vi.mock("./AppRoutes", () => ({
 }));
 
 vi.mock("../features/playback/components/PlayerBar", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  PlayerBar: (props: any) => (
+  PlayerBar: (props: {
+    onNowPlaying: () => void;
+    onSelectArtist: (artist: { name: string }) => void;
+    onSelectAlbumById: (albumId: string) => void;
+  }) => (
     <div data-testid="player-bar-stub">
       <button data-testid="pb-now-playing" onClick={props.onNowPlaying}>now</button>
       <button data-testid="pb-select-artist" onClick={() => props.onSelectArtist({ name: "Artist Y" })}>artist</button>
@@ -62,8 +64,12 @@ vi.mock("../features/playback/components/PlayerBar", () => ({
 }));
 
 vi.mock("../components/CommandPalette", () => ({
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  CommandPalette: (props: any) =>
+  CommandPalette: (props: {
+    open: boolean;
+    onNavigate: (view: string) => void;
+    onSelectAlbum: (album: { id: string; title: string }) => void;
+    onSelectArtist: (name: string, albumCount: number) => void;
+  }) =>
     !props.open ? null : (
       <div data-testid="command-palette-stub">
         <button data-testid="cp-navigate" onClick={() => props.onNavigate("home")}>nav-home</button>
@@ -122,10 +128,20 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     openAlbum(row);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const props: any = {
+  const props: Partial<AppViewProps> & { pathnameForTest: string } = {
     server: undefined,
-    serverWithCred: { server: {}, credential: "x" },
+    serverWithCred: {
+      server: {
+        id: "srv",
+        type: "navidrome",
+        url: "https://srv.example",
+        alt_url: null,
+        display_name: "Srv",
+        username: "u",
+        created_at: "2026-01-01",
+      },
+      credential: { type: "apikey", apiKey: "k" },
+    },
     playlists: [],
     view,
     navItems: [
@@ -144,7 +160,7 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     queueClass: "",
     currentTrack: null,
     sidebarExpanded: false,
-    setSidebarExpanded: () => {},
+    setSidebarExpanded: async () => {},
     sidebarLiveWidth: null,
     sidebarWidth: 180,
     handleSidebarResizeMouseDown: () => {},

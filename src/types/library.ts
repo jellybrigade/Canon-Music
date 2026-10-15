@@ -1,4 +1,4 @@
-import { type ReplayGainColumns } from "../lib/replayGainRow";
+import type { ReplayGainColumns } from "../lib/replayGainRow";
 
 export interface AlbumRow {
   id: string;

@@ -26,7 +26,7 @@ function sourceFiles(dir: string): string[] {
 const BARE_FETCH = /(?<![\w.$])fetch\(/;
 
 /** 1-based lines calling the global `fetch`; comment lines are skipped. */
-export function bareFetchLines(source: string): number[] {
+function bareFetchLines(source: string): number[] {
   return source
     .split("\n")
     .flatMap((line, index) => (!/^\s*(\/\/|\/?\*)/.test(line) && BARE_FETCH.test(line) ? [index + 1] : []));

@@ -9,7 +9,7 @@ import { Profiler } from "react";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../../playback/store/player";
-import { type CurrentTrack } from "../../playback/store/playerTypes";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { RadioButton } from "./RadioButton";

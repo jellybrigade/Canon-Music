@@ -11,7 +11,7 @@ export function computeReplayGainLinear(
   const gainDb =
     (preferAlbum ? rg?.albumGain ?? rg?.trackGain : rg?.trackGain ?? rg?.albumGain) ?? fallbackDb;
   const peak = preferAlbum ? rg?.albumPeak ?? rg?.trackPeak : rg?.trackPeak ?? rg?.albumPeak;
-  const linear = Math.pow(10, (gainDb + preAmpDb) / 20);
+  const linear = 10 ** ((gainDb + preAmpDb) / 20);
   // Peak is optional and usually absent; treat a missing peak as nothing to clip against,
   // not full-scale, or it would cancel pre-amp and fallback gain for the whole library.
   if (peak == null || peak <= 0) return linear;

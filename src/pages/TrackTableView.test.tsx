@@ -13,7 +13,7 @@ vi.mock("../hooks/useLoved", () => ({
   useLoved: () => ({ lovedTrackIds, toggleTrackLove }),
 }));
 
-import React from "react";
+import type React from "react";
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { usePlayerStore } from "../store/player";
-import { type LyricsOverride } from "../hooks/useLyrics";
-import { type LrcLine } from "../../../clients/lrclib";
+import type { LyricsOverride } from "../hooks/useLyrics";
+import type { LrcLine } from "../../../clients/lrclib";
 import "./LyricsTabPanel.css";
 
 interface LyricsTabPanelProps {

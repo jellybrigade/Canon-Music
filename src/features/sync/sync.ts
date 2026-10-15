@@ -253,7 +253,7 @@ export async function syncLibrary(
   let attemptedCount = 0;
   const readAlbumIds: string[] = [];
   for (const { album, albumDbId, existingTrackCount } of albumsNeedingTracks) {
-    let tracks;
+    let tracks: Awaited<ReturnType<typeof fetchAlbumTracks>>;
     attemptedCount++;
     try {
       tracks = await fetchAlbumTracks(server.url, server.username, credential, album.id, altUrl);

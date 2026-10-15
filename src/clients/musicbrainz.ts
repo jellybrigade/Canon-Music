@@ -341,7 +341,7 @@ export async function getMinFolksonomyCount(): Promise<number> {
     "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'"
   );
   const val = parseInt(rows[0]?.value ?? "", 10);
-  return isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
+  return Number.isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
 }
 
 export async function setMinFolksonomyCount(count: number): Promise<void> {

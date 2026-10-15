@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import { ChevronLeft, RefreshCw, ListX, AlertCircle } from "lucide-react";
 import { usePlayerStore } from "../store/player";
@@ -159,7 +160,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   }
 
   return (
-    <>
     <div
       className="now-playing-view"
       style={{
@@ -374,7 +374,5 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
         </div>
       </div>
     </div>
-
-    </>
   );
 }

@@ -32,7 +32,7 @@ const AUTO_CONFIRM_THRESHOLD = 0.90;
 const MIN_SCORE_GAP = 0.10;
 
 export function stripTrailingBrackets(title: string): string | null {
-  const stripped = title.replace(/\s*[\(\[].*?[\)\]]\s*$/, "").trim();
+  const stripped = title.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
   return stripped !== title && stripped.length > 0 ? stripped : null;
 }
 

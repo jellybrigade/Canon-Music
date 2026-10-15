@@ -231,7 +231,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               value={minTagCount ?? 25}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 0 && v <= 100) {
+                if (!Number.isNaN(v) && v >= 0 && v <= 100) {
                   void setMinTagCount(v).then(() => {
                     void queryClient.invalidateQueries({ queryKey: QK.settingsLastfmMinTagCount() });
                   });
@@ -286,7 +286,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               value={minFolksonomyCount ?? 2}
               onChange={(e) => {
                 const v = parseInt(e.target.value, 10);
-                if (!isNaN(v) && v >= 0 && v <= 100) {
+                if (!Number.isNaN(v) && v >= 0 && v <= 100) {
                   void setMinFolksonomyCount(v).then(() => {
                     void queryClient.invalidateQueries({ queryKey: QK.settingsMbMinFolksonomy() });
                   });

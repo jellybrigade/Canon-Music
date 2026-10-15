@@ -3,7 +3,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/taur
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
 vi.mock("../../db", () => ({ getDb: vi.fn() }));
 
-import React from "react";
+import type React from "react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";

@@ -68,13 +68,13 @@ function hasUnbracketedOr(sql: string): boolean {
   return false;
 }
 
-export interface UnscopedRead {
+interface UnscopedRead {
   path: string;
   line: number;
   sql: string;
 }
 
-export function unscopedArtistReads(path: string, text: string): UnscopedRead[] {
+function unscopedArtistReads(path: string, text: string): UnscopedRead[] {
   const out: UnscopedRead[] = [];
   for (const match of text.matchAll(MIRROR_READ)) {
     const sql = resolveFragments(match[1] ?? "", text);
@@ -121,10 +121,12 @@ describe("artist-name reads of the mirror are scoped to one server", () => {
   it("sees a read whose filter and scope live in a separate fragment", () => {
     const composed = [
       "const match = `t.server_id = ? AND t.artist = ?`;",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: source text fed to the sweep
       "const q = `SELECT t.id FROM tracks t WHERE ${match}`;",
     ].join("\n");
     const composedUnscoped = [
       "const match = `t.artist = ?`;",
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: source text fed to the sweep
       "const q = `SELECT t.id FROM tracks t WHERE ${match}`;",
     ].join("\n");
     expect(unscopedArtistReads("x.ts", composed)).toEqual([]);

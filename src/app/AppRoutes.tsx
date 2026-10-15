@@ -1,4 +1,5 @@
-import React, { Suspense, lazy } from "react";
+import type React from "react";
+import { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import type { QueryClient } from "@tanstack/react-query";
 import type { Update } from "@tauri-apps/plugin-updater";

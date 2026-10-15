@@ -102,7 +102,7 @@ function seedPlaylistTracks(playlistId: string, nativeTrackIds: string[], server
   const stmt = db.raw.prepare(
     "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)"
   );
-  nativeTrackIds.forEach((nativeId, position) => stmt.run(playlistId, `${server.id}:${nativeId}`, position));
+  nativeTrackIds.forEach((nativeId, position) => { stmt.run(playlistId, `${server.id}:${nativeId}`, position); });
   db.raw
     .prepare("UPDATE playlists SET track_count = ? WHERE id = ?")
     .run(nativeTrackIds.length, playlistId);
@@ -198,7 +198,7 @@ describe("usePlaylistTracks load effect", () => {
 
   it("reads the playlist's tracks in position order regardless of insertion order", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => { seedTrack(id); });
     // Inserted out of order on purpose: only ORDER BY pt.position can rescue this.
     db.raw
       .prepare("INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)")
@@ -284,8 +284,8 @@ describe("usePlaylistTracks load effect", () => {
   it("does not leak rows from another playlist holding the same positions", async () => {
     const plA = seedPlaylist("pl1", SRV);
     const plB = seedPlaylist("pl2", SRV_B);
-    ["a", "b"].forEach((id) => seedTrack(id));
-    ["x", "y"].forEach((id) => seedTrack(id, `${id}-alb`, SRV_B));
+    ["a", "b"].forEach((id) => { seedTrack(id); });
+    ["x", "y"].forEach((id) => { seedTrack(id, `${id}-alb`, SRV_B); });
     seedPlaylistTracks(plA, ["a", "b"]);
     seedPlaylistTracks(plB, ["x", "y"], SRV_B);
 
@@ -449,7 +449,7 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("sends the stripped playlist id and the raw position to the server", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b"].forEach((id) => seedTrack(id));
+    ["a", "b"].forEach((id) => { seedTrack(id); });
     seedPlaylistTracks(pl, ["a", "b"]);
     const { result } = await mount(pl);
 
@@ -482,7 +482,7 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("writes nothing locally when the server call fails", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => { seedTrack(id); });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
     vi.mocked(removeTrackFromNavidromePlaylist).mockRejectedValueOnce(new Error("http 500"));
@@ -509,7 +509,7 @@ describe("usePlaylistTracks removeTrack", () => {
     // desyncs the second removal." Without compaction the survivor B would still sit at
     // position 1 and the second removal would send index 1, deleting C server side.
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => { seedTrack(id); });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
 
@@ -543,7 +543,7 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("re-renders the list from the compacted table after a removal", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => { seedTrack(id); });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
     await waitFor(() => expect(result.current.data).toHaveLength(3));
@@ -559,7 +559,7 @@ describe("usePlaylistTracks removeTrack", () => {
 
   it("invokes the removal command exactly once per removal", async () => {
     const pl = seedPlaylist("pl1");
-    ["a", "b", "c"].forEach((id) => seedTrack(id));
+    ["a", "b", "c"].forEach((id) => { seedTrack(id); });
     seedPlaylistTracks(pl, ["a", "b", "c"]);
     const { result } = await mount(pl);
 

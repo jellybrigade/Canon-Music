@@ -119,7 +119,7 @@ export function useLyrics(
       if (lrclibResult === undefined) everySourceAnswered = false;
 
       let plain = lrclibResult?.plain ?? null;
-      let synced = lrclibResult?.synced ?? null;
+      const synced = lrclibResult?.synced ?? null;
       let source = "lrclib";
 
       if (!plain && !synced) {

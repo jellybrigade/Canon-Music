@@ -6,7 +6,7 @@ import { loginFailureMessage } from "../../setup/loginFailureMessage";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { keychain } from "../../../lib/keychain";
 import { getDb } from "../../../db";
-import { type SyncOptions } from "../../sync/sync";
+import type { SyncOptions } from "../../sync/sync";
 import { clearSyncWatermark } from "../../sync/syncWatermark";
 import { purgeServerData } from "../../sync/syncPrune";
 import { clearCredentialRejection } from "../../../lib/credentialRejections";

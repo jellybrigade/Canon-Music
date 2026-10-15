@@ -190,7 +190,7 @@ function getCoverStoreVersion(): number {
 }
 function bumpCoverStore(): void {
   coverStoreVersion++;
-  coverStoreListeners.forEach((l) => l());
+  coverStoreListeners.forEach((l) => { l(); });
 }
 
 function rememberAlbumDataUrl(albumId: string, dataUrl: string): void {

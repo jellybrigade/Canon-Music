@@ -1,4 +1,4 @@
-import Database from "@tauri-apps/plugin-sql";
+import type Database from "@tauri-apps/plugin-sql";
 
 // tauri-plugin-sql's pool has no connection affinity, so BEGIN/COMMIT across two
 // execute() calls can silently no-op; batch into multi-row statements instead.

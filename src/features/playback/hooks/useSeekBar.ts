@@ -1,4 +1,5 @@
-import React, { useCallback, useRef, useState } from "react";
+import type React from "react";
+import { useCallback, useRef, useState } from "react";
 import { usePlayerStore } from "../store/player";
 import { formatDuration } from "../../../lib/trackCells";
 

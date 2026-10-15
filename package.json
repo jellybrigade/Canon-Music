@@ -10,7 +10,10 @@
     "tauri": "tauri",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:cov": "vitest run --coverage"
+    "test:cov": "vitest run --coverage",
+    "format": "biome check --write . && cd src-tauri && cargo fmt",
+    "lint": "biome check .",
+    "check": "bash scripts/run-local-checks.sh"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.13",
@@ -30,6 +33,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.15",
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

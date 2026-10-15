@@ -16,7 +16,7 @@ function isoToParts(iso: string): { month: string; day: string; weekday: string;
   if (!iso) return null;
   try {
     const d = new Date(iso);
-    if (isNaN(d.getTime())) return null;
+    if (Number.isNaN(d.getTime())) return null;
     return {
       month: d.toLocaleString("en-US", { month: "short" }).toUpperCase(),
       day: String(d.getDate()),

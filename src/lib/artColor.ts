@@ -21,12 +21,12 @@ const OKLAB_MIN_L = 0.55;
 // Ported from ratune/src/color.rs.
 
 function srgbToLinear(x: number): number {
-  return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+  return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
 }
 
 function linearToSrgb(x: number): number {
   const c = Math.max(0, x);
-  return c <= 0.0031308 ? c * 12.92 : 1.055 * Math.pow(c, 1 / 2.4) - 0.055;
+  return c <= 0.0031308 ? c * 12.92 : 1.055 * c ** (1 / 2.4) - 0.055;
 }
 
 function rgbToOklab(r: number, g: number, b: number): [number, number, number] {

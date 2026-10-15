@@ -74,7 +74,7 @@ function endOfTemplate(text: string, open: number): number {
  * otherwise shift every later argument, and the cover id would stop being `args[3]` in exactly
  * the call nobody looked at.
  */
-export function callSites(text: string): { line: number; args: string[] }[] {
+function callSites(text: string): { line: number; args: string[] }[] {
   const sites: { line: number; args: string[] }[] = [];
   const CALL = /\bgetCoverArtUrl\s*\(/g;
   for (const match of text.matchAll(CALL)) {
@@ -123,7 +123,7 @@ export function callSites(text: string): { line: number; args: string[] }[] {
  * reaches the call through a ternary or a `??`, where a trailing-only test sees nothing. `!==`
  * and a leading `!negation` are operators, not assertions.
  */
-export function assertsNonNull(arg: string): boolean {
+function assertsNonNull(arg: string): boolean {
   return /[\w$)\]]!(?!=)/.test(arg);
 }
 

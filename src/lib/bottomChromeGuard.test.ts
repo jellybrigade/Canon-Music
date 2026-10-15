@@ -21,7 +21,7 @@ function stylesheets(dir: string): string[] {
   return out.sort();
 }
 
-export function bottomChromeReads(text: string): number[] {
+function bottomChromeReads(text: string): number[] {
   const lines: number[] = [];
   for (const [index, line] of text.split("\n").entries()) {
     if (/var\(\s*--(player-bar-reserve|normalizing-bar-height)\b/.test(line)) lines.push(index + 1);

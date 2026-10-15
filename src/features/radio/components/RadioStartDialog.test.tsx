@@ -8,7 +8,7 @@ import { render, renderHook, cleanup, waitFor, act, fireEvent } from "@testing-l
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../../playback/store/player";
-import { type CurrentTrack } from "../../playback/store/playerTypes";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { __resetModalRegistry } from "../../../ui/useModalChrome";

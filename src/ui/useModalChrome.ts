@@ -104,7 +104,7 @@ export function useModalChrome(onClose: () => void, options: ModalChromeOptions 
     const opener = document.activeElement as HTMLElement | null;
     return () => {
       // The opener is often a ContextMenu item that unmounted on select.
-      if (opener && opener.isConnected && typeof opener.focus === "function") opener.focus();
+      if (opener?.isConnected && typeof opener.focus === "function") opener.focus();
       else document.body.focus?.();
     };
   }, []);

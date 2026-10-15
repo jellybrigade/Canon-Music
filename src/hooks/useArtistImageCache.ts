@@ -211,7 +211,7 @@ function getArtistStoreVersion(): number {
 }
 function bumpArtistStore(): void {
   artistStoreVersion++;
-  artistStoreListeners.forEach((l) => l());
+  artistStoreListeners.forEach((l) => { l(); });
 }
 
 function rememberArtistDataUrl(name: string, dataUrl: string): void {

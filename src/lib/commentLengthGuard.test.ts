@@ -41,7 +41,7 @@ function hasContent(line: string): boolean {
   return stripped.length > 0;
 }
 
-export function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
+function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
   const starts: number[] = [];
   let runStart = -1;
   let runLength = 0;
@@ -60,7 +60,7 @@ export function longCommentRuns(text: string, max = MAX_COMMENT_RUN): number[] {
 
 // A file that comments most of its lines is gaming the per-run cap with many short
 // comments; cap total comment lines at 40% of code lines (min 10, so tiny files have slack).
-export function commentDensityExcess(text: string): { comment: number; cap: number } | null {
+function commentDensityExcess(text: string): { comment: number; cap: number } | null {
   const nonBlank = text.split("\n").filter((line) => line.trim().length > 0);
   const comment = nonBlank.filter((line) => COMMENT_LINE.test(line) && hasContent(line)).length;
   const code = nonBlank.length - comment;

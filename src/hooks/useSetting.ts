@@ -63,7 +63,7 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
         [key, newValue]
       );
       settingCache.set(key, newValue);
-      settingListeners.get(key)?.forEach((fn) => fn(newValue));
+      settingListeners.get(key)?.forEach((fn) => { fn(newValue); });
     },
     [key]
   );
@@ -81,7 +81,7 @@ export async function refreshAllSettings(): Promise<void> {
   );
   for (const { key, value } of rows) {
     settingCache.set(key, value);
-    settingListeners.get(key)?.forEach((fn) => fn(value));
+    settingListeners.get(key)?.forEach((fn) => { fn(value); });
   }
 }
 

@@ -8,7 +8,7 @@ import { render, renderHook, cleanup, waitFor, act, fireEvent } from "@testing-l
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PlaybackTab } from "./PlaybackTab";
 import { usePlayerStore } from "../../playback/store/player";
-import { type CurrentTrack } from "../../playback/store/playerTypes";
+import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../../radio/store/radioStart";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { useStartRadio, RADIO_START_ACTION_SETTING } from "../../radio/hooks/useStartRadio";

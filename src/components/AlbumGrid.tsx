@@ -212,7 +212,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       const sections: ScrubberSection[] = [];
       for (const { label, rowIndex } of yearHeaders) {
         const year = parseInt(label, 10);
-        const bucketLabel = isNaN(year) ? label : `${Math.floor(year / 10) * 10}s`;
+        const bucketLabel = Number.isNaN(year) ? label : `${Math.floor(year / 10) * 10}s`;
         if (!seen.has(bucketLabel)) {
           seen.add(bucketLabel);
           sections.push({ label: bucketLabel, rowIndex, column: 0 });
