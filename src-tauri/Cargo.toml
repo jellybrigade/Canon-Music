@@ -36,8 +36,6 @@ tokio = { version = "1", features = ["rt", "sync"] }
 time = "=0.3.55"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-# Talk to PulseAudio/PipeWire natively instead of through the ALSA plugin; falls back to ALSA.
-cpal = { version = "0.18", features = ["pulseaudio"] }
 webkit2gtk = { version = "2.0", features = ["v2_20"] }
 # Targeted NVIDIA-only WebKitGTK workaround (dmabuf renderer / explicit sync),
 # replacing the former blanket WEBKIT_DISABLE_COMPOSITING_MODE=1 which forced
