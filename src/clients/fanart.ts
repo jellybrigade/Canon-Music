@@ -1,5 +1,5 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { keychain } from "../lib/keychain";
+import { boundedNativeFetch } from "./boundedFetch";
 
 interface FanartArtistResponse {
   artistthumb?: { url: string }[];
@@ -29,10 +29,13 @@ export async function setFanartApiKey(key: string): Promise<void> {
 /** Resolves null when fanart.tv answered without an image or refused the key (permanent, like no key);
  * rejects when it didn't answer. */
 export async function fetchFanartTvImageByMbid(mbid: string, apiKey: string): Promise<string | null> {
-  const res = await tauriFetch(`https://webservice.fanart.tv/v3/music/${mbid}?api_key=${encodeURIComponent(apiKey)}`, {
-    method: "GET",
-    headers: { Accept: "application/json", "User-Agent": "Canon Music Player" },
-  });
+  const res = await boundedNativeFetch(
+    `https://webservice.fanart.tv/v3/music/${mbid}?api_key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json", "User-Agent": "Canon Music Player" },
+    },
+  );
   if (res.status === 404 || res.status === 401 || res.status === 403) return null;
   if (!res.ok) throw new Error(`fanart.tv returned ${res.status}`);
   const data = (await res.json()) as FanartArtistResponse;

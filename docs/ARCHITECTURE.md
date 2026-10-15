@@ -25,7 +25,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
 | `src/store/` | `*SessionStore.ts`: refresh tick + row cache per mirrored domain; `libraryFilters.ts`, `albumTracksNotice.ts`. |
 | `src/lib/` | Pure helpers: `ids.ts`, `sql.ts` (`escapeLike`), `queryKeys.ts` (`QK`), `routes.ts`, `shuffle.ts`, `asyncPool.ts`, `rateLimiter.ts`, `boundedCache.ts`, `logger.ts`, `keychain.ts`, `transportHealth.ts`, `credentialRejections.ts`, `updater.ts`, `replayGainRow.ts`, `numberSetting.ts` (`parseNumberOr`, `parseIntegerOr`, `parseStalenessDays`), `trackCells.ts` (`formatDuration`, zero-safe `durationCell`/`bitrateCell`). |
-| `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. Every webview request goes through `boundedFetch.ts` (12 s on headers, `UPLOAD_TIMEOUT_MS` for uploads, 12 s per body chunk, returns a buffered `Response`); `unboundedFetchGuard.test.ts` rejects a bare `fetch(`. |
+| `src/clients/` | HTTP clients, one per service. Navidrome split: `navidrome.ts`, `navidromeUrls.ts` (auth params, cover/stream URLs), `navidromeTransport.ts` (`apiPost`), `navidromePlaylists.ts`. `dlna.ts` = UPnP SOAP. Every request goes through `boundedFetch.ts`: `boundedFetch` (webview) or `boundedNativeFetch` (`tauri-plugin-http`, for a User-Agent or CORS-blocked hosts); 12 s on headers (`UPLOAD_TIMEOUT_MS` for uploads), 12 s per body chunk, returns a buffered `Response`. `unboundedFetchGuard.test.ts` rejects a bare, `window.` or `globalThis.` `fetch(` and any other `plugin-http` import. |
 | `src/db/` | `index.ts` (`getDb()`), `migrations.ts`, `trackIdTables.ts`, `genreIdTables.ts`. |
 | `src/types/` | `library.ts` row types, `server.ts` (`Server`). |
 | `src/styles/` | `tokens.css`, `base.css`. |
@@ -79,7 +79,7 @@ Rust (`src-tauri/src/`):
 - `queue_state` and `radio_seed` settings hold server-prefixed ids and are validated against surviving servers on load.
 - Session-store hooks return `isLoading` = "no rows for this key yet", not "fetch in flight"; tick bumps refetch behind the old rows. They also return `error`: a failed read is never rendered as an empty list or an endless loading line.
 - Sync prune refuses an empty or partial fetch; a failed stage (loved, playlists) leaves stored data untouched and is reported in `skippedStages`.
-- MusicBrainz calls go through `tauri-plugin-http` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
+- MusicBrainz calls go through `boundedNativeFetch` (User-Agent) at 1 req/1.1 s; capability scoped to musicbrainz.org.
 - A DB with a schema version above `LATEST_SCHEMA_VERSION` throws `SchemaTooNewError` (fatal screen, no retry).
 
 ## 5. Feature notes

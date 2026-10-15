@@ -1,6 +1,7 @@
 // Repo-wide guard for known-issues: "A request with no deadline can hang its spinner forever."
 // LRCLIB and lyrics.ovh used bare `fetch`, so a stalled server left lyrics loading for minutes.
-// Every request goes through `boundedFetch`, which bounds headers and body alike.
+// Every request goes through `boundedFetch.ts`, which bounds headers and body alike; that includes
+// plugin-http, whose native client has no timeout of its own.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,14 +23,17 @@ function sourceFiles(dir: string): string[] {
   return out.sort();
 }
 
-// A call to the global, not a method (`.fetch(`) or a longer name (`refetch(`, `tauriFetch(`).
-const BARE_FETCH = /(?<![\w.$])fetch\(/;
+// A call to the global, bare or through `window`/`globalThis`, not a method (`.fetch(`) or a longer
+// name (`refetch(`); or any import of plugin-http's fetch.
+const UNBOUNDED_REQUEST = [/(?<![\w.$])(?:(?:window|globalThis)\.)?fetch\(/, /["']@tauri-apps\/plugin-http["']/];
 
-/** 1-based lines calling the global `fetch`; comment lines are skipped. */
+/** 1-based lines that can start a request with no deadline; comment lines are skipped. */
 function bareFetchLines(source: string): number[] {
   return source
     .split("\n")
-    .flatMap((line, index) => (!/^\s*(\/\/|\/?\*)/.test(line) && BARE_FETCH.test(line) ? [index + 1] : []));
+    .flatMap((line, index) =>
+      !/^\s*(\/\/|\/?\*)/.test(line) && UNBOUNDED_REQUEST.some((pattern) => pattern.test(line)) ? [index + 1] : [],
+    );
 }
 
 describe("network requests", () => {
@@ -48,7 +52,9 @@ describe("the sweep's own reach", () => {
   it("sees a bare fetch and ignores lookalikes and comments", () => {
     expect(bareFetchLines("const r = await fetch(url);")).toEqual([1]);
     expect(bareFetchLines('res = fetch(url, { method: "POST" })')).toEqual([1]);
-    expect(bareFetchLines("void query.refetch();\nawait tauriFetch(u);\nwindow.fetch2(x);\nobj.fetch(x);")).toEqual([]);
+    expect(bareFetchLines("await window.fetch(url);\nglobalThis.fetch(url);")).toEqual([1, 2]);
+    expect(bareFetchLines('import { fetch as tauriFetch } from "@tauri-apps/plugin-http";')).toEqual([1]);
+    expect(bareFetchLines("void query.refetch();\nwindow.fetch2(x);\nobj.fetch(x);")).toEqual([]);
     expect(bareFetchLines("// Native fetch() is blocked by CORS")).toEqual([]);
   });
 });

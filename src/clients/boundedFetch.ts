@@ -1,3 +1,5 @@
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+
 export const REQUEST_TIMEOUT_MS = 12_000;
 /** An upload's bytes all leave before its headers can come back, so its header deadline covers the transfer. */
 export const UPLOAD_TIMEOUT_MS = 60_000;
@@ -19,6 +21,16 @@ export function boundedFetch(
   options: BoundedFetchOptions = {},
 ): Promise<Response> {
   return boundedRequest((target, request) => fetch(target, request), url, init, options);
+}
+
+/** `boundedFetch` through the native client: for headers the webview won't send (User-Agent) and
+ *  hosts its CORS rules block. */
+export function boundedNativeFetch(
+  url: string,
+  init: RequestInit = {},
+  options: BoundedFetchOptions = {},
+): Promise<Response> {
+  return boundedRequest(tauriFetch, url, init, options);
 }
 
 async function boundedRequest(

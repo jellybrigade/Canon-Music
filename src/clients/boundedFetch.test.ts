@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { boundedFetch, REQUEST_TIMEOUT_MS } from "./boundedFetch";
+
+vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
+
+import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { boundedFetch, boundedNativeFetch, REQUEST_TIMEOUT_MS } from "./boundedFetch";
 
 function abortableNever(_url: string, init?: RequestInit): Promise<Response> {
   return new Promise((_resolve, reject) => {
@@ -14,6 +18,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.mocked(tauriFetch).mockReset();
 });
 
 /** A body that sends one byte every `gapMs`, `count` times; it errors on `signal` only if given one. */
@@ -146,5 +151,18 @@ describe("boundedFetch", () => {
     );
     await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS * 2);
     await expect((await pending).text()).resolves.toBe("ok");
+  });
+});
+
+describe("boundedNativeFetch", () => {
+  it("goes through the native client with the same deadline", async () => {
+    vi.mocked(tauriFetch).mockImplementation((_url, init) => abortableNever("", init));
+    const pending = expect(
+      boundedNativeFetch("https://example.test", { headers: { "User-Agent": "Canon" } }),
+    ).rejects.toThrow("aborted");
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+    expect(tauriFetch).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(tauriFetch).mock.calls[0]?.[1]?.headers).toEqual({ "User-Agent": "Canon" });
   });
 });

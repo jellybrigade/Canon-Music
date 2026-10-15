@@ -2,7 +2,7 @@
 // Tauri's Rust-backed fetch and drawing from a blob: URL only when that taints the canvas
 // (external hosts like Wikidata/Fanart/TheAudioDB rarely send CORS headers).
 
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { boundedNativeFetch } from "../clients/boundedFetch";
 import { cappedSet } from "./boundedCache";
 
 const CANVAS_SIZE = 32;
@@ -143,7 +143,7 @@ function loadImageAnonymous(src: string): Promise<HTMLImageElement | null> {
 async function extractViaProxyFetch(imageUrl: string): Promise<string | null> {
   let objectUrl: string | null = null;
   try {
-    const res = await tauriFetch(imageUrl);
+    const res = await boundedNativeFetch(imageUrl);
     if (!res.ok) return null;
     const blob = await res.blob();
     objectUrl = URL.createObjectURL(blob);
