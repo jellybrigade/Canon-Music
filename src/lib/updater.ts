@@ -3,14 +3,10 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 
 export type DownloadProgress = { downloaded: number; total: number | null };
 
-/** Returns the pending update if one is available, null otherwise. Swallows network errors. */
+/** Null means the feed answered with nothing newer; a feed that couldn't be read rejects, so callers can tell them apart. */
 export async function checkForUpdate(): Promise<Update | null> {
-  try {
-    const update = await check();
-    return update?.available ? update : null;
-  } catch {
-    return null;
-  }
+  const update = await check();
+  return update?.available ? update : null;
 }
 
 /** Downloads and installs with a progress callback, then relaunches. Throws on failure. */
