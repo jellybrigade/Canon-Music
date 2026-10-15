@@ -1,11 +1,18 @@
-import { getDb } from "../../../db";
-import { getCanonTree, canonicalKey, rawGenreId, findCanonicalSync, getAncestorIds, type CanonTree } from "./canonicalize";
-import { bucketize } from "./tagBuckets";
 import { fetchAlbumTags, fetchArtistGenreTags } from "../../../clients/lastfm";
-import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
 import type { MbGenre } from "../../../clients/musicbrainz";
+import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
+import { getDb } from "../../../db";
 import { executeBatched } from "../../../lib/dbBatch";
+import {
+  type CanonTree,
+  canonicalKey,
+  findCanonicalSync,
+  getAncestorIds,
+  getCanonTree,
+  rawGenreId,
+} from "./canonicalize";
 import { getManualGenreMappings } from "./manualMappings";
+import { bucketize } from "./tagBuckets";
 
 export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
 
@@ -50,27 +57,19 @@ export function isYearLikeGenre(s: string): boolean {
 
 export async function getSkipYearGenres(): Promise<boolean> {
   const db = await getDb();
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'tags.skip_year_genres'"
-  );
+  const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'tags.skip_year_genres'");
   return rows[0] ? rows[0].value === "true" : true;
 }
 
 export async function readNormalizedTags(albumId: string): Promise<NormalizedTags | null> {
   const db = await getDb();
   type Row = { normalized_tags_json: string | null };
-  const rows = await db.select<Row[]>(
-    "SELECT normalized_tags_json FROM albums WHERE id = ?",
-    [albumId]
-  );
+  const rows = await db.select<Row[]>("SELECT normalized_tags_json FROM albums WHERE id = ?", [albumId]);
   const json = rows[0]?.normalized_tags_json;
   if (!json) return null;
   // If album_genres is empty, the filter pipeline is broken, force re-normalization.
   type CountRow = { n: number };
-  const countRows = await db.select<CountRow[]>(
-    "SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?",
-    [albumId]
-  );
+  const countRows = await db.select<CountRow[]>("SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?", [albumId]);
   if ((countRows[0]?.n ?? 0) === 0) return null;
   return JSON.parse(json) as NormalizedTags;
 }
@@ -113,10 +112,7 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
   for (const entry of entries) {
     const manualId = manualMap.get(canonicalKey(entry.name));
     const confidence =
-      entry.source === "file" ? 1.0
-      : entry.source === "lastfm" ? 0.8
-      : entry.source === "musicbrainz" ? 0.7
-      : 0.6;
+      entry.source === "file" ? 1.0 : entry.source === "lastfm" ? 0.8 : entry.source === "musicbrainz" ? 0.7 : 0.6;
 
     if (manualId === "__ignored__") continue;
 
@@ -146,12 +142,16 @@ export async function normalizeAlbum(
   albumId: string,
   artist: string,
   album: string,
-  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null; combinedMbTags?: MbGenre[] | null }
+  identity?: {
+    lastfmArtistName?: string | null;
+    lastfmAlbumName?: string | null;
+    combinedMbGenres?: MbGenre[] | null;
+    combinedMbTags?: MbGenre[] | null;
+  },
 ): Promise<NormalizedTags> {
   const existing = inFlightPromises.get(albumId);
   if (existing) return existing;
-  const promise = _doNormalizeAlbum(albumId, artist, album, identity)
-    .finally(() => inFlightPromises.delete(albumId));
+  const promise = _doNormalizeAlbum(albumId, artist, album, identity).finally(() => inFlightPromises.delete(albumId));
   inFlightPromises.set(albumId, promise);
   return promise;
 }
@@ -160,7 +160,12 @@ async function _doNormalizeAlbum(
   albumId: string,
   artist: string,
   album: string,
-  identity?: { lastfmArtistName?: string | null; lastfmAlbumName?: string | null; combinedMbGenres?: MbGenre[] | null; combinedMbTags?: MbGenre[] | null }
+  identity?: {
+    lastfmArtistName?: string | null;
+    lastfmAlbumName?: string | null;
+    combinedMbGenres?: MbGenre[] | null;
+    combinedMbTags?: MbGenre[] | null;
+  },
 ): Promise<NormalizedTags> {
   const db = await getDb();
   const tree = await getCanonTree();
@@ -172,7 +177,7 @@ async function _doNormalizeAlbum(
      FROM track_tags tt
      JOIN tracks t ON t.id = tt.track_id
      WHERE t.album_id = ? AND tt.kind = 'genre' AND tt.source != 'lastfm-track'`,
-    [albumId]
+    [albumId],
   );
 
   // Manual mappings override auto tree-matching. Cached across albums, dropped by
@@ -223,10 +228,7 @@ async function _doNormalizeAlbum(
   }
 
   type TrackIdRow = { id: string };
-  const albumTracks = await db.select<TrackIdRow[]>(
-    "SELECT id FROM tracks WHERE album_id = ?",
-    [albumId]
-  );
+  const albumTracks = await db.select<TrackIdRow[]>("SELECT id FROM tracks WHERE album_id = ?", [albumId]);
 
   // Consensus promotion: per-track Last.fm genres that appear on ≥50% of the album's
   // tracks are promoted into the album genre pipeline with lastfm-level confidence.
@@ -245,7 +247,7 @@ async function _doNormalizeAlbum(
          AND tt.canonical_id IS NOT NULL
        GROUP BY tt.canonical_id
        HAVING COUNT(DISTINCT tt.track_id) >= ?`,
-      [albumId, Math.ceil(totalTrackCount * TRACK_GENRE_ALBUM_CONSENSUS)]
+      [albumId, Math.ceil(totalTrackCount * TRACK_GENRE_ALBUM_CONSENSUS)],
     );
     for (const row of consensusRows) {
       consensusPromoted.push(row.canonical_id);
@@ -297,7 +299,7 @@ async function _doNormalizeAlbum(
       trackTagRows,
       "(?, 'genre', ?, ?)",
       3,
-      (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`
+      (placeholders) => `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, source) VALUES ${placeholders}`,
     );
     await db.execute(
       `UPDATE track_tags
@@ -312,21 +314,21 @@ async function _doNormalizeAlbum(
        WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'musicbrainz-folksonomy')
          AND canonical_id IS NULL
          AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
-      [albumId]
+      [albumId],
     );
   }
 
   type ExclusionRow = { canonical_id: string };
   const exclusionRows = await db.select<ExclusionRow[]>(
     "SELECT canonical_id FROM album_genre_exclusions WHERE album_id = ?",
-    [albumId]
+    [albumId],
   );
   const excludedIds = new Set(exclusionRows.map((r) => r.canonical_id));
 
   type UserGenreRow = { canonical_id: string; name: string };
   const userGenreRows = await db.select<UserGenreRow[]>(
     "SELECT canonical_id, name FROM album_user_genres WHERE album_id = ?",
-    [albumId]
+    [albumId],
   );
   const { mapped, unmapped } = resolveGenreTags({
     tree,
@@ -336,7 +338,10 @@ async function _doNormalizeAlbum(
     excludedIds,
   });
 
-  const buckets = bucketize(mapped.map((t) => t.id!), tree);
+  const buckets = bucketize(
+    mapped.map((t) => t.id!),
+    tree,
+  );
 
   const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
@@ -414,7 +419,7 @@ async function _doNormalizeAlbum(
     genreInsertRows,
     "(?, ?, ?, ?)",
     4,
-    (placeholders) => `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ${placeholders}`
+    (placeholders) => `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ${placeholders}`,
   );
 
   await db.execute("DELETE FROM album_unresolved_genres WHERE album_id = ?", [albumId]);
@@ -424,13 +429,15 @@ async function _doNormalizeAlbum(
     unresolvedInsertRows,
     "(?, ?, 'genre', ?)",
     3,
-    (placeholders) => `INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES ${placeholders}`
+    (placeholders) =>
+      `INSERT OR IGNORE INTO album_unresolved_genres (album_id, raw_value, kind, source) VALUES ${placeholders}`,
   );
 
-  await db.execute(
-    "UPDATE albums SET normalized_tags_json = ?, computed_at = ? WHERE id = ?",
-    [JSON.stringify(normalizedTags), normalizedTags.computed_at, albumId]
-  );
+  await db.execute("UPDATE albums SET normalized_tags_json = ?, computed_at = ? WHERE id = ?", [
+    JSON.stringify(normalizedTags),
+    normalizedTags.computed_at,
+    albumId,
+  ]);
 
   return normalizedTags;
 }

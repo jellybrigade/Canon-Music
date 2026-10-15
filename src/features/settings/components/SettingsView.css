@@ -54,7 +54,9 @@
   color: var(--text-secondary);
   cursor: pointer;
   text-align: left;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   width: 100%;
   white-space: nowrap;
 }
@@ -192,7 +194,9 @@
   height: 0.9rem;
   border-radius: 50%;
   background: var(--text-secondary);
-  transition: transform var(--duration-slow), background var(--duration-slow);
+  transition:
+    transform var(--duration-slow),
+    background var(--duration-slow);
 }
 
 .toggle-switch input:checked + .toggle-track {
@@ -280,7 +284,6 @@
   margin: 0 0 var(--space-sm);
   line-height: 1.5;
 }
-
 
 .settings-field {
   display: flex;
@@ -401,7 +404,10 @@
   border-radius: var(--radius-lg);
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color 150ms ease-out, border-color 150ms ease-out, background 150ms ease-out;
+  transition:
+    color 150ms ease-out,
+    border-color 150ms ease-out,
+    background 150ms ease-out;
 }
 
 .settings-community-btn:hover {

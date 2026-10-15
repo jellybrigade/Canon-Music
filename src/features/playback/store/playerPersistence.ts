@@ -7,26 +7,17 @@ export function createPlayerPersistence(get: PlayerGet) {
     try {
       const { radioActive, radioSeed, radioMode, radioLabel, radioSimilarityScale } = get();
       const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)",
-        [radioActive ? "1" : "0"]
-      );
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_seed', ?)",
-        [radioSeed ? JSON.stringify(radioSeed) : ""]
-      );
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_mode', ?)",
-        [radioMode]
-      );
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_label', ?)",
-        [radioLabel ?? ""]
-      );
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('radio.similarity_scale', ?)",
-        [String(radioSimilarityScale)]
-      );
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_active', ?)", [
+        radioActive ? "1" : "0",
+      ]);
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_seed', ?)", [
+        radioSeed ? JSON.stringify(radioSeed) : "",
+      ]);
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_mode', ?)", [radioMode]);
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('radio_label', ?)", [radioLabel ?? ""]);
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('radio.similarity_scale', ?)", [
+        String(radioSimilarityScale),
+      ]);
     } catch (e) {
       console.error("Failed to persist radio state:", e);
     }
@@ -37,10 +28,9 @@ export function createPlayerPersistence(get: PlayerGet) {
       const { queue, queueIndex, shuffleOrder, isShuffled, currentTrack } = get();
       const snapshot: QueueSnapshot = { queue, queueIndex, shuffleOrder, isShuffled, currentTrack };
       const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('queue_state', ?)",
-        [JSON.stringify(snapshot)]
-      );
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('queue_state', ?)", [
+        JSON.stringify(snapshot),
+      ]);
     } catch (e) {
       console.error("Failed to persist queue state:", e);
     }
@@ -62,7 +52,7 @@ export function createPlayerPersistence(get: PlayerGet) {
       const db = await getDb();
       await db.execute(
         "INSERT OR REPLACE INTO settings (key, value) VALUES ('volume', ?), ('player.pre_mute_volume', ?)",
-        [String(rawVolume), String(runtime.preMuteVolume)]
+        [String(rawVolume), String(runtime.preMuteVolume)],
       );
     } catch (e) {
       console.error("Failed to persist volume:", e);

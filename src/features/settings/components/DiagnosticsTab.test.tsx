@@ -3,20 +3,18 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DiagnosticsTab } from "./DiagnosticsTab";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { DiagnosticsTab } from "./DiagnosticsTab";
 
 let db: FakeDatabase;
 
 function seedQueuedScrobble(serverId: string) {
   db.raw
-    .prepare(
-      `INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES (?, 'Song', 'Artist', 0)`
-    )
+    .prepare(`INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES (?, 'Song', 'Artist', 0)`)
     .run(`${serverId}:t1`);
 }
 
@@ -32,13 +30,13 @@ function renderTab(serverId: string | undefined) {
         serverWithCredential={undefined}
         serverId={serverId}
       />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
 function scrobbleCountText(): string | undefined {
   const heading = Array.from(document.querySelectorAll(".settings-section-title")).find(
-    (h) => h.textContent === "Scrobble queue"
+    (h) => h.textContent === "Scrobble queue",
   );
   return heading?.closest("section")?.querySelector(".settings-diag-value")?.textContent ?? undefined;
 }

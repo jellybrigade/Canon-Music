@@ -2,17 +2,18 @@
  * On album open, fetches Last.fm track tags for stale tracks, then re-runs normalizeAlbum so
  * radio and album genres see them. Gated by `tags.enrich_tracks`; failures are silent.
  */
-import { useEffect, useRef } from "react";
+
 import { useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../../db";
-import { QK } from "../../../lib/queryKeys";
+import { useEffect, useRef } from "react";
 import { fetchTrackTags } from "../../../clients/lastfm";
-import { getCanonTree, findCanonicalSync } from "../../tags/lib/canonicalize";
+import { getDb } from "../../../db";
+import { useSetting } from "../../../hooks/useSetting";
+import { parseStalenessDays } from "../../../lib/numberSetting";
+import { QK } from "../../../lib/queryKeys";
+import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
+import { findCanonicalSync, getCanonTree } from "../../tags/lib/canonicalize";
 import { normalizeAlbum } from "../../tags/lib/tagNormalize";
 import { useAlbumIdentity } from "./useAlbumIdentity";
-import { useSetting } from "../../../hooks/useSetting";
-import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
-import { parseStalenessDays } from "../../../lib/numberSetting";
 
 // Module-level dedupe: one enrichment run per album at a time across all mounts.
 const inFlight = new Map<string, Promise<void>>();
@@ -30,28 +31,31 @@ async function enrichAlbumTracks(
   albumArtist: string,
   albumName: string,
   staleDays: number,
-  identity: { lastfm_artist_name?: string | null; lastfm_album_name?: string | null; combined_genres_json?: string | null; combined_tags_json?: string | null } | null,
+  identity: {
+    lastfm_artist_name?: string | null;
+    lastfm_album_name?: string | null;
+    combined_genres_json?: string | null;
+    combined_tags_json?: string | null;
+  } | null,
 ): Promise<void> {
   const db = await getDb();
 
   const tracks = await db.select<TrackStub[]>(
     `SELECT id, title, artist, album_artist, tags_enriched_at
      FROM tracks WHERE album_id = ? ORDER BY disc_number, track_number`,
-    [albumId]
+    [albumId],
   );
   if (tracks.length === 0) return;
 
   const staleThreshold = Math.floor(Date.now() / 1000) - staleDays * 86400;
-  const staleTracks = tracks.filter(
-    (t) => t.tags_enriched_at === null || t.tags_enriched_at < staleThreshold
-  );
+  const staleTracks = tracks.filter((t) => t.tags_enriched_at === null || t.tags_enriched_at < staleThreshold);
   if (staleTracks.length === 0) return;
 
   // Load canon tree + manual mappings once for the whole album run.
   const tree = await getCanonTree();
   type MappingRow = { raw_value: string; canonical_id: string; kind: string };
   const manualRows = await db.select<MappingRow[]>(
-    "SELECT raw_value, canonical_id, kind FROM tag_mappings WHERE source = 'manual'"
+    "SELECT raw_value, canonical_id, kind FROM tag_mappings WHERE source = 'manual'",
   );
   const manualMap = new Map(manualRows.map((r) => [`${r.raw_value}:${r.kind}`, r.canonical_id]));
 
@@ -92,15 +96,12 @@ async function enrichAlbumTracks(
       await db.execute(
         `INSERT OR IGNORE INTO track_tags (track_id, kind, raw_value, canonical_id, source)
          VALUES (?, ?, ?, ?, 'lastfm-track')`,
-        [track.id, kind, raw, canonId]
+        [track.id, kind, raw, canonId],
       );
     }
 
     // Stamp only on successful fetch, leaves null for retry on failure.
-    await db.execute(
-      "UPDATE tracks SET tags_enriched_at = ? WHERE id = ?",
-      [Math.floor(Date.now() / 1000), track.id]
-    );
+    await db.execute("UPDATE tracks SET tags_enriched_at = ? WHERE id = ?", [Math.floor(Date.now() / 1000), track.id]);
     anySucceeded = true;
   }
 
@@ -110,10 +111,18 @@ async function enrichAlbumTracks(
   let combinedMbGenres: Array<{ name: string; count: number }> | null = null;
   let combinedMbTags: Array<{ name: string; count: number }> | null = null;
   if (identity?.combined_genres_json) {
-    try { combinedMbGenres = JSON.parse(identity.combined_genres_json) as Array<{ name: string; count: number }>; } catch { /* ignore */ }
+    try {
+      combinedMbGenres = JSON.parse(identity.combined_genres_json) as Array<{ name: string; count: number }>;
+    } catch {
+      /* ignore */
+    }
   }
   if (identity?.combined_tags_json) {
-    try { combinedMbTags = JSON.parse(identity.combined_tags_json) as Array<{ name: string; count: number }>; } catch { /* ignore */ }
+    try {
+      combinedMbTags = JSON.parse(identity.combined_tags_json) as Array<{ name: string; count: number }>;
+    } catch {
+      /* ignore */
+    }
   }
   await normalizeAlbum(albumId, albumArtist, albumName, {
     lastfmArtistName: identity?.lastfm_artist_name ?? null,
@@ -123,11 +132,7 @@ async function enrichAlbumTracks(
   });
 }
 
-export function useEnrichAlbumTracks(
-  albumId: string,
-  albumArtist: string,
-  albumName: string,
-) {
+export function useEnrichAlbumTracks(albumId: string, albumArtist: string, albumName: string) {
   const queryClient = useQueryClient();
   const [enrichTracks] = useSetting("tags.enrich_tracks", "true");
   const [staleDaysStr] = useSetting("tags.staleness_days", "30");
@@ -156,7 +161,9 @@ export function useEnrichAlbumTracks(
       })
       // A failed run releases the claim so a later trigger can retry. Safe against a loop:
       // nothing here re-runs the effect, only a dep moving does.
-      .catch(() => { if (ranRef.current === albumId) ranRef.current = null; })
+      .catch(() => {
+        if (ranRef.current === albumId) ranRef.current = null;
+      })
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);

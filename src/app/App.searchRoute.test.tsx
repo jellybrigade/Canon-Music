@@ -21,9 +21,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -42,11 +40,11 @@ vi.mock("../components/FilterSidebar", () => ({ FilterSidebar: () => <div data-t
 vi.mock("../pages/ArtistGrid", () => ({ ArtistGrid: () => <div data-testid="artist-grid" /> }));
 vi.mock("../pages/HomeView", () => ({ HomeView: () => <div data-testid="home-view" /> }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useEffect } from "react";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { MemoryRouter, useLocation, useNavigationType } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
@@ -61,14 +59,14 @@ let navLog: string[] = [];
 
 async function seedLibrary() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
   testDb.raw
-    .prepare(
-      `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, ?)`,
-    )
+    .prepare(`INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, 'srv-a', 'navidrome', ?, ?)`)
     .run("alb-1", "Arrival", "ABBA");
   // `tracks_fts` has no triggers (migrations v5); `sync.ts` writes it explicitly, so a test that
   // wants search hits has to seed it by hand.
@@ -89,7 +87,9 @@ async function seedLibrary() {
 function NavProbe() {
   const location = useLocation();
   const navigationType = useNavigationType();
-  useEffect(() => { navLog.push(navigationType); }, [location, navigationType]);
+  useEffect(() => {
+    navLog.push(navigationType);
+  }, [location, navigationType]);
   return <div data-testid="url">{location.pathname + location.search}</div>;
 }
 
@@ -124,24 +124,26 @@ function press(key: string, opts: { ctrlKey?: boolean; altKey?: boolean; target?
 
 const searchInput = () => document.querySelector(".search-bar-input") as HTMLInputElement | null;
 const url = () => screen.getByTestId("url").textContent;
-const sidebarButton = (label: string) =>
-  document.querySelector(`.sidebar-btn[title="${label}"]`) as HTMLElement | null;
+const sidebarButton = (label: string) => document.querySelector(`.sidebar-btn[title="${label}"]`) as HTMLElement | null;
 
 /** Go to /search by shortcut and wait for the route to be the one rendering. */
 async function openSearch() {
-  await act(async () => { press("f", { ctrlKey: true }); });
+  await act(async () => {
+    press("f", { ctrlKey: true });
+  });
   await waitFor(() => expect(searchInput()).not.toBeNull());
 }
 
 /** Type into the search box and let the 200ms debounce land in the URL. */
 async function type(value: string) {
   fireEvent.change(searchInput()!, { target: { value } });
-  await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+  await act(async () => {
+    await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2));
+  });
 }
 
 /** The three section reads `useSearch` issues under one `Promise.all`, per completed round. */
-const searchReads = () =>
-  testDb.queryLog.filter((q) => q.sql.includes("ranked AS MATERIALIZED")).length;
+const searchReads = () => testDb.queryLog.filter((q) => q.sql.includes("ranked AS MATERIALIZED")).length;
 
 beforeEach(async () => {
   resetTauriMocks();
@@ -165,7 +167,9 @@ describe("the /search route", () => {
     await type("abba");
     expect(url()).toBe("/search?q=abba");
 
-    await act(async () => { press("ArrowLeft", { altKey: true }); });
+    await act(async () => {
+      press("ArrowLeft", { altKey: true });
+    });
 
     await waitFor(() => expect(url()).toBe("/library"));
     expect(searchInput()).toBeNull();
@@ -176,7 +180,9 @@ describe("the /search route", () => {
     await openSearch();
     await type("abba");
 
-    await act(async () => { fireEvent.mouseUp(window, { button: 3 }); });
+    await act(async () => {
+      fireEvent.mouseUp(window, { button: 3 });
+    });
 
     await waitFor(() => expect(url()).toBe("/library"));
   });
@@ -186,7 +192,9 @@ describe("the /search route", () => {
     await openSearch();
     await type("abba");
 
-    await act(async () => { press("Escape", { target: searchInput()! }); });
+    await act(async () => {
+      press("Escape", { target: searchInput()! });
+    });
 
     await waitFor(() => expect(url()).toBe("/library"));
   });
@@ -211,7 +219,9 @@ describe("the /search route", () => {
     await mountApp(["/search"], 0);
     await waitFor(() => expect(searchInput()).not.toBeNull());
 
-    await act(async () => { press("Escape", { target: searchInput()! }); });
+    await act(async () => {
+      press("Escape", { target: searchInput()! });
+    });
 
     await waitFor(() => expect(url()).toBe("/home"));
   });
@@ -235,7 +245,9 @@ describe("the /search route", () => {
     // The sidebar highlight used to lie outright: Library stayed lit while search covered the
     // whole app, because the highlight reads the URL and the URL never moved.
     await mountApp(["/library"]);
-    await act(async () => { fireEvent.click(sidebarButton("Search")!); });
+    await act(async () => {
+      fireEvent.click(sidebarButton("Search")!);
+    });
 
     await waitFor(() => expect(url()).toBe("/search"));
     expect(sidebarButton("Search")!.className).toContain("sidebar-btn--active");
@@ -251,7 +263,9 @@ describe("the /search route", () => {
     const beforeVisits = navLog.length;
     searchInput()!.setSelectionRange(4, 4);
 
-    await act(async () => { press("f", { ctrlKey: true, target: searchInput()! }); });
+    await act(async () => {
+      press("f", { ctrlKey: true, target: searchInput()! });
+    });
 
     expect(url()).toBe("/search?q=abba");
     expect(navLog.length).toBe(beforeVisits);
@@ -272,7 +286,9 @@ describe("the /search route's cost", () => {
     for (const value of ["a", "ab", "abb", "abba", "abbas"]) {
       fireEvent.change(searchInput()!, { target: { value } });
     }
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2));
+    });
     await waitFor(() => expect(url()).toBe("/search?q=abbas"));
 
     expect(navLog.filter((t) => t === "PUSH").length).toBe(1);
@@ -291,7 +307,9 @@ describe("the /search route's cost", () => {
     for (const value of ["a", "ab", "abb", "abba", "abbas"]) {
       fireEvent.change(searchInput()!, { target: { value } });
     }
-    await act(async () => { await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, DEBOUNCE_MS * 2));
+    });
 
     expect(searchInput()).toBe(first);
     expect(searchInput()!.value).toBe("abbas");
@@ -307,11 +325,17 @@ describe("the /search route's cost", () => {
     // navigation, and then the write this asserts against has already landed.
     vi.useFakeTimers();
     fireEvent.change(searchInput()!, { target: { value: "abba" } });
-    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS / 2); });
+    await act(async () => {
+      vi.advanceTimersByTime(DEBOUNCE_MS / 2);
+    });
 
-    await act(async () => { press("ArrowLeft", { altKey: true }); });
+    await act(async () => {
+      press("ArrowLeft", { altKey: true });
+    });
     expect(url()).toBe("/library");
-    await act(async () => { vi.advanceTimersByTime(DEBOUNCE_MS * 2); });
+    await act(async () => {
+      vi.advanceTimersByTime(DEBOUNCE_MS * 2);
+    });
 
     expect(url()).toBe("/library");
   });

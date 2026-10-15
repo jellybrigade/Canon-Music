@@ -1,26 +1,27 @@
 // On open, refreshes a stale artist_identity row from Last.fm artist.getInfo, preserving
 // MB columns. Failures are silent.
-import { useCallback, useEffect, useRef, useState } from "react";
+
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../../db";
-import { QK } from "../../../lib/queryKeys";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchFanartTvImageByMbid, getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchArtistReleaseGroupTitles, fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
-import { similarity } from "../lib/fuzzyMatch";
+import { getArtistImageFromServer } from "../../../clients/navidrome";
+import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
+import { getDb } from "../../../db";
+import type { ServerWithCredential } from "../../../hooks/useServer";
+import { useSetting } from "../../../hooks/useSetting";
+import { stripServerPrefix } from "../../../lib/ids";
+import { parseStalenessDays } from "../../../lib/numberSetting";
+import { QK } from "../../../lib/queryKeys";
+import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
 import {
   ARTIST_AUTO_SELECT_SETTING,
   DEFAULT_ARTIST_AUTO_SELECT_SCORE,
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
-import { getFanartApiKey, fetchFanartTvImageByMbid } from "../../../clients/fanart";
-import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } from "../../../clients/theaudiodb";
-import { getArtistImageFromServer } from "../../../clients/navidrome";
-import { stripServerPrefix } from "../../../lib/ids";
-import type { ServerWithCredential } from "../../../hooks/useServer";
-import { useSetting } from "../../../hooks/useSetting";
-import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
-import { parseStalenessDays } from "../../../lib/numberSetting";
+import { similarity } from "../lib/fuzzyMatch";
 
 /** Probes a URL via Image() (sidesteps CORS, unlike fetch) so a server-scraped
  * portrait that 404s (no image on file) never reaches the cache/UI as a broken image. */
@@ -44,7 +45,7 @@ async function findNativeArtistId(artistName: string, serverId: string): Promise
      JOIN artist_aliases al ON al.canonical_name = a.name
      WHERE a.server_id = ? AND al.alias_name = ?
      LIMIT 1`,
-    [serverId, artistName, serverId, artistName]
+    [serverId, artistName, serverId, artistName],
   );
   const row = rows[0];
   return row ? stripServerPrefix(row.id, serverId) : null;
@@ -58,8 +59,8 @@ export interface ArtistEnrichmentRow {
   bio: string | null;
   listeners: number | null;
   playcount: number | null;
-  similar_json: string | null;   // JSON string[]
-  top_tags_json: string | null;  // JSON string[]
+  similar_json: string | null; // JSON string[]
+  top_tags_json: string | null; // JSON string[]
   lastfm_image_url: string | null;
   wikidata_image_url: string | null;
   navidrome_image_url: string | null;
@@ -118,7 +119,7 @@ async function disambiguateArtistByLocalAlbums(
      WHERE artist = ?
         OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?)
      LIMIT 50`,
-    [artistName, artistName]
+    [artistName, artistName],
   );
   const localAlbums = localRows.map((r) => r.name);
   if (localAlbums.length === 0) return null;
@@ -131,23 +132,25 @@ async function disambiguateArtistByLocalAlbums(
     .slice(0, 3);
   if (ranked.length === 0) return null;
 
-  const scored = (await Promise.all(
-    ranked.map(async ({ candidate }) => {
-      try {
-        const rgTitles = await fetchArtistReleaseGroupTitles(candidate.id);
-        if (rgTitles.length === 0) return null;
-        // Average best-match score for each local album against candidate's release groups
-        let total = 0;
-        for (const localName of localAlbums) {
-          const best = Math.max(...rgTitles.map((t) => similarity(localName, t)));
-          total += best;
+  const scored = (
+    await Promise.all(
+      ranked.map(async ({ candidate }) => {
+        try {
+          const rgTitles = await fetchArtistReleaseGroupTitles(candidate.id);
+          if (rgTitles.length === 0) return null;
+          // Average best-match score for each local album against candidate's release groups
+          let total = 0;
+          for (const localName of localAlbums) {
+            const best = Math.max(...rgTitles.map((t) => similarity(localName, t)));
+            total += best;
+          }
+          return { id: candidate.id, score: total / localAlbums.length };
+        } catch {
+          return null;
         }
-        return { id: candidate.id, score: total / localAlbums.length };
-      } catch {
-        return null;
-      }
-    })
-  )).filter((s): s is { id: string; score: number } => s !== null);
+      }),
+    )
+  ).filter((s): s is { id: string; score: number } => s !== null);
   if (scored.length === 0) return null;
 
   scored.sort((a, b) => b.score - a.score);
@@ -160,7 +163,7 @@ async function disambiguateArtistByLocalAlbums(
        ON CONFLICT(artist_name) DO UPDATE SET
          mb_artist_id = excluded.mb_artist_id,
          confirmed_at = excluded.confirmed_at`,
-      [artistName, best.id, Math.floor(Date.now() / 1000)]
+      [artistName, best.id, Math.floor(Date.now() / 1000)],
     );
     return best.id;
   }
@@ -249,7 +252,11 @@ async function enrichArtist({
     const nativeId = await findNativeArtistId(artistName, server.id).catch(markIncomplete);
     if (nativeId) {
       const url = await getArtistImageFromServer(
-        server.url, server.username, credential, nativeId, server.alt_url ?? undefined
+        server.url,
+        server.username,
+        credential,
+        nativeId,
+        server.alt_url ?? undefined,
       );
       if (url && (await probeImageLoads(url))) navidromeImageUrl = url;
     }
@@ -291,14 +298,14 @@ async function enrichArtist({
       imageUrl,
       navidromeImageUrl,
       enrichedAt,
-    ]
+    ],
   );
   return { isIdentityLookupIncomplete };
 }
 
 export function useEnrichArtist(
   artistName: string,
-  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential; identifyIfUnidentified?: boolean }
+  options?: { enabled?: boolean; serverWithCredential?: ServerWithCredential; identifyIfUnidentified?: boolean },
 ) {
   const enabled = options?.enabled ?? true;
   const identifyIfUnidentified = options?.identifyIfUnidentified ?? false;
@@ -323,10 +330,9 @@ export function useEnrichArtist(
     queryFn: async (): Promise<ArtistEnrichmentRow | null> => {
       if (!artistName) return null;
       const db = await getDb();
-      const rows = await db.select<ArtistEnrichmentRow[]>(
-        "SELECT * FROM artist_identity WHERE artist_name = ?",
-        [artistName]
-      );
+      const rows = await db.select<ArtistEnrichmentRow[]>("SELECT * FROM artist_identity WHERE artist_name = ?", [
+        artistName,
+      ]);
       return rows[0] ?? null;
     },
     // Gate on the caller's `enabled` too: grid/similar-artist cards mount dozens at
@@ -348,7 +354,7 @@ export function useEnrichArtist(
 
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
     const mbArtistId = query.data?.mb_artist_id ?? null;
-    const hasWikidataImage = !!(query.data?.wikidata_image_url);
+    const hasWikidataImage = !!query.data?.wikidata_image_url;
 
     if (!mbArtistId) identifyAttempted.add(artistName);
 
@@ -363,7 +369,12 @@ export function useEnrichArtist(
       await slot;
       try {
         const { isIdentityLookupIncomplete } = await enrichArtist({
-          artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+          artistName,
+          lastfmName,
+          mbArtistId,
+          hasWikidataImage,
+          serverWithCredential,
+          minAutoSelectScore,
         });
         if (isIdentityLookupIncomplete) identifyAttempted.delete(artistName);
         await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
@@ -381,8 +392,16 @@ export function useEnrichArtist(
     })().finally(() => inFlight.delete(artistName));
     inFlight.set(artistName, promise);
   }, [
-    enabled, query.isLoading, query.data, artistName, staleDays, queryClient, serverWithCredential,
-    minAutoSelectScore, isMinAutoSelectScoreLoaded, identifyIfUnidentified,
+    enabled,
+    query.isLoading,
+    query.data,
+    artistName,
+    staleDays,
+    queryClient,
+    serverWithCredential,
+    minAutoSelectScore,
+    isMinAutoSelectScoreLoaded,
+    identifyIfUnidentified,
   ]);
 
   const refresh = useCallback(async () => {
@@ -392,10 +411,15 @@ export function useEnrichArtist(
     ranRef.current = null;
     const lastfmName = query.data?.lastfm_artist_name ?? artistName;
     const mbArtistId = query.data?.mb_artist_id ?? null;
-    const hasWikidataImage = !!(query.data?.wikidata_image_url);
+    const hasWikidataImage = !!query.data?.wikidata_image_url;
     try {
       await enrichArtist({
-        artistName, lastfmName, mbArtistId, hasWikidataImage, serverWithCredential, minAutoSelectScore,
+        artistName,
+        lastfmName,
+        mbArtistId,
+        hasWikidataImage,
+        serverWithCredential,
+        minAutoSelectScore,
       });
       await queryClient.invalidateQueries({ queryKey: QK.artistEnrichment(artistName) });
       useArtistBrowseSessionStore.getState().bumpRefresh();

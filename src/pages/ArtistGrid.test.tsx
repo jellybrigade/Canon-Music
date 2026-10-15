@@ -21,15 +21,15 @@ vi.mock("../hooks/useSetting", () => ({
   useBoolSetting: (_key: string, def: boolean) => [def, async () => {}, true],
 }));
 
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ArtistGrid } from "./ArtistGrid";
+import { cleanup, render } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
-import { createMigratedTestDb } from "../test/sqlite";
-import { resetTauriMocks } from "../test/mocks/tauri";
-import type { ArtistRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { resetTauriMocks } from "../test/mocks/tauri";
+import { createMigratedTestDb } from "../test/sqlite";
+import type { ArtistRow } from "../types/library";
+import { ArtistGrid } from "./ArtistGrid";
 
 const SRV: ServerWithCredential = {
   server: {
@@ -75,7 +75,7 @@ function renderGrid(props: { artists: ArtistRow[]; isLoading?: boolean }) {
         onSelect={() => {}}
         isLoading={props.isLoading ?? false}
       />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -104,9 +104,7 @@ beforeAll(() => {
 
 beforeEach(async () => {
   resetTauriMocks();
-  vi.mocked(getDb).mockResolvedValue(
-    (await createMigratedTestDb()) as unknown as Awaited<ReturnType<typeof getDb>>
-  );
+  vi.mocked(getDb).mockResolvedValue((await createMigratedTestDb()) as unknown as Awaited<ReturnType<typeof getDb>>);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
 
@@ -127,7 +125,7 @@ describe("ArtistGrid", () => {
           serverWithCredential={SRV}
           onSelect={() => {}}
         />
-      </QueryClientProvider>
+      </QueryClientProvider>,
     );
     expect(paintedCols()).toBe(EXPECTED_COLS);
   });

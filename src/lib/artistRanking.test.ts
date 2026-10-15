@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mostPlayedHere } from "./artistRanking";
 
 function track(title: string, play_count: number | null, played_at: string | null = null) {
@@ -19,7 +19,7 @@ describe("mostPlayedHere", () => {
   it("breaks a play-count tie on the most recent play", () => {
     const ranked = mostPlayedHere(
       [track("older", 4, "2026-01-01T00:00:00Z"), track("newer", 4, "2026-06-01T00:00:00Z")],
-      10
+      10,
     );
     expect(ranked.map((t) => t.title)).toEqual(["newer", "older"]);
   });

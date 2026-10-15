@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getDb } from "../../../db";
+import type { NodeSection, TreeNode } from "../lib/canonicalize";
 import { getCanonTree } from "../lib/canonicalize";
-import type { TreeNode, NodeSection } from "../lib/canonicalize";
 
 export interface GenreTreeData {
   nodeById: Map<string, TreeNode>;
@@ -40,7 +40,7 @@ async function buildGenreTree(): Promise<GenreTreeData> {
   const countRows = await db.select<CountRow[]>(
     `SELECT canonical_id, COUNT(DISTINCT album_id) AS album_count
      FROM album_genres
-     GROUP BY canonical_id`
+     GROUP BY canonical_id`,
   );
 
   const countById = new Map<string, number>();
@@ -89,12 +89,16 @@ export function useGenreTree(): { data: GenreTreeData | null; error: string | nu
   useEffect(() => {
     let cancelled = false;
     buildGenreTree()
-      .then((d) => { if (!cancelled) setData(d); })
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
       .catch((err: unknown) => {
         console.error("useGenreTree: failed to build genre tree", err);
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [attempt]);
 
   const retry = useCallback(() => {

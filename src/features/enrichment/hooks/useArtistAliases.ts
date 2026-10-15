@@ -1,8 +1,8 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
-import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
 import { useArtistAlbumsSessionStore } from "../../../store/artistAlbumsSessionStore";
+import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionStore";
 
 export interface ArtistAlias {
   alias_name: string;
@@ -15,7 +15,7 @@ export function useArtistAliases() {
     queryFn: async (): Promise<ArtistAlias[]> => {
       const db = await getDb();
       return db.select<ArtistAlias[]>(
-        `SELECT alias_name, canonical_name FROM artist_aliases ORDER BY canonical_name, alias_name`
+        `SELECT alias_name, canonical_name FROM artist_aliases ORDER BY canonical_name, alias_name`,
       );
     },
   });
@@ -28,7 +28,7 @@ export function useArtistCanonicalOf(aliasName: string) {
       const db = await getDb();
       const rows = await db.select<{ canonical_name: string }[]>(
         `SELECT canonical_name FROM artist_aliases WHERE alias_name = ?`,
-        [aliasName]
+        [aliasName],
       );
       return rows[0]?.canonical_name ?? null;
     },
@@ -42,7 +42,7 @@ export function useAliasesOfCanonical(canonicalName: string) {
       const db = await getDb();
       const rows = await db.select<{ alias_name: string }[]>(
         `SELECT alias_name FROM artist_aliases WHERE canonical_name = ? ORDER BY alias_name`,
-        [canonicalName]
+        [canonicalName],
       );
       return rows.map((r) => r.alias_name);
     },
@@ -54,10 +54,10 @@ export function useSetArtistAlias() {
   return useMutation({
     mutationFn: async ({ aliasName, canonicalName }: { aliasName: string; canonicalName: string }) => {
       const db = await getDb();
-      await db.execute(
-        `INSERT OR REPLACE INTO artist_aliases (alias_name, canonical_name) VALUES (?, ?)`,
-        [aliasName, canonicalName]
-      );
+      await db.execute(`INSERT OR REPLACE INTO artist_aliases (alias_name, canonical_name) VALUES (?, ?)`, [
+        aliasName,
+        canonicalName,
+      ]);
     },
     onSuccess: (_data, { aliasName }) => {
       void qc.invalidateQueries({ queryKey: QK.artistAliases() });
@@ -75,7 +75,7 @@ export function useRemoveArtistAlias() {
       const db = await getDb();
       const rows = await db.select<{ canonical_name: string }[]>(
         `SELECT canonical_name FROM artist_aliases WHERE alias_name = ?`,
-        [aliasName]
+        [aliasName],
       );
       const canonicalName = rows[0]?.canonical_name ?? null;
       await db.execute(`DELETE FROM artist_aliases WHERE alias_name = ?`, [aliasName]);

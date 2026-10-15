@@ -6,10 +6,7 @@ export const WAVEFORM_STUB_PEAK = 0.1;
 // pass for the previous track's shape.
 const PLACEHOLDER_PEAKS: readonly number[] = new Array<number>(WAVEFORM_BAR_COUNT).fill(WAVEFORM_STUB_PEAK);
 
-export function displayedWaveformPeaks(
-  showWaveform: boolean,
-  peaks: number[] | null
-): readonly number[] | null {
+export function displayedWaveformPeaks(showWaveform: boolean, peaks: number[] | null): readonly number[] | null {
   if (!showWaveform) return null;
   return peaks && peaks.length > 0 ? peaks : PLACEHOLDER_PEAKS;
 }

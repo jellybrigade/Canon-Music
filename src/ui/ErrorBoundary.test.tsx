@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { reloadApp } from "../lib/reloadApp";
 import { ROUTES } from "../lib/routes";
 import { renderCatching } from "../test/renderCatching";
-import { reloadApp } from "../lib/reloadApp";
 import { ErrorBoundary } from "./ErrorBoundary";
 
 vi.mock("../lib/reloadApp", () => ({ reloadApp: vi.fn() }));

@@ -32,12 +32,7 @@ export async function discoverRenderers(timeoutMs = 4000): Promise<DlnaRenderer[
 
 // ── SOAP helpers ───────────────────────────────────────────────────────────
 
-async function soapAction(
-  controlUrl: string,
-  serviceType: string,
-  action: string,
-  body: string
-): Promise<string> {
+async function soapAction(controlUrl: string, serviceType: string, action: string, body: string): Promise<string> {
   const envelope = `<?xml version="1.0" encoding="utf-8"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
   <s:Body>
@@ -67,8 +62,8 @@ function secsToTime(seconds: number): string {
 
 function timeToSecs(t: string): number {
   const parts = t.split(":").map(Number);
-  if (parts.length === 3) return (parts[0]! * 3600) + (parts[1]! * 60) + (parts[2]! || 0);
-  if (parts.length === 2) return (parts[0]! * 60) + (parts[1]! || 0);
+  if (parts.length === 3) return parts[0]! * 3600 + parts[1]! * 60 + (parts[2]! || 0);
+  if (parts.length === 2) return parts[0]! * 60 + (parts[1]! || 0);
   return parts[0]! || 0;
 }
 
@@ -83,7 +78,7 @@ export function buildDidlMetadata(
   track: CurrentTrack,
   streamUrl: string,
   coverArtUrl: string | null,
-  transcoding = true
+  transcoding = true,
 ): string {
   const title = escapeXml(track.title);
   const artist = escapeXml(track.artist ?? "");
@@ -122,46 +117,27 @@ function escapeXml(s: string): string {
 
 // ── AVTransport actions ────────────────────────────────────────────────────
 
-export async function setAvTransportUri(
-  controlUrl: string,
-  streamUrl: string,
-  metadata: string
-): Promise<void> {
+export async function setAvTransportUri(controlUrl: string, streamUrl: string, metadata: string): Promise<void> {
   await soapAction(
     controlUrl,
     AV_SERVICE,
     "SetAVTransportURI",
     `<InstanceID>0</InstanceID>
      <CurrentURI>${escapeXml(streamUrl)}</CurrentURI>
-     <CurrentURIMetaData>${escapeXml(metadata)}</CurrentURIMetaData>`
+     <CurrentURIMetaData>${escapeXml(metadata)}</CurrentURIMetaData>`,
   );
 }
 
 export async function avPlay(controlUrl: string): Promise<void> {
-  await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "Play",
-    `<InstanceID>0</InstanceID><Speed>1</Speed>`
-  );
+  await soapAction(controlUrl, AV_SERVICE, "Play", `<InstanceID>0</InstanceID><Speed>1</Speed>`);
 }
 
 export async function avPause(controlUrl: string): Promise<void> {
-  await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "Pause",
-    `<InstanceID>0</InstanceID>`
-  );
+  await soapAction(controlUrl, AV_SERVICE, "Pause", `<InstanceID>0</InstanceID>`);
 }
 
 export async function avStop(controlUrl: string): Promise<void> {
-  await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "Stop",
-    `<InstanceID>0</InstanceID>`
-  );
+  await soapAction(controlUrl, AV_SERVICE, "Stop", `<InstanceID>0</InstanceID>`);
 }
 
 export async function avSeek(controlUrl: string, seconds: number): Promise<void> {
@@ -171,28 +147,18 @@ export async function avSeek(controlUrl: string, seconds: number): Promise<void>
     "Seek",
     `<InstanceID>0</InstanceID>
      <Unit>REL_TIME</Unit>
-     <Target>${secsToTime(seconds)}</Target>`
+     <Target>${secsToTime(seconds)}</Target>`,
   );
 }
 
 export async function getPositionInfo(controlUrl: string): Promise<number> {
-  const xml = await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "GetPositionInfo",
-    `<InstanceID>0</InstanceID>`
-  );
+  const xml = await soapAction(controlUrl, AV_SERVICE, "GetPositionInfo", `<InstanceID>0</InstanceID>`);
   const relTime = xmlTextContent(xml, "RelTime");
   return relTime ? timeToSecs(relTime) : 0;
 }
 
 export async function getTransportInfo(controlUrl: string): Promise<string> {
-  const xml = await soapAction(
-    controlUrl,
-    AV_SERVICE,
-    "GetTransportInfo",
-    `<InstanceID>0</InstanceID>`
-  );
+  const xml = await soapAction(controlUrl, AV_SERVICE, "GetTransportInfo", `<InstanceID>0</InstanceID>`);
   return xmlTextContent(xml, "CurrentTransportState") ?? "UNKNOWN";
 }
 
@@ -206,6 +172,6 @@ export async function setVolume(controlUrl: string, volume: number): Promise<voi
     "SetVolume",
     `<InstanceID>0</InstanceID>
      <Channel>Master</Channel>
-     <DesiredVolume>${clamped}</DesiredVolume>`
+     <DesiredVolume>${clamped}</DesiredVolume>`,
   );
 }

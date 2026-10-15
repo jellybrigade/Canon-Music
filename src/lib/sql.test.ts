@@ -38,9 +38,7 @@ describe("escapeLike against real SQLite", () => {
       raw.exec("CREATE TABLE t (v TEXT)");
       const insert = raw.prepare("INSERT INTO t (v) VALUES (?)");
       for (const v of values) insert.run(v);
-      const rows = raw
-        .prepare("SELECT rowid FROM t WHERE v LIKE ? ESCAPE '\\'")
-        .all(pattern) as { rowid: number }[];
+      const rows = raw.prepare("SELECT rowid FROM t WHERE v LIKE ? ESCAPE '\\'").all(pattern) as { rowid: number }[];
       return rows.map((r) => r.rowid);
     } finally {
       raw.close();

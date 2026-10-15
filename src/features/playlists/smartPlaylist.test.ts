@@ -1,13 +1,13 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 import {
+  buildSmartQuery,
   DEFAULT_SMART_FILTERS,
   LIMIT_MAX,
-  SORT_OPTIONS,
-  buildSmartQuery,
   parseSmartFilters,
   type SmartFilters,
+  SORT_OPTIONS,
 } from "./smartPlaylist";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 
 function filters(over: Partial<SmartFilters> = {}): SmartFilters {
   return { ...DEFAULT_SMART_FILTERS, ...over };
@@ -40,9 +40,7 @@ describe("parseSmartFilters", () => {
   });
 
   it("replaces a non-array selectedGenres and an unknown genreMode", () => {
-    const parsed = parseSmartFilters(
-      JSON.stringify({ selectedGenres: "rock", genreMode: "sideways" })
-    )!;
+    const parsed = parseSmartFilters(JSON.stringify({ selectedGenres: "rock", genreMode: "sideways" }))!;
     expect(parsed.selectedGenres).toEqual([]);
     expect(parsed.genreMode).toBe("include");
   });
@@ -68,7 +66,7 @@ describe("buildSmartQuery", () => {
     const evil = "'; DROP TABLE tracks; --";
     const { sql, params } = buildSmartQuery(
       filters({ titleContains: evil, artistContains: evil, albumContains: evil, selectedGenres: [evil] }),
-      "srv-1"
+      "srv-1",
     );
     expect(sql).not.toContain("DROP TABLE");
     expect(params.filter((p) => String(p).includes("DROP TABLE")).length).toBe(4);
@@ -99,18 +97,15 @@ describe("buildSmartQuery", () => {
 
   it("uses IN for include mode and NOT IN for exclude mode", () => {
     expect(buildSmartQuery(filters({ selectedGenres: ["rock"] }), "s").sql).toContain(
-      "t.album_id IN (SELECT album_id FROM album_genres"
+      "t.album_id IN (SELECT album_id FROM album_genres",
     );
-    expect(
-      buildSmartQuery(filters({ selectedGenres: ["rock"], genreMode: "exclude" }), "s").sql
-    ).toContain("t.album_id NOT IN (SELECT album_id FROM album_genres");
+    expect(buildSmartQuery(filters({ selectedGenres: ["rock"], genreMode: "exclude" }), "s").sql).toContain(
+      "t.album_id NOT IN (SELECT album_id FROM album_genres",
+    );
   });
 
   it("binds one placeholder per selected genre", () => {
-    const { sql, params } = buildSmartQuery(
-      filters({ selectedGenres: ["rock", "jazz", "funk"] }),
-      "s"
-    );
+    const { sql, params } = buildSmartQuery(filters({ selectedGenres: ["rock", "jazz", "funk"] }), "s");
     expect(sql).toContain("canonical_id IN (?, ?, ?)");
     expect(params.slice(-3)).toEqual(["rock", "jazz", "funk"]);
   });
@@ -134,7 +129,7 @@ describe("buildSmartQuery against the real schema", () => {
     db = await createMigratedTestDb();
     await db.execute(
       `INSERT INTO albums (id, server_id, server_type, name, artist, year)
-       VALUES ('srv:al1', 'srv', 'navidrome', 'Kid A', 'Radiohead', 2000)`
+       VALUES ('srv:al1', 'srv', 'navidrome', 'Kid A', 'Radiohead', 2000)`,
     );
     for (const [id, title, plays, year] of [
       ["srv:t1", "Everything In Its Right Place", 9, 2000],
@@ -144,12 +139,12 @@ describe("buildSmartQuery against the real schema", () => {
       await db.execute(
         `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count)
          VALUES (?, 'srv', 'navidrome', ?, 'Radiohead', 'srv:al1', ?, ?)`,
-        [id, title, year, plays]
+        [id, title, year, plays],
       );
     }
     await db.execute(
       `INSERT INTO album_genres (album_id, canonical_id, relation, name)
-       VALUES ('srv:al1', 'art-rock', 'direct', 'Art Rock')`
+       VALUES ('srv:al1', 'art-rock', 'direct', 'Art Rock')`,
     );
   });
 

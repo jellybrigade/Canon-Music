@@ -4,15 +4,19 @@ import { readFailedLookupAlbumIds, readFailedLookupAlbums } from "./useAlbumIden
 
 async function seedTwoServers() {
   const db = await createMigratedTestDb();
-  for (const [id, server] of [["srv-a:al-1", "srv-a"], ["srv-b:al-1", "srv-b"], ["srv-a:al-2", "srv-a"]]) {
+  for (const [id, server] of [
+    ["srv-a:al-1", "srv-a"],
+    ["srv-b:al-1", "srv-b"],
+    ["srv-a:al-2", "srv-a"],
+  ]) {
     await db.execute(
       "INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, 'navidrome', ?, 'Artist')",
-      [id, server, id]
+      [id, server, id],
     );
   }
   await db.execute(
     `INSERT INTO album_identity (album_id, mb_release_group_id, looked_up_at) VALUES
-       ('srv-a:al-1', NULL, 1), ('srv-b:al-1', NULL, 1), ('srv-a:al-2', 'mbid', 1)`
+       ('srv-a:al-1', NULL, 1), ('srv-b:al-1', NULL, 1), ('srv-a:al-2', 'mbid', 1)`,
   );
   return db;
 }
@@ -28,10 +32,13 @@ describe("readFailedLookupAlbums", () => {
 
   it("counts only the album's own server's tracks", async () => {
     const db = await seedTwoServers();
-    for (const [id, server] of [["t-1", "srv-a"], ["t-2", "srv-b"]]) {
+    for (const [id, server] of [
+      ["t-1", "srv-a"],
+      ["t-2", "srv-b"],
+    ]) {
       await db.execute(
         "INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES (?, ?, 'navidrome', ?, 'srv-a:al-1')",
-        [id, server, id]
+        [id, server, id],
       );
     }
 

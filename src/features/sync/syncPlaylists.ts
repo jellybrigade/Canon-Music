@@ -1,27 +1,29 @@
 import { fetchPlaylists, fetchPlaylistTracks } from "../../clients/navidromePlaylists";
-import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
 import { runPool } from "../../lib/asyncPool";
+import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { SyncStageContext } from "./syncStage";
 
 // Non-fatal like the loved pass (syncLoved.ts): a failed playlist listing skips this pass
 // instead of throwing away the whole sync.
-export async function syncPlaylists(
-  { db, server, credential, altUrl, skippedStages }: SyncStageContext,
-): Promise<{ failedPlaylists: number; playlistsChanged: boolean }> {
+export async function syncPlaylists({
+  db,
+  server,
+  credential,
+  altUrl,
+  skippedStages,
+}: SyncStageContext): Promise<{ failedPlaylists: number; playlistsChanged: boolean }> {
   let failedPlaylists = 0;
   // The write below prunes playlists absent from the fetched list, so any fetch failure
   // must block it entirely or a playlist whose track list failed gets erased outright.
   let playlistWritesBlocked = false;
-  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl).catch(
-    (err: unknown) => {
-      console.error("sync: failed to fetch playlists, keeping stored playlists:", err);
-      skippedStages.push("playlists");
-      playlistWritesBlocked = true;
-      return [];
-    }
-  );
-  type PlaylistWithTracks = { pl: typeof playlists[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
+  const playlists = await fetchPlaylists(server.url, server.username, credential, altUrl).catch((err: unknown) => {
+    console.error("sync: failed to fetch playlists, keeping stored playlists:", err);
+    skippedStages.push("playlists");
+    playlistWritesBlocked = true;
+    return [];
+  });
+  type PlaylistWithTracks = { pl: (typeof playlists)[number]; tracks: Awaited<ReturnType<typeof fetchPlaylistTracks>> };
   // One round trip per playlist, needed every sync tick to build the comparison signature;
   // the pool bounds concurrency without changing what's fetched.
   const fetchedByIndex = new Array<PlaylistWithTracks | undefined>(playlists.length);
@@ -40,10 +42,10 @@ export async function syncPlaylists(
         if (!(err instanceof TransportStalledError)) failedPlaylists++;
       }
     },
-    { concurrency: 4 }
+    { concurrency: 4 },
   );
   const playlistsWithTracks: PlaylistWithTracks[] = fetchedByIndex.filter(
-    (entry): entry is PlaylistWithTracks => entry !== undefined
+    (entry): entry is PlaylistWithTracks => entry !== undefined,
   );
 
   // Same idea as loved: build a signature of the fetched playlists (metadata plus
@@ -59,13 +61,13 @@ export async function syncPlaylists(
   const [existingPlaylists, existingPlaylistTracks] = await Promise.all([
     db.select<ExistingPlaylistRow[]>(
       "SELECT id, name, comment, track_count, cover_art_url FROM playlists WHERE server_id = ? ORDER BY id",
-      [server.id]
+      [server.id],
     ),
     db.select<{ playlist_id: string; track_id: string; position: number }[]>(
       `SELECT playlist_id, track_id, position FROM playlist_tracks
        WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)
        ORDER BY playlist_id, position`,
-      [server.id]
+      [server.id],
     ),
   ]);
 
@@ -78,19 +80,28 @@ export async function syncPlaylists(
     const list = existingTrackIdsByPlaylist.get(row.playlist_id);
     if (list) list.push(row.track_id);
     else existingTrackIdsByPlaylist.set(row.playlist_id, [row.track_id]);
-    if (row.position !== (existingTrackIdsByPlaylist.get(row.playlist_id)!.length - 1)) {
+    if (row.position !== existingTrackIdsByPlaylist.get(row.playlist_id)!.length - 1) {
       holedPlaylists.add(row.playlist_id);
     }
   }
 
   function playlistSignature(
-    rows: { id: string; name: string; comment: string | null; trackCount: unknown; coverArt: string | null; trackIds: string[] }[]
+    rows: {
+      id: string;
+      name: string;
+      comment: string | null;
+      trackCount: unknown;
+      coverArt: string | null;
+      trackIds: string[];
+    }[],
   ): string {
     return rows
       .slice()
       .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((r) =>
-        [r.id, r.name, r.comment ?? "", String(r.trackCount ?? ""), r.coverArt ?? "", r.trackIds.join(",")].join("\u0001")
+        [r.id, r.name, r.comment ?? "", String(r.trackCount ?? ""), r.coverArt ?? "", r.trackIds.join(",")].join(
+          "\u0001",
+        ),
       )
       .join("\u0002");
   }
@@ -103,7 +114,7 @@ export async function syncPlaylists(
       trackCount: pl.songCount,
       coverArt: pl.coverArt ?? null,
       trackIds: tracks.map((t) => `${server.id}:${t.id}`),
-    }))
+    })),
   );
   const existingSignature = playlistSignature(
     existingPlaylists.map((r) => ({
@@ -113,7 +124,7 @@ export async function syncPlaylists(
       trackCount: r.track_count,
       coverArt: r.cover_art_url,
       trackIds: existingTrackIdsByPlaylist.get(r.id) ?? [],
-    }))
+    })),
   );
 
   const playlistsChanged =
@@ -139,7 +150,7 @@ export async function syncPlaylists(
            comment = excluded.comment,
            track_count = excluded.track_count,
            cover_art_url = excluded.cover_art_url`,
-        [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null]
+        [plDbId, server.id, pl.name, pl.comment ?? null, pl.songCount, pl.coverArt ?? null],
       );
       // Only rewrite the track rows of playlists whose own ordered list moved. The
       // signature above is server-wide, so one edited playlist used to rewrite every
@@ -147,8 +158,7 @@ export async function syncPlaylists(
       const fetchedTrackIds = tracks.map((t) => `${server.id}:${t.id}`);
       const storedTrackIds = existingTrackIdsByPlaylist.get(plDbId) ?? [];
       const sameTracks =
-        storedTrackIds.length === fetchedTrackIds.length &&
-        fetchedTrackIds.every((id, i) => storedTrackIds[i] === id);
+        storedTrackIds.length === fetchedTrackIds.length && fetchedTrackIds.every((id, i) => storedTrackIds[i] === id);
       if (sameTracks && !holedPlaylists.has(plDbId)) continue;
 
       await db.execute("DELETE FROM playlist_tracks WHERE playlist_id = ?", [plDbId]);
@@ -158,7 +168,8 @@ export async function syncPlaylists(
         trackRows,
         "(?, ?, ?)",
         3,
-        (placeholders) => `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`
+        (placeholders) =>
+          `INSERT OR REPLACE INTO playlist_tracks (playlist_id, track_id, position) VALUES ${placeholders}`,
       );
     }
   }

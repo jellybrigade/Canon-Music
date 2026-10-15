@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../db";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { boundedFetch } from "../clients/boundedFetch";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { getDb } from "../db";
 import { QK } from "../lib/queryKeys";
 import type { ServerWithCredential } from "./useServer";
-import { boundedFetch } from "../clients/boundedFetch";
 
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 100;
@@ -18,11 +18,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function fetchAndStoreCover(
-  albumId: string,
-  artworkUrl: string,
-  swc: ServerWithCredential,
-): Promise<boolean> {
+async function fetchAndStoreCover(albumId: string, artworkUrl: string, swc: ServerWithCredential): Promise<boolean> {
   let url = "";
   try {
     url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
@@ -34,10 +30,11 @@ async function fetchAndStoreCover(
     const blob = await res.blob();
     const dataUrl = await blobToDataUrl(blob);
     const db = await getDb();
-    await db.execute(
-      `INSERT OR REPLACE INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)`,
-      [albumId, dataUrl, Date.now()],
-    );
+    await db.execute(`INSERT OR REPLACE INTO album_covers (album_id, data_url, cached_at) VALUES (?, ?, ?)`, [
+      albumId,
+      dataUrl,
+      Date.now(),
+    ]);
     return true;
   } catch (err) {
     // Network/parse/DB failure for this one album; retry on next session.
@@ -97,8 +94,8 @@ export function useCoverCachePopulator(swc: ServerWithCredential | undefined) {
       void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
     });
     return () => controller.abort();
-  // Re-run when the server changes (e.g. user switches servers).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Re-run when the server changes (e.g. user switches servers).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [swc?.server.id]);
 }
 
@@ -190,7 +187,9 @@ function getCoverStoreVersion(): number {
 }
 function bumpCoverStore(): void {
   coverStoreVersion++;
-  coverStoreListeners.forEach((l) => { l(); });
+  coverStoreListeners.forEach((l) => {
+    l();
+  });
 }
 
 function rememberAlbumDataUrl(albumId: string, dataUrl: string): void {

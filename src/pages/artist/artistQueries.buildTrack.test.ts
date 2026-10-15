@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { CRED, SRV, server } from "../../test/navidromeFixtures";
 import { buildTrackObj, type TopTrack } from "./artistQueries";
-import { CRED, server, SRV } from "../../test/navidromeFixtures";
 
 const TRACK: TopTrack = {
   id: `${SRV}:t1`,

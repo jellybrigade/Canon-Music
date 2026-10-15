@@ -16,7 +16,7 @@ describe("replayGainFromRow", () => {
         replay_gain_track_peak: 0.9,
         replay_gain_album_gain: -8,
         replay_gain_album_peak: 0.95,
-      })
+      }),
     ).toEqual({ trackGain: -7.5, trackPeak: 0.9, albumGain: -8, albumPeak: 0.95 });
   });
 

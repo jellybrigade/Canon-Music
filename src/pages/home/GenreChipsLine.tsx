@@ -24,7 +24,11 @@ export function GenreChipsLine({ genres, onPlayGenre }: FeaturedGenresSectionPro
             >
               {g.name}
             </button>
-            {i < ranked.length - 1 && <span className="genre-line__sep" aria-hidden="true">·</span>}
+            {i < ranked.length - 1 && (
+              <span className="genre-line__sep" aria-hidden="true">
+                ·
+              </span>
+            )}
           </span>
         ))}
       </p>

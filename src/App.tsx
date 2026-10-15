@@ -1,60 +1,81 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Music, Users, Tag, Settings, ListMusic, Headphones, House, Layers, Calendar, LayoutList, CircleHelp, Search } from "lucide-react";
+import {
+  Calendar,
+  CircleHelp,
+  Headphones,
+  House,
+  Layers,
+  LayoutList,
+  ListMusic,
+  Music,
+  Search,
+  Settings,
+  Tag,
+  Users,
+} from "lucide-react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+
 const Wizard = lazy(() => import("./features/setup/Wizard").then((m) => ({ default: m.Wizard })));
-import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
-import { useServers, useServerWithCredential } from "./hooks/useServer";
-import { useAlbums } from "./hooks/useAlbums";
-import { useArtists } from "./hooks/useArtists";
-import { useAllTracks } from "./hooks/useAllTracks";
-import { useGenres } from "./hooks/useGenres";
-import { useLoved } from "./hooks/useLoved";
-import { useBoolSetting, useSetting } from "./hooks/useSetting";
-import { usePlaylists } from "./features/playlists/usePlaylists";
-import { useScrobbleFlush } from "./features/playback/hooks/useScrobbleFlush";
-import { useUnmappedTagCount } from "./features/tags/hooks/useTagMappings";
-import { useMediaSession } from "./features/playback/hooks/useMediaSession";
-import { useRadio } from "./features/radio/hooks/useRadio";
-import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
-import { useBackgroundNormalizer } from "./features/tags/hooks/useBackgroundNormalizer";
-import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
-import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
-import { ROUTES } from "./lib/routes";
-import { useAnyModalOpen } from "./ui/useModalChrome";
-import { useQueueSync } from "./features/playback/hooks/useQueueSync";
-import { useWakeLock } from "./features/playback/hooks/useWakeLock";
-import { useAppNavigation } from "./hooks/useAppNavigation";
-import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
-import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
-import { useSidebarResize } from "./hooks/useSidebarResize";
-import { useLibrarySync } from "./features/sync/useLibrarySync";
-import { loadAlbumTracksForPlay } from "./lib/albumTracks";
-import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
-import { useCoverCachePopulator } from "./hooks/useCoverCache";
-import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
-import { usePlayerStore } from "./features/playback/store/player";
-import { useLibraryFiltersStore } from "./store/libraryFilters";
-import type { RadioMode, CurrentTrack } from "./features/playback/store/playerTypes";
-import { extractAccent } from "./lib/artColor";
-import { checkForUpdate } from "./lib/updater";
-import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
-import { getCoverArtUrl, getStreamUrl, initCoverServer, setStreamMaxBitrate, updateCoverProxyConfig } from "./clients/navidromeUrls";
+
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { makeStreamUrlBuilder } from "./lib/track";
-import { getDb } from "./db";
 import type { Update } from "@tauri-apps/plugin-updater";
-import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
+import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
-import type { AppViewProps, NavItem } from "./app/AppRoutes";
+import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
+import {
+  getCoverArtUrl,
+  getStreamUrl,
+  initCoverServer,
+  setStreamMaxBitrate,
+  updateCoverProxyConfig,
+} from "./clients/navidromeUrls";
+import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
+import { getDb } from "./db";
+import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
+import { useMediaSession } from "./features/playback/hooks/useMediaSession";
+import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
+import { useQueueSync } from "./features/playback/hooks/useQueueSync";
+import { useScrobbleFlush } from "./features/playback/hooks/useScrobbleFlush";
+import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
+import { useWakeLock } from "./features/playback/hooks/useWakeLock";
+import { usePlayerStore } from "./features/playback/store/player";
+import type { CurrentTrack, RadioMode } from "./features/playback/store/playerTypes";
+import { usePlaylists } from "./features/playlists/usePlaylists";
+import { useRadio } from "./features/radio/hooks/useRadio";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
 import { loadGenreSeedTracks } from "./features/radio/lib/genreSeed";
+import { useSearchShortcuts } from "./features/search/useSearchShortcuts";
+import { useLibrarySync } from "./features/sync/useLibrarySync";
+import { useBackgroundNormalizer } from "./features/tags/hooks/useBackgroundNormalizer";
+import { useUnmappedTagCount } from "./features/tags/hooks/useTagMappings";
+import { useAlbums } from "./hooks/useAlbums";
+import { useAllTracks } from "./hooks/useAllTracks";
+import { useAppActivityTracking } from "./hooks/useAppActivityTracking";
+import { useAppNavigation } from "./hooks/useAppNavigation";
+import { useArtists } from "./hooks/useArtists";
+import { useCoverCachePopulator } from "./hooks/useCoverCache";
+import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
+import { useGenres } from "./hooks/useGenres";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { useLoved } from "./hooks/useLoved";
+import { useServers, useServerWithCredential } from "./hooks/useServer";
+import { useBoolSetting, useSetting } from "./hooks/useSetting";
+import { useSidebarResize } from "./hooks/useSidebarResize";
+import { loadAlbumTracksForPlay } from "./lib/albumTracks";
+import { extractAccent } from "./lib/artColor";
+import { ROUTES } from "./lib/routes";
+import { makeStreamUrlBuilder } from "./lib/track";
+import { checkForUpdate } from "./lib/updater";
+import { useLibraryFiltersStore } from "./store/libraryFilters";
+import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
+import { useAnyModalOpen } from "./ui/useModalChrome";
 import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
-import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "./lib/replayGainRow";
 import { parseIntegerOr } from "./lib/numberSetting";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "./lib/replayGainRow";
 
 export default function App() {
   useWakeLock();
@@ -70,7 +91,6 @@ export default function App() {
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
   const setAccentColor = usePlayerStore((s) => s.setAccentColor);
-
 
   const canonicalIdFilters = useLibraryFiltersStore((s) => s.canonicalIdFilters);
   const lovedOnly = useLibraryFiltersStore((s) => s.lovedOnly);
@@ -91,19 +111,15 @@ export default function App() {
     setCommandPaletteOpen(false);
   }, []);
 
-  const {
-    view,
-    pathname,
-    navigateTo,
-    openAlbum,
-    openArtist,
-    openPlaylist,
-    goBack,
-    leaveSearch,
-  } = useAppNavigation(dismissOverlays);
+  const { view, pathname, navigateTo, openAlbum, openArtist, openPlaylist, goBack, leaveSearch } =
+    useAppNavigation(dismissOverlays);
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
-  const { liveWidth: sidebarLiveWidth, savedWidth: sidebarWidth, handleMouseDown: handleSidebarResizeMouseDown } = useSidebarResize({
+  const {
+    liveWidth: sidebarLiveWidth,
+    savedWidth: sidebarWidth,
+    handleMouseDown: handleSidebarResizeMouseDown,
+  } = useSidebarResize({
     direction: "ltr",
     min: 52,
     max: 400,
@@ -142,21 +158,33 @@ export default function App() {
   useScrobbleFlush(serverWithCred);
 
   const [rawSort, setSort, sortLoaded] = useSetting("library_sort", "artist");
-  const sort = (["artist", "alphabetical", "year", "recently_added"].includes(rawSort)
-    ? rawSort
-    : "artist") as AlbumSort;
+  const sort = (
+    ["artist", "alphabetical", "year", "recently_added"].includes(rawSort) ? rawSort : "artist"
+  ) as AlbumSort;
 
   // Gated on `pathname` not `view` (folds /album/:id into "library") and on `sortLoaded`
   // to avoid scanning once with the default sort and again once the real sort arrives.
-  const { data: albums, isLoading: albumsLoading, error: albumsError } =
-    useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
-  const { data: artists, isLoading: artistsLoading, error: artistsError } =
-    useArtists(pathname === "/artists");
+  const {
+    data: albums,
+    isLoading: albumsLoading,
+    error: albumsError,
+  } = useAlbums(sort, canonicalIdFilters, pathname === "/library" && sortLoaded);
+  const { data: artists, isLoading: artistsLoading, error: artistsError } = useArtists(pathname === "/artists");
   const { data: allTracks, isLoading: allTracksLoading, error: allTracksError } = useAllTracks(pathname === "/tracks");
   const { data: genres, error: genresError, retry: retryGenres } = useGenres(pathname === "/library");
   // Ungated: one cheap shared invoke, and lovedAlbumIds feeds the visibleAlbums memo.
   const { lovedAlbumIds } = useLoved();
-  const { data: playlists, createPlaylist, createSmartPlaylist, addAlbumToPlaylist, deletePlaylist, renamePlaylist, setCustomCover, refreshSmartPlaylist, updateSmartPlaylistRules } = usePlaylists();
+  const {
+    data: playlists,
+    createPlaylist,
+    createSmartPlaylist,
+    addAlbumToPlaylist,
+    deletePlaylist,
+    renamePlaylist,
+    setCustomCover,
+    refreshSmartPlaylist,
+    updateSmartPlaylistRules,
+  } = usePlaylists();
   // Scalar count for the sidebar badge. The full tag vocabulary is fetched only inside
   // the lazily-loaded Tags route, which is where the rows are actually used.
   const { data: unmappedCountRaw } = useUnmappedTagCount();
@@ -209,15 +237,21 @@ export default function App() {
   const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
   const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
   const [streamMaxBitrate] = useSetting("stream.max_bitrate", "0");
-  useEffect(() => { setStreamMaxBitrate(parseInt(streamMaxBitrate, 10)); }, [streamMaxBitrate]);
   useEffect(() => {
-    void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
+    setStreamMaxBitrate(parseInt(streamMaxBitrate, 10));
+  }, [streamMaxBitrate]);
+  useEffect(() => {
+    void checkForUpdate().then((u) => {
+      if (u) setPendingUpdate(u);
+    });
   }, []);
   useEffect(() => {
     if (!autoCheckUpdates) return;
     const ms = Math.max(10, parseIntegerOr(autoCheckIntervalMin, 60)) * 60 * 1000;
     const id = setInterval(() => {
-      void checkForUpdate().then((u) => { if (u) setPendingUpdate(u); });
+      void checkForUpdate().then((u) => {
+        if (u) setPendingUpdate(u);
+      });
     }, ms);
     return () => clearInterval(id);
   }, [autoCheckUpdates, autoCheckIntervalMin]);
@@ -238,7 +272,9 @@ export default function App() {
     leaveSearch,
   });
 
-  useEffect(() => { void loadSettings(); }, [loadSettings]);
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   // Cover art proxy: push credentials to Rust first, then enable proxy URLs only after config is confirmed.
   // Sequenced in one effect to prevent a window where proxy URLs are returned but the Rust config is still None.
@@ -249,7 +285,7 @@ export default function App() {
         await updateCoverProxyConfig(
           serverWithCred.server.url,
           serverWithCred.server.username,
-          serverWithCred.credential
+          serverWithCred.credential,
         );
         initCoverServer();
       } catch {
@@ -271,9 +307,7 @@ export default function App() {
     // Rebuilding the tray menu allocates a fresh Menu and seven items on the Rust side,
     // so skip the round trip entirely while the icon is hidden (the default).
     if (!showTrayIcon) return;
-    const title = currentTrack
-      ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ""}`
-      : "";
+    const title = currentTrack ? `${currentTrack.title}${currentTrack.artist ? ` - ${currentTrack.artist}` : ""}` : "";
     void invoke("tray_update", { title, isPlaying }).catch(() => {});
   }, [showTrayIcon, currentTrack?.id, isPlaying]);
 
@@ -282,12 +316,15 @@ export default function App() {
     const p = listen<string>("tray-action", (e) => {
       const store = usePlayerStore.getState();
       if (e.payload === "play_pause") {
-        if (store.isPlaying) store.pause(); else store.resume();
+        if (store.isPlaying) store.pause();
+        else store.resume();
       } else if (e.payload === "next") {
         void store.next();
       }
     });
-    return () => { void p.then((fn) => fn()); };
+    return () => {
+      void p.then((fn) => fn());
+    };
   }, []);
 
   useEffect(() => {
@@ -303,9 +340,9 @@ export default function App() {
     const artUrl = currentTrack?.coverArtUrl ?? null;
     if (!artUrl) {
       setAccentColor(null);
-      document.documentElement.style.removeProperty('--accent');
-      document.documentElement.style.removeProperty('--accent-hover');
-      document.documentElement.style.removeProperty('--accent-subtle');
+      document.documentElement.style.removeProperty("--accent");
+      document.documentElement.style.removeProperty("--accent-hover");
+      document.documentElement.style.removeProperty("--accent-subtle");
       return;
     }
     let cancelled = false;
@@ -313,16 +350,18 @@ export default function App() {
       if (cancelled) return;
       setAccentColor(color);
       if (color) {
-        document.documentElement.style.setProperty('--accent', color);
-        document.documentElement.style.setProperty('--accent-hover', `color-mix(in oklab, ${color} 85%, black)`);
+        document.documentElement.style.setProperty("--accent", color);
+        document.documentElement.style.setProperty("--accent-hover", `color-mix(in oklab, ${color} 85%, black)`);
         // parse rgb(...) to build subtle
         const m = color.match(/\d+/g);
         if (m) {
-          document.documentElement.style.setProperty('--accent-subtle', `rgba(${m[0]}, ${m[1]}, ${m[2]}, 0.18)`);
+          document.documentElement.style.setProperty("--accent-subtle", `rgba(${m[0]}, ${m[1]}, ${m[2]}, 0.18)`);
         }
       }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [currentTrack?.coverArtUrl, setAccentColor]);
 
   useEffect(() => {
@@ -336,7 +375,10 @@ export default function App() {
   }, [currentTrack?.coverArtUrl]);
 
   useEffect(() => {
-    if (!currentTrack) { document.title = "Canon"; return; }
+    if (!currentTrack) {
+      document.title = "Canon";
+      return;
+    }
     const parts = [currentTrack.artist, currentTrack.title].filter(Boolean);
     document.title = parts.length > 0 ? `${parts.join(" - ")} · Canon` : "Canon";
   }, [currentTrack?.title, currentTrack?.artist]);
@@ -346,10 +388,17 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
     type TrackRow = {
-      id: string; title: string; artist: string | null; duration: number | null; album_id: string;
-      replay_gain_track_gain: number | null; replay_gain_track_peak: number | null;
-      replay_gain_album_gain: number | null; replay_gain_album_peak: number | null;
-      album_name: string | null; artwork_url: string | null;
+      id: string;
+      title: string;
+      artist: string | null;
+      duration: number | null;
+      album_id: string;
+      replay_gain_track_gain: number | null;
+      replay_gain_track_peak: number | null;
+      replay_gain_album_gain: number | null;
+      replay_gain_album_peak: number | null;
+      album_name: string | null;
+      artwork_url: string | null;
     };
     const rows = await db.select<TrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id,
@@ -359,25 +408,26 @@ export default function App() {
        FROM tracks t
        LEFT JOIN albums a ON a.id = t.album_id
        WHERE t.id = ?`,
-      [trackId]
+      [trackId],
     );
     const t = rows[0];
     if (!t) return;
     const artworkUrl = t.artwork_url;
-    const coverArtUrl = artworkUrl
-      ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64)
-      : null;
-    await play({
-      id: t.id,
-      title: t.title,
-      artist: t.artist,
-      duration: t.duration,
-      coverArtUrl,
-      artworkRef: artworkUrl,
-      album: t.album_name,
-      albumId: t.album_id,
-      replayGain: replayGainFromRow(t),
-    }, makeStreamUrlBuilder(srv, credential));
+    const coverArtUrl = artworkUrl ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64) : null;
+    await play(
+      {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        duration: t.duration,
+        coverArtUrl,
+        artworkRef: artworkUrl,
+        album: t.album_name,
+        albumId: t.album_id,
+        replayGain: replayGainFromRow(t),
+      },
+      makeStreamUrlBuilder(srv, credential),
+    );
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -390,7 +440,7 @@ export default function App() {
     type TrackRow = { id: string; title: string; artist: string | null; duration: number | null } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, ${REPLAY_GAIN_COLUMNS} FROM tracks t WHERE t.album_id = ? AND t.server_id = ? ORDER BY COALESCE(t.play_count, 0) DESC, t.track_number ASC`,
-      [album.id, srv.id]
+      [album.id, srv.id],
     );
     if (rows.length === 0) return;
     const topHalf = rows.slice(0, Math.max(1, Math.ceil(rows.length / 2)));
@@ -398,7 +448,17 @@ export default function App() {
     const coverArtUrl = album.artwork_url
       ? getCoverArtUrl(srv.url, srv.username, credential, album.artwork_url, 64)
       : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
+    const track = {
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
+      coverArtUrl,
+      artworkRef: album.artwork_url ?? null,
+      album: album.name,
+      albumId: album.id,
+      replayGain: replayGainFromRow(t),
+    };
     await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 
@@ -411,7 +471,17 @@ export default function App() {
       : null;
     const streamUrlFor = makeStreamUrlBuilder(srv, credential);
     for (const t of rows) {
-      const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: album.artwork_url ?? null, album: album.name, albumId: album.id, replayGain: replayGainFromRow(t) };
+      const track = {
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        duration: t.duration,
+        coverArtUrl,
+        artworkRef: album.artwork_url ?? null,
+        album: album.name,
+        albumId: album.id,
+        replayGain: replayGainFromRow(t),
+      };
       addToQueue(track, streamUrlFor);
     }
   }
@@ -422,19 +492,37 @@ export default function App() {
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
     const tracks: CurrentTrack[] = rows.map((t) => ({
-      id: t.id, title: t.title, artist: t.artist, duration: t.duration,
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
       coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
-      artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id,
+      artworkRef: t.artwork_url ?? null,
+      album: t.album_name ?? null,
+      albumId: t.album_id,
       replayGain: replayGainFromRow(t),
     }));
-    await startRadio({ tracks, streamUrlFor: makeStreamUrlBuilder(srv, credential), mode: "same-genre", label: genreLabel });
+    await startRadio({
+      tracks,
+      streamUrlFor: makeStreamUrlBuilder(srv, credential),
+      mode: "same-genre",
+      label: genreLabel,
+    });
   }
 
   async function handleStartRadioFromArtist(artist: ArtistRow, mode: RadioMode) {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = { id: string; title: string; artist: string | null; duration: number | null; album_id: string; artwork_url: string | null; album_name: string | null } & ReplayGainColumns;
+    type TrackRow = {
+      id: string;
+      title: string;
+      artist: string | null;
+      duration: number | null;
+      album_id: string;
+      artwork_url: string | null;
+      album_name: string | null;
+    } & ReplayGainColumns;
     const rows = await db.select<TrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
               ${REPLAY_GAIN_COLUMNS}
@@ -442,14 +530,22 @@ export default function App() {
        WHERE t.server_id = ?
          AND (t.artist = ? OR a.artist = ?)
        ORDER BY random() LIMIT 1`,
-      [srv.id, artist.name, artist.name]
+      [srv.id, artist.name, artist.name],
     );
     const t = rows[0];
     if (!t) return;
-    const coverArtUrl = t.artwork_url
-      ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64)
-      : null;
-    const track = { id: t.id, title: t.title, artist: t.artist, duration: t.duration, coverArtUrl, artworkRef: t.artwork_url ?? null, album: t.album_name ?? null, albumId: t.album_id, replayGain: replayGainFromRow(t) };
+    const coverArtUrl = t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null;
+    const track = {
+      id: t.id,
+      title: t.title,
+      artist: t.artist,
+      duration: t.duration,
+      coverArtUrl,
+      artworkRef: t.artwork_url ?? null,
+      album: t.album_name ?? null,
+      albumId: t.album_id,
+      replayGain: replayGainFromRow(t),
+    };
     await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 
@@ -458,10 +554,10 @@ export default function App() {
   async function openAlbumById(albumId: string) {
     if (!server) return;
     const db = await getDb();
-    const rows = await db.select<AlbumRow[]>(
-      "SELECT * FROM albums WHERE id = ? AND server_id = ?",
-      [albumId, server.id]
-    );
+    const rows = await db.select<AlbumRow[]>("SELECT * FROM albums WHERE id = ? AND server_id = ?", [
+      albumId,
+      server.id,
+    ]);
     if (rows[0]) openAlbum(rows[0]);
   }
 
@@ -475,8 +571,18 @@ export default function App() {
     { id: "years", label: "Years", icon: <Calendar size={24} /> },
     { id: "playlists", label: "Playlists", icon: <ListMusic size={24} /> },
     { id: "tracks", label: "Tracks", icon: <LayoutList size={24} /> },
-    { id: "tags", label: "Tags", icon: <Tag size={24} />, badge: (hideTagBadge ? undefined : unmappedCount) || undefined },
-    { id: "unidentified", label: "Unidentified", icon: <CircleHelp size={24} />, badge: unidentifiedCount || undefined },
+    {
+      id: "tags",
+      label: "Tags",
+      icon: <Tag size={24} />,
+      badge: (hideTagBadge ? undefined : unmappedCount) || undefined,
+    },
+    {
+      id: "unidentified",
+      label: "Unidentified",
+      icon: <CircleHelp size={24} />,
+      badge: unidentifiedCount || undefined,
+    },
     { id: "settings", label: "Settings", icon: <Settings size={24} /> },
   ];
 
@@ -488,7 +594,9 @@ export default function App() {
     return (
       <DatabaseErrorScreen
         error={serversError}
-        onRetry={() => { void refetchServers(); }}
+        onRetry={() => {
+          void refetchServers();
+        }}
       />
     );
   }
@@ -548,7 +656,9 @@ export default function App() {
     runSync,
     credError: credError ?? null,
     credPending,
-    retryCredential: () => { void refetchCredential(); },
+    retryCredential: () => {
+      void refetchCredential();
+    },
     searchInputRef,
     homeSearchRaw,
     homeSearchQuery,

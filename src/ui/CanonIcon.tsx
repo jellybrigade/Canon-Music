@@ -1,5 +1,5 @@
-import markSvg from "../assets/canon-logo-kit/canon-mark-currentcolor.svg?raw";
 import lockupSvg from "../assets/canon-logo-kit/canon-lockup-currentcolor.svg?raw";
+import markSvg from "../assets/canon-logo-kit/canon-mark-currentcolor.svg?raw";
 import "./CanonIcon.css";
 
 interface Props {

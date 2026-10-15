@@ -1,17 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { CurrentTrack } from "./playerTypes";
 import type { DlnaRenderer } from "../../../clients/dlna";
 import {
-  buildDidlMetadata,
-  setAvTransportUri,
-  avPlay,
   avPause,
-  avStop,
+  avPlay,
   avSeek,
+  avStop,
+  buildDidlMetadata,
+  setVolume as dlnaSetVolume,
   getPositionInfo,
   getTransportInfo,
-  setVolume as dlnaSetVolume,
+  setAvTransportUri,
 } from "../../../clients/dlna";
+import type { CurrentTrack } from "./playerTypes";
 
 // How often DlnaTarget re-checks the renderer's transport state once the track is expected to
 // have finished, and how often it checks when the track's duration is unknown so there is no
@@ -103,7 +103,7 @@ export class DlnaTarget implements PlaybackTarget {
     renderer: DlnaRenderer,
     onTrackEnd: () => void,
     castMaxBitrate = CAST_MAX_BITRATE_DEFAULT,
-    onError?: (message: string) => void
+    onError?: (message: string) => void,
   ) {
     this.renderer = renderer;
     this.supportsVolume = renderer.supportsVolume;
@@ -239,8 +239,7 @@ export class DlnaTarget implements PlaybackTarget {
         const localPos = this.positionSeconds + (Date.now() - this.positionUpdatedAt) / 1000;
         // Reject: renderer returned 0 (bad/unsupported) while we're already past 3s.
         const valid =
-          (reported > 0 || localPos <= 3) &&
-          (this.currentDuration <= 0 || effective < this.currentDuration + 5);
+          (reported > 0 || localPos <= 3) && (this.currentDuration <= 0 || effective < this.currentDuration + 5);
         // Only re-baseline on significant drift to avoid visible snaps.
         if (valid && Math.abs(effective - localPos) > 1.5) {
           this.positionSeconds = effective;
@@ -301,7 +300,13 @@ export class DlnaTarget implements PlaybackTarget {
   }
 
   private clearTimers() {
-    if (this.reconcileTimer) { clearTimeout(this.reconcileTimer); this.reconcileTimer = null; }
-    if (this.trackEndTimer) { clearTimeout(this.trackEndTimer); this.trackEndTimer = null; }
+    if (this.reconcileTimer) {
+      clearTimeout(this.reconcileTimer);
+      this.reconcileTimer = null;
+    }
+    if (this.trackEndTimer) {
+      clearTimeout(this.trackEndTimer);
+      this.trackEndTimer = null;
+    }
   }
 }

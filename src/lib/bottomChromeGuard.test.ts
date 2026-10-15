@@ -3,9 +3,9 @@
 // own padding for them, and Home, Tags and the Unidentified view each got it wrong. The shell now
 // gives every route root a bottom margin, so any other reader of the two heights is a second
 // reserve (double gap) or a sign someone is hand-rolling one again.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -31,7 +31,11 @@ function bottomChromeReads(text: string): number[] {
 
 describe("bottom chrome reserve", () => {
   it("finds a read of either height", () => {
-    expect(bottomChromeReads("a { padding: 0 0 calc(var(--player-bar-reserve, 0px) + 4px); }\nb {}\nc { top: var(--normalizing-bar-height); }")).toEqual([1, 3]);
+    expect(
+      bottomChromeReads(
+        "a { padding: 0 0 calc(var(--player-bar-reserve, 0px) + 4px); }\nb {}\nc { top: var(--normalizing-bar-height); }",
+      ),
+    ).toEqual([1, 3]);
   });
 
   it("is read only by the shell stylesheet", () => {

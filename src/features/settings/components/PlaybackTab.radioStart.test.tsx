@@ -3,17 +3,17 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, renderHook, cleanup, waitFor, act, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PlaybackTab } from "./PlaybackTab";
+import { act, cleanup, fireEvent, render, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getDb } from "../../../db";
+import { __resetSettingCache } from "../../../hooks/useSetting";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
+import { RADIO_START_ACTION_SETTING, useStartRadio } from "../../radio/hooks/useStartRadio";
 import { useRadioStartStore } from "../../radio/store/radioStart";
-import { __resetSettingCache } from "../../../hooks/useSetting";
-import { useStartRadio, RADIO_START_ACTION_SETTING } from "../../radio/hooks/useStartRadio";
-import { getDb } from "../../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { PlaybackTab } from "./PlaybackTab";
 
 let db: FakeDatabase;
 const startRadioFrom = vi.fn(() => Promise.resolve());
@@ -23,7 +23,9 @@ const request = { tracks: [seed], streamUrlFor: (t: CurrentTrack) => t.id };
 const select = () => document.querySelector<HTMLSelectElement>('select[aria-label="Start radio action"]')!;
 
 function storedSetting(): string | undefined {
-  const row = db.raw.prepare("SELECT value FROM settings WHERE key = ?").get(RADIO_START_ACTION_SETTING) as { value: string } | undefined;
+  const row = db.raw.prepare("SELECT value FROM settings WHERE key = ?").get(RADIO_START_ACTION_SETTING) as
+    | { value: string }
+    | undefined;
   return row?.value;
 }
 
@@ -32,7 +34,7 @@ function renderTab() {
   return render(
     <QueryClientProvider client={client}>
       <PlaybackTab searchQuery="" serverId={undefined} />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -63,14 +65,18 @@ describe("PlaybackTab start radio action", () => {
 
     await act(async () => fireEvent.change(select(), { target: { value: "replace" } }));
     await waitFor(() => expect(storedSetting()).toBe("replace"));
-    await act(async () => { await result.current(request); });
+    await act(async () => {
+      await result.current(request);
+    });
     expect(useRadioStartStore.getState().pending).toBeNull();
     expect(startRadioFrom).toHaveBeenCalledTimes(1);
     expect(startRadioFrom).toHaveBeenCalledWith("replace", request);
 
     await act(async () => fireEvent.change(select(), { target: { value: "ask" } }));
     await waitFor(() => expect(storedSetting()).toBe("ask"));
-    await act(async () => { await result.current(request); });
+    await act(async () => {
+      await result.current(request);
+    });
     expect(useRadioStartStore.getState().pending).toBe(request);
     expect(startRadioFrom).toHaveBeenCalledTimes(1);
   });

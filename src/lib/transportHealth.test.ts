@@ -194,10 +194,7 @@ describe("a burst of requests stalling together", () => {
 
   it("still answers every one of them with the notice", async () => {
     await noteTransportTimeout(URL_);
-    const notices = await Promise.all([
-      noteTransportTimeout(URL_),
-      noteTransportTimeout(URL_),
-    ]);
+    const notices = await Promise.all([noteTransportTimeout(URL_), noteTransportTimeout(URL_)]);
 
     expect(notices.every((n) => n !== null)).toBe(true);
   });
@@ -243,7 +240,7 @@ describe("while the probe is still running", () => {
       () =>
         new Promise((resolve) => {
           release = () => resolve({ reachable: false, status: null, elapsedMs: 7, error: "connection refused" });
-        })
+        }),
     );
     return () => release();
   }
@@ -364,7 +361,7 @@ describe("a stall the native stack disproves", () => {
       () =>
         new Promise((resolve) => {
           release = () => resolve({ reachable: true, status: 200, elapsedMs: 7900, error: null });
-        })
+        }),
     );
     await noteTransportTimeout(URL_);
     const opening = noteTransportTimeout(URL_);

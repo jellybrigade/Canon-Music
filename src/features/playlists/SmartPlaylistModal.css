@@ -148,7 +148,10 @@
   font-weight: 500;
   padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast),
+    border-color var(--duration-fast);
 }
 
 .spm-mode-btn--active {
@@ -183,7 +186,9 @@
   font-size: var(--text-xs);
   padding: var(--space-2xs) var(--space-xs);
   cursor: pointer;
-  transition: background var(--duration-fast), color var(--duration-fast);
+  transition:
+    background var(--duration-fast),
+    color var(--duration-fast);
   display: inline-flex;
   align-items: center;
   gap: var(--space-2xs);

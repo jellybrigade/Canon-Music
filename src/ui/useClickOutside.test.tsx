@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useRef } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useClickOutside } from "./useClickOutside";
 
 beforeEach(() => vi.useFakeTimers());
@@ -76,9 +77,7 @@ describe("useClickOutside", () => {
     const onOutside = vi.fn();
     render(<Harness onOutside={onOutside} />);
     arm();
-    screen
-      .getByTestId("swallower")
-      .addEventListener("mousedown", (e) => e.stopPropagation());
+    screen.getByTestId("swallower").addEventListener("mousedown", (e) => e.stopPropagation());
 
     fireEvent.mouseDown(screen.getByTestId("deep-outside"));
 

@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMeasuredElement } from "../../../hooks/useMeasuredElement";
-import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { TagVocabRow } from "../hooks/useTagMappings";
-import type { TreeNode, TagKind } from "../lib/canonicalize";
+import { useTagMappings, useTagVocab } from "../hooks/useTagMappings";
+import type { TagKind, TreeNode } from "../lib/canonicalize";
+import { DanglingGenresPanel } from "./DanglingGenresPanel";
 import {
   ACCEPTED,
-  IGNORED,
   AlbumArtStrip,
-  TagSourceDots,
-  SOURCE_META,
-  CanonCombobox,
   applySearch,
+  CanonCombobox,
+  IGNORED,
   Pagination,
+  SOURCE_META,
+  TagSourceDots,
 } from "./TagsViewHelpers";
-import { DanglingGenresPanel } from "./DanglingGenresPanel";
 import "./TagReviewTab.css";
 
 // ── ReviewRow ─────────────────────────────────────────────────────────────────
@@ -32,9 +32,13 @@ function ReviewRow({ row, treeNodes, onMap, onAccept, onIgnore, onCreateNode }: 
     <div className="review-row">
       <div className="rr-info">
         {/* Each child is a subgrid cell; wrappers hold the column when the child renders null. */}
-        <div className="rr-sources"><TagSourceDots sources={row.sources} /></div>
+        <div className="rr-sources">
+          <TagSourceDots sources={row.sources} />
+        </div>
         <span className="rr-name">{row.raw_value}</span>
-        <div className="rr-art"><AlbumArtStrip rawValue={row.raw_value} kind={row.kind} size={30} max={6} /></div>
+        <div className="rr-art">
+          <AlbumArtStrip rawValue={row.raw_value} kind={row.kind} size={30} max={6} />
+        </div>
         <span className="rr-albums">{row.album_count}</span>
       </div>
       <div className="rr-actions">
@@ -87,20 +91,17 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
   // exists, and an effect keyed on nothing would never see it arrive.
   const { attach: attachContainer, height: containerHeight } = useMeasuredElement<HTMLDivElement>();
 
-  const pageSize = containerHeight > 0
-    ? Math.max(1, Math.floor(containerHeight / ROW_HEIGHT))
-    : DEFAULT_PAGE_SIZE;
+  const pageSize = containerHeight > 0 ? Math.max(1, Math.floor(containerHeight / ROW_HEIGHT)) : DEFAULT_PAGE_SIZE;
 
-  const unresolvedRows = useMemo(
-    () => vocab.filter((r) => !r.canonical_id && r.album_count > 0),
-    [vocab],
-  );
+  const unresolvedRows = useMemo(() => vocab.filter((r) => !r.canonical_id && r.album_count > 0), [vocab]);
 
   const filteredRows = useMemo(() => applySearch(unresolvedRows, search), [unresolvedRows, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
 
-  useEffect(() => { setPage(1); }, [search]);
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
@@ -117,7 +118,11 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
   }
 
   if (isLoading) {
-    return <div className="review-empty"><strong>Loading…</strong></div>;
+    return (
+      <div className="review-empty">
+        <strong>Loading…</strong>
+      </div>
+    );
   }
 
   if (isError) {
@@ -134,7 +139,9 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
       {autoNote && (
         <div className="review-autonote">
           {autoNote}
-          <button className="review-autonote-dismiss" onClick={onDismissAutoNote}>×</button>
+          <button className="review-autonote-dismiss" onClick={onDismissAutoNote}>
+            ×
+          </button>
         </div>
       )}
       <DanglingGenresPanel treeNodes={treeNodes} />

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import { render, cleanup, act } from "@testing-library/react";
+
+import { act, cleanup, render } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { useMeasuredElement } from "./useMeasuredElement";
 
 const WIDTH = 640;
@@ -18,14 +19,18 @@ beforeAll(() => {
         act(() => {
           callback(
             [{ contentRect: { width, height } } as unknown as ResizeObserverEntry],
-            this as unknown as ResizeObserver
+            this as unknown as ResizeObserver,
           );
         });
       };
     }
-    observe(el: HTMLElement) { observed.push(el); }
+    observe(el: HTMLElement) {
+      observed.push(el);
+    }
     unobserve() {}
-    disconnect() { disconnects.push(1); }
+    disconnect() {
+      disconnects.push(1);
+    }
   }
   globalThis.ResizeObserver = StubResizeObserver as unknown as typeof ResizeObserver;
   // The observer reports the content box, so the initial synchronous measurement has to

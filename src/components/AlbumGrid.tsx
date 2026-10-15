@@ -1,23 +1,23 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
-import { Heart, CircleHelp } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { AlbumRow, AlbumSort } from "../types/library";
-import type { ServerWithCredential } from "../hooks/useServer";
-import { useLoved } from "../hooks/useLoved";
-import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
-import { useBoolSetting } from "../hooks/useSetting";
-import { useScrollMemory } from "../hooks/useScrollMemory";
+import { CircleHelp, Heart } from "lucide-react";
+import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
-import { useAlbumCoverMap } from "../hooks/useCoverCache";
-import { AlbumArt } from "./AlbumArt";
-import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
-import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
-import { Pagination } from "../features/tags/components/TagsViewHelpers";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
-import { CardGridSkeleton } from "../ui/Skeleton";
+import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
+import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
+import { Pagination } from "../features/tags/components/TagsViewHelpers";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
+import { useAlbumCoverMap } from "../hooks/useCoverCache";
+import { useLoved } from "../hooks/useLoved";
+import { useScrollMemory } from "../hooks/useScrollMemory";
+import type { ServerWithCredential } from "../hooks/useServer";
+import { useBoolSetting } from "../hooks/useSetting";
+import type { AlbumRow, AlbumSort } from "../types/library";
+import { ContextMenu, ContextMenuSubmenu } from "../ui/ContextMenu";
+import { CardGridSkeleton } from "../ui/Skeleton";
+import { AlbumArt } from "./AlbumArt";
 import "./AlbumGrid.css";
 
 const PAGE_SIZE = 100;
@@ -28,9 +28,7 @@ const ROW_GAP = 24;
 const CARD_MIN = 190;
 const YEAR_HEADER_HEIGHT = 38;
 
-type GridRow =
-  | { type: "year-header"; label: string }
-  | { type: "albums"; items: AlbumRow[] };
+type GridRow = { type: "year-header"; label: string } | { type: "albums"; items: AlbumRow[] };
 
 interface ScrubberSection {
   label: string;
@@ -68,13 +66,24 @@ interface CardProps {
   onToggleLove: (albumId: string) => void;
 }
 
-const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredential, isLoved, showBadge, onSelect, onContextMenu, onToggleLove }: CardProps) {
+const AlbumCard = memo(function AlbumCard({
+  album,
+  coverUrl,
+  serverWithCredential,
+  isLoved,
+  showBadge,
+  onSelect,
+  onContextMenu,
+  onToggleLove,
+}: CardProps) {
   const albumDisplayName = useAlbumDisplayName();
   const { server, credential } = serverWithCredential;
   // Memoized because getCoverArtUrl returns a fresh string each call, which would
   // otherwise defeat this component's React.memo.
   const artUrl = useMemo(
-    () => coverUrl ?? (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null),
+    () =>
+      coverUrl ??
+      (album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url) : null),
     [coverUrl, album.artwork_url, server.url, server.username, credential],
   );
   return (
@@ -84,7 +93,10 @@ const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredentia
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onSelect(album)}
-      onContextMenu={(e) => { e.preventDefault(); onContextMenu(e.clientX, e.clientY, album); }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onContextMenu(e.clientX, e.clientY, album);
+      }}
     >
       {artUrl ? (
         <AlbumArt
@@ -102,7 +114,10 @@ const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredentia
       <button
         className={`album-heart${isLoved ? " album-heart--loved" : ""}`}
         aria-label={isLoved ? "Unlove album" : "Love album"}
-        onClick={(e) => { e.stopPropagation(); onToggleLove(album.id); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleLove(album.id);
+        }}
       >
         <Heart size={16} fill={isLoved ? "currentColor" : "none"} strokeWidth={2} />
       </button>
@@ -119,7 +134,20 @@ const AlbumCard = memo(function AlbumCard({ album, coverUrl, serverWithCredentia
   );
 });
 
-export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio, onAddAlbumToQueue, onAddAlbumToPlaylist, playlists, emptyMessage, sort, isLoading = false, error = null, onRetry }: Props) {
+export function AlbumGrid({
+  albums,
+  serverWithCredential,
+  onSelect,
+  onStartRadio,
+  onAddAlbumToQueue,
+  onAddAlbumToPlaylist,
+  playlists,
+  emptyMessage,
+  sort,
+  isLoading = false,
+  error = null,
+  onRetry,
+}: Props) {
   const coverMap = useAlbumCoverMap();
   const { lovedAlbumIds, toggleAlbumLove } = useLoved();
   const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
@@ -148,9 +176,12 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const handleContextMenu = useCallback((x: number, y: number, album: AlbumRow) => {
     setContextMenu({ x, y, album });
   }, []);
-  const handleToggleLove = useCallback((albumId: string) => {
-    void toggleAlbumLove(albumId, serverWithCredential);
-  }, [toggleAlbumLove, serverWithCredential]);
+  const handleToggleLove = useCallback(
+    (albumId: string) => {
+      void toggleAlbumLove(albumId, serverWithCredential);
+    },
+    [toggleAlbumLove, serverWithCredential],
+  );
 
   // Reset to page 1 when sort/filter changes
   const prevAlbumsLen = useRef(albums.length);
@@ -163,11 +194,11 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     }
   }, [albums.length]);
 
-  useEffect(() => { setPage(1); }, [paginated, sort]);
+  useEffect(() => {
+    setPage(1);
+  }, [paginated, sort]);
 
-  const visibleAlbums = paginated
-    ? albums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-    : albums;
+  const visibleAlbums = paginated ? albums.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : albums;
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
@@ -181,8 +212,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       let batch: AlbumRow[] = [];
       let lastYear: number | null | "unset" = "unset";
       const flush = () => {
-        for (let i = 0; i < batch.length; i += cols)
-          result.push({ type: "albums", items: batch.slice(i, i + cols) });
+        for (let i = 0; i < batch.length; i += cols) result.push({ type: "albums", items: batch.slice(i, i + cols) });
         batch = [];
       };
       for (const album of visibleAlbums) {
@@ -206,7 +236,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
     if (!sort || sort === "recently_added" || cols === 0) return [];
     if (sort === "year") {
       const yearHeaders = rows.flatMap((row, i) =>
-        row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : []
+        row.type === "year-header" ? [{ label: row.label, rowIndex: i }] : [],
       );
       const seen = new Set<string>();
       const sections: ScrubberSection[] = [];
@@ -243,7 +273,7 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => containerRef.current,
-    estimateSize: (i) => rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight,
+    estimateSize: (i) => (rows[i]?.type === "year-header" ? YEAR_HEADER_HEIGHT : rowHeight),
     overscan: 3,
     paddingStart: PADDING,
     paddingEnd: PADDING,
@@ -283,16 +313,14 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           <div className="empty-state">
             <p className="empty-state-title">Couldn't load your albums</p>
             <p className="empty-state-hint">{error}</p>
-            {onRetry && <button className="empty-state-action" onClick={onRetry}>Try again</button>}
+            {onRetry && (
+              <button className="empty-state-action" onClick={onRetry}>
+                Try again
+              </button>
+            )}
           </div>
         ) : isLoading && albums.length === 0 ? (
-          <CardGridSkeleton
-            count={18}
-            minWidth={CARD_MIN}
-            gap={COL_GAP}
-            padding={PADDING}
-            label="Loading albums"
-          />
+          <CardGridSkeleton count={18} minWidth={CARD_MIN} gap={COL_GAP} padding={PADDING} label="Loading albums" />
         ) : albums.length === 0 ? (
           emptyMessage ? (
             <div className="empty-state">
@@ -302,66 +330,64 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
           ) : (
             <div className="empty-state">
               <p className="empty-state-title">No albums here yet</p>
-              <p className="empty-state-hint">
-                Connect a server in Settings and sync your library to fill this grid.
-              </p>
+              <p className="empty-state-hint">Connect a server in Settings and sync your library to fill this grid.</p>
             </div>
           )
         ) : (
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
-            if (!row) return null;
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: "relative" }}>
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const row = rows[virtualRow.index];
+              if (!row) return null;
 
-            if (row.type === "year-header") {
+              if (row.type === "year-header") {
+                return (
+                  <div
+                    key={virtualRow.key}
+                    className="year-group-header"
+                    style={{
+                      position: "absolute",
+                      top: `${virtualRow.start}px`,
+                      left: `${PADDING}px`,
+                      right: `${PADDING}px`,
+                      height: `${YEAR_HEADER_HEIGHT}px`,
+                    }}
+                  >
+                    {row.label}
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={virtualRow.key}
-                  className="year-group-header"
                   style={{
                     position: "absolute",
                     top: `${virtualRow.start}px`,
                     left: `${PADDING}px`,
                     right: `${PADDING}px`,
-                    height: `${YEAR_HEADER_HEIGHT}px`,
+                    height: `${Math.round(cardWidth)}px`,
+                    display: "grid",
+                    gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                    gap: `${COL_GAP}px`,
                   }}
                 >
-                  {row.label}
+                  {row.items.map((album) => (
+                    <AlbumCard
+                      key={album.id}
+                      album={album}
+                      coverUrl={coverMap.get(album.id) ?? null}
+                      serverWithCredential={serverWithCredential}
+                      isLoved={lovedAlbumIds.has(album.id)}
+                      showBadge={mbAutoIdentify && failedLookupSet.has(album.id)}
+                      onSelect={handleSelect}
+                      onContextMenu={handleContextMenu}
+                      onToggleLove={handleToggleLove}
+                    />
+                  ))}
                 </div>
               );
-            }
-
-            return (
-              <div
-                key={virtualRow.key}
-                style={{
-                  position: "absolute",
-                  top: `${virtualRow.start}px`,
-                  left: `${PADDING}px`,
-                  right: `${PADDING}px`,
-                  height: `${Math.round(cardWidth)}px`,
-                  display: "grid",
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
-                  gap: `${COL_GAP}px`,
-                }}
-              >
-                {row.items.map((album) => (
-                  <AlbumCard
-                    key={album.id}
-                    album={album}
-                    coverUrl={coverMap.get(album.id) ?? null}
-                    serverWithCredential={serverWithCredential}
-                    isLoved={lovedAlbumIds.has(album.id)}
-                    showBadge={mbAutoIdentify && failedLookupSet.has(album.id)}
-                    onSelect={handleSelect}
-                    onContextMenu={handleContextMenu}
-                    onToggleLove={handleToggleLove}
-                  />
-                ))}
-              </div>
-            );
-          })}
-        </div>
+            })}
+          </div>
         )}
       </div>
       {!paginated && scrubberSections.length > 1 && (
@@ -380,25 +406,51 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
       )}
       {paginated && albums.length > PAGE_SIZE && (
         <div className="album-grid-pagination">
-          <Pagination page={page} total={albums.length} pageSize={PAGE_SIZE} onChange={(p) => { setPage(p); containerRef.current?.scrollTo({ top: 0 }); }} />
+          <Pagination
+            page={page}
+            total={albums.length}
+            pageSize={PAGE_SIZE}
+            onChange={(p) => {
+              setPage(p);
+              containerRef.current?.scrollTo({ top: 0 });
+            }}
+          />
         </div>
       )}
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          <button onClick={() => { onSelect(contextMenu.album); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelect(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
             Open album
           </button>
           {onAddAlbumToQueue && (
-            <button onClick={() => { onAddAlbumToQueue(contextMenu.album); setContextMenu(null); }}>
+            <button
+              onClick={() => {
+                onAddAlbumToQueue(contextMenu.album);
+                setContextMenu(null);
+              }}
+            >
               Add to Queue
             </button>
           )}
           {onStartRadio && (
             <StartRadioSubmenu
-              onSelect={(mode) => { onStartRadio(contextMenu.album, mode); setContextMenu(null); }}
+              onSelect={(mode) => {
+                onStartRadio(contextMenu.album, mode);
+                setContextMenu(null);
+              }}
             />
           )}
-          <button onClick={() => { handleToggleLove(contextMenu.album.id); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              handleToggleLove(contextMenu.album.id);
+              setContextMenu(null);
+            }}
+          >
             {lovedAlbumIds.has(contextMenu.album.id) ? "Unlove album" : "Love album"}
           </button>
           {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
@@ -406,14 +458,22 @@ export function AlbumGrid({ albums, serverWithCredential, onSelect, onStartRadio
               {playlists.map((pl) => (
                 <button
                   key={pl.id}
-                  onClick={() => { onAddAlbumToPlaylist(contextMenu.album, pl); setContextMenu(null); }}
+                  onClick={() => {
+                    onAddAlbumToPlaylist(contextMenu.album, pl);
+                    setContextMenu(null);
+                  }}
                 >
                   {pl.name}
                 </button>
               ))}
             </ContextMenuSubmenu>
           )}
-          <button onClick={() => { setIdentifyAlbum(contextMenu.album); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              setIdentifyAlbum(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
             Identify on MusicBrainz…
           </button>
         </ContextMenu>

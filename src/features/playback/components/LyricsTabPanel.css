@@ -49,7 +49,9 @@
   line-height: 1.6;
   border-radius: var(--radius-sm-md);
   cursor: pointer;
-  transition: color var(--duration-slower), background var(--duration-slower);
+  transition:
+    color var(--duration-slower),
+    background var(--duration-slower);
 }
 
 .lyrics-line:hover {
@@ -65,7 +67,9 @@
   color: var(--accent);
   font-weight: 600;
   background: color-mix(in srgb, var(--accent) 10%, transparent);
-  transition: color var(--duration-slower), background var(--duration-slower);
+  transition:
+    color var(--duration-slower),
+    background var(--duration-slower);
 }
 
 .lyrics-plain {

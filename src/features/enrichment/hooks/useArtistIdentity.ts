@@ -1,12 +1,7 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { lookupArtist, type MbArtistCandidate, type MbArtistDetail, searchArtists } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
-import {
-  searchArtists,
-  lookupArtist,
-  type MbArtistCandidate,
-  type MbArtistDetail,
-} from "../../../clients/musicbrainz";
 
 // ── Stored identity row ────────────────────────────────────────────────────────
 
@@ -22,10 +17,9 @@ export function useArtistIdentity(artistName: string) {
     queryKey: QK.artistIdentity(artistName),
     queryFn: async (): Promise<ArtistIdentityRow | null> => {
       const db = await getDb();
-      const rows = await db.select<ArtistIdentityRow[]>(
-        "SELECT * FROM artist_identity WHERE artist_name = ?",
-        [artistName]
-      );
+      const rows = await db.select<ArtistIdentityRow[]>("SELECT * FROM artist_identity WHERE artist_name = ?", [
+        artistName,
+      ]);
       return rows[0] ?? null;
     },
     enabled: !!artistName,
@@ -125,12 +119,7 @@ export function useSaveArtistIdentity() {
            lastfm_artist_name = excluded.lastfm_artist_name,
            confirmed_at       = excluded.confirmed_at,
            enriched_at        = NULL`,
-        [
-          input.artistName,
-          input.mbArtistId,
-          input.lastfmArtistName,
-          Math.floor(Date.now() / 1000),
-        ]
+        [input.artistName, input.mbArtistId, input.lastfmArtistName, Math.floor(Date.now() / 1000)],
       );
     },
     onSuccess: (_data, input) => {

@@ -7,12 +7,18 @@
  * the artist inside one mount. A claim stored as a bare boolean then stands against the new
  * artist and nothing enriches it for the life of that mount.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 vi.mock("../../../clients/lastfm", () => ({
   fetchArtistInfo: vi.fn().mockResolvedValue({
-    bio: "bio", listeners: 1, playcount: 2, similar: [], topTags: [], imageUrl: null, url: null,
+    bio: "bio",
+    listeners: 1,
+    playcount: 2,
+    similar: [],
+    topTags: [],
+    imageUrl: null,
+    url: null,
   }),
 }));
 vi.mock("../../../clients/musicbrainz", () => ({
@@ -31,16 +37,16 @@ vi.mock("../../../clients/theaudiodb", () => ({
 }));
 vi.mock("../../../clients/navidrome", () => ({ getArtistImageFromServer: vi.fn().mockResolvedValue(null) }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { getDb } from "../../../db";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { getDb } from "../../../db";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { __resetIdentifyAttempts, useEnrichArtist } from "./useEnrichArtist";
 
 let db: FakeDatabase;
@@ -61,7 +67,9 @@ function enrichedArtists(): string[] {
 function storedIdentity(name: string) {
   return db.raw
     .prepare("SELECT mb_artist_id, confirmed_at, bio, enriched_at FROM artist_identity WHERE artist_name = ?")
-    .get(name) as { mb_artist_id: string | null; confirmed_at: number | null; bio: string | null; enriched_at: number | null } | undefined;
+    .get(name) as
+    | { mb_artist_id: string | null; confirmed_at: number | null; bio: string | null; enriched_at: number | null }
+    | undefined;
 }
 
 const SINGLE_MATCH = [{ id: "mbid-1", name: "slowdive", disambiguation: null, country: null, score: 100 }];
@@ -104,10 +112,10 @@ describe("useEnrichArtist", () => {
   it("enriches the artist on a later attempt after one fails", async () => {
     vi.mocked(fetchArtistInfo).mockRejectedValueOnce(new Error("last.fm unreachable"));
 
-    const { rerender } = renderHook(
-      ({ enabled }: { enabled: boolean }) => useEnrichArtist("slowdive", { enabled }),
-      { wrapper, initialProps: { enabled: true } }
-    );
+    const { rerender } = renderHook(({ enabled }: { enabled: boolean }) => useEnrichArtist("slowdive", { enabled }), {
+      wrapper,
+      initialProps: { enabled: true },
+    });
 
     await waitFor(() => expect(vi.mocked(fetchArtistInfo)).toHaveBeenCalledTimes(1));
     expect(enrichedArtists()).toEqual([]);
@@ -157,7 +165,12 @@ describe("useEnrichArtist", () => {
 
   it("keeps the artist retryable when the TheAudioDB portrait fallback fails", async () => {
     vi.mocked(fetchArtistInfo).mockResolvedValueOnce({
-      bio: null, listeners: 1, playcount: 2, similar: [], topTags: [], imageUrl: null,
+      bio: null,
+      listeners: 1,
+      playcount: 2,
+      similar: [],
+      topTags: [],
+      imageUrl: null,
     });
     vi.mocked(fetchTheAudioDbArtist).mockRejectedValueOnce(new Error("theaudiodb unreachable"));
 

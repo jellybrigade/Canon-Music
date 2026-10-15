@@ -1,23 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
+import canonTreeData from "../assets/canon-tree.json";
+import { createMigratedTestDb, createTestDb, type FakeDatabase, forkTestDb } from "../test/sqlite";
 import {
   LATEST_SCHEMA_VERSION,
-  SchemaTooNewError,
+  type MigrationDb,
   migrations,
   RYM_ID_RENAMES,
   runMigrations,
-  type MigrationDb,
+  SchemaTooNewError,
 } from "./migrations";
-import canonTreeData from "../assets/canon-tree.json";
-import { createTestDb, createMigratedTestDb, forkTestDb, type FakeDatabase } from "../test/sqlite";
 
 const LATEST = Math.max(...migrations.map((m) => m.version));
 
 /** `type|name|sql` for every schema object, order-stable, for before/after comparison. */
 function schemaSnapshot(db: FakeDatabase): string[] {
   return (
-    db.raw
-      .prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name")
-      .all() as { type: string; name: string; sql: string | null }[]
+    db.raw.prepare("SELECT type, name, sql FROM sqlite_master ORDER BY type, name").all() as {
+      type: string;
+      name: string;
+      sql: string | null;
+    }[]
   ).map((r) => `${r.type}|${r.name}|${r.sql ?? ""}`);
 }
 
@@ -28,7 +30,7 @@ function userTables(db: FakeDatabase): string[] {
       .prepare(
         `SELECT name FROM sqlite_master WHERE type = 'table'
            AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'tracks_fts_%'
-         ORDER BY name`
+         ORDER BY name`,
       )
       .all() as { name: string }[]
   ).map((r) => r.name);
@@ -105,7 +107,7 @@ describe("runMigrations", () => {
     await runMigrations(db);
 
     const recorded = (
-      (await db.select<{ version: number }[]>("SELECT version FROM schema_migrations ORDER BY version"))
+      await db.select<{ version: number }[]>("SELECT version FROM schema_migrations ORDER BY version")
     ).map((r) => r.version);
     expect(recorded).toEqual(migrations.map((m) => m.version));
     expect(Math.max(...recorded)).toBe(LATEST);
@@ -174,26 +176,22 @@ describe("runMigrations", () => {
     await migrateThrough(db, 26);
     await db.execute(
       `INSERT INTO tracks (id, server_id, server_type, title, album_id)
-       VALUES ('t1', 's1', 'navidrome', 'Song', 'a1')`
+       VALUES ('t1', 's1', 'navidrome', 'Song', 'a1')`,
     );
     await db.execute(
       `INSERT INTO track_tags (track_id, kind, raw_value, source)
-       VALUES ('t1', 'genre', 'Hip-Hop', 'lastfm')`
+       VALUES ('t1', 'genre', 'Hip-Hop', 'lastfm')`,
     );
-    await db.execute(
-      "INSERT INTO tag_mappings (raw_value, kind, canonical_id) VALUES ('Hip-Hop', 'genre', 'hip-hop')"
-    );
+    await db.execute("INSERT INTO tag_mappings (raw_value, kind, canonical_id) VALUES ('Hip-Hop', 'genre', 'hip-hop')");
     await runMigrations(db);
 
     const vocab = await db.select<{ norm_value: string; album_count: number }[]>(
-      "SELECT norm_value, album_count FROM tag_vocab_cache"
+      "SELECT norm_value, album_count FROM tag_vocab_cache",
     );
     expect(vocab).toHaveLength(1);
     expect(vocab[0]?.norm_value).toBe("hip hop");
     expect(vocab[0]?.album_count).toBe(1);
-    const mappings = await db.select<{ norm_value: string }[]>(
-      "SELECT norm_value FROM tag_mappings"
-    );
+    const mappings = await db.select<{ norm_value: string }[]>("SELECT norm_value FROM tag_mappings");
     expect(mappings[0]?.norm_value).toBe("hip hop");
   });
 
@@ -265,8 +263,7 @@ describe("runMigrations", () => {
     const db = createTestDb();
     const broken: MigrationDb = {
       execute: (query, bindValues) => {
-        if (query.startsWith("CREATE TABLE IF NOT EXISTS tracks"))
-          return Promise.reject("no such table: nope");
+        if (query.startsWith("CREATE TABLE IF NOT EXISTS tracks")) return Promise.reject("no such table: nope");
         return db.execute(query, bindValues);
       },
       select: (query, bindValues) => db.select(query, bindValues),
@@ -278,8 +275,7 @@ describe("runMigrations", () => {
     const db = createTestDb();
     const broken: MigrationDb = {
       execute: (query, bindValues) => {
-        if (query.includes("ADD COLUMN played_at"))
-          return Promise.reject("duplicate column name: played_at");
+        if (query.includes("ADD COLUMN played_at")) return Promise.reject("duplicate column name: played_at");
         return db.execute(query, bindValues);
       },
       select: (query, bindValues) => db.select(query, bindValues),
@@ -341,9 +337,9 @@ describe("post-migration schema", () => {
   it("declares exactly the expected named indexes", async () => {
     const db = await createMigratedTestDb();
     const indexes = (
-      db.raw
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name")
-        .all() as { name: string }[]
+      db.raw.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL ORDER BY name").all() as {
+        name: string;
+      }[]
     ).map((r) => r.name);
     expect(indexes).toEqual([
       "idx_album_genres_canonical",
@@ -381,7 +377,7 @@ describe("post-migration schema", () => {
     // These are the ones the duplicate-column swallow could hide the loss of: if the ALTER failed
     // for some other reason the migration still records its version and moves on.
     expect(columnsOf(db, "albums")).toEqual(
-      expect.arrayContaining(["played_at", "accent_color", "release_type", "play_count"])
+      expect.arrayContaining(["played_at", "accent_color", "release_type", "play_count"]),
     );
     expect(columnsOf(db, "tracks")).toEqual(
       expect.arrayContaining([
@@ -393,20 +389,18 @@ describe("post-migration schema", () => {
         "bit_rate",
         "suffix",
         "file_size",
-      ])
+      ]),
     );
     expect(columnsOf(db, "servers")).toEqual(
-      expect.arrayContaining(["alt_url", "last_scan_at", "server_version", "song_count"])
+      expect.arrayContaining(["alt_url", "last_scan_at", "server_version", "song_count"]),
     );
     expect(columnsOf(db, "artist_identity")).toEqual(
-      expect.arrayContaining(["navidrome_image_url", "wikidata_image_url"])
+      expect.arrayContaining(["navidrome_image_url", "wikidata_image_url"]),
     );
     expect(columnsOf(db, "album_identity")).toEqual(
-      expect.arrayContaining(["album_bio", "lastfm_url", "album_enriched_at"])
+      expect.arrayContaining(["album_bio", "lastfm_url", "album_enriched_at"]),
     );
-    expect(columnsOf(db, "playlists")).toEqual(
-      expect.arrayContaining(["is_smart", "rules_json", "custom_cover_data"])
-    );
+    expect(columnsOf(db, "playlists")).toEqual(expect.arrayContaining(["is_smart", "rules_json", "custom_cover_data"]));
     expect(columnsOf(db, "servers")).toEqual(expect.arrayContaining(["alt_url"]));
     expect(columnsOf(db, "tag_mappings")).toEqual(expect.arrayContaining(["norm_value"]));
     expect(columnsOf(db, "lyrics")).toEqual(expect.arrayContaining(["offset_ms"]));
@@ -467,9 +461,10 @@ describe("RYM genre id renames", () => {
       canonical_id: "field-recording",
       name: "Field Recording",
     });
-    expect(
-      await db.select("SELECT canonical_id FROM album_genres ORDER BY canonical_id")
-    ).toEqual([{ canonical_id: "punk-post-punk-hardcore" }, { canonical_id: "rock" }]);
+    expect(await db.select("SELECT canonical_id FROM album_genres ORDER BY canonical_id")).toEqual([
+      { canonical_id: "punk-post-punk-hardcore" },
+      { canonical_id: "rock" },
+    ]);
     expect(await one("SELECT canonical_id FROM album_genre_exclusions")).toEqual({
       canonical_id: "newa-music",
     });
@@ -491,9 +486,7 @@ describe("RYM genre id renames", () => {
   it("re-normalizes albums that held a renamed id or an unresolved genre, and no others", async () => {
     const db = await seededAt51();
     await runMigrations(db);
-    expect(
-      await db.select("SELECT id, computed_at FROM albums ORDER BY id")
-    ).toEqual([
+    expect(await db.select("SELECT id, computed_at FROM albums ORDER BY id")).toEqual([
       { id: "a1", computed_at: null },
       { id: "a3", computed_at: 100 },
       { id: "a4", computed_at: null },
@@ -507,9 +500,7 @@ describe("RYM genre id renames", () => {
       INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value)
       VALUES ('Newa Folk Music', 'genre', 'south-asian-folk-music', 'manual', 'newa folk music')`);
     await runMigrations(db);
-    expect(
-      await db.select("SELECT raw_value, canonical_id, source FROM tag_mappings ORDER BY raw_value")
-    ).toEqual([
+    expect(await db.select("SELECT raw_value, canonical_id, source FROM tag_mappings ORDER BY raw_value")).toEqual([
       { raw_value: "Newa Folk Music", canonical_id: "south-asian-folk-music", source: "manual" },
       { raw_value: "Punk", canonical_id: "punk-post-punk-hardcore", source: "manual" },
       { raw_value: "Sacred Harp Singing", canonical_id: "shape-note-singing", source: "manual" },
@@ -534,10 +525,10 @@ describe("schema constraints the code depends on", () => {
     const db = await createMigratedTestDb();
     await db.execute("INSERT INTO playlists (id, server_id, name) VALUES ('p1', 's1', 'P')");
     await db.execute(
-      "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES ('p1', 't1', 0), ('p1', 't1', 1)"
+      "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES ('p1', 't1', 0), ('p1', 't1', 1)",
     );
     const rows = await db.select<{ position: number }[]>(
-      "SELECT position FROM playlist_tracks WHERE playlist_id = 'p1' ORDER BY position"
+      "SELECT position FROM playlist_tracks WHERE playlist_id = 'p1' ORDER BY position",
     );
     expect(rows.map((r) => r.position)).toEqual([0, 1]);
   });
@@ -567,17 +558,15 @@ describe("schema constraints the code depends on", () => {
 
   it("dedupes scrobble history but not the scrobble queue", async () => {
     const db = await createMigratedTestDb();
-    await db.execute(
-      "INSERT INTO scrobble_history (track_id, timestamp) VALUES ('t1', 1), ('t1', 2)"
+    await db.execute("INSERT INTO scrobble_history (track_id, timestamp) VALUES ('t1', 1), ('t1', 2)");
+    await expect(db.execute("INSERT INTO scrobble_history (track_id, timestamp) VALUES ('t1', 1)")).rejects.toThrow(
+      /UNIQUE/,
     );
-    await expect(
-      db.execute("INSERT INTO scrobble_history (track_id, timestamp) VALUES ('t1', 1)")
-    ).rejects.toThrow(/UNIQUE/);
 
     // The queue deliberately has no such constraint: the same track played twice is two scrobbles.
     await db.execute(
       `INSERT INTO scrobble_queue (track_id, title, artist, timestamp)
-       VALUES ('t1', 'Song', 'A', 1), ('t1', 'Song', 'A', 1)`
+       VALUES ('t1', 'Song', 'A', 1), ('t1', 'Song', 'A', 1)`,
     );
     const queued = await db.select<{ n: number }[]>("SELECT COUNT(*) AS n FROM scrobble_queue");
     expect(queued[0]?.n).toBe(2);
@@ -595,12 +584,12 @@ describe("schema constraints the code depends on", () => {
   it("constrains track_tags.source to the known provenance values", async () => {
     const db = await createMigratedTestDb();
     await db.execute(
-      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'lastfm-track')"
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'lastfm-track')",
     );
     await expect(
       db.execute(
-        "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'nonsense')"
-      )
+        "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'nonsense')",
+      ),
     ).rejects.toThrow(/CHECK/);
   });
 });
@@ -632,9 +621,7 @@ describe("migration atomicity", () => {
   }
 
   function recordedVersion(db: FakeDatabase): number {
-    return (
-      db.raw.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number | null }
-    ).v ?? 0;
+    return (db.raw.prepare("SELECT MAX(version) AS v FROM schema_migrations").get() as { v: number | null }).v ?? 0;
   }
 
   it("leaves the schema untouched when a block dies partway through", async () => {
@@ -642,12 +629,12 @@ describe("migration atomicity", () => {
     // RENAME used to leave every tag in a table the app cannot see, unrecoverably.
     const db = await dbAtVersion(24);
     await db.execute(
-      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')"
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')",
     );
     const before = schemaSnapshot(db);
 
     await expect(
-      runMigrations(failingAt(db, (sql) => sql.startsWith("ALTER TABLE track_tags_new RENAME")))
+      runMigrations(failingAt(db, (sql) => sql.startsWith("ALTER TABLE track_tags_new RENAME"))),
     ).rejects.toThrow(/disk I\/O error/);
 
     expect(schemaSnapshot(db)).toEqual(before);
@@ -661,11 +648,11 @@ describe("migration atomicity", () => {
   it("finishes on the next launch after a block died partway through", async () => {
     const db = await dbAtVersion(24);
     await db.execute(
-      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')"
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'jazz', 'server')",
     );
-    await expect(
-      runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))
-    ).rejects.toThrow(/disk I\/O error/);
+    await expect(runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))).rejects.toThrow(
+      /disk I\/O error/,
+    );
 
     await runMigrations(db);
 
@@ -683,7 +670,7 @@ describe("migration atomicity", () => {
     const before = schemaSnapshot(db);
 
     await expect(
-      runMigrations(failingAt(db, (sql) => sql.startsWith("INSERT INTO schema_migrations")))
+      runMigrations(failingAt(db, (sql) => sql.startsWith("INSERT INTO schema_migrations"))),
     ).rejects.toThrow(/disk I\/O error/);
 
     expect(schemaSnapshot(db)).toEqual(before);
@@ -692,9 +679,9 @@ describe("migration atomicity", () => {
 
   it("leaves no transaction open after a failed block", async () => {
     const db = await dbAtVersion(24);
-    await expect(
-      runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))
-    ).rejects.toThrow(/disk I\/O error/);
+    await expect(runMigrations(failingAt(db, (sql) => sql.startsWith("DROP TABLE track_tags")))).rejects.toThrow(
+      /disk I\/O error/,
+    );
 
     expect(db.raw.inTransaction).toBe(false);
   });
@@ -721,10 +708,10 @@ describe("migration atomicity", () => {
     const db = await dbAtVersion(27);
     const v27 = migrations.find((m) => m.version === 27)!;
     await db.execute(
-      "INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('t1', 's1', 'navidrome', 'Song', 'a1')"
+      "INSERT INTO tracks (id, server_id, server_type, title, album_id) VALUES ('t1', 's1', 'navidrome', 'Song', 'a1')",
     );
     await db.execute(
-      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'Hip-Hop', 'server')"
+      "INSERT INTO track_tags (track_id, kind, raw_value, source) VALUES ('t1', 'genre', 'Hip-Hop', 'server')",
     );
     const seed = v27.sql
       .split(";")

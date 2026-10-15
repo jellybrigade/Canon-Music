@@ -1,10 +1,10 @@
-import { useState, useEffect } from "react";
-import { X } from "lucide-react";
 import { getVersion } from "@tauri-apps/api/app";
+import { X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { boundedFetch } from "../clients/boundedFetch";
 import { logger } from "../lib/logger";
 import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
-import { boundedFetch } from "../clients/boundedFetch";
 import "./FeedbackModal.css";
 
 const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
@@ -72,7 +72,10 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
   async function submit() {
     if (status === "sending") return;
     if (category === "bug") {
-      if (!steps.trim()) { setStepsError(true); return; }
+      if (!steps.trim()) {
+        setStepsError(true);
+        return;
+      }
     } else {
       if (!text.trim()) return;
     }
@@ -80,12 +83,16 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
     setStatus("sending");
 
     const serverHost = serverUrl
-      ? (() => { try { return new URL(serverUrl).hostname; } catch { return "(unknown)"; } })()
+      ? (() => {
+          try {
+            return new URL(serverUrl).hostname;
+          } catch {
+            return "(unknown)";
+          }
+        })()
       : "(none)";
 
-    const sysLine = includeSysInfo
-      ? `\n\n*Canon v${appVersion} · ${detectOS()} · ${serverHost}*`
-      : "";
+    const sysLine = includeSysInfo ? `\n\n*Canon v${appVersion} · ${detectOS()} · ${serverHost}*` : "";
 
     let bodyText: string;
     if (category === "bug") {
@@ -143,7 +150,10 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
             <button
               key={c}
               className={`feedback-cat-btn${category === c ? " feedback-cat-btn--active" : ""}`}
-              onClick={() => { setCategory(c); setStepsError(false); }}
+              onClick={() => {
+                setCategory(c);
+                setStepsError(false);
+              }}
             >
               {CATEGORY_LABELS[c]}
             </button>
@@ -167,7 +177,10 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
               className={`feedback-textarea feedback-textarea--bug${stepsError ? " feedback-textarea--error" : ""}`}
               placeholder={STEPS_PLACEHOLDER}
               value={steps}
-              onChange={(e) => { setSteps(e.target.value); if (e.target.value.trim()) setStepsError(false); }}
+              onChange={(e) => {
+                setSteps(e.target.value);
+                if (e.target.value.trim()) setStepsError(false);
+              }}
               rows={3}
             />
             {stepsError && <div className="feedback-steps-error">Steps to reproduce are required.</div>}
@@ -186,22 +199,16 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
         <div className="feedback-footer">
           <div className="feedback-checks">
             <label className="feedback-sysinfo">
-              <input
-                type="checkbox"
-                checked={includeSysInfo}
-                onChange={(e) => setIncludeSysInfo(e.target.checked)}
-              />
+              <input type="checkbox" checked={includeSysInfo} onChange={(e) => setIncludeSysInfo(e.target.checked)} />
               <span>Include system info</span>
               {includeSysInfo && (
-                <span className="feedback-sysinfo-detail">v{appVersion} · {detectOS()}</span>
+                <span className="feedback-sysinfo-detail">
+                  v{appVersion} · {detectOS()}
+                </span>
               )}
             </label>
             <label className="feedback-sysinfo">
-              <input
-                type="checkbox"
-                checked={includeLogs}
-                onChange={(e) => setIncludeLogs(e.target.checked)}
-              />
+              <input type="checkbox" checked={includeLogs} onChange={(e) => setIncludeLogs(e.target.checked)} />
               <span>Include recent logs</span>
             </label>
           </div>

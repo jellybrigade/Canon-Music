@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach, beforeAll } from "vitest";
-import { render, screen, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
-import { AppShell } from "./AppShell";
-import type { AppViewProps } from "./AppRoutes";
+import { MemoryRouter, useNavigate } from "react-router-dom";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { useAppNavigation } from "../hooks/useAppNavigation";
 import { useDismissOnNavigate } from "../hooks/useDismissOnNavigate";
+import type { AppViewProps } from "./AppRoutes";
+import { AppShell } from "./AppShell";
 
 /**
  * Guards known-issues.md's "State deciding which subtree renders, but absent
@@ -56,9 +57,15 @@ vi.mock("../features/playback/components/PlayerBar", () => ({
     onSelectAlbumById: (albumId: string) => void;
   }) => (
     <div data-testid="player-bar-stub">
-      <button data-testid="pb-now-playing" onClick={props.onNowPlaying}>now</button>
-      <button data-testid="pb-select-artist" onClick={() => props.onSelectArtist({ name: "Artist Y" })}>artist</button>
-      <button data-testid="pb-select-album-by-id" onClick={() => props.onSelectAlbumById("srv:alb2")}>albumbyid</button>
+      <button data-testid="pb-now-playing" onClick={props.onNowPlaying}>
+        now
+      </button>
+      <button data-testid="pb-select-artist" onClick={() => props.onSelectArtist({ name: "Artist Y" })}>
+        artist
+      </button>
+      <button data-testid="pb-select-album-by-id" onClick={() => props.onSelectAlbumById("srv:alb2")}>
+        albumbyid
+      </button>
     </div>
   ),
 }));
@@ -72,10 +79,18 @@ vi.mock("../components/CommandPalette", () => ({
   }) =>
     !props.open ? null : (
       <div data-testid="command-palette-stub">
-        <button data-testid="cp-navigate" onClick={() => props.onNavigate("home")}>nav-home</button>
-        <button data-testid="cp-navigate-library" onClick={() => props.onNavigate("library")}>nav-library</button>
-        <button data-testid="cp-select-album" onClick={() => props.onSelectAlbum({ id: "srv:alb1", title: "A" })}>album</button>
-        <button data-testid="cp-select-artist" onClick={() => props.onSelectArtist("Artist X", 3)}>artist</button>
+        <button data-testid="cp-navigate" onClick={() => props.onNavigate("home")}>
+          nav-home
+        </button>
+        <button data-testid="cp-navigate-library" onClick={() => props.onNavigate("library")}>
+          nav-library
+        </button>
+        <button data-testid="cp-select-album" onClick={() => props.onSelectAlbum({ id: "srv:alb1", title: "A" })}>
+          album
+        </button>
+        <button data-testid="cp-select-artist" onClick={() => props.onSelectArtist("Artist X", 3)}>
+          artist
+        </button>
       </div>
     ),
 }));
@@ -95,21 +110,23 @@ beforeAll(async () => {
   render(
     <MemoryRouter initialEntries={["/library"]}>
       <Inner startPaletteOpen={false} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
   await waitFor(() => expect(screen.getByTestId("route-content")).toBeInTheDocument());
   cleanup();
   render(
     <MemoryRouter initialEntries={["/library"]}>
       <Inner startPaletteOpen={true} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
   await waitFor(() => expect(screen.getByTestId("command-palette-stub")).toBeInTheDocument());
   cleanup();
 });
 
 function makeAlbumRow(id: string) {
-  return { id, server_id: "srv", title: id } as unknown as Parameters<ReturnType<typeof useAppNavigation>["openAlbum"]>[0];
+  return { id, server_id: "srv", title: id } as unknown as Parameters<
+    ReturnType<typeof useAppNavigation>["openAlbum"]
+  >[0];
 }
 
 async function mockLookupAlbum(id: string) {
@@ -182,7 +199,9 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     <>
       {/* A route-owned navigation, the one kind that never passes through
           useAppNavigation. AppRoutes does this after deleting a playlist. */}
-      <button data-testid="raw-navigate" onClick={() => rawNavigate("/playlists")}>raw</button>
+      <button data-testid="raw-navigate" onClick={() => rawNavigate("/playlists")}>
+        raw
+      </button>
       <AppShell {...(props as AppViewProps)} />
     </>
   );
@@ -192,7 +211,7 @@ function renderHarness(opts: { entries: string[]; index?: number; startPaletteOp
   return render(
     <MemoryRouter initialEntries={opts.entries} initialIndex={opts.index}>
       <Inner startPaletteOpen={opts.startPaletteOpen ?? true} />
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -258,9 +277,7 @@ describe("AppShell: command palette dismissed by every navigation source", () =>
     // never reads as inert, while the router commits the location as a transition. So the route
     // is still painting the path this navigation came *from* when the dismissal lands, and the
     // destination has to be waited for rather than read off the same tick.
-    await waitFor(() =>
-      expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2")
-    );
+    await waitFor(() => expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb2"));
   });
 
   it("Alt+ArrowLeft dismisses the palette by navigating back", () => {

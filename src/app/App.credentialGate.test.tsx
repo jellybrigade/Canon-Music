@@ -36,13 +36,13 @@ vi.mock("../features/playlists/PlaylistDetail", () => ({
 vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
 vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () => null }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
-import { allowSlowAppMounts } from "../test/appMount";
 import { keychain } from "../lib/keychain";
+import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 
@@ -64,10 +64,12 @@ const ROUTES = [
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
   await testDb.execute(
     "INSERT INTO albums (id, server_id, server_type, name, artist, year) VALUES (?, ?, 'navidrome', ?, ?, ?)",
     ["srv-a:alb1", "srv-a", "Album Name", "Artist Name", 2020],
@@ -119,16 +121,13 @@ afterEach(() => {
 });
 
 describe("a detail route while the credential round-trip is in flight", () => {
-  it.each(ROUTES)(
-    "the $name route says it is connecting instead of painting a blank page",
-    async ({ path }) => {
-      deferKeychain();
-      mountAt(path);
+  it.each(ROUTES)("the $name route says it is connecting instead of painting a blank page", async ({ path }) => {
+    deferKeychain();
+    mountAt(path);
 
-      expect(await screen.findByText(CRED_LOADING_COPY)).toBeInTheDocument();
-      expect(screen.queryByText(CRED_ERROR_COPY)).not.toBeInTheDocument();
-    },
-  );
+    expect(await screen.findByText(CRED_LOADING_COPY)).toBeInTheDocument();
+    expect(screen.queryByText(CRED_ERROR_COPY)).not.toBeInTheDocument();
+  });
 
   it.each(ROUTES)("the $name route keeps its page chrome while connecting", async ({ path }) => {
     deferKeychain();

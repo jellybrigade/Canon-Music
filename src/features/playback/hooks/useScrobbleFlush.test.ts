@@ -13,7 +13,7 @@
  * The producer that fills `scrobble_queue` (`useScrobble.ts`) shares only the table name and
  * is a separate scope; rows are seeded directly here.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
@@ -25,18 +25,18 @@ vi.mock("../../../clients/navidrome", async () => {
   return { ...actual, scrobbleTrack: vi.fn() };
 });
 
-import React from "react";
-import { renderHook, act, cleanup } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { getDb } from "../../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import React from "react";
 import { scrobbleTrack } from "../../../clients/navidrome";
-import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { SubsonicError } from "../../../clients/navidromeTransport";
-import { QK } from "../../../lib/queryKeys";
-import type { Server } from "../../../types/server";
+import type { NavidromeCredential } from "../../../clients/navidromeUrls";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import { useScrobbleFlush, getScrobbleQueueCount } from "./useScrobbleFlush";
+import { QK } from "../../../lib/queryKeys";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import type { Server } from "../../../types/server";
+import { getScrobbleQueueCount, useScrobbleFlush } from "./useScrobbleFlush";
 
 const FLUSH_MS = 60_000;
 
@@ -87,9 +87,10 @@ function queueTrackIds(): string[] {
 }
 
 function historyRows(): { track_id: string; timestamp: number }[] {
-  return db.raw
-    .prepare("SELECT track_id, timestamp FROM scrobble_history ORDER BY id")
-    .all() as { track_id: string; timestamp: number }[];
+  return db.raw.prepare("SELECT track_id, timestamp FROM scrobble_history ORDER BY id").all() as {
+    track_id: string;
+    timestamp: number;
+  }[];
 }
 
 function trackPlayCount(trackId: string): number {
@@ -125,7 +126,7 @@ function armDeferredScrobble() {
     () =>
       new Promise<void>((res, rej) => {
         pending.push({ resolve: () => res(), reject: rej });
-      })
+      }),
   );
 }
 
@@ -148,10 +149,10 @@ async function tick(ms = 0) {
 // Deliberately no default for `value`: `renderFlush(undefined)` must render the
 // no-server path, which a default parameter would silently turn back into a server.
 function renderFlush(value: ServerWithCredential | undefined, client = makeClient()) {
-  const view = renderHook(
-    ({ v }: { v: ServerWithCredential | undefined }) => useScrobbleFlush(v),
-    { initialProps: { v: value }, wrapper: wrapperFor(client) }
-  );
+  const view = renderHook(({ v }: { v: ServerWithCredential | undefined }) => useScrobbleFlush(v), {
+    initialProps: { v: value },
+    wrapper: wrapperFor(client),
+  });
   return { ...view, client };
 }
 
@@ -185,7 +186,9 @@ describe("useScrobbleFlush drain", () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedQueue("srv-a:t3", 1700000003);
-    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
+    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => {
+      seedTrack(id);
+    });
 
     renderFlush(swc());
     await tick();
@@ -337,7 +340,9 @@ describe("useScrobbleFlush error handling", () => {
     seedQueue("srv-a:t1", 1700000001);
     seedQueue("srv-a:t2", 1700000002);
     seedQueue("srv-a:t3", 1700000003);
-    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
+    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => {
+      seedTrack(id);
+    });
     vi.mocked(scrobbleTrack).mockRejectedValueOnce(new SubsonicError("scrobble.view", 70));
 
     renderFlush(swc());
@@ -351,25 +356,24 @@ describe("useScrobbleFlush error handling", () => {
 
   // Same entry: 40/41/50 are recoverable by re-entering the password, so dropping the rows
   // would delete the user's offline backlog.
-  it.each([40, 41, 50])(
-    "stops the batch and keeps the whole backlog on auth error %i",
-    async (code) => {
-      seedQueue("srv-a:t1", 1700000001);
-      seedQueue("srv-a:t2", 1700000002);
-      seedQueue("srv-a:t3", 1700000003);
-      ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => { seedTrack(id); });
-      vi.mocked(scrobbleTrack).mockRejectedValue(new SubsonicError("scrobble.view", code));
+  it.each([40, 41, 50])("stops the batch and keeps the whole backlog on auth error %i", async (code) => {
+    seedQueue("srv-a:t1", 1700000001);
+    seedQueue("srv-a:t2", 1700000002);
+    seedQueue("srv-a:t3", 1700000003);
+    ["srv-a:t1", "srv-a:t2", "srv-a:t3"].forEach((id) => {
+      seedTrack(id);
+    });
+    vi.mocked(scrobbleTrack).mockRejectedValue(new SubsonicError("scrobble.view", code));
 
-      const { client } = renderFlush(swc());
-      const invalidate = vi.spyOn(client, "invalidateQueries");
-      await tick();
+    const { client } = renderFlush(swc());
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await tick();
 
-      expect(scrobbleTrack).toHaveBeenCalledTimes(1);
-      expect(queueTrackIds()).toEqual(["srv-a:t1", "srv-a:t2", "srv-a:t3"]);
-      expect(historyRows()).toEqual([]);
-      expect(invalidate).not.toHaveBeenCalled();
-    }
-  );
+    expect(scrobbleTrack).toHaveBeenCalledTimes(1);
+    expect(queueTrackIds()).toEqual(["srv-a:t1", "srv-a:t2", "srv-a:t3"]);
+    expect(historyRows()).toEqual([]);
+    expect(invalidate).not.toHaveBeenCalled();
+  });
 
   it("stops the batch on a Subsonic error carrying no code", async () => {
     // `callSubsonicVoid` reads `response.error?.code ?? null`, so a malformed error body

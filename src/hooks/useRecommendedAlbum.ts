@@ -1,7 +1,7 @@
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getDb } from "../db";
-import { QK } from "../lib/queryKeys";
 import { HOME_GC_TIME, HOME_STALE_TIME } from "../lib/homeQueryTiming";
+import { QK } from "../lib/queryKeys";
 
 interface RecommendedAlbumRow {
   id: string;
@@ -35,7 +35,7 @@ export function useRecommendedAlbum(albumId: string | null) {
          HAVING genre_match * 1.0 / genre_total >= 0.5
          ORDER BY genre_match DESC, RANDOM()
          LIMIT 1`,
-        [albumId, albumId]
+        [albumId, albumId],
       );
       return rows[0] ?? null;
     },

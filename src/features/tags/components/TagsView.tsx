@@ -1,23 +1,22 @@
-import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
 import { QK } from "../../../lib/queryKeys";
-import { useTagVocab, useTagMappings, useAutoMapExact } from "../hooks/useTagMappings";
 import { useDanglingGenreIds } from "../hooks/useDanglingGenreIds";
-import {
-  useUserNodes,
-  useCreateUserNode,
-  useUpdateUserNode,
-  useDeleteUserNode,
-  isSuperseeded,
-} from "../hooks/useUserTree";
+import { useAutoMapExact, useTagMappings, useTagVocab } from "../hooks/useTagMappings";
 import type { UserTreeNode } from "../hooks/useUserTree";
+import {
+  isSuperseeded,
+  useCreateUserNode,
+  useDeleteUserNode,
+  useUpdateUserNode,
+  useUserNodes,
+} from "../hooks/useUserTree";
 import type { TagKind, TreeNode } from "../lib/canonicalize";
 import { getCanonTree } from "../lib/canonicalize";
-import { NodeModal } from "./TagTreeTab";
-import type { NodeFormState } from "./TagTreeTab";
-import { TagReviewTab } from "./TagReviewTab";
 import { TagDecidedTab } from "./TagDecidedTab";
-import { TagTreeTab } from "./TagTreeTab";
+import { TagReviewTab } from "./TagReviewTab";
+import type { NodeFormState } from "./TagTreeTab";
+import { NodeModal, TagTreeTab } from "./TagTreeTab";
 import { TitleCleanupTab } from "./TitleCleanupTab";
 import "./TagsView.css";
 
@@ -58,14 +57,16 @@ export function TagsView() {
         }
       },
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const createUserNode = useCreateUserNode();
   const updateUserNode = useUpdateUserNode();
   const deleteUserNode = useDeleteUserNode();
 
   useEffect(() => {
-    getCanonTree().then((tree) => setTreeNodes(tree.nodes)).catch(console.error);
+    getCanonTree()
+      .then((tree) => setTreeNodes(tree.nodes))
+      .catch(console.error);
   }, []);
 
   async function refreshTree() {
@@ -158,7 +159,9 @@ export function TagsView() {
       <header className="tags-view-header">
         <div className="tags-view-title-row">
           <div className="tags-view-title">Genre Tags</div>
-          <button className="tags-refresh-btn" onClick={handleRefresh} title="Refresh tag data">↻</button>
+          <button className="tags-refresh-btn" onClick={handleRefresh} title="Refresh tag data">
+            ↻
+          </button>
         </div>
       </header>
 
@@ -204,7 +207,9 @@ export function TagsView() {
           initialName={pendingCreate?.name ?? ""}
           editingNode={editingNode ?? undefined}
           treeNodes={treeNodes}
-          onSave={(state) => { void handleNodeSave(state); }}
+          onSave={(state) => {
+            void handleNodeSave(state);
+          }}
           onCancel={closeNodeModal}
           error={nodeModalError}
         />
@@ -213,7 +218,9 @@ export function TagsView() {
       {deletingNode && (
         <div
           className="node-modal-backdrop"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) setDeletingNode(null); }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setDeletingNode(null);
+          }}
         >
           <div className="node-modal">
             <h3 className="node-modal-title">Delete "{deletingNode.name}"?</h3>
@@ -224,7 +231,12 @@ export function TagsView() {
               <button className="node-modal-btn node-modal-btn--cancel" onClick={() => setDeletingNode(null)}>
                 Cancel
               </button>
-              <button className="node-modal-btn node-modal-btn--danger" onClick={() => { void confirmNodeDelete(); }}>
+              <button
+                className="node-modal-btn node-modal-btn--danger"
+                onClick={() => {
+                  void confirmNodeDelete();
+                }}
+              >
                 Delete
               </button>
             </div>

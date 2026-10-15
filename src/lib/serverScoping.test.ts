@@ -7,9 +7,9 @@
 // Known limit: SQL built by pushing conditions onto an array (`buildSmartQuery`) never exists as
 // one string in the source, so no literal-based sweep can see it. Such a builder owes its own unit
 // test that the server scope is among the conditions it always emits.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -110,10 +110,8 @@ describe("artist-name reads of the mirror are scoped to one server", () => {
   });
 
   it("flags a scope bound to the first alternative of a name-match group", () => {
-    const leaky =
-      "const q = `SELECT id FROM tracks WHERE server_id = ? AND artist = ? OR artist LIKE ?`;";
-    const bracketed =
-      "const q = `SELECT id FROM tracks WHERE server_id = ? AND (artist = ? OR artist LIKE ?)`;";
+    const leaky = "const q = `SELECT id FROM tracks WHERE server_id = ? AND artist = ? OR artist LIKE ?`;";
+    const bracketed = "const q = `SELECT id FROM tracks WHERE server_id = ? AND (artist = ? OR artist LIKE ?)`;";
     expect(unscopedArtistReads("x.ts", leaky)).toHaveLength(1);
     expect(unscopedArtistReads("x.ts", bracketed)).toEqual([]);
   });
@@ -142,7 +140,7 @@ describe("artist-name reads of the mirror are scoped to one server", () => {
     expect(file).toBeDefined();
     const text = file?.text ?? "";
     const composed = [...text.matchAll(MIRROR_READ)].filter(
-      (m) => !ARTIST_FILTER.test(m[1] ?? "") && ARTIST_FILTER.test(resolveFragments(m[1] ?? "", text))
+      (m) => !ARTIST_FILTER.test(m[1] ?? "") && ARTIST_FILTER.test(resolveFragments(m[1] ?? "", text)),
     );
     expect(composed.length).toBe(2);
     expect(unscopedArtistReads("features/playback/lib/nowPlayingQueries.ts", text)).toEqual([]);
@@ -165,7 +163,7 @@ describe("artist-name reads of the mirror are scoped to one server", () => {
       expect(file, `${path} is exempted but no longer exists`).toBeDefined();
       expect(
         unscopedArtistReads(path, file?.text ?? "").length,
-        `${path} no longer needs its exemption`
+        `${path} no longer needs its exemption`,
       ).toBeGreaterThan(0);
     }
   });

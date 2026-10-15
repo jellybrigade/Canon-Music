@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 
 export interface MeasuredElement<T extends HTMLElement> {
   /** For consumers that need the node itself (a virtualizer's scroll element, `useScrollMemory`). */
@@ -37,10 +37,13 @@ export function useMeasuredElement<T extends HTMLElement>(): MeasuredElement<T> 
 
   // React calls `attach(null)` on unmount, but only for an element that is still rendered;
   // an unmount that happens while the view is back on its empty branch has already detached.
-  useEffect(() => () => {
-    observerRef.current?.disconnect();
-    observerRef.current = null;
-  }, []);
+  useEffect(
+    () => () => {
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+    },
+    [],
+  );
 
   return { ref, attach, width: size.width, height: size.height };
 }

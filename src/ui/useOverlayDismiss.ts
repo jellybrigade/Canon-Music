@@ -1,5 +1,5 @@
-import { useRef, useMemo } from "react";
 import type { MouseEvent } from "react";
+import { useMemo, useRef } from "react";
 
 /**
  * Backdrop dismissal for portal modals: press and release must both target the backdrop, so a

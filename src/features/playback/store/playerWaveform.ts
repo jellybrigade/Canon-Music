@@ -1,10 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getDb } from "../../../db";
-import { resolveTrack } from "./queueOrder";
 import { WAVEFORM_BAR_COUNT, WAVEFORM_STUB_PEAK } from "../lib/waveformDisplay";
 import { runtime, waveformInFlight } from "./playerRuntime";
 import type { PlayerGet, PlayerSet } from "./playerTypes";
+import { resolveTrack } from "./queueOrder";
 
 export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
   // Single global listener for preloaded (not-yet-current) waveforms: caches the result and
@@ -15,10 +15,11 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
     if (!waveformInFlight.delete(trackId)) return;
     try {
       const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)",
-        [trackId, JSON.stringify(peaks), Math.floor(Date.now() / 1000)]
-      );
+      await db.execute("INSERT OR REPLACE INTO waveform_cache (track_id, peaks_json, created_at) VALUES (?, ?, ?)", [
+        trackId,
+        JSON.stringify(peaks),
+        Math.floor(Date.now() / 1000),
+      ]);
     } catch (e) {
       console.error("Failed to cache preloaded waveform:", e);
     }
@@ -29,7 +30,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
       const db = await getDb();
       const settingRows = await db.select<{ value: string }[]>(
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
-        []
+        [],
       );
       if ((settingRows[0]?.value ?? "true") !== "true") return;
 
@@ -45,10 +46,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
         type Row = { peaks_json: string };
         if (waveformInFlight.has(track.id)) continue;
 
-        const rows = await db.select<Row[]>(
-          "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
-          [track.id]
-        );
+        const rows = await db.select<Row[]>("SELECT peaks_json FROM waveform_cache WHERE track_id = ?", [track.id]);
         if (rows[0]) continue;
 
         const rawUrl = streamUrlFor(track);
@@ -89,15 +87,12 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
 
       const settingRows = await db.select<{ value: string }[]>(
         "SELECT value FROM settings WHERE key = 'player.show_waveform'",
-        []
+        [],
       );
       if ((settingRows[0]?.value ?? "true") !== "true") return;
 
       type Row = { peaks_json: string };
-      const rows = await db.select<Row[]>(
-        "SELECT peaks_json FROM waveform_cache WHERE track_id = ?",
-        [trackId]
-      );
+      const rows = await db.select<Row[]>("SELECT peaks_json FROM waveform_cache WHERE track_id = ?", [trackId]);
       if (rows[0]) {
         const peaks = JSON.parse(rows[0].peaks_json) as number[];
         // Preloaded waveforms from partial streams are padded with trailing zeros.
@@ -132,25 +127,22 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
           if (get().currentTrack?.id !== trackId) return;
           const scale = runningMax > 0 ? 1 / runningMax : 1;
           // Show each bar at its actual position; unfilled bars get a stub so the load direction is clear.
-          const display = rawPeaks.map((v, i) => i < filledCount ? v * scale : WAVEFORM_STUB_PEAK);
+          const display = rawPeaks.map((v, i) => (i < filledCount ? v * scale : WAVEFORM_STUB_PEAK));
           set({ waveformPeaks: display });
-        }
+        },
       );
 
-      const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>(
-        "waveform_complete",
-        (event) => {
-          // Guard before unlisten: a stale event from a prior track must not kill the current track's listeners
-          if (event.payload.track_id !== trackId) return;
-          unlistenChunk();
-          unlistenComplete();
-          runtime.cancelWaveform = null;
-          if (get().currentTrack?.id === trackId) {
-            set({ waveformPeaks: event.payload.peaks });
-          }
-          // Caching is owned by the global waveform_complete listener.
+      const unlistenComplete = await listen<{ track_id: string; peaks: number[] }>("waveform_complete", (event) => {
+        // Guard before unlisten: a stale event from a prior track must not kill the current track's listeners
+        if (event.payload.track_id !== trackId) return;
+        unlistenChunk();
+        unlistenComplete();
+        runtime.cancelWaveform = null;
+        if (get().currentTrack?.id === trackId) {
+          set({ waveformPeaks: event.payload.peaks });
         }
-      );
+        // Caching is owned by the global waveform_complete listener.
+      });
 
       // Hold references so a future track can cancel these listeners if it starts before waveform_complete fires
       runtime.cancelWaveform = () => {
@@ -174,10 +166,13 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
       // listeners above still receive them. Invoking again would corrupt the shared temp file.
       if (!waveformInFlight.has(trackId)) {
         waveformInFlight.add(trackId);
-        void invoke("audio_extract_waveform", { trackId, url: waveformUrl, durationSecs: get().currentTrack?.duration ?? 0 })
-          .catch(() => {
-            waveformInFlight.delete(trackId);
-          });
+        void invoke("audio_extract_waveform", {
+          trackId,
+          url: waveformUrl,
+          durationSecs: get().currentTrack?.duration ?? 0,
+        }).catch(() => {
+          waveformInFlight.delete(trackId);
+        });
       }
     } catch (e) {
       console.error("Failed to fetch waveform:", e);

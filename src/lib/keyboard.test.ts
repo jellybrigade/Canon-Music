@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { isTextEntryTarget } from "./keyboard";
 
 function keydownOn(el: EventTarget | null): KeyboardEvent {
@@ -8,7 +8,9 @@ function keydownOn(el: EventTarget | null): KeyboardEvent {
   return e;
 }
 
-afterEach(() => { document.body.innerHTML = ""; });
+afterEach(() => {
+  document.body.innerHTML = "";
+});
 
 describe("isTextEntryTarget", () => {
   it("is true for a text input", () => {

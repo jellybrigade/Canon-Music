@@ -217,15 +217,15 @@ body,
   -webkit-text-size-adjust: 100%;
 }
 
-
 .light-theme .sidebar-btn--active,
 .light-theme .sidebar-btn--active:hover:not(:disabled) {
   background-color: var(--tint-4);
 }
 
-
 /* ── Base elements ── */
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-family: var(--font-sans);
 }
 
@@ -239,7 +239,10 @@ button {
   font-family: inherit;
   color: var(--text-primary);
   background-color: var(--bg-input);
-  transition: border-color var(--duration-moderate), opacity var(--duration-moderate), background-color var(--duration-moderate);
+  transition:
+    border-color var(--duration-moderate),
+    opacity var(--duration-moderate),
+    background-color var(--duration-moderate);
   box-shadow: var(--shadow-xs) var(--scrim-1);
   outline: none;
 }
@@ -282,7 +285,9 @@ input[type="checkbox"] {
   background-size: 0.7rem 0.7rem;
   box-shadow: none;
   cursor: pointer;
-  transition: background-color var(--duration-moderate), border-color var(--duration-moderate);
+  transition:
+    background-color var(--duration-moderate),
+    border-color var(--duration-moderate);
 }
 
 input[type="checkbox"]:hover:not(:disabled) {
@@ -330,8 +335,12 @@ button.primary:hover:not(:disabled) {
 
 /* ── Animations ── */
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Pause all CSS animations while window unfocused - reduces WebKitGTK GPU
@@ -349,8 +358,12 @@ html[data-app-blurred] * {
    NowPlayingProgress.css; the gradient is a background, so it stays inside the element box and
    needs no overflow clipping on a track whose waveform variant is overflow: visible. */
 @keyframes bufferSweep {
-  from { background-position: -50% 0; }
-  to   { background-position: 150% 0; }
+  from {
+    background-position: -50% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
 }
 
 /* The waveform variant of the buffering track can't use that overlay: it is 28px (48px in
@@ -367,12 +380,21 @@ html[data-app-blurred] * {
 /* --bar-rest rather than a literal: the transport's bars idle at --progress-track and Now
    Playing's at --tint-5, so a hardcoded trough would recolour one of them on every cycle. */
 @keyframes bufferBarSweep {
-  0%, 100% { background-color: var(--bar-rest); }
-  50%      { background-color: var(--accent); }
+  0%,
+  100% {
+    background-color: var(--bar-rest);
+  }
+  50% {
+    background-color: var(--accent);
+  }
 }
 
-.player-progress-bar--buffering .waveform-bar { --bar-rest: var(--progress-track); }
-.now-playing-progress-bar--buffering .now-playing-waveform-bar { --bar-rest: var(--tint-5); }
+.player-progress-bar--buffering .waveform-bar {
+  --bar-rest: var(--progress-track);
+}
+.now-playing-progress-bar--buffering .now-playing-waveform-bar {
+  --bar-rest: var(--tint-5);
+}
 
 .player-progress-bar--buffering .waveform-bar,
 .now-playing-progress-bar--buffering .now-playing-waveform-bar {
@@ -394,15 +416,25 @@ html[data-app-blurred] * {
 }
 
 @keyframes playingPulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* Shared by every loading skeleton (AlbumDetail.css, NowPlayingAbout.css). Defined here rather
    than per-file because a keyframes name is global: two copies are one copy that can drift. */
 @keyframes canon-skeleton-pulse {
-  0%, 100% { opacity: var(--opacity-40); }
-  50%      { opacity: var(--opacity-20); }
+  0%,
+  100% {
+    opacity: var(--opacity-40);
+  }
+  50% {
+    opacity: var(--opacity-20);
+  }
 }
 
 /* ── Empty / error states ──
@@ -528,7 +560,9 @@ html[data-app-blurred] * {
   cursor: pointer;
   color: var(--text-tertiary);
   padding: 0;
-  transition: color var(--duration-base), background-color var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background-color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -601,7 +635,9 @@ html[data-app-blurred] * {
   gap: var(--space-xs);
   cursor: pointer;
   color: var(--accent, var(--overlay-70));
-  transition: color var(--duration-base), background-color var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background-color var(--duration-base);
   flex-shrink: 0;
   opacity: var(--opacity-75);
 }
@@ -634,7 +670,9 @@ html[data-app-blurred] * {
   justify-content: center;
   cursor: pointer;
   color: var(--text-secondary);
-  transition: color var(--duration-base), background-color var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background-color var(--duration-base);
   flex-shrink: 0;
 }
 
@@ -668,15 +706,15 @@ html[data-app-blurred] * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
 }
-
-
 
 /* ── Fatal startup error (database unreadable) ──
    Same shape as ErrorBoundary's panel, but rendered from App so it can offer a
@@ -718,7 +756,9 @@ html[data-app-blurred] * {
   background: var(--bg-elevated);
   color: var(--text-primary);
   cursor: pointer;
-  transition: background-color var(--duration-base), border-color var(--duration-base);
+  transition:
+    background-color var(--duration-base),
+    border-color var(--duration-base);
 }
 
 .app-fatal-btn:hover {

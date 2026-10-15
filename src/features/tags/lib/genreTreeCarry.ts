@@ -1,9 +1,16 @@
-import { invoke } from "@tauri-apps/api/core";
 import type { QueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import type Database from "@tauri-apps/plugin-sql";
 import canonTreeData from "../../../assets/canon-tree.json";
 import { QK } from "../../../lib/queryKeys";
-import { bustCanonTreeCache, findCanonicalSync, getCanonTree, sqlNorm, type CanonTree, type TagKind } from "./canonicalize";
+import {
+  bustCanonTreeCache,
+  type CanonTree,
+  findCanonicalSync,
+  getCanonTree,
+  sqlNorm,
+  type TagKind,
+} from "./canonicalize";
 import { invalidateManualMappings } from "./manualMappings";
 
 export type TreeRename = { from: string; fromName: string; to: string };
@@ -54,9 +61,7 @@ export function refreshGenreIdReads(queryClient: QueryClient): void {
 
 /** Carries stored genre ids onto a new bundled tree, once per tree version. */
 export async function carryGenreTree(db: Database, queryClient: QueryClient): Promise<void> {
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'genre_tree_version'"
-  );
+  const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'genre_tree_version'");
   if (rows[0]?.value === canonTreeData.version) return;
   const renames = planGenreRenames(canonTreeData.renames, await getCanonTree());
   await invoke("carry_genre_renames", { renames, treeVersion: canonTreeData.version });

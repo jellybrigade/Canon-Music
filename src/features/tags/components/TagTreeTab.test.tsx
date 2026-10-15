@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { NodeModal } from "./TagTreeTab";
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetModalRegistry, useAnyModalOpen } from "../../../ui/useModalChrome";
+import { NodeModal } from "./TagTreeTab";
 
 beforeEach(() => __resetModalRegistry());
 afterEach(cleanup);

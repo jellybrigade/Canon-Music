@@ -9,7 +9,7 @@
  * `isPlaying: false`, no engine load), which is exactly the fix that entry documents for this
  * hook's own restore path.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
@@ -19,15 +19,15 @@ vi.mock("../../../clients/navidrome", async () => {
   return { ...actual, getPlayQueue: vi.fn(), savePlayQueue: vi.fn() };
 });
 
-import { renderHook, act, cleanup } from "@testing-library/react";
+import { act, cleanup, renderHook } from "@testing-library/react";
+import { getPlayQueue, type SavedPlayQueue, savePlayQueue } from "../../../clients/navidrome";
+import type { NavidromeCredential } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
+import type { ServerWithCredential } from "../../../hooks/useServer";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { getPlayQueue, savePlayQueue, type SavedPlayQueue } from "../../../clients/navidrome";
+import type { Server } from "../../../types/server";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
-import type { NavidromeCredential } from "../../../clients/navidromeUrls";
-import type { Server } from "../../../types/server";
-import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useQueueSync } from "./useQueueSync";
 
 const SRV: Server = {
@@ -70,11 +70,15 @@ function seedTrack(nativeId: string, albumId: string | null = `${nativeId}-alb`,
       .prepare("INSERT OR IGNORE INTO albums (id, server_id, server_type, name) VALUES (?, ?, 'navidrome', ?)")
       .run(canonAlbumId, server.id, `album ${albumId}`);
     db.raw
-      .prepare("INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?)")
+      .prepare(
+        "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', ?)",
+      )
       .run(canonId, server.id, `title ${nativeId}`, canonAlbumId);
   } else {
     db.raw
-      .prepare("INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', NULL)")
+      .prepare(
+        "INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES (?, ?, 'navidrome', ?, 'Some Artist', NULL)",
+      )
       .run(canonId, server.id, `title ${nativeId}`);
   }
 }
@@ -254,7 +258,10 @@ describe("useQueueSync restore", () => {
     seedTrack("t1");
     let resolveQueue!: (v: SavedPlayQueue | null) => void;
     vi.mocked(getPlayQueue).mockImplementation(
-      () => new Promise((resolve) => { resolveQueue = resolve; })
+      () =>
+        new Promise((resolve) => {
+          resolveQueue = resolve;
+        }),
     );
 
     renderSync(swc());

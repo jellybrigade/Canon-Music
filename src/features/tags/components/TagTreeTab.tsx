@@ -1,15 +1,11 @@
+import { AlertTriangle, Pencil, Plus, Trash2 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Pencil, Trash2, AlertTriangle } from "lucide-react";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
-import {
-  useUserNodes,
-  useUserTreeChangelog,
-  isSuperseeded,
-} from "../hooks/useUserTree";
 import type { UserTreeNode } from "../hooks/useUserTree";
+import { isSuperseeded, useUserNodes, useUserTreeChangelog } from "../hooks/useUserTree";
 import type { TreeNode } from "../lib/canonicalize";
 import { canonicalKey } from "../lib/canonicalize";
 import "./TagTreeTab.css";
@@ -37,7 +33,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
   const [name, setName] = useState(editingNode?.name ?? initialName);
   const [type, setType] = useState<UserNodeType>((editingNode?.type as UserNodeType) ?? "genre");
   const [parentId, setParentId] = useState<string>(
-    editingNode ? (JSON.parse(editingNode.parent_ids) as string[])[0] ?? "" : "",
+    editingNode ? ((JSON.parse(editingNode.parent_ids) as string[])[0] ?? "") : "",
   );
   const [parentQuery, setParentQuery] = useState("");
   const [parentOpen, setParentOpen] = useState(false);
@@ -53,7 +49,11 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
     const q = parentQuery.toLowerCase();
     const section = sectionForType(type);
     return treeNodes
-      .filter((n) => n.sections.includes(section) && (n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q)))
+      .filter(
+        (n) =>
+          n.sections.includes(section) &&
+          (n.name.toLowerCase().includes(q) || n.canonical_key.toLowerCase().includes(q)),
+      )
       .slice(0, 8);
   }, [treeNodes, parentQuery, type]);
 
@@ -73,7 +73,14 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
     setParentOpen(true);
   }
 
-  useClickOutside(parentWrapRef, () => { setParentOpen(false); setParentQuery(""); }, parentOpen);
+  useClickOutside(
+    parentWrapRef,
+    () => {
+      setParentOpen(false);
+      setParentQuery("");
+    },
+    parentOpen,
+  );
 
   const chrome = useModalChrome(onCancel);
   const dismiss = useOverlayDismiss(onCancel);
@@ -93,7 +100,10 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { e.preventDefault(); onSave({ name: name.trim(), type, parentId }); }
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSave({ name: name.trim(), type, parentId });
+              }
             }}
           />
           {name.trim() && <span className="node-modal-key-preview">key: {previewKey}</span>}
@@ -102,15 +112,21 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
         <label className="node-modal-label">
           Type
           <div className="tags-seg node-modal-seg">
-            {([
-              ["genre", "Genre"],
-              ["descriptor", "Descriptor"],
-              ["scenes-and-movements", "Scenes & Movements"],
-            ] as [UserNodeType, string][]).map(([t, label]) => (
+            {(
+              [
+                ["genre", "Genre"],
+                ["descriptor", "Descriptor"],
+                ["scenes-and-movements", "Scenes & Movements"],
+              ] as [UserNodeType, string][]
+            ).map(([t, label]) => (
               <button
                 key={t}
                 className={`tags-seg-btn${type === t ? " tags-seg-btn--active" : ""}`}
-                onClick={() => { setType(t); setParentId(""); setParentQuery(""); }}
+                onClick={() => {
+                  setType(t);
+                  setParentId("");
+                  setParentQuery("");
+                }}
               >
                 {label}
               </button>
@@ -123,7 +139,15 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
           {parentNode ? (
             <div className="tags-mapped" style={{ marginTop: 4 }}>
               <span className="tags-mapped-name">{parentNode.name}</span>
-              <button className="tags-clear-btn" onClick={() => { setParentId(""); setParentQuery(""); }}>×</button>
+              <button
+                className="tags-clear-btn"
+                onClick={() => {
+                  setParentId("");
+                  setParentQuery("");
+                }}
+              >
+                ×
+              </button>
             </div>
           ) : (
             <div className="tags-combobox" ref={parentWrapRef} style={{ marginTop: 4 }}>
@@ -132,29 +156,34 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
                 className="tags-combobox-input"
                 placeholder="Search for parent node…"
                 value={parentQuery}
-                onChange={(e) => { setParentQuery(e.target.value); openParentDrop(); }}
+                onChange={(e) => {
+                  setParentQuery(e.target.value);
+                  openParentDrop();
+                }}
                 onFocus={openParentDrop}
               />
-              {parentOpen && parentMatches.length > 0 && createPortal(
-                <div className="tags-combobox-dropdown" style={parentDropStyle}>
-                  {parentMatches.map((n) => (
-                    <button
-                      key={n.id}
-                      className="tags-combobox-option"
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        setParentId(n.id);
-                        setParentQuery("");
-                        setParentOpen(false);
-                      }}
-                    >
-                      <span className="tags-option-name">{n.name}</span>
-                      <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
-                    </button>
-                  ))}
-                </div>,
-                document.body,
-              )}
+              {parentOpen &&
+                parentMatches.length > 0 &&
+                createPortal(
+                  <div className="tags-combobox-dropdown" style={parentDropStyle}>
+                    {parentMatches.map((n) => (
+                      <button
+                        key={n.id}
+                        className="tags-combobox-option"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setParentId(n.id);
+                          setParentQuery("");
+                          setParentOpen(false);
+                        }}
+                      >
+                        <span className="tags-option-name">{n.name}</span>
+                        <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
+                      </button>
+                    ))}
+                  </div>,
+                  document.body,
+                )}
             </div>
           )}
         </label>
@@ -162,7 +191,9 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
         {error && <p className="node-modal-error">{error}</p>}
 
         <div className="node-modal-actions">
-          <button className="node-modal-btn node-modal-btn--cancel" onClick={onCancel}>Cancel</button>
+          <button className="node-modal-btn node-modal-btn--cancel" onClick={onCancel}>
+            Cancel
+          </button>
           <button
             className="node-modal-btn node-modal-btn--save"
             disabled={!name.trim()}
@@ -188,9 +219,7 @@ interface TreeNodeRowProps {
 
 function UserNodeRow({ node, treeNodes, onEdit, onDelete }: TreeNodeRowProps) {
   const parentIds = JSON.parse(node.parent_ids) as string[];
-  const parentName = parentIds[0]
-    ? (treeNodes.find((n) => n.id === parentIds[0])?.name ?? parentIds[0])
-    : null;
+  const parentName = parentIds[0] ? (treeNodes.find((n) => n.id === parentIds[0])?.name ?? parentIds[0]) : null;
   const superseded = isSuperseeded(node);
 
   return (
@@ -198,7 +227,14 @@ function UserNodeRow({ node, treeNodes, onEdit, onDelete }: TreeNodeRowProps) {
       <span className="tree-node-name">{node.name}</span>
       <span className={`tags-kind-badge tags-kind-badge--${node.type}`}>{node.type}</span>
       <div className="tree-node-parent">
-        {parentName ? <><span className="tree-node-parent-arrow">↳</span>{parentName}</> : <span style={{ color: "var(--text-tertiary)" }}>-</span>}
+        {parentName ? (
+          <>
+            <span className="tree-node-parent-arrow">↳</span>
+            {parentName}
+          </>
+        ) : (
+          <span style={{ color: "var(--text-tertiary)" }}>-</span>
+        )}
         {superseded && (
           <span className="tree-node-conflict" title="A node with this key now exists in the bundled tree">
             <AlertTriangle size={12} /> bundled
@@ -260,7 +296,10 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
         ) : (
           <>
             <div className="tree-col-header">
-              <span>Node</span><span>Type</span><span>Parent</span><span></span>
+              <span>Node</span>
+              <span>Type</span>
+              <span>Parent</span>
+              <span></span>
             </div>
             <div className="tree-node-list">
               {userNodes.map((node) => (
@@ -282,13 +321,9 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
             <div className="tree-changelog-list">
               {changelog.map((entry) => (
                 <div key={entry.id} className="tree-changelog-row">
-                  <span className={`tree-changelog-action tree-changelog-action--${entry.action}`}>
-                    {entry.action}
-                  </span>
+                  <span className={`tree-changelog-action tree-changelog-action--${entry.action}`}>{entry.action}</span>
                   <span className="tree-changelog-name">{entry.node_name}</span>
-                  <span className="tree-changelog-date">
-                    {new Date(entry.created_at).toLocaleDateString()}
-                  </span>
+                  <span className="tree-changelog-date">{new Date(entry.created_at).toLocaleDateString()}</span>
                 </div>
               ))}
             </div>

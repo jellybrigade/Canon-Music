@@ -8,7 +8,7 @@
  * stops a second row per play), so the rejection path owes it a decision, and the retry it arms
  * has to be bounded or a locked database turns the 200ms position tick into a hot write loop.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
@@ -18,15 +18,15 @@ vi.mock("../../../clients/navidrome", async () => {
   return { ...actual, reportNowPlaying: vi.fn().mockResolvedValue(undefined) };
 });
 
-import { renderHook, act, cleanup } from "@testing-library/react";
-import { getDb } from "../../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { usePlayerStore } from "../store/player";
-import type { CurrentTrack } from "../store/playerTypes";
+import { act, cleanup, renderHook } from "@testing-library/react";
 import { reportNowPlaying } from "../../../clients/navidrome";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
-import type { Server } from "../../../types/server";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import type { Server } from "../../../types/server";
+import { usePlayerStore } from "../store/player";
+import type { CurrentTrack } from "../store/playerTypes";
 import { useScrobble } from "./useScrobble";
 
 const SRV: Server = {

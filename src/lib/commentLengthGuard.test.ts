@@ -1,9 +1,9 @@
 // Repo-wide guard for AGENTS.md: "Comments: default none... 1-2 lines." A comment past a
 // couple lines is usually WHAT not WHY, or a stale essay. Cap every run at 3 lines; longer
 // belongs in ARCHITECTURE.md/known-issues.md instead.
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));
@@ -83,9 +83,7 @@ describe("comment length", () => {
   });
 
   it("no source file has a comment run past the cap", () => {
-    const violations = FILES.flatMap((file) =>
-      longCommentRuns(file.text).map((line) => `${file.path}:${line}`),
-    );
+    const violations = FILES.flatMap((file) => longCommentRuns(file.text).map((line) => `${file.path}:${line}`));
     expect(violations).toEqual([]);
   });
 

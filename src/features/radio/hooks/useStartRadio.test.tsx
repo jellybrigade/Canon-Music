@@ -3,15 +3,15 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { renderHook, cleanup, waitFor, act } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
+import { __resetSettingCache } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
-import { __resetSettingCache } from "../../../hooks/useSetting";
-import { resolveRadioStart, useStartRadio, RADIO_START_ACTION_SETTING } from "./useStartRadio";
+import { RADIO_START_ACTION_SETTING, resolveRadioStart, useStartRadio } from "./useStartRadio";
 
 let db: FakeDatabase;
 const startRadioFrom = vi.fn(() => Promise.resolve());

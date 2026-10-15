@@ -13,12 +13,12 @@
  */
 import type Database from "@tauri-apps/plugin-sql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
-import { remappedTrackIdTables } from "../../db/trackIdTables";
-import { invokeCount } from "../../test/perf";
 import type { NavidromeAlbum, NavidromeStarred, NavidromeTrack } from "../../clients/navidrome";
 import type { NavidromePlaylist } from "../../clients/navidromePlaylists";
+import { remappedTrackIdTables } from "../../db/trackIdTables";
+import { onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
+import { invokeCount } from "../../test/perf";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 
@@ -38,15 +38,22 @@ vi.mock("../../clients/navidromePlaylists", () => ({
   fetchPlaylistTracks: vi.fn(),
 }));
 
-import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "../../clients/navidrome";
+import {
+  fetchAlbumTracks,
+  fetchAllAlbums,
+  fetchAndStoreOpenSubsonicExtensions,
+  fetchScanStatus,
+  fetchStarred2,
+  songExists,
+} from "../../clients/navidrome";
 import { fetchPlaylists, fetchPlaylistTracks } from "../../clients/navidromePlaylists";
+import { TransportStalledError } from "../../lib/transportHealth";
+import { album, CRED, OTHER, SRV, server, track } from "../../test/navidromeFixtures";
+import type { SyncProgress } from "./sync";
 import { syncLibrary } from "./sync";
-import { clearSyncWatermark } from "./syncWatermark";
 import { purgeServerData, purgeStrandedServers } from "./syncPrune";
 import { repairAlbumTrackIds, syncAlbumTracks } from "./syncTracks";
-import type { SyncProgress } from "./sync";
-import { album, CRED, OTHER, server, SRV, track } from "../../test/navidromeFixtures";
-import { TransportStalledError } from "../../lib/transportHealth";
+import { clearSyncWatermark } from "./syncWatermark";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -75,10 +82,7 @@ function db(): FakeDatabase {
 }
 
 async function count(table: string, where = "", params: unknown[] = []): Promise<number> {
-  const rows = await db().select<{ c: number }[]>(
-    `SELECT COUNT(*) AS c FROM ${table} ${where}`,
-    params
-  );
+  const rows = await db().select<{ c: number }[]>(`SELECT COUNT(*) AS c FROM ${table} ${where}`, params);
   return rows[0]?.c ?? 0;
 }
 
@@ -138,10 +142,27 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
 }
 
 const OWNED_TABLES = [
-  "albums", "tracks", "artists", "playlists", "playlist_tracks", "playlist_resume",
-  "tracks_fts", "track_tags", "loved_tracks", "loved_albums", "tag_issues", "lyrics",
-  "waveform_cache", "scrobble_queue", "scrobble_history", "album_covers", "album_identity",
-  "album_user_genres", "album_genre_exclusions", "album_genres", "album_unresolved_genres",
+  "albums",
+  "tracks",
+  "artists",
+  "playlists",
+  "playlist_tracks",
+  "playlist_resume",
+  "tracks_fts",
+  "track_tags",
+  "loved_tracks",
+  "loved_albums",
+  "tag_issues",
+  "lyrics",
+  "waveform_cache",
+  "scrobble_queue",
+  "scrobble_history",
+  "album_covers",
+  "album_identity",
+  "album_user_genres",
+  "album_genre_exclusions",
+  "album_genres",
+  "album_unresolved_genres",
 ];
 
 describe("purgeServerData", () => {
@@ -173,7 +194,14 @@ describe("purgeServerData", () => {
       INSERT INTO tag_mappings (raw_value, kind, canonical_id) VALUES ('rock', 'genre', 'rock');
       INSERT INTO user_tree_nodes (id, name, type, canonical_key) VALUES ('n', 'N', 'genre', 'n');
     `);
-    const tables = ["artist_identity", "artist_aliases", "artist_covers", "radio_signal_cache", "tag_mappings", "user_tree_nodes"];
+    const tables = [
+      "artist_identity",
+      "artist_aliases",
+      "artist_covers",
+      "radio_signal_cache",
+      "tag_mappings",
+      "user_tree_nodes",
+    ];
     const before = await Promise.all(tables.map(async (table) => ({ table, rows: await count(table) })));
     expect(before.every((entry) => entry.rows > 0)).toBe(true);
     await purgeServerData(asDb(db()), SRV);
@@ -197,9 +225,15 @@ describe("purgeServerData", () => {
     seedServerRows(db(), SRV);
     await purgeServerData(asDb(db()), SRV);
     const trackKeyed: [string, string][] = [
-      ["tracks_fts", "id"], ["track_tags", "track_id"], ["loved_tracks", "track_id"],
-      ["playlist_tracks", "track_id"], ["tag_issues", "track_id"], ["lyrics", "track_id"],
-      ["waveform_cache", "track_id"], ["scrobble_queue", "track_id"], ["scrobble_history", "track_id"],
+      ["tracks_fts", "id"],
+      ["track_tags", "track_id"],
+      ["loved_tracks", "track_id"],
+      ["playlist_tracks", "track_id"],
+      ["tag_issues", "track_id"],
+      ["lyrics", "track_id"],
+      ["waveform_cache", "track_id"],
+      ["scrobble_queue", "track_id"],
+      ["scrobble_history", "track_id"],
     ];
     for (const [table, column] of trackKeyed) {
       expect({ table, rows: await count(table, `WHERE ${column} LIKE '${SRV}:%'`) }).toEqual({ table, rows: 0 });
@@ -238,7 +272,9 @@ describe("purgeServerData", () => {
 describe("purgeStrandedServers", () => {
   it("takes every row of a server the servers table no longer lists", async () => {
     seedServerRows(db(), SRV);
-    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${OTHER}', 'navidrome', 'http://b', 'B', 'u')`);
+    db().raw.exec(
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${OTHER}', 'navidrome', 'http://b', 'B', 'u')`,
+    );
     seedServerRows(db(), OTHER);
     const stranded = await purgeStrandedServers(asDb(db()));
     expect(stranded).toEqual([SRV]);
@@ -259,7 +295,9 @@ describe("purgeStrandedServers", () => {
   });
 
   it("keeps every row while the server is still registered", async () => {
-    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`);
+    db().raw.exec(
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`,
+    );
     seedServerRows(db(), SRV);
     const before = await Promise.all(OWNED_TABLES.map((t) => count(t)));
     expect(await purgeStrandedServers(asDb(db()))).toEqual([]);
@@ -267,7 +305,9 @@ describe("purgeStrandedServers", () => {
   });
 
   it("writes nothing and reads once when there is nothing stranded", async () => {
-    db().raw.exec(`INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`);
+    db().raw.exec(
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://a', 'A', 'u')`,
+    );
     seedServerRows(db(), SRV);
     db().executeCount = 0;
     db().selectCount = 0;
@@ -311,7 +351,7 @@ describe("syncLibrary initial sync", () => {
     expect(await count("tracks")).toBe(3);
     expect(await count("tracks_fts")).toBe(3);
     const artists = await db().select<{ name: string; album_count: number }[]>(
-      "SELECT name, album_count FROM artists ORDER BY name"
+      "SELECT name, album_count FROM artists ORDER BY name",
     );
     expect(artists).toEqual([
       { name: "Artist One", album_count: 1 },
@@ -339,11 +379,11 @@ describe("syncLibrary initial sync", () => {
         album("al-2", { releaseTypes: [], releaseType: "album" }),
         album("al-3"),
       ],
-      {}
+      {},
     );
     await syncLibrary(server(), CRED);
     const rows = await db().select<{ id: string; release_type: string | null }[]>(
-      "SELECT id, release_type FROM albums ORDER BY id"
+      "SELECT id, release_type FROM albums ORDER BY id",
     );
     expect(rows.map((r) => r.release_type)).toEqual(["ep", "album", null]);
   });
@@ -467,7 +507,9 @@ describe("syncLibrary album prune", () => {
     expect(await count("tracks", "WHERE album_id = ?", [`${SRV}:al-2`])).toBe(0);
     expect(await count("tracks_fts", "WHERE id LIKE '%t3'")).toBe(0);
     const albumKeyed: [string, string][] = [
-      ["loved_albums", "album_id"], ["album_genres", "album_id"], ["album_unresolved_genres", "album_id"],
+      ["loved_albums", "album_id"],
+      ["album_genres", "album_id"],
+      ["album_unresolved_genres", "album_id"],
       ["album_covers", "album_id"],
     ];
     for (const [table, column] of albumKeyed) {
@@ -491,7 +533,13 @@ describe("syncLibrary album prune", () => {
     `);
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     await syncLibrary(server(), CRED);
-    for (const table of ["album_identity", "album_user_genres", "album_genre_exclusions", "scrobble_queue", "scrobble_history"]) {
+    for (const table of [
+      "album_identity",
+      "album_user_genres",
+      "album_genre_exclusions",
+      "scrobble_queue",
+      "scrobble_history",
+    ]) {
       expect({ table, rows: await count(table) }).toEqual({ table, rows: 1 });
     }
   });
@@ -520,7 +568,7 @@ describe("syncLibrary album prune", () => {
   it("never treats another server's albums as stale", async () => {
     await seedTwoAlbums();
     db().raw.exec(
-      `INSERT INTO albums (id, server_id, server_type, name) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other')`
+      `INSERT INTO albums (id, server_id, server_type, name) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other')`,
     );
     serveLibrary([album("al-1"), album("al-2")], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
@@ -533,7 +581,7 @@ describe("syncLibrary album prune", () => {
 
   it("scopes the artists rebuild to its own server", async () => {
     db().raw.exec(
-      `INSERT INTO artists (id, server_id, server_type, name, album_count) VALUES ('x', '${OTHER}', 'navidrome', 'Other Artist', 4)`
+      `INSERT INTO artists (id, server_id, server_type, name, album_count) VALUES ('x', '${OTHER}', 'navidrome', 'Other Artist', 4)`,
     );
     serveLibrary([album("al-1")], { "al-1": [] });
     await syncLibrary(server(), CRED);
@@ -558,7 +606,9 @@ describe("syncLibrary per-album track prune", () => {
 
   it("removes tracks the album no longer contains, with their derived rows", async () => {
     await seedAlbumWithTracks(["t1", "t2", "t3"]);
-    db().raw.exec(`INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01')`);
+    db().raw.exec(
+      `INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01')`,
+    );
 
     serveLibrary([album("al-1", { songCount: 2, created: "2026-02-02T00:00:00Z" })], {
       "al-1": [track("t1", "al-1"), track("t2", "al-1")],
@@ -606,7 +656,6 @@ describe("syncLibrary per-album track prune", () => {
     expect(seen.filter((s) => /NOT IN/.test(s))).toHaveLength(1);
   });
 });
-
 
 describe("syncLibrary track id remap", () => {
   /**
@@ -747,7 +796,7 @@ describe("syncLibrary track id remap", () => {
 describe("clearSyncWatermark", () => {
   function seedServerRow(serverId: string): void {
     db().raw.exec(
-      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${serverId}', 'navidrome', 'http://music.local', 'Music', 'user')`
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${serverId}', 'navidrome', 'http://music.local', 'Music', 'user')`,
     );
   }
 
@@ -757,16 +806,16 @@ describe("clearSyncWatermark", () => {
     mScanStatus.mockResolvedValue({ serverVersion: "0.64.0", lastScan: "2026-09-01T00:00:00Z", songCount: 1 });
     await syncLibrary(server(), CRED);
     expect(
-      (await db().select<{ server_version: string | null }[]>("SELECT server_version FROM servers WHERE id = ?", [SRV]))[0]
-        ?.server_version
+      (
+        await db().select<{ server_version: string | null }[]>("SELECT server_version FROM servers WHERE id = ?", [SRV])
+      )[0]?.server_version,
     ).toBe("0.64.0");
 
     await clearSyncWatermark(asDb(db()), SRV);
 
-    const [row] = await db().select<{ last_scan_at: string | null; server_version: string | null; song_count: number | null }[]>(
-      "SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?",
-      [SRV]
-    );
+    const [row] = await db().select<
+      { last_scan_at: string | null; server_version: string | null; song_count: number | null }[]
+    >("SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?", [SRV]);
     expect(row).toEqual({ last_scan_at: null, server_version: null, song_count: null });
   });
 
@@ -779,7 +828,7 @@ describe("clearSyncWatermark", () => {
 
     const [row] = await db().select<{ server_version: string | null }[]>(
       "SELECT server_version FROM servers WHERE id = ?",
-      [OTHER]
+      [OTHER],
     );
     expect(row?.server_version).toBe("0.63.0");
   });
@@ -790,13 +839,13 @@ describe("clearSyncWatermark", () => {
     mScanStatus.mockResolvedValue({ serverVersion: "0.64.0", lastScan: "2026-09-01T00:00:00Z", songCount: 1 });
     await syncLibrary(server(), CRED);
     db().raw.exec(
-      `INSERT INTO albums (id, server_id, server_type, name, tracks_read_scan) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other', 'kept')`
+      `INSERT INTO albums (id, server_id, server_type, name, tracks_read_scan) VALUES ('${OTHER}:al-9', '${OTHER}', 'navidrome', 'Other', 'kept')`,
     );
 
     await clearSyncWatermark(asDb(db()), SRV);
 
     const rows = await db().select<{ id: string; tracks_read_scan: string | null }[]>(
-      "SELECT id, tracks_read_scan FROM albums ORDER BY id"
+      "SELECT id, tracks_read_scan FROM albums ORDER BY id",
     );
     expect(rows).toEqual([
       { id: `${SRV}:al-1`, tracks_read_scan: null },
@@ -857,12 +906,16 @@ describe("repairAlbumTrackIds", () => {
       "al-1": [track("t1", "al-1", { path: "/m/1.flac" }), track("t2", "al-1", { path: "/m/2.flac" })],
     });
     await syncLibrary(server(), CRED);
-    onInvoke("remap_track_ids", (args) => applyNativeRemap((args as { remaps: { oldId: string; newId: string }[] }).remaps));
+    onInvoke("remap_track_ids", (args) =>
+      applyNativeRemap((args as { remaps: { oldId: string; newId: string }[] }).remaps),
+    );
   }
 
   it("re-resolves the album and reports which ids moved", async () => {
     await seedAlbum();
-    db().raw.exec(`INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t1', 'la', 'lrclib', '2026-01-01')`);
+    db().raw.exec(
+      `INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t1', 'la', 'lrclib', '2026-01-01')`,
+    );
     mAlbumTracks.mockResolvedValue([
       track("t1-new", "al-1", { path: "/m/1.flac" }),
       track("t2", "al-1", { path: "/m/2.flac" }),
@@ -931,7 +984,7 @@ describe("syncLibrary track upsert", () => {
 
     const rows = await db().select<{ tags_enriched_at: number | null }[]>(
       "SELECT tags_enriched_at FROM tracks WHERE id = ?",
-      [`${SRV}:t1`]
+      [`${SRV}:t1`],
     );
     expect(rows[0]?.tags_enriched_at).toBe(1700);
   });
@@ -966,22 +1019,19 @@ describe("syncLibrary track upsert", () => {
 
     const rows = await db().select<{ title: string; play_count: number }[]>(
       "SELECT title, play_count FROM tracks WHERE id = ?",
-      [`${SRV}:t1`]
+      [`${SRV}:t1`],
     );
     expect(rows[0]).toEqual({ title: "New", play_count: 7 });
   });
 
   it("mirrors the server's last-played stamp, which counts plays from every client", async () => {
     serveLibrary([album("al-1", { songCount: 2 })], {
-      "al-1": [
-        track("t1", "al-1", { played: "2026-09-09T08:59:52Z", playCount: 4 }),
-        track("t2", "al-1"),
-      ],
+      "al-1": [track("t1", "al-1", { played: "2026-09-09T08:59:52Z", playCount: 4 }), track("t2", "al-1")],
     });
     await syncLibrary(server(), CRED);
 
     const rows = await db().select<{ id: string; played_at: string | null }[]>(
-      "SELECT id, played_at FROM tracks ORDER BY id"
+      "SELECT id, played_at FROM tracks ORDER BY id",
     );
     expect(rows).toEqual([
       { id: `${SRV}:t1`, played_at: "2026-09-09T08:59:52Z" },
@@ -1055,15 +1105,18 @@ describe("syncLibrary skip evidence", () => {
   /** The `servers` row every real sync has, and the watermark columns hang off. */
   function seedServerRow(): void {
     db().raw.exec(
-      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://music.local', 'Music', 'user')`
+      `INSERT INTO servers (id, type, url, display_name, username) VALUES ('${SRV}', 'navidrome', 'http://music.local', 'Music', 'user')`,
     );
   }
 
-  async function storedWatermark(): Promise<{
-    last_scan_at: string | null;
-    server_version: string | null;
-    song_count: number | null;
-  } | undefined> {
+  async function storedWatermark(): Promise<
+    | {
+        last_scan_at: string | null;
+        server_version: string | null;
+        song_count: number | null;
+      }
+    | undefined
+  > {
     const rows = await db().select<
       { last_scan_at: string | null; server_version: string | null; song_count: number | null }[]
     >("SELECT last_scan_at, server_version, song_count FROM servers WHERE id = ?", [SRV]);
@@ -1266,9 +1319,7 @@ describe("syncLibrary skip evidence", () => {
         if (++call > 3) throw new Error("timed out");
         return [track(`t-${albumId}`, albumId)];
       });
-      expect(
-        (await syncLibrary(server(), CRED, undefined, { forceTrackPass: true })).albumTracksIncomplete
-      ).toBe(true);
+      expect((await syncLibrary(server(), CRED, undefined, { forceTrackPass: true })).albumTracksIncomplete).toBe(true);
       mAlbumTracks.mockReset();
       mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => [track(`t-${albumId}`, albumId)]);
 
@@ -1407,7 +1458,6 @@ describe("syncLibrary album track failures", () => {
     await expect(syncLibrary(server(), CRED)).resolves.toBeDefined();
   });
 });
-
 
 describe("syncLibrary album progress reporting", () => {
   function libraryOf(n: number): NavidromeAlbum[] {
@@ -1548,7 +1598,7 @@ describe("syncLibrary playlist stage", () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     mPlaylists.mockResolvedValue([pl("pl-1"), pl("pl-2")]);
     mPlaylistTracks.mockImplementation(async (_u, _n, _c, id) =>
-      id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1")]
+      id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1")],
     );
     await syncLibrary(server(), CRED);
   }
@@ -1558,16 +1608,15 @@ describe("syncLibrary playlist stage", () => {
     // DELETE-then-INSERT silently turned a smart playlist into an ordinary one.
     await seedPlaylists();
     db().raw.exec(
-      `UPDATE playlists SET is_smart = 1, rules_json = '{"r":1}', custom_cover_data = 'data:png' WHERE id = '${SRV}:pl-1'`
+      `UPDATE playlists SET is_smart = 1, rules_json = '{"r":1}', custom_cover_data = 'data:png' WHERE id = '${SRV}:pl-1'`,
     );
     mPlaylists.mockResolvedValue([pl("pl-1", { name: "Renamed" }), pl("pl-2")]);
     const second = await syncLibrary(server(), CRED);
 
     expect(second.changed.playlists).toBe(true);
-    const rows = await db().select<{ name: string; is_smart: number; rules_json: string | null; custom_cover_data: string | null }[]>(
-      "SELECT name, is_smart, rules_json, custom_cover_data FROM playlists WHERE id = ?",
-      [`${SRV}:pl-1`]
-    );
+    const rows = await db().select<
+      { name: string; is_smart: number; rules_json: string | null; custom_cover_data: string | null }[]
+    >("SELECT name, is_smart, rules_json, custom_cover_data FROM playlists WHERE id = ?", [`${SRV}:pl-1`]);
     expect(rows[0]).toEqual({ name: "Renamed", is_smart: 1, rules_json: '{"r":1}', custom_cover_data: "data:png" });
   });
 
@@ -1581,7 +1630,7 @@ describe("syncLibrary playlist stage", () => {
     }) as FakeDatabase["execute"];
 
     mPlaylistTracks.mockImplementation(async (_u, _n, _c, id) =>
-      id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1"), track("t1", "al-1")]
+      id === "pl-1" ? [track("t1", "al-1")] : [track("t2", "al-1"), track("t1", "al-1")],
     );
     mPlaylists.mockResolvedValue([pl("pl-1"), pl("pl-2", { songCount: 2 })]);
     await syncLibrary(server(), CRED);
@@ -1604,7 +1653,7 @@ describe("syncLibrary playlist stage", () => {
     // `position` doubles as the remote Subsonic index, so a hole makes the next removal
     // delete the wrong remote track.
     const rows = await db().select<{ track_id: string; position: number }[]>(
-      "SELECT track_id, position FROM playlist_tracks ORDER BY position"
+      "SELECT track_id, position FROM playlist_tracks ORDER BY position",
     );
     expect(rows).toEqual([
       { track_id: `${SRV}:t1`, position: 0 },
@@ -1623,14 +1672,12 @@ describe("syncLibrary playlist stage", () => {
       "al-2": [track("t2", "al-2")],
     });
     mPlaylists.mockResolvedValue([pl("pl-1", { songCount: 3 })]);
-    mPlaylistTracks.mockResolvedValue([
-      track("t1", "al-1"),
-      track("t2", "al-2"),
-      track("t3", "al-1"),
-    ]);
+    mPlaylistTracks.mockResolvedValue([track("t1", "al-1"), track("t2", "al-2"), track("t3", "al-1")]);
     await syncLibrary(server(), CRED);
     expect(await ids("SELECT track_id AS id FROM playlist_tracks ORDER BY position")).toEqual([
-      `${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`,
+      `${SRV}:t1`,
+      `${SRV}:t2`,
+      `${SRV}:t3`,
     ]);
 
     // al-2 is gone server side. Everything the playlist gates compare - name, comment,
@@ -1641,7 +1688,7 @@ describe("syncLibrary playlist stage", () => {
     await syncLibrary(server(), CRED);
 
     const rows = await db().select<{ track_id: string; position: number }[]>(
-      "SELECT track_id, position FROM playlist_tracks ORDER BY position"
+      "SELECT track_id, position FROM playlist_tracks ORDER BY position",
     );
     expect(rows).toEqual([
       { track_id: `${SRV}:t1`, position: 0 },
@@ -1652,7 +1699,7 @@ describe("syncLibrary playlist stage", () => {
   it("prunes a playlist the server no longer lists, with its tracks and resume row", async () => {
     await seedPlaylists();
     db().raw.exec(
-      `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position) VALUES ('${SRV}:pl-2', '${SRV}:t2', 1)`
+      `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position) VALUES ('${SRV}:pl-2', '${SRV}:t2', 1)`,
     );
     mPlaylists.mockResolvedValue([pl("pl-1")]);
     await syncLibrary(server(), CRED);
@@ -1738,16 +1785,16 @@ describe("syncAlbumTracks", () => {
   });
 
   it("stores replay gain sub-fields individually and defaults play_count to zero", async () => {
-    mAlbumTracks.mockResolvedValue([
-      track("t1", "al-1", { replayGain: { trackGain: -3 } }),
-      track("t2", "al-1", {}),
-    ]);
+    mAlbumTracks.mockResolvedValue([track("t1", "al-1", { replayGain: { trackGain: -3 } }), track("t2", "al-1", {})]);
     await syncAlbumTracks(server(), { type: "apikey", apiKey: "k" }, `${SRV}:al-1`);
-    const rows = await db().select<{
-      id: string; replay_gain_track_gain: number | null; replay_gain_album_gain: number | null; play_count: number;
-    }[]>(
-      "SELECT id, replay_gain_track_gain, replay_gain_album_gain, play_count FROM tracks ORDER BY id"
-    );
+    const rows = await db().select<
+      {
+        id: string;
+        replay_gain_track_gain: number | null;
+        replay_gain_album_gain: number | null;
+        play_count: number;
+      }[]
+    >("SELECT id, replay_gain_track_gain, replay_gain_album_gain, play_count FROM tracks ORDER BY id");
     expect(rows).toEqual([
       { id: `${SRV}:t1`, replay_gain_track_gain: -3, replay_gain_album_gain: null, play_count: 0 },
       { id: `${SRV}:t2`, replay_gain_track_gain: null, replay_gain_album_gain: null, play_count: 0 },

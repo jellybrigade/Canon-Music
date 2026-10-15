@@ -3,17 +3,17 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, renderHook, cleanup, waitFor, act, fireEvent } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, waitFor } from "@testing-library/react";
+import { Profiler } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
+import { __resetSettingCache } from "../../../hooks/useSetting";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { __resetModalRegistry } from "../../../ui/useModalChrome";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
+import { RADIO_START_ACTION_SETTING, useStartRadio } from "../hooks/useStartRadio";
 import { useRadioStartStore } from "../store/radioStart";
-import { __resetSettingCache } from "../../../hooks/useSetting";
-import { __resetModalRegistry } from "../../../ui/useModalChrome";
-import { useStartRadio, RADIO_START_ACTION_SETTING } from "../hooks/useStartRadio";
-import { Profiler } from "react";
 import { RadioStartDialogHost } from "./RadioStartDialog";
 
 let db: FakeDatabase;
@@ -23,11 +23,15 @@ const request = { tracks: [seed], streamUrlFor: (t: CurrentTrack) => t.id };
 
 const dialog = () => document.querySelector(".radio-start-dialog");
 const button = (name: string) =>
-  Array.from(document.querySelectorAll<HTMLButtonElement>(".radio-start-dialog .radio-start-btn")).find((b) => b.textContent === name)!;
+  Array.from(document.querySelectorAll<HTMLButtonElement>(".radio-start-dialog .radio-start-btn")).find(
+    (b) => b.textContent === name,
+  )!;
 const rememberBox = () => document.querySelector<HTMLInputElement>(".radio-start-remember input")!;
 
 function storedSetting(): string | undefined {
-  const row = db.raw.prepare("SELECT value FROM settings WHERE key = ?").get(RADIO_START_ACTION_SETTING) as { value: string } | undefined;
+  const row = db.raw.prepare("SELECT value FROM settings WHERE key = ?").get(RADIO_START_ACTION_SETTING) as
+    | { value: string }
+    | undefined;
   return row?.value;
 }
 
@@ -92,7 +96,9 @@ describe("RadioStartDialog", () => {
     await waitFor(() => expect(storedSetting()).toBe("queue_last"));
 
     const { result } = renderHook(() => useStartRadio());
-    await act(async () => { await result.current(request); });
+    await act(async () => {
+      await result.current(request);
+    });
 
     expect(useRadioStartStore.getState().pending).toBeNull();
     expect(dialog()).toBeNull();
@@ -113,9 +119,14 @@ describe("RadioStartDialog", () => {
   it("does not re-render on playback ticks while open", async () => {
     let commits = 0;
     render(
-      <Profiler id="host" onRender={() => { commits++; }}>
+      <Profiler
+        id="host"
+        onRender={() => {
+          commits++;
+        }}
+      >
         <RadioStartDialogHost />
-      </Profiler>
+      </Profiler>,
     );
     act(() => useRadioStartStore.getState().ask(request));
     await waitFor(() => expect(dialog()).not.toBeNull());

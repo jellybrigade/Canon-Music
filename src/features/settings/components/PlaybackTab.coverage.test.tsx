@@ -3,13 +3,13 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { PlaybackTab } from "./PlaybackTab";
-import { usePlayerStore } from "../../playback/store/player";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { usePlayerStore } from "../../playback/store/player";
+import { PlaybackTab } from "./PlaybackTab";
 
 let db: FakeDatabase;
 
@@ -17,7 +17,7 @@ function seedTrack(id: string, serverId: string, gains: { track?: number; album?
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, replay_gain_track_gain, replay_gain_album_gain)
-       VALUES (?, ?, 'navidrome', ?, ?, ?)`
+       VALUES (?, ?, 'navidrome', ?, ?, ?)`,
     )
     .run(id, serverId, `title ${id}`, gains.track ?? null, gains.album ?? null);
 }
@@ -27,7 +27,7 @@ function renderTab(serverId: string | undefined) {
   return render(
     <QueryClientProvider client={client}>
       <PlaybackTab searchQuery="" serverId={serverId} />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
 }
 
@@ -63,9 +63,7 @@ describe("PlaybackTab ReplayGain coverage", () => {
   it("warns outright when a mode has no tags behind it at all", async () => {
     seedTrack("t1", "srv-a");
     renderTab("srv-a");
-    await waitFor(() =>
-      expect(coverageText()).toContain("No track in this library carries ReplayGain tags")
-    );
+    await waitFor(() => expect(coverageText()).toContain("No track in this library carries ReplayGain tags"));
     expect(coverageText()).toContain("sounds the same as Off");
   });
 

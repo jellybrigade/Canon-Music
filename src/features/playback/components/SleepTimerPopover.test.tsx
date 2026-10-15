@@ -3,9 +3,9 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/t
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, act } from "@testing-library/react";
+import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import { createRef, Profiler } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlayerStore } from "../store/player";
 import { SleepTimerPopover } from "./SleepTimerPopover";
 
@@ -50,7 +50,9 @@ describe("SleepTimerPopover", () => {
   it("choosing a preset arms that many minutes and closes the popover", () => {
     const onClose = vi.fn();
     mount(onClose);
-    fireEvent.click(Array.from(document.querySelectorAll(".timer-popover-item")).find((el) => el.textContent === "45 min")!);
+    fireEvent.click(
+      Array.from(document.querySelectorAll(".timer-popover-item")).find((el) => el.textContent === "45 min")!,
+    );
     expect(usePlayerStore.getState().sleepTimerEndsAt).toBe(Date.now() + 45 * 60 * 1000);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -66,7 +68,12 @@ describe("SleepTimerPopover", () => {
   it("does not re-render on playback progress, only on the timer it shows", () => {
     let commits = 0;
     render(
-      <Profiler id="timer" onRender={() => { commits++; }}>
+      <Profiler
+        id="timer"
+        onRender={() => {
+          commits++;
+        }}
+      >
         <SleepTimerPopover popoverRef={createRef()} position={null} onClose={() => {}} />
       </Profiler>,
     );

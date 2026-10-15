@@ -2,13 +2,13 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { UnidentifiedView } from "./UnidentifiedView";
+import { cleanup, render, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
-import { resetTauriMocks } from "../../../test/mocks/tauri";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { resetTauriMocks } from "../../../test/mocks/tauri";
+import { UnidentifiedView } from "./UnidentifiedView";
 
 const SRV: ServerWithCredential = {
   server: {

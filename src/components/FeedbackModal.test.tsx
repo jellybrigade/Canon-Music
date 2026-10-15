@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { FeedbackModal } from "./FeedbackModal";
+
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
+import { FeedbackModal } from "./FeedbackModal";
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
 vi.mock("../lib/logger", () => ({ logger: { getRecent: () => Promise.resolve(""), error: vi.fn() } }));

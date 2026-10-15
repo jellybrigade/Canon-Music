@@ -67,7 +67,9 @@
   border-radius: var(--radius-sm);
   padding: var(--space-2xs) var(--space-sm);
   cursor: pointer;
-  transition: background var(--duration-moderate) ease, color var(--duration-moderate) ease;
+  transition:
+    background var(--duration-moderate) ease,
+    color var(--duration-moderate) ease;
 }
 
 .tour-card-enable-btn:hover {

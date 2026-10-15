@@ -38,7 +38,9 @@ export async function executeIdChunks(
     const sql = buildSql(placeholders);
     if (first) {
       if (/\bnot\s+in\b/i.test(sql)) {
-        throw new Error("executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep");
+        throw new Error(
+          "executeIdChunks does not support NOT IN: chunking would make each chunk delete rows the other chunks meant to keep",
+        );
       }
       first = false;
     }

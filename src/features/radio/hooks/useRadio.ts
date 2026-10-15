@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
+import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../../../clients/lastfm";
+import { getDb } from "../../../db";
+import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "../../../lib/replayGainRow";
+import { escapeLike } from "../../../lib/sql";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { getRadioCandidates } from "../lib/radio";
-import { fetchSimilarArtistsFull, fetchSimilarTracks } from "../../../clients/lastfm";
-import { getDb } from "../../../db";
-import { escapeLike } from "../../../lib/sql";
-import { REPLAY_GAIN_COLUMNS, replayGainFromRow, type ReplayGainColumns } from "../../../lib/replayGainRow";
 
 const LOOKAHEAD_THRESHOLD = 10;
 const RECENT_PLAYED_WINDOW_S = 3600;
@@ -46,7 +46,7 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
     `SELECT track_id FROM scrobble_history WHERE track_id LIKE ? ESCAPE '\\' AND timestamp > ?
      UNION
      SELECT id AS track_id FROM tracks WHERE server_id = ? AND played_at > ?`,
-    [`${escapeLike(serverId)}:%`, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()]
+    [`${escapeLike(serverId)}:%`, cutoffS, serverId, new Date(cutoffS * 1000).toISOString()],
   );
   return new Set(rows.map((r) => r.track_id));
 }
@@ -54,7 +54,7 @@ async function getRecentlyPlayedIds(serverId: string): Promise<Set<string>> {
 function pickFromTop(
   candidates: { id: string; score: number }[],
   candidateSample: number,
-  topPickWindow: number
+  topPickWindow: number,
 ): { id: string; score: number } | null {
   const pool = candidates.slice(0, candidateSample);
   if (pool.length === 0) return null;
@@ -176,29 +176,40 @@ export function useRadio() {
 
           const db2 = await getDb();
           type TrackRow2 = {
-            id: string; title: string; artist: string | null;
-            duration: number | null; artwork_url: string | null;
-            album_id: string | null; album_name: string | null;
+            id: string;
+            title: string;
+            artist: string | null;
+            duration: number | null;
+            artwork_url: string | null;
+            album_id: string | null;
+            album_name: string | null;
           } & ReplayGainColumns;
           const rows2 = await db2.select<TrackRow2[]>(
             `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name,
                     ${REPLAY_GAIN_COLUMNS}
              FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
              WHERE t.id = ?`,
-            [pick.id]
+            [pick.id],
           );
           const row2 = rows2[0];
           if (!row2) return;
           const track2: CurrentTrack = {
-            id: row2.id, title: row2.title, artist: row2.artist, duration: row2.duration,
-            artworkRef: row2.artwork_url, albumId: row2.album_id, album: row2.album_name, coverArtUrl: null,
+            id: row2.id,
+            title: row2.title,
+            artist: row2.artist,
+            duration: row2.duration,
+            artworkRef: row2.artwork_url,
+            albumId: row2.album_id,
+            album: row2.album_name,
+            coverArtUrl: null,
             replayGain: replayGainFromRow(row2),
           };
           const fallbackUrl2 = streamUrlFor ? streamUrlFor(track2) : "";
           // Re-read live state, not the closure's: this callback runs after several awaits,
           // and the closure can hold stale values from before the user paused or skipped.
           const live2 = usePlayerStore.getState();
-          const wasAtEnd2 = hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
+          const wasAtEnd2 =
+            hasPlayedRef.current && !live2.isPlaying && !live2.isLoading && live2.queueIndex === live2.queue.length - 1;
           addToQueue(track2, streamUrlFor ?? (() => fallbackUrl2));
           // Read the length back off the store: an append can trim played entries off the front
           // to stay under maxQueueSize, so the captured pre-append length is not the new track's
@@ -218,7 +229,9 @@ export function useRadio() {
             .map((c) => {
               const ak = (c.artist ?? "").toLowerCase();
               const artistGap = ak ? counter - (artistLastPlayedRef.current.get(ak) ?? -Infinity) : Infinity;
-              const albumGap = c.albumId ? counter - (albumLastPlayedRef.current.get(c.albumId) ?? -Infinity) : Infinity;
+              const albumGap = c.albumId
+                ? counter - (albumLastPlayedRef.current.get(c.albumId) ?? -Infinity)
+                : Infinity;
               const artistMult = Math.max(0, Math.min(1, artistGap / artistDecay));
               const albumMult = Math.max(0, Math.min(1, albumGap / ALBUM_DECAY_TRACKS));
               return { ...c, score: c.score * artistMult * albumMult };
@@ -233,16 +246,20 @@ export function useRadio() {
 
         const db = await getDb();
         type TrackRow = {
-          id: string; title: string; artist: string | null;
-          duration: number | null; artwork_url: string | null;
-          album_id: string | null; album_name: string | null;
+          id: string;
+          title: string;
+          artist: string | null;
+          duration: number | null;
+          artwork_url: string | null;
+          album_id: string | null;
+          album_name: string | null;
         } & ReplayGainColumns;
         const rows = await db.select<TrackRow[]>(
           `SELECT t.id, t.title, t.artist, t.duration, a.artwork_url, t.album_id, a.name AS album_name,
                     ${REPLAY_GAIN_COLUMNS}
            FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
            WHERE t.id = ?`,
-          [pick.id]
+          [pick.id],
         );
         const row = rows[0];
         if (!row) return;
@@ -261,7 +278,8 @@ export function useRadio() {
         const fallbackUrl = streamUrlFor ? streamUrlFor(track) : "";
         // Same staleness concern as the same-album branch above: read live state, not closure.
         const live = usePlayerStore.getState();
-        const wasAtEnd = hasPlayedRef.current && !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
+        const wasAtEnd =
+          hasPlayedRef.current && !live.isPlaying && !live.isLoading && live.queueIndex === live.queue.length - 1;
         addToQueue(track, streamUrlFor ?? (() => fallbackUrl));
         // See the note above: the append may have trimmed the front of the queue.
         if (wasAtEnd) void playFromQueueIndex(usePlayerStore.getState().queue.length - 1);

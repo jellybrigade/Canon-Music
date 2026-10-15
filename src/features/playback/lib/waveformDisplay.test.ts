@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { displayedWaveformPeaks, WAVEFORM_BAR_COUNT, WAVEFORM_STUB_PEAK } from "./waveformDisplay";
 
 describe("displayedWaveformPeaks", () => {

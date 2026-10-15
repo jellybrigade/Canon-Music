@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * `getManualGenreMappings` holds module-level cache/inFlight/generation state,
@@ -28,18 +28,14 @@ describe("getManualGenreMappings", () => {
   });
 
   it("queries tag_mappings on first call", async () => {
-    const select = vi.fn(async () => [
-      { raw_value: "Hip Hop", canonical_id: "hh" },
-    ]);
+    const select = vi.fn(async () => [{ raw_value: "Hip Hop", canonical_id: "hh" }]);
     const { getManualGenreMappings } = await freshModule(select);
 
     const map = await getManualGenreMappings();
 
     expect(select).toHaveBeenCalledTimes(1);
     expect(select).toHaveBeenCalledWith(expect.stringContaining("tag_mappings"));
-    expect(map.get(await import("./canonicalize").then((m) => m.canonicalKey("Hip Hop")))).toBe(
-      "hh"
-    );
+    expect(map.get(await import("./canonicalize").then((m) => m.canonicalKey("Hip Hop")))).toBe("hh");
   });
 
   it("resolves to an empty map, and caches it, when the table has no manual rows", async () => {

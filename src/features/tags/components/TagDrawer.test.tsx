@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TagDrawer } from "./TagDrawer";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetModalRegistry, useAnyModalOpen } from "../../../ui/useModalChrome";
+import { TagDrawer } from "./TagDrawer";
 
 vi.mock("../../../db", () => ({ getDb: () => Promise.resolve({ select: () => Promise.resolve([]) }) }));
 vi.mock("../lib/canonicalize", () => ({ getCanonTree: () => Promise.resolve({ nodes: [] }) }));

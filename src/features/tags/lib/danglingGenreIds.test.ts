@@ -2,9 +2,9 @@ import type Database from "@tauri-apps/plugin-sql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import canonTreeData from "../../../assets/canon-tree.json";
 import { GENRE_ID_HOLDERS } from "../../../db/genreIdTables";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { invokeArgs, invokeCount } from "../../../test/perf";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 
@@ -21,18 +21,21 @@ function asDb(fake: FakeDatabase): Database {
 async function seedEveryHolder(id: string): Promise<void> {
   await db.execute(
     "INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value) VALUES (?, 'genre', ?, 'manual', ?)",
-    [`raw ${id}`, id, `raw ${id}`]
+    [`raw ${id}`, id, `raw ${id}`],
   );
   await db.execute(
     "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES ('t1', 'genre', ?, ?, 'server')",
-    [`raw ${id}`, id]
+    [`raw ${id}`, id],
   );
-  await db.execute("INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('a1', ?, 'direct', 'Old Name')", [id]);
+  await db.execute(
+    "INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('a1', ?, 'direct', 'Old Name')",
+    [id],
+  );
   await db.execute("INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('a2', ?, 'Old Name')", [id]);
   await db.execute("INSERT INTO album_genre_exclusions (album_id, canonical_id) VALUES ('a3', ?)", [id]);
   await db.execute(
     "INSERT INTO user_tree_nodes (id, name, type, canonical_key, parent_ids) VALUES (?, 'Child', 'genre', ?, ?)",
-    [`user:child-${id}`, `child ${id}`, JSON.stringify([id])]
+    [`user:child-${id}`, `child ${id}`, JSON.stringify([id])],
   );
   await db.execute("INSERT INTO playlists (id, server_id, name, rules_json) VALUES (?, 'srv', 'Smart', ?)", [
     `p-${id}`,
@@ -43,7 +46,9 @@ async function seedEveryHolder(id: string): Promise<void> {
 beforeEach(async () => {
   resetTauriMocks();
   db = await createMigratedTestDb();
-  await db.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES ('srv', 'navidrome', 'http://nd', 'Home', 'u')");
+  await db.execute(
+    "INSERT INTO servers (id, type, url, display_name, username) VALUES ('srv', 'navidrome', 'http://nd', 'Home', 'u')",
+  );
 });
 
 describe("findDanglingGenreIds", () => {
@@ -63,11 +68,17 @@ describe("findDanglingGenreIds", () => {
     await seedEveryHolder("rock");
     await seedEveryHolder("user:skate");
     await db.execute(
-      "INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value) VALUES ('Ok', 'genre', '__accepted__', 'manual', 'ok'), ('No', 'genre', '__ignored__', 'manual', 'no')"
+      "INSERT INTO tag_mappings (raw_value, kind, canonical_id, source, norm_value) VALUES ('Ok', 'genre', '__accepted__', 'manual', 'ok'), ('No', 'genre', '__ignored__', 'manual', 'no')",
     );
-    await db.execute("INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('a9', 'raw:outrun', 'direct', 'Outrun')");
-    await db.execute("INSERT INTO playlists (id, server_id, name, rules_json) VALUES ('p-bad', 'srv', 'Broken', 'not json')");
-    await db.execute("INSERT INTO playlists (id, server_id, name, rules_json) VALUES ('p-plain', 'srv', 'Plain', '{\"name\":\"x\"}')");
+    await db.execute(
+      "INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('a9', 'raw:outrun', 'direct', 'Outrun')",
+    );
+    await db.execute(
+      "INSERT INTO playlists (id, server_id, name, rules_json) VALUES ('p-bad', 'srv', 'Broken', 'not json')",
+    );
+    await db.execute(
+      "INSERT INTO playlists (id, server_id, name, rules_json) VALUES ('p-plain', 'srv', 'Plain', '{\"name\":\"x\"}')",
+    );
 
     expect(await findDanglingGenreIds(asDb(db), LIVE)).toEqual([]);
   });
@@ -75,7 +86,7 @@ describe("findDanglingGenreIds", () => {
   it("counts each holder's references and names ids without a stored name by id", async () => {
     await seedEveryHolder("gone");
     await db.execute(
-      "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES ('t2', 'genre', 'x', 'gone', 'server'), ('t3', 'genre', 'y', 'also-gone', 'server')"
+      "INSERT INTO track_tags (track_id, kind, raw_value, canonical_id, source) VALUES ('t2', 'genre', 'x', 'gone', 'server'), ('t3', 'genre', 'y', 'also-gone', 'server')",
     );
     const found = await findDanglingGenreIds(asDb(db), LIVE);
     expect(found.map((d) => [d.id, d.name])).toEqual([

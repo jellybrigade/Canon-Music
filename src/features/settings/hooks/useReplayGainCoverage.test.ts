@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { useReplayGainCoverage } from "./useReplayGainCoverage";
@@ -17,15 +17,11 @@ function wrapper({ children }: { children: ReactNode }) {
   return createElement(QueryClientProvider, { client: queryClient }, children);
 }
 
-function seedTrack(
-  id: string,
-  serverId: string,
-  gains: { track?: number | null; album?: number | null } = {}
-) {
+function seedTrack(id: string, serverId: string, gains: { track?: number | null; album?: number | null } = {}) {
   db.raw
     .prepare(
       `INSERT INTO tracks (id, server_id, server_type, title, replay_gain_track_gain, replay_gain_album_gain)
-       VALUES (?, ?, 'navidrome', ?, ?, ?)`
+       VALUES (?, ?, 'navidrome', ?, ?, ?)`,
     )
     .run(id, serverId, `title ${id}`, gains.track ?? null, gains.album ?? null);
 }

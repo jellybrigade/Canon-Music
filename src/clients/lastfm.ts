@@ -1,9 +1,9 @@
 import { getDb } from "../db";
-import { keychain } from "../lib/keychain";
-import { canonicalKey } from "../features/tags/lib/canonicalize";
 import type { TagKind } from "../features/tags/lib/canonicalize";
-import { makeRateLimiter } from "../lib/rateLimiter";
+import { canonicalKey } from "../features/tags/lib/canonicalize";
+import { keychain } from "../lib/keychain";
 import { parseNumberOr } from "../lib/numberSetting";
+import { makeRateLimiter } from "../lib/rateLimiter";
 import { boundedFetch } from "./boundedFetch";
 
 const LASTFM_KEYCHAIN_SERVICE = "canon.lastfm";
@@ -24,20 +24,22 @@ async function getApiKey(): Promise<string | null> {
   try {
     const key = await keychain.get(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
     if (key) return key;
-  } catch { /* not in keychain yet */ }
+  } catch {
+    /* not in keychain yet */
+  }
   // Migration: move legacy SQLite key to keychain on first access
   try {
     const db = await getDb();
-    const rows = await db.select<{ value: string }[]>(
-      "SELECT value FROM settings WHERE key = 'lastfm.api_key'"
-    );
+    const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'lastfm.api_key'");
     const legacy = rows[0]?.value;
     if (legacy) {
       await keychain.set(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT, legacy);
       await db.execute("DELETE FROM settings WHERE key = 'lastfm.api_key'");
       return legacy;
     }
-  } catch { /* migration not critical */ }
+  } catch {
+    /* migration not critical */
+  }
   return null;
 }
 
@@ -45,33 +47,39 @@ export async function setApiKey(key: string): Promise<void> {
   if (key) {
     await keychain.set(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT, key);
   } else {
-    try { await keychain.delete(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT); } catch { /* ok */ }
+    try {
+      await keychain.delete(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
+    } catch {
+      /* ok */
+    }
   }
   // Remove any lingering SQLite copy
   try {
     const db = await getDb();
     await db.execute("DELETE FROM settings WHERE key = 'lastfm.api_key'");
-  } catch { /* ok */ }
+  } catch {
+    /* ok */
+  }
 }
 
 export async function getMinTagCount(): Promise<number> {
   const db = await getDb();
-  const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'lastfm.min_tag_count'"
-  );
+  const rows = await db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = 'lastfm.min_tag_count'");
   const val = parseInt(rows[0]?.value ?? "", 10);
   return Number.isNaN(val) ? MIN_TAG_COUNT_DEFAULT : val;
 }
 
 export async function setMinTagCount(count: number): Promise<void> {
   const db = await getDb();
-  await db.execute(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES ('lastfm.min_tag_count', ?)",
-    [String(count)]
-  );
+  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('lastfm.min_tag_count', ?)", [String(count)]);
 }
 
-async function fetchTags(method: string, params: Record<string, string>, apiKey: string, minCount: number): Promise<string[]> {
+async function fetchTags(
+  method: string,
+  params: Record<string, string>,
+  apiKey: string,
+  minCount: number,
+): Promise<string[]> {
   await rateLimit();
   const url = new URL(LASTFM_BASE);
   url.searchParams.set("method", method);
@@ -148,19 +156,15 @@ export function resolvePortraitUrl(
     lastfm_image_url: string | null;
     wikidata_image_url: string | null;
     navidrome_image_url?: string | null;
-  } | null
+  } | null,
 ): string | null {
   const rawLastfmImage = enrichment?.lastfm_image_url ?? null;
-  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER)
-    ? rawLastfmImage
-    : null;
+  const lastfmPortraitUrl = rawLastfmImage && !rawLastfmImage.includes(LASTFM_PLACEHOLDER) ? rawLastfmImage : null;
   return enrichment?.wikidata_image_url ?? enrichment?.navidrome_image_url ?? lastfmPortraitUrl;
 }
 
 function pickImage(images: Array<{ "#text": string; size: string }>): string | null {
-  const filtered = images.filter(
-    (img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER)
-  );
+  const filtered = images.filter((img) => img["#text"] && !img["#text"].includes(LASTFM_PLACEHOLDER));
   const extralarge = filtered.find((img) => img.size === "extralarge");
   const large = filtered.find((img) => img.size === "large");
   const chosen = extralarge ?? large ?? filtered[filtered.length - 1];
@@ -217,9 +221,10 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
       listeners: parseNumberOr(a.stats?.listeners, null),
       playcount: parseNumberOr(a.stats?.playcount, null),
       // getSimilar answers [] on failure too, so an empty list falls back to getInfo's five.
-      similar: similarEntries.length > 0
-        ? similarArtistsAboveMatch(similarEntries)
-        : (a.similar?.artist ?? []).map((x) => x.name),
+      similar:
+        similarEntries.length > 0
+          ? similarArtistsAboveMatch(similarEntries)
+          : (a.similar?.artist ?? []).map((x) => x.name),
       topTags: (a.tags?.tag ?? []).map((t) => t.name).slice(0, 10),
       imageUrl: a.image ? pickImage(a.image) : null,
     };
@@ -236,21 +241,26 @@ async function getCached<T>(key: string): Promise<T | null> {
     const cutoff = Math.floor(Date.now() / 1000) - SIGNAL_CACHE_TTL_S;
     const rows = await db.select<{ value: string }[]>(
       "SELECT value FROM radio_signal_cache WHERE cache_key = ? AND fetched_at > ?",
-      [key, cutoff]
+      [key, cutoff],
     );
     if (rows[0]) return JSON.parse(rows[0].value) as T;
-  } catch { /* cache miss */ }
+  } catch {
+    /* cache miss */
+  }
   return null;
 }
 
 async function setCached<T>(key: string, value: T): Promise<void> {
   try {
     const db = await getDb();
-    await db.execute(
-      "INSERT OR REPLACE INTO radio_signal_cache (cache_key, value, fetched_at) VALUES (?, ?, ?)",
-      [key, JSON.stringify(value), Math.floor(Date.now() / 1000)]
-    );
-  } catch { /* non-critical */ }
+    await db.execute("INSERT OR REPLACE INTO radio_signal_cache (cache_key, value, fetched_at) VALUES (?, ?, ?)", [
+      key,
+      JSON.stringify(value),
+      Math.floor(Date.now() / 1000),
+    ]);
+  } catch {
+    /* non-critical */
+  }
 }
 
 export interface SimilarArtistEntry {
@@ -264,7 +274,7 @@ export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: stri
   const cached = await getCached<SimilarArtistEntry[]>(cacheKey);
   if (cached) return cached;
 
-  const apiKey = knownApiKey ?? await getApiKey();
+  const apiKey = knownApiKey ?? (await getApiKey());
   if (!apiKey) return [];
 
   await rateLimit();

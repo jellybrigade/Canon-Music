@@ -1,6 +1,6 @@
 import { Volume2, VolumeX } from "lucide-react";
-import { usePlayerStore } from "../store/player";
 import { useVolumeWheel } from "../hooks/useVolumeWheel";
+import { usePlayerStore } from "../store/player";
 
 interface Props {
   className: string;
@@ -25,9 +25,11 @@ export function VolumeControl({ className, iconSize, isLabelled = false }: Props
         title={muteLabel}
         aria-label={muteLabel}
       >
-        {volume > 0
-          ? <Volume2 size={iconSize} className="player-volume-icon" />
-          : <VolumeX size={iconSize} className="player-volume-icon" />}
+        {volume > 0 ? (
+          <Volume2 size={iconSize} className="player-volume-icon" />
+        ) : (
+          <VolumeX size={iconSize} className="player-volume-icon" />
+        )}
       </button>
       {isLabelled && <span className="player-more-row__label player-more-volume__label">Volume</span>}
       <input

@@ -1,10 +1,10 @@
-import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useEffect, useRef } from "react";
 
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
+import type { ServerWithCredential } from "../../../hooks/useServer";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
-import type { ServerWithCredential } from "../../../hooks/useServer";
 
 /** On Subsonic 70 at play time, re-resolves the album's track ids and retries, once per album per session. */
 export function useTrackIdRepair(serverWithCredential: ServerWithCredential | undefined): void {

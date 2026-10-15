@@ -15,7 +15,7 @@ export function isCoverServerReady(): boolean {
 export async function updateCoverProxyConfig(
   baseUrl: string,
   username: string,
-  credential: NavidromeCredential
+  credential: NavidromeCredential,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   await invoke("set_cover_proxy_config", {
@@ -27,19 +27,14 @@ export function setStreamMaxBitrate(kbps: number): void {
   _streamMaxBitrate = kbps;
 }
 
-export type NavidromeCredential =
-  | { type: "md5"; token: string; salt: string }
-  | { type: "apikey"; apiKey: string };
+export type NavidromeCredential = { type: "md5"; token: string; salt: string } | { type: "apikey"; apiKey: string };
 
 export function normalizeUrl(url: string): string {
   // Strip trailing slashes and accidental /rest suffix
   return url.replace(/\/+$/, "").replace(/\/rest$/, "");
 }
 
-export function buildAuthParams(
-  username: string,
-  credential: NavidromeCredential
-): URLSearchParams {
+export function buildAuthParams(username: string, credential: NavidromeCredential): URLSearchParams {
   const p = new URLSearchParams();
   p.set("u", username);
   if (credential.type === "apikey") {
@@ -59,7 +54,7 @@ export function getCoverArtUrl(
   username: string,
   credential: NavidromeCredential,
   coverArtId: string,
-  size = 300
+  size = 300,
 ): string {
   // Rust falls back to 300 for a size it cannot parse, but caches under `{id}:{size}`
   // with the string it was handed, so a fractional or negative size fragments the disk
@@ -88,7 +83,7 @@ export function getStreamUrl(
   baseUrl: string,
   username: string,
   credential: NavidromeCredential,
-  trackId: string
+  trackId: string,
 ): string {
   const params = buildAuthParams(username, credential);
   params.set("id", trackId);

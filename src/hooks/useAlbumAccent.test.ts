@@ -8,21 +8,21 @@
  * reads that row through React Query, so a write nothing invalidates is invisible to it for
  * the whole 60s staleTime and every revisit inside that window decodes the image again.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 vi.mock("../lib/artColor", () => ({ extractAccent: vi.fn() }));
 
-import { renderHook, waitFor, cleanup } from "@testing-library/react";
-import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { getDb } from "../db";
 import { extractAccent } from "../lib/artColor";
-import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { QK } from "../lib/queryKeys";
-import { useAlbumAccent } from "./useAlbumAccent";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import type { AlbumRow } from "../types/library";
+import { useAlbumAccent } from "./useAlbumAccent";
 
 const SERVER_ID = "srv-a";
 const ALBUM_ID = "srv-a:alb1";
@@ -37,18 +37,21 @@ function wrapper({ children }: { children: ReactNode }) {
 }
 
 function storedAccent(): string | null | undefined {
-  const row = db.raw
-    .prepare("SELECT accent_color FROM albums WHERE id = ?")
-    .get(ALBUM_ID) as { accent_color: string | null } | undefined;
+  const row = db.raw.prepare("SELECT accent_color FROM albums WHERE id = ?").get(ALBUM_ID) as
+    | { accent_color: string | null }
+    | undefined;
   return row?.accent_color;
 }
 
 beforeEach(async () => {
   db = await createMigratedTestDb();
-  await db.execute(
-    "INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, ?, ?, ?)",
-    [ALBUM_ID, SERVER_ID, "navidrome", "Loveless", "my bloody valentine"]
-  );
+  await db.execute("INSERT INTO albums (id, server_id, server_type, name, artist) VALUES (?, ?, ?, ?, ?)", [
+    ALBUM_ID,
+    SERVER_ID,
+    "navidrome",
+    "Loveless",
+    "my bloody valentine",
+  ]);
   // The seed above is not work the hook did; count from zero.
   db.executeCount = 0;
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
@@ -65,10 +68,7 @@ afterEach(() => {
 
 describe("useAlbumAccent", () => {
   it("derives a missing accent color and stores it on the album row", async () => {
-    const view = renderHook(
-      () => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID),
-      { wrapper }
-    );
+    const view = renderHook(() => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID), { wrapper });
     await waitFor(() => expect(view.result.current).toBe(COLOR));
     await waitFor(() => expect(storedAccent()).toBe(COLOR));
     expect(extractAccent).toHaveBeenCalledTimes(1);
@@ -84,7 +84,13 @@ describe("useAlbumAccent", () => {
 
   it("writes the color into the album list Home reuses, so a Home revisit does not decode again", async () => {
     const row = (id: string): AlbumRow => ({
-      id, server_id: SERVER_ID, name: id, artist: null, year: null, artwork_url: null, accent_color: null,
+      id,
+      server_id: SERVER_ID,
+      name: id,
+      artist: null,
+      year: null,
+      artwork_url: null,
+      accent_color: null,
     });
     const store = useAlbumBrowseSessionStore.getState();
     store.setRows([row(ALBUM_ID), row("srv-a:alb2")], 0, "artist|");
@@ -100,28 +106,19 @@ describe("useAlbumAccent", () => {
   });
 
   it("decodes the cover once across a revisit that reads the stored color back", async () => {
-    const first = renderHook(
-      () => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID),
-      { wrapper }
-    );
+    const first = renderHook(() => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID), { wrapper });
     await waitFor(() => expect(storedAccent()).toBe(COLOR));
     first.unmount();
 
     // What the route hands back once its query has been invalidated and refetched.
-    const second = renderHook(
-      () => useAlbumAccent(ALBUM_ID, storedAccent(), ART_URL, SERVER_ID),
-      { wrapper }
-    );
+    const second = renderHook(() => useAlbumAccent(ALBUM_ID, storedAccent(), ART_URL, SERVER_ID), { wrapper });
     await waitFor(() => expect(second.result.current).toBe(COLOR));
     expect(extractAccent).toHaveBeenCalledTimes(1);
     expect(db.executeCount).toBe(1);
   });
 
   it("does not decode a cover for an album that already has a color", async () => {
-    const view = renderHook(
-      () => useAlbumAccent(ALBUM_ID, COLOR, ART_URL, SERVER_ID),
-      { wrapper }
-    );
+    const view = renderHook(() => useAlbumAccent(ALBUM_ID, COLOR, ART_URL, SERVER_ID), { wrapper });
     await waitFor(() => expect(view.result.current).toBe(COLOR));
     expect(extractAccent).not.toHaveBeenCalled();
     expect(db.executeCount).toBe(0);
@@ -130,12 +127,14 @@ describe("useAlbumAccent", () => {
   it("drops the previous album's tint while the next one is decoding", async () => {
     let resolveExtract: (color: string | null) => void = () => {};
     vi.mocked(extractAccent).mockImplementation(
-      () => new Promise((resolve) => { resolveExtract = resolve; })
+      () =>
+        new Promise((resolve) => {
+          resolveExtract = resolve;
+        }),
     );
     const view = renderHook(
-      ({ id, accent }: { id: string; accent: string | null }) =>
-        useAlbumAccent(id, accent, ART_URL, SERVER_ID),
-      { wrapper, initialProps: { id: ALBUM_ID, accent: COLOR } as { id: string; accent: string | null } }
+      ({ id, accent }: { id: string; accent: string | null }) => useAlbumAccent(id, accent, ART_URL, SERVER_ID),
+      { wrapper, initialProps: { id: ALBUM_ID, accent: COLOR } as { id: string; accent: string | null } },
     );
     expect(view.result.current).toBe(COLOR);
 
@@ -149,10 +148,7 @@ describe("useAlbumAccent", () => {
   it("leaves the album untinted when the cover cannot be decoded", async () => {
     vi.mocked(extractAccent).mockRejectedValue(new Error("decode failed"));
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = renderHook(
-      () => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID),
-      { wrapper }
-    );
+    const view = renderHook(() => useAlbumAccent(ALBUM_ID, null, ART_URL, SERVER_ID), { wrapper });
     await waitFor(() => expect(errors).toHaveBeenCalledTimes(1));
     expect(view.result.current).toBeNull();
     expect(storedAccent()).toBeNull();

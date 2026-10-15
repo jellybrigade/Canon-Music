@@ -67,7 +67,9 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    color var(--motion-fast, 120ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
 }
 
 .foryou-v2-action-btn:hover {
@@ -104,7 +106,9 @@
   margin-bottom: var(--space-xs);
   color: var(--text-tertiary, #666);
   cursor: pointer;
-  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    color var(--motion-fast, 120ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
 }
 
 .foryou-v2-remove-btn:hover {
@@ -136,7 +140,9 @@
   font-weight: 600;
   color: var(--text-tertiary, #666);
   cursor: pointer;
-  transition: color var(--motion-fast, 120ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    color var(--motion-fast, 120ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
 }
 
 .foryou-v2-add-form__type-btn:hover {
@@ -307,7 +313,7 @@
 }
 
 .foryou-v2-tile__art-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0);

@@ -36,7 +36,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color var(--duration-base), background var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background var(--duration-base);
 }
 
 .feedback-close:hover {
@@ -62,7 +64,10 @@
   box-shadow: none;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: color var(--duration-base), background var(--duration-base), border-color var(--duration-base);
+  transition:
+    color var(--duration-base),
+    background var(--duration-base),
+    border-color var(--duration-base);
 }
 
 .feedback-cat-btn:hover {

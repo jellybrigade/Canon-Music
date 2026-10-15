@@ -1,15 +1,15 @@
-import { useRef, useState, useEffect } from "react";
-import { syncLibrary } from "./sync";
-import type { SyncOptions, SyncProgress } from "./sync";
-import { invalidateGenreTreeCache } from "../tags/hooks/useGenreTree";
-import { useSetting } from "../../hooks/useSetting";
+import { useEffect, useRef, useState } from "react";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { useSetting } from "../../hooks/useSetting";
 import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
-import { useArtistBrowseSessionStore } from "../../store/artistBrowseSessionStore";
-import { useLovedSessionStore } from "../../store/lovedSessionStore";
-import { useGenresSessionStore } from "../../store/genresSessionStore";
 import { useAllTracksSessionStore } from "../../store/allTracksSessionStore";
+import { useArtistBrowseSessionStore } from "../../store/artistBrowseSessionStore";
+import { useGenresSessionStore } from "../../store/genresSessionStore";
+import { useLovedSessionStore } from "../../store/lovedSessionStore";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
+import { invalidateGenreTreeCache } from "../tags/hooks/useGenreTree";
+import type { SyncOptions, SyncProgress } from "./sync";
+import { syncLibrary } from "./sync";
 
 export type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -125,7 +125,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         lastInvalidate = now;
         useAlbumBrowseSessionStore.getState().bumpRefresh();
       },
-      syncOptions
+      syncOptions,
     )
       .then(({ failedAlbums, failedPlaylists, skippedStages, albumTracksIncomplete, changed }) => {
         if (!mountedRef.current) return;
@@ -217,7 +217,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   useEffect(() => {
     if (!target) return;
     syncIfNeeded(target);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target]);
 
   // Re-armed in the body: StrictMode's mount/unmount/mount would otherwise leave every
@@ -237,12 +237,15 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     if (!target || Number.isNaN(intervalMin) || intervalMin <= 0) return;
     // Keyed on the id, not the object: `App.tsx` yields an equal-but-new object on any
     // refetch, and re-arming on each one would reset the countdown before a tick could land.
-    const id = setInterval(() => {
-      const latest = serverRef.current;
-      if (latest) runSync(latest);
-    }, intervalMin * 60 * 1000);
+    const id = setInterval(
+      () => {
+        const latest = serverRef.current;
+        if (latest) runSync(latest);
+      },
+      intervalMin * 60 * 1000,
+    );
     return () => clearInterval(id);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.server.id, autoSyncIntervalMin]);
 
   return { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync };

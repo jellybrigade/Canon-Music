@@ -1,19 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  combineGenres,
+  lookupRelease,
+  lookupReleaseGroup,
+  type MbGenre,
+  type MbReleaseDetail,
+  type MbReleaseGroupCandidate,
+  type MbReleaseGroupDetail,
+  searchReleaseGroups,
+} from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
-import {
-  searchReleaseGroups,
-  lookupReleaseGroup,
-  lookupRelease,
-  combineGenres,
-  type MbReleaseGroupCandidate,
-  type MbReleaseGroupDetail,
-  type MbReleaseDetail,
-  type MbGenre,
-} from "../../../clients/musicbrainz";
-import { rankCandidates, filterByTrackCount } from "../lib/fuzzyMatch";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
+import { filterByTrackCount, rankCandidates } from "../lib/fuzzyMatch";
 
 const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
@@ -47,10 +47,7 @@ export function useAlbumIdentity(albumId: string) {
     queryKey: QK.albumIdentity(albumId),
     queryFn: async (): Promise<AlbumIdentityRow | null> => {
       const db = await getDb();
-      const rows = await db.select<AlbumIdentityRow[]>(
-        "SELECT * FROM album_identity WHERE album_id = ?",
-        [albumId]
-      );
+      const rows = await db.select<AlbumIdentityRow[]>("SELECT * FROM album_identity WHERE album_id = ?", [albumId]);
       return rows[0] ?? null;
     },
     enabled: !!albumId,
@@ -66,7 +63,7 @@ export function useConfirmedArtistMbid(artistName: string) {
       const db = await getDb();
       const fromArtistIdentity = await db.select<{ mb_artist_id: string }[]>(
         "SELECT mb_artist_id FROM artist_identity WHERE artist_name = ? AND mb_artist_id IS NOT NULL",
-        [artistName]
+        [artistName],
       );
       if (fromArtistIdentity[0]) return fromArtistIdentity[0].mb_artist_id;
 
@@ -76,7 +73,7 @@ export function useConfirmedArtistMbid(artistName: string) {
          WHERE a.artist = ? AND ai.mb_artist_id IS NOT NULL AND ai.auto_matched = 0
          ORDER BY ai.confirmed_at DESC
          LIMIT 1`,
-        [artistName]
+        [artistName],
       );
       return fromAlbums[0]?.mb_artist_id ?? null;
     },
@@ -121,7 +118,16 @@ export function useIdentifyAlbum({
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: QK.identifyAlbum(albumId, overrideMbRgId, overrideMbReleaseId, artist, album, trackCount, year, confirmedArtistMbid),
+    queryKey: QK.identifyAlbum(
+      albumId,
+      overrideMbRgId,
+      overrideMbReleaseId,
+      artist,
+      album,
+      trackCount,
+      year,
+      confirmedArtistMbid,
+    ),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
         let rgId = overrideMbRgId ?? null;
@@ -159,9 +165,7 @@ export function useIdentifyAlbum({
           const gap = second ? top.score - second.score : Infinity;
 
           // Also auto-pick when top wins on type alone (Album over Single with same title)
-          const typeWins =
-            top.candidate.primaryType !== "Single" &&
-            second?.candidate.primaryType === "Single";
+          const typeWins = top.candidate.primaryType !== "Single" && second?.candidate.primaryType === "Single";
 
           if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
             rgId = top.candidate.id;
@@ -184,10 +188,7 @@ export function useIdentifyAlbum({
 
         let releaseDetail: MbReleaseDetail | null = null;
         const releaseId =
-          overrideMbReleaseId ??
-          rgDetail.releases.find((r) => r.date)?.id ??
-          rgDetail.releases[0]?.id ??
-          null;
+          overrideMbReleaseId ?? rgDetail.releases.find((r) => r.date)?.id ?? rgDetail.releases[0]?.id ?? null;
 
         if (releaseId) {
           try {
@@ -197,14 +198,8 @@ export function useIdentifyAlbum({
           }
         }
 
-        const combinedGenres = combineGenres(
-          rgDetail.genres,
-          releaseDetail?.genres ?? []
-        );
-        const combinedTags = combineGenres(
-          rgDetail.tags,
-          releaseDetail?.tags ?? []
-        );
+        const combinedGenres = combineGenres(rgDetail.genres, releaseDetail?.genres ?? []);
+        const combinedTags = combineGenres(rgDetail.tags, releaseDetail?.tags ?? []);
 
         return {
           mbStatus: "found",
@@ -256,9 +251,7 @@ export interface SaveAlbumIdentityInput {
 
 /** Accepts an optional confirmedAt so bulk callers can supply their own timestamp
  * instead of calling Date.now() twice. */
-export async function persistAlbumIdentity(
-  input: SaveAlbumIdentityInput & { confirmedAt?: number }
-): Promise<void> {
+export async function persistAlbumIdentity(input: SaveAlbumIdentityInput & { confirmedAt?: number }): Promise<void> {
   const db = await getDb();
   const now = Math.floor(Date.now() / 1000);
   await db.execute(
@@ -287,7 +280,7 @@ export async function persistAlbumIdentity(
       input.autoMatched ? 1 : 0,
       input.matchScore ?? null,
       now,
-    ]
+    ],
   );
 }
 
@@ -309,14 +302,14 @@ export function useSaveAlbumIdentity() {
 
 export async function readFailedLookupAlbumIds(
   db: Awaited<ReturnType<typeof getDb>>,
-  serverId: string
+  serverId: string,
 ): Promise<string[]> {
   const rows = await db.select<{ album_id: string }[]>(
     `SELECT ai.album_id FROM album_identity ai
      INNER JOIN albums a ON a.id = ai.album_id
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
      ORDER BY ai.album_id`,
-    [serverId]
+    [serverId],
   );
   return rows.map((r) => r.album_id);
 }
@@ -340,7 +333,7 @@ export function useRecordFailedLookup() {
         `INSERT OR IGNORE INTO album_identity
            (album_id, looked_up_at, match_score, auto_matched, lastfm_match_confirmed)
          VALUES (?, ?, ?, 0, 0)`,
-        [albumId, Math.floor(Date.now() / 1000), matchScore]
+        [albumId, Math.floor(Date.now() / 1000), matchScore],
       );
     },
     onSuccess: (_data, input) => {
@@ -358,7 +351,7 @@ export interface FailedAlbumRow extends AlbumRow {
 /** Album rows (plus track_count) on one server that were looked up but yielded no MB match. */
 export async function readFailedLookupAlbums(
   db: Awaited<ReturnType<typeof getDb>>,
-  serverId: string
+  serverId: string,
 ): Promise<FailedAlbumRow[]> {
   return db.select<FailedAlbumRow[]>(
     `SELECT a.*,
@@ -367,7 +360,7 @@ export async function readFailedLookupAlbums(
      INNER JOIN album_identity ai ON ai.album_id = a.id
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
      ORDER BY a.artist, a.name, a.id`,
-    [serverId]
+    [serverId],
   );
 }
 

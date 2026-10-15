@@ -1,11 +1,11 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 
-import { makeStreamUrlBuilder } from "./track";
-import { setStreamMaxBitrate, type NavidromeCredential } from "../clients/navidromeUrls";
-import type { Server } from "../types/server";
+import { type NavidromeCredential, setStreamMaxBitrate } from "../clients/navidromeUrls";
 import type { CurrentTrack } from "../features/playback/store/playerTypes";
+import type { Server } from "../types/server";
+import { makeStreamUrlBuilder } from "./track";
 
 function makeServer(overrides: Partial<Server> = {}): Server {
   return {

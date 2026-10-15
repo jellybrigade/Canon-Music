@@ -1,17 +1,17 @@
 import { create } from "zustand";
-import { getDb } from "../../../db";
-import { CAST_MAX_BITRATE_DEFAULT, LocalTarget, DlnaTarget } from "./playbackTarget";
-import { parseIntegerOr } from "../../../lib/numberSetting";
 import { discoverRenderers } from "../../../clients/dlna";
+import { getDb } from "../../../db";
+import { parseIntegerOr } from "../../../lib/numberSetting";
+import { CAST_MAX_BITRATE_DEFAULT, DlnaTarget, LocalTarget } from "./playbackTarget";
+import { createPlayerEngine } from "./playerEngine";
+import { createPlayerPersistence } from "./playerPersistence";
+import { runtime } from "./playerRuntime";
+import { createSettingsActions } from "./playerSettings";
+import { type CurrentTrack, type PlayerState, plainError, type RadioMode } from "./playerTypes";
+import { createPlayerWaveform } from "./playerWaveform";
+import { createQueueActions } from "./queueActions";
 import { buildShuffleOrder, resolveTrack } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
-import { runtime } from "./playerRuntime";
-import { createPlayerPersistence } from "./playerPersistence";
-import { createPlayerWaveform } from "./playerWaveform";
-import { createPlayerEngine } from "./playerEngine";
-import { createQueueActions } from "./queueActions";
-import { createSettingsActions } from "./playerSettings";
-import { plainError, type CurrentTrack, type PlayerState, type RadioMode } from "./playerTypes";
 
 const PREV_RESTART_THRESHOLD_S = 3;
 // Timers stop during suspend while the deadline is wall-clock, so the sleep timer re-checks
@@ -112,18 +112,26 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         try {
           const db2 = await getDb();
           const rows2 = await db2.select<{ value: string }[]>(
-            "SELECT value FROM settings WHERE key = 'cast.max_bitrate'", []
+            "SELECT value FROM settings WHERE key = 'cast.max_bitrate'",
+            [],
           );
           if (rows2[0]) castBitrate = parseIntegerOr(rows2[0].value, CAST_MAX_BITRATE_DEFAULT);
-        } catch { /* use default */ }
-        runtime.activeTarget = new DlnaTarget(renderer, () => {
-          void get().next(true);
-        }, castBitrate, (message) => {
-          // The renderer stopped answering. Nothing else on the cast path surfaces this:
-          // there is no audio-error event, and the target has stopped its own timers.
-          set({ error: plainError(message), isPlaying: false, isBuffering: false });
-          stopElapsedTimer();
-        });
+        } catch {
+          /* use default */
+        }
+        runtime.activeTarget = new DlnaTarget(
+          renderer,
+          () => {
+            void get().next(true);
+          },
+          castBitrate,
+          (message) => {
+            // The renderer stopped answering. Nothing else on the cast path surfaces this:
+            // there is no audio-error event, and the target has stopped its own timers.
+            set({ error: plainError(message), isPlaying: false, isBuffering: false });
+            stopElapsedTimer();
+          },
+        );
         set({ castDevice: renderer });
         // Resume on renderer at parked position.
         if (currentTrack && streamUrl) {
@@ -144,11 +152,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
 
       try {
         const db = await getDb();
-        await db.execute(
-          "INSERT OR REPLACE INTO settings (key, value) VALUES ('cast.device', ?)",
-          [renderer ? JSON.stringify(renderer) : ""]
-        );
-      } catch { /* non-fatal */ }
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('cast.device', ?)", [
+          renderer ? JSON.stringify(renderer) : "",
+        ]);
+      } catch {
+        /* non-fatal */
+      }
     },
 
     setWaveformPeaks: (peaks) => {
@@ -195,7 +204,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         shuffleOrder = [0];
       }
 
-      set({ queue: workingTracks, queueIndex: position, streamUrlFor, shuffleOrder, radioActive: false, radioSeed: null });
+      set({
+        queue: workingTracks,
+        queueIndex: position,
+        streamUrlFor,
+        shuffleOrder,
+        radioActive: false,
+        radioSeed: null,
+      });
       const track = resolveTrack(workingTracks, shuffleOrder, isShuffled, position);
       if (track) await playTrack(track, streamUrlFor(track));
       void persistQueueState();
@@ -206,7 +222,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     setSleepTimer: (preset) => {
-      if (runtime.sleepTimerTimeout) { clearTimeout(runtime.sleepTimerTimeout); runtime.sleepTimerTimeout = null; }
+      if (runtime.sleepTimerTimeout) {
+        clearTimeout(runtime.sleepTimerTimeout);
+        runtime.sleepTimerTimeout = null;
+      }
       if (preset === "end-of-track") {
         set({ sleepTimerEndOfTrack: true, sleepTimerEndsAt: null, sleepTimerMinutes: null });
       } else {
@@ -227,7 +246,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
     },
 
     clearSleepTimer: () => {
-      if (runtime.sleepTimerTimeout) { clearTimeout(runtime.sleepTimerTimeout); runtime.sleepTimerTimeout = null; }
+      if (runtime.sleepTimerTimeout) {
+        clearTimeout(runtime.sleepTimerTimeout);
+        runtime.sleepTimerTimeout = null;
+      }
       set({ sleepTimerEndsAt: null, sleepTimerMinutes: null, sleepTimerEndOfTrack: false });
     },
 
@@ -255,7 +277,16 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
           await playTrack(track, streamUrlFor(track), true);
           return;
         }
-        set({ currentTrack: track, streamUrl: null, elapsed: 0, isPlaying: false, isLoading: false, isBuffering: false, error: null, waveformPeaks: null });
+        set({
+          currentTrack: track,
+          streamUrl: null,
+          elapsed: 0,
+          isPlaying: false,
+          isLoading: false,
+          isBuffering: false,
+          error: null,
+          waveformPeaks: null,
+        });
         // The other natural-end signal for the finished track is still coming, and the dedupe
         // above compares against the current track, which is now the parked one.
         runtime.lastEndedTrackId = track.id;
@@ -298,9 +329,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         // Re-shuffle on loop-back so each pass plays a different order. Unanchored (-1): the
         // previous pass has finished, so there is no playing track to keep at position 0, and
         // anchoring on queue index 0 made every single wrap open with queue[0].
-        const newShuffleOrder = isShuffled && queue.length > 1
-          ? buildShuffleOrder(queue.length, -1)
-          : shuffleOrder;
+        const newShuffleOrder = isShuffled && queue.length > 1 ? buildShuffleOrder(queue.length, -1) : shuffleOrder;
         set({ queueIndex: 0, shuffleOrder: newShuffleOrder });
         const track = resolveTrack(queue, newShuffleOrder, isShuffled, 0);
         if (track) await land(track);

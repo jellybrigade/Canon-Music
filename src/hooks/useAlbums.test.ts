@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
-import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
-import { useAlbums } from "./useAlbums";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
+import { invoke, onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import type { AlbumRow, AlbumSort } from "../types/library";
+import { useAlbums } from "./useAlbums";
 
 function album(id: string, serverId: string): AlbumRow {
   return { id, server_id: serverId, name: id, artist: null, year: null, artwork_url: null };

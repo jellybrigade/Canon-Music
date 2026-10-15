@@ -1,6 +1,6 @@
+import { Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Plus } from "lucide-react";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import type { TreeNode } from "../lib/canonicalize";
 
@@ -19,17 +19,18 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const currentName = useMemo(
-    () => treeNodes.find((n) => n.id === currentId)?.name ?? null,
-    [treeNodes, currentId]
-  );
+  const currentName = useMemo(() => treeNodes.find((n) => n.id === currentId)?.name ?? null, [treeNodes, currentId]);
 
   const matches = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.toLowerCase();
 
     function initials(s: string) {
-      return s.split(/[\s\-_/]+/).map(w => w[0] ?? "").join("").toLowerCase();
+      return s
+        .split(/[\s\-_/]+/)
+        .map((w) => w[0] ?? "")
+        .join("")
+        .toLowerCase();
     }
 
     function score(n: { name: string; canonical_key: string }): number {
@@ -45,11 +46,11 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
     }
 
     return treeNodes
-      .map(n => ({ n, s: score(n) }))
-      .filter(x => x.s > 0)
+      .map((n) => ({ n, s: score(n) }))
+      .filter((x) => x.s > 0)
       .sort((a, b) => b.s - a.s)
       .slice(0, 10)
-      .map(x => x.n);
+      .map((x) => x.n);
   }, [treeNodes, query]);
 
   const canCreate =
@@ -71,13 +72,22 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
     setOpen(true);
   }
 
-  useClickOutside(wrapRef, () => { setOpen(false); setQuery(""); }, open);
+  useClickOutside(
+    wrapRef,
+    () => {
+      setOpen(false);
+      setQuery("");
+    },
+    open,
+  );
 
   if (currentId && currentName) {
     return (
       <div className="tags-mapped">
         <span className="tags-mapped-name">{currentName}</span>
-        <button className="tags-clear-btn" onClick={onClear} title="Remove mapping">×</button>
+        <button className="tags-clear-btn" onClick={onClear} title="Remove mapping">
+          ×
+        </button>
       </div>
     );
   }
@@ -91,43 +101,47 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
         className="tags-combobox-input"
         placeholder="Map to genre…"
         value={query}
-        onChange={(e) => { setQuery(e.target.value); openDropdown(); }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          openDropdown();
+        }}
         onFocus={openDropdown}
       />
-      {showDropdown && createPortal(
-        <div className="tags-combobox-dropdown" style={dropdownStyle}>
-          {matches.map((n) => (
-            <button
-              key={n.id}
-              className="tags-combobox-option"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onSelect(n.id);
-                setQuery("");
-                setOpen(false);
-              }}
-            >
-              <span className="tags-option-name">{n.name}</span>
-              <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
-            </button>
-          ))}
-          {canCreate && (
-            <button
-              className="tags-combobox-option tags-combobox-create"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onCreateNode!(query.trim());
-                setQuery("");
-                setOpen(false);
-              }}
-            >
-              <Plus size={12} />
-              <span className="tags-option-name">Create "{query.trim()}"</span>
-            </button>
-          )}
-        </div>,
-        document.body
-      )}
+      {showDropdown &&
+        createPortal(
+          <div className="tags-combobox-dropdown" style={dropdownStyle}>
+            {matches.map((n) => (
+              <button
+                key={n.id}
+                className="tags-combobox-option"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(n.id);
+                  setQuery("");
+                  setOpen(false);
+                }}
+              >
+                <span className="tags-option-name">{n.name}</span>
+                <span className="tags-option-section">{n.sections.join(", ") || n.type}</span>
+              </button>
+            ))}
+            {canCreate && (
+              <button
+                className="tags-combobox-option tags-combobox-create"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onCreateNode!(query.trim());
+                  setQuery("");
+                  setOpen(false);
+                }}
+              >
+                <Plus size={12} />
+                <span className="tags-option-name">Create "{query.trim()}"</span>
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

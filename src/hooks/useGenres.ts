@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDb } from "../db";
 import { useGenresSessionStore } from "../store/genresSessionStore";
 
@@ -76,9 +76,7 @@ export function useRecentGenres() {
   const refreshTick = useGenresSessionStore((s) => s.refreshTick);
   const [data, setData] = useState<GenreRow[] | undefined>(() => {
     const s = useGenresSessionStore.getState();
-    return s.recentRows && s.recentCachedTick === s.refreshTick
-      ? (s.recentRows as GenreRow[])
-      : undefined;
+    return s.recentRows && s.recentCachedTick === s.refreshTick ? (s.recentRows as GenreRow[]) : undefined;
   });
   const [isFetching, setIsFetching] = useState(() => data === undefined);
   const [error, setError] = useState<string | null>(null);

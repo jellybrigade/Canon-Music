@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { getDb } from "../db";
+import { useArtistAlbumsSessionStore } from "../store/artistAlbumsSessionStore";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
 import { useArtistAlbums } from "./useArtistAlbums";
-import { useArtistAlbumsSessionStore } from "../store/artistAlbumsSessionStore";
 
 let db: FakeDatabase;
 
@@ -26,15 +26,13 @@ function seedAlbum(serverId: string, suffix: string, artist: string): void {
   db.raw
     .prepare(
       `INSERT INTO albums (id, server_id, server_type, name, artist, year)
-       VALUES (?, ?, 'navidrome', ?, ?, 2000)`
+       VALUES (?, ?, 'navidrome', ?, ?, 2000)`,
     )
     .run(`${serverId}:al${suffix}`, serverId, `Album ${suffix}`, artist);
 }
 
 function seedAlias(canonical: string, alias: string): void {
-  db.raw
-    .prepare("INSERT INTO artist_aliases (canonical_name, alias_name) VALUES (?, ?)")
-    .run(canonical, alias);
+  db.raw.prepare("INSERT INTO artist_aliases (canonical_name, alias_name) VALUES (?, ?)").run(canonical, alias);
 }
 
 // known-issues.md, the name-keyed form of the wrong-owner class: the artist name carries no
@@ -62,7 +60,7 @@ describe("useArtistAlbums server scoping", () => {
     seedAlbum("beta", "2", "Burial");
     const { result, rerender } = renderHook(
       ({ serverId }: { serverId: string }) => useArtistAlbums("Burial", serverId),
-      { initialProps: { serverId: "alpha" } }
+      { initialProps: { serverId: "alpha" } },
     );
     await waitFor(() => expect(result.current.data?.map((a) => a.id)).toEqual(["alpha:al1"]));
     rerender({ serverId: "beta" });

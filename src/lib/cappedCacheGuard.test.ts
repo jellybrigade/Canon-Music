@@ -9,9 +9,9 @@
 // the write is `>= MAX` and needs an explicit `!cache.has(key)` beside it, while a cap checked
 // *after* a delete-then-set write is `> MAX` and is already overwrite-safe (re-inserting refreshes
 // insertion order, and the size only exceeds the cap when the write genuinely added an entry).
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));

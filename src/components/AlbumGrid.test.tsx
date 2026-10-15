@@ -25,16 +25,16 @@ vi.mock("../hooks/useSetting", () => ({
   ],
 }));
 
-import type React from "react";
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AlbumGrid } from "./AlbumGrid";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type React from "react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
-import { createMigratedTestDb } from "../test/sqlite";
-import { resetTauriMocks } from "../test/mocks/tauri";
-import type { AlbumRow } from "../types/library";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { resetTauriMocks } from "../test/mocks/tauri";
+import { createMigratedTestDb } from "../test/sqlite";
+import type { AlbumRow } from "../types/library";
+import { AlbumGrid } from "./AlbumGrid";
 
 const SRV: ServerWithCredential = {
   server: {
@@ -101,7 +101,7 @@ function renderGrid(props: Partial<React.ComponentProps<typeof AlbumGrid>> = {})
   const view = render(
     <QueryClientProvider client={client}>
       <AlbumGrid {...all} />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
   return {
     ...view,
@@ -109,15 +109,16 @@ function renderGrid(props: Partial<React.ComponentProps<typeof AlbumGrid>> = {})
       view.rerender(
         <QueryClientProvider client={client}>
           <AlbumGrid {...all} {...next} />
-        </QueryClientProvider>
+        </QueryClientProvider>,
       ),
   };
 }
 
 /** Absolutely positioned album rows, in render order. */
 function gridRows(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>(".album-grid-scroller > div > div"))
-    .filter((el) => !el.classList.contains("year-group-header"));
+  return Array.from(document.querySelectorAll<HTMLElement>(".album-grid-scroller > div > div")).filter(
+    (el) => !el.classList.contains("year-group-header"),
+  );
 }
 
 function cards(): HTMLElement[] {
@@ -129,14 +130,12 @@ function cardNames(): string[] {
 }
 
 function scrubberLabels(): string[] {
-  return Array.from(document.querySelectorAll(".album-grid-scrubber-item")).map(
-    (b) => b.textContent!
-  );
+  return Array.from(document.querySelectorAll(".album-grid-scrubber-item")).map((b) => b.textContent!);
 }
 
 function clickScrubber(label: string) {
   const btn = Array.from(document.querySelectorAll<HTMLElement>(".album-grid-scrubber-item")).find(
-    (b) => b.textContent === label
+    (b) => b.textContent === label,
   );
   if (!btn) throw new Error(`no scrubber button "${label}"; have ${scrubberLabels().join(",")}`);
   fireEvent.click(btn);
@@ -254,7 +253,7 @@ describe("AlbumGrid load / empty / error states", () => {
     renderGrid({ albums: [] });
     expect(screen.getByText("No albums here yet")).toBeInTheDocument();
     expect(
-      screen.getByText("Connect a server in Settings and sync your library to fill this grid.")
+      screen.getByText("Connect a server in Settings and sync your library to fill this grid."),
     ).toBeInTheDocument();
     expect(document.querySelector(".album-grid-scrubber")).toBeNull();
   });
@@ -315,7 +314,7 @@ describe("AlbumGrid row chunking", () => {
 
   it("splits a year run longer than one row into several rows under one header", () => {
     const albums = Array.from({ length: COLS + 1 }, (_, i) =>
-      album({ id: `srv-a:${i}`, name: `Album ${i}`, year: 1999 })
+      album({ id: `srv-a:${i}`, name: `Album ${i}`, year: 1999 }),
     );
     renderGrid({ albums, sort: "year" });
     expect(document.querySelectorAll(".year-group-header")).toHaveLength(1);
@@ -374,12 +373,8 @@ describe("AlbumGrid scrubber sections", () => {
 
   it("indexes on the artist under artist sort and on the name under alphabetical sort", () => {
     const albums = [
-      ...Array.from({ length: COLS }, (_, i) =>
-        album({ id: `srv-a:z${i}`, name: `Zulu ${i}`, artist: "Bravo" })
-      ),
-      ...Array.from({ length: COLS }, (_, i) =>
-        album({ id: `srv-a:y${i}`, name: `Alpha ${i}`, artist: "Charlie" })
-      ),
+      ...Array.from({ length: COLS }, (_, i) => album({ id: `srv-a:z${i}`, name: `Zulu ${i}`, artist: "Bravo" })),
+      ...Array.from({ length: COLS }, (_, i) => album({ id: `srv-a:y${i}`, name: `Alpha ${i}`, artist: "Charlie" })),
     ];
     const { rerenderWith } = renderGrid({ albums, sort: "artist" });
     expect(scrubberLabels()).toEqual(["B", "C"]);
@@ -421,9 +416,7 @@ describe("AlbumGrid scrubber sections", () => {
   });
 
   it("buckets year sections by decade, keeping the first year of each", () => {
-    const albums = [1993, 1997, 2004, 2011].map((year, i) =>
-      album({ id: `srv-a:${i}`, name: `Album ${i}`, year })
-    );
+    const albums = [1993, 1997, 2004, 2011].map((year, i) => album({ id: `srv-a:${i}`, name: `Album ${i}`, year }));
     renderGrid({ albums, sort: "year" });
     expect(scrubberLabels()).toEqual(["1990s", "2000s", "2010s"]);
   });
@@ -490,9 +483,7 @@ describe("AlbumGrid scrubber jump", () => {
     // target well clear of the bottom clamp, which would otherwise answer the question.
     const perYear = COLS * 8;
     const albums = [1990, 2000, 2010].flatMap((year, y) =>
-      Array.from({ length: perYear }, (_, i) =>
-        album({ id: `srv-a:${y}-${i}`, name: `Album ${y}-${i}`, year })
-      )
+      Array.from({ length: perYear }, (_, i) => album({ id: `srv-a:${y}-${i}`, name: `Album ${y}-${i}`, year })),
     );
     renderGrid({ albums, sort: "year" });
     expect(jumpTo("2010s")).toBe(PADDING + 2 * YEAR_HEADER_HEIGHT + 16 * ROW_H);
@@ -514,9 +505,7 @@ describe("AlbumGrid scrubber position", () => {
   const perLetter = COLS * 2;
 
   function activeLabels(): string[] {
-    return Array.from(document.querySelectorAll(".album-grid-scrubber-item--active")).map(
-      (b) => b.textContent!
-    );
+    return Array.from(document.querySelectorAll(".album-grid-scrubber-item--active")).map((b) => b.textContent!);
   }
 
   function scrollGridTo(top: number) {
@@ -565,9 +554,7 @@ describe("AlbumGrid scrubber position", () => {
   it("marks the decade in year sort", () => {
     const perYear = COLS * 8;
     const albums = [1990, 2000, 2010].flatMap((year, y) =>
-      Array.from({ length: perYear }, (_, i) =>
-        album({ id: `srv-a:${y}-${i}`, name: `Album ${y}-${i}`, year })
-      )
+      Array.from({ length: perYear }, (_, i) => album({ id: `srv-a:${y}-${i}`, name: `Album ${y}-${i}`, year })),
     );
     renderGrid({ albums, sort: "year" });
     scrollGridTo(PADDING + YEAR_HEADER_HEIGHT + 9 * ROW_H);

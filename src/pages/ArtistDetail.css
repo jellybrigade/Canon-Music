@@ -211,7 +211,10 @@
   justify-content: center;
   box-shadow: none;
   padding: 0;
-  transition: background var(--motion-fast), color var(--motion-fast), border-color var(--motion-fast);
+  transition:
+    background var(--motion-fast),
+    color var(--motion-fast),
+    border-color var(--motion-fast);
 }
 
 /* Half the 8px row gap horizontally, so two neighbouring halos meet without overlapping - at
@@ -363,7 +366,9 @@
    otherwise the in-library tab is the one place in the strip that gives no
    feedback at all. */
 .artist-similar-card--owned:hover .artist-similar-avatar {
-  box-shadow: 0 0 0 2px var(--accent), 0 0 0 6px var(--accent-border);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 6px var(--accent-border);
 }
 
 .artist-similar-card--owned:hover .artist-similar-name {

@@ -6,8 +6,7 @@ export interface RemoteNotice {
   url?: string;
 }
 
-const NOTICE_URL =
-  "https://raw.githubusercontent.com/jellybrigade/Canon-Music/main/notice.json";
+const NOTICE_URL = "https://raw.githubusercontent.com/jellybrigade/Canon-Music/main/notice.json";
 
 export async function fetchRemoteNotice(): Promise<RemoteNotice | null> {
   try {

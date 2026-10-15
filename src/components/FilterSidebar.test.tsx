@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilterSidebar } from "./FilterSidebar";
 
 function mount(overrides: Partial<Parameters<typeof FilterSidebar>[0]> = {}) {

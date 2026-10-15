@@ -16,7 +16,7 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 17678, withTrackGain: 1151, withAlbumGain: 705, withAnyGain: 1157 }),
       "album",
-      -6
+      -6,
     );
     expect(s.headline).toBe("705 of 17,678 tracks (4%) carry album gain.");
   });
@@ -25,16 +25,18 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 17678, withTrackGain: 1151, withAlbumGain: 705, withAnyGain: 1157 }),
       "album",
-      -6
+      -6,
     );
-    expect(s.detail).toBe("452 more fall back to track gain. 16,521 have no tags and play at the fallback gain (-6 dB).");
+    expect(s.detail).toBe(
+      "452 more fall back to track gain. 16,521 have no tags and play at the fallback gain (-6 dB).",
+    );
   });
 
   it("swaps which gain is preferred in track mode", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 1000, withTrackGain: 400, withAlbumGain: 450, withAnyGain: 500 }),
       "track",
-      -3
+      -3,
     );
     expect(s.headline).toBe("400 of 1,000 tracks (40%) carry track gain.");
     expect(s.detail).toBe("100 more fall back to album gain. 500 have no tags and play at the fallback gain (-3 dB).");
@@ -44,7 +46,7 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 50, withTrackGain: 50, withAlbumGain: 50, withAnyGain: 50 }),
       "track",
-      -6
+      -6,
     );
     expect(s.headline).toBe("50 of 50 tracks (100%) carry track gain.");
     expect(s.detail).toBe("Every track in this library is normalized.");
@@ -60,7 +62,7 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 17678, withTrackGain: 1151, withAlbumGain: 705, withAnyGain: 1157 }),
       "off",
-      -6
+      -6,
     );
     expect(s.headline).toBe("Tracks play at their original level.");
     expect(s.detail).toBe("1,157 of 17,678 tracks (7%) carry ReplayGain tags.");
@@ -70,7 +72,7 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 10000, withTrackGain: 3, withAlbumGain: 3, withAnyGain: 3 }),
       "track",
-      -6
+      -6,
     );
     expect(s.headline).toBe("3 of 10,000 tracks (<1%) carry track gain.");
   });
@@ -79,7 +81,7 @@ describe("describeReplayGainCoverage", () => {
     const s = describeReplayGainCoverage(
       coverage({ total: 10, withTrackGain: 1, withAlbumGain: 1, withAnyGain: 1 }),
       "track",
-      2
+      2,
     );
     expect(s.detail).toContain("(+2 dB)");
   });

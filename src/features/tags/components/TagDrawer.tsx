@@ -1,19 +1,19 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
-import { getDb } from "../../../db";
-import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
-import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
-import { useTagMappings } from "../hooks/useTagMappings";
-import { normalizeAlbum } from "../lib/tagNormalize";
-import { getCanonTree } from "../lib/canonicalize";
-import type { TreeNode } from "../lib/canonicalize";
-import type { NormalizedTag } from "../lib/tagNormalize";
 import type { MbGenre } from "../../../clients/musicbrainz";
-import { CanonCombobox, ACCEPTED, IGNORED } from "./TagsViewHelpers";
-import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import { getDb } from "../../../db";
+import { QK } from "../../../lib/queryKeys";
 import { useModalChrome } from "../../../ui/useModalChrome";
+import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import { useAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
+import { useNormalizeAlbum } from "../hooks/useNormalizeAlbum";
+import { useTagMappings } from "../hooks/useTagMappings";
+import type { TreeNode } from "../lib/canonicalize";
+import { getCanonTree } from "../lib/canonicalize";
+import type { NormalizedTag } from "../lib/tagNormalize";
+import { normalizeAlbum } from "../lib/tagNormalize";
+import { ACCEPTED, CanonCombobox, IGNORED } from "./TagsViewHelpers";
 import "./TagDrawer.css";
 import "./TagsView.css";
 
@@ -39,7 +39,7 @@ function useTrackRawTags(trackId: string | undefined) {
       const db = await getDb();
       return db.select<RawTagRow[]>(
         "SELECT raw_value, kind, source FROM track_tags WHERE track_id = ? ORDER BY kind, raw_value",
-        [trackId]
+        [trackId],
       );
     },
     enabled: !!trackId,
@@ -59,7 +59,7 @@ function useAlbumRawGenreMap(albumId: string) {
          WHERE t.album_id = ? AND tt.kind = 'genre'
            AND tt.canonical_id IS NOT NULL
            AND tt.canonical_id NOT IN ('__accepted__', '__ignored__')`,
-        [albumId]
+        [albumId],
       );
       const map = new Map<string, string[]>();
       for (const { canonical_id, raw_value } of rows) {
@@ -89,7 +89,7 @@ function useAlbumUnmatchedGenres(albumId: string) {
              WHERE tm.raw_value = ug.raw_value AND tm.kind = 'genre'
            )
          ORDER BY ug.source, ug.raw_value`,
-        [albumId]
+        [albumId],
       );
     },
     staleTime: Infinity,
@@ -183,7 +183,9 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
   const [treeNodes, setTreeNodes] = useState<TreeNode[]>([]);
 
   useEffect(() => {
-    getCanonTree().then((t) => setTreeNodes(t.nodes)).catch(console.error);
+    getCanonTree()
+      .then((t) => setTreeNodes(t.nodes))
+      .catch(console.error);
   }, []);
 
   if (unmatched.length === 0) return null;
@@ -197,11 +199,19 @@ export function UnmatchedSection({ albumId, albumArtist, albumName }: UnmatchedS
 
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {
-      try { combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[]; } catch { /* malformed */ }
+      try {
+        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
+      } catch {
+        /* malformed */
+      }
     }
     let combinedMbTags: MbGenre[] | null = null;
     if (identity?.combined_tags_json) {
-      try { combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[]; } catch { /* malformed */ }
+      try {
+        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
+      } catch {
+        /* malformed */
+      }
     }
 
     await normalizeAlbum(albumId, albumArtist, albumName, {
@@ -274,11 +284,19 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
     }
     let combinedMbGenres: MbGenre[] | null = null;
     if (identity?.combined_genres_json) {
-      try { combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[]; } catch { /* malformed */ }
+      try {
+        combinedMbGenres = JSON.parse(identity.combined_genres_json) as MbGenre[];
+      } catch {
+        /* malformed */
+      }
     }
     let combinedMbTags: MbGenre[] | null = null;
     if (identity?.combined_tags_json) {
-      try { combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[]; } catch { /* malformed */ }
+      try {
+        combinedMbTags = JSON.parse(identity.combined_tags_json) as MbGenre[];
+      } catch {
+        /* malformed */
+      }
     }
     await normalizeAlbum(albumId, albumArtist, albumName, {
       lastfmArtistName: identity?.lastfm_artist_name ?? null,
@@ -296,9 +314,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
     <div className="tag-drawer-overlay" {...dismiss}>
       <div className="tag-drawer" {...chrome}>
         <div className="tag-drawer-header">
-          <h2 className="tag-drawer-title">
-            {trackId ? "Track Tags" : "Album Tags"}
-          </h2>
+          <h2 className="tag-drawer-title">{trackId ? "Track Tags" : "Album Tags"}</h2>
           <button className="tag-drawer-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
@@ -311,11 +327,7 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
             <div className="tag-drawer-empty">No normalized tags yet.</div>
           ) : (
             <>
-              <UnmatchedSection
-                albumId={albumId}
-                albumArtist={albumArtist}
-                albumName={albumName}
-              />
+              <UnmatchedSection albumId={albumId} albumArtist={albumArtist} albumName={albumName} />
               <TagSection
                 title="Genres"
                 tags={normalizedTags.genres}
@@ -324,17 +336,8 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
                 rawMap={rawMap}
                 onIgnore={handleIgnoreUnmappedGenre}
               />
-              <TagSection
-                title="Descriptors"
-                tags={normalizedTags.descriptors}
-                level="album"
-                rawMap={rawMap}
-              />
-              <TagSection
-                title="Scenes & Movements"
-                tags={normalizedTags.scenes}
-                level="album"
-              />
+              <TagSection title="Descriptors" tags={normalizedTags.descriptors} level="album" rawMap={rawMap} />
+              <TagSection title="Scenes & Movements" tags={normalizedTags.scenes} level="album" />
               {trackId && rawTrackTags && rawTrackTags.length > 0 && (
                 <div className="tag-drawer-section tag-drawer-section--raw">
                   <h3 className="tag-drawer-section-title">
@@ -354,6 +357,6 @@ export function TagDrawer({ albumId, albumArtist, albumName, trackId, onClose }:
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

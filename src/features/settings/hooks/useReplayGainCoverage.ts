@@ -19,7 +19,7 @@ async function readCoverage(serverId: string): Promise<ReplayGainCoverage> {
             SUM(CASE WHEN replay_gain_track_gain IS NOT NULL
                        OR replay_gain_album_gain IS NOT NULL THEN 1 ELSE 0 END) AS with_any_gain
      FROM tracks WHERE server_id = ?`,
-    [serverId]
+    [serverId],
   );
   const row = rows[0];
   // SUM over no rows is NULL, so an empty mirror has to read as zero rather than as absent.

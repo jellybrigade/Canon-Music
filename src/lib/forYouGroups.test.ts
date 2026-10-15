@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
+import type { AlbumRow } from "../types/library";
 import {
+  buildForYouGroups,
   FOR_YOU_PER_TAB_DEFAULT,
   FOR_YOU_PER_TAB_MAX,
   FOR_YOU_PER_TAB_MIN,
-  buildForYouGroups,
-  parseForYouPerTab,
   type ForYouCategoryConfig,
+  parseForYouPerTab,
 } from "./forYouGroups";
-import type { AlbumRow } from "../types/library";
 
 function albums(prefix: string, count: number): AlbumRow[] {
   return Array.from({ length: count }, (_, i) => ({

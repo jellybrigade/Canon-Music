@@ -18,7 +18,8 @@ export function useMissingTracksRepair(read: {
   const [outcome, setOutcome] = useState<{ albumId: string; isFetching: boolean; error: string | null } | null>(null);
 
   useEffect(() => {
-    if (!shouldFetchMissingTracks({ isLoading, error, tracks, albumId, attemptedAlbumId: attemptedAlbumIdRef.current })) return;
+    if (!shouldFetchMissingTracks({ isLoading, error, tracks, albumId, attemptedAlbumId: attemptedAlbumIdRef.current }))
+      return;
     attemptedAlbumIdRef.current = albumId;
     setOutcome({ albumId, isFetching: true, error: null });
     const settle = (message: string | null) =>

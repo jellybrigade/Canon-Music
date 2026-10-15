@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
 import { getDb } from "../../../db";
+import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
 
 // Ordered to match artistNames (Last.fm similarity), not alphabetically;
@@ -20,7 +20,7 @@ export function useSimilarArtistAlbums(artistNames: string[], serverId: string) 
            AND (a.artist IN (${placeholders})
             OR a.artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name IN (${placeholders})))
          ORDER BY a.artist, a.year IS NULL, a.year DESC`,
-        [serverId, ...artistNames, ...artistNames]
+        [serverId, ...artistNames, ...artistNames],
       );
       const rank = new Map(artistNames.map((name, i) => [name, i]));
       const seenArtists = new Set<string>();

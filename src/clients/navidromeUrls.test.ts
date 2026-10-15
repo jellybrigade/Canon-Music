@@ -13,8 +13,9 @@
  * module registries per file so the two cannot collide today, but the fresh import per
  * test here means an intra-file leak is impossible either.
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import { md5 } from "js-md5";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 
@@ -88,9 +89,7 @@ describe("buildAuthParams (through getStreamUrl)", () => {
 
   it("orders the params u, t, s, v, c, f, then the call-specific ones", () => {
     const url = nav.getStreamUrl(BASE, "alice", cred, "tr-1");
-    expect(url.slice(url.indexOf("?") + 1)).toBe(
-      "u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json&id=tr-1"
-    );
+    expect(url.slice(url.indexOf("?") + 1)).toBe("u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json&id=tr-1");
   });
 });
 
@@ -177,7 +176,7 @@ describe("getStreamUrl", () => {
 describe("getCoverArtUrl before the cover server is ready", () => {
   it("builds a direct /rest/getCoverArt URL with credentials and the default size 300", () => {
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1")).toBe(
-      "http://music.example/rest/getCoverArt?u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json&id=al-1&size=300"
+      "http://music.example/rest/getCoverArt?u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json&id=al-1&size=300",
     );
   });
 
@@ -195,15 +194,11 @@ describe("getCoverArtUrl before the cover server is ready", () => {
   it("clamps the direct URL branch by the same rule as the cover:// one", () => {
     expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -4)).get("size")).toBe("1");
     expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).get("size")).toBe("150");
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).get("size")).toBe(
-      "300"
-    );
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).get("size")).toBe("300");
   });
 
   it("passes a large size through unclamped", () => {
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 100000)).get("size")).toBe(
-      "100000"
-    );
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 100000)).get("size")).toBe("100000");
   });
 
   it("emits an empty id when the cover art id is empty", () => {
@@ -231,15 +226,11 @@ describe("getCoverArtUrl once the cover server is ready", () => {
 
   it("switches from a direct URL to the cover:// scheme", () => {
     expect(nav.isCoverServerReady()).toBe(true);
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 300)).toBe(
-      "cover://localhost/cover/al-1?size=300"
-    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 300)).toBe("cover://localhost/cover/al-1?size=300");
   });
 
   it("still defaults size to 300, matching the Rust handler's own fallback", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1")).toBe(
-      "cover://localhost/cover/al-1?size=300"
-    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1")).toBe("cover://localhost/cover/al-1?size=300");
   });
 
   it("emits an identical URL for a different server, so the ready branch is not owner-scoped", () => {
@@ -254,9 +245,7 @@ describe("getCoverArtUrl once the cover server is ready", () => {
   });
 
   it("percent-encodes a slash in the id so the Rust /cover/ prefix strip sees one segment", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al/1", 300)).toBe(
-      "cover://localhost/cover/al%2F1?size=300"
-    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al/1", 300)).toBe("cover://localhost/cover/al%2F1?size=300");
   });
 
   it("percent-encodes a question mark and ampersand so the id cannot corrupt size", () => {
@@ -267,14 +256,14 @@ describe("getCoverArtUrl once the cover server is ready", () => {
 
   it("encodes a unicode id", () => {
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "アル", 64)).toBe(
-      "cover://localhost/cover/%E3%82%A2%E3%83%AB?size=64"
+      "cover://localhost/cover/%E3%82%A2%E3%83%AB?size=64",
     );
   });
 
   it("leaves encodeURIComponent's unreserved set alone", () => {
     // Guards against a swap to encodeURI, which would also leave & ? / unescaped.
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "a'b(c)*-._~!", 300)).toBe(
-      "cover://localhost/cover/a'b(c)*-._~!?size=300"
+      "cover://localhost/cover/a'b(c)*-._~!?size=300",
     );
   });
 
@@ -282,20 +271,14 @@ describe("getCoverArtUrl once the cover server is ready", () => {
     // Rust parses size as u32 and silently falls back to 300, but it caches under
     // `{id}:{size}` with whatever string arrived, so an unclamped value fragments the
     // disk cache and every React memo key derived from the URL.
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -1)).toBe(
-      "cover://localhost/cover/al-1?size=1"
-    );
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).toBe(
-      "cover://localhost/cover/al-1?size=150"
-    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", -1)).toBe("cover://localhost/cover/al-1?size=1");
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 149.6)).toBe("cover://localhost/cover/al-1?size=150");
   });
 
   it("falls back to 300, the Rust handler's own default, for a size that is not a number", () => {
-    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).toBe(
-      "cover://localhost/cover/al-1?size=300"
-    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.NaN)).toBe("cover://localhost/cover/al-1?size=300");
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", Number.POSITIVE_INFINITY)).toBe(
-      "cover://localhost/cover/al-1?size=300"
+      "cover://localhost/cover/al-1?size=300",
     );
   });
 });
@@ -325,7 +308,7 @@ describe("getArtistImageUrl", () => {
     nav.initCoverServer();
     const src = "https://lastfm.example/img.jpg?x=1";
     expect(nav.getArtistImageUrl(src)).toBe(
-      "cover://localhost/artist-image/https%3A%2F%2Flastfm.example%2Fimg.jpg%3Fx%3D1"
+      "cover://localhost/artist-image/https%3A%2F%2Flastfm.example%2Fimg.jpg%3Fx%3D1",
     );
   });
 
@@ -333,9 +316,7 @@ describe("getArtistImageUrl", () => {
     nav.initCoverServer();
     const url = nav.getArtistImageUrl("https://h/i?a=1&b=2");
     expect(url).not.toContain("&");
-    expect(decodeURIComponent(url.slice("cover://localhost/artist-image/".length))).toBe(
-      "https://h/i?a=1&b=2"
-    );
+    expect(decodeURIComponent(url.slice("cover://localhost/artist-image/".length))).toBe("https://h/i?a=1&b=2");
   });
 
   it("double-encodes an already-percent-encoded source, and Rust's single decode undoes it", () => {
@@ -361,9 +342,7 @@ describe("getArtistImageUrl", () => {
 describe("updateCoverProxyConfig", () => {
   /** The single argument object handed to the nth `set_cover_proxy_config` invoke. */
   function proxyArgs(n = 0): { baseUrl: string; authParams: string } {
-    const calls = vi
-      .mocked(invoke)
-      .mock.calls.filter(([cmd]) => cmd === "set_cover_proxy_config");
+    const calls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "set_cover_proxy_config");
     return calls[n]![1] as { baseUrl: string; authParams: string };
   }
 
@@ -390,9 +369,7 @@ describe("updateCoverProxyConfig", () => {
 
   it("propagates an invoke failure instead of swallowing it", async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("no such command"));
-    await expect(nav.updateCoverProxyConfig(BASE, "alice", cred)).rejects.toThrow(
-      "no such command"
-    );
+    await expect(nav.updateCoverProxyConfig(BASE, "alice", cred)).rejects.toThrow("no such command");
   });
 });
 
@@ -486,9 +463,7 @@ describe("authenticate credential generation", () => {
     const a = await authenticate(BASE, "alice", "sesame");
     const b = await authenticate(BASE, "alice", "sesame");
     expect(a.type === "md5" && b.type === "md5" && a.salt).not.toBe(b.type === "md5" && b.salt);
-    expect(a.type === "md5" && b.type === "md5" && a.token).not.toBe(
-      b.type === "md5" && b.token
-    );
+    expect(a.type === "md5" && b.type === "md5" && a.token).not.toBe(b.type === "md5" && b.token);
     vi.unstubAllGlobals();
   });
 

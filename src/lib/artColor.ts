@@ -34,11 +34,11 @@ function rgbToOklab(r: number, g: number, b: number): [number, number, number] {
   const gl = srgbToLinear(g / 255);
   const bl = srgbToLinear(b / 255);
   const l = Math.cbrt(0.41222148 * rl + 0.53633254 * gl + 0.05144599 * bl);
-  const m = Math.cbrt(0.21190350 * rl + 0.68069955 * gl + 0.10739696 * bl);
-  const s = Math.cbrt(0.08830246 * rl + 0.28171884 * gl + 0.62997870 * bl);
+  const m = Math.cbrt(0.2119035 * rl + 0.68069955 * gl + 0.10739696 * bl);
+  const s = Math.cbrt(0.08830246 * rl + 0.28171884 * gl + 0.6299787 * bl);
   return [
     0.21045426 * l + 0.79361778 * m - 0.00407205 * s,
-    1.97799850 * l - 2.42859220 * m + 0.45059370 * s,
+    1.9779985 * l - 2.4285922 * m + 0.4505937 * s,
     0.02590403 * l + 0.78277177 * m - 0.80867577 * s,
   ];
 }
@@ -52,8 +52,8 @@ function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
   const s3 = s * s * s;
   return [
     Math.round(Math.min(255, Math.max(0, linearToSrgb(+4.07674166 * l3 - 3.30771159 * m3 + 0.23096993 * s3) * 255))),
-    Math.round(Math.min(255, Math.max(0, linearToSrgb(-1.26843800 * l3 + 2.60975740 * m3 - 0.34131940 * s3) * 255))),
-    Math.round(Math.min(255, Math.max(0, linearToSrgb(-0.00419609 * l3 - 0.70341861 * m3 + 1.70761470 * s3) * 255))),
+    Math.round(Math.min(255, Math.max(0, linearToSrgb(-1.268438 * l3 + 2.6097574 * m3 - 0.3413194 * s3) * 255))),
+    Math.round(Math.min(255, Math.max(0, linearToSrgb(-0.00419609 * l3 - 0.70341861 * m3 + 1.7076147 * s3) * 255))),
   ];
 }
 
@@ -180,4 +180,3 @@ export async function extractAccent(imageUrl: string): Promise<string | null> {
   cappedSet(accentCache, imageUrl, color, MAX_ACCENT_CACHE_ENTRIES);
   return color;
 }
-

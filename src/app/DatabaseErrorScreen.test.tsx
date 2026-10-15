@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DatabaseErrorScreen } from "./DatabaseErrorScreen";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SchemaTooNewError } from "../db/migrations";
+import { DatabaseErrorScreen } from "./DatabaseErrorScreen";
 
 const { check, relaunch } = vi.hoisted(() => ({ check: vi.fn(), relaunch: vi.fn() }));
 vi.mock("@tauri-apps/plugin-updater", () => ({ check }));

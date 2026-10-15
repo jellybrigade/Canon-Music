@@ -3,21 +3,21 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/taur
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
 vi.mock("../../db", () => ({ getDb: vi.fn() }));
 
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type React from "react";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act } from "@testing-library/react";
-import { SmartPlaylistModal } from "./SmartPlaylistModal";
-import {
-  DEFAULT_SMART_FILTERS,
-  parseSmartFilters,
-  buildSmartQuery,
-  LIMIT_MAX,
-  type SmartFilters,
-} from "./smartPlaylist";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useGenresSessionStore } from "../../store/genresSessionStore";
 import { onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { invokeCount } from "../../test/perf";
 import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
+import { SmartPlaylistModal } from "./SmartPlaylistModal";
+import {
+  buildSmartQuery,
+  DEFAULT_SMART_FILTERS,
+  LIMIT_MAX,
+  parseSmartFilters,
+  type SmartFilters,
+} from "./smartPlaylist";
 
 /**
  * What this component actually is, because the plan bullet's wording does not describe it:
@@ -63,9 +63,7 @@ const GENRES: Genre[] = [
 async function mount(props: Partial<React.ComponentProps<typeof SmartPlaylistModal>> = {}) {
   const onSave = props.onSave ?? vi.fn(async () => {});
   const onClose = props.onClose ?? vi.fn();
-  const utils = render(
-    <SmartPlaylistModal {...props} onSave={onSave} onClose={onClose} />
-  );
+  const utils = render(<SmartPlaylistModal {...props} onSave={onSave} onClose={onClose} />);
   await act(async () => {});
   return { ...utils, onSave: onSave as ReturnType<typeof vi.fn>, onClose: onClose as ReturnType<typeof vi.fn> };
 }
@@ -76,9 +74,7 @@ async function mount(props: Partial<React.ComponentProps<typeof SmartPlaylistMod
  * DOM order, which would silently repoint if a field is inserted.
  */
 function field(label: string): HTMLInputElement | HTMLSelectElement {
-  const el = Array.from(document.querySelectorAll(".spm-label")).find(
-    (l) => l.textContent === label
-  );
+  const el = Array.from(document.querySelectorAll(".spm-label")).find((l) => l.textContent === label);
   if (!el) throw new Error(`no field labelled "${label}"`);
   const input = el.parentElement!.querySelector("input, select");
   if (!input) throw new Error(`field "${label}" has no control`);
@@ -121,12 +117,10 @@ const modeBtn = (name: string) => buttonLabelled(".spm-mode-btn", name);
 const overlay = () => document.querySelector(".spm-overlay") as HTMLElement;
 const dialog = () => document.querySelector(".spm-dialog") as HTMLElement;
 const selectedChips = () =>
-  Array.from(document.querySelectorAll(".spm-genre-chip--selected")).map((c) =>
-    (c.textContent ?? "").trim()
-  );
+  Array.from(document.querySelectorAll(".spm-genre-chip--selected")).map((c) => (c.textContent ?? "").trim());
 const availableChips = () =>
-  Array.from(document.querySelectorAll(".spm-genre-chip:not(.spm-genre-chip--selected)")).map(
-    (c) => (c.textContent ?? "").trim()
+  Array.from(document.querySelectorAll(".spm-genre-chip:not(.spm-genre-chip--selected)")).map((c) =>
+    (c.textContent ?? "").trim(),
   );
 
 function type(control: HTMLInputElement | HTMLSelectElement, value: string) {
@@ -188,18 +182,18 @@ describe("SmartPlaylistModal round-trip", () => {
     const db: FakeDatabase = await createMigratedTestDb();
     db.raw
       .prepare(
-        `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES ('al-1','srv-a','navidrome','Album','Zeppelin')`
+        `INSERT INTO albums (id, server_id, server_type, name, artist) VALUES ('al-1','srv-a','navidrome','Album','Zeppelin')`,
       )
       .run();
     db.raw
       .prepare(
-        `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('al-1','rock','direct','Rock')`
+        `INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('al-1','rock','direct','Rock')`,
       )
       .run();
     const track = (id: string, year: number, plays: number) =>
       db.raw
         .prepare(
-          `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count) VALUES (?,'srv-a','navidrome',?, 'Zeppelin','al-1',?,?)`
+          `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, year, play_count) VALUES (?,'srv-a','navidrome',?, 'Zeppelin','al-1',?,?)`,
         )
         .run(id, `T ${id}`, year, plays);
     track("t-in", 1975, 9);
@@ -241,9 +235,7 @@ describe("SmartPlaylistModal round-trip", () => {
     expect(selectedChips()).toEqual(["genre-that-vanished"]);
     fireEvent.click(saveBtn());
     await act(async () => {});
-    expect(savedFilters(onSave).selectedGenres).toEqual([
-      "genre-that-vanished",
-    ]);
+    expect(savedFilters(onSave).selectedGenres).toEqual(["genre-that-vanished"]);
   });
 
   it("preserves a sort value that is not in SORT_OPTIONS even though the select shows Random", async () => {
@@ -539,9 +531,7 @@ describe("SmartPlaylistModal numeric fields", () => {
     await act(async () => {});
     // buildSmartQuery is the only thing that rescues this, at query time.
     expect(savedFilters(onSave).limit).toBe(100000);
-    expect(buildSmartQuery(savedFilters(onSave), "srv-a").sql).toContain(
-      `LIMIT ${LIMIT_MAX}`
-    );
+    expect(buildSmartQuery(savedFilters(onSave), "srv-a").sql).toContain(`LIMIT ${LIMIT_MAX}`);
   });
 
   it("stores a blank year as null, not zero, and omits it from the query", async () => {
@@ -657,7 +647,7 @@ describe("SmartPlaylistModal create vs edit mode", () => {
         onSave={onSave}
         onClose={onClose}
         title="Edit A"
-      />
+      />,
     );
     await act(async () => {});
     rerender(
@@ -666,7 +656,7 @@ describe("SmartPlaylistModal create vs edit mode", () => {
         onSave={onSave}
         onClose={onClose}
         title="Edit A"
-      />
+      />,
     );
     expect((field("Name") as HTMLInputElement).value).toBe("First");
   });

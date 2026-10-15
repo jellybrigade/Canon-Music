@@ -1,18 +1,18 @@
-import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
+import { useState } from "react";
 import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
-import { loginFailureMessage } from "../../setup/loginFailureMessage";
 import type { NavidromeCredential } from "../../../clients/navidromeUrls";
-import { keychain } from "../../../lib/keychain";
 import { getDb } from "../../../db";
-import type { SyncOptions } from "../../sync/sync";
-import { clearSyncWatermark } from "../../sync/syncWatermark";
-import { purgeServerData } from "../../sync/syncPrune";
-import { clearCredentialRejection } from "../../../lib/credentialRejections";
 import { useCredentialRejected } from "../../../hooks/useCredentialRejected";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { clearCredentialRejection } from "../../../lib/credentialRejections";
+import { keychain } from "../../../lib/keychain";
+import { QK } from "../../../lib/queryKeys";
 import type { Server as ServerRow } from "../../../types/server";
+import { loginFailureMessage } from "../../setup/loginFailureMessage";
+import type { SyncOptions } from "../../sync/sync";
+import { purgeServerData } from "../../sync/syncPrune";
+import { clearSyncWatermark } from "../../sync/syncWatermark";
 
 type TestState = "idle" | "testing" | "ok" | "error";
 type AuthMethod = "password" | "apikey";
@@ -41,7 +41,13 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
   const [editAuthMethod, setEditAuthMethod] = useState<AuthMethod>("password");
   const [serverTestState, setServerTestState] = useState<TestState>("idle");
   const [serverTestError, setServerTestError] = useState("");
-  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{ url: string; username: string; password: string; apiKey: string; authMethod: AuthMethod } | null>(null);
+  const [serverTestedSnapshot, setServerTestedSnapshot] = useState<{
+    url: string;
+    username: string;
+    password: string;
+    apiKey: string;
+    authMethod: AuthMethod;
+  } | null>(null);
   const [serverTestedCredential, setServerTestedCredential] = useState<NavidromeCredential | null>(null);
   const [serverSaving, setServerSaving] = useState(false);
   const [serverSaveError, setServerSaveError] = useState("");
@@ -52,7 +58,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
   const [resyncError, setResyncError] = useState("");
 
   const fl = searchQuery.toLowerCase().trim();
-  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+  const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
 
   function beginEditServer() {
     setEditUrl(server?.url ?? "");
@@ -64,9 +70,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     // The servers row does not record which auth method was used, so the stored
     // credential's own shape is the only source for it. Without this an API-key
     // user lands on the Password tab every time they open Edit.
-    setEditAuthMethod(
-      serverWithCredential?.credential.type === "apikey" ? "apikey" : "password"
-    );
+    setEditAuthMethod(serverWithCredential?.credential.type === "apikey" ? "apikey" : "password");
     setServerTestState("idle");
     setServerTestError("");
     setServerTestedSnapshot(null);
@@ -77,8 +81,10 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
 
   function handleEditCredentialChange(key: "url" | "altUrl" | "username" | "password" | "apiKey", v: string) {
     if (key === "url") setEditUrl(v);
-    else if (key === "altUrl") { setEditAltUrl(v); return; }
-    else if (key === "username") setEditUsername(v);
+    else if (key === "altUrl") {
+      setEditAltUrl(v);
+      return;
+    } else if (key === "username") setEditUsername(v);
     else if (key === "apiKey") setEditApiKey(v);
     else setEditPassword(v);
     setServerTestState("idle");
@@ -97,11 +103,18 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     setServerTestState("testing");
     setServerTestError("");
     try {
-      const cred = editAuthMethod === "apikey"
-        ? await authenticateWithApiKey(editUrl, editUsername, editApiKey)
-        : await authenticate(editUrl, editUsername, editPassword);
+      const cred =
+        editAuthMethod === "apikey"
+          ? await authenticateWithApiKey(editUrl, editUsername, editApiKey)
+          : await authenticate(editUrl, editUsername, editPassword);
       setServerTestState("ok");
-      setServerTestedSnapshot({ url: editUrl, username: editUsername, password: editPassword, apiKey: editApiKey, authMethod: editAuthMethod });
+      setServerTestedSnapshot({
+        url: editUrl,
+        username: editUsername,
+        password: editPassword,
+        apiKey: editApiKey,
+        authMethod: editAuthMethod,
+      });
       setServerTestedCredential(cred);
     } catch (err) {
       setServerTestState("error");
@@ -114,15 +127,16 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     serverTestedSnapshot.url === editUrl &&
     serverTestedSnapshot.username === editUsername &&
     serverTestedSnapshot.authMethod === editAuthMethod &&
-    (editAuthMethod === "apikey" ? serverTestedSnapshot.apiKey === editApiKey : serverTestedSnapshot.password === editPassword);
+    (editAuthMethod === "apikey"
+      ? serverTestedSnapshot.apiKey === editApiKey
+      : serverTestedSnapshot.password === editPassword);
 
-  const canTestServer = editUrl.trim() !== "" && editUsername.trim() !== "" &&
+  const canTestServer =
+    editUrl.trim() !== "" &&
+    editUsername.trim() !== "" &&
     (editAuthMethod === "apikey" ? editApiKey.trim() !== "" : editPassword.trim() !== "");
   const canSaveServer =
-    serverTestState === "ok" &&
-    serverSnapshotMatch &&
-    editDisplayName.trim() !== "" &&
-    !serverSaving;
+    serverTestState === "ok" && serverSnapshotMatch && editDisplayName.trim() !== "" && !serverSaving;
 
   async function handleSaveServer() {
     if (!serverTestedCredential) return;
@@ -137,15 +151,18 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       const cleanDisplayName = editDisplayName.trim();
       const cleanUsername = editUsername.trim();
       if (server) {
-        await db.execute(
-          "UPDATE servers SET url=?, alt_url=?, display_name=?, username=? WHERE id=?",
-          [cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername, id]
-        );
+        await db.execute("UPDATE servers SET url=?, alt_url=?, display_name=?, username=? WHERE id=?", [
+          cleanUrl,
+          cleanAltUrl,
+          cleanDisplayName,
+          cleanUsername,
+          id,
+        ]);
       } else {
         try {
           await db.execute(
             "INSERT INTO servers (id, type, url, alt_url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?, ?)",
-            [id, cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername]
+            [id, cleanUrl, cleanAltUrl, cleanDisplayName, cleanUsername],
           );
         } catch (err) {
           // Freshly minted id on this branch, so a failed insert would strand the
@@ -159,7 +176,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
         cleanUsername,
         serverTestedCredential,
         id,
-        cleanAltUrl ?? undefined
+        cleanAltUrl ?? undefined,
       );
       if (server) clearCredentialRejection(server.url);
       clearCredentialRejection(cleanUrl);
@@ -217,43 +234,56 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           <div className="settings-server-card">
             <div className="settings-server-info">
               <span className="settings-server-name">{server.display_name}</span>
-              <span className="settings-server-meta">{server.url} · {server.username}{server.alt_url ? ` · alt: ${server.alt_url}` : ""}</span>
+              <span className="settings-server-meta">
+                {server.url} · {server.username}
+                {server.alt_url ? ` · alt: ${server.alt_url}` : ""}
+              </span>
             </div>
-            <button className="settings-btn" onClick={beginEditServer}>Edit</button>
+            <button className="settings-btn" onClick={beginEditServer}>
+              Edit
+            </button>
           </div>
         ) : server ? (
           <div className="settings-server-card">
             <div className="settings-server-info">
               <span className="settings-server-name">{server.display_name}</span>
-              <span className="settings-server-meta">{server.url} · {server.username}{server.alt_url ? ` · alt: ${server.alt_url}` : ""}</span>
+              <span className="settings-server-meta">
+                {server.url} · {server.username}
+                {server.alt_url ? ` · alt: ${server.alt_url}` : ""}
+              </span>
               <p className="settings-error">
                 {isCredentialRejected
                   ? "Navidrome refused the saved password or API key, so nothing can sync or play. Enter the current one to reconnect."
                   : "Stored credential is missing or unreadable. Re-enter your password or API key to reconnect."}
               </p>
             </div>
-            <button className="settings-btn primary" onClick={beginEditServer}>Reconnect</button>
+            <button className="settings-btn primary" onClick={beginEditServer}>
+              Reconnect
+            </button>
           </div>
         ) : (
           <div className="settings-server-card">
             <div className="settings-server-info">
               <span className="settings-server-name">No server configured</span>
             </div>
-            <button className="settings-btn primary" onClick={beginEditServer}>Add server</button>
+            <button className="settings-btn primary" onClick={beginEditServer}>
+              Add server
+            </button>
           </div>
         )
       ) : (
         <div className="settings-server-edit">
           <label className="settings-field">
             <span>Server URL</span>
-            <input
-              type="url"
-              value={editUrl}
-              onChange={(e) => handleEditCredentialChange("url", e.target.value)}
-            />
+            <input type="url" value={editUrl} onChange={(e) => handleEditCredentialChange("url", e.target.value)} />
           </label>
           <label className="settings-field">
-            <span>Alternate URL <span style={{ fontWeight: "normal", opacity: 0.6 }}>(optional, used as fallback if primary is unreachable)</span></span>
+            <span>
+              Alternate URL{" "}
+              <span style={{ fontWeight: "normal", opacity: 0.6 }}>
+                (optional, used as fallback if primary is unreachable)
+              </span>
+            </span>
             <input
               type="url"
               value={editAltUrl}
@@ -263,11 +293,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           </label>
           <label className="settings-field">
             <span>Display name</span>
-            <input
-              type="text"
-              value={editDisplayName}
-              onChange={(e) => setEditDisplayName(e.target.value)}
-            />
+            <input type="text" value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)} />
           </label>
           <label className="settings-field">
             <span>Username</span>
@@ -283,12 +309,16 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
               type="button"
               className={`wizard-auth-tab${editAuthMethod === "password" ? " wizard-auth-tab--active" : ""}`}
               onClick={() => handleEditAuthMethodChange("password")}
-            >Password</button>
+            >
+              Password
+            </button>
             <button
               type="button"
               className={`wizard-auth-tab${editAuthMethod === "apikey" ? " wizard-auth-tab--active" : ""}`}
               onClick={() => handleEditAuthMethodChange("apikey")}
-            >API Key</button>
+            >
+              API Key
+            </button>
           </div>
           {editAuthMethod === "password" ? (
             <label className="settings-field">
@@ -314,20 +344,28 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
             </label>
           )}
           {serverTestState === "error" && <p className="settings-error">{serverTestError}</p>}
-          {serverTestState === "ok" && serverSnapshotMatch && <p className="settings-success">Connection successful.</p>}
+          {serverTestState === "ok" && serverSnapshotMatch && (
+            <p className="settings-success">Connection successful.</p>
+          )}
           {serverSaveError && <p className="settings-error">{serverSaveError}</p>}
           <div className="settings-field--row">
-            <button className="settings-btn" onClick={() => setServerEditing(false)}>Cancel</button>
+            <button className="settings-btn" onClick={() => setServerEditing(false)}>
+              Cancel
+            </button>
             <button
               className="settings-btn"
-              onClick={() => { void handleServerTest(); }}
+              onClick={() => {
+                void handleServerTest();
+              }}
               disabled={!canTestServer || serverTestState === "testing"}
             >
               {serverTestState === "testing" ? "Testing…" : "Test connection"}
             </button>
             <button
               className="settings-btn primary"
-              onClick={() => { void handleSaveServer(); }}
+              onClick={() => {
+                void handleSaveServer();
+              }}
               disabled={!canSaveServer}
             >
               {serverSaving ? "Saving…" : "Save"}
@@ -341,7 +379,10 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           {!resyncConfirm ? (
             <button
               className="settings-btn"
-              onClick={() => { setResyncConfirm(true); setResyncError(""); }}
+              onClick={() => {
+                setResyncConfirm(true);
+                setResyncError("");
+              }}
               disabled={syncStatus === "syncing"}
             >
               Resync library
@@ -349,11 +390,18 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           ) : (
             <div className="settings-resync-confirm">
               <span className="settings-hint">
-                Read every album's tracks again? This asks the server once per album, so a large
-                library takes a while. Use it when tracks are missing or will not play.
+                Read every album's tracks again? This asks the server once per album, so a large library takes a while.
+                Use it when tracks are missing or will not play.
               </span>
-              <button className="settings-btn" onClick={() => setResyncConfirm(false)}>Cancel</button>
-              <button className="settings-btn primary" onClick={() => { void handleResync(); }}>
+              <button className="settings-btn" onClick={() => setResyncConfirm(false)}>
+                Cancel
+              </button>
+              <button
+                className="settings-btn primary"
+                onClick={() => {
+                  void handleResync();
+                }}
+              >
                 Resync
               </button>
             </div>
@@ -371,19 +419,24 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
           ) : (
             <div className="settings-remove-confirm">
               <span className="settings-error">
-                Remove server and return to setup? Canon's local copy of this library goes
-                with it, including tag work and play history. Your files are untouched.
+                Remove server and return to setup? Canon's local copy of this library goes with it, including tag work
+                and play history. Your files are untouched.
               </span>
               <button
                 className="settings-btn"
-                onClick={() => { setRemoveConfirm(false); setRemoveError(""); }}
+                onClick={() => {
+                  setRemoveConfirm(false);
+                  setRemoveError("");
+                }}
                 disabled={removing}
               >
                 Cancel
               </button>
               <button
                 className="settings-btn settings-btn--danger"
-                onClick={() => { void handleRemoveServer(); }}
+                onClick={() => {
+                  void handleRemoveServer();
+                }}
                 disabled={removing}
               >
                 {removing ? "Removing…" : "Remove"}

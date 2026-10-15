@@ -1,8 +1,8 @@
-import { useServers, useServerWithCredential } from "../../../hooks/useServer";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { useServers, useServerWithCredential } from "../../../hooks/useServer";
 import { useTagAlbums } from "../hooks/useTagMappings";
-import { CanonCombobox } from "./CanonCombobox";
 import type { TagKind } from "../lib/canonicalize";
+import { CanonCombobox } from "./CanonCombobox";
 
 // ── Sentinel constants ────────────────────────────────────────────────────────
 
@@ -13,7 +13,10 @@ export const IGNORED = "__ignored__";
 
 export type ArtAlbum = { album_id: string; album_name: string; artwork_url: string | null };
 export type KindFilter = "all" | "genre" | "mood";
-export interface SegOption { value: string; label: string }
+export interface SegOption {
+  value: string;
+  label: string;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,7 +32,17 @@ export function applySearch<T extends { raw_value: string }>(rows: T[], search: 
 
 // ── AlbumArtStrip ─────────────────────────────────────────────────────────────
 
-export function AlbumArtStrip({ rawValue, kind, size = 24, max }: { rawValue: string; kind: TagKind; size?: number; max?: number }) {
+export function AlbumArtStrip({
+  rawValue,
+  kind,
+  size = 24,
+  max,
+}: {
+  rawValue: string;
+  kind: TagKind;
+  size?: number;
+  max?: number;
+}) {
   const { data: albums = [] } = useTagAlbums(rawValue, kind);
   const { data: servers } = useServers();
   const { data: swc } = useServerWithCredential(servers?.[0]?.id);
@@ -50,12 +63,7 @@ export function AlbumArtStrip({ rawValue, kind, size = 24, max }: { rawValue: st
   return (
     <div className="tags-art-strip">
       {tiles.map((a) => (
-        <div
-          key={a.album_id}
-          className="tags-art-thumb"
-          title={a.album_name}
-          style={{ width: size, height: size }}
-        >
+        <div key={a.album_id} className="tags-art-thumb" title={a.album_name} style={{ width: size, height: size }}>
           <img src={a.url!} alt="" width={size} height={size} loading="lazy" decoding="async" />
         </div>
       ))}
@@ -66,10 +74,10 @@ export function AlbumArtStrip({ rawValue, kind, size = 24, max }: { rawValue: st
 // ── TagSourceLabels ───────────────────────────────────────────────────────────
 
 export const SOURCE_META: Record<string, { cls: string; label: string }> = {
-  "lastfm":                { cls: "src-lfm",     label: "Last.fm" },
-  "musicbrainz":           { cls: "src-mb",      label: "MusicBrainz" },
-  "musicbrainz-folksonomy":{ cls: "src-mb-folk", label: "Folksonomy" },
-  "file":                  { cls: "src-file",    label: "File tags" },
+  lastfm: { cls: "src-lfm", label: "Last.fm" },
+  musicbrainz: { cls: "src-mb", label: "MusicBrainz" },
+  "musicbrainz-folksonomy": { cls: "src-mb-folk", label: "Folksonomy" },
+  file: { cls: "src-file", label: "File tags" },
 };
 
 function srcCls(s: string) {
@@ -79,15 +87,14 @@ function srcCls(s: string) {
 /** Colored dot per source, use SOURCE_META for a legend. */
 export function TagSourceDots({ sources }: { sources: string | null }) {
   if (!sources) return null;
-  const parts = sources.split(",").map((s) => s.trim()).filter(Boolean);
+  const parts = sources
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   return (
     <span className="tag-sources">
       {parts.map((s) => (
-        <span
-          key={s}
-          className={`tag-src-dot ${srcCls(s)}`}
-          title={SOURCE_META[s]?.label ?? s}
-        />
+        <span key={s} className={`tag-src-dot ${srcCls(s)}`} title={SOURCE_META[s]?.label ?? s} />
       ))}
     </span>
   );
@@ -95,7 +102,11 @@ export function TagSourceDots({ sources }: { sources: string | null }) {
 
 // ── SegToggle ─────────────────────────────────────────────────────────────────
 
-export function SegToggle({ value, options, onChange }: {
+export function SegToggle({
+  value,
+  options,
+  onChange,
+}: {
   value: string;
   options: SegOption[];
   onChange: (v: string) => void;
@@ -120,7 +131,12 @@ export { CanonCombobox };
 
 // ── Pagination ────────────────────────────────────────────────────────────────
 
-export function Pagination({ page, total, pageSize, onChange }: {
+export function Pagination({
+  page,
+  total,
+  pageSize,
+  onChange,
+}: {
   page: number;
   total: number;
   pageSize: number;
@@ -132,19 +148,30 @@ export function Pagination({ page, total, pageSize, onChange }: {
   function pages(): (number | "…")[] {
     if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
     if (page <= 4) return [1, 2, 3, 4, 5, "…", totalPages];
-    if (page >= totalPages - 3) return [1, "…", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+    if (page >= totalPages - 3)
+      return [1, "…", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
     return [1, "…", page - 1, page, page + 1, "…", totalPages];
   }
 
   return (
     <div className="pagination">
-      <button className="pg-btn" disabled={page === 1} onClick={() => onChange(page - 1)}>‹</button>
+      <button className="pg-btn" disabled={page === 1} onClick={() => onChange(page - 1)}>
+        ‹
+      </button>
       {pages().map((p, i) =>
-        p === "…"
-          ? <span key={`e${i}`} className="pg-ellipsis">…</span>
-          : <button key={p} className={`pg-btn${page === p ? " pg-btn--active" : ""}`} onClick={() => onChange(p)}>{p}</button>
+        p === "…" ? (
+          <span key={`e${i}`} className="pg-ellipsis">
+            …
+          </span>
+        ) : (
+          <button key={p} className={`pg-btn${page === p ? " pg-btn--active" : ""}`} onClick={() => onChange(p)}>
+            {p}
+          </button>
+        ),
       )}
-      <button className="pg-btn" disabled={page === totalPages} onClick={() => onChange(page + 1)}>›</button>
+      <button className="pg-btn" disabled={page === totalPages} onClick={() => onChange(page + 1)}>
+        ›
+      </button>
     </div>
   );
 }

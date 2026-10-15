@@ -1,17 +1,10 @@
-import { useState, useMemo } from "react";
+import { ListMusic, RefreshCw, X } from "lucide-react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { ListMusic, X, RefreshCw } from "lucide-react";
 import { useGenres } from "../../hooks/useGenres";
-import { useOverlayDismiss } from "../../ui/useOverlayDismiss";
 import { useModalChrome } from "../../ui/useModalChrome";
-import {
-  DEFAULT_SMART_FILTERS,
-  SORT_OPTIONS,
-  YEAR_MIN,
-  YEAR_MAX,
-  LIMIT_MAX,
-  type SmartFilters,
-} from "./smartPlaylist";
+import { useOverlayDismiss } from "../../ui/useOverlayDismiss";
+import { DEFAULT_SMART_FILTERS, LIMIT_MAX, type SmartFilters, SORT_OPTIONS, YEAR_MAX, YEAR_MIN } from "./smartPlaylist";
 import "./SmartPlaylistModal.css";
 import { parseIntegerOr, parseNumberOr } from "../../lib/numberSetting";
 
@@ -43,8 +36,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
     return allGenres.filter((g) => !selected.has(g.canonical_id) && (!q || g.name.toLowerCase().includes(q)));
   }, [allGenres, filters.selectedGenres, genreSearch]);
 
-  const isYearRangeInverted =
-    filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
+  const isYearRangeInverted = filters.yearFrom !== null && filters.yearTo !== null && filters.yearFrom > filters.yearTo;
   const saveError = failedSave?.filters === filters ? failedSave.message : null;
   // A half-typed year reads as inverted ("2" < 1990), so the message waits until focus leaves.
   const [isEditingYear, setIsEditingYear] = useState(false);
@@ -119,18 +111,21 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
                   min={1}
                   max={LIMIT_MAX}
                   value={filters.limit}
-                  onChange={(e) => set("limit", Math.max(1, Math.min(LIMIT_MAX, parseIntegerOr(e.target.value, DEFAULT_SMART_FILTERS.limit))))}
+                  onChange={(e) =>
+                    set(
+                      "limit",
+                      Math.max(1, Math.min(LIMIT_MAX, parseIntegerOr(e.target.value, DEFAULT_SMART_FILTERS.limit))),
+                    )
+                  }
                 />
               </div>
               <div className="spm-field spm-field--half">
                 <label className="spm-label">Sort</label>
-                <select
-                  className="spm-select"
-                  value={filters.sort}
-                  onChange={(e) => set("sort", e.target.value)}
-                >
+                <select className="spm-select" value={filters.sort} onChange={(e) => set("sort", e.target.value)}>
                   {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -273,18 +268,14 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
               ))}
               {availableGenres.length === 0 &&
                 (genresError ? (
-                  <span className="spm-genre-empty spm-genre-empty--error">
-                    Couldn't load genres: {genresError}
-                  </span>
+                  <span className="spm-genre-empty spm-genre-empty--error">Couldn't load genres: {genresError}</span>
                 ) : isLoadingGenres ? (
                   <span className="spm-genre-empty">Loading genres…</span>
                 ) : (
                   <span className="spm-genre-empty">No genres found</span>
                 ))}
             </div>
-            {hiddenGenreCount > 0 && (
-              <span className="spm-genre-more">{hiddenGenreCount} more, search to narrow</span>
-            )}
+            {hiddenGenreCount > 0 && <span className="spm-genre-more">{hiddenGenreCount} more, search to narrow</span>}
           </section>
         </div>
 
@@ -308,6 +299,6 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

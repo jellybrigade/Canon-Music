@@ -1,6 +1,6 @@
-import { memo, useEffect, useState } from "react";
-import { Calendar, Info } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { Calendar, Info } from "lucide-react";
+import { memo, useEffect, useState } from "react";
 import type { BandsintownEvent } from "../clients/bandsintown";
 import "./TourCard.css";
 
@@ -32,7 +32,9 @@ const TOUR_LIMIT = 5;
 
 export const TourCard = memo(function TourCard({ artistName, enabled, loading, events, onEnable }: Props) {
   const [showAll, setShowAll] = useState(false);
-  useEffect(() => { setShowAll(false); }, [artistName]);
+  useEffect(() => {
+    setShowAll(false);
+  }, [artistName]);
 
   const visible = showAll ? events : events.slice(0, TOUR_LIMIT);
   const hidden = Math.max(0, events.length - visible.length);
@@ -59,13 +61,13 @@ export const TourCard = memo(function TourCard({ artistName, enabled, loading, e
             </span>
           </div>
           <p className="tour-card-prompt-desc">Optional. Loads concerts for the current artist via Bandsintown.</p>
-          <button className="tour-card-enable-btn" onClick={onEnable}>Enable</button>
+          <button className="tour-card-enable-btn" onClick={onEnable}>
+            Enable
+          </button>
         </div>
       ) : (
         <>
-          {loading && events.length === 0 && (
-            <p className="tour-card-empty">Loading…</p>
-          )}
+          {loading && events.length === 0 && <p className="tour-card-empty">Loading…</p>}
           {visible.length > 0 && (
             <ul className="tour-card-list">
               {visible.map((ev, idx) => {
@@ -78,7 +80,13 @@ export const TourCard = memo(function TourCard({ artistName, enabled, loading, e
                     onClick={() => ev.url && openUrl(ev.url).catch(() => {})}
                     role={ev.url ? "button" : undefined}
                     tabIndex={ev.url ? 0 : undefined}
-                    onKeyDown={ev.url ? (e) => { if (e.key === "Enter") openUrl(ev.url).catch(() => {}); } : undefined}
+                    onKeyDown={
+                      ev.url
+                        ? (e) => {
+                            if (e.key === "Enter") openUrl(ev.url).catch(() => {});
+                          }
+                        : undefined
+                    }
                   >
                     {parts && (
                       <div className="tour-card-date">
@@ -89,7 +97,11 @@ export const TourCard = memo(function TourCard({ artistName, enabled, loading, e
                     <div className="tour-card-meta">
                       <div className="tour-card-venue">{ev.venueName || place}</div>
                       <div className="tour-card-place">
-                        {parts && <span className="tour-card-when">{parts.weekday}, {parts.time}</span>}
+                        {parts && (
+                          <span className="tour-card-when">
+                            {parts.weekday}, {parts.time}
+                          </span>
+                        )}
                         {parts && place && <span className="tour-card-sep"> · </span>}
                         <span>{place}</span>
                       </div>

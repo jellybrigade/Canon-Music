@@ -13,17 +13,17 @@ vi.mock("../hooks/useLoved", () => ({
   useLoved: () => ({ lovedTrackIds, toggleTrackLove }),
 }));
 
-import type React from "react";
-import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { TrackTableView } from "./TrackTableView";
-import { usePlayerStore } from "../features/playback/store/player";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import type React from "react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
-import { createMigratedTestDb } from "../test/sqlite";
-import { resetTauriMocks, onInvoke } from "../test/mocks/tauri";
+import { usePlayerStore } from "../features/playback/store/player";
 import type { AllTrackRow } from "../hooks/useAllTracks";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { createMigratedTestDb } from "../test/sqlite";
+import { TrackTableView } from "./TrackTableView";
 
 const SRV: ServerWithCredential = {
   server: {
@@ -88,7 +88,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TrackTableView>>
   const view = render(
     <QueryClientProvider client={client}>
       <TrackTableView {...all} />
-    </QueryClientProvider>
+    </QueryClientProvider>,
   );
   return {
     ...view,
@@ -96,7 +96,7 @@ function renderTable(props: Partial<React.ComponentProps<typeof TrackTableView>>
       view.rerender(
         <QueryClientProvider client={client}>
           <TrackTableView {...all} tracks={tracks} />
-        </QueryClientProvider>
+        </QueryClientProvider>,
       ),
   };
 }
@@ -119,7 +119,7 @@ function rowTitles(): string[] {
 function querySortHeader(label: string): HTMLElement | null {
   return (
     Array.from(document.querySelectorAll<HTMLElement>("button.track-sort-btn")).find((b) =>
-      (b.textContent ?? "").trimStart().startsWith(label)
+      (b.textContent ?? "").trimStart().startsWith(label),
     ) ?? null
   );
 }
@@ -157,8 +157,14 @@ beforeEach(async () => {
   toggleTrackLove.mockClear();
   for (const fn of [playQueue, addToQueue, playNext, addManyToQueue, playNextMany, startRadio]) fn.mockClear();
   usePlayerStore.setState({
-    playQueue, addToQueue, playNext, addManyToQueue, playNextMany, startRadio,
-    currentTrack: null, isPlaying: false,
+    playQueue,
+    addToQueue,
+    playNext,
+    addManyToQueue,
+    playNextMany,
+    startRadio,
+    currentTrack: null,
+    isPlaying: false,
   });
   onInvoke("get_loved", () => ({ trackIds: [], albumIds: [], trackAlbumIds: [] }));
   const db = await createMigratedTestDb();
@@ -228,10 +234,39 @@ describe("TrackTableView sorting", () => {
   it("sorts every clickable numeric and string column", () => {
     localStorage.setItem(
       "canon-track-table-cols",
-      JSON.stringify({ artist: true, album: true, year: true, genre: false, duration: true, plays: true, format: true, bitrate: true })
+      JSON.stringify({
+        artist: true,
+        album: true,
+        year: true,
+        genre: false,
+        duration: true,
+        plays: true,
+        format: true,
+        bitrate: true,
+      }),
     );
-    const lo = track({ id: "srv-a:t1", title: "Low", artist: "Artist B", album_name: "Beta", year: 1990, duration: 100, play_count: 1, bit_rate: 128, suffix: "flac" });
-    const hi = track({ id: "srv-a:t2", title: "High", artist: "Artist A", album_name: "Alpha", year: 2020, duration: 300, play_count: 9, bit_rate: 320, suffix: "mp3" });
+    const lo = track({
+      id: "srv-a:t1",
+      title: "Low",
+      artist: "Artist B",
+      album_name: "Beta",
+      year: 1990,
+      duration: 100,
+      play_count: 1,
+      bit_rate: 128,
+      suffix: "flac",
+    });
+    const hi = track({
+      id: "srv-a:t2",
+      title: "High",
+      artist: "Artist A",
+      album_name: "Alpha",
+      year: 2020,
+      duration: 300,
+      play_count: 9,
+      bit_rate: 320,
+      suffix: "mp3",
+    });
     renderTable({ tracks: [lo, hi] });
     const cases: Array<[string, string[]]> = [
       ["Title", ["High", "Low"]],
@@ -379,7 +414,9 @@ describe("TrackTableView selection across a refresh", () => {
 
     // A sync renames an artist, so C and D move to the top of the artist-ascending order.
     rerenderWith([
-      row("A"), row("B"), row("E"),
+      row("A"),
+      row("B"),
+      row("E"),
       { ...row("C"), artist: "Artist 1" },
       { ...row("D"), artist: "Artist 2" },
     ]);
@@ -448,8 +485,7 @@ describe("TrackTableView context menu", () => {
     expect(menu.getByText("Play 2 tracks")).toBeInTheDocument();
     fireEvent.click(menu.getByText("Play 2 tracks"));
     expect(playQueue).toHaveBeenCalledTimes(1);
-    expect((playQueue.mock.calls[0]![0] as Array<{ title: string }>).map((t) => t.title))
-      .toEqual(["Song B", "Song C"]);
+    expect((playQueue.mock.calls[0]![0] as Array<{ title: string }>).map((t) => t.title)).toEqual(["Song B", "Song C"]);
   });
 
   it("opens the single-track menu when only one row is selected", () => {
@@ -525,7 +561,7 @@ describe("TrackTableView row controls", () => {
   it("shows a zero in every numeric column and leaves only a missing value blank", () => {
     localStorage.setItem(
       "canon-track-table-cols",
-      JSON.stringify({ year: true, plays: true, bitrate: true, duration: true })
+      JSON.stringify({ year: true, plays: true, bitrate: true, duration: true }),
     );
     renderTable({
       tracks: [
@@ -535,7 +571,7 @@ describe("TrackTableView row controls", () => {
     });
     const cells = (title: string) =>
       [".playlist-vrow-year", ".playlist-vrow-bitrate", ".playlist-vrow-duration"].flatMap((selector) =>
-        Array.from(rowFor(title).querySelectorAll(selector), (cell) => cell.textContent)
+        Array.from(rowFor(title).querySelectorAll(selector), (cell) => cell.textContent),
       );
     expect(cells("Zero")).toEqual(["0", "0k", "0", "0:00"]);
     expect(cells("Missing")).toEqual(["", "", "", ""]);

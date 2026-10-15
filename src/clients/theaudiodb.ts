@@ -10,18 +10,17 @@ interface TheAudioDbResponse {
 }
 
 async function searchTheAudioDb(name: string): Promise<TheAudioDbArtist | null> {
-  const res = await tauriFetch(
-    `https://www.theaudiodb.com/api/v1/json/2/search.php?s=${encodeURIComponent(name)}`,
-    { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } }
-  );
+  const res = await tauriFetch(`https://www.theaudiodb.com/api/v1/json/2/search.php?s=${encodeURIComponent(name)}`, {
+    method: "GET",
+    connectTimeout: 8000,
+    headers: { "User-Agent": "Canon Music Player" },
+  });
   if (!res.ok) return null;
   const data = (await res.json()) as TheAudioDbResponse;
   return data?.artists?.[0] ?? null;
 }
 
-export async function fetchTheAudioDbArtist(
-  name: string
-): Promise<{ bio: string | null; thumbUrl: string | null }> {
+export async function fetchTheAudioDbArtist(name: string): Promise<{ bio: string | null; thumbUrl: string | null }> {
   let artist = await searchTheAudioDb(name);
   // Strip leading "The " if no result
   if (!artist && name.toLowerCase().startsWith("the ")) {
@@ -35,10 +34,11 @@ export async function fetchTheAudioDbArtist(
 
 export async function fetchWikipediaBio(name: string): Promise<string | null> {
   try {
-    const res = await tauriFetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`,
-      { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } }
-    );
+    const res = await tauriFetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`, {
+      method: "GET",
+      connectTimeout: 8000,
+      headers: { "User-Agent": "Canon Music Player" },
+    });
     if (!res.ok) return null;
     const data = (await res.json()) as { extract?: string };
     return data?.extract?.trim() || null;
@@ -58,24 +58,28 @@ export async function fetchWikipediaBioByMbid(mbid: string): Promise<string | nu
       headers: {
         "User-Agent": "Canon Music Player",
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/sparql-results+json",
+        Accept: "application/sparql-results+json",
       },
       body,
-    }).then(async (res) => {
-      if (!res.ok) return null;
-      const data = (await res.json()) as { results?: { bindings?: Array<{ article?: { value: string } }> } };
-      const articleUrl = data.results?.bindings?.[0]?.article?.value;
-      if (!articleUrl) return null;
-      const wikiTitle = decodeURIComponent(articleUrl.split("/wiki/")[1] ?? "").replace(/#.*$/, "").replace(/\?.*$/, "");
-      if (!wikiTitle) return null;
-      const summaryRes = await tauriFetch(
-        `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
-        { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } }
-      );
-      if (!summaryRes.ok) return null;
-      const summaryData = (await summaryRes.json()) as { extract?: string };
-      return summaryData?.extract?.trim() || null;
-    }).catch(() => null);
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as { results?: { bindings?: Array<{ article?: { value: string } }> } };
+        const articleUrl = data.results?.bindings?.[0]?.article?.value;
+        if (!articleUrl) return null;
+        const wikiTitle = decodeURIComponent(articleUrl.split("/wiki/")[1] ?? "")
+          .replace(/#.*$/, "")
+          .replace(/\?.*$/, "");
+        if (!wikiTitle) return null;
+        const summaryRes = await tauriFetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
+          { method: "GET", connectTimeout: 8000, headers: { "User-Agent": "Canon Music Player" } },
+        );
+        if (!summaryRes.ok) return null;
+        const summaryData = (await summaryRes.json()) as { extract?: string };
+        return summaryData?.extract?.trim() || null;
+      })
+      .catch(() => null);
     return await Promise.race([work, deadline]);
   } catch {
     return null;

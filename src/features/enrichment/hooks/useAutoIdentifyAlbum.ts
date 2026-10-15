@@ -1,9 +1,9 @@
 // Runs only when `mb.auto_identify` is on, names are non-empty and no identity row exists.
 // Side-effect free: the caller saves or records the lookup based on `decision`.
 import { useQuery } from "@tanstack/react-query";
-import { autoIdentifyAlbum } from "../lib/albumIdentify";
-import type { AutoDecision, AutoIdentifyResult } from "../lib/albumIdentify";
 import { QK } from "../../../lib/queryKeys";
+import type { AutoDecision, AutoIdentifyResult } from "../lib/albumIdentify";
+import { autoIdentifyAlbum } from "../lib/albumIdentify";
 import type { AlbumIdentityRow } from "./useAlbumIdentity";
 
 export type { AutoDecision, AutoIdentifyResult };
@@ -37,13 +37,7 @@ export function useAutoIdentifyAlbum({
     queryKey: QK.autoIdentifyAlbum(albumId, confirmedArtistMbid),
     queryFn: (): Promise<AutoIdentifyResult> =>
       autoIdentifyAlbum({ artist, album, trackCount, year, confirmedArtistMbid }),
-    enabled:
-      mbAutoIdentify &&
-      !!albumId &&
-      !!artist &&
-      !!album &&
-      identityLoaded &&
-      existingIdentity === null,  // null = no row = never looked up; undefined = still loading
+    enabled: mbAutoIdentify && !!albumId && !!artist && !!album && identityLoaded && existingIdentity === null, // null = no row = never looked up; undefined = still loading
     staleTime: Infinity,
     retry: false,
   });

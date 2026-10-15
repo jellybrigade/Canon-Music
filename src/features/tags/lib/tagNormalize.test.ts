@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { isStale, isYearLikeGenre, resolveGenreTags, type NormalizedTags } from "./tagNormalize";
-import { canonicalKey, type CanonTree, type TreeNode } from "./canonicalize";
+import { type CanonTree, canonicalKey, type TreeNode } from "./canonicalize";
+import { isStale, isYearLikeGenre, type NormalizedTags, resolveGenreTags } from "./tagNormalize";
 
 describe("isYearLikeGenre", () => {
   it("matches a four-digit decade with trailing s", () => {
@@ -75,8 +75,22 @@ describe("isStale", () => {
 });
 
 describe("resolveGenreTags", () => {
-  const rock: TreeNode = { id: "rock", name: "Rock", type: "genre", canonical_key: "rock", parents: [], sections: ["genres"] };
-  const jazz: TreeNode = { id: "jazz", name: "Jazz", type: "genre", canonical_key: "jazz", parents: [], sections: ["genres"] };
+  const rock: TreeNode = {
+    id: "rock",
+    name: "Rock",
+    type: "genre",
+    canonical_key: "rock",
+    parents: [],
+    sections: ["genres"],
+  };
+  const jazz: TreeNode = {
+    id: "jazz",
+    name: "Jazz",
+    type: "genre",
+    canonical_key: "jazz",
+    parents: [],
+    sections: ["genres"],
+  };
 
   function treeOf(nodes: TreeNode[]): CanonTree {
     const byId = new Map(nodes.map((n) => [n.id, n]));

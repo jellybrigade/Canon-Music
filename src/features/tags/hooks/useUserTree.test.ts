@@ -11,18 +11,18 @@
  * invoked once with the node, the hook writes no SQL of its own, and a rejection reaches the
  * caller instead of leaving the caches claiming the node is gone.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, act, cleanup, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { getDb } from "../../../db";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { invoke, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { useDeleteUserNode } from "./useUserTree";
 
 let db: FakeDatabase;
@@ -67,9 +67,7 @@ describe("useDeleteUserNode", () => {
     const { result } = renderHook(() => useDeleteUserNode(), { wrapper });
 
     await act(async () => {
-      await expect(
-        result.current.mutateAsync({ id: "user:gone", name: "Gone" })
-      ).rejects.toThrow("Node not found.");
+      await expect(result.current.mutateAsync({ id: "user:gone", name: "Gone" })).rejects.toThrow("Node not found.");
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

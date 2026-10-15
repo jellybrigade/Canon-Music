@@ -1,29 +1,35 @@
-import { useMemo, useState } from "react";
 import { Lock, Play, Plus, RefreshCw, Unlock, X } from "lucide-react";
-import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
+import { useMemo, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
-import { FOR_YOU_PER_TAB_CHOICES, type ForYouCategoryConfig, type ForYouGroup } from "../../lib/forYouGroups";
-import type { ServerWithCredential } from "../../hooks/useServer";
-import type { AlbumRow } from "../../types/library";
+import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
+import type { ServerWithCredential } from "../../hooks/useServer";
+import { FOR_YOU_PER_TAB_CHOICES, type ForYouCategoryConfig, type ForYouGroup } from "../../lib/forYouGroups";
+import type { AlbumRow } from "../../types/library";
 import "./ForYouRail.css";
 
 const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
-  { key: "jump-back-in",     kicker: "Jump back in",     desc: "Recently played" },
-  { key: "on-repeat",        kicker: "On repeat",        desc: "Played most in the last 30 days" },
-  { key: "rediscover",       kicker: "Rediscover",       desc: "Favorites you haven't played recently" },
+  { key: "jump-back-in", kicker: "Jump back in", desc: "Recently played" },
+  { key: "on-repeat", kicker: "On repeat", desc: "Played most in the last 30 days" },
+  { key: "rediscover", kicker: "Rediscover", desc: "Favorites you haven't played recently" },
   { key: "finish-the-album", kicker: "Finish the album", desc: "Albums you've only partially heard" },
-  { key: "hidden-gem",       kicker: "Hidden gem",       desc: "Albums with just 1-3 plays" },
-  { key: "loved",            kicker: "Loved",            desc: "Albums and tracks you've starred" },
-  { key: "unplayed",         kicker: "Unplayed",         desc: "Never played in your library" },
-  { key: "almost-done",      kicker: "Almost done",      desc: "Albums where you've heard most but not all tracks" },
+  { key: "hidden-gem", kicker: "Hidden gem", desc: "Albums with just 1-3 plays" },
+  { key: "loved", kicker: "Loved", desc: "Albums and tracks you've starred" },
+  { key: "unplayed", kicker: "Unplayed", desc: "Never played in your library" },
+  { key: "almost-done", kicker: "Almost done", desc: "Albums where you've heard most but not all tracks" },
 ];
 
 const DEFAULT_FOR_YOU_ENABLED = new Set([
-  "jump-back-in", "on-repeat", "rediscover", "finish-the-album", "hidden-gem", "loved", "almost-done",
+  "jump-back-in",
+  "on-repeat",
+  "rediscover",
+  "finish-the-album",
+  "hidden-gem",
+  "loved",
+  "almost-done",
 ]);
 
-export const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES.map(c => ({
+export const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES.map((c) => ({
   ...c,
   enabled: DEFAULT_FOR_YOU_ENABLED.has(c.key),
 }));
@@ -31,19 +37,19 @@ export const DEFAULT_FOR_YOU_CONFIG: ForYouCategoryConfig[] = FOR_YOU_CATEGORIES
 export const DEFAULT_FOR_YOU_CONFIG_JSON = JSON.stringify(DEFAULT_FOR_YOU_CONFIG);
 
 const FOR_YOU_CATEGORY_DESC: Record<string, string> = Object.fromEntries(
-  FOR_YOU_CATEGORIES.map(c => [c.key, c.desc])
+  FOR_YOU_CATEGORIES.map((c) => [c.key, c.desc]),
 );
 
 /** Merges a saved config with the canonical category list so newly-added categories
  *  always appear (appended, using their default enabled state). */
 export function mergeForYouConfig(saved: ForYouCategoryConfig[]): ForYouCategoryConfig[] {
-  const savedKeys = new Set(saved.map(c => c.key));
-  const added = FOR_YOU_CATEGORIES
-    .filter(c => !savedKeys.has(c.key))
-    .map(c => ({ ...c, enabled: DEFAULT_FOR_YOU_ENABLED.has(c.key) }));
+  const savedKeys = new Set(saved.map((c) => c.key));
+  const added = FOR_YOU_CATEGORIES.filter((c) => !savedKeys.has(c.key)).map((c) => ({
+    ...c,
+    enabled: DEFAULT_FOR_YOU_ENABLED.has(c.key),
+  }));
   return [...saved, ...added];
 }
-
 
 interface ForYouRailProps {
   groups: ForYouGroup[];
@@ -59,7 +65,19 @@ interface ForYouRailProps {
   onPerTabChange: (count: number) => void;
 }
 
-export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, playAlbum, onRefresh, onCardContextMenu, config, onConfigChange, perTab, onPerTabChange }: ForYouRailProps) {
+export function ForYouRail({
+  groups,
+  isLoading,
+  serverWithCred,
+  onSelectAlbum,
+  playAlbum,
+  onRefresh,
+  onCardContextMenu,
+  config,
+  onConfigChange,
+  perTab,
+  onPerTabChange,
+}: ForYouRailProps) {
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
   const coverMap = useAlbumCoverMap();
@@ -67,9 +85,10 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
     const map: Record<string, string> = {};
     for (const cat of config) {
       if (cat.customFilter) {
-        map[cat.key] = cat.customFilter.type === "decade"
-          ? `Albums from the ${cat.customFilter.decade}s`
-          : `Albums by ${cat.customFilter.artist}`;
+        map[cat.key] =
+          cat.customFilter.type === "decade"
+            ? `Albums from the ${cat.customFilter.decade}s`
+            : `Albums by ${cat.customFilter.artist}`;
       } else if (FOR_YOU_CATEGORY_DESC[cat.key]) {
         map[cat.key] = FOR_YOU_CATEGORY_DESC[cat.key]!;
       }
@@ -90,7 +109,9 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
     return (
       <section className="home-rail">
         <div className="home-rail__header">
-          <p className="home-section-label" style={{ margin: 0 }}>For You</p>
+          <p className="home-section-label" style={{ margin: 0 }}>
+            For You
+          </p>
         </div>
         <div className="foryou-v2-tabs">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -108,7 +129,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
     );
   }
 
-  const activeTabGroup = groups.find(g => g.key === activeTabKey) ?? groups[0]!;
+  const activeTabGroup = groups.find((g) => g.key === activeTabKey) ?? groups[0]!;
 
   function handleTabKeyDown(e: React.KeyboardEvent, index: number) {
     if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
@@ -127,11 +148,11 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
   }
 
   function toggleEnabled(key: string) {
-    onConfigChange(config.map(c => c.key === key ? { ...c, enabled: !c.enabled } : c));
+    onConfigChange(config.map((c) => (c.key === key ? { ...c, enabled: !c.enabled } : c)));
   }
 
   function removeCustom(key: string) {
-    onConfigChange(config.filter(c => c.key !== key));
+    onConfigChange(config.filter((c) => c.key !== key));
   }
 
   function submitAddCustom(e: React.SyntheticEvent) {
@@ -139,22 +160,28 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
     if (addType === "decade") {
       const decade = Math.floor(Number(addDecade) / 10) * 10;
       if (!decade || Number.isNaN(decade)) return;
-      onConfigChange([...config, {
-        key: `custom-decade-${decade}-${Date.now()}`,
-        kicker: `${decade}s`,
-        enabled: true,
-        customFilter: { type: "decade", decade },
-      }]);
+      onConfigChange([
+        ...config,
+        {
+          key: `custom-decade-${decade}-${Date.now()}`,
+          kicker: `${decade}s`,
+          enabled: true,
+          customFilter: { type: "decade", decade },
+        },
+      ]);
       setAddDecade("");
     } else {
       const artist = addArtist.trim();
       if (!artist) return;
-      onConfigChange([...config, {
-        key: `custom-artist-${Date.now()}`,
-        kicker: artist,
-        enabled: true,
-        customFilter: { type: "artist", artist },
-      }]);
+      onConfigChange([
+        ...config,
+        {
+          key: `custom-artist-${Date.now()}`,
+          kicker: artist,
+          enabled: true,
+          customFilter: { type: "artist", artist },
+        },
+      ]);
       setAddArtist("");
     }
     setAddFormOpen(false);
@@ -192,7 +219,9 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
   return (
     <section className="home-rail">
       <div className="home-rail__header">
-        <p className="home-section-label" style={{ margin: 0 }}>For You</p>
+        <p className="home-section-label" style={{ margin: 0 }}>
+          For You
+        </p>
       </div>
 
       {!locked && (
@@ -203,10 +232,12 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
             <select
               className="foryou-v2-per-tab__select"
               value={perTab}
-              onChange={e => onPerTabChange(Number(e.target.value))}
+              onChange={(e) => onPerTabChange(Number(e.target.value))}
             >
-              {FOR_YOU_PER_TAB_CHOICES.map(count => (
-                <option key={count} value={count}>{count}</option>
+              {FOR_YOU_PER_TAB_CHOICES.map((count) => (
+                <option key={count} value={count}>
+                  {count}
+                </option>
               ))}
             </select>
           </label>
@@ -226,7 +257,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
                     tabIndex={activeTabGroup.key === group.key ? 0 : -1}
                     className={`foryou-v2-tab${activeTabGroup.key === group.key ? " foryou-v2-tab--active" : ""}`}
                     onClick={() => setActiveTabKey(group.key)}
-                    onKeyDown={e => handleTabKeyDown(e, i)}
+                    onKeyDown={(e) => handleTabKeyDown(e, i)}
                   >
                     {group.kicker}
                   </button>
@@ -242,8 +273,8 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
                     className={`foryou-v2-tab foryou-v2-tab--draggable${activeTabGroup.key === cat.key ? " foryou-v2-tab--active" : ""}${!cat.enabled ? " foryou-v2-tab--disabled" : ""}`}
                     onClick={() => toggleEnabled(cat.key)}
                     draggable
-                    onDragStart={e => handleTabDragStart(e, i)}
-                    onDragOver={e => handleTabDragOver(e, i)}
+                    onDragStart={(e) => handleTabDragStart(e, i)}
+                    onDragOver={(e) => handleTabDragOver(e, i)}
                     onDrop={handleTabDrop}
                     onDragEnd={handleTabDragEnd}
                     title={cat.enabled ? "Click to disable" : "Click to enable"}
@@ -267,9 +298,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
       </div>
 
       <div className="foryou-v2-desc-row">
-        {descByKey[activeTabGroup.key] && (
-          <p className="foryou-v2-desc">{descByKey[activeTabGroup.key]}</p>
-        )}
+        {descByKey[activeTabGroup.key] && <p className="foryou-v2-desc">{descByKey[activeTabGroup.key]}</p>}
         <div className="foryou-v2-tabs__actions">
           <button className="foryou-v2-action-btn" onClick={onRefresh} aria-label="Refresh suggestions">
             <RefreshCw size={14} />
@@ -277,7 +306,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
           {!locked && (
             <button
               className={`foryou-v2-action-btn${addFormOpen ? " foryou-v2-action-btn--active" : ""}`}
-              onClick={() => setAddFormOpen(o => !o)}
+              onClick={() => setAddFormOpen((o) => !o)}
               aria-label="Add custom category"
               aria-pressed={addFormOpen}
               title="Add a decade or artist category"
@@ -287,7 +316,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
           )}
           <button
             className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
-            onClick={() => setLocked(l => !l)}
+            onClick={() => setLocked((l) => !l)}
             aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
             aria-pressed={!locked}
             title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}
@@ -321,7 +350,7 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
               step={10}
               placeholder="e.g. 1990"
               value={addDecade}
-              onChange={e => setAddDecade(e.target.value)}
+              onChange={(e) => setAddDecade(e.target.value)}
               className="foryou-v2-add-form__input"
               autoFocus
             />
@@ -330,20 +359,24 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
               type="text"
               placeholder="Artist name"
               value={addArtist}
-              onChange={e => setAddArtist(e.target.value)}
+              onChange={(e) => setAddArtist(e.target.value)}
               className="foryou-v2-add-form__input"
               autoFocus
             />
           )}
-          <button type="submit" className="foryou-v2-add-form__submit">Add</button>
+          <button type="submit" className="foryou-v2-add-form__submit">
+            Add
+          </button>
         </form>
       )}
 
       <div className="foryou-v2-grid" role="tabpanel">
-        {activeTabGroup.albums.map(album => {
-          const artUrl = coverMap.get(album.id) ?? (album.artwork_url
-            ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
-            : null);
+        {activeTabGroup.albums.map((album) => {
+          const artUrl =
+            coverMap.get(album.id) ??
+            (album.artwork_url
+              ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 300)
+              : null);
           return (
             <div
               key={album.id}
@@ -351,16 +384,21 @@ export function ForYouRail({ groups, isLoading, serverWithCred, onSelectAlbum, p
               onClick={() => onSelectAlbum(album)}
               role="button"
               tabIndex={0}
-              onKeyDown={e => e.key === "Enter" && onSelectAlbum(album)}
-              onContextMenu={e => onCardContextMenu(e, album)}
+              onKeyDown={(e) => e.key === "Enter" && onSelectAlbum(album)}
+              onContextMenu={(e) => onCardContextMenu(e, album)}
             >
               <div className="foryou-v2-tile__art-wrap">
-                {artUrl
-                  ? <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
-                  : <div className="foryou-v2-tile__art" />}
+                {artUrl ? (
+                  <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                ) : (
+                  <div className="foryou-v2-tile__art" />
+                )}
                 <button
                   className="foryou-v2-tile__play"
-                  onClick={e => { e.stopPropagation(); playAlbum(album); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playAlbum(album);
+                  }}
                   aria-label={`Play ${album.name}`}
                 >
                   <Play size={13} fill="currentColor" />

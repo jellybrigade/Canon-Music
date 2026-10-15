@@ -1,13 +1,13 @@
-import { lazy, useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { useSearchParams } from "react-router-dom";
 import { ChevronLeft, Search, X } from "lucide-react";
-import { useSearch } from "./useSearch";
+import { lazy, type RefObject, useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { CredentialNotice } from "../../components/CredentialNotice";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import type { Server } from "../../types/server";
 import type { AlbumRow, ArtistRow } from "../../types/library";
-import type { PlaylistRow } from "../playlists/usePlaylists";
+import type { Server } from "../../types/server";
 import type { RadioMode } from "../playback/store/playerTypes";
+import type { PlaylistRow } from "../playlists/usePlaylists";
+import { useSearch } from "./useSearch";
 
 const SearchResults = lazy(() => import("./SearchResults").then((m) => ({ default: m.SearchResults })));
 
@@ -63,19 +63,25 @@ export function SearchView({
     setSearchRaw(query);
   }
 
-  useEffect(() => () => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    },
+    [],
+  );
 
-  const handleChange = useCallback((value: string) => {
-    setSearchRaw(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      lastWrittenRef.current = value.trim() ? value : "";
-      setSearchParams(value.trim() ? { q: value } : {}, { replace: true });
-    }, 200);
-  }, [setSearchParams]);
+  const handleChange = useCallback(
+    (value: string) => {
+      setSearchRaw(value);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        lastWrittenRef.current = value.trim() ? value : "";
+        setSearchParams(value.trim() ? { q: value } : {}, { replace: true });
+      }, 200);
+    },
+    [setSearchParams],
+  );
 
   const clearInput = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -88,11 +94,14 @@ export function SearchView({
 
   // A callback ref fires on attach, whenever that is - unlike the effect this replaced, this
   // also focuses correctly on a cold mount straight at /search?q=... (a deep link, or Forward).
-  const attachInput = useCallback((el: HTMLInputElement | null) => {
-    searchInputRef.current = el;
-    el?.focus();
-    el?.select();
-  }, [searchInputRef]);
+  const attachInput = useCallback(
+    (el: HTMLInputElement | null) => {
+      searchInputRef.current = el;
+      el?.focus();
+      el?.select();
+    },
+    [searchInputRef],
+  );
 
   const { data: searchResults, isPending: searchPending, isError: searchError } = useSearch(query, server?.id);
 
@@ -137,11 +146,33 @@ export function SearchView({
           serverWithCredential={serverWithCred}
           playlists={playlists}
           onSelectAlbum={openAlbum}
-          onSelectArtist={(artist) => openArtist({ name: artist.name, album_count: artist.album_count, artwork_url: null, lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null, enriched_at: null })}
-          onPlayTrack={(id) => { void handlePlayTrack(id); }}
-          onStartRadioFromAlbum={(album, mode) => { void handleStartRadioFromAlbum(album, mode); }}
-          onStartRadioFromArtist={(artist, mode) => { void handleStartRadioFromArtist(artist, mode); }}
-          onAddAlbumToPlaylist={serverWithCred ? (album, pl) => { void addAlbumToPlaylist(pl, album.id, serverWithCred); } : undefined}
+          onSelectArtist={(artist) =>
+            openArtist({
+              name: artist.name,
+              album_count: artist.album_count,
+              artwork_url: null,
+              lastfm_image_url: null,
+              wikidata_image_url: null,
+              navidrome_image_url: null,
+              enriched_at: null,
+            })
+          }
+          onPlayTrack={(id) => {
+            void handlePlayTrack(id);
+          }}
+          onStartRadioFromAlbum={(album, mode) => {
+            void handleStartRadioFromAlbum(album, mode);
+          }}
+          onStartRadioFromArtist={(artist, mode) => {
+            void handleStartRadioFromArtist(artist, mode);
+          }}
+          onAddAlbumToPlaylist={
+            serverWithCred
+              ? (album, pl) => {
+                  void addAlbumToPlaylist(pl, album.id, serverWithCred);
+                }
+              : undefined
+          }
         />
       )}
     </main>

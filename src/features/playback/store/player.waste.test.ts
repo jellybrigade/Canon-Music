@@ -8,15 +8,15 @@
  * test - a store that notifies every subscriber five times a second still reports the right
  * `currentTrack`, and two overlapping intervals still produce a plausible `elapsed`.
  */
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
-import { resetTauriMocks, onInvoke, emitTauriEvent } from "../../../test/mocks/tauri";
-import { trackRenders, invokeCount } from "../../../test/perf";
 import { getDb } from "../../../db";
+import { emitTauriEvent, onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
+import { invokeCount, trackRenders } from "../../../test/perf";
 import { usePlayerStore } from "./player";
 import type { CurrentTrack } from "./playerTypes";
 

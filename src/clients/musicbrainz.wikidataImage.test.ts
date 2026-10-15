@@ -16,7 +16,7 @@ afterEach(() => {
 describe("fetchWikidataImageByMbid", () => {
   it("returns the image when Wikidata has one", async () => {
     vi.mocked(tauriFetch).mockImplementation(async () =>
-      jsonResponse(200, { results: { bindings: [{ image: { value: "https://img/x.jpg" } }] } })
+      jsonResponse(200, { results: { bindings: [{ image: { value: "https://img/x.jpg" } }] } }),
     );
 
     await expect(fetchWikidataImageByMbid("mbid-1")).resolves.toBe("https://img/x.jpg");

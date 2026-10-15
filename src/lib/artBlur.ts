@@ -1,8 +1,8 @@
 // CSS `filter: blur()` on a viewport-size layer forces the compositor to rasterize on every
 // repaint (expensive on WebKitGTK); blur once here at a tiny canvas size and let CSS scale it up.
 
-import * as StackBlur from "stackblur-canvas";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import * as StackBlur from "stackblur-canvas";
 import { cappedSet } from "./boundedCache";
 
 // Small enough that StackBlur runs in well under a millisecond, large enough

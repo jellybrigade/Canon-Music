@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useTrackListSessionStore } from "../store/trackListSessionStore";
+import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import type { TrackRow } from "../types/library";
+
 export type { TrackRow } from "../types/library";
 
 // Rusqlite read path (psysonic pattern, see instructions/donow.md "rusqlite write/read
@@ -42,7 +43,12 @@ export function useTracks(albumId: string | null) {
       } catch (err) {
         console.error("useTracks: failed to load tracks", err);
         if (!cancelled) {
-          setResult({ albumId, rows: undefined, error: err instanceof Error ? err.message : String(err), isLoading: false });
+          setResult({
+            albumId,
+            rows: undefined,
+            error: err instanceof Error ? err.message : String(err),
+            isLoading: false,
+          });
         }
       }
     })();

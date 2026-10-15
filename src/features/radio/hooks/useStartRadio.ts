@@ -1,8 +1,8 @@
 import { useCallback } from "react";
+import { useSetting } from "../../../hooks/useSetting";
 import { usePlayerStore } from "../../playback/store/player";
 import type { RadioStartAction, RadioStartRequest } from "../../playback/store/playerTypes";
 import { useRadioStartStore } from "../store/radioStart";
-import { useSetting } from "../../../hooks/useSetting";
 
 export const RADIO_START_ACTION_SETTING = "radio.start_action";
 
@@ -25,6 +25,6 @@ export function useStartRadio(): (request: RadioStartRequest) => Promise<void> {
       }
       await usePlayerStore.getState().startRadioFrom(action, request);
     },
-    [setting]
+    [setting],
   );
 }

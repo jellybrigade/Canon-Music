@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   LASTFM_PLACEHOLDER,
-  SIMILAR_ARTIST_MIN_MATCH,
   normalizeTrackTitle,
   resolvePortraitUrl,
+  SIMILAR_ARTIST_MIN_MATCH,
   similarArtistsAboveMatch,
 } from "./lastfm";
 
@@ -50,7 +50,7 @@ describe("resolvePortraitUrl", () => {
 
   it("returns null when every source is null", () => {
     expect(
-      resolvePortraitUrl({ lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null })
+      resolvePortraitUrl({ lastfm_image_url: null, wikidata_image_url: null, navidrome_image_url: null }),
     ).toBeNull();
   });
 
@@ -60,7 +60,7 @@ describe("resolvePortraitUrl", () => {
         lastfm_image_url: "https://lastfm/img.jpg",
         wikidata_image_url: "https://wikidata/img.jpg",
         navidrome_image_url: "https://navidrome/img.jpg",
-      })
+      }),
     ).toBe("https://wikidata/img.jpg");
   });
 
@@ -70,7 +70,7 @@ describe("resolvePortraitUrl", () => {
         lastfm_image_url: "https://lastfm/img.jpg",
         wikidata_image_url: null,
         navidrome_image_url: "https://navidrome/img.jpg",
-      })
+      }),
     ).toBe("https://navidrome/img.jpg");
   });
 
@@ -80,7 +80,7 @@ describe("resolvePortraitUrl", () => {
         lastfm_image_url: "https://lastfm/img.jpg",
         wikidata_image_url: null,
         navidrome_image_url: null,
-      })
+      }),
     ).toBe("https://lastfm/img.jpg");
   });
 
@@ -90,14 +90,14 @@ describe("resolvePortraitUrl", () => {
         lastfm_image_url: `https://lastfm/${LASTFM_PLACEHOLDER}.png`,
         wikidata_image_url: null,
         navidrome_image_url: null,
-      })
+      }),
     ).toBeNull();
   });
 
   it("treats a missing navidrome_image_url key the same as null", () => {
-    expect(
-      resolvePortraitUrl({ lastfm_image_url: null, wikidata_image_url: "https://wikidata/img.jpg" })
-    ).toBe("https://wikidata/img.jpg");
+    expect(resolvePortraitUrl({ lastfm_image_url: null, wikidata_image_url: "https://wikidata/img.jpg" })).toBe(
+      "https://wikidata/img.jpg",
+    );
   });
 });
 

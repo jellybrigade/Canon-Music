@@ -13,10 +13,16 @@ interface Props {
 export function PlaybackErrorActions({ cause, onRetry, onSkip, skipDisabled, onOpenResync }: Props) {
   return (
     <>
-      <button className="player-error-action" onClick={onRetry}>Retry</button>
-      <button className="player-error-action" onClick={onSkip} disabled={skipDisabled}>Skip</button>
+      <button className="player-error-action" onClick={onRetry}>
+        Retry
+      </button>
+      <button className="player-error-action" onClick={onSkip} disabled={skipDisabled}>
+        Skip
+      </button>
       {cause === "stale-track-id" && (
-        <button className="player-error-action" onClick={onOpenResync}>Resync library</button>
+        <button className="player-error-action" onClick={onOpenResync}>
+          Resync library
+        </button>
       )}
     </>
   );

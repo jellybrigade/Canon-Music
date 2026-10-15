@@ -10,10 +10,10 @@
  * path under test is unchanged.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { resetTauriMocks } from "../../test/mocks/tauri";
-import { album, CRED, server, SRV, track } from "../../test/navidromeFixtures";
 import type { NavidromeStarred } from "../../clients/navidrome";
+import { resetTauriMocks } from "../../test/mocks/tauri";
+import { album, CRED, SRV, server, track } from "../../test/navidromeFixtures";
+import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 
@@ -40,10 +40,17 @@ vi.mock("../../clients/navidromePlaylists", () => ({
   fetchPlaylistTracks: vi.fn(),
 }));
 
-import { fetchAllAlbums, fetchAlbumTracks, fetchStarred2, fetchAndStoreOpenSubsonicExtensions, fetchScanStatus, songExists } from "../../clients/navidrome";
+import {
+  fetchAlbumTracks,
+  fetchAllAlbums,
+  fetchAndStoreOpenSubsonicExtensions,
+  fetchScanStatus,
+  fetchStarred2,
+  songExists,
+} from "../../clients/navidrome";
 import { fetchPlaylists, fetchPlaylistTracks } from "../../clients/navidromePlaylists";
-import { syncLibrary } from "./sync";
 import { SQLITE_MAX_VARIABLES as CEILING } from "../../lib/dbBatch";
+import { syncLibrary } from "./sync";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -54,19 +61,14 @@ function db(): FakeDatabase {
 }
 
 async function count(where = "", params: unknown[] = []): Promise<number> {
-  const rows = await db().select<{ c: number }[]>(
-    `SELECT COUNT(*) AS c FROM tracks ${where}`,
-    params
-  );
+  const rows = await db().select<{ c: number }[]>(`SELECT COUNT(*) AS c FROM tracks ${where}`, params);
   return rows[0]?.c ?? 0;
 }
 
 /** Point the album-list and per-album track mocks at one canned album. */
 function serveAlbum(tracks: ReturnType<typeof track>[], overrides = {}): void {
   mAllAlbums.mockResolvedValue([album("al-1", { songCount: tracks.length, ...overrides })]);
-  mAlbumTracks.mockImplementation(async (_url, _user, _cred, albumId) =>
-    albumId === "al-1" ? tracks : []
-  );
+  mAlbumTracks.mockImplementation(async (_url, _user, _cred, albumId) => (albumId === "al-1" ? tracks : []));
 }
 
 beforeEach(async () => {

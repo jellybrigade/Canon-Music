@@ -93,8 +93,7 @@ export async function noteTransportTimeout(baseUrl: string): Promise<string | nu
   const threshold = state.openings === 0 && !state.excused ? TRIP_AFTER_TIMEOUTS : 1;
   if (state.consecutiveTimeouts < threshold) return null;
 
-  const cooldown =
-    COOLDOWN_LADDER_MS[Math.min(state.openings, COOLDOWN_LADDER_MS.length - 1)]!;
+  const cooldown = COOLDOWN_LADDER_MS[Math.min(state.openings, COOLDOWN_LADDER_MS.length - 1)]!;
   state.consecutiveTimeouts = 0;
   state.openings += 1;
   state.openUntil = Date.now() + cooldown;

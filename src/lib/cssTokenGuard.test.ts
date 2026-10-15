@@ -3,9 +3,9 @@
 // with no error anywhere, so the start-radio dialog shipped see-through. A fallback only hides the
 // same defect behind a literal. Every custom property read must be declared in a stylesheet or set
 // from TS (inline `style` objects and `setProperty`, both spelled as a quoted `"--name"`).
-import { readFileSync, readdirSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const SRC_DIR = fileURLToPath(new URL("..", import.meta.url));

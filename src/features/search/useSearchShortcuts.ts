@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
 import { isTextEntryTarget } from "../../lib/keyboard";
 
 export interface SearchShortcutOptions {

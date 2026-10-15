@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMigratedTestDb } from "../test/sqlite";
-import { formatLogValue, initLogger, stopLogger, logger } from "./logger";
+import { formatLogValue, initLogger, logger, stopLogger } from "./logger";
 
 const holder: { db: Awaited<ReturnType<typeof createMigratedTestDb>> | null } = { db: null };
 vi.mock("../db", () => ({ getDb: async () => holder.db }));
@@ -73,7 +73,7 @@ describe("logger writes", () => {
     await logger.flush();
     const rows = await holder.db!.select<{ message: string }[]>(
       "SELECT message FROM app_logs ORDER BY id DESC LIMIT 1",
-      []
+      [],
     );
     expect(rows[0]!.message).toContain("could not reach the server");
   });

@@ -106,10 +106,7 @@ interface MbSearchRGResponse {
   }>;
 }
 
-export async function searchReleaseGroups(
-  artist: string,
-  album: string
-): Promise<MbReleaseGroupCandidate[]> {
+export async function searchReleaseGroups(artist: string, album: string): Promise<MbReleaseGroupCandidate[]> {
   type RgHit = NonNullable<MbSearchRGResponse["release-groups"]>[number];
   const toCandidate = (rg: RgHit) => {
     const credit = rg["artist-credit"]?.[0]?.artist;
@@ -131,7 +128,7 @@ export async function searchReleaseGroups(
   });
 
   const results = data["release-groups"] ?? [];
-  const bestScore = results.length > 0 ? Math.max(...results.map(r => r.score ?? 0)) : 0;
+  const bestScore = results.length > 0 ? Math.max(...results.map((r) => r.score ?? 0)) : 0;
   if (bestScore >= 50) return results.map(toCandidate);
 
   // Fallback: artist-name exact match can fail for aliases/credits (e.g. "Brian Eno" vs "Eno"),
@@ -205,9 +202,7 @@ export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetai
   });
 
   const labelInfo = data["label-info"]?.[0];
-  const trackCount = data.media
-    ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0)
-    : null;
+  const trackCount = data.media ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0) : null;
   return {
     id: data.id,
     title: data.title,
@@ -319,7 +314,7 @@ export async function fetchWikidataImageByMbid(mbid: string): Promise<string | n
       headers: {
         "User-Agent": USER_AGENT,
         "Content-Type": "application/x-www-form-urlencoded",
-        "Accept": "application/sparql-results+json",
+        Accept: "application/sparql-results+json",
       },
       body,
       signal: controller.signal,
@@ -338,7 +333,7 @@ export async function getMinFolksonomyCount(): Promise<number> {
   const { getDb } = await import("../db");
   const db = await getDb();
   const rows = await db.select<{ value: string }[]>(
-    "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'"
+    "SELECT value FROM settings WHERE key = 'musicbrainz.min_folksonomy_count'",
   );
   const val = parseInt(rows[0]?.value ?? "", 10);
   return Number.isNaN(val) ? MIN_FOLKSONOMY_COUNT_DEFAULT : val;
@@ -347,10 +342,9 @@ export async function getMinFolksonomyCount(): Promise<number> {
 export async function setMinFolksonomyCount(count: number): Promise<void> {
   const { getDb } = await import("../db");
   const db = await getDb();
-  await db.execute(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES ('musicbrainz.min_folksonomy_count', ?)",
-    [String(count)]
-  );
+  await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('musicbrainz.min_folksonomy_count', ?)", [
+    String(count),
+  ]);
 }
 
 // RG genres are an aggregate community view; release genres are pressing-specific.

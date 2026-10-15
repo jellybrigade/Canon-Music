@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { checkForUpdate, installAndRestart } from "../../../lib/updater";
 import type { Update } from "@tauri-apps/plugin-updater";
+import { useEffect, useState } from "react";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
+import { checkForUpdate, installAndRestart } from "../../../lib/updater";
 import { SettingRow } from "./SettingRow";
 
 interface Props {
@@ -12,16 +12,20 @@ interface Props {
 
 export function AboutTab({ searchQuery }: Props) {
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [updateCheckState, setUpdateCheckState] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">("idle");
+  const [updateCheckState, setUpdateCheckState] = useState<"idle" | "checking" | "up-to-date" | "available" | "error">(
+    "idle",
+  );
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
   const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
   const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
 
-  useEffect(() => { void getVersion().then(setAppVersion); }, []);
+  useEffect(() => {
+    void getVersion().then(setAppVersion);
+  }, []);
 
   const fl = searchQuery.toLowerCase().trim();
-  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+  const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
 
   if (!show("about", "version", "update", "community", "discord", "ko-fi", "kofi")) return null;
 
@@ -31,10 +35,7 @@ export function AboutTab({ searchQuery }: Props) {
       <div className="settings-community">
         <span className="settings-community-label">Join the community or support development</span>
         <div className="settings-community-links">
-          <button
-            className="settings-community-btn"
-            onClick={() => void openUrl("https://discord.gg/sYYaJp7xNg")}
-          >
+          <button className="settings-community-btn" onClick={() => void openUrl("https://discord.gg/sYYaJp7xNg")}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path
                 fill="currentColor"
@@ -43,10 +44,7 @@ export function AboutTab({ searchQuery }: Props) {
             </svg>
             Discord
           </button>
-          <button
-            className="settings-community-btn"
-            onClick={() => void openUrl("https://ko-fi.com/canonmusic")}
-          >
+          <button className="settings-community-btn" onClick={() => void openUrl("https://ko-fi.com/canonmusic")}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path
                 fill="currentColor"
@@ -58,8 +56,8 @@ export function AboutTab({ searchQuery }: Props) {
         </div>
       </div>
       <p className="settings-alpha-notice">
-        <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash.
-        Thanks for trying it out this early, it means a lot.
+        <strong>Canon is in alpha.</strong> Expect bugs, rough edges, and the occasional crash. Thanks for trying it out
+        this early, it means a lot.
       </p>
       <div className="settings-diag-row">
         <span className="settings-diag-label">Version</span>
@@ -67,11 +65,7 @@ export function AboutTab({ searchQuery }: Props) {
       </div>
       <SettingRow title="Auto check for updates">
         <label className="toggle-switch">
-          <input
-            type="checkbox"
-            checked={autoCheck}
-            onChange={(e) => void setAutoCheck(e.target.checked)}
-          />
+          <input type="checkbox" checked={autoCheck} onChange={(e) => void setAutoCheck(e.target.checked)} />
           <span className="toggle-track" />
         </label>
       </SettingRow>
@@ -97,18 +91,20 @@ export function AboutTab({ searchQuery }: Props) {
             onClick={() => {
               setUpdateCheckState("checking");
               setPendingUpdate(null);
-              void checkForUpdate().then((u) => {
-                if (u) { setPendingUpdate(u); setUpdateCheckState("available"); }
-                else setUpdateCheckState("up-to-date");
-              }).catch(() => setUpdateCheckState("error"));
+              void checkForUpdate()
+                .then((u) => {
+                  if (u) {
+                    setPendingUpdate(u);
+                    setUpdateCheckState("available");
+                  } else setUpdateCheckState("up-to-date");
+                })
+                .catch(() => setUpdateCheckState("error"));
             }}
           >
             {updateCheckState === "checking" ? "Checking…" : "Check for updates"}
           </button>
         ) : null}
-        {updateCheckState === "up-to-date" && (
-          <span className="settings-hint">You're up to date.</span>
-        )}
+        {updateCheckState === "up-to-date" && <span className="settings-hint">You're up to date.</span>}
         {updateCheckState === "error" && (
           <span className="settings-hint" style={{ color: "var(--danger)" }}>
             Couldn't check for updates.

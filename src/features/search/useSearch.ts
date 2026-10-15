@@ -1,4 +1,4 @@
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { getDb } from "../../db";
 import { QK } from "../../lib/queryKeys";
 
@@ -65,7 +65,9 @@ function scoreMatch(field: string | null, query: string): number {
   const f = field.toLowerCase();
   const q = query.toLowerCase();
   const plain = f.replace(BRACKETED, " ").replace(/\s+/g, " ").trim();
-  const bracketed = Array.from(f.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "").join(" ").trim();
+  const bracketed = Array.from(f.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "")
+    .join(" ")
+    .trim();
   if (!plain) return scoreTier(bracketed, q);
   const plainScore = scoreTier(plain, q);
   if (plainScore > 0) return plainScore;
@@ -76,7 +78,7 @@ function scoreMatch(field: string | null, query: string): number {
 function scoreTier(f: string, q: string): number {
   if (f === q) return 1000;
   if (f.startsWith(q)) return 800;
-  if (f.split(/\s+/).some(t => t.startsWith(q))) return 600;
+  if (f.split(/\s+/).some((t) => t.startsWith(q))) return 600;
   if (f.includes(q)) return 300;
   return 0;
 }
@@ -112,7 +114,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        GROUP BY a.id
        ORDER BY rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId]
+      [fts, serverId],
     ),
     db.select<SearchTrack[]>(
       `${RANKED_CTE}
@@ -125,9 +127,17 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        WHERE t.server_id = ?
        ORDER BY r.rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId]
+      [fts, serverId],
     ),
-    db.select<{ name: string; album_count: number; lastfm_image_url: string | null; wikidata_image_url: string | null; navidrome_image_url: string | null }[]>(
+    db.select<
+      {
+        name: string;
+        album_count: number;
+        lastfm_image_url: string | null;
+        wikidata_image_url: string | null;
+        navidrome_image_url: string | null;
+      }[]
+    >(
       `${RANKED_CTE}
        SELECT t.artist AS name, COUNT(DISTINCT t.album_id) AS album_count,
               ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url,
@@ -139,39 +149,39 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        GROUP BY t.artist
        ORDER BY rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId]
+      [fts, serverId],
     ),
   ]);
 
   // Re-rank in JS: FTS5 gives recall, scoring gives relevance. A zero score (e.g. an album
   // matched only via genre) is dropped rather than kept at the bottom.
   const albums: SearchAlbum[] = albumRows
-    .map(a => ({ item: a, s: Math.max(scoreMatch(a.name, query), Math.floor(scoreMatch(a.artist, query) * 0.6)) }))
-    .filter(x => x.s > 0)
+    .map((a) => ({ item: a, s: Math.max(scoreMatch(a.name, query), Math.floor(scoreMatch(a.artist, query) * 0.6)) }))
+    .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.item.name.localeCompare(b.item.name))
-    .map(x => x.item);
+    .map((x) => x.item);
 
   const tracks: SearchTrack[] = trackRows
-    .map(t => ({ item: t, s: Math.max(scoreMatch(t.title, query), Math.floor(scoreMatch(t.artist, query) * 0.6)) }))
-    .filter(x => x.s > 0)
+    .map((t) => ({ item: t, s: Math.max(scoreMatch(t.title, query), Math.floor(scoreMatch(t.artist, query) * 0.6)) }))
+    .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.item.title.localeCompare(b.item.title))
-    .map(x => x.item);
+    .map((x) => x.item);
 
   const FEAT_RE = /^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i;
 
   const scoredArtists = artistRows
-    .map(a => ({ item: a, s: scoreMatch(a.name, query) }))
-    .filter(x => x.s > 0)
+    .map((a) => ({ item: a, s: scoreMatch(a.name, query) }))
+    .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || b.item.album_count - a.item.album_count);
 
-  const primaryNames = new Set(scoredArtists.map(x => x.item.name.toLowerCase()));
+  const primaryNames = new Set(scoredArtists.map((x) => x.item.name.toLowerCase()));
 
   const artists: SearchArtist[] = scoredArtists
     .filter(({ item }) => {
       const m = FEAT_RE.exec(item.name);
       return !m?.[1] || !primaryNames.has(m[1].toLowerCase());
     })
-    .map(x => x.item);
+    .map((x) => x.item);
 
   return { albums, tracks, artists };
 }

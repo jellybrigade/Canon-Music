@@ -1,25 +1,39 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type RefObject } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { ArtistRow } from "../types/library";
-import type { ServerWithCredential } from "../hooks/useServer";
-import { getCoverArtUrl, getArtistImageUrl } from "../clients/navidromeUrls";
+import {
+  type MouseEvent,
+  memo,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { resolvePortraitUrl } from "../clients/lastfm";
-import { useArtistImageMap } from "../hooks/useArtistImageCache";
-import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
-import { useScrollMemory } from "../hooks/useScrollMemory";
-import { useMeasuredElement } from "../hooks/useMeasuredElement";
-import { ContextMenu } from "../ui/ContextMenu";
-import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
+import { getArtistImageUrl, getCoverArtUrl } from "../clients/navidromeUrls";
 import { ArtistIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
-import { CardGridSkeleton } from "../ui/Skeleton";
+import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import type { RadioMode } from "../features/playback/store/playerTypes";
+import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
+import { useArtistImageMap } from "../hooks/useArtistImageCache";
+import { useMeasuredElement } from "../hooks/useMeasuredElement";
+import { useScrollMemory } from "../hooks/useScrollMemory";
+import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import { parseStalenessDays } from "../lib/numberSetting";
+import type { ArtistRow } from "../types/library";
+import { ContextMenu } from "../ui/ContextMenu";
+import { CardGridSkeleton } from "../ui/Skeleton";
 
 /** Lazily triggers portrait enrichment once a grid tile scrolls into view, so artists
  * never opened individually still get one. A null component, not a card hook, so the
  * grid can skip mounting it for artists whose enrichment is already fresh. */
-function LazyPortraitEnrich({ artistName, serverWithCredential, elRef }: {
+function LazyPortraitEnrich({
+  artistName,
+  serverWithCredential,
+  elRef,
+}: {
   artistName: string;
   serverWithCredential: ServerWithCredential;
   elRef: RefObject<HTMLElement | null>;
@@ -30,8 +44,10 @@ function LazyPortraitEnrich({ artistName, serverWithCredential, elRef }: {
     const el = elRef.current;
     if (!el) return;
     const observer = new IntersectionObserver(
-      (entries) => { if (entries.some((entry) => entry.isIntersecting)) setInView(true); },
-      { rootMargin: "300px" }
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) setInView(true);
+      },
+      { rootMargin: "300px" },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -57,7 +73,15 @@ interface Props {
   onRetry?: () => void;
 }
 
-export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRadio, isLoading = false, error = null, onRetry }: Props) {
+export function ArtistGrid({
+  artists,
+  serverWithCredential,
+  onSelect,
+  onStartRadio,
+  isLoading = false,
+  error = null,
+  onRetry,
+}: Props) {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; artist: ArtistRow } | null>(null);
   const [identifyArtist, setIdentifyArtist] = useState<ArtistRow | null>(null);
   const [failedPortraits, setFailedPortraits] = useState<Set<string>>(new Set());
@@ -82,8 +106,7 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
 
   // The scroller below is rendered only once there are artists, so it has to be measured on
   // attach rather than from an effect - see useMeasuredElement.
-  const { ref: containerRef, attach: attachContainer, width: containerWidth } =
-    useMeasuredElement<HTMLDivElement>();
+  const { ref: containerRef, attach: attachContainer, width: containerWidth } = useMeasuredElement<HTMLDivElement>();
 
   const available = containerWidth > 0 ? containerWidth - PADDING * 2 : 0;
   const cols = Math.max(1, Math.floor((available + COL_GAP) / (CARD_MIN + COL_GAP)));
@@ -120,21 +143,18 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
       <div className="empty-state">
         <p className="empty-state-title">Couldn't load your artists</p>
         <p className="empty-state-hint">{error}</p>
-        {onRetry && <button className="empty-state-action" onClick={onRetry}>Try again</button>}
+        {onRetry && (
+          <button className="empty-state-action" onClick={onRetry}>
+            Try again
+          </button>
+        )}
       </div>
     );
   }
 
   if (artists.length === 0 && isLoading) {
     return (
-      <CardGridSkeleton
-        count={18}
-        minWidth={CARD_MIN}
-        gap={COL_GAP}
-        padding={PADDING}
-        round
-        label="Loading artists"
-      />
+      <CardGridSkeleton count={18} minWidth={CARD_MIN} gap={COL_GAP} padding={PADDING} round label="Loading artists" />
     );
   }
 
@@ -190,24 +210,34 @@ export function ArtistGrid({ artists, serverWithCredential, onSelect, onStartRad
       </div>
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} onClose={() => setContextMenu(null)}>
-          <button onClick={() => { onSelect(contextMenu.artist); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              onSelect(contextMenu.artist);
+              setContextMenu(null);
+            }}
+          >
             Open artist
           </button>
           {onStartRadio && (
             <StartRadioSubmenu
-              onSelect={(mode) => { onStartRadio(contextMenu.artist, mode); setContextMenu(null); }}
+              onSelect={(mode) => {
+                onStartRadio(contextMenu.artist, mode);
+                setContextMenu(null);
+              }}
             />
           )}
-          <button onClick={() => { setIdentifyArtist(contextMenu.artist); setContextMenu(null); }}>
+          <button
+            onClick={() => {
+              setIdentifyArtist(contextMenu.artist);
+              setContextMenu(null);
+            }}
+          >
             Identify on MusicBrainz…
           </button>
         </ContextMenu>
       )}
       {identifyArtist && (
-        <ArtistIdentifyDialog
-          artistName={identifyArtist.name}
-          onClose={() => setIdentifyArtist(null)}
-        />
+        <ArtistIdentifyDialog artistName={identifyArtist.name} onClose={() => setIdentifyArtist(null)} />
       )}
     </>
   );
@@ -224,7 +254,16 @@ interface ArtistGridCardProps {
   onPortraitError: (artistName: string) => void;
 }
 
-const ArtistGridCard = memo(function ArtistGridCard({ artist, cachedImageUrl, portraitFailed, enrichStale, serverWithCredential, onSelect, onContextMenu, onPortraitError }: ArtistGridCardProps) {
+const ArtistGridCard = memo(function ArtistGridCard({
+  artist,
+  cachedImageUrl,
+  portraitFailed,
+  enrichStale,
+  serverWithCredential,
+  onSelect,
+  onContextMenu,
+  onPortraitError,
+}: ArtistGridCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCredential;
 
@@ -233,7 +272,8 @@ const ArtistGridCard = memo(function ArtistGridCard({ artist, cachedImageUrl, po
   // fresh strings per call, which would otherwise defeat this component's React.memo.
   const portraitUrl = useMemo(() => resolvePortraitUrl(artist), [artist]);
   const fallbackUrl = useMemo(
-    () => (artist.artwork_url ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300) : null),
+    () =>
+      artist.artwork_url ? getCoverArtUrl(server.url, server.username, credential, artist.artwork_url, 300) : null,
     [artist.artwork_url, server.url, server.username, credential],
   );
   const imgUrl = useMemo(
@@ -247,7 +287,9 @@ const ArtistGridCard = memo(function ArtistGridCard({ artist, cachedImageUrl, po
   // closure per card per render (which would defeat this component's React.memo).
   const handleSelect = useCallback(() => onSelect(artist), [onSelect, artist]);
   const handleContextMenu = useCallback((e: MouseEvent) => onContextMenu(e, artist), [onContextMenu, artist]);
-  const handlePortraitError = useCallback(() => { if (hasPortrait) onPortraitError(artist.name); }, [onPortraitError, artist.name, hasPortrait]);
+  const handlePortraitError = useCallback(() => {
+    if (hasPortrait) onPortraitError(artist.name);
+  }, [onPortraitError, artist.name, hasPortrait]);
 
   return (
     <div

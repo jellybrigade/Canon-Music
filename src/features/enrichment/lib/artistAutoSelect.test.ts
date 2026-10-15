@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MbArtistCandidate } from "../../../clients/musicbrainz";
-import {
-  DEFAULT_ARTIST_AUTO_SELECT_SCORE,
-  parseArtistAutoSelectScore,
-  pickConfidentArtist,
-} from "./artistAutoSelect";
+import { DEFAULT_ARTIST_AUTO_SELECT_SCORE, parseArtistAutoSelectScore, pickConfidentArtist } from "./artistAutoSelect";
 
 function candidate(id: string, score: number | null): MbArtistCandidate {
   return { id, name: id, disambiguation: null, country: null, score };

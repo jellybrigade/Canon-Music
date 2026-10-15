@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  filterByTrackCount,
-  normalizeForMatch,
-  rankCandidates,
-  scoreReleaseGroup,
-  similarity,
-} from "./fuzzyMatch";
 import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
+import { filterByTrackCount, normalizeForMatch, rankCandidates, scoreReleaseGroup, similarity } from "./fuzzyMatch";
 
 function candidate(over: Partial<MbReleaseGroupCandidate> = {}): MbReleaseGroupCandidate {
   return {
@@ -106,7 +100,7 @@ describe("scoreReleaseGroup", () => {
     const right = candidate({ ...base, firstReleaseDate: "2019-04-01" });
     const wrong = candidate({ ...base, firstReleaseDate: "1994-04-01", title: "Sisterhod" });
     expect(scoreReleaseGroup(right, "Some Artist", "Sisterhood", 2019)).toBeGreaterThan(
-      scoreReleaseGroup(wrong, "Some Artist", "Sisterhood", 2019)
+      scoreReleaseGroup(wrong, "Some Artist", "Sisterhood", 2019),
     );
   });
 
@@ -141,7 +135,7 @@ describe("filterByTrackCount", () => {
         candidate({ id: "a", primaryType: "Album" }),
         candidate({ id: "e", primaryType: "EP" }),
       ],
-      2
+      2,
     );
     expect(kept.map((c) => c.id)).toEqual(["s", "a"]);
   });
@@ -149,7 +143,7 @@ describe("filterByTrackCount", () => {
   it("allows EP and Album for a five-track release", () => {
     const kept = filterByTrackCount(
       [candidate({ id: "s", primaryType: "Single" }), candidate({ id: "e", primaryType: "EP" })],
-      5
+      5,
     );
     expect(kept.map((c) => c.id)).toEqual(["e"]);
   });
@@ -173,7 +167,7 @@ describe("rankCandidates", () => {
         candidate({ id: "right", title: "Kid A", artistName: "Radiohead" }),
       ],
       "Radiohead",
-      "Kid A"
+      "Kid A",
     );
     expect(ranked[0]!.candidate.id).toBe("right");
   });
@@ -185,19 +179,16 @@ describe("rankCandidates", () => {
         candidate({ id: "album", primaryType: "Album", score: 100 }),
       ],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked[0]!.candidate.id).toBe("album");
   });
 
   it("falls back to MusicBrainz's own score at an equal type and fuzzy score", () => {
     const ranked = rankCandidates(
-      [
-        candidate({ id: "low", score: 40 }),
-        candidate({ id: "high", score: 95 }),
-      ],
+      [candidate({ id: "low", score: 40 }), candidate({ id: "high", score: 95 })],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked[0]!.candidate.id).toBe("high");
   });
@@ -206,7 +197,7 @@ describe("rankCandidates", () => {
     const ranked = rankCandidates(
       [candidate({ id: "first" }), candidate({ id: "second" }), candidate({ id: "third" })],
       "Some Artist",
-      "Some Album"
+      "Some Album",
     );
     expect(ranked.map((r) => r.candidate.id)).toEqual(["first", "second", "third"]);
   });

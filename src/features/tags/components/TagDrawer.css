@@ -19,8 +19,12 @@
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 .tag-drawer-header {
@@ -148,7 +152,9 @@
   box-shadow: none;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: border-color var(--motion-fast), color var(--motion-fast);
+  transition:
+    border-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .tag-drawer-override:hover {
@@ -227,7 +233,9 @@
 }
 
 /* Combobox below the genre name, full width */
-.td-unmatched-row .tags-combobox { width: 100%; }
+.td-unmatched-row .tags-combobox {
+  width: 100%;
+}
 
 .td-unmatched-row .tags-combobox-input {
   width: 100%;
@@ -242,7 +250,9 @@
   box-sizing: border-box;
 }
 
-.td-unmatched-row .tags-combobox-input:focus { border-color: var(--accent); }
+.td-unmatched-row .tags-combobox-input:focus {
+  border-color: var(--accent);
+}
 
 .td-unmatched-row .tags-mapped {
   display: flex;
@@ -285,7 +295,10 @@
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color var(--duration-fast), border-color var(--duration-fast), background var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast),
+    background var(--duration-fast);
 }
 
 .td-unmatched-row .btn-flat.accept:hover {
@@ -311,7 +324,9 @@
   color: var(--text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
-  transition: color var(--duration-fast), border-color var(--duration-fast);
+  transition:
+    color var(--duration-fast),
+    border-color var(--duration-fast);
 }
 
 .tag-drawer-ignore-btn:hover {

@@ -55,7 +55,10 @@ export const useAlbumBrowseSessionStore = create<AlbumBrowseSessionState>((set, 
         entries.set(key, rows);
         continue;
       }
-      entries.set(key, rows.map((row) => (row.id === albumId ? { ...row, accent_color: accentColor } : row)));
+      entries.set(
+        key,
+        rows.map((row) => (row.id === albumId ? { ...row, accent_color: accentColor } : row)),
+      );
       isChanged = true;
     }
     if (isChanged) set({ entries });

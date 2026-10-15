@@ -1,16 +1,18 @@
+import { useQuery } from "@tanstack/react-query";
 import { lazy, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { CredentialNotice } from "../components/CredentialNotice";
 import { getDb } from "../db";
-import type { AlbumRow, ArtistRow } from "../types/library";
-import type { ServerWithCredential } from "../hooks/useServer";
 import type { PlaylistRow, usePlaylists } from "../features/playlists/usePlaylists";
+import type { ServerWithCredential } from "../hooks/useServer";
 import { QK } from "../lib/queryKeys";
+import type { AlbumRow, ArtistRow } from "../types/library";
 
 const AlbumDetail = lazy(() => import("../pages/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
 const ArtistDetail = lazy(() => import("../pages/ArtistDetail").then((m) => ({ default: m.ArtistDetail })));
-const PlaylistDetail = lazy(() => import("../features/playlists/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })));
+const PlaylistDetail = lazy(() =>
+  import("../features/playlists/PlaylistDetail").then((m) => ({ default: m.PlaylistDetail })),
+);
 
 type PlaylistApi = ReturnType<typeof usePlaylists>;
 
@@ -69,13 +71,20 @@ export function AlbumDetailRoute({
         // `useParams` has already decoded the segment, so `albumId` is the id `albumPath`
         // encoded. Decoding again throws on an id holding a literal `%` and silently
         // rewrites one holding the text `%20` into a space.
-        [albumId!, serverWithCred!.server.id]
+        [albumId!, serverWithCred!.server.id],
       );
       return rows[0] ?? null;
     },
   });
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
+    return (
+      <CredentialGate
+        credError={credError}
+        credPending={credPending}
+        retryCredential={retryCredential}
+        queueClass={queueClass}
+      />
+    );
   }
   // `data` is undefined both while pending and when genuinely absent; `fetchedAlbum ?? null`
   // folded both into a blank page. Same split as PlaylistDetailRoute below.
@@ -85,9 +94,7 @@ export function AlbumDetailRoute({
         {albumPending ? (
           <p className="empty-state">Loading album…</p>
         ) : (
-          <p className="empty-state">
-            That album is no longer here. It may have been removed from the server.
-          </p>
+          <p className="empty-state">That album is no longer here. It may have been removed from the server.</p>
         )}
       </main>
     );
@@ -148,13 +155,20 @@ export function ArtistDetailRoute({
          FROM artists a
          LEFT JOIN artist_identity ai ON ai.artist_name = a.name
          WHERE LOWER(TRIM(a.name)) = LOWER(TRIM(?)) AND a.server_id = ?`,
-        [decodedName!, serverId]
+        [decodedName!, serverId],
       );
       return rows[0] ?? null;
     },
   });
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
+    return (
+      <CredentialGate
+        credError={credError}
+        credPending={credPending}
+        retryCredential={retryCredential}
+        queueClass={queueClass}
+      />
+    );
   }
   if (!decodedName) return null;
   // Held until the lookup settles, else the fallback briefly paints "0 albums" with no portrait.
@@ -222,11 +236,18 @@ export function PlaylistDetailRoute({
   // Already decoded by `useParams`; see the note in `ArtistDetailRoute`.
   const decodedId = playlistId ?? null;
   const playlist = useMemo(
-    () => (decodedId ? playlists?.find((p) => p.id === decodedId) ?? null : null),
-    [playlists, decodedId]
+    () => (decodedId ? (playlists?.find((p) => p.id === decodedId) ?? null) : null),
+    [playlists, decodedId],
   );
   if (!serverWithCred) {
-    return <CredentialGate credError={credError} credPending={credPending} retryCredential={retryCredential} queueClass={queueClass} />;
+    return (
+      <CredentialGate
+        credError={credError}
+        credPending={credPending}
+        retryCredential={retryCredential}
+        queueClass={queueClass}
+      />
+    );
   }
   if (!playlist) {
     return (
@@ -234,9 +255,7 @@ export function PlaylistDetailRoute({
         {playlists === undefined ? (
           <p className="empty-state">Loading playlist…</p>
         ) : (
-          <p className="empty-state">
-            That playlist is no longer here. It may have been deleted on the server.
-          </p>
+          <p className="empty-state">That playlist is no longer here. It may have been deleted on the server.</p>
         )}
       </main>
     );

@@ -1,15 +1,15 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Mic2 } from "lucide-react";
-import { ContextMenu } from "../../ui/ContextMenu";
-import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
-import type { Server } from "../../types/server";
-import type { NavidromeCredential } from "../../clients/navidromeUrls";
-import { useStartRadio } from "../../features/radio/hooks/useStartRadio";
-import { makeStreamUrlBuilder } from "../../lib/track";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
-import { useArtistImageMap, resolveArtistImageUrl } from "../../hooks/useArtistImageCache";
+import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { useEnrichArtist } from "../../features/enrichment/hooks/useEnrichArtist";
-import { useArtistSeedTrack, buildTrackObj } from "./artistQueries";
+import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
+import { useStartRadio } from "../../features/radio/hooks/useStartRadio";
+import { resolveArtistImageUrl, useArtistImageMap } from "../../hooks/useArtistImageCache";
+import { makeStreamUrlBuilder } from "../../lib/track";
+import type { Server } from "../../types/server";
+import { ContextMenu } from "../../ui/ContextMenu";
+import { buildTrackObj, useArtistSeedTrack } from "./artistQueries";
 
 interface SimilarArtistCardProps {
   name: string;
@@ -19,7 +19,13 @@ interface SimilarArtistCardProps {
   credential: NavidromeCredential;
 }
 
-export const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, onSelect, server, credential }: SimilarArtistCardProps) {
+export const SimilarArtistCard = memo(function SimilarArtistCard({
+  name,
+  owned,
+  onSelect,
+  server,
+  credential,
+}: SimilarArtistCardProps) {
   const cardRef = useRef<HTMLButtonElement>(null);
   const [inView, setInView] = useState(false);
 
@@ -31,7 +37,7 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({ name, owned, 
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) setInView(true);
       },
-      { rootMargin: "200px" }
+      { rootMargin: "200px" },
     );
     observer.observe(el);
     return () => observer.disconnect();

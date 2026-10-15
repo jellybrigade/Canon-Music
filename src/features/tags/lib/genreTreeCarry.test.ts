@@ -1,10 +1,10 @@
-import type Database from "@tauri-apps/plugin-sql";
 import { QueryClient } from "@tanstack/react-query";
+import type Database from "@tauri-apps/plugin-sql";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import canonTreeData from "../../../assets/canon-tree.json";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import { invokeArgs, invokeCount } from "../../../test/perf";
+import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 
@@ -50,7 +50,7 @@ describe("planGenreRenames", () => {
         { from: "pyschedelic", fromName: "Pyschedelic", to: "psychedelic" },
         { from: "punk", fromName: "Punk", to: "punk-post-punk-hardcore" },
       ],
-      tree
+      tree,
     );
     expect(plan).toEqual([
       { from: "pyschedelic", to: "psychedelic", toName: "Psychedelic", seed: null },
@@ -65,9 +65,7 @@ describe("planGenreRenames", () => {
 
   it("refuses a rename onto a node the tree does not have", async () => {
     const tree = await getCanonTree();
-    expect(() => planGenreRenames([{ from: "a", fromName: "A", to: "no-such-node" }], tree)).toThrow(
-      /no-such-node/
-    );
+    expect(() => planGenreRenames([{ from: "a", fromName: "A", to: "no-such-node" }], tree)).toThrow(/no-such-node/);
   });
 });
 
@@ -105,7 +103,7 @@ describe("carryGenreTree", () => {
     await carryGenreTree(asDb(testDb()), queryClient);
     const keys = invalidate.mock.calls.map(([filters]) => filters?.queryKey);
     expect(keys).toEqual(
-      expect.arrayContaining([QK.tagVocab(), QK.tagMappings(), QK.normalizedTagsAll(), QK.danglingGenreIds()])
+      expect.arrayContaining([QK.tagVocab(), QK.tagMappings(), QK.normalizedTagsAll(), QK.danglingGenreIds()]),
     );
   });
 });

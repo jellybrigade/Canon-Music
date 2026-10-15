@@ -15,11 +15,14 @@ function lastfmResponse(body: unknown): Response {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.mocked(keychain.get).mockResolvedValue("key");
-  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
-    url.includes("artist.getSimilar")
-      ? lastfmResponse({ similarartists: { artist: [{ name: "B", match: "0.9" }] } })
-      : lastfmResponse({ artist: { similar: { artist: [] } } })
-  ));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      url.includes("artist.getSimilar")
+        ? lastfmResponse({ similarartists: { artist: [{ name: "B", match: "0.9" }] } })
+        : lastfmResponse({ artist: { similar: { artist: [] } } }),
+    ),
+  );
 });
 
 afterEach(() => {

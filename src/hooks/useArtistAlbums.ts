@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getDb } from "../db";
-import type { AlbumRow } from "../types/library";
 import { useArtistAlbumsSessionStore } from "../store/artistAlbumsSessionStore";
+import type { AlbumRow } from "../types/library";
 
 export function useArtistAlbums(artistName: string, serverId: string) {
   const refreshTick = useArtistAlbumsSessionStore((s) => s.refreshTick);
@@ -35,7 +35,7 @@ export function useArtistAlbums(artistName: string, serverId: string) {
              AND (artist = ?
               OR artist IN (SELECT alias_name FROM artist_aliases WHERE canonical_name = ?))
            ORDER BY year IS NULL, year DESC, name`,
-          [serverId, artistName, artistName]
+          [serverId, artistName, artistName],
         );
         if (!cancelled) {
           setData(rows);

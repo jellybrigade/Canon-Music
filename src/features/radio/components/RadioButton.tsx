@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
 import { Radio } from "lucide-react";
+import { useRef, useState } from "react";
 import { useClickOutside } from "../../../ui/useClickOutside";
-import { useStartRadio } from "../hooks/useStartRadio";
 import { usePlayerStore } from "../../playback/store/player";
 import { RADIO_MODES, type RadioMode } from "../../playback/store/playerTypes";
+import { useStartRadio } from "../hooks/useStartRadio";
 import "./RadioButton.css";
 
 export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
@@ -66,7 +66,10 @@ export function RadioButton({ iconSize = 18 }: { iconSize?: number }) {
               <button
                 role="menuitem"
                 className="radio-menu-item radio-menu-item--stop"
-                onClick={() => { setRadioActive(false); setOpen(false); }}
+                onClick={() => {
+                  setRadioActive(false);
+                  setOpen(false);
+                }}
               >
                 Stop radio
               </button>

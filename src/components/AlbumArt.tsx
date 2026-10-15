@@ -37,7 +37,9 @@ export function AlbumArt({ src, artist, album, alt = "", className, loading, dec
       className={className}
       loading={loading}
       decoding={decoding}
-      onError={() => { void handleError(); }}
+      onError={() => {
+        void handleError();
+      }}
     />
   );
 }

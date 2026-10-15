@@ -1,7 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { describe, expect, it } from "vitest";
-import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./dbBatch";
 import { createTestDb, type FakeDatabase } from "../test/sqlite";
+import { executeBatched, executeIdChunks, SQLITE_MAX_VARIABLES } from "./dbBatch";
 
 // dbBatch.ts's signature only asks for the execute/select surface the plugin's Database
 // provides, which FakeDatabase already implements - the plugin's own class also carries a
@@ -28,7 +28,13 @@ describe("executeBatched", () => {
   it("chunks rows so each statement calls buildSql with only that chunk's placeholders", async () => {
     const db = createTestDb();
     await db.execute("CREATE TABLE x (a INTEGER, b INTEGER)");
-    const rows = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]];
+    const rows = [
+      [1, 2],
+      [3, 4],
+      [5, 6],
+      [7, 8],
+      [9, 10],
+    ];
     const calls: string[] = [];
     await executeBatched(asDb(db), rows, "(?, ?)", 2, (ph) => {
       calls.push(ph);
@@ -100,7 +106,7 @@ describe("executeIdChunks", () => {
     seedTracks(db, [...keep, ...deleteTarget]);
 
     await expect(
-      executeIdChunks(asDb(db), deleteTarget, (ph) => `DELETE FROM tracks WHERE id NOT IN (${ph})`)
+      executeIdChunks(asDb(db), deleteTarget, (ph) => `DELETE FROM tracks WHERE id NOT IN (${ph})`),
     ).rejects.toThrow(/NOT IN/i);
   });
 

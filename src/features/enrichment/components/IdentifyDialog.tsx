@@ -1,15 +1,20 @@
-import { useState, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { CheckCircle, XCircle, AlertCircle, Loader, Search, ExternalLink } from "lucide-react";
-import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQuery } from "@tanstack/react-query";
-import { useAlbumIdentity, useIdentifyAlbum, useSaveAlbumIdentity, useConfirmedArtistMbid } from "../hooks/useAlbumIdentity";
-import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
-import { searchReleaseGroups, searchArtists } from "../../../clients/musicbrainz";
-import type { MbReleaseGroupCandidate, MbArtistCandidate } from "../../../clients/musicbrainz";
-import { rankCandidates } from "../lib/fuzzyMatch";
-import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { AlertCircle, CheckCircle, ExternalLink, Loader, Search, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import type { MbArtistCandidate, MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
+import { searchArtists, searchReleaseGroups } from "../../../clients/musicbrainz";
+import { useSetting } from "../../../hooks/useSetting";
 import { useModalChrome } from "../../../ui/useModalChrome";
+import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
+import {
+  useAlbumIdentity,
+  useConfirmedArtistMbid,
+  useIdentifyAlbum,
+  useSaveAlbumIdentity,
+} from "../hooks/useAlbumIdentity";
+import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
 import {
   ARTIST_AUTO_SELECT_SETTING,
@@ -17,7 +22,7 @@ import {
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
-import { useSetting } from "../../../hooks/useSetting";
+import { rankCandidates } from "../lib/fuzzyMatch";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -29,8 +34,17 @@ function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist";
       role="button"
       tabIndex={0}
       aria-label="Open on MusicBrainz"
-      onClick={(e) => { e.stopPropagation(); open(); }}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); open(); } }}
+      onClick={(e) => {
+        e.stopPropagation();
+        open();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          open();
+        }
+      }}
     >
       <ExternalLink size={13} />
     </span>
@@ -51,7 +65,15 @@ interface AlbumIdentifyDialogProps {
   onClose: () => void;
 }
 
-export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, confirmedArtistMbid, onClose }: AlbumIdentifyDialogProps) {
+export function AlbumIdentifyDialog({
+  albumId,
+  artist,
+  album,
+  trackCount,
+  year,
+  confirmedArtistMbid,
+  onClose,
+}: AlbumIdentifyDialogProps) {
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
   const dismiss = useOverlayDismiss(onClose);
@@ -147,8 +169,8 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
     // If lfm fields were used as search queries (not changed after "Look up"), restore
     // the original saved values rather than persisting the search string as an override.
-    const lastfmArtist = lfmArtistUsedForSearch ? (initialLfmArtist || null) : (lfmArtist.trim() || null);
-    const lastfmAlbum = lfmAlbumUsedForSearch ? (initialLfmAlbum || null) : (lfmAlbum.trim() || null);
+    const lastfmArtist = lfmArtistUsedForSearch ? initialLfmArtist || null : lfmArtist.trim() || null;
+    const lastfmAlbum = lfmAlbumUsedForSearch ? initialLfmAlbum || null : lfmAlbum.trim() || null;
 
     await saveIdentity.mutateAsync({
       albumId,
@@ -180,7 +202,9 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
       <div className="identify-dialog" {...chrome} aria-label="Identify Album">
         <div className="identify-header">
           <h2 className="identify-title">Identify Album</h2>
-          <button className="identify-close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="identify-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
 
         <div className="identify-body">
@@ -224,14 +248,20 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
           {/* ── Album name / artist override ── */}
           <section className="identify-section">
             <h3 className="identify-section-title">Last.fm strings</h3>
-            <p className="identify-hint">Override the artist/album name used for Last.fm lookups (e.g. fix typos, alternate titles).</p>
+            <p className="identify-hint">
+              Override the artist/album name used for Last.fm lookups (e.g. fix typos, alternate titles).
+            </p>
             <label className="identify-field">
               <span>Artist</span>
               <input
                 type="text"
                 placeholder={artist}
                 value={lfmArtist}
-                onChange={(e) => { setLfmArtist(e.target.value); setLfmArtistUsedForSearch(false); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setLfmArtist(e.target.value);
+                  setLfmArtistUsedForSearch(false);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
             <label className="identify-field">
@@ -240,7 +270,11 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                 type="text"
                 placeholder={album}
                 value={lfmAlbum}
-                onChange={(e) => { setLfmAlbum(e.target.value); setLfmAlbumUsedForSearch(false); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setLfmAlbum(e.target.value);
+                  setLfmAlbumUsedForSearch(false);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
           </section>
@@ -254,7 +288,11 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                 type="text"
                 placeholder="e.g. 76df3287-6cda-33eb-8e9a-044b5e15ffdd"
                 value={mbRgId}
-                onChange={(e) => { setMbRgId(e.target.value); setSelectedCandidate(null); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setMbRgId(e.target.value);
+                  setSelectedCandidate(null);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
             <label className="identify-field">
@@ -263,7 +301,10 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                 type="text"
                 placeholder="specific pressing MBID"
                 value={mbReleaseId}
-                onChange={(e) => { setMbReleaseId(e.target.value); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setMbReleaseId(e.target.value);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
             <label className="identify-field">
@@ -272,18 +313,17 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                 type="text"
                 placeholder="artist MBID"
                 value={mbArtistId}
-                onChange={(e) => { setMbArtistId(e.target.value); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setMbArtistId(e.target.value);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
           </section>
 
           {/* ── Fetch button ── */}
           <div className="identify-actions-row">
-            <button
-              className="identify-btn identify-btn--fetch"
-              onClick={handleFetch}
-              disabled={isFetching}
-            >
+            <button className="identify-btn identify-btn--fetch" onClick={handleFetch} disabled={isFetching}>
               {isFetching ? <Loader size={14} className="identify-spinner" /> : <Search size={14} />}
               {isFetching ? "Looking up…" : "Look up"}
             </button>
@@ -300,7 +340,9 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
+                  <p className="identify-hint">
+                    {candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}
+                  </p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
@@ -331,9 +373,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                   </div>
                   <div className="identify-fact-row">
                     <span className="identify-fact-label">Year</span>
-                    <span className="identify-fact-value">
-                      {rgDetail.firstReleaseDate?.slice(0, 4) ?? "-"}
-                    </span>
+                    <span className="identify-fact-value">{rgDetail.firstReleaseDate?.slice(0, 4) ?? "-"}</span>
                   </div>
                   {releaseDetail?.label && (
                     <div className="identify-fact-row">
@@ -357,7 +397,10 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
                     <div className="identify-fact-row">
                       <span className="identify-fact-label">Genres</span>
                       <span className="identify-fact-value">
-                        {combinedGenres.slice(0, 6).map((g) => g.name).join(" · ")}
+                        {combinedGenres
+                          .slice(0, 6)
+                          .map((g) => g.name)
+                          .join(" · ")}
                       </span>
                     </div>
                   )}
@@ -369,7 +412,9 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
               )}
 
               {lookupResult.mbStatus === "not_found" && (
-                <p className="identify-hint identify-hint--warn">No match found on MusicBrainz. Try entering the MBID directly.</p>
+                <p className="identify-hint identify-hint--warn">
+                  No match found on MusicBrainz. Try entering the MBID directly.
+                </p>
               )}
 
               {lookupResult.mbStatus === "error" && (
@@ -381,7 +426,9 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
 
         {/* ── Footer ── */}
         <div className="identify-footer">
-          <button className="identify-btn" onClick={onClose}>Cancel</button>
+          <button className="identify-btn" onClick={onClose}>
+            Cancel
+          </button>
           <button
             className="identify-btn identify-btn--primary"
             onClick={() => void handleConfirm()}
@@ -392,7 +439,7 @@ export function AlbumIdentifyDialog({ albumId, artist, album, trackCount, year, 
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 
@@ -447,17 +494,23 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
     if (isSavedIdentityPending || isConfirmedArtistMbidPending || !isMinAutoSelectScoreLoaded) return;
     setHasAutoSelected(true);
     if (savedIdentity?.confirmed_at != null) return;
-    const match = searchResults.find((c) => c.id === confirmedArtistMbid)
-      ?? pickConfidentArtist(searchResults, minAutoSelectScore);
+    const match =
+      searchResults.find((c) => c.id === confirmedArtistMbid) ?? pickConfidentArtist(searchResults, minAutoSelectScore);
     if (match) {
       setSelectedCandidate(match.id);
       setMbArtistId(match.id);
       setFetchEnabled(true);
     }
   }, [
-    hasAutoSelected, savedIdentity, isSavedIdentityPending, selectedCandidate,
-    confirmedArtistMbid, isConfirmedArtistMbidPending, searchResults,
-    minAutoSelectScore, isMinAutoSelectScoreLoaded,
+    hasAutoSelected,
+    savedIdentity,
+    isSavedIdentityPending,
+    selectedCandidate,
+    confirmedArtistMbid,
+    isConfirmedArtistMbidPending,
+    searchResults,
+    minAutoSelectScore,
+    isMinAutoSelectScoreLoaded,
   ]);
 
   const { data: lookupResult, isFetching } = useIdentifyArtist({
@@ -484,7 +537,9 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
   }
 
   async function handleConfirm() {
-    const lastfmArtist = lfmArtistUsedForSearch ? (initialLfmArtist || null) : (lfmArtist.trim() || lookupResult?.mbDetail?.name || null);
+    const lastfmArtist = lfmArtistUsedForSearch
+      ? initialLfmArtist || null
+      : lfmArtist.trim() || lookupResult?.mbDetail?.name || null;
     await saveIdentity.mutateAsync({
       artistName,
       mbArtistId: effectiveMbArtistId ?? lookupResult?.mbDetail?.id ?? null,
@@ -502,7 +557,9 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
       <div className="identify-dialog" {...chrome} aria-label="Identify Artist">
         <div className="identify-header">
           <h2 className="identify-title">Identify Artist</h2>
-          <button className="identify-close" onClick={onClose} aria-label="Close">✕</button>
+          <button className="identify-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
         </div>
 
         <div className="identify-body">
@@ -556,7 +613,11 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                 type="text"
                 placeholder={artistName}
                 value={lfmArtist}
-                onChange={(e) => { setLfmArtist(e.target.value); setLfmArtistUsedForSearch(false); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setLfmArtist(e.target.value);
+                  setLfmArtistUsedForSearch(false);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
           </section>
@@ -569,17 +630,17 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                 type="text"
                 placeholder="e.g. 65f4f0c5-ef9e-490c-aee3-909e7ae6b2ab"
                 value={mbArtistId}
-                onChange={(e) => { setMbArtistId(e.target.value); setSelectedCandidate(null); setFetchEnabled(false); }}
+                onChange={(e) => {
+                  setMbArtistId(e.target.value);
+                  setSelectedCandidate(null);
+                  setFetchEnabled(false);
+                }}
               />
             </label>
           </section>
 
           <div className="identify-actions-row">
-            <button
-              className="identify-btn identify-btn--fetch"
-              onClick={handleFetch}
-              disabled={isFetching}
-            >
+            <button className="identify-btn identify-btn--fetch" onClick={handleFetch} disabled={isFetching}>
               {isFetching ? <Loader size={14} className="identify-spinner" /> : <Search size={14} />}
               {isFetching ? "Looking up…" : "Look up"}
             </button>
@@ -594,7 +655,9 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
 
               {isAmbiguous && candidates.length > 0 && (
                 <div className="identify-candidates">
-                  <p className="identify-hint">{candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}</p>
+                  <p className="identify-hint">
+                    {candidates.length === 1 ? "Select to confirm:" : "Multiple matches, select one:"}
+                  </p>
                   {candidates.map((c) => (
                     <button
                       key={c.id}
@@ -605,12 +668,8 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                         <span className="identify-candidate-title">{c.name}</span>
                         <MusicBrainzBrowseLink kind="artist" id={c.id} />
                       </div>
-                      {c.disambiguation && (
-                        <span className="identify-candidate-meta">{c.disambiguation}</span>
-                      )}
-                      {c.country && (
-                        <span className="identify-candidate-meta">{c.country}</span>
-                      )}
+                      {c.disambiguation && <span className="identify-candidate-meta">{c.disambiguation}</span>}
+                      {c.country && <span className="identify-candidate-meta">{c.country}</span>}
                     </button>
                   ))}
                 </div>
@@ -638,7 +697,10 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
                     <div className="identify-fact-row">
                       <span className="identify-fact-label">Genres</span>
                       <span className="identify-fact-value">
-                        {artistDetail.genres.slice(0, 6).map((g) => g.name).join(" · ")}
+                        {artistDetail.genres
+                          .slice(0, 6)
+                          .map((g) => g.name)
+                          .join(" · ")}
                       </span>
                     </div>
                   )}
@@ -661,7 +723,9 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
         </div>
 
         <div className="identify-footer">
-          <button className="identify-btn" onClick={onClose}>Cancel</button>
+          <button className="identify-btn" onClick={onClose}>
+            Cancel
+          </button>
           <button
             className="identify-btn identify-btn--primary"
             onClick={() => void handleConfirm()}
@@ -672,7 +736,7 @@ export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDial
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }
 

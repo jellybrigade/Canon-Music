@@ -1,29 +1,29 @@
+import { AlertCircle, ChevronLeft, ListX, RefreshCw } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
-import { ChevronLeft, RefreshCw, ListX, AlertCircle } from "lucide-react";
-import { usePlayerStore } from "../store/player";
-import { isNextDisabled, type RadioMode } from "../store/playerTypes";
-import { PlaybackErrorActions } from "./PlaybackErrorActions";
-import { useLoved } from "../../../hooks/useLoved";
-import { useLyrics, type LyricsOverride } from "../hooks/useLyrics";
-import type { ServerWithCredential } from "../../../hooks/useServer";
-import type { AlbumRow } from "../../../types/library";
-import { ArtBackdrop } from "../../../components/ArtBackdrop";
+import { type BandsintownEvent, fetchBandsintownEvents } from "../../../clients/bandsintown";
 import { parseLrc } from "../../../clients/lrclib";
-import { primaryArtistOf } from "../lib/nowPlayingQueries";
-import { fetchBandsintownEvents, type BandsintownEvent } from "../../../clients/bandsintown";
-import { useBoolSetting } from "../../../hooks/useSetting";
-import { AlbumArt } from "../../../components/AlbumArt";
-import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
-import { NowPlayingProgress } from "./NowPlayingProgress";
-import { LyricsTabPanel } from "./LyricsTabPanel";
-import { NowPlayingControls } from "./NowPlayingControls";
-import { UpNextList } from "./UpNextList";
-import { NowPlayingAbout } from "./NowPlayingAbout";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { AlbumArt } from "../../../components/AlbumArt";
+import { ArtBackdrop } from "../../../components/ArtBackdrop";
+import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
+import { useLoved } from "../../../hooks/useLoved";
+import type { ServerWithCredential } from "../../../hooks/useServer";
+import { useBoolSetting } from "../../../hooks/useSetting";
+import type { AlbumRow } from "../../../types/library";
+import { type LyricsOverride, useLyrics } from "../hooks/useLyrics";
+import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
+import { primaryArtistOf } from "../lib/nowPlayingQueries";
 import { albumRowOfTrack } from "../lib/trackAlbum";
 import { displayedWaveformPeaks } from "../lib/waveformDisplay";
+import { usePlayerStore } from "../store/player";
+import { isNextDisabled, type RadioMode } from "../store/playerTypes";
+import { LyricsTabPanel } from "./LyricsTabPanel";
+import { NowPlayingAbout } from "./NowPlayingAbout";
+import { NowPlayingControls } from "./NowPlayingControls";
+import { NowPlayingProgress } from "./NowPlayingProgress";
+import { PlaybackErrorActions } from "./PlaybackErrorActions";
+import { UpNextList } from "./UpNextList";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
@@ -36,7 +36,14 @@ interface Props {
   onOpenResync: () => void;
   onBack?: () => void;
 }
-export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectArtist, onStartRadio, onOpenResync, onBack }: Props) {
+export function NowPlayingView({
+  serverWithCredential,
+  onSelectAlbum,
+  onSelectArtist,
+  onStartRadio,
+  onOpenResync,
+  onBack,
+}: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
@@ -66,16 +73,19 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   const primaryArtist = primaryArtistOf(currentTrack?.artist);
   const { data: artistAlbums, isPending: albumsPending } = useNowPlayingAlbums(primaryArtist, server.id);
   const { data: topTracks, isPending: topTracksPending } = useNowPlayingTopTracks(primaryArtist, server.id);
-  const { data: suggestedTracks } = useSuggestedTracks(
-    primaryArtist,
-    currentTrack?.id ?? null,
-    server.id
-  );
+  const { data: suggestedTracks } = useSuggestedTracks(primaryArtist, currentTrack?.id ?? null, server.id);
   // Both start out `undefined`, which is indistinguishable from "the artist has nothing" unless
   // the pending flags are consulted. Without them the About tab asserted "No artist info
   // available." for the whole of the Last.fm round trip, then replaced it with the content.
   const aboutPending = !!primaryArtist && (albumsPending || topTracksPending);
-  const { plain: lyricsPlain, synced: lyricsSynced, loading: lyricsLoading, refresh: lyricsRefresh, offsetMs: lyricsOffsetMs, setOffsetMs: setLyricsOffsetMs } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
+  const {
+    plain: lyricsPlain,
+    synced: lyricsSynced,
+    loading: lyricsLoading,
+    refresh: lyricsRefresh,
+    offsetMs: lyricsOffsetMs,
+    setOffsetMs: setLyricsOffsetMs,
+  } = useLyrics(currentTrack ?? null, lyricsOverride, serverWithCredential);
   const lyricsLines = useMemo(() => (lyricsSynced ? parseLrc(lyricsSynced) : null), [lyricsSynced]);
   const accent = usePlayerStore((s) => s.accentColor);
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
@@ -91,15 +101,19 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     }
     let cancelled = false;
     setTourLoading(true);
-    fetchBandsintownEvents(primaryArtist).then((events) => {
-      if (!cancelled) {
-        setTourEvents(events);
-        setTourLoading(false);
-      }
-    }).catch(() => {
-      if (!cancelled) setTourLoading(false);
-    });
-    return () => { cancelled = true; };
+    fetchBandsintownEvents(primaryArtist)
+      .then((events) => {
+        if (!cancelled) {
+          setTourEvents(events);
+          setTourLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTourLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [bandsintownEnabled, primaryArtist]);
 
   // Downsample to 80 bars for the overlay, reduces DOM nodes from 200 and cuts jank.
@@ -121,18 +135,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)
-    : currentTrack?.coverArtUrl ?? null;
+    : (currentTrack?.coverArtUrl ?? null);
   // Blur destroys detail anyway, so the full-viewport blurred backdrop only needs a
   // tiny source image (avoids WebKit running its expensive blur filter over 600px
   // of pixels it's about to throw away).
   const blurArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 64)
-    : currentTrack?.coverArtUrl ?? null;
-
+    : (currentTrack?.coverArtUrl ?? null);
 
   const otherAlbums = useMemo(
     () => artistAlbums?.filter((a) => a.id !== currentTrack?.albumId) ?? [],
-    [artistAlbums, currentTrack?.albumId]
+    [artistAlbums, currentTrack?.albumId],
   );
 
   useEffect(() => {
@@ -150,7 +163,6 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab, queueIndex]);
 
-
   if (!currentTrack) {
     return (
       <div className="now-playing-view now-playing-view--empty">
@@ -162,9 +174,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
   return (
     <div
       className="now-playing-view"
-      style={{
-        ...(accent ? { '--np-dominant': accent } : {}),
-      } as React.CSSProperties}
+      style={
+        {
+          ...(accent ? { "--np-dominant": accent } : {}),
+        } as React.CSSProperties
+      }
     >
       <ArtBackdrop imageUrl={blurArtUrl} className="now-playing-backdrop" />
       {onBack && (
@@ -189,10 +203,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
 
           <div className="now-playing-info">
             <div className="now-playing-title-row">
-              <p className="now-playing-title" title={currentTrack.title}>{currentTrack.title}</p>
+              <p className="now-playing-title" title={currentTrack.title}>
+                {currentTrack.title}
+              </p>
             </div>
-            {currentTrack.artist && (
-              onSelectArtist ? (
+            {currentTrack.artist &&
+              (onSelectArtist ? (
                 <button
                   className="now-playing-artist now-playing-artist--link"
                   onClick={() => onSelectArtist(currentTrack.artist!)}
@@ -201,10 +217,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 </button>
               ) : (
                 <p className="now-playing-artist">{currentTrack.artist}</p>
-              )
-            )}
-            {currentTrack.album && (
-              currentAlbum ? (
+              ))}
+            {currentTrack.album &&
+              (currentAlbum ? (
                 <button
                   className="now-playing-album now-playing-album--link"
                   onClick={() => onSelectAlbum(currentAlbum)}
@@ -213,14 +228,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 </button>
               ) : (
                 <p className="now-playing-album">{albumDisplayName(currentTrack.album!)}</p>
-              )
-            )}
+              ))}
           </div>
 
-          <NowPlayingProgress
-            duration={duration}
-            overlayPeaks={overlayPeaks}
-          />
+          <NowPlayingProgress duration={duration} overlayPeaks={overlayPeaks} />
 
           {error && (
             <div className="now-playing-error" role="alert">
@@ -243,7 +254,11 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 ? `${(audioFormat.sampleRate / 1000).toFixed(1)} kHz`
                 : `${audioFormat.sampleRate} Hz`}
               {" · "}
-              {audioFormat.channels === 1 ? "mono" : audioFormat.channels === 2 ? "stereo" : `${audioFormat.channels}ch`}
+              {audioFormat.channels === 1
+                ? "mono"
+                : audioFormat.channels === 2
+                  ? "stereo"
+                  : `${audioFormat.channels}ch`}
             </div>
           )}
 
@@ -287,14 +302,17 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       title="Shift lyrics earlier (−500ms)"
                       style={{ margin: 0 }}
                       onClick={() => void setLyricsOffsetMs(lyricsOffsetMs - 500)}
-                    >−</button>
+                    >
+                      −
+                    </button>
                     {lyricsOffsetMs !== 0 && (
                       <button
                         className="lyrics-offset-value"
                         title="Reset offset"
                         onClick={() => void setLyricsOffsetMs(0)}
                       >
-                        {lyricsOffsetMs > 0 ? "+" : ""}{(lyricsOffsetMs / 1000).toFixed(1)}s
+                        {lyricsOffsetMs > 0 ? "+" : ""}
+                        {(lyricsOffsetMs / 1000).toFixed(1)}s
                       </button>
                     )}
                     <button
@@ -302,7 +320,9 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                       title="Shift lyrics later (+500ms)"
                       style={{ margin: 0 }}
                       onClick={() => void setLyricsOffsetMs(lyricsOffsetMs + 500)}
-                    >+</button>
+                    >
+                      +
+                    </button>
                   </div>
                 )}
                 <button
@@ -318,7 +338,10 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                   title="Re-fetch lyrics"
                   disabled={lyricsLoading}
                   style={{ margin: 0 }}
-                  onClick={() => { setLyricsOverride(null); void lyricsRefresh(); }}
+                  onClick={() => {
+                    setLyricsOverride(null);
+                    void lyricsRefresh();
+                  }}
                 >
                   <RefreshCw size={13} className={lyricsLoading ? "spin" : ""} />
                 </button>
@@ -344,7 +367,12 @@ export function NowPlayingView({ serverWithCredential, onSelectAlbum, onSelectAr
                 otherAlbums={otherAlbums}
                 topTracks={topTracks}
                 suggestedTracks={suggestedTracks}
-                tour={{ enabled: bandsintownEnabled, loading: tourLoading, events: tourEvents, onEnable: () => void setBandsintownEnabled(true) }}
+                tour={{
+                  enabled: bandsintownEnabled,
+                  loading: tourLoading,
+                  events: tourEvents,
+                  onEnable: () => void setBandsintownEnabled(true),
+                }}
                 onSelectAlbum={onSelectAlbum}
                 onSelectArtist={onSelectArtist}
                 onStartRadio={onStartRadio}

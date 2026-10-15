@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bucketize } from "./tagBuckets";
 import type { CanonTree, NodeSection, TreeNode } from "./canonicalize";
+import { bucketize } from "./tagBuckets";
 
 function node(id: string, ...sections: NodeSection[]): TreeNode {
   return { id, name: id, type: "genre", canonical_key: id, parents: [], sections };

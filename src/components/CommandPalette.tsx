@@ -1,9 +1,9 @@
+import { House, List, ListMusic, Music, Play, Settings, User, Users } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
-import { House, Music, Users, ListMusic, Settings, List, Play, User } from "lucide-react";
-import { useSearch } from "../features/search/useSearch";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { useSearch } from "../features/search/useSearch";
+import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../hooks/useServer";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
@@ -50,12 +50,12 @@ type Item = NavCommand | AlbumResult | TrackResult | ArtistResult;
 const itemKey = (item: Item) => `${item.kind}:${item.id}`;
 
 const NAV_COMMANDS: NavCommand[] = [
-  { kind: "nav", id: "nav-home",      label: "Home",      icon: <House size={16} />,     view: "home" },
-  { kind: "nav", id: "nav-library",   label: "Library",   icon: <Music size={16} />,     view: "library" },
-  { kind: "nav", id: "nav-artists",   label: "Artists",   icon: <Users size={16} />,     view: "artists" },
+  { kind: "nav", id: "nav-home", label: "Home", icon: <House size={16} />, view: "home" },
+  { kind: "nav", id: "nav-library", label: "Library", icon: <Music size={16} />, view: "library" },
+  { kind: "nav", id: "nav-artists", label: "Artists", icon: <Users size={16} />, view: "artists" },
   { kind: "nav", id: "nav-playlists", label: "Playlists", icon: <ListMusic size={16} />, view: "playlists" },
-  { kind: "nav", id: "nav-queue",     label: "Queue",     icon: <List size={16} />,      view: "nowplaying" },
-  { kind: "nav", id: "nav-settings",  label: "Settings",  icon: <Settings size={16} />,  view: "settings" },
+  { kind: "nav", id: "nav-queue", label: "Queue", icon: <List size={16} />, view: "nowplaying" },
+  { kind: "nav", id: "nav-settings", label: "Settings", icon: <Settings size={16} />, view: "settings" },
 ];
 
 const RESULTS_CAP = 5;
@@ -75,7 +75,16 @@ interface Props {
   serverId?: string;
 }
 
-export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, serverWithCredential, serverId }: Props) {
+export function CommandPalette({
+  open,
+  onClose,
+  onNavigate,
+  onSelectAlbum,
+  onSelectArtist,
+  onPlayTrack,
+  serverWithCredential,
+  serverId,
+}: Props) {
   const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
   const [deferred, setDeferred] = useState("");
@@ -94,51 +103,71 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   const { data: results, isError } = useSearch(deferred, serverId ?? serverWithCredential?.server.id);
 
   const searchAlbums: AlbumResult[] = deferred
-    ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({ kind: "album" as const, id: a.id, server_id: a.server_id, name: a.name, artist: a.artist, artwork_url: a.artwork_url })) ?? [])
+    ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({
+        kind: "album" as const,
+        id: a.id,
+        server_id: a.server_id,
+        name: a.name,
+        artist: a.artist,
+        artwork_url: a.artwork_url,
+      })) ?? [])
     : [];
   const searchTracks: TrackResult[] = deferred
-    ? (results?.tracks.slice(0, RESULTS_CAP).map((t) => ({ kind: "track" as const, id: t.id, title: t.title, artist: t.artist, album_name: t.album_name })) ?? [])
+    ? (results?.tracks.slice(0, RESULTS_CAP).map((t) => ({
+        kind: "track" as const,
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        album_name: t.album_name,
+      })) ?? [])
     : [];
   const searchArtists: ArtistResult[] = deferred
-    ? (results?.artists.slice(0, RESULTS_CAP).map((a) => ({ kind: "artist" as const, id: `artist-${a.name}`, name: a.name, album_count: a.album_count })) ?? [])
+    ? (results?.artists
+        .slice(0, RESULTS_CAP)
+        .map((a) => ({ kind: "artist" as const, id: `artist-${a.name}`, name: a.name, album_count: a.album_count })) ??
+      [])
     : [];
 
-  const items: Item[] = deferred
-    ? [...searchArtists, ...searchAlbums, ...searchTracks]
-    : NAV_COMMANDS;
+  const items: Item[] = deferred ? [...searchArtists, ...searchAlbums, ...searchTracks] : NAV_COMMANDS;
 
   // Nothing focused, or a row that has since gone: the first row, which is what a freshly
   // arrived result set should offer Enter.
-  const focusedIdx = Math.max(0, items.findIndex((item) => itemKey(item) === focusedKey));
+  const focusedIdx = Math.max(
+    0,
+    items.findIndex((item) => itemKey(item) === focusedKey),
+  );
 
   const artistOffset = 0;
   const albumOffset = searchArtists.length;
   const trackOffset = searchArtists.length + searchAlbums.length;
 
-  const activate = useCallback((item: Item) => {
-    if (item.kind === "nav") {
-      onNavigate(item.view);
-    } else if (item.kind === "album") {
-      onSelectAlbum({
-        id: item.id,
-        // From the row, never the selected server: stamping the current
-        // selection onto a row is what silently builds URLs against the
-        // wrong host (see known-issues.md).
-        server_id: item.server_id,
-        name: item.name,
-        artist: item.artist,
-        year: null,
-        artwork_url: item.artwork_url,
-      });
-    } else if (item.kind === "track") {
-      onPlayTrack(item.id);
-    } else if (item.kind === "artist") {
-      onSelectArtist(item.name, item.album_count);
-    }
-    onClose();
-    // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
-    // replaced server object would only churn this callback's identity.
-  }, [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose]);
+  const activate = useCallback(
+    (item: Item) => {
+      if (item.kind === "nav") {
+        onNavigate(item.view);
+      } else if (item.kind === "album") {
+        onSelectAlbum({
+          id: item.id,
+          // From the row, never the selected server: stamping the current
+          // selection onto a row is what silently builds URLs against the
+          // wrong host (see known-issues.md).
+          server_id: item.server_id,
+          name: item.name,
+          artist: item.artist,
+          year: null,
+          artwork_url: item.artwork_url,
+        });
+      } else if (item.kind === "track") {
+        onPlayTrack(item.id);
+      } else if (item.kind === "artist") {
+        onSelectArtist(item.name, item.album_count);
+      }
+      onClose();
+      // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
+      // replaced server object would only churn this callback's identity.
+    },
+    [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose],
+  );
 
   useEffect(() => {
     if (open) {
@@ -151,7 +180,9 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     }
   }, [open]);
 
-  useEffect(() => { setFocusedKey(null); }, [deferred]);
+  useEffect(() => {
+    setFocusedKey(null);
+  }, [deferred]);
 
   // .cp-results is a 420px scroller and there can be 15 result rows, so arrowing
   // down past the fold otherwise moves a selection the user can't see.
@@ -171,7 +202,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
       const { items, focusedIdx, activate, onClose } = keysRef.current;
-      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         const delta = e.key === "ArrowDown" ? 1 : -1;
@@ -179,7 +213,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
         // listener, so two presses arriving in one task are batched and both would read the
         // same snapshot and move a single row between them.
         setFocusedKey((current) => {
-          const from = Math.max(0, items.findIndex((item) => itemKey(item) === current));
+          const from = Math.max(
+            0,
+            items.findIndex((item) => itemKey(item) === current),
+          );
           const to = items[Math.min(Math.max(from + delta, 0), items.length - 1)];
           return to ? itemKey(to) : current;
         });
@@ -198,7 +235,8 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
   // placeholderData keeps the previous query's rows around on failure, so the
   // error branch has to win outright rather than render alongside stale results.
   const showResults = !isError && results;
-  const isEmpty = deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
+  const isEmpty =
+    deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
 
   return (
     <div className="cp-backdrop" {...dismiss}>
@@ -227,7 +265,10 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     ref={i === focusedIdx ? focusedRef : null}
                     className={`cp-nav-item${i === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedKey(itemKey(cmd))}
-                    onMouseDown={(e) => { e.preventDefault(); activate(cmd); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      activate(cmd);
+                    }}
                   >
                     <span className="cp-nav-icon">{cmd.icon}</span>
                     <span className="cp-nav-label">{cmd.label}</span>
@@ -237,17 +278,11 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
             </div>
           )}
 
-          {deferred && isError && (
-            <p className="cp-empty">Search failed. The library database could not be read.</p>
-          )}
+          {deferred && isError && <p className="cp-empty">Search failed. The library database could not be read.</p>}
 
-          {deferred && !isError && !results && (
-            <p className="cp-empty">Searching…</p>
-          )}
+          {deferred && !isError && !results && <p className="cp-empty">Searching…</p>}
 
-          {deferred && showResults && isEmpty && (
-            <p className="cp-empty">No results for "{deferred}"</p>
-          )}
+          {deferred && showResults && isEmpty && <p className="cp-empty">No results for "{deferred}"</p>}
 
           {deferred && showResults && searchArtists.length > 0 && (
             <div className="cp-section">
@@ -260,9 +295,14 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedKey(itemKey(artist))}
-                    onMouseDown={(e) => { e.preventDefault(); activate(artist); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      activate(artist);
+                    }}
                   >
-                    <div className="cp-track-icon"><User size={14} /></div>
+                    <div className="cp-track-icon">
+                      <User size={14} />
+                    </div>
                     <span className="cp-result-primary">{artist.name}</span>
                     <span className="cp-result-secondary">{artist.album_count} albums</span>
                   </button>
@@ -276,20 +316,32 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
               <p className="cp-section-label">Albums</p>
               {searchAlbums.map((album, i) => {
                 const idx = albumOffset + i;
-                const artUrl = serverWithCredential && album.artwork_url
-                  ? getCoverArtUrl(serverWithCredential.server.url, serverWithCredential.server.username, serverWithCredential.credential, album.artwork_url, 48)
-                  : null;
+                const artUrl =
+                  serverWithCredential && album.artwork_url
+                    ? getCoverArtUrl(
+                        serverWithCredential.server.url,
+                        serverWithCredential.server.username,
+                        serverWithCredential.credential,
+                        album.artwork_url,
+                        48,
+                      )
+                    : null;
                 return (
                   <button
                     key={album.id}
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedKey(itemKey(album))}
-                    onMouseDown={(e) => { e.preventDefault(); activate(album); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      activate(album);
+                    }}
                   >
-                    {artUrl
-                      ? <img className="cp-art" src={artUrl} alt="" />
-                      : <div className="cp-art cp-art--placeholder" />}
+                    {artUrl ? (
+                      <img className="cp-art" src={artUrl} alt="" />
+                    ) : (
+                      <div className="cp-art cp-art--placeholder" />
+                    )}
                     <span className="cp-result-primary">{albumDisplayName(album.name)}</span>
                     {album.artist && <span className="cp-result-secondary">{album.artist}</span>}
                   </button>
@@ -309,9 +361,14 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
                     ref={idx === focusedIdx ? focusedRef : null}
                     className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedKey(itemKey(track))}
-                    onMouseDown={(e) => { e.preventDefault(); activate(track); }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      activate(track);
+                    }}
                   >
-                    <div className="cp-track-icon"><Play size={14} /></div>
+                    <div className="cp-track-icon">
+                      <Play size={14} />
+                    </div>
                     <span className="cp-result-primary">{track.title}</span>
                     <span className="cp-result-secondary">
                       {[track.artist, track.album_name].filter(Boolean).join(" · ")}
@@ -324,9 +381,15 @@ export function CommandPalette({ open, onClose, onNavigate, onSelectAlbum, onSel
         </div>
 
         <div className="cp-footer">
-          <span><kbd>↑↓</kbd> navigate</span>
-          <span><kbd>↵</kbd> select</span>
-          <span><kbd>esc</kbd> close</span>
+          <span>
+            <kbd>↑↓</kbd> navigate
+          </span>
+          <span>
+            <kbd>↵</kbd> select
+          </span>
+          <span>
+            <kbd>esc</kbd> close
+          </span>
         </div>
       </div>
     </div>

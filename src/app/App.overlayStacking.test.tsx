@@ -22,9 +22,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(
-      JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" }),
-    ),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
@@ -39,10 +37,10 @@ vi.mock("../features/playback/hooks/useScrobble", () => ({ ScrobbleTracker: () =
 // listener is on `document` rather than `window`, which is the whole point of covering it.
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn().mockResolvedValue("0.6.0") }));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent, act, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../App";
 import { allowSlowAppMounts } from "../test/appMount";
 import { resetTauriMocks } from "../test/mocks/tauri";
@@ -54,10 +52,12 @@ let testDb: FakeDatabase;
 
 async function seedServer() {
   testDb = await createMigratedTestDb();
-  await testDb.execute(
-    "INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)",
-    ["srv-a", "https://example.test", "Test", "u"],
-  );
+  await testDb.execute("INSERT INTO servers (id, type, url, display_name, username) VALUES (?, 'navidrome', ?, ?, ?)", [
+    "srv-a",
+    "https://example.test",
+    "Test",
+    "u",
+  ]);
 }
 
 async function mountApp() {
@@ -105,13 +105,17 @@ const expectGone = (get: () => Element | null) => waitFor(() => expect(get()).to
  */
 async function stackPaletteOverSearch(query = "abba") {
   await mountApp();
-  await act(async () => { press("f", { ctrlKey: true }); });
+  await act(async () => {
+    press("f", { ctrlKey: true });
+  });
   await waitFor(() => expect(searchInput()).not.toBeNull());
   fireEvent.change(searchInput()!, { target: { value: query } });
   // Ctrl+K is guarded against firing from a text field, so the user has to leave the search
   // input first - clicking any blank part of the page does it.
   searchInput()!.blur();
-  await act(async () => { press("k", { ctrlKey: true }); });
+  await act(async () => {
+    press("k", { ctrlKey: true });
+  });
   await waitFor(() => expect(paletteInput()).not.toBeNull());
   await waitFor(() => expect(document.activeElement).toBe(paletteInput()));
 }
@@ -141,7 +145,9 @@ describe("command palette stacked over the search route", () => {
   it("closes only the palette on Escape pressed from the palette's own input", async () => {
     await stackPaletteOverSearch();
 
-    await act(async () => { press("Escape", { target: paletteInput()! }); });
+    await act(async () => {
+      press("Escape", { target: paletteInput()! });
+    });
 
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
@@ -157,7 +163,9 @@ describe("command palette stacked over the search route", () => {
     await stackPaletteOverSearch();
     paletteInput()!.blur();
 
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
 
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
@@ -174,11 +182,15 @@ describe("command palette stacked over the search route", () => {
     // focuses the search input *underneath* the palette.
     await stackPaletteOverSearch();
     paletteInput()!.blur();
-    await act(async () => { press("f", { ctrlKey: true, target: document.body }); });
+    await act(async () => {
+      press("f", { ctrlKey: true, target: document.body });
+    });
     await waitFor(() => expect(document.activeElement).toBe(searchInput()));
     expect(paletteInput()).not.toBeNull();
 
-    await act(async () => { press("Escape", { target: searchInput()! }); });
+    await act(async () => {
+      press("Escape", { target: searchInput()! });
+    });
 
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
@@ -189,11 +201,15 @@ describe("command palette stacked over the search route", () => {
     // "Topmost only" means nothing unless the next press reaches the next layer down.
     await stackPaletteOverSearch();
 
-    await act(async () => { press("Escape", { target: paletteInput()! }); });
+    await act(async () => {
+      press("Escape", { target: paletteInput()! });
+    });
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();
 
-    await act(async () => { press("Escape", { target: searchInput()! }); });
+    await act(async () => {
+      press("Escape", { target: searchInput()! });
+    });
 
     await waitFor(() => expect(routeContent()).not.toBeNull());
     expect(searchInput()).toBeNull();
@@ -203,10 +219,14 @@ describe("command palette stacked over the search route", () => {
   it("still closes the palette on Escape when search is not under it", async () => {
     // Guards against a fix that makes the palette's dismissal conditional on the layer below.
     await mountApp();
-    await act(async () => { press("k", { ctrlKey: true }); });
+    await act(async () => {
+      press("k", { ctrlKey: true });
+    });
     await waitFor(() => expect(paletteInput()).not.toBeNull());
 
-    await act(async () => { press("Escape", { target: paletteInput()! }); });
+    await act(async () => {
+      press("Escape", { target: paletteInput()! });
+    });
 
     await expectGone(paletteInput);
     expect(routeContent()).not.toBeNull();
@@ -220,7 +240,9 @@ describe("command palette stacked over the search route", () => {
     document.body.appendChild(stray);
     stray.focus();
 
-    await act(async () => { press("Escape", { target: stray }); });
+    await act(async () => {
+      press("Escape", { target: stray });
+    });
     stray.remove();
 
     expect(searchInput()).not.toBeNull();
@@ -277,17 +299,23 @@ describe("command palette stacked over the search route", () => {
     // one; it goes through the open-modal registry now, which is what makes the guard ask "is
     // anything above me" rather than "is the palette open".
     await mountApp();
-    await act(async () => { press("f", { ctrlKey: true }); });
+    await act(async () => {
+      press("f", { ctrlKey: true });
+    });
     await waitFor(() => expect(searchInput()).not.toBeNull());
     fireEvent.change(searchInput()!, { target: { value: "abba" } });
     searchInput()!.blur();
 
     const feedbackBtn = document.querySelector(".sidebar-feedback-btn") as HTMLElement;
     expect(feedbackBtn).not.toBeNull();
-    await act(async () => { fireEvent.click(feedbackBtn); });
+    await act(async () => {
+      fireEvent.click(feedbackBtn);
+    });
     await waitFor(() => expect(document.querySelector(".feedback-modal")).not.toBeNull());
 
-    await act(async () => { press("Escape", { target: document.body }); });
+    await act(async () => {
+      press("Escape", { target: document.body });
+    });
 
     await expectGone(() => document.querySelector(".feedback-modal"));
     expect(searchInput()).not.toBeNull();
@@ -298,7 +326,9 @@ describe("command palette stacked over the search route", () => {
     // The toggle half of the Ctrl+K guard, asserted for what it must *not* touch.
     await stackPaletteOverSearch();
 
-    await act(async () => { press("k", { ctrlKey: true, target: paletteInput()! }); });
+    await act(async () => {
+      press("k", { ctrlKey: true, target: paletteInput()! });
+    });
 
     await expectGone(paletteInput);
     expect(searchInput()).not.toBeNull();

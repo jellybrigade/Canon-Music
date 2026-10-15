@@ -6,12 +6,12 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { TRACK_ID_TABLES, prunedTrackIdTables, purgedTrackIdTables, remappedTrackIdTables } from "./trackIdTables";
+import { prunedTrackIdTables, purgedTrackIdTables, remappedTrackIdTables, TRACK_ID_TABLES } from "./trackIdTables";
 
 const MIGRATIONS = readFileSync(fileURLToPath(new URL("./migrations.ts", import.meta.url)), "utf-8");
 const TRACK_REMAP_RS = readFileSync(
   fileURLToPath(new URL("../../src-tauri/src/library_write/track_remap.rs", import.meta.url)),
-  "utf-8"
+  "utf-8",
 );
 
 /**
@@ -22,9 +22,9 @@ const TRACK_REMAP_RS = readFileSync(
 function schemaTrackIdColumns(): Map<string, string> {
   const found = new Map<string, string>();
   const scratch = new Set(
-    [...MIGRATIONS.matchAll(/ALTER TABLE (\w+) RENAME TO|DROP TABLE(?: IF EXISTS)? (\w+)/g)].flatMap(
-      (match) => [match[1], match[2]].filter((name): name is string => name !== undefined)
-    )
+    [...MIGRATIONS.matchAll(/ALTER TABLE (\w+) RENAME TO|DROP TABLE(?: IF EXISTS)? (\w+)/g)].flatMap((match) =>
+      [match[1], match[2]].filter((name): name is string => name !== undefined),
+    ),
   );
   const create = /CREATE TABLE(?: IF NOT EXISTS)? (\w+) \(([^;]*?)\)\s*;/g;
   for (const match of MIGRATIONS.matchAll(create)) {

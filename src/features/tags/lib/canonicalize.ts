@@ -44,10 +44,13 @@ export async function getCanonTree(): Promise<CanonTree> {
   const bundled = canonTreeData.nodes as TreeNode[];
   const userNodes: TreeNode[] = userRows.map((r) => {
     const section: NodeSection | undefined =
-      r.type === "genre" ? "genres"
-      : r.type === "descriptor" ? "descriptors"
-      : r.type === "scenes-and-movements" ? "scenes-and-movements"
-      : undefined;
+      r.type === "genre"
+        ? "genres"
+        : r.type === "descriptor"
+          ? "descriptors"
+          : r.type === "scenes-and-movements"
+            ? "scenes-and-movements"
+            : undefined;
     return {
       id: r.id,
       name: r.name,
@@ -88,7 +91,7 @@ export async function getCanonTree(): Promise<CanonTree> {
 }
 
 const RAW_ALIASES: Record<string, string> = {
-  "rnb": "r&b",
+  rnb: "r&b",
   "r n b": "r&b",
   "r and b": "r&b",
   "r'n'b": "r&b",
@@ -101,7 +104,7 @@ const RAW_ALIASES: Record<string, string> = {
 // "hip hop" are interchangeable in compound tags (e.g. "midwest rap" → "midwest
 // hip hop") but the base word also appears as-is in tree nodes ("gangsta rap").
 const RAW_FALLBACK_ALIASES: Record<string, string> = {
-  "rap": "hip hop",
+  rap: "hip hop",
 };
 
 function buildPatterns(aliases: Record<string, string>): Array<[RegExp, string]> {
@@ -242,7 +245,7 @@ export function getAncestorIds(node: TreeNode, byId: Map<string, TreeNode>): str
 export async function findCanonical(
   rawValue: string,
   kind: TagKind,
-  existingMappings?: Map<string, string>
+  existingMappings?: Map<string, string>,
 ): Promise<FindResult> {
   const tree = await getCanonTree();
   const key = canonicalKey(applyAliases(rawValue));
@@ -288,7 +291,7 @@ export function findCanonicalSync(
   rawValue: string,
   kind: TagKind,
   tree: CanonTree,
-  existingMappings?: Map<string, string>
+  existingMappings?: Map<string, string>,
 ): FindResult {
   const key = canonicalKey(applyAliases(rawValue));
 

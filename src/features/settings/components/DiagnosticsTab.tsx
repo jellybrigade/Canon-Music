@@ -1,10 +1,10 @@
-import { useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
-import { getMissingCoverCount, useCacheAllCovers } from "../../../hooks/useCoverCache";
+import { useRef } from "react";
 import { getMissingArtistImageCount, useCacheAllArtistImages } from "../../../hooks/useArtistImageCache";
-import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
+import { getMissingCoverCount, useCacheAllCovers } from "../../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { QK } from "../../../lib/queryKeys";
+import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
 import { exportSettingsFile, importSettingsFile } from "../lib/settingsBackup";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
@@ -57,25 +57,41 @@ function useScrobbleQueueCount(serverId: string | undefined) {
   });
 }
 
-export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuery, serverWithCredential, serverId }: Props) {
+export function DiagnosticsTab({
+  syncStatus,
+  syncError,
+  lastSyncedAt,
+  searchQuery,
+  serverWithCredential,
+  serverId,
+}: Props) {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverId);
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
   const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
   const { data: missingArtistImageCount, refetch: refetchMissingArtistImageCount } = useMissingArtistImageCount();
-  const { run: cacheAllArtistImages, progress: artistImageProgress, lastFailedCount: lastFailedArtistImageCount } = useCacheAllArtistImages();
+  const {
+    run: cacheAllArtistImages,
+    progress: artistImageProgress,
+    lastFailedCount: lastFailedArtistImageCount,
+  } = useCacheAllArtistImages();
 
   const fl = searchQuery.toLowerCase().trim();
-  const show = (...labels: string[]) => !fl || labels.some(l => l.toLowerCase().includes(fl));
+  const show = (...labels: string[]) => !fl || labels.some((l) => l.toLowerCase().includes(fl));
 
   function syncStatusLabel() {
     switch (syncStatus) {
-      case "syncing": return "Syncing…";
-      case "done": return lastSyncedAt ? `Done (${new Date(lastSyncedAt).toLocaleTimeString()})` : "Done";
-      case "partial": return `Partial: ${syncError}`;
-      case "error": return `Error: ${syncError}`;
-      default: return "Idle";
+      case "syncing":
+        return "Syncing…";
+      case "done":
+        return lastSyncedAt ? `Done (${new Date(lastSyncedAt).toLocaleTimeString()})` : "Done";
+      case "partial":
+        return `Partial: ${syncError}`;
+      case "error":
+        return `Error: ${syncError}`;
+      default:
+        return "Idle";
     }
   }
 
@@ -96,7 +112,9 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <h3 className="settings-section-title">Sync</h3>
           <div className="settings-diag-row">
             <span className="settings-diag-label">Library sync</span>
-            <span className={`settings-diag-value${syncStatus === "error" || syncStatus === "partial" ? " settings-diag-value--error" : ""}`}>
+            <span
+              className={`settings-diag-value${syncStatus === "error" || syncStatus === "partial" ? " settings-diag-value--error" : ""}`}
+            >
               {syncStatusLabel()}
             </span>
           </div>
@@ -109,7 +127,12 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <div className="settings-diag-row">
             <span className="settings-diag-label">Pending</span>
             <span className="settings-diag-value">{scrobbleCount ?? "-"}</span>
-            <button className="settings-btn" onClick={() => { void refetchScrobbleCount(); }}>
+            <button
+              className="settings-btn"
+              onClick={() => {
+                void refetchScrobbleCount();
+              }}
+            >
               Refresh
             </button>
           </div>
@@ -120,20 +143,20 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
         <section className="settings-section">
           <h3 className="settings-section-title">Album cover cache</h3>
           <p className="settings-section-desc">
-            Canon caches cover art locally the first time each album loads. Use this to pre-cache
-            everything at once, e.g. after a fresh sync.
+            Canon caches cover art locally the first time each album loads. Use this to pre-cache everything at once,
+            e.g. after a fresh sync.
           </p>
           <div className="settings-field settings-field--row">
             <button
               className="settings-btn"
               disabled={!serverWithCredential || coverProgress !== null || !missingCoverCount}
               onClick={() => {
-                void cacheAllCovers().then(() => { void refetchMissingCoverCount(); });
+                void cacheAllCovers().then(() => {
+                  void refetchMissingCoverCount();
+                });
               }}
             >
-              {coverProgress
-                ? `Caching… ${coverProgress.done} / ${coverProgress.total}`
-                : "Cache all covers now"}
+              {coverProgress ? `Caching… ${coverProgress.done} / ${coverProgress.total}` : "Cache all covers now"}
             </button>
             {coverProgress === null && (
               <span className="settings-hint">
@@ -155,15 +178,17 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
         <section className="settings-section">
           <h3 className="settings-section-title">Artist portrait cache</h3>
           <p className="settings-section-desc">
-            Canon caches artist portraits locally the first time each artist loads. Use this to
-            pre-cache everything at once, e.g. after enriching your library.
+            Canon caches artist portraits locally the first time each artist loads. Use this to pre-cache everything at
+            once, e.g. after enriching your library.
           </p>
           <div className="settings-field settings-field--row">
             <button
               className="settings-btn"
               disabled={artistImageProgress !== null || !missingArtistImageCount}
               onClick={() => {
-                void cacheAllArtistImages().then(() => { void refetchMissingArtistImageCount(); });
+                void cacheAllArtistImages().then(() => {
+                  void refetchMissingArtistImageCount();
+                });
               }}
             >
               {artistImageProgress
@@ -191,7 +216,12 @@ export function DiagnosticsTab({ syncStatus, syncError, lastSyncedAt, searchQuer
           <h3 className="settings-section-title">Settings backup</h3>
           <p className="settings-section-desc">Server credentials are not included in exports.</p>
           <div className="settings-field settings-field--row">
-            <button className="settings-btn" onClick={() => { void exportSettingsFile(); }}>
+            <button
+              className="settings-btn"
+              onClick={() => {
+                void exportSettingsFile();
+              }}
+            >
               Export settings
             </button>
             <button className="settings-btn" onClick={() => importInputRef.current?.click()}>

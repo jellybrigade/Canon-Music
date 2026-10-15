@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
-import { renderHook, act } from "@testing-library/react";
+
+import { act, renderHook } from "@testing-library/react";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
-import type { AlbumRow } from "../types/library";
+import { describe, expect, it, vi } from "vitest";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
+import type { AlbumRow } from "../types/library";
 import { useAppNavigation } from "./useAppNavigation";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
@@ -16,14 +17,14 @@ function wrapper(initialEntries: string[]) {
 }
 
 describe("view mapping", () => {
-  it("maps /search to view \"search\"", () => {
+  it('maps /search to view "search"', () => {
     const { result } = renderHook(() => useAppNavigation(() => {}), {
       wrapper: wrapper(["/search?q=abba"]),
     });
     expect(result.current.view).toBe("search");
   });
 
-  it("still folds /album/:id into \"library\"", () => {
+  it('still folds /album/:id into "library"', () => {
     const { result } = renderHook(() => useAppNavigation(() => {}), {
       wrapper: wrapper(["/album/a1"]),
     });
@@ -64,8 +65,15 @@ function album(id: string): AlbumRow {
 
 function playlist(id: string): PlaylistRow {
   return {
-    id, server_id: "srv-a", name: "Mix", comment: null, track_count: 0,
-    cover_art_url: null, custom_cover_data: null, is_smart: 0, rules_json: null,
+    id,
+    server_id: "srv-a",
+    name: "Mix",
+    comment: null,
+    track_count: 0,
+    cover_art_url: null,
+    custom_cover_data: null,
+    is_smart: 0,
+    rules_json: null,
   };
 }
 
@@ -74,10 +82,9 @@ describe("asking for the route already showing", () => {
   // the user was already looking at. Worst on /search: `leaveSearch` is `navigate(-1)`, so
   // Escape and the header Back button both left the user still in search.
   function nav(initialEntries: string[]) {
-    return renderHook(
-      () => ({ app: useAppNavigation(() => {}), search: useLocation().search }),
-      { wrapper: wrapper(initialEntries) },
-    );
+    return renderHook(() => ({ app: useAppNavigation(() => {}), search: useLocation().search }), {
+      wrapper: wrapper(initialEntries),
+    });
   }
 
   it("pushes no second /search entry, so leaving search still lands on the page behind it", () => {
@@ -139,10 +146,9 @@ describe("leaveSearch after the route rewrites its own entry", () => {
   // (the web-process-terminated -> reload() recovery) plus one keystroke left Escape and the
   // header Back button doing nothing at all.
   it("leaves for /home when the mount entry was replaced by the query write", () => {
-    const { result } = renderHook(
-      () => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }),
-      { wrapper: wrapper(["/search"]) },
-    );
+    const { result } = renderHook(() => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }), {
+      wrapper: wrapper(["/search"]),
+    });
     act(() => result.current.navigate("/search?q=abba", { replace: true }));
     expect(result.current.app.pathname).toBe("/search");
 
@@ -151,10 +157,9 @@ describe("leaveSearch after the route rewrites its own entry", () => {
   });
 
   it("still goes back one entry when search was pushed onto a replaced mount entry", () => {
-    const { result } = renderHook(
-      () => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }),
-      { wrapper: wrapper(["/search"]) },
-    );
+    const { result } = renderHook(() => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }), {
+      wrapper: wrapper(["/search"]),
+    });
     act(() => result.current.navigate("/search?q=abba", { replace: true }));
     act(() => result.current.app.navigateTo("library"));
     act(() => result.current.navigate("/search?q=abba"));
@@ -164,10 +169,9 @@ describe("leaveSearch after the route rewrites its own entry", () => {
   });
 
   it("leaves for /home again after a pop back to the mount entry", () => {
-    const { result } = renderHook(
-      () => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }),
-      { wrapper: wrapper(["/search"]) },
-    );
+    const { result } = renderHook(() => ({ app: useAppNavigation(() => {}), navigate: useNavigate() }), {
+      wrapper: wrapper(["/search"]),
+    });
     act(() => result.current.navigate("/search?q=abba", { replace: true }));
     act(() => result.current.app.navigateTo("library"));
     act(() => result.current.app.goBack());

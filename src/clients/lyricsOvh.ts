@@ -1,9 +1,6 @@
 import { boundedFetch } from "./boundedFetch";
 
-export async function fetchLyricsOvh(
-  artist: string | null,
-  title: string
-): Promise<string | null> {
+export async function fetchLyricsOvh(artist: string | null, title: string): Promise<string | null> {
   if (!artist) return null;
   const enc = (s: string) => encodeURIComponent(s);
   const res = await boundedFetch(`https://api.lyrics.ovh/v1/${enc(artist)}/${enc(title)}`);

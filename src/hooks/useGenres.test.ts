@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
 
-import { renderHook, waitFor, act, cleanup } from "@testing-library/react";
-import { onInvoke, resetTauriMocks, invoke } from "../test/mocks/tauri";
-import { useGenres, useRecentGenres, type GenreRow } from "./useGenres";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { useGenresSessionStore } from "../store/genresSessionStore";
+import { invoke, onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { type GenreRow, useGenres, useRecentGenres } from "./useGenres";
 
 function genre(id: string): GenreRow {
   return { canonical_id: id, name: id, album_count: 1 };

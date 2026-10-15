@@ -32,7 +32,9 @@
   border-radius: var(--radius-xs);
   transition: color var(--duration-fast);
 }
-.age-close:hover { color: var(--text-primary); }
+.age-close:hover {
+  color: var(--text-primary);
+}
 
 .age-body {
   padding: var(--space-xs) var(--space-md) var(--space-xs);
@@ -106,7 +108,9 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
-.age-chip-label:hover { color: var(--text-primary); }
+.age-chip-label:hover {
+  color: var(--text-primary);
+}
 
 .age-chip-remove {
   background: none;
@@ -119,8 +123,13 @@
   opacity: var(--opacity-50);
   transition: opacity var(--duration-fast);
 }
-.age-chip-remove:hover:not(:disabled) { opacity: 1; }
-.age-chip-remove:disabled { opacity: var(--opacity-20); cursor: default; }
+.age-chip-remove:hover:not(:disabled) {
+  opacity: 1;
+}
+.age-chip-remove:disabled {
+  opacity: var(--opacity-20);
+  cursor: default;
+}
 
 /* ── Add genre row ── */
 
@@ -151,9 +160,15 @@
   width: 100%;
   outline: none;
 }
-.age-input:focus { border-color: var(--accent, #7c6af0); }
-.age-input::placeholder { color: var(--text-tertiary); }
-.age-input:disabled { opacity: var(--opacity-50); }
+.age-input:focus {
+  border-color: var(--accent, #7c6af0);
+}
+.age-input::placeholder {
+  color: var(--text-tertiary);
+}
+.age-input:disabled {
+  opacity: var(--opacity-50);
+}
 
 .age-autocomplete {
   position: absolute;

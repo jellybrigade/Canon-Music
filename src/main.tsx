@@ -1,13 +1,13 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
-import { ErrorBoundary } from "./ui/ErrorBoundary";
-import { initLogger } from "./lib/logger";
 import { getDb } from "./db";
 import { purgeStrandedServers } from "./features/sync/syncPrune";
 import { carryGenreTree } from "./features/tags/lib/genreTreeCarry";
+import { initLogger } from "./lib/logger";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 
 initLogger();
 
@@ -55,5 +55,5 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         </BrowserRouter>
       </QueryClientProvider>
     </ErrorBoundary>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

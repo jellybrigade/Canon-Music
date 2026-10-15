@@ -23,18 +23,15 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
 
     if (settingCache.has(key)) {
       setLoaded(true);
-      return () => { listeners.delete(setValue); };
+      return () => {
+        listeners.delete(setValue);
+      };
     }
 
     setLoaded(false);
     let cancelled = false;
     getDb()
-      .then((db) =>
-        db.select<{ value: string }[]>(
-          "SELECT value FROM settings WHERE key = ?",
-          [key]
-        )
-      )
+      .then((db) => db.select<{ value: string }[]>("SELECT value FROM settings WHERE key = ?", [key]))
       .then((rows) => {
         if (cancelled) return;
         const resolved = rows[0]?.value ?? defaultValue;
@@ -58,14 +55,13 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
   const update = useCallback(
     async (newValue: string) => {
       const db = await getDb();
-      await db.execute(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        [key, newValue]
-      );
+      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, newValue]);
       settingCache.set(key, newValue);
-      settingListeners.get(key)?.forEach((fn) => { fn(newValue); });
+      settingListeners.get(key)?.forEach((fn) => {
+        fn(newValue);
+      });
     },
-    [key]
+    [key],
   );
 
   return [value, update, loaded];
@@ -76,12 +72,12 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
 // after a bulk write (e.g. settings import) that doesn't go through `update`.
 export async function refreshAllSettings(): Promise<void> {
   const db = await getDb();
-  const rows = await db.select<{ key: string; value: string }[]>(
-    "SELECT key, value FROM settings"
-  );
+  const rows = await db.select<{ key: string; value: string }[]>("SELECT key, value FROM settings");
   for (const { key, value } of rows) {
     settingCache.set(key, value);
-    settingListeners.get(key)?.forEach((fn) => { fn(value); });
+    settingListeners.get(key)?.forEach((fn) => {
+      fn(value);
+    });
   }
 }
 

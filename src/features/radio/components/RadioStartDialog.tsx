@@ -1,13 +1,13 @@
+import { Radio, X } from "lucide-react";
 import { useState } from "react";
 import { createPortal } from "react-dom";
-import { Radio, X } from "lucide-react";
+import { useSetting } from "../../../hooks/useSetting";
+import { useModalChrome } from "../../../ui/useModalChrome";
+import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { usePlayerStore } from "../../playback/store/player";
 import type { RadioStartAction, RadioStartRequest } from "../../playback/store/playerTypes";
-import { useRadioStartStore } from "../store/radioStart";
-import { useSetting } from "../../../hooks/useSetting";
 import { RADIO_START_ACTION_SETTING } from "../hooks/useStartRadio";
-import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
-import { useModalChrome } from "../../../ui/useModalChrome";
+import { useRadioStartStore } from "../store/radioStart";
 import "./RadioStartDialog.css";
 
 export function RadioStartDialogHost() {
@@ -47,8 +47,8 @@ function RadioStartDialog({ request }: { request: RadioStartRequest }) {
 
         <div className="radio-start-body">
           <p className="radio-start-description">
-            Your queue has {queueLength} {queueLength === 1 ? "track" : "tracks"}. Replace it, or let radio
-            continue after it?
+            Your queue has {queueLength} {queueLength === 1 ? "track" : "tracks"}. Replace it, or let radio continue
+            after it?
           </p>
         </div>
 
@@ -58,7 +58,9 @@ function RadioStartDialog({ request }: { request: RadioStartRequest }) {
             Always do this
           </label>
           <div className="radio-start-actions">
-            <button className="radio-start-btn" onClick={() => choose("queue_last")}>Add to queue</button>
+            <button className="radio-start-btn" onClick={() => choose("queue_last")}>
+              Add to queue
+            </button>
             <button className="radio-start-btn radio-start-btn--primary" onClick={() => choose("replace")} autoFocus>
               Replace queue
             </button>
@@ -66,6 +68,6 @@ function RadioStartDialog({ request }: { request: RadioStartRequest }) {
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

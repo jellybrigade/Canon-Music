@@ -10,8 +10,12 @@
   padding: 0 var(--space-sm);
 }
 
-.track-skeleton-row:nth-child(2n) .track-skeleton-bar { animation-delay: 0.12s; }
-.track-skeleton-row:nth-child(3n) .track-skeleton-bar { animation-delay: 0.24s; }
+.track-skeleton-row:nth-child(2n) .track-skeleton-bar {
+  animation-delay: 0.12s;
+}
+.track-skeleton-row:nth-child(3n) .track-skeleton-bar {
+  animation-delay: 0.24s;
+}
 
 /* ── Track table: selected row + sortable header buttons ── */
 .track-table-row--selected {

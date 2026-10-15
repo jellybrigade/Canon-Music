@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest";
+
 import { act } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
 import { trackRenders } from "../test/perf";
 import { useAlbumTracksNoticeStore } from "./albumTracksNotice";
 

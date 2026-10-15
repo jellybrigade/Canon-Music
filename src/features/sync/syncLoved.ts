@@ -1,7 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { fetchStarred2 } from "../../clients/navidrome";
-import { escapeLike } from "../../lib/sql";
 import { executeBatched } from "../../lib/dbBatch";
+import { escapeLike } from "../../lib/sql";
 import type { SyncStageContext } from "./syncStage";
 
 async function insertIdColumnBatch(db: Database, table: string, column: string, ids: string[]): Promise<void> {
@@ -10,7 +10,7 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
     ids.map((id) => [id]),
     "(?)",
     1,
-    (placeholders) => `INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`
+    (placeholders) => `INSERT OR IGNORE INTO ${table} (${column}) VALUES ${placeholders}`,
   );
 }
 
@@ -18,13 +18,11 @@ async function insertIdColumnBatch(db: Database, table: string, column: string, 
 // skips the pass rather than letting the delete-first write run on no data.
 export async function syncLoved({ db, server, credential, altUrl, skippedStages }: SyncStageContext): Promise<boolean> {
   let lovedChanged = false;
-  const starred = await fetchStarred2(server.url, server.username, credential, altUrl).catch(
-    (err: unknown) => {
-      console.error("sync: failed to fetch starred items, keeping stored loved state:", err);
-      skippedStages.push("loved");
-      return null;
-    }
-  );
+  const starred = await fetchStarred2(server.url, server.username, credential, altUrl).catch((err: unknown) => {
+    console.error("sync: failed to fetch starred items, keeping stored loved state:", err);
+    skippedStages.push("loved");
+    return null;
+  });
 
   if (starred) {
     const starredAlbumIds = (starred.album ?? []).map((a) => `${server.id}:${a.id}`);
@@ -34,14 +32,12 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
     // starred ids with no local row and rewrote loved state every sync.
     const idPrefix = `${escapeLike(server.id)}:%`;
     const [existingLovedAlbums, existingLovedTracks] = await Promise.all([
-      db.select<{ album_id: string }[]>(
-        "SELECT album_id FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'",
-        [idPrefix]
-      ),
-      db.select<{ track_id: string }[]>(
-        "SELECT track_id FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'",
-        [idPrefix]
-      ),
+      db.select<{ album_id: string }[]>("SELECT album_id FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [
+        idPrefix,
+      ]),
+      db.select<{ track_id: string }[]>("SELECT track_id FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [
+        idPrefix,
+      ]),
     ]);
 
     const existingLovedAlbumIds = new Set(existingLovedAlbums.map((r) => r.album_id));
@@ -50,9 +46,7 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
       starredAlbumIds.some((id) => !existingLovedAlbumIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [
-        idPrefix,
-      ]);
+      await db.execute("DELETE FROM loved_albums WHERE album_id LIKE ? ESCAPE '\\'", [idPrefix]);
       await insertIdColumnBatch(db, "loved_albums", "album_id", starredAlbumIds);
     }
 
@@ -62,9 +56,7 @@ export async function syncLoved({ db, server, credential, altUrl, skippedStages 
       starredTrackIds.some((id) => !existingLovedTrackIds.has(id))
     ) {
       lovedChanged = true;
-      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [
-        idPrefix,
-      ]);
+      await db.execute("DELETE FROM loved_tracks WHERE track_id LIKE ? ESCAPE '\\'", [idPrefix]);
       await insertIdColumnBatch(db, "loved_tracks", "track_id", starredTrackIds);
     }
   }

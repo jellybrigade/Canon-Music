@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
-vi.mock("../../../db", () => ({ getDb: vi.fn(() => Promise.resolve({ select: () => Promise.resolve([]), execute: () => Promise.resolve() })) }));
+vi.mock("../../../db", () => ({
+  getDb: vi.fn(() => Promise.resolve({ select: () => Promise.resolve([]), execute: () => Promise.resolve() })),
+}));
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { cleanup, fireEvent, render } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlayerStore } from "../../playback/store/player";
 import type { CurrentTrack } from "../../playback/store/playerTypes";
 import { RadioQueueStatus } from "./RadioQueueStatus";

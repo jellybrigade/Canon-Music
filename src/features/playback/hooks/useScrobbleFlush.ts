@@ -1,12 +1,12 @@
-import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../../../db";
+import { useEffect } from "react";
 import { scrobbleTrack } from "../../../clients/navidrome";
 import { SubsonicError } from "../../../clients/navidromeTransport";
-import { stripServerPrefix } from "../../../lib/ids";
-import { escapeLike } from "../../../lib/sql";
-import { QK } from "../../../lib/queryKeys";
+import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { stripServerPrefix } from "../../../lib/ids";
+import { QK } from "../../../lib/queryKeys";
+import { escapeLike } from "../../../lib/sql";
 
 const FLUSH_INTERVAL_MS = 60_000;
 
@@ -30,7 +30,7 @@ export async function getScrobbleQueueCount(serverId: string): Promise<number> {
   const db = await getDb();
   const rows = await db.select<{ n: number }[]>(
     "SELECT COUNT(*) as n FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\'",
-    [ownerPattern(serverId)]
+    [ownerPattern(serverId)],
   );
   return rows[0]?.n ?? 0;
 }
@@ -59,14 +59,21 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
         type ScrobbleRow = { id: number; track_id: string; timestamp: number };
         const rows = await db.select<ScrobbleRow[]>(
           "SELECT id, track_id, timestamp FROM scrobble_queue WHERE track_id LIKE ? ESCAPE '\\' ORDER BY timestamp",
-          [ownerPattern(server.id)]
+          [ownerPattern(server.id)],
         );
 
         for (const row of rows) {
           if (cancelled) break;
           try {
             const nativeId = stripServerPrefix(row.track_id, server.id);
-            await scrobbleTrack(server.url, server.username, credential, nativeId, row.timestamp * 1000, server.alt_url ?? undefined);
+            await scrobbleTrack(
+              server.url,
+              server.username,
+              credential,
+              nativeId,
+              row.timestamp * 1000,
+              server.alt_url ?? undefined,
+            );
           } catch (e) {
             if (e instanceof SubsonicError && e.code !== null && PERMANENT_SUBSONIC_CODES.has(e.code)) {
               // Drop it and keep going, otherwise this row blocks the queue forever.
@@ -76,20 +83,17 @@ export function useScrobbleFlush(serverWithCred: ServerWithCredential | undefine
             }
             break; // Server unreachable or refusing for a reason that may clear, stop batch
           }
-          await db.execute(
-            "INSERT OR IGNORE INTO scrobble_history (track_id, timestamp) VALUES (?, ?)",
-            [row.track_id, row.timestamp]
-          );
+          await db.execute("INSERT OR IGNORE INTO scrobble_history (track_id, timestamp) VALUES (?, ?)", [
+            row.track_id,
+            row.timestamp,
+          ]);
           await db.execute("DELETE FROM scrobble_queue WHERE id = ?", [row.id]);
           // Sync's play_count skip-fast-path won't catch this play; count it locally.
           // After the DELETE so a crash loses a count instead of double-counting it.
-          await db.execute(
-            "UPDATE tracks SET play_count = play_count + 1 WHERE id = ?",
-            [row.track_id]
-          );
+          await db.execute("UPDATE tracks SET play_count = play_count + 1 WHERE id = ?", [row.track_id]);
           await db.execute(
             "UPDATE albums SET play_count = play_count + 1 WHERE id = (SELECT album_id FROM tracks WHERE id = ?)",
-            [row.track_id]
+            [row.track_id],
           );
           sent++;
         }

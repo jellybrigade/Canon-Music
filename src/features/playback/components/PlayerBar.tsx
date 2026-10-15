@@ -1,34 +1,48 @@
-import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { QK } from "../../../lib/queryKeys";
-import { useClickOutside } from "../../../ui/useClickOutside";
 import {
-  Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Loader, Headphones, Heart, Star, Timer, ChevronUp, Cast, Check, AlertCircle,
+  AlertCircle,
+  Cast,
+  Check,
+  ChevronUp,
+  Headphones,
+  Heart,
+  Loader,
+  Pause,
+  Play,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Star,
+  Timer,
 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { fetchTrackRating, setRating } from "../../../clients/navidrome";
+import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { AlbumArt } from "../../../components/AlbumArt";
+import { AlbumTracksNotice } from "../../../components/AlbumTracksNotice";
+import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
+import { useLoved } from "../../../hooks/useLoved";
+import type { ServerWithCredential } from "../../../hooks/useServer";
+import { useSetting } from "../../../hooks/useSetting";
+import { stripServerPrefix } from "../../../lib/ids";
+import { QK } from "../../../lib/queryKeys";
+import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
+import { ContextMenu } from "../../../ui/ContextMenu";
+import { useClickOutside } from "../../../ui/useClickOutside";
+import { RadioButton } from "../../radio/components/RadioButton";
+import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
+import { useTagsStore } from "../../tags/store/tags";
+import { popoverAbove } from "../lib/popoverAbove";
+import { sleepTimerCountdown } from "../lib/sleepTimer";
 import { usePlayerStore } from "../store/player";
 import { isNextDisabled, repeatModeLabel } from "../store/playerTypes";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
-import { useTagsStore } from "../../tags/store/tags";
-import { useLoved } from "../../../hooks/useLoved";
-import { useSetting } from "../../../hooks/useSetting";
-import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
-import { PlayerProgress } from "./PlayerProgress";
-import { RadioButton } from "../../radio/components/RadioButton";
-import { SleepTimerPopover } from "./SleepTimerPopover";
 import { PlayerMoreControls } from "./PlayerMoreControls";
-import { popoverAbove } from "../lib/popoverAbove";
+import { PlayerProgress } from "./PlayerProgress";
+import { SleepTimerPopover } from "./SleepTimerPopover";
 import { VolumeControl } from "./VolumeControl";
-import { sleepTimerCountdown } from "../lib/sleepTimer";
-import { ContextMenu } from "../../../ui/ContextMenu";
-import { AlbumArt } from "../../../components/AlbumArt";
-import { setRating, fetchTrackRating } from "../../../clients/navidrome";
-import { getCoverArtUrl } from "../../../clients/navidromeUrls";
-import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
-import { stripServerPrefix } from "../../../lib/ids";
-import type { ServerWithCredential } from "../../../hooks/useServer";
-import { AlbumTracksNotice } from "../../../components/AlbumTracksNotice";
-import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
 import "./PlayerBar.css";
 
 interface LoveButtonProps {
@@ -58,40 +72,40 @@ interface Props {
 }
 
 export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
-  const currentTrack  = usePlayerStore((s) => s.currentTrack);
+  const currentTrack = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
-  const isPlaying     = usePlayerStore((s) => s.isPlaying);
-  const isLoading     = usePlayerStore((s) => s.isLoading);
-  const error         = usePlayerStore((s) => s.error);
-  const retryCurrent  = usePlayerStore((s) => s.retryCurrent);
-  const queue         = usePlayerStore((s) => s.queue);
-  const queueIndex    = usePlayerStore((s) => s.queueIndex);
-  const repeat        = usePlayerStore((s) => s.repeat);
-  const isShuffled    = usePlayerStore((s) => s.isShuffled);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
+  const isLoading = usePlayerStore((s) => s.isLoading);
+  const error = usePlayerStore((s) => s.error);
+  const retryCurrent = usePlayerStore((s) => s.retryCurrent);
+  const queue = usePlayerStore((s) => s.queue);
+  const queueIndex = usePlayerStore((s) => s.queueIndex);
+  const repeat = usePlayerStore((s) => s.repeat);
+  const isShuffled = usePlayerStore((s) => s.isShuffled);
   const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
 
-  const pause         = usePlayerStore((s) => s.pause);
-  const resume        = usePlayerStore((s) => s.resume);
-  const next          = usePlayerStore((s) => s.next);
-  const prev          = usePlayerStore((s) => s.prev);
-  const seek          = usePlayerStore((s) => s.seek);
-  const toggleRepeat  = usePlayerStore((s) => s.toggleRepeat);
+  const pause = usePlayerStore((s) => s.pause);
+  const resume = usePlayerStore((s) => s.resume);
+  const next = usePlayerStore((s) => s.next);
+  const prev = usePlayerStore((s) => s.prev);
+  const seek = usePlayerStore((s) => s.seek);
+  const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const pullProgress        = useTagsStore((s) => s.pullProgress);
-  const enrichmentPending   = useTagsStore((s) => s.enrichmentPending);
+  const pullProgress = useTagsStore((s) => s.pullProgress);
+  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
   const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
   const [, setSnoozeUntil] = useSetting("enrichment.snooze_until", "");
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
-  const sleepTimerEndsAt    = usePlayerStore((s) => s.sleepTimerEndsAt);
+  const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
   const sleepTimerEndOfTrack = usePlayerStore((s) => s.sleepTimerEndOfTrack);
 
-  const castDevice           = usePlayerStore((s) => s.castDevice);
-  const availableRenderers   = usePlayerStore((s) => s.availableRenderers);
-  const isScanningRenderers  = usePlayerStore((s) => s.isScanningRenderers);
-  const rendererScanError    = usePlayerStore((s) => s.rendererScanError);
-  const scanRenderers        = usePlayerStore((s) => s.scanRenderers);
-  const setCastDevice        = usePlayerStore((s) => s.setCastDevice);
+  const castDevice = usePlayerStore((s) => s.castDevice);
+  const availableRenderers = usePlayerStore((s) => s.availableRenderers);
+  const isScanningRenderers = usePlayerStore((s) => s.isScanningRenderers);
+  const rendererScanError = usePlayerStore((s) => s.rendererScanError);
+  const scanRenderers = usePlayerStore((s) => s.scanRenderers);
+  const setCastDevice = usePlayerStore((s) => s.setCastDevice);
 
   const [castOpen, setCastOpen] = useState(false);
   const [castPopoverPos, setCastPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
@@ -112,9 +126,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const ratingDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const queryClient = useQueryClient();
   const nativeTrackId =
-    currentTrack && serverWithCred
-      ? stripServerPrefix(currentTrack.id, serverWithCred.server.id)
-      : null;
+    currentTrack && serverWithCred ? stripServerPrefix(currentTrack.id, serverWithCred.server.id) : null;
   const { data: trackRating = 0 } = useQuery({
     queryKey: QK.trackRating(nativeTrackId),
     queryFn: () =>
@@ -123,12 +135,11 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
         serverWithCred!.server.username,
         serverWithCred!.credential,
         nativeTrackId!,
-        serverWithCred!.server.alt_url ?? undefined
+        serverWithCred!.server.alt_url ?? undefined,
       ),
     enabled: !!nativeTrackId,
     staleTime: Infinity,
   });
-
 
   const prevHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevHoldFired = useRef(false);
@@ -170,7 +181,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--normalizing-bar-height",
-      (pullProgress || enrichmentPending || albumTracksNotice) ? "24px" : "0px"
+      pullProgress || enrichmentPending || albumTracksNotice ? "24px" : "0px",
     );
     // The badge unmounts with the bar (Now Playing); a stale height would reserve an empty strip.
     return () => document.documentElement.style.setProperty("--normalizing-bar-height", "0px");
@@ -178,7 +189,9 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   useEffect(() => {
     if (!artOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setArtOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setArtOpen(false);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [artOpen]);
@@ -187,7 +200,10 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   // Sleep timer countdown display
   useEffect(() => {
-    if (sleepTimerEndsAt === null) { setRemaining(""); return; }
+    if (sleepTimerEndsAt === null) {
+      setRemaining("");
+      return;
+    }
     const endsAt = sleepTimerEndsAt;
     function tick() {
       setRemaining(sleepTimerCountdown(endsAt, Date.now()));
@@ -207,9 +223,11 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
     const { server, credential } = serverWithCred;
     if (ratingDebounce.current) clearTimeout(ratingDebounce.current);
     ratingDebounce.current = setTimeout(() => {
-      setRating(server.url, server.username, credential, nativeTrackId, newRating, server.alt_url ?? undefined).catch(() => {
-        queryClient.invalidateQueries({ queryKey: QK.trackRating(nativeTrackId) });
-      });
+      setRating(server.url, server.username, credential, nativeTrackId, newRating, server.alt_url ?? undefined).catch(
+        () => {
+          queryClient.invalidateQueries({ queryKey: QK.trackRating(nativeTrackId) });
+        },
+      );
     }, 200);
   }
 
@@ -227,14 +245,13 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
           Metadata not fetched for {enrichmentPending} albums
           <button
             className="normalizing-bar__action"
-            onClick={() => { void runEnrichment(); }}
+            onClick={() => {
+              void runEnrichment();
+            }}
           >
             Fetch now
           </button>
-          <button
-            className="normalizing-bar__dismiss"
-            onClick={() => setEnrichmentPending(null)}
-          >
+          <button className="normalizing-bar__dismiss" onClick={() => setEnrichmentPending(null)}>
             Dismiss
           </button>
           <button
@@ -249,12 +266,14 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
           </button>
           {snoozeMenu && (
             <ContextMenu x={snoozeMenu.x} y={snoozeMenu.y} onClose={() => setSnoozeMenu(null)}>
-              {([
-                ["Snooze 1 day", String(Math.floor(Date.now() / 1000) + 86400)],
-                ["Snooze 1 week", String(Math.floor(Date.now() / 1000) + 604800)],
-                ["Snooze 1 month", String(Math.floor(Date.now() / 1000) + 2592000)],
-                ["Never show again", "forever"],
-              ] as [string, string][]).map(([label, value]) => (
+              {(
+                [
+                  ["Snooze 1 day", String(Math.floor(Date.now() / 1000) + 86400)],
+                  ["Snooze 1 week", String(Math.floor(Date.now() / 1000) + 604800)],
+                  ["Snooze 1 month", String(Math.floor(Date.now() / 1000) + 2592000)],
+                  ["Never show again", "forever"],
+                ] as [string, string][]
+              ).map(([label, value]) => (
                 <button
                   key={label}
                   onClick={() => {
@@ -275,218 +294,214 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
           Fetching metadata… {pullProgress.done} / {pullProgress.total}
         </div>
       )}
-      {!currentTrack ? null : <div
-        className="player-bar"
-      >
-        <div className="player-section player-section--left">
-          <div className="player-thumb-wrap">
-            <button
-              ref={artThumbRef}
-              className="player-thumb"
-              onClick={() => {
-                if (currentTrack.albumId && onSelectAlbumById) {
-                  void onSelectAlbumById(currentTrack.albumId);
-                } else {
-                  setArtOpen((v) => !v);
-                }
-              }}
-              aria-label={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
-              title={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
-            >
-              <AlbumArt
-                src={(currentTrack.albumId ? coverMap.get(currentTrack.albumId) : undefined) ?? currentTrack.coverArtUrl ?? null}
-                artist={currentTrack.artist}
-                album={currentTrack.album ?? null}
-                alt=""
-              />
-            </button>
-            <button
-              className="player-thumb-expand"
-              onClick={onNowPlaying}
-              aria-label="Now playing"
-              title="Now playing"
-            >
-              <ChevronUp size={12} />
-            </button>
-          </div>
-          <div className="player-track-info">
-            <span className="player-title">{currentTrack.title}</span>
-            {error ? (
-              <div className="player-error" role="alert">
-                <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
-                <span className="player-error-msg" title={error.message}>{error.message}</span>
-                <PlaybackErrorActions
-                  cause={error.cause}
-                  onRetry={retryCurrent}
-                  onSkip={() => void next()}
-                  skipDisabled={nextDisabled}
-                  onOpenResync={onOpenResync}
-                />
-              </div>
-            ) : (
-              currentTrack.artist && (
-                  onSelectArtist ? (
-                    <button
-                      className="player-artist player-artist--link"
-                      onClick={() => onSelectArtist(currentTrack.artist!)}
-                    >
-                      {currentTrack.artist}
-                    </button>
-                  ) : (
-                    <span className="player-artist">{currentTrack.artist}</span>
-                  )
-                )
-            )}
-          </div>
-        </div>
-
-        <div className="player-section player-section--center">
-          <div className="player-controls">
-            <button
-              className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
-              onClick={toggleShuffle}
-              title={shuffleLabel}
-              aria-label={shuffleLabel}
-              aria-pressed={isShuffled}
-            >
-              <Shuffle size={20} />
-            </button>
-            <button
-              className="player-btn"
-              onPointerDown={handlePrevPointerDown}
-              onPointerUp={handlePrevPointerUp}
-              onPointerLeave={handlePrevPointerLeave}
-              // Keyboard activation fires click with no pointerdown/up, so it's invisible
-              // to the pointer handlers above; detail === 0 identifies that case.
-              onClick={(e) => { if (e.detail === 0) void prev(); }}
-              disabled={queue.length === 0}
-              aria-label="Previous"
-            >
-              <SkipBack size={24} />
-            </button>
-            <button
-              className="player-btn player-btn--play"
-              onClick={isPlaying ? pause : resume}
-              disabled={isLoading}
-              aria-label={isPlaying ? "Pause" : "Play"}
-            >
-              {isLoading
-                ? <Loader size={20} className="player-spin" />
-                : isPlaying
-                  ? <Pause size={20} fill="currentColor" strokeWidth={0} />
-                  : <Play size={20} fill="currentColor" strokeWidth={0} />}
-            </button>
-            <button
-              className="player-btn"
-              onClick={() => void next()}
-              disabled={nextDisabled}
-              aria-label="Next"
-            >
-              <SkipForward size={24} />
-            </button>
-            <button
-              className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
-              onClick={() => void toggleRepeat()}
-              title={repeatLabel}
-              aria-label={repeatLabel}
-              aria-pressed={repeat !== "off"}
-            >
-              {repeat === "repeat-one"
-                ? <Repeat1 size={20} />
-                : <Repeat size={20} />}
-            </button>
-          </div>
-
-          <div className="player-progress-row">
-            <PlayerProgress />
-          </div>
-        </div>
-
-        <div className="player-section player-section--right">
-          {currentTrack && serverWithCred && (
-            <>
-              <LoveButton
-                isLoved={isLoved}
-                onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)}
-              />
-              <div
-                className="player-stars player-stars--hide-narrow"
-                onMouseLeave={() => setHoverRating(0)}
+      {!currentTrack ? null : (
+        <div className="player-bar">
+          <div className="player-section player-section--left">
+            <div className="player-thumb-wrap">
+              <button
+                ref={artThumbRef}
+                className="player-thumb"
+                onClick={() => {
+                  if (currentTrack.albumId && onSelectAlbumById) {
+                    void onSelectAlbumById(currentTrack.albumId);
+                  } else {
+                    setArtOpen((v) => !v);
+                  }
+                }}
+                aria-label={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
+                title={currentTrack.albumId && onSelectAlbumById ? "Go to album" : "Show cover art"}
               >
-                {[1, 2, 3, 4, 5].map((star) => {
-                  const filled = star <= (hoverRating || trackRating);
-                  return (
-                    <button
-                      key={star}
-                      className={`player-star-btn${filled ? " player-star-btn--filled" : ""}`}
-                      onClick={() => handleStarClick(star)}
-                      onMouseEnter={() => setHoverRating(star)}
-                      title={`Rate ${star} star${star !== 1 ? "s" : ""}`}
-                      aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
-                    >
-                      <Star size={13} fill={filled ? "currentColor" : "none"} strokeWidth={filled ? 0 : 1.5} />
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-          <RadioButton />
-          <button
-            ref={timerBtnRef}
-            className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}
-            onClick={() => {
-              if (timerBtnRef.current) setTimerPopoverPos(popoverAbove(timerBtnRef.current));
-              setTimerOpen((o) => !o);
-            }}
-            title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
-            aria-label="Sleep timer"
-          >
-            {timerActive && remaining ? (
-              <span className="player-timer-remaining">{remaining}</span>
-            ) : (
-              <Timer size={18} />
+                <AlbumArt
+                  src={
+                    (currentTrack.albumId ? coverMap.get(currentTrack.albumId) : undefined) ??
+                    currentTrack.coverArtUrl ??
+                    null
+                  }
+                  artist={currentTrack.artist}
+                  album={currentTrack.album ?? null}
+                  alt=""
+                />
+              </button>
+              <button
+                className="player-thumb-expand"
+                onClick={onNowPlaying}
+                aria-label="Now playing"
+                title="Now playing"
+              >
+                <ChevronUp size={12} />
+              </button>
+            </div>
+            <div className="player-track-info">
+              <span className="player-title">{currentTrack.title}</span>
+              {error ? (
+                <div className="player-error" role="alert">
+                  <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
+                  <span className="player-error-msg" title={error.message}>
+                    {error.message}
+                  </span>
+                  <PlaybackErrorActions
+                    cause={error.cause}
+                    onRetry={retryCurrent}
+                    onSkip={() => void next()}
+                    skipDisabled={nextDisabled}
+                    onOpenResync={onOpenResync}
+                  />
+                </div>
+              ) : (
+                currentTrack.artist &&
+                (onSelectArtist ? (
+                  <button
+                    className="player-artist player-artist--link"
+                    onClick={() => onSelectArtist(currentTrack.artist!)}
+                  >
+                    {currentTrack.artist}
+                  </button>
+                ) : (
+                  <span className="player-artist">{currentTrack.artist}</span>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="player-section player-section--center">
+            <div className="player-controls">
+              <button
+                className={`player-btn player-btn--icon${isShuffled ? " player-btn--active" : ""}`}
+                onClick={toggleShuffle}
+                title={shuffleLabel}
+                aria-label={shuffleLabel}
+                aria-pressed={isShuffled}
+              >
+                <Shuffle size={20} />
+              </button>
+              <button
+                className="player-btn"
+                onPointerDown={handlePrevPointerDown}
+                onPointerUp={handlePrevPointerUp}
+                onPointerLeave={handlePrevPointerLeave}
+                // Keyboard activation fires click with no pointerdown/up, so it's invisible
+                // to the pointer handlers above; detail === 0 identifies that case.
+                onClick={(e) => {
+                  if (e.detail === 0) void prev();
+                }}
+                disabled={queue.length === 0}
+                aria-label="Previous"
+              >
+                <SkipBack size={24} />
+              </button>
+              <button
+                className="player-btn player-btn--play"
+                onClick={isPlaying ? pause : resume}
+                disabled={isLoading}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isLoading ? (
+                  <Loader size={20} className="player-spin" />
+                ) : isPlaying ? (
+                  <Pause size={20} fill="currentColor" strokeWidth={0} />
+                ) : (
+                  <Play size={20} fill="currentColor" strokeWidth={0} />
+                )}
+              </button>
+              <button className="player-btn" onClick={() => void next()} disabled={nextDisabled} aria-label="Next">
+                <SkipForward size={24} />
+              </button>
+              <button
+                className={`player-btn player-btn--icon${repeat !== "off" ? " player-btn--active" : ""}`}
+                onClick={() => void toggleRepeat()}
+                title={repeatLabel}
+                aria-label={repeatLabel}
+                aria-pressed={repeat !== "off"}
+              >
+                {repeat === "repeat-one" ? <Repeat1 size={20} /> : <Repeat size={20} />}
+              </button>
+            </div>
+
+            <div className="player-progress-row">
+              <PlayerProgress />
+            </div>
+          </div>
+
+          <div className="player-section player-section--right">
+            {currentTrack && serverWithCred && (
+              <>
+                <LoveButton isLoved={isLoved} onToggle={() => void toggleTrackLove(currentTrack.id, serverWithCred)} />
+                <div className="player-stars player-stars--hide-narrow" onMouseLeave={() => setHoverRating(0)}>
+                  {[1, 2, 3, 4, 5].map((star) => {
+                    const filled = star <= (hoverRating || trackRating);
+                    return (
+                      <button
+                        key={star}
+                        className={`player-star-btn${filled ? " player-star-btn--filled" : ""}`}
+                        onClick={() => handleStarClick(star)}
+                        onMouseEnter={() => setHoverRating(star)}
+                        title={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                        aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                      >
+                        <Star size={13} fill={filled ? "currentColor" : "none"} strokeWidth={filled ? 0 : 1.5} />
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
-          </button>
-          <button
-            ref={castBtnRef}
-            className={`player-btn player-btn--icon player-btn--hide-narrow${castDevice ? " player-btn--active" : ""}`}
-            onClick={() => {
-              if (castBtnRef.current) setCastPopoverPos(popoverAbove(castBtnRef.current));
-              if (!castOpen) void scanRenderers();
-              setCastOpen((o) => !o);
-            }}
-            title={castDevice ? `Casting to ${castDevice.name}` : "Cast to device"}
-            aria-label="Cast to device"
-          >
-            <Cast size={18} />
-          </button>
-          <button
-            className="player-btn player-btn--icon player-btn--hide-narrow"
-            onClick={onNowPlaying}
-            title="Now playing"
-            aria-label="Now playing"
-          >
-            <Headphones size={22} />
-          </button>
-          <VolumeControl className="player-volume" iconSize={18} />
-          <PlayerMoreControls
-            timerLabel={remaining}
-            isTimerActive={timerActive}
-            castDeviceName={castDevice?.name ?? null}
-            onOpenTimer={(anchor) => {
-              setTimerPopoverPos(popoverAbove(anchor));
-              setTimerOpen(true);
-            }}
-            onOpenCast={(anchor) => {
-              setCastPopoverPos(popoverAbove(anchor));
-              if (!castOpen) void scanRenderers();
-              setCastOpen(true);
-            }}
-            onNowPlaying={onNowPlaying}
-          />
+            <RadioButton />
+            <button
+              ref={timerBtnRef}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${timerActive ? " player-btn--active" : ""}`}
+              onClick={() => {
+                if (timerBtnRef.current) setTimerPopoverPos(popoverAbove(timerBtnRef.current));
+                setTimerOpen((o) => !o);
+              }}
+              title={sleepTimerEndOfTrack ? "End of track" : remaining || "Sleep timer"}
+              aria-label="Sleep timer"
+            >
+              {timerActive && remaining ? (
+                <span className="player-timer-remaining">{remaining}</span>
+              ) : (
+                <Timer size={18} />
+              )}
+            </button>
+            <button
+              ref={castBtnRef}
+              className={`player-btn player-btn--icon player-btn--hide-narrow${castDevice ? " player-btn--active" : ""}`}
+              onClick={() => {
+                if (castBtnRef.current) setCastPopoverPos(popoverAbove(castBtnRef.current));
+                if (!castOpen) void scanRenderers();
+                setCastOpen((o) => !o);
+              }}
+              title={castDevice ? `Casting to ${castDevice.name}` : "Cast to device"}
+              aria-label="Cast to device"
+            >
+              <Cast size={18} />
+            </button>
+            <button
+              className="player-btn player-btn--icon player-btn--hide-narrow"
+              onClick={onNowPlaying}
+              title="Now playing"
+              aria-label="Now playing"
+            >
+              <Headphones size={22} />
+            </button>
+            <VolumeControl className="player-volume" iconSize={18} />
+            <PlayerMoreControls
+              timerLabel={remaining}
+              isTimerActive={timerActive}
+              castDeviceName={castDevice?.name ?? null}
+              onOpenTimer={(anchor) => {
+                setTimerPopoverPos(popoverAbove(anchor));
+                setTimerOpen(true);
+              }}
+              onOpenCast={(anchor) => {
+                setCastPopoverPos(popoverAbove(anchor));
+                if (!castOpen) void scanRenderers();
+                setCastOpen(true);
+              }}
+              onNowPlaying={onNowPlaying}
+            />
+          </div>
         </div>
-      </div>}
+      )}
 
       {timerOpen && (
         <SleepTimerPopover
@@ -504,45 +519,55 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
         >
           <button
             className={`cast-popover-item${castDevice === null ? " cast-popover-item--active" : ""}`}
-            onClick={() => { void setCastDevice(null); setCastOpen(false); }}
+            onClick={() => {
+              void setCastDevice(null);
+              setCastOpen(false);
+            }}
           >
             <Check size={14} className="cast-popover-item__check" />
             This computer
           </button>
-          {(availableRenderers.length > 0 || isScanningRenderers) && (
-            <div className="cast-popover-separator" />
-          )}
-          {isScanningRenderers && (
-            <div className="cast-popover-scanning">Scanning…</div>
-          )}
+          {(availableRenderers.length > 0 || isScanningRenderers) && <div className="cast-popover-separator" />}
+          {isScanningRenderers && <div className="cast-popover-scanning">Scanning…</div>}
           {availableRenderers.map((r) => (
             <button
               key={r.baseUrl}
               className={`cast-popover-item${castDevice?.baseUrl === r.baseUrl ? " cast-popover-item--active" : ""}`}
-              onClick={() => { void setCastDevice(r); setCastOpen(false); }}
+              onClick={() => {
+                void setCastDevice(r);
+                setCastOpen(false);
+              }}
             >
               <Check size={14} className="cast-popover-item__check" />
               {r.name}
             </button>
           ))}
           {!isScanningRenderers && availableRenderers.length === 0 && (
-            <div className="cast-popover-empty">
-              {rendererScanError ?? "No devices found"}
-            </div>
+            <div className="cast-popover-empty">{rendererScanError ?? "No devices found"}</div>
           )}
         </div>
       )}
 
-      {artOpen && currentTrack && (currentTrack.artworkRef || currentTrack.coverArtUrl) && (() => {
-        const popoverUrl = serverWithCred && currentTrack.artworkRef
-          ? getCoverArtUrl(serverWithCred.server.url, serverWithCred.server.username, serverWithCred.credential, currentTrack.artworkRef, 400)
-          : currentTrack.coverArtUrl;
-        return popoverUrl ? (
-          <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>
-            <img src={popoverUrl} alt={currentTrack.title} />
-          </div>
-        ) : null;
-      })()}
+      {artOpen &&
+        currentTrack &&
+        (currentTrack.artworkRef || currentTrack.coverArtUrl) &&
+        (() => {
+          const popoverUrl =
+            serverWithCred && currentTrack.artworkRef
+              ? getCoverArtUrl(
+                  serverWithCred.server.url,
+                  serverWithCred.server.username,
+                  serverWithCred.credential,
+                  currentTrack.artworkRef,
+                  400,
+                )
+              : currentTrack.coverArtUrl;
+          return popoverUrl ? (
+            <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>
+              <img src={popoverUrl} alt={currentTrack.title} />
+            </div>
+          ) : null;
+        })()}
     </>
   );
 }

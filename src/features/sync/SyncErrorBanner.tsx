@@ -38,8 +38,12 @@ export function SyncErrorBanner({ variant, serverName, detail, nextRetryAt, onRe
   useEffect(() => {
     if (nextRetryAt === null) return;
     setNow(Date.now());
-    const id = setInterval(() => { setNow(Date.now()); }, 1000);
-    return () => { clearInterval(id); };
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => {
+      clearInterval(id);
+    };
   }, [nextRetryAt]);
 
   const remaining = nextRetryAt === null ? 0 : nextRetryAt - now;

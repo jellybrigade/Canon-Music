@@ -23,7 +23,7 @@
 
 /* Dominant color radial glow at top, derived from album art accent */
 .now-playing-view::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse 100% 40% at 50% 0%, var(--np-dominant, transparent), transparent 70%);
@@ -279,7 +279,9 @@
   padding: var(--space-xs) var(--space-md) var(--space-xs);
   cursor: pointer;
   margin-bottom: -1px;
-  transition: color var(--duration-moderate), border-bottom-color var(--duration-moderate);
+  transition:
+    color var(--duration-moderate),
+    border-bottom-color var(--duration-moderate);
 }
 
 .now-playing-tab-btn:hover,
@@ -397,7 +399,6 @@
   .now-playing-top-tracks-grid {
     grid-template-columns: 1fr;
   }
-
 
   .now-playing-art,
   .now-playing-art--placeholder {

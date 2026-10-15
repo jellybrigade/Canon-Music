@@ -1,11 +1,16 @@
-import { useState } from "react";
-import { Heart, Play, Disc, HelpCircle, ExternalLink, Shuffle, ListPlus, ListEnd } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAlbumDisplayName, useAlbumSuffixAllowlist, useAlbumSuffixExclusions, extractSuffix } from "../../hooks/useAlbumDisplayName";
-import { useBoolSetting } from "../../hooks/useSetting";
+import { Disc, ExternalLink, Heart, HelpCircle, ListEnd, ListPlus, Play, Shuffle } from "lucide-react";
+import { useState } from "react";
 import { ArtBackdrop } from "../../components/ArtBackdrop";
-import type { AlbumRow } from "../../types/library";
 import type { AlbumIdentityRow } from "../../features/enrichment/hooks/useAlbumIdentity";
+import {
+  extractSuffix,
+  useAlbumDisplayName,
+  useAlbumSuffixAllowlist,
+  useAlbumSuffixExclusions,
+} from "../../hooks/useAlbumDisplayName";
+import { useBoolSetting } from "../../hooks/useSetting";
+import type { AlbumRow } from "../../types/library";
 import "./AlbumHero.css";
 
 interface Props {
@@ -35,15 +40,16 @@ function AlbumTitle({ album }: { album: AlbumRow }) {
   const detectedSuffix = extractSuffix(album.name);
   const suffixIsExcluded = suffixExcludedIds.includes(album.id);
   const suffixWasStripped = !suffixIsExcluded && albumDisplayName(album.name, album.id) !== album.name;
-  const suffixCanBeAdded = strippingEnabled && detectedSuffix !== null && !suffixWasStripped &&
+  const suffixCanBeAdded =
+    strippingEnabled &&
+    detectedSuffix !== null &&
+    !suffixWasStripped &&
     !suffixAllowlist.some((s) => s.toLowerCase() === detectedSuffix.toLowerCase());
 
   return (
     <>
       <div className="album-detail-title-row">
-        <h2 className="album-detail-title">
-          {showFullTitle ? album.name : albumDisplayName(album.name, album.id)}
-        </h2>
+        <h2 className="album-detail-title">{showFullTitle ? album.name : albumDisplayName(album.name, album.id)}</h2>
         {suffixWasStripped && (
           <button
             className="album-suffix-toggle-btn"
@@ -56,7 +62,10 @@ function AlbumTitle({ album }: { album: AlbumRow }) {
         {suffixWasStripped && showFullTitle && detectedSuffix && (
           <button
             className="album-suffix-toggle-btn"
-            onClick={() => { void excludeFromSuffix(album.id); setShowFullTitle(false); }}
+            onClick={() => {
+              void excludeFromSuffix(album.id);
+              setShowFullTitle(false);
+            }}
             title="Keep the suffix visible for this album only."
           >
             Keep
@@ -104,15 +113,21 @@ export function AlbumHero({
   // The album button does whatever album.play_action says, so its label and icon have to say so
   // too. A fixed "Play Album" is a lie for three of the four settings.
   const playActionLabel =
-    playAction === "queue_last" ? "Add to Queue"
-    : playAction === "queue_next" ? "Play Next"
-    : playAction === "shuffle" ? "Shuffle Album"
-    : "Play Album";
+    playAction === "queue_last"
+      ? "Add to Queue"
+      : playAction === "queue_next"
+        ? "Play Next"
+        : playAction === "shuffle"
+          ? "Shuffle Album"
+          : "Play Album";
   const PlayActionIcon =
-    playAction === "queue_last" ? ListEnd
-    : playAction === "queue_next" ? ListPlus
-    : playAction === "shuffle" ? Shuffle
-    : Play;
+    playAction === "queue_last"
+      ? ListEnd
+      : playAction === "queue_next"
+        ? ListPlus
+        : playAction === "shuffle"
+          ? Shuffle
+          : Play;
 
   return (
     <div className="album-detail-header">
@@ -128,21 +143,20 @@ export function AlbumHero({
         )}
         <div className="album-detail-meta">
           <AlbumTitle album={album} />
-          {album.artist && (
-            onSelectArtist ? (
+          {album.artist &&
+            (onSelectArtist ? (
               <span
                 className="album-detail-artist album-detail-artist--link"
                 onClick={() => onSelectArtist(album.artist!)}
                 role="button"
                 tabIndex={0}
-                onKeyDown={e => e.key === 'Enter' && onSelectArtist(album.artist!)}
+                onKeyDown={(e) => e.key === "Enter" && onSelectArtist(album.artist!)}
               >
                 {album.artist}
               </span>
             ) : (
               <p className="album-detail-artist">{album.artist}</p>
-            )
-          )}
+            ))}
           {album.year && !(albumIdentity?.confirmed_at && albumIdentity.release_date) && (
             <p className="album-detail-year">{album.year}</p>
           )}
@@ -150,9 +164,7 @@ export function AlbumHero({
             (albumIdentity.release_date || albumIdentity.label || albumIdentity.country) && (
               <div className="album-detail-identity">
                 <p className="mb-verified-facts">
-                  {albumIdentity.release_date && (
-                    <span>{albumIdentity.release_date.slice(0, 4)}</span>
-                  )}
+                  {albumIdentity.release_date && <span>{albumIdentity.release_date.slice(0, 4)}</span>}
                   {albumIdentity.label && <span>{albumIdentity.label}</span>}
                   {albumIdentity.country && <span>{albumIdentity.country}</span>}
                   {albumIdentity.catalog_number && <span>{albumIdentity.catalog_number}</span>}
@@ -171,7 +183,8 @@ export function AlbumHero({
           <div className="album-meta-refresh-line">
             {tagsComputedAt ? (
               <span className="album-meta-refresh-hint">
-                Tags updated {Math.floor((Date.now() / 1000 - tagsComputedAt) / 86400) === 0
+                Tags updated{" "}
+                {Math.floor((Date.now() / 1000 - tagsComputedAt) / 86400) === 0
                   ? "today"
                   : `${Math.floor((Date.now() / 1000 - tagsComputedAt) / 86400)}d ago`}
               </span>
@@ -184,16 +197,13 @@ export function AlbumHero({
               {tagRefresh.isRefreshing ? "Refreshing…" : "Refresh"}
             </button>
             {tagRefresh.error && (
-              <span className="album-meta-refresh-error" role="status">{tagRefresh.error}</span>
+              <span className="album-meta-refresh-error" role="status">
+                {tagRefresh.error}
+              </span>
             )}
           </div>
           <div className="album-detail-actions">
-            <button
-              className="play-album-btn"
-              onClick={onPlayAlbum}
-              disabled={!canPlay}
-              aria-label={playActionLabel}
-            >
+            <button className="play-album-btn" onClick={onPlayAlbum} disabled={!canPlay} aria-label={playActionLabel}>
               <PlayActionIcon size={16} /> {playActionLabel}
             </button>
             <button

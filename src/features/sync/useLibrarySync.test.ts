@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", async () => (await import("../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../test/mocks/tauri")).eventModule);
@@ -8,16 +8,16 @@ vi.mock("./sync", () => ({ syncLibrary: vi.fn() }));
 vi.mock("../tags/hooks/useGenreTree", () => ({ invalidateGenreTreeCache: vi.fn() }));
 vi.mock("../../hooks/useSetting", () => ({ useSetting: vi.fn(() => [intervalSetting, vi.fn(), true]) }));
 
-import { renderHook, act } from "@testing-library/react";
-import { syncLibrary } from "./sync";
-import type { SyncProgress } from "./sync";
+import { act, renderHook } from "@testing-library/react";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
-import type { Server } from "../../types/server";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { useLibrarySync } from "./useLibrarySync";
+import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 import { useGenresSessionStore } from "../../store/genresSessionStore";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
-import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
+import type { Server } from "../../types/server";
+import type { SyncProgress } from "./sync";
+import { syncLibrary } from "./sync";
+import { useLibrarySync } from "./useLibrarySync";
 
 /** Read by the mocked `useSetting` above; assign before rendering. */
 let intervalSetting = "5";
@@ -265,7 +265,9 @@ describe("useLibrarySync options", () => {
 
     act(() => {
       result.current.runSync(SRV_A, {
-        onSettled: () => { tickAtSettle = useAlbumBrowseSessionStore.getState().refreshTick; },
+        onSettled: () => {
+          tickAtSettle = useAlbumBrowseSessionStore.getState().refreshTick;
+        },
       });
     });
     await settle(0, { changed: { albums: true } });
@@ -362,7 +364,9 @@ describe("useLibrarySync server claim", () => {
 
     // The claim only clears on a retry, so the manual button is what reaches a
     // server that has already synced once.
-    await act(async () => { result.current.runSync(SRV_A); });
+    await act(async () => {
+      result.current.runSync(SRV_A);
+    });
     await failRun(2, new Error("boom"));
 
     // A fresh first step, not the second one the earlier failure would have left.
@@ -628,9 +632,7 @@ describe("useLibrarySync partial reporting", () => {
     await settle(0, { skippedStages: ["loved", "playlists", "artists"] });
 
     expect(result.current.syncStatus).toBe("partial");
-    expect(result.current.syncError).toBe(
-      "Sync partial: loved, playlists and artists unchanged (server unreachable)."
-    );
+    expect(result.current.syncError).toBe("Sync partial: loved, playlists and artists unchanged (server unreachable).");
   });
 
   it.each([
@@ -649,9 +651,7 @@ describe("useLibrarySync partial reporting", () => {
     await tick();
     await settle(0, { failedAlbums: 2, failedPlaylists: 1 });
 
-    expect(result.current.syncError).toBe(
-      "Sync partial: failed to fetch tracks for 2 albums and 1 playlist."
-    );
+    expect(result.current.syncError).toBe("Sync partial: failed to fetch tracks for 2 albums and 1 playlist.");
   });
 
   it("joins every partial reason into one sentence", async () => {
@@ -666,7 +666,7 @@ describe("useLibrarySync partial reporting", () => {
     expect(result.current.syncError).toBe(
       "Sync partial: failed to fetch tracks for 1 album; " +
         "loved, playlists and artists unchanged (server unreachable); " +
-        "stopped reading album tracks early (server unreachable), the rest follow next sync."
+        "stopped reading album tracks early (server unreachable), the rest follow next sync.",
     );
   });
 });

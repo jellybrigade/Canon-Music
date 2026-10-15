@@ -1,8 +1,8 @@
+import { ListFilter, Play, Search, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { Play, ListFilter, Search, X } from "lucide-react";
 import { useGenreTree } from "../features/tags/hooks/useGenreTree";
-import { getParentChain } from "../features/tags/lib/canonicalize";
 import type { NodeSection } from "../features/tags/lib/canonicalize";
+import { getParentChain } from "../features/tags/lib/canonicalize";
 import "./GenreView.css";
 
 const EMPTY_MAP = new Map<string, never>();
@@ -52,7 +52,9 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
         <div className="empty-state">
           <p className="empty-state-title">Couldn't load your genres</p>
           <p className="empty-state-hint">{error}</p>
-          <button className="empty-state-action" onClick={retry}>Try again</button>
+          <button className="empty-state-action" onClick={retry}>
+            Try again
+          </button>
         </div>
       </div>
     );
@@ -66,9 +68,9 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
     );
   }
 
-  const availableSections = (
-    ["genres", "descriptors", "scenes-and-movements"] as NodeSection[]
-  ).filter((s) => (rootsBySection[s]?.length ?? 0) > 0);
+  const availableSections = (["genres", "descriptors", "scenes-and-movements"] as NodeSection[]).filter(
+    (s) => (rootsBySection[s]?.length ?? 0) > 0,
+  );
 
   function handleSectionChange(s: SectionTab) {
     setSection(s);
@@ -79,14 +81,8 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
   const searchLower = search.toLowerCase();
   const searchResults = search
     ? Array.from(nodeById.values())
-        .filter(
-          (n) =>
-            n.name.toLowerCase().includes(searchLower) &&
-            (countById.get(n.id) ?? 0) > 0
-        )
-        .sort((a, b) =>
-          a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
-        )
+        .filter((n) => n.name.toLowerCase().includes(searchLower) && (countById.get(n.id) ?? 0) > 0)
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))
     : [];
 
   function handleNodeClick(nodeId: string, depth: number) {
@@ -146,10 +142,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
           {breadcrumbNames.map((name, i) => (
             <span key={i} className="genre-breadcrumb__item">
               {i > 0 && <span className="genre-breadcrumb__sep">›</span>}
-              <button
-                className="genre-breadcrumb__node"
-                onClick={() => setPath(path.slice(0, i + 1))}
-              >
+              <button className="genre-breadcrumb__node" onClick={() => setPath(path.slice(0, i + 1))}>
                 {name}
               </button>
             </span>
@@ -161,9 +154,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
       {search ? (
         <div className="genre-search-results">
           {searchResults.length === 0 ? (
-            <p className="genre-search-results__empty">
-              No genres match "{search}"
-            </p>
+            <p className="genre-search-results__empty">No genres match "{search}"</p>
           ) : (
             searchResults.map((node) => {
               const parentChain = getParentChain(node, nodeById, 4);
@@ -182,19 +173,28 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                   {parentChain.length > 0 && (
                     <span className="genre-col-breadcrumb">
                       {parentChain.map((seg, i) => (
-                        <span key={i} style={{ flexShrink: parentChain.length - i }} className="genre-col-breadcrumb__seg">
+                        <span
+                          key={i}
+                          style={{ flexShrink: parentChain.length - i }}
+                          className="genre-col-breadcrumb__seg"
+                        >
                           {seg}
                           {i < parentChain.length - 1 && <span className="genre-col-breadcrumb__sep"> ›</span>}
                         </span>
                       ))}
                     </span>
                   )}
-                  <span className="genre-col-count">{count} {count === 1 ? "album" : "albums"}</span>
+                  <span className="genre-col-count">
+                    {count} {count === 1 ? "album" : "albums"}
+                  </span>
                   <div className="genre-col-actions">
                     <button
                       className="genre-col-action-btn"
                       title="Browse in Library"
-                      onClick={(e) => { e.stopPropagation(); onSelectGenre(node.id); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectGenre(node.id);
+                      }}
                       aria-label="Filter library to this genre"
                     >
                       <ListFilter size={15} strokeWidth={2} />
@@ -202,7 +202,10 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                     <button
                       className="genre-col-action-btn genre-col-action-btn--play"
                       title="Shuffle play"
-                      onClick={(e) => { e.stopPropagation(); onPlayGenre(node.id, node.name); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlayGenre(node.id, node.name);
+                      }}
                       aria-label="Shuffle play this genre"
                     >
                       <Play size={14} fill="currentColor" strokeWidth={0} />
@@ -220,16 +223,12 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
             const selectedInCol = path[depth] ?? null;
             const unique = [...new Set(colIds)];
             return (
-              <div
-                key={depth}
-                className="genre-column"
-              >
+              <div key={depth} className="genre-column">
                 {unique.map((nodeId) => {
                   const node = nodeById.get(nodeId);
                   if (!node) return null;
                   const count = countById.get(nodeId) ?? 0;
-                  const hasChildren =
-                    (childrenById.get(nodeId)?.length ?? 0) > 0;
+                  const hasChildren = (childrenById.get(nodeId)?.length ?? 0) > 0;
                   const isSelected = selectedInCol === nodeId;
                   return (
                     <div
@@ -239,14 +238,20 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ")
-                          handleNodeClick(nodeId, depth);
+                        if (e.key === "Enter" || e.key === " ") handleNodeClick(nodeId, depth);
                       }}
                     >
                       <span className="genre-col-name">{node.name}</span>
                       <div className="genre-col-right">
-                        <span className="genre-col-count">{count} {count === 1 ? "album" : "albums"}</span>
-                        <span className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`} aria-hidden>›</span>
+                        <span className="genre-col-count">
+                          {count} {count === 1 ? "album" : "albums"}
+                        </span>
+                        <span
+                          className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`}
+                          aria-hidden
+                        >
+                          ›
+                        </span>
                         <div className="genre-col-actions">
                           <button
                             className="genre-col-action-btn"

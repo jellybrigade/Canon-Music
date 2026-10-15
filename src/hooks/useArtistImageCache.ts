@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getDb } from "../db";
-import { getArtistImageUrl, isCoverServerReady } from "../clients/navidromeUrls";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { boundedFetch } from "../clients/boundedFetch";
 import { resolvePortraitUrl } from "../clients/lastfm";
-import { makeRateLimiter } from "../lib/rateLimiter";
+import { getArtistImageUrl, isCoverServerReady } from "../clients/navidromeUrls";
+import { getDb } from "../db";
 import { runPool } from "../lib/asyncPool";
 import { QK } from "../lib/queryKeys";
-import { boundedFetch } from "../clients/boundedFetch";
+import { makeRateLimiter } from "../lib/rateLimiter";
 
 // Wikimedia 429s on bursts: a per-host token bucket owns the rate, a worker pool owns
 // concurrency, and 429s retry with backoff.
@@ -92,10 +92,11 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
     const blob = await res!.blob();
     const dataUrl = await blobToDataUrl(blob);
     const db = await getDb();
-    await db.execute(
-      `INSERT OR REPLACE INTO artist_covers (artist_name, data_url, cached_at) VALUES (?, ?, ?)`,
-      [artistName, dataUrl, Date.now()],
-    );
+    await db.execute(`INSERT OR REPLACE INTO artist_covers (artist_name, data_url, cached_at) VALUES (?, ?, ?)`, [
+      artistName,
+      dataUrl,
+      Date.now(),
+    ]);
     return true;
   } catch (err) {
     // Network/parse/DB failure for this one artist; retry on next session.
@@ -106,7 +107,14 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
 
 async function getMissingArtistImageRows(): Promise<{ name: string; portrait_url: string }[]> {
   const db = await getDb();
-  const rows = await db.select<{ name: string; lastfm_image_url: string | null; wikidata_image_url: string | null; navidrome_image_url: string | null }[]>(`
+  const rows = await db.select<
+    {
+      name: string;
+      lastfm_image_url: string | null;
+      wikidata_image_url: string | null;
+      navidrome_image_url: string | null;
+    }[]
+  >(`
     SELECT ai.artist_name AS name, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
     FROM artist_identity ai
     LEFT JOIN artist_covers ac ON ac.artist_name = ai.artist_name
@@ -211,7 +219,9 @@ function getArtistStoreVersion(): number {
 }
 function bumpArtistStore(): void {
   artistStoreVersion++;
-  artistStoreListeners.forEach((l) => { l(); });
+  artistStoreListeners.forEach((l) => {
+    l();
+  });
 }
 
 function rememberArtistDataUrl(name: string, dataUrl: string): void {
@@ -289,7 +299,7 @@ export function useArtistImageMap(): Pick<Map<string, string>, "get"> {
 export function resolveArtistImageUrl(
   imageMap: Pick<Map<string, string>, "get">,
   artistName: string,
-  rawPortraitUrl: string | null
+  rawPortraitUrl: string | null,
 ): string | null {
   if (!rawPortraitUrl) return null;
   return imageMap.get(artistName) ?? getArtistImageUrl(rawPortraitUrl);

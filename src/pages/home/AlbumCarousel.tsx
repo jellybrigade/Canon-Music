@@ -1,10 +1,10 @@
-import { useRef, useState, useEffect } from "react";
 import { ChevronLeft, ChevronRight, Play, Radio, RefreshCw } from "lucide-react";
-import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
+import { useEffect, useRef, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
+import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { AlbumRow } from "../../types/library";
-import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import "./AlbumCarousel.css";
 
 interface CarouselRefresh {
@@ -41,7 +41,19 @@ function cardStride(track: HTMLDivElement): number {
   return card.offsetWidth + (Number.isFinite(gap) ? gap : 0);
 }
 
-export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCred, onSelectAlbum, playAlbum, onCardContextMenu, onRadio, refresh, scrollToStartRequest = 0 }: AlbumCarouselProps) {
+export function AlbumCarousel({
+  title,
+  subtitle,
+  items,
+  isLoading,
+  serverWithCred,
+  onSelectAlbum,
+  playAlbum,
+  onCardContextMenu,
+  onRadio,
+  refresh,
+  scrollToStartRequest = 0,
+}: AlbumCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const { server, credential } = serverWithCred;
   const albumDisplayName = useAlbumDisplayName();
@@ -91,7 +103,12 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
         <h2 className="home-section__title">{title}</h2>
         {subtitle && <p className="home-section__subtitle">{subtitle}</p>}
         {onRadio && (
-          <button className="home-section__radio-btn" onClick={onRadio} aria-label={`Start ${title} radio`} title="Start radio">
+          <button
+            className="home-section__radio-btn"
+            onClick={onRadio}
+            aria-label={`Start ${title} radio`}
+            title="Start radio"
+          >
             <Radio size={13} />
           </button>
         )}
@@ -107,11 +124,18 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
           </button>
         )}
         {refresh?.note && (
-          <span className="home-section__note" role="status" title={refresh.noteDetail}>{refresh.note}</span>
+          <span className="home-section__note" role="status" title={refresh.noteDetail}>
+            {refresh.note}
+          </span>
         )}
       </div>
       <div className="album-carousel">
-        <button className="album-carousel__arrow album-carousel__arrow--prev" onClick={() => scroll("prev")} disabled={atStart} aria-label="Scroll left">
+        <button
+          className="album-carousel__arrow album-carousel__arrow--prev"
+          onClick={() => scroll("prev")}
+          disabled={atStart}
+          aria-label="Scroll left"
+        >
           <ChevronLeft size={15} />
         </button>
         <div className="album-carousel__track" ref={trackRef}>
@@ -123,10 +147,12 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
                   <p className="carousel-card__artist">&nbsp;</p>
                 </div>
               ))
-            : (items ?? []).map(item => {
-                const artUrl = coverMap.get(item.id) ?? (item.artwork_url
-                  ? getCoverArtUrl(server.url, server.username, credential, item.artwork_url, 300)
-                  : null);
+            : (items ?? []).map((item) => {
+                const artUrl =
+                  coverMap.get(item.id) ??
+                  (item.artwork_url
+                    ? getCoverArtUrl(server.url, server.username, credential, item.artwork_url, 300)
+                    : null);
                 return (
                   <div
                     key={item.id}
@@ -134,16 +160,27 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
                     onClick={() => onSelectAlbum(item)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={e => e.key === "Enter" && onSelectAlbum(item)}
-                    onContextMenu={e => onCardContextMenu(e, item)}
+                    onKeyDown={(e) => e.key === "Enter" && onSelectAlbum(item)}
+                    onContextMenu={(e) => onCardContextMenu(e, item)}
                   >
                     <div className="carousel-card__art-wrap">
-                      {artUrl
-                        ? <img className="carousel-card__art" src={artUrl} alt={item.name} decoding="async" loading="lazy" />
-                        : <div className="carousel-card__art" />}
+                      {artUrl ? (
+                        <img
+                          className="carousel-card__art"
+                          src={artUrl}
+                          alt={item.name}
+                          decoding="async"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="carousel-card__art" />
+                      )}
                       <button
                         className="carousel-card__play"
-                        onClick={e => { e.stopPropagation(); void playAlbum(item); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void playAlbum(item);
+                        }}
                         aria-label={`Play ${item.name}`}
                       >
                         <Play size={13} fill="currentColor" />
@@ -155,7 +192,12 @@ export function AlbumCarousel({ title, subtitle, items, isLoading, serverWithCre
                 );
               })}
         </div>
-        <button className="album-carousel__arrow album-carousel__arrow--next" onClick={() => scroll("next")} disabled={atEnd} aria-label="Scroll right">
+        <button
+          className="album-carousel__arrow album-carousel__arrow--next"
+          onClick={() => scroll("next")}
+          disabled={atEnd}
+          aria-label="Scroll right"
+        >
           <ChevronRight size={15} />
         </button>
       </div>

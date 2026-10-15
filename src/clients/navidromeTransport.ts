@@ -1,12 +1,12 @@
+import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import {
   noteTransportTimeout,
   recordTransportSuccess,
-  transportStallNotice,
   TransportStalledError,
+  transportStallNotice,
 } from "../lib/transportHealth";
-import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
-import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
-import { REQUEST_TIMEOUT_MS, boundedFetch } from "./boundedFetch";
+import { boundedFetch, REQUEST_TIMEOUT_MS } from "./boundedFetch";
+import { buildAuthParams, type NavidromeCredential, normalizeUrl } from "./navidromeUrls";
 
 // Stuck DNS resolution (stale systemd-resolved entry) hangs fetch ~25s then rejects
 // with an opaque "Load failed"; cap well under that and retry instead of aborting.
@@ -25,12 +25,7 @@ function isRetriableStatus(status: number): boolean {
 
 /** A timed-out request may have applied before the response was lost, so retrying these would
  *  scrobble twice or duplicate a playlist; everything else is a read or an idempotent write. */
-const NON_IDEMPOTENT_ENDPOINTS = new Set([
-  "scrobble",
-  "createPlaylist",
-  "updatePlaylist",
-  "deletePlaylist",
-]);
+const NON_IDEMPOTENT_ENDPOINTS = new Set(["scrobble", "createPlaylist", "updatePlaylist", "deletePlaylist"]);
 
 function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean {
   // Call sites are inconsistent about the ".view" suffix, so compare on the bare name.
@@ -65,7 +60,7 @@ export async function apiPost(
   endpoint: string,
   params: URLSearchParams,
   altUrl?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<Response> {
   const body = params.toString();
   const server = normalizeUrl(baseUrl);
@@ -125,7 +120,7 @@ export async function apiPost(
   const cause = lastWasTimeout && retriable ? await noteTransportTimeout(server) : null;
   throw new Error(
     `${endpoint} failed after ${maxAttempts} attempt${maxAttempts > 1 ? "s" : ""}: ${lastFailure}` +
-      (cause ? `. ${cause}` : "")
+      (cause ? `. ${cause}` : ""),
   );
 }
 
@@ -146,7 +141,7 @@ export function checkEnvelope(
   baseUrl: string,
   endpoint: string,
   response: SubsonicEnvelope,
-  fallbackMessage?: string
+  fallbackMessage?: string,
 ): void {
   noteEnvelope(baseUrl, response);
   if (response.status !== "ok") {
@@ -161,7 +156,7 @@ export async function callSubsonicVoid(
   endpoint: string,
   extraParams: Record<string, string>,
   altUrl?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   for (const [k, v] of Object.entries(extraParams)) params.set(k, v);

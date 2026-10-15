@@ -104,7 +104,9 @@
   cursor: pointer;
   color: var(--text-primary, #f0f0f0);
   opacity: 0;
-  transition: opacity var(--motion-med, 200ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    opacity var(--motion-med, 200ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
   z-index: 2;
 }
 
@@ -126,8 +128,12 @@
   cursor: default;
 }
 
-.album-carousel__arrow--prev { left: -16px; }
-.album-carousel__arrow--next { right: -16px; }
+.album-carousel__arrow--prev {
+  left: -16px;
+}
+.album-carousel__arrow--next {
+  right: -16px;
+}
 
 /* ── Carousel Card ────────────────────────────────────────────────────────── */
 
@@ -158,7 +164,7 @@
 
 /* Dim overlay via ::after, keeps filter off the <img> to avoid WebKitGTK flicker */
 .carousel-card__art-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0);
@@ -188,7 +194,10 @@
   justify-content: center;
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--motion-med, 200ms ease-out), transform var(--motion-med, 200ms ease-out), background var(--motion-fast, 120ms ease-out);
+  transition:
+    opacity var(--motion-med, 200ms ease-out),
+    transform var(--motion-med, 200ms ease-out),
+    background var(--motion-fast, 120ms ease-out);
   z-index: 1;
   box-shadow: var(--shadow-sm) var(--scrim-2);
 }

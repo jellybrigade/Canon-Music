@@ -46,9 +46,13 @@
 /* Stagger by column so the grid reads as content settling in rather than one block
    flashing. Same intent as the row stagger in AlbumDetail.css. */
 .skeleton-card:nth-child(2n) .skeleton-card-art,
-.skeleton-card:nth-child(2n) .skeleton-bar { animation-delay: 0.12s; }
+.skeleton-card:nth-child(2n) .skeleton-bar {
+  animation-delay: 0.12s;
+}
 .skeleton-card:nth-child(3n) .skeleton-card-art,
-.skeleton-card:nth-child(3n) .skeleton-bar { animation-delay: 0.24s; }
+.skeleton-card:nth-child(3n) .skeleton-bar {
+  animation-delay: 0.24s;
+}
 
 /* ── Row list ── */
 .skeleton-row-list {
@@ -64,5 +68,9 @@
   padding: 0 var(--space-xs);
 }
 
-.skeleton-row:nth-child(2n) .skeleton-bar { animation-delay: 0.12s; }
-.skeleton-row:nth-child(3n) .skeleton-bar { animation-delay: 0.24s; }
+.skeleton-row:nth-child(2n) .skeleton-bar {
+  animation-delay: 0.12s;
+}
+.skeleton-row:nth-child(3n) .skeleton-bar {
+  animation-delay: 0.24s;
+}

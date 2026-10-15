@@ -1,12 +1,13 @@
 import { useMemo } from "react";
-import { WaveformBars } from "./WaveformBars";
-import { usePlayerStore } from "../store/player";
-import { useSeekBar } from "../hooks/useSeekBar";
 import { formatDuration } from "../../../lib/trackCells";
+import { useSeekBar } from "../hooks/useSeekBar";
+import { usePlayerStore } from "../store/player";
+import { WaveformBars } from "./WaveformBars";
 import "./NowPlayingProgress.css";
 
 export function NowPlayingProgress({
-  duration, overlayPeaks,
+  duration,
+  overlayPeaks,
 }: {
   duration: number;
   overlayPeaks: readonly number[] | null;
@@ -15,7 +16,7 @@ export function NowPlayingProgress({
   const isBuffering = usePlayerStore((s) => s.isBuffering);
   const overlayFilledCount = useMemo(
     () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
-    [progress, overlayPeaks]
+    [progress, overlayPeaks],
   );
 
   return (
