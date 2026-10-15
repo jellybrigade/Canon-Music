@@ -16,7 +16,9 @@ if [ -z "${CI:-}" ]; then
   HALF_CORES=$(( $(nproc) / 2 > 1 ? $(nproc) / 2 : 1 ))
   export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$HALF_CORES}"
   VITEST_ARGS=(--maxWorkers="$HALF_CORES")
-  if [ -z "${CANON_CHECKS_SCOPED:-}" ] && command -v systemd-run >/dev/null 2>&1; then
+  # The binary can exist with no reachable user manager (ssh, containers); probe, else run unscoped.
+  if [ -z "${CANON_CHECKS_SCOPED:-}" ] && command -v systemd-run >/dev/null 2>&1 \
+    && systemd-run --user --scope --quiet true >/dev/null 2>&1; then
     TOTAL_MEMORY_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
     export CANON_CHECKS_SCOPED=1
     exec systemd-run --user --scope --quiet --same-dir \
