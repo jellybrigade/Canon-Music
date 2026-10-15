@@ -6,7 +6,46 @@ on:
       - main
 
 jobs:
+  # One draft created before the matrix: parallel jobs each looking a draft up by tag can
+  # race and create two drafts for the same tag, splitting the assets between them.
+  draft:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read version from tauri.conf.json
+        id: version
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG" || echo "Tag already exists, skipping"
+          git push origin "$TAG" || echo "Tag already pushed, skipping"
+
+      - name: Create draft release from commit message
+        id: draft
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            git log -1 --format=%B | tail -n +3 > /tmp/notes.md
+            gh release create "$TAG" --draft --verify-tag --title "Canon $TAG" --notes-file /tmp/notes.md --repo "$REPO"
+          fi
+          echo "release_id=$(gh release view "$TAG" --json databaseId --jq .databaseId --repo "$REPO")" >> "$GITHUB_OUTPUT"
+
   release:
+    needs: draft
     permissions:
       contents: write
     strategy:
@@ -24,35 +63,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-
-      - name: Read version from tauri.conf.json
-        id: version
-        shell: bash
-        run: |
-          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Create and push tag (once, on Linux runner)
-        if: matrix.platform == 'ubuntu-22.04'
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "$TAG" -m "$TAG" || echo "Tag already exists, skipping"
-          git push origin "$TAG" || echo "Tag already pushed, skipping"
-
-      - name: Extract release notes from commit message
-        id: notes
-        shell: bash
-        run: |
-          BODY=$(git log -1 --format=%B | tail -n +3)
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$BODY" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Install system dependencies (Linux)
         if: matrix.platform == 'ubuntu-22.04'
@@ -103,17 +113,13 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           VITE_DISCORD_WEBHOOK: ${{ secrets.VITE_DISCORD_WEBHOOK }}
         with:
-          tagName: ${{ steps.version.outputs.tag }}
-          releaseName: Canon ${{ steps.version.outputs.tag }}
-          releaseBody: ${{ steps.notes.outputs.body }}
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.draft.outputs.release_id }}
           uploadUpdaterJson: false
           args: ${{ matrix.args }}
 
   finalize:
-    needs: release
-    if: ${{ !cancelled() }}
+    needs: [draft, release]
+    if: ${{ !cancelled() && needs.draft.result == 'success' }}
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -204,8 +210,10 @@ jobs:
           gh release upload "$TAG" /tmp/latest.json --clobber --repo "$REPO"
 
       # The release stays a draft until latest.json is on it: once published it becomes
-      # releases/latest, and every update check 404s until the feed file lands.
+      # releases/latest, and every update check 404s until the feed file lands. A failed
+      # platform build leaves it a draft: publishing would ship a feed missing that platform.
       - name: Publish release
+        if: ${{ needs.release.result == 'success' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
