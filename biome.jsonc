@@ -2,7 +2,15 @@
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "includes": ["src/**", "scripts/**", "*.ts", "*.json", "!src-tauri", "!**/*.json.bak"]
+    "includes": [
+      "src/**",
+      "scripts/**",
+      "*.ts",
+      "*.json",
+      "!src-tauri",
+      "!**/*.json.bak",
+      "!src/assets/canon-tree.json"
+    ]
   },
   "formatter": {
     "enabled": true,
