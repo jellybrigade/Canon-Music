@@ -29,7 +29,7 @@ bash scripts/run-local-checks.sh   # fixes first, then all pre-commit checks
 
 ## Git
 
-- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (enable: `git config core.hooksPath scripts/git-hooks`).
+- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (enable: `git config core.hooksPath scripts/git-hooks`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
 - Work on `development`; `main` only via `/release`; multi-session breaking work on its own branch off `development`.
 - Commit every finished logical unit unasked; unrelated cleanup is its own commit. Never commit red; pre-existing failure → say so.
 - Subject only, never a body. Imperative, no period, no `feat:` prefix, <=50 chars target, 72 cap.
