@@ -76,6 +76,26 @@ describe("DatabaseErrorScreen", () => {
     expect(relaunch).not.toHaveBeenCalled();
   });
 
+  it("reports a failed check as a failure, not as no update, and retries on request", async () => {
+    const downloadAndInstall = vi.fn(() => Promise.resolve());
+    check
+      .mockRejectedValueOnce(new Error("Could not fetch a valid release JSON from the remote"))
+      .mockResolvedValueOnce({ available: true, version: "0.51.0", downloadAndInstall });
+    relaunch.mockResolvedValue(undefined);
+    render(<DatabaseErrorScreen error={tooNew()} onRetry={vi.fn()} />);
+
+    await userEvent.click(updateButton());
+
+    expect(await screen.findByText(/Could not fetch a valid release JSON/)).toBeInTheDocument();
+    expect(screen.queryByText(/No newer Canon found/)).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+
+    await vi.waitFor(() => expect(relaunch).toHaveBeenCalledTimes(1));
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(downloadAndInstall).toHaveBeenCalledTimes(1);
+  });
+
   it("shows the install error and re-enables the button", async () => {
     const downloadAndInstall = vi.fn(() => Promise.reject(new Error("signature mismatch")));
     check.mockResolvedValue({ available: true, version: "0.51.0", downloadAndInstall });

@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDb } from "../db";
+import { errorMessage } from "../lib/errorMessage";
 import { useGenresSessionStore } from "../store/genresSessionStore";
 
 export interface GenreRow {
@@ -53,7 +54,7 @@ export function useGenres(enabled: boolean = true) {
       } catch (err) {
         console.error("useGenres: failed to load genres", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
           setIsFetching(false);
         }
       }
@@ -105,7 +106,7 @@ export function useRecentGenres() {
       } catch (err) {
         console.error("useRecentGenres: failed to load genres", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
           setIsFetching(false);
         }
       }

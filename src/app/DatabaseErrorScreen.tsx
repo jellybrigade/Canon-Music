@@ -1,5 +1,7 @@
+import type { Update } from "@tauri-apps/plugin-updater";
 import { useState } from "react";
 import { SchemaTooNewError } from "../db/migrations";
+import { errorMessage } from "../lib/errorMessage";
 import { checkForUpdate, type DownloadProgress, installAndRestart } from "../lib/updater";
 
 interface Props {
@@ -30,7 +32,7 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
   return (
     <div className="app-fatal">
       <h1 className="app-fatal-title">Canon could not read its database</h1>
-      <p className="app-fatal-message">{error instanceof Error ? error.message : String(error)}</p>
+      <p className="app-fatal-message">{errorMessage(error)}</p>
       <p className="app-fatal-hint">
         Your server settings and library are still on disk. This is usually a locked or in-use database file, so closing
         any other running copy of Canon and trying again is the first thing to check.
@@ -47,6 +49,7 @@ type UpdateState =
   | { phase: "checking" }
   | { phase: "installing"; progress: DownloadProgress | null }
   | { phase: "none" }
+  | { phase: "checkFailed"; message: string }
   | { phase: "failed"; message: string };
 
 /** App shell's update modal never mounts on this screen; without this the only way out is a manual download. */
@@ -56,7 +59,13 @@ function UpdateButton() {
 
   async function handleUpdate() {
     setState({ phase: "checking" });
-    const update = await checkForUpdate();
+    let update: Update | null;
+    try {
+      update = await checkForUpdate();
+    } catch (e) {
+      setState({ phase: "checkFailed", message: errorMessage(e) });
+      return;
+    }
     if (!update) {
       setState({ phase: "none" });
       return;
@@ -65,7 +74,7 @@ function UpdateButton() {
     try {
       await installAndRestart(update, (progress) => setState({ phase: "installing", progress }));
     } catch (e) {
-      setState({ phase: "failed", message: e instanceof Error ? e.message : String(e) });
+      setState({ phase: "failed", message: errorMessage(e) });
     }
   }
 
@@ -78,7 +87,7 @@ function UpdateButton() {
         }}
         disabled={isBusy}
       >
-        Update Canon
+        {state.phase === "checkFailed" ? "Try again" : "Update Canon"}
       </button>
       {state.phase !== "idle" && (
         <p className="app-fatal-hint" role="status">
@@ -99,7 +108,9 @@ function describeUpdateState(state: Exclude<UpdateState, { phase: "idle" }>): st
       return `Downloading… ${Math.round((progress.downloaded / progress.total) * 100)}%`;
     }
     case "none":
-      return "No newer Canon found. Check your connection, or try again once the next release is out.";
+      return "No newer Canon found. Try again once the next release is out.";
+    case "checkFailed":
+      return `Couldn't check for updates: ${state.message}`;
     case "failed":
       return state.message;
   }

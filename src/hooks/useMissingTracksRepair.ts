@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { shouldFetchMissingTracks } from "../lib/albumTracks";
+import { errorMessage } from "../lib/errorMessage";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 
 /**
@@ -26,7 +27,7 @@ export function useMissingTracksRepair(read: {
       setOutcome((prev) => (prev?.albumId === albumId ? { albumId, isFetching: false, error: message } : prev));
     fetchTracks().then(
       () => settle(null),
-      (err: unknown) => settle(err instanceof Error ? err.message : String(err)),
+      (err: unknown) => settle(errorMessage(err)),
     );
   }, [tracks, isLoading, error, albumId, fetchTracks]);
 

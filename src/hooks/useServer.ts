@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { getDb } from "../db";
 import { SchemaTooNewError } from "../db/migrations";
+import { errorMessage } from "../lib/errorMessage";
 import { keychain } from "../lib/keychain";
 import { QK } from "../lib/queryKeys";
 import type { Server } from "../types/server";
@@ -75,7 +76,7 @@ export function useServerWithCredential(serverId: string | undefined) {
       try {
         credJson = await keychain.get(`canon.server.${server.id}`, "credential");
       } catch (err) {
-        throw credentialReadError(err instanceof Error ? err.message : String(err));
+        throw credentialReadError(errorMessage(err));
       }
       if (!credJson) {
         throw new Error(`No credentials found for server ${server.id}. Re-enter in Settings.`);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getDb } from "../../../db";
+import { errorMessage } from "../../../lib/errorMessage";
 import type { NodeSection, TreeNode } from "../lib/canonicalize";
 import { getCanonTree } from "../lib/canonicalize";
 
@@ -94,7 +95,7 @@ export function useGenreTree(): { data: GenreTreeData | null; error: string | nu
       })
       .catch((err: unknown) => {
         console.error("useGenreTree: failed to build genre tree", err);
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+        if (!cancelled) setError(errorMessage(err));
       });
     return () => {
       cancelled = true;

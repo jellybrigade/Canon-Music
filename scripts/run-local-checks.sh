@@ -9,6 +9,26 @@ cd "$REPO_ROOT"
 IS_CI=0
 [ "${1:-}" = "--ci" ] && IS_CI=1
 
+# On a desktop, every check at once starved the session and ran it out of memory. A user scope
+# gives the desktop CPU priority across cgroups (nice can't) and confines an OOM kill to the checks.
+VITEST_ARGS=()
+if [ -z "${CI:-}" ]; then
+  HALF_CORES=$(( $(nproc) / 2 > 1 ? $(nproc) / 2 : 1 ))
+  export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-$HALF_CORES}"
+  VITEST_ARGS=(--maxWorkers="$HALF_CORES")
+  # The binary can exist with no reachable user manager (ssh, containers); probe, else run unscoped.
+  if [ -z "${CANON_CHECKS_SCOPED:-}" ] && command -v systemd-run >/dev/null 2>&1 \
+    && systemd-run --user --scope --quiet true >/dev/null 2>&1; then
+    TOTAL_MEMORY_KB=$(awk '/^MemTotal:/ {print $2}' /proc/meminfo)
+    export CANON_CHECKS_SCOPED=1
+    exec systemd-run --user --scope --quiet --same-dir \
+      -p CPUWeight=20 \
+      -p MemoryHigh="$(( TOTAL_MEMORY_KB / 2 ))K" \
+      -p MemoryMax="$(( TOTAL_MEMORY_KB * 6 / 10 ))K" \
+      bash "$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")" "$@"
+  fi
+fi
+
 TMP_DIR=$(mktemp -d -t canon-checks-XXXXXXXX)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -160,13 +180,15 @@ echo "Running local checks..."
 run_task dashes      dash_check
 run_task rustcomment rust_comment_check
 run_task typecheck   pnpm tsc --noEmit
-run_task vitest      pnpm test:run
-run_task cargo-test  bash -c 'cd src-tauri && cargo test'
-run_task clippy      bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
+run_task vitest      pnpm test:run "${VITEST_ARGS[@]}"
 run_task biome       pnpm biome check .
+# Both build the whole crate graph under one target/ lock: in parallel they only double peak memory.
+run_task clippy      bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
+wait_task clippy
+run_task cargo-test  bash -c 'cd src-tauri && cargo test'
 
-TASKS+=(dashes rustcomment biome typecheck vitest cargo-test clippy)
-for t in "${TASKS[@]}"; do wait_task "$t"; done
+TASKS+=(dashes rustcomment biome typecheck vitest clippy cargo-test)
+for t in "${TASKS[@]}"; do [ -f "$TMP_DIR/$t.status" ] || wait_task "$t"; done
 
 echo
 FAILED=0

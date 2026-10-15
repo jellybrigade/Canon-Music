@@ -6,6 +6,7 @@ import { getDb } from "../../../db";
 import { useCredentialRejected } from "../../../hooks/useCredentialRejected";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { clearCredentialRejection } from "../../../lib/credentialRejections";
+import { errorMessage } from "../../../lib/errorMessage";
 import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import type { Server as ServerRow } from "../../../types/server";
@@ -184,7 +185,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       await queryClient.invalidateQueries({ queryKey: QK.serverCredential(id) });
       setServerEditing(false);
     } catch (err) {
-      setServerSaveError(err instanceof Error ? err.message : String(err));
+      setServerSaveError(errorMessage(err));
     } finally {
       setServerSaving(false);
     }
@@ -201,7 +202,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       setResyncConfirm(false);
       runSync(serverWithCredential, { forceTrackPass: true });
     } catch (err) {
-      setResyncError(err instanceof Error ? err.message : String(err));
+      setResyncError(errorMessage(err));
     }
   }
 
@@ -219,7 +220,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       await db.execute("DELETE FROM servers WHERE id=?", [server.id]);
       onRemoveServer();
     } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : String(err));
+      setRemoveError(errorMessage(err));
       setRemoving(false);
     }
   }

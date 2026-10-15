@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { errorMessage } from "../lib/errorMessage";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumRow, AlbumSort } from "../types/library";
 
@@ -53,7 +54,7 @@ export function useAlbums(sort: AlbumSort = "artist", canonicalIds: string[] = [
       } catch (err) {
         console.error("useAlbums: failed to load albums", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
         }
       }
     }

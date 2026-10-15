@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
+import { errorMessage } from "../../../lib/errorMessage";
 import type { PlayerPersistence } from "./playerPersistence";
 import { runtime } from "./playerRuntime";
 import { type CurrentTrack, type PlayerGet, type PlayerSet, plainError } from "./playerTypes";
@@ -450,7 +451,7 @@ export function createPlayerEngine(
           isPlaying: false,
           isLoading: false,
           isBuffering: false,
-          error: plainError(e instanceof Error ? e.message : String(e)),
+          error: plainError(errorMessage(e)),
         });
       }
     };

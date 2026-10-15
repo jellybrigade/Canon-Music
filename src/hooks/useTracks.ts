@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { errorMessage } from "../lib/errorMessage";
 import { useTrackListSessionStore } from "../store/trackListSessionStore";
 import type { TrackRow } from "../types/library";
 
@@ -46,7 +47,7 @@ export function useTracks(albumId: string | null) {
           setResult({
             albumId,
             rows: undefined,
-            error: err instanceof Error ? err.message : String(err),
+            error: errorMessage(err),
             isLoading: false,
           });
         }

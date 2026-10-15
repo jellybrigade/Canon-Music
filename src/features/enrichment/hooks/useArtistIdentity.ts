@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { lookupArtist, type MbArtistCandidate, type MbArtistDetail, searchArtists } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
+import { errorMessage } from "../../../lib/errorMessage";
 import { QK } from "../../../lib/queryKeys";
 
 // ── Stored identity row ────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ export function useIdentifyArtist({
           mbStatus: "error",
           mbDetail: null,
           mbCandidates: [],
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage(e),
         };
       }
     },

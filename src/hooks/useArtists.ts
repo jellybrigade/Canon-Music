@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { errorMessage } from "../lib/errorMessage";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
 import type { ArtistRow } from "../types/library";
 
@@ -49,7 +50,7 @@ export function useArtists(enabled: boolean = true) {
       } catch (err) {
         console.error("useArtists: failed to load artists", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
           setIsFetching(false);
         }
       }

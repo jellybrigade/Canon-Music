@@ -1,6 +1,6 @@
-use super::http_client_long;
+use super::{http_client_long, open_decoder};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
-use rodio::{Decoder, Source};
+use rodio::Source;
 use std::io::{Read, Seek, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -151,7 +151,7 @@ pub async fn audio_extract_waveform(
             download_done: download_done.clone(),
         };
 
-        let source = match Decoder::new(reader) {
+        let source = match open_decoder(reader, None) {
             Ok(s) => s,
             Err(e) => {
                 let _ = dl_handle.join();
@@ -160,14 +160,8 @@ pub async fn audio_extract_waveform(
             }
         };
 
-        let channels = source.channels() as usize;
-        let sample_rate = source.sample_rate() as f64;
-
-        if channels == 0 {
-            let _ = dl_handle.join();
-            let _ = std::fs::remove_file(&temp_path);
-            return Err("no audio channels".into());
-        }
+        let channels = source.channels().get() as usize;
+        let sample_rate = source.sample_rate().get() as f64;
 
         // Compute bucket size from known track duration; fall back to 30-min estimate
         let estimated_frames = if duration_secs > 0.0 {
@@ -189,7 +183,7 @@ pub async fn audio_extract_waveform(
 
         for sample in source {
             // Mix channels down to mono as we go
-            frame_sum += sample as f32 / i16::MAX as f32;
+            frame_sum += sample;
             chan_idx += 1;
 
             if chan_idx == channels {

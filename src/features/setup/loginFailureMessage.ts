@@ -1,5 +1,6 @@
 import { SubsonicError } from "../../clients/navidromeTransport";
 import { INVALID_API_KEY_CODE, WRONG_CREDENTIALS_CODE } from "../../lib/credentialRejections";
+import { errorMessage } from "../../lib/errorMessage";
 
 export function loginFailureMessage(error: unknown, authMethod: "password" | "apikey"): string {
   if (error instanceof SubsonicError) {
@@ -10,5 +11,5 @@ export function loginFailureMessage(error: unknown, authMethod: "password" | "ap
       return "Wrong username or password. Check both and try again.";
     }
   }
-  return error instanceof Error ? error.message : String(error);
+  return errorMessage(error);
 }

@@ -77,6 +77,16 @@ import "./styles/base.css";
 import { parseIntegerOr } from "./lib/numberSetting";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns, replayGainFromRow } from "./lib/replayGainRow";
 
+// A background check that fails stays quiet, like one that finds nothing; only the log tells them apart.
+function runBackgroundUpdateCheck(onFound: (update: Update) => void): void {
+  void checkForUpdate().then(
+    (update) => {
+      if (update) onFound(update);
+    },
+    (error: unknown) => console.warn("[updater] update check failed:", error),
+  );
+}
+
 export default function App() {
   useWakeLock();
   useAppActivityTracking();
@@ -241,18 +251,12 @@ export default function App() {
     setStreamMaxBitrate(parseInt(streamMaxBitrate, 10));
   }, [streamMaxBitrate]);
   useEffect(() => {
-    void checkForUpdate().then((u) => {
-      if (u) setPendingUpdate(u);
-    });
+    runBackgroundUpdateCheck(setPendingUpdate);
   }, []);
   useEffect(() => {
     if (!autoCheckUpdates) return;
     const ms = Math.max(10, parseIntegerOr(autoCheckIntervalMin, 60)) * 60 * 1000;
-    const id = setInterval(() => {
-      void checkForUpdate().then((u) => {
-        if (u) setPendingUpdate(u);
-      });
-    }, ms);
+    const id = setInterval(() => runBackgroundUpdateCheck(setPendingUpdate), ms);
     return () => clearInterval(id);
   }, [autoCheckUpdates, autoCheckIntervalMin]);
 

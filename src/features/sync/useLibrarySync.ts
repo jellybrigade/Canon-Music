@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { useSetting } from "../../hooks/useSetting";
+import { errorMessage } from "../../lib/errorMessage";
 import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 import { useAllTracksSessionStore } from "../../store/allTracksSessionStore";
 import { useArtistBrowseSessionStore } from "../../store/artistBrowseSessionStore";
@@ -181,7 +182,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         failed = true;
         console.error("Sync failed:", err);
         if (!mountedRef.current) return;
-        outcome = { status: "error", albumsChanged: false, error: err instanceof Error ? err.message : String(err) };
+        outcome = { status: "error", albumsChanged: false, error: errorMessage(err) };
         setSyncStatus("error");
         setSyncError(outcome.error);
       })

@@ -40,7 +40,7 @@ Rust (`src-tauri/src/`):
 | Module | Holds |
 |---|---|
 | `lib.rs` | `run()`: plugins, managed state, `cover://` scheme, tray, window events, `generate_handler!` list, `take_crash_report`. Window created hidden, shown in `on_page_load`. |
-| `audio/` | `mod.rs` `AudioState` (sink, `play_id` race guard, `PosTracker`, prefetch cache, fade generation, gapless flags); `playback.rs` play/enqueue/prefetch; `control.rs` transport + position; `waveform.rs`. |
+| `audio/` | `mod.rs` output open (fixed 100ms buffer, device config fallback, fatal stream error sets `output_lost`), `open_decoder` (seekable + byte length, shared by playback and waveform), `AudioState` (player, `play_id` race guard, `PosTracker`, prefetch cache, fade generation, gapless flags, `output_lost`); `playback.rs` play/enqueue/prefetch, reports a lost output as a non-retryable `audio-error`; `control.rs` transport + position; `waveform.rs`. |
 | `streaming.rs` | `StreamingBuffer` (RAM) and `FileBackedStreamingBuffer` (spills to `stream-spill/` when length > 64 MiB or unknown); spill dir cleared at startup. |
 | `stream_classify.rs` | `classify_stream_response`: sniffs the first 8 KiB so a Subsonic error envelope on HTTP 200 never reaches the decoder. |
 | `cover.rs` | `cover://` handler: memory cache (500), disk cache (2000, `cover-cache/`), request semaphore (16), `set_cover_proxy_config`. |

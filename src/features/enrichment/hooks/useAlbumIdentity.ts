@@ -10,6 +10,7 @@ import {
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
+import { errorMessage } from "../../../lib/errorMessage";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
@@ -213,7 +214,7 @@ export function useIdentifyAlbum({
           mbCandidates: [],
           combinedGenres: [],
           combinedTags: [],
-          error: e instanceof Error ? e.message : String(e),
+          error: errorMessage(e),
         };
       }
     },
