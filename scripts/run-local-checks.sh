@@ -80,7 +80,13 @@ rust_comment_check() {
   hits=$(find src-tauri/src -name '*.rs' -not -name '*_test.rs' -print0 | xargs -0 awk '
     function strip(l) { sub(/^\/\*\*?/, "", l); sub(/\*\/$/, "", l); sub(/^\/\/\/?!?/, "", l); sub(/^\*/, "", l); gsub(/^[ \t]+|[ \t]+$/, "", l); return l }
     function reset(   ) { run_len = 0; comment_lines = 0; code_lines = 0 }
-    FNR == 1 { reset() }
+    # Per-file totals flush on the next file and at END: ENDFILE is gawk-only and CI awk is mawk.
+    function flush(file,   cap) {
+      if (run_len > 3) print file ":" run_start " run"
+      cap = code_lines * 0.4; if (cap < 10) cap = 10
+      if (comment_lines > cap) print file ": " comment_lines " comments, cap " int(cap) + 1 " density"
+    }
+    FNR == 1 { if (NR > 1) flush(previous_file); reset(); previous_file = FILENAME }
     /^[ \t]*$/ { next }
     {
       line = $0; sub(/^[ \t]+/, "", line)
@@ -94,11 +100,7 @@ rust_comment_check() {
         code_lines++
       }
     }
-    ENDFILE {
-      if (run_len > 3) print FILENAME ":" run_start " run"
-      cap = code_lines * 0.4; if (cap < 10) cap = 10
-      if (comment_lines > cap) print FILENAME ": " comment_lines " comments, cap " int(cap) + 1 " density"
-    }
+    END { if (NR > 0) flush(previous_file) }
   ')
   if [ -n "$hits" ]; then
     echo "Comment cap exceeded in src-tauri/ (see AGENTS.md):" >&2
