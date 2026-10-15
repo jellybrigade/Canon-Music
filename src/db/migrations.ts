@@ -777,6 +777,12 @@ export const migrations: Migration[] = [
     version: 52,
     sql: rymRenameSql(),
   },
+  {
+    // Automatic lookups used to run before an album's tracks loaded, so a lead single sharing the
+    // album's title read as a tie; mark those failures due so the next open asks again.
+    version: 53,
+    sql: `UPDATE album_identity SET looked_up_at = 0 WHERE mb_release_group_id IS NULL AND confirmed_at IS NULL;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

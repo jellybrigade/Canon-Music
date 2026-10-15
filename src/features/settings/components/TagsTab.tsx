@@ -7,7 +7,7 @@ import { getDb } from "../../../db";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
-import { persistAlbumIdentity } from "../../enrichment/hooks/useAlbumIdentity";
+import { persistAlbumIdentity, recordFailedLookup } from "../../enrichment/hooks/useAlbumIdentity";
 import { autoIdentifyAlbum } from "../../enrichment/lib/albumIdentify";
 import { ARTIST_AUTO_SELECT_SETTING, DEFAULT_ARTIST_AUTO_SELECT_SCORE } from "../../enrichment/lib/artistAutoSelect";
 import { useRapToHipHop } from "../../tags/hooks/useTagMappings";
@@ -95,10 +95,12 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
 
   const handleRefreshAll = useCallback(async () => {
     const db = await getDb();
-    type Row = { id: string; artist: string | null; name: string; year: number | null };
+    type Row = { id: string; artist: string | null; name: string; year: number | null; track_count: number };
 
     const unmatched = await db.select<Row[]>(
-      `SELECT a.id, a.artist, a.name, a.year FROM albums a
+      `SELECT a.id, a.artist, a.name, a.year,
+              (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+       FROM albums a
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
@@ -110,7 +112,12 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       for (let i = 0; i < unmatched.length; i++) {
         const album = unmatched[i]!;
         try {
-          const result = await autoIdentifyAlbum({ artist: album.artist ?? "", album: album.name, year: album.year });
+          const result = await autoIdentifyAlbum({
+            artist: album.artist ?? "",
+            album: album.name,
+            trackCount: album.track_count,
+            year: album.year,
+          });
           if (result.decision === "auto_confirmed" && result.detail) {
             const now = Math.floor(Date.now() / 1000);
             await persistAlbumIdentity({
@@ -132,13 +139,12 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
               matchScore: Math.round(result.score * 100),
               confirmedAt: now,
             });
-          } else {
-            const now = Math.floor(Date.now() / 1000);
-            await db.execute(
-              `INSERT OR IGNORE INTO album_identity (album_id, auto_matched, match_score, looked_up_at)
-               VALUES (?, 0, ?, ?)`,
-              [album.id, Math.round(result.score * 100), now],
-            );
+          } else if (result.decision !== "error") {
+            await recordFailedLookup(db, {
+              albumId: album.id,
+              matchScore: Math.round(result.score * 100),
+              lookedUpAt: Math.floor(Date.now() / 1000),
+            });
           }
         } catch (e) {
           console.warn("MB sync failed for:", album.name, e);

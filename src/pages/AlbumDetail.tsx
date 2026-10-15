@@ -197,7 +197,6 @@ export function AlbumDetail({
     confirmedArtistMbid,
     mbAutoIdentify,
     existingIdentity: albumIdentity,
-    identityLoaded,
   });
 
   useEffect(() => {

@@ -91,8 +91,8 @@ export const QK = {
     year?: number | null,
     confirmedArtistMbid?: string | null,
   ) => ["identify-album", albumId, mbRgId, mbReleaseId, artist, album, trackCount, year, confirmedArtistMbid],
-  autoIdentifyAlbum: (albumId: string, confirmedArtistMbid?: string | null) =>
-    ["auto-identify-album", albumId, confirmedArtistMbid] as const,
+  autoIdentifyAlbum: (albumId: string, trackCount: number, confirmedArtistMbid?: string | null) =>
+    ["auto-identify-album", albumId, trackCount, confirmedArtistMbid] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbumIdsFor: (serverId: string) => ["failed-lookup-album-ids", serverId] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,

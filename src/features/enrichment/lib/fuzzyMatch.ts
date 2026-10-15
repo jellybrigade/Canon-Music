@@ -166,3 +166,19 @@ export function rankCandidates(
       return (b.candidate.score ?? 0) - (a.candidate.score ?? 0);
     });
 }
+
+/**
+ * The top candidate if it clears `minScore` and beats the runner-up by `minGap`, or shares its title
+ * while outranking it by type: an album and its same-titled lead single score identically.
+ */
+export function pickClearWinner(
+  ranked: RankedCandidate[],
+  { minScore, minGap }: { minScore: number; minGap: number },
+): RankedCandidate | null {
+  const [top, second] = ranked;
+  if (!top || top.score < minScore) return null;
+  if (!second || top.score - second.score >= minGap) return top;
+  const typeRank = (r: RankedCandidate) => TYPE_RANK[r.candidate.primaryType ?? ""] ?? 1;
+  const isSameTitle = normalizeForMatch(top.candidate.title) === normalizeForMatch(second.candidate.title);
+  return isSameTitle && typeRank(top) > typeRank(second) ? top : null;
+}

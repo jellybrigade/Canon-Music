@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
-import { filterByTrackCount, normalizeForMatch, rankCandidates, scoreReleaseGroup, similarity } from "./fuzzyMatch";
+import {
+  filterByTrackCount,
+  normalizeForMatch,
+  pickClearWinner,
+  rankCandidates,
+  scoreReleaseGroup,
+  similarity,
+} from "./fuzzyMatch";
 
 function candidate(over: Partial<MbReleaseGroupCandidate> = {}): MbReleaseGroupCandidate {
   return {
@@ -204,5 +211,53 @@ describe("rankCandidates", () => {
 
   it("returns an empty array for no candidates", () => {
     expect(rankCandidates([], "a", "b")).toEqual([]);
+  });
+});
+
+describe("pickClearWinner", () => {
+  const rules = { minScore: 0.9, minGap: 0.1 };
+  const ranked = (...entries: Array<[Partial<MbReleaseGroupCandidate>, number]>) =>
+    entries.map(([over, score]) => ({ candidate: candidate(over), score }));
+
+  it("picks a lone confident candidate", () => {
+    expect(pickClearWinner(ranked([{ id: "album" }, 1]), rules)?.candidate.id).toBe("album");
+  });
+
+  it("picks an album tied with its own same-titled single", () => {
+    const winner = pickClearWinner(
+      ranked([{ id: "album", primaryType: "Album" }, 1], [{ id: "single", primaryType: "Single" }, 1]),
+      rules,
+    );
+    expect(winner?.candidate.id).toBe("album");
+  });
+
+  it("refuses a near-tie between differently titled releases of different types", () => {
+    expect(
+      pickClearWinner(
+        ranked(
+          [{ id: "album", title: "Night Drive", primaryType: "Album" }, 0.95],
+          [{ id: "ep", title: "Night Driver", primaryType: "EP" }, 0.9],
+        ),
+        rules,
+      ),
+    ).toBeNull();
+  });
+
+  it("refuses two tied candidates of the same type", () => {
+    expect(
+      pickClearWinner(ranked([{ id: "a", primaryType: "Album" }, 1], [{ id: "b", primaryType: "Album" }, 0.95]), rules),
+    ).toBeNull();
+  });
+
+  it("refuses a top score under the threshold", () => {
+    expect(pickClearWinner(ranked([{ id: "a" }, 0.89]), rules)).toBeNull();
+  });
+
+  it("picks a top candidate that clears the gap", () => {
+    expect(pickClearWinner(ranked([{ id: "a" }, 1], [{ id: "b" }, 0.85]), rules)?.candidate.id).toBe("a");
+  });
+
+  it("returns null for no candidates", () => {
+    expect(pickClearWinner([], rules)).toBeNull();
   });
 });

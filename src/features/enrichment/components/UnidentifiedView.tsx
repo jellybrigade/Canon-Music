@@ -8,7 +8,12 @@ import type { ServerWithCredential } from "../../../hooks/useServer";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
 import { RowListSkeleton } from "../../../ui/Skeleton";
-import { type FailedAlbumRow, persistAlbumIdentity, useFailedLookupAlbums } from "../hooks/useAlbumIdentity";
+import {
+  type FailedAlbumRow,
+  persistAlbumIdentity,
+  recordFailedLookup,
+  useFailedLookupAlbums,
+} from "../hooks/useAlbumIdentity";
 import { autoIdentifyAlbum } from "../lib/albumIdentify";
 import { AlbumIdentifyDialog } from "./IdentifyDialog";
 import "./UnidentifiedView.css";
@@ -60,15 +65,12 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
           });
           void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(album.id) });
           void queryClient.invalidateQueries({ queryKey: QK.normalizedTags(album.id) });
-        } else {
-          // Update the failed row so looked_up_at reflects this rescan
-          const now = Math.floor(Date.now() / 1000);
-          await db.execute(
-            `UPDATE album_identity
-             SET auto_matched = 0, match_score = ?, looked_up_at = ?
-             WHERE album_id = ? AND mb_release_group_id IS NULL`,
-            [Math.round(result.score * 100), now, album.id],
-          );
+        } else if (result.decision !== "error") {
+          await recordFailedLookup(db, {
+            albumId: album.id,
+            matchScore: Math.round(result.score * 100),
+            lookedUpAt: Math.floor(Date.now() / 1000),
+          });
         }
       } catch (e) {
         console.warn("Rescan failed for:", album.name, e);

@@ -8,7 +8,7 @@ import {
   type MbReleaseGroupDetail,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
-import { filterByTrackCount, rankCandidates } from "./fuzzyMatch";
+import { filterByTrackCount, pickClearWinner, rankCandidates } from "./fuzzyMatch";
 
 export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
 
@@ -25,6 +25,17 @@ export interface AutoIdentifyResult {
 
 const AUTO_CONFIRM_THRESHOLD = 0.9;
 const MIN_SCORE_GAP = 0.1;
+export const AUTO_IDENTIFY_RETRY_SECONDS = 7 * 24 * 60 * 60;
+
+/** Never looked up, or an automatic lookup that found nothing long enough ago that MusicBrainz may have it now. */
+export function needsAutoIdentify(
+  identity: { mb_release_group_id: string | null; confirmed_at: number | null; looked_up_at: number | null } | null,
+  nowSeconds: number,
+): boolean {
+  if (identity === null) return true;
+  if (identity.mb_release_group_id !== null || identity.confirmed_at !== null) return false;
+  return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
+}
 
 export function stripTrailingBrackets(title: string): string | null {
   const stripped = title.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
@@ -89,13 +100,10 @@ export async function autoIdentifyAlbum({
     }
 
     const top = ranked[0]!;
-    const second = ranked[1];
-    const gap = second ? top.score - second.score : Infinity;
 
-    if (top.score < AUTO_CONFIRM_THRESHOLD || gap < MIN_SCORE_GAP) {
-      const decision = top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous";
+    if (!pickClearWinner(ranked, { minScore: AUTO_CONFIRM_THRESHOLD, minGap: MIN_SCORE_GAP })) {
       return {
-        decision,
+        decision: top.score < AUTO_CONFIRM_THRESHOLD ? "needs_review" : "ambiguous",
         score: top.score,
         top: top.candidate,
         detail: null,

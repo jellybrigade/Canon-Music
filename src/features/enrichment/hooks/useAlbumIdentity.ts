@@ -13,7 +13,7 @@ import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
 import { stripTrailingBrackets } from "../lib/albumIdentify";
-import { filterByTrackCount, rankCandidates } from "../lib/fuzzyMatch";
+import { filterByTrackCount, pickClearWinner, rankCandidates } from "../lib/fuzzyMatch";
 
 const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
@@ -160,15 +160,10 @@ export function useIdentifyAlbum({
 
           const filtered = filterByTrackCount(candidates, trackCount ?? 0);
           const ranked = rankCandidates(filtered, artist, searchTitle, year, confirmedArtistMbid);
-          const top = ranked[0]!;
-          const second = ranked[1];
-          const gap = second ? top.score - second.score : Infinity;
+          const winner = pickClearWinner(ranked, { minScore: DIALOG_AUTO_PICK_THRESHOLD, minGap: DIALOG_MIN_GAP });
 
-          // Also auto-pick when top wins on type alone (Album over Single with same title)
-          const typeWins = top.candidate.primaryType !== "Single" && second?.candidate.primaryType === "Single";
-
-          if (top.score >= DIALOG_AUTO_PICK_THRESHOLD && (gap >= DIALOG_MIN_GAP || typeWins)) {
-            rgId = top.candidate.id;
+          if (winner) {
+            rgId = winner.candidate.id;
             candidates = ranked.map((r) => r.candidate);
           } else {
             // Return ranked candidates so picker shows best match first
@@ -298,8 +293,6 @@ export function useSaveAlbumIdentity() {
   });
 }
 
-// INSERT OR IGNORE so it never clobbers a confirmed row that arrived via the dialog or a race.
-
 export async function readFailedLookupAlbumIds(
   db: Awaited<ReturnType<typeof getDb>>,
   serverId: string,
@@ -323,19 +316,26 @@ export function useFailedLookupAlbumIds(serverId: string | undefined) {
   });
 }
 
+/** Records an automatic lookup that found no match; a row the user confirmed is never touched. */
+export async function recordFailedLookup(
+  db: Awaited<ReturnType<typeof getDb>>,
+  { albumId, matchScore, lookedUpAt }: { albumId: string; matchScore: number; lookedUpAt: number },
+): Promise<void> {
+  await db.execute(
+    `INSERT INTO album_identity (album_id, looked_up_at, match_score, auto_matched, lastfm_match_confirmed)
+     VALUES (?, ?, ?, 0, 0)
+     ON CONFLICT(album_id) DO UPDATE SET looked_up_at = excluded.looked_up_at, match_score = excluded.match_score
+     WHERE album_identity.mb_release_group_id IS NULL AND album_identity.confirmed_at IS NULL`,
+    [albumId, lookedUpAt, matchScore],
+  );
+}
+
 export function useRecordFailedLookup() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ albumId, matchScore }: { albumId: string; matchScore: number }) => {
-      const db = await getDb();
-      await db.execute(
-        `INSERT OR IGNORE INTO album_identity
-           (album_id, looked_up_at, match_score, auto_matched, lastfm_match_confirmed)
-         VALUES (?, ?, ?, 0, 0)`,
-        [albumId, Math.floor(Date.now() / 1000), matchScore],
-      );
-    },
+    mutationFn: async ({ albumId, matchScore }: { albumId: string; matchScore: number }) =>
+      recordFailedLookup(await getDb(), { albumId, matchScore, lookedUpAt: Math.floor(Date.now() / 1000) }),
     onSuccess: (_data, input) => {
       void queryClient.invalidateQueries({ queryKey: QK.albumIdentity(input.albumId) });
       void queryClient.invalidateQueries({ queryKey: QK.failedLookupAlbumIds() });
