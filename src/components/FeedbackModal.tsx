@@ -1,7 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { boundedFetch } from "../clients/boundedFetch";
+import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
 import { logger } from "../lib/logger";
 import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
@@ -119,7 +119,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
         const form = new FormData();
         form.append("payload_json", JSON.stringify(payload));
         form.append("files[0]", new Blob([logText], { type: "text/plain" }), "canon-logs.txt");
-        res = await boundedFetch(WEBHOOK_URL, { method: "POST", body: form });
+        res = await boundedFetch(WEBHOOK_URL, { method: "POST", body: form }, { headersTimeoutMs: UPLOAD_TIMEOUT_MS });
       } else {
         res = await boundedFetch(WEBHOOK_URL, {
           method: "POST",

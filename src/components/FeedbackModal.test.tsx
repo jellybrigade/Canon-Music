@@ -1,11 +1,16 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
 import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
 import { FeedbackModal } from "./FeedbackModal";
 
 vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
+vi.mock("../clients/boundedFetch", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../clients/boundedFetch")>()),
+  boundedFetch: vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
+}));
 vi.mock("../lib/logger", () => ({ logger: { getRecent: () => Promise.resolve(""), error: vi.fn() } }));
 
 beforeEach(() => __resetModalRegistry());
@@ -69,5 +74,15 @@ describe("FeedbackModal", () => {
     render(<Probe />);
 
     expect(screen.getByTestId("any-modal")).toHaveTextContent("false");
+  });
+
+  it("gives the upload with attached logs the long deadline", async () => {
+    render(<FeedbackModal onClose={vi.fn()} />);
+
+    fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: "Love it" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(boundedFetch).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(boundedFetch).mock.calls[0]?.[2]).toEqual({ headersTimeoutMs: UPLOAD_TIMEOUT_MS });
   });
 });

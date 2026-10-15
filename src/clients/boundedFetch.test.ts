@@ -16,6 +16,25 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/** A body that sends one byte every `gapMs`, `count` times; it errors on `signal` only if given one. */
+function tricklingBody(gapMs: number, count: number, signal?: AbortSignal | null): ReadableStream<Uint8Array> {
+  let sent = 0;
+  return new ReadableStream({
+    start(controller) {
+      signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
+    },
+    pull(controller) {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          if (sent === count) controller.close();
+          else controller.enqueue(new Uint8Array([sent++]));
+          resolve();
+        }, gapMs);
+      });
+    },
+  });
+}
+
 describe("boundedFetch", () => {
   it("rejects when the server never sends headers", async () => {
     vi.stubGlobal("fetch", vi.fn(abortableNever));
@@ -85,5 +104,47 @@ describe("boundedFetch", () => {
     );
     await boundedFetch("https://example.test");
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("lets a slow body finish while it keeps arriving", async () => {
+    const gap = REQUEST_TIMEOUT_MS * 0.75;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: RequestInit) => Promise.resolve(new Response(tricklingBody(gap, 3, init?.signal)))),
+    );
+    const pending = boundedFetch("https://example.test");
+    await vi.advanceTimersByTimeAsync(gap * 4);
+    const res = await pending;
+    expect(new Uint8Array(await res.arrayBuffer())).toEqual(new Uint8Array([0, 1, 2]));
+  });
+
+  it("rejects a stalled body even when the transport ignores the abort", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(new Response(tricklingBody(REQUEST_TIMEOUT_MS * 2, 3)))),
+    );
+    const pending = expect(boundedFetch("https://example.test")).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    await pending;
+  });
+
+  it("gives an upload a longer deadline for its headers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise<Response>((resolve, reject) => {
+            setTimeout(() => resolve(new Response("ok")), REQUEST_TIMEOUT_MS * 2);
+            init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+          }),
+      ),
+    );
+    const pending = boundedFetch(
+      "https://example.test",
+      { method: "POST" },
+      { headersTimeoutMs: REQUEST_TIMEOUT_MS * 3 },
+    );
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS * 2);
+    await expect((await pending).text()).resolves.toBe("ok");
   });
 });
