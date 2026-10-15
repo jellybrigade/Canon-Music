@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.53.0",
   "type": "module",
+  "packageManager": "pnpm@10.28.2",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -13,7 +14,8 @@
     "test:cov": "vitest run --coverage",
     "format": "biome check --write . && cd src-tauri && cargo fmt",
     "lint": "biome check .",
-    "check": "bash scripts/run-local-checks.sh"
+    "check": "bash scripts/run-local-checks.sh",
+    "prepare": "git config core.hooksPath scripts/git-hooks || true"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.13",

@@ -20,7 +20,7 @@ Desktop music player + tag manager for self-hosted Navidrome. Tauri (Rust: audio
 ## Commands
 
 ```bash
-pnpm tauri dev | build
+pnpm tauri dev | build              # pnpm/Node/Rust pinned: packageManager, .node-version, rust-toolchain.toml
 pnpm test:run | pnpm tsc --noEmit
 pnpm format | lint | check          # Biome (120-col, biome.jsonc)
 cd src-tauri && cargo test | cargo clippy | cargo fmt
@@ -29,7 +29,7 @@ bash scripts/run-local-checks.sh   # fixes first, then all pre-commit checks
 
 ## Git
 
-- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (enable: `git config core.hooksPath scripts/git-hooks`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
+- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (`pnpm install` sets `core.hooksPath`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
 - Work on `development`; `main` only via `/release`; multi-session breaking work on its own branch off `development`.
 - Commit every finished logical unit unasked; unrelated cleanup is its own commit. Never commit red; pre-existing failure → say so.
 - Subject only, never a body. Imperative, no period, no `feat:` prefix, <=50 chars target, 72 cap.
