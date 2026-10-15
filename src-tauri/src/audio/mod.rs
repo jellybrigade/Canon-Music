@@ -3,12 +3,13 @@ pub mod playback;
 pub mod waveform;
 
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
-use rodio::cpal::BufferSize;
+use rodio::cpal::{BufferSize, ErrorKind};
+use rodio::decoder::DecoderError;
 use rodio::mixer::Mixer;
-use rodio::{DeviceSinkBuilder, DeviceSinkError, MixerDeviceSink, Player};
+use rodio::{Decoder, DeviceSinkBuilder, DeviceSinkError, MixerDeviceSink, Player};
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::sync::atomic::{AtomicBool, AtomicU64};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -39,24 +40,61 @@ fn output_buffer_frames(sample_rate: u32) -> u32 {
     (sample_rate * OUTPUT_BUFFER_MS / 1000).max(1)
 }
 
-/// Opens the default output with an explicit buffer; failing that, rodio's own device fallback.
-pub(crate) fn open_output() -> Result<MixerDeviceSink, DeviceSinkError> {
+/// Errors after which the output stream produces no more sound; the rest are glitches it survives.
+fn output_error_is_fatal(kind: ErrorKind) -> bool {
+    !matches!(
+        kind,
+        ErrorKind::Xrun | ErrorKind::DeviceChanged | ErrorKind::RealtimeDenied
+    )
+}
+
+/// Opens the default output with an explicit buffer; failing that, the device's other configs.
+/// A fatal stream error sets `output_lost`, since rodio's players never drain once it dies.
+pub(crate) fn open_output(
+    output_lost: Arc<AtomicBool>,
+) -> Result<MixerDeviceSink, DeviceSinkError> {
+    let on_error = move |e: rodio::cpal::Error| {
+        eprintln!("Audio output error: {e}");
+        if output_error_is_fatal(e.kind()) {
+            output_lost.store(true, Ordering::Release);
+        }
+    };
+    let device = rodio::cpal::default_host()
+        .default_output_device()
+        .ok_or(DeviceSinkError::NoDevice)?;
     let with_explicit_buffer = || {
-        let device = rodio::cpal::default_host()
-            .default_output_device()
-            .ok_or(DeviceSinkError::NoDevice)?;
-        let sample_rate = device
+        let config = device
             .default_output_config()
-            .map_err(DeviceSinkError::DefaultSinkConfigError)?
-            .sample_rate();
-        DeviceSinkBuilder::from_device(device)?
-            .with_buffer_size(BufferSize::Fixed(output_buffer_frames(sample_rate)))
+            .map_err(DeviceSinkError::DefaultSinkConfigError)?;
+        DeviceSinkBuilder::default()
+            .with_device(device.clone())
+            .with_supported_config(&config)
+            .with_buffer_size(BufferSize::Fixed(output_buffer_frames(
+                config.sample_rate(),
+            )))
+            .with_error_callback(on_error.clone())
             .open_stream()
     };
     with_explicit_buffer().or_else(|e| {
-        eprintln!("Audio output with explicit buffer failed ({e}); trying rodio defaults");
-        DeviceSinkBuilder::open_default_sink()
+        eprintln!(
+            "Audio output with explicit buffer failed ({e}); trying the device's other configs"
+        );
+        DeviceSinkBuilder::from_device(device.clone())?
+            .with_error_callback(on_error.clone())
+            .open_sink_or_fallback()
     })
+}
+
+/// rodio's plain `Decoder::new` marks the reader unseekable, so every backward seek fails.
+pub(crate) fn open_decoder<R>(reader: R, byte_len: Option<u64>) -> Result<Decoder<R>, DecoderError>
+where
+    R: Read + Seek + Send + Sync + 'static,
+{
+    let builder = Decoder::builder().with_data(reader).with_seekable(true);
+    match byte_len {
+        Some(len) => builder.with_byte_len(len).build(),
+        None => builder.build(),
+    }
 }
 
 pub(crate) struct PosTracker {
@@ -76,6 +114,8 @@ impl PosTracker {
 
 pub(crate) struct AudioState {
     pub(crate) mixer: Option<Mixer>,
+    // Set by the output stream's error callback once it can no longer play anything.
+    pub(crate) output_lost: Arc<AtomicBool>,
     pub(crate) sink: Arc<Mutex<Option<Arc<Player>>>>,
     pub(crate) play_id: Arc<AtomicU64>,
     pub(crate) pos: Arc<Mutex<PosTracker>>,
@@ -104,6 +144,16 @@ mod tests {
         assert_eq!(output_buffer_frames(44_100), 4_410);
         assert_eq!(output_buffer_frames(48_000), 4_800);
         assert_eq!(output_buffer_frames(96_000), 9_600);
+    }
+
+    #[test]
+    fn only_a_dead_stream_counts_as_a_lost_output() {
+        assert!(output_error_is_fatal(ErrorKind::DeviceNotAvailable));
+        assert!(output_error_is_fatal(ErrorKind::HostUnavailable));
+        assert!(output_error_is_fatal(ErrorKind::StreamInvalidated));
+        assert!(!output_error_is_fatal(ErrorKind::Xrun));
+        assert!(!output_error_is_fatal(ErrorKind::DeviceChanged));
+        assert!(!output_error_is_fatal(ErrorKind::RealtimeDenied));
     }
 
     #[test]

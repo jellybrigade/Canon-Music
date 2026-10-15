@@ -1,10 +1,9 @@
-use super::{http_client, http_client_long, AudioReader, AudioState};
+use super::{http_client, http_client_long, open_decoder, AudioReader, AudioState};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
 use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
-use rodio::decoder::DecoderError;
 use rodio::source::EmptyCallback;
-use rodio::{Decoder, Player, Source};
-use std::io::{Cursor, Read, Seek};
+use rodio::{Player, Source};
+use std::io::{Cursor, Read};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -48,6 +47,7 @@ pub async fn audio_play(
     let speed_arc = Arc::clone(&state.speed);
     let gapless_queued_arc = Arc::clone(&state.gapless_queued);
     let gapless_started_arc = Arc::clone(&state.gapless_started);
+    let output_lost_arc = Arc::clone(&state.output_lost);
 
     // Reset gapless state — any pending enqueue is now stale.
     state.gapless_queued.store(false, Ordering::Relaxed);
@@ -276,6 +276,12 @@ pub async fn audio_play(
         let channels = source.channels();
         let sample_rate = source.sample_rate();
 
+        // A player on a dead stream never drains, so without this the frontend sits in a
+        // silent "playing" with no track-ended and no error.
+        if output_lost_arc.load(Ordering::Acquire) {
+            emit_output_lost(&app, &url);
+            return;
+        }
         let sink = Arc::new(Player::connect_new(&mixer));
         let current_volume = *volume_arc.lock().unwrap_or_else(|e| e.into_inner());
         let current_speed = *speed_arc.lock().unwrap_or_else(|e| e.into_inner());
@@ -312,6 +318,10 @@ pub async fn audio_play(
             loop {
                 std::thread::sleep(Duration::from_millis(100));
                 if play_id_watcher.load(Ordering::Relaxed) != this_id {
+                    return;
+                }
+                if output_lost_arc.load(Ordering::Acquire) {
+                    emit_output_lost(&app_watcher, &url);
                     return;
                 }
                 if take_gapless_start(&gapless_started_watcher, this_id) {
@@ -457,16 +467,16 @@ pub async fn audio_enqueue_next(
     Ok(())
 }
 
-/// rodio's plain `Decoder::new` marks the reader unseekable, so every backward seek fails.
-fn open_decoder<R>(reader: R, byte_len: Option<u64>) -> Result<Decoder<R>, DecoderError>
-where
-    R: Read + Seek + Send + Sync + 'static,
-{
-    let builder = Decoder::builder().with_data(reader).with_seekable(true);
-    match byte_len {
-        Some(len) => builder.with_byte_len(len).build(),
-        None => builder.build(),
-    }
+fn emit_output_lost(app: &tauri::AppHandle, url: &str) {
+    app.emit(
+        "audio-error",
+        serde_json::json!({
+            "url": url,
+            "message": "The audio output device is unavailable",
+            "retryable": false,
+        }),
+    )
+    .ok();
 }
 
 /// Appends `source` behind a zero-length marker that records `play_id` in `started` at the

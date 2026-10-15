@@ -67,10 +67,12 @@ pub fn run() {
     // Spawn a thread to own the output device so it stays alive for the process lifetime.
     // Non-fatal: if no audio device is available the app still opens, play commands
     // return an error instead of crashing.
+    let output_lost = Arc::new(AtomicBool::new(false));
+    let output_lost_writer = Arc::clone(&output_lost);
     let (tx, rx) = std::sync::mpsc::sync_channel(0);
     std::thread::Builder::new()
         .name("audio-output".into())
-        .spawn(move || match audio::open_output() {
+        .spawn(move || match audio::open_output(output_lost_writer) {
             Ok(output) => {
                 let _ = tx.send(Some(output.mixer().clone()));
                 loop {
@@ -135,6 +137,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .manage(AudioState {
             mixer,
+            output_lost,
             sink: Arc::new(Mutex::new(None)),
             play_id: Arc::new(AtomicU64::new(0)),
             pos: Arc::new(Mutex::new(PosTracker { play_start: None, offset: 0.0, speed: 1.0 })),

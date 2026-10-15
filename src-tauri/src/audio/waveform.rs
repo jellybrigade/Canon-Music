@@ -1,6 +1,6 @@
-use super::http_client_long;
+use super::{http_client_long, open_decoder};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
-use rodio::{Decoder, Source};
+use rodio::Source;
 use std::io::{Read, Seek, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -151,7 +151,7 @@ pub async fn audio_extract_waveform(
             download_done: download_done.clone(),
         };
 
-        let source = match Decoder::new(reader) {
+        let source = match open_decoder(reader, None) {
             Ok(s) => s,
             Err(e) => {
                 let _ = dl_handle.join();
