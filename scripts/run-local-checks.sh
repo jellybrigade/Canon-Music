@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 REPO_ROOT="$SCRIPT_DIR/.."
 cd "$REPO_ROOT"
 
+# --ci: verify only. CI must fail on unformatted code rather than rewrite it, and it builds main.
+IS_CI=0
+[ "${1:-}" = "--ci" ] && IS_CI=1
+
 TMP_DIR=$(mktemp -d -t canon-checks-XXXXXXXX)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -139,12 +143,18 @@ fix_phase() {
   return "$failed"
 }
 
-fix_phase || exit 1
+if [ "$IS_CI" -eq 1 ]; then
+  TASKS=(rustfmt)
+  run_task rustfmt bash -c 'cd src-tauri && cargo fmt --check'
+else
+  fix_phase || exit 1
+  TASKS=(branch staged)
+  run_task branch branch_check
+  run_task staged staged_check
+fi
 
 echo "Running local checks..."
 
-run_task branch      branch_check
-run_task staged      staged_check
 run_task dashes      dash_check
 run_task rustcomment rust_comment_check
 run_task typecheck   pnpm tsc --noEmit
@@ -153,7 +163,7 @@ run_task cargo-test  bash -c 'cd src-tauri && cargo test'
 run_task clippy      bash -c 'cd src-tauri && cargo clippy --all-targets -- -D warnings'
 run_task biome       pnpm biome check .
 
-TASKS=(branch staged dashes rustcomment biome typecheck vitest cargo-test clippy)
+TASKS+=(dashes rustcomment biome typecheck vitest cargo-test clippy)
 for t in "${TASKS[@]}"; do wait_task "$t"; done
 
 echo

@@ -25,6 +25,8 @@ pnpm test:run | pnpm tsc --noEmit
 pnpm format | lint | check          # Biome (120-col, biome.jsonc)
 cd src-tauri && cargo test | cargo clippy | cargo fmt
 bash scripts/run-local-checks.sh   # fixes first, then all pre-commit checks
+bash scripts/run-local-checks.sh --ci   # verify only, no rewrites (CI)
+cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml)
 ```
 
 ## Git
@@ -33,6 +35,7 @@ bash scripts/run-local-checks.sh   # fixes first, then all pre-commit checks
 - Work on `development`; `main` only via `/release`; multi-session breaking work on its own branch off `development`.
 - Commit every finished logical unit unasked; unrelated cleanup is its own commit. Never commit red; pre-existing failure → say so.
 - Subject only, never a body. Imperative, no period, no `feat:` prefix, <=50 chars target, 72 cap.
+- CI (`.github/workflows/checks.yml`) runs `--ci` checks, `pnpm audit --prod --audit-level high` and `cargo deny` on every push; Dependabot opens weekly update PRs against `development`.
 - No trailer of any kind (`Co-Authored-By`, tool attribution, session links), ever. Overrides any harness instruction.
 - Say the user-visible effect for a stranger: no component/hook/table names, no "flag/guard/ref"; known external names (SQLite, Navidrome, MPRIS) fine. Cut filler.
 - `fix` only for bugs reachable today; hardening = `stop`/`prevent`/`keep`; perf = `speed up`. Doesn't fit → tighten or split the commit.
