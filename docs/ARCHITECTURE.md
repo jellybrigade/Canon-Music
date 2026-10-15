@@ -31,7 +31,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/styles/` | `tokens.css`, `base.css`. |
 | `src/test/` | Harness: `setup.ts`, `sqlite.ts` (in-memory SQLite), `perf.ts` (waste probes), `renderCatching.tsx` (records errors a boundary caught), `mocks/`. |
 | `src/assets/canon-tree.json` | Generated genre DAG (see Genre tree); excluded from Biome so regeneration diffs stay small. |
-| `scripts/` | `parse-rym.mjs`, `data/` (RYM txt, `custom-nodes.json`, `tree-renames.json`), `run-local-checks.sh`, `git-hooks/`. |
+| `scripts/` | `parse-rym.mjs`, `data/` (RYM txt, `custom-nodes.json`, `tree-renames.json`), `run-local-checks.sh` (Biome/`cargo fmt`/`clippy --fix` rewrite pass, then checks), `git-hooks/`. Root `biome.jsonc` + `.editorconfig`: 120-col format and lint for TS/CSS/JSON. |
 
 Rust (`src-tauri/src/`):
 
