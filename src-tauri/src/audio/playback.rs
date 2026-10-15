@@ -242,7 +242,9 @@ pub async fn audio_play(
                 }
             });
 
-            (reader_box, content_length, codec)
+            // Content-Length is the server's claim about the body, not a measurement; a wrong
+            // length would skew the decoder's duration and seek estimates, so it gets none.
+            (reader_box, None, codec)
         };
 
         // Check before blocking on format probing; common fast-path for rapid skips.
