@@ -55,13 +55,6 @@ pub fn run() {
     #[cfg(target_os = "linux")]
     std::env::set_var("GTK_OVERLAY_SCROLLING", "0");
 
-    // rodio 0.19's default ALSA buffer underruns under load; widen it via PipeWire/Pulse.
-    // No-op on pure ALSA. Only set if unset, so it never overrides a user choice.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("PULSE_LATENCY_MSEC").is_none() {
-        std::env::set_var("PULSE_LATENCY_MSEC", "60");
-    }
-
     // Targeted NVIDIA quirk instead of blanket CPU-render fallback; no-op on Intel/AMD.
     // Opt out with CANON_WEBKIT_GPU_ACCEL=1.
     #[cfg(target_os = "linux")]
@@ -71,15 +64,15 @@ pub fn run() {
         );
     }
 
-    // Spawn a thread to own OutputStream so it stays alive for the process lifetime.
+    // Spawn a thread to own the output device so it stays alive for the process lifetime.
     // Non-fatal: if no audio device is available the app still opens, play commands
     // return an error instead of crashing.
     let (tx, rx) = std::sync::mpsc::sync_channel(0);
     std::thread::Builder::new()
         .name("audio-output".into())
-        .spawn(move || match rodio::OutputStream::try_default() {
-            Ok((_stream, handle)) => {
-                let _ = tx.send(Some(handle));
+        .spawn(move || match audio::open_output() {
+            Ok(output) => {
+                let _ = tx.send(Some(output.mixer().clone()));
                 loop {
                     std::thread::park();
                 }
@@ -90,7 +83,7 @@ pub fn run() {
             }
         })
         .expect("Failed to spawn audio thread");
-    let handle = rx.recv().unwrap_or(None);
+    let mixer = rx.recv().unwrap_or(None);
 
     // Served via a registered `cover://` scheme handler instead of a loopback TCP server,
     // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
@@ -141,7 +134,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(AudioState {
-            handle,
+            mixer,
             sink: Arc::new(Mutex::new(None)),
             play_id: Arc::new(AtomicU64::new(0)),
             pos: Arc::new(Mutex::new(PosTracker { play_start: None, offset: 0.0, speed: 1.0 })),

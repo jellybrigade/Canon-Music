@@ -2,7 +2,10 @@ pub mod control;
 pub mod playback;
 pub mod waveform;
 
-use rodio::{OutputStreamHandle, Sink};
+use rodio::cpal::traits::{DeviceTrait, HostTrait};
+use rodio::cpal::BufferSize;
+use rodio::mixer::Mixer;
+use rodio::{DeviceSinkBuilder, DeviceSinkError, MixerDeviceSink, Player};
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -28,6 +31,34 @@ pub(crate) fn http_client_long() -> reqwest::blocking::Client {
         .expect("failed to build HTTP client")
 }
 
+// Headroom against underruns while the machine is busy (the ALSA plugin's default was too small).
+// Pause, volume and seek reach the speakers this much later, which a music player can afford.
+const OUTPUT_BUFFER_MS: u32 = 100;
+
+fn output_buffer_frames(sample_rate: u32) -> u32 {
+    (sample_rate * OUTPUT_BUFFER_MS / 1000).max(1)
+}
+
+/// Opens the default output with an explicit buffer; failing that, rodio's own device fallback.
+pub(crate) fn open_output() -> Result<MixerDeviceSink, DeviceSinkError> {
+    let with_explicit_buffer = || {
+        let device = rodio::cpal::default_host()
+            .default_output_device()
+            .ok_or(DeviceSinkError::NoDevice)?;
+        let sample_rate = device
+            .default_output_config()
+            .map_err(DeviceSinkError::DefaultSinkConfigError)?
+            .sample_rate();
+        DeviceSinkBuilder::from_device(device)?
+            .with_buffer_size(BufferSize::Fixed(output_buffer_frames(sample_rate)))
+            .open_stream()
+    };
+    with_explicit_buffer().or_else(|e| {
+        eprintln!("Audio output with explicit buffer failed ({e}); trying rodio defaults");
+        DeviceSinkBuilder::open_default_sink()
+    })
+}
+
 pub(crate) struct PosTracker {
     pub(crate) play_start: Option<Instant>,
     pub(crate) offset: f64,
@@ -44,8 +75,8 @@ impl PosTracker {
 }
 
 pub(crate) struct AudioState {
-    pub(crate) handle: Option<OutputStreamHandle>,
-    pub(crate) sink: Arc<Mutex<Option<Arc<Sink>>>>,
+    pub(crate) mixer: Option<Mixer>,
+    pub(crate) sink: Arc<Mutex<Option<Arc<Player>>>>,
     pub(crate) play_id: Arc<AtomicU64>,
     pub(crate) pos: Arc<Mutex<PosTracker>>,
     pub(crate) volume: Arc<Mutex<f32>>,
@@ -62,4 +93,21 @@ pub(crate) struct AudioState {
     pub(crate) gapless_queued: Arc<AtomicBool>,
     // play_id under which playback reached the queued gapless source; 0 once the watcher reports it.
     pub(crate) gapless_started: Arc<AtomicU64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn output_buffer_holds_the_same_time_at_any_sample_rate() {
+        assert_eq!(output_buffer_frames(44_100), 4_410);
+        assert_eq!(output_buffer_frames(48_000), 4_800);
+        assert_eq!(output_buffer_frames(96_000), 9_600);
+    }
+
+    #[test]
+    fn output_buffer_is_never_zero() {
+        assert_eq!(output_buffer_frames(0), 1);
+    }
 }

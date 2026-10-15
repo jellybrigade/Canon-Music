@@ -1,10 +1,10 @@
 use super::{http_client, http_client_long, AudioReader, AudioState};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
 use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
-use rodio::cpal::FromSample;
+use rodio::decoder::DecoderError;
 use rodio::source::EmptyCallback;
-use rodio::{Decoder, Sample, Sink, Source};
-use std::io::{Cursor, Read};
+use rodio::{Decoder, Player, Source};
+use std::io::{Cursor, Read, Seek};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -16,8 +16,8 @@ pub async fn audio_play(
     state: tauri::State<'_, AudioState>,
     url: String,
 ) -> Result<(), String> {
-    let handle = state
-        .handle
+    let mixer = state
+        .mixer
         .as_ref()
         .ok_or("No audio output device available")?
         .clone();
@@ -72,8 +72,13 @@ pub async fn audio_play(
             .ok()
             .map(|d| d.join("stream-spill"));
 
-        let (reader, codec): (Box<dyn AudioReader>, String) = if let Some(bytes) = cached_bytes {
-            (Box::new(Cursor::new(bytes)), String::new())
+        let (reader, byte_len, codec): (Box<dyn AudioReader>, Option<u64>, String) = if let Some(
+            bytes,
+        ) =
+            cached_bytes
+        {
+            let byte_len = bytes.len() as u64;
+            (Box::new(Cursor::new(bytes)), Some(byte_len), String::new())
         } else {
             let response = match http_client().get(&url).send() {
                 Ok(r) => r,
@@ -237,7 +242,7 @@ pub async fn audio_play(
                 }
             });
 
-            (reader_box, codec)
+            (reader_box, content_length, codec)
         };
 
         // Check before blocking on format probing; common fast-path for rapid skips.
@@ -245,8 +250,8 @@ pub async fn audio_play(
             return;
         }
 
-        // Decoder::new blocks (via Condvar) until enough bytes arrive for format probing.
-        let source = match Decoder::new(reader) {
+        // Building the decoder blocks (via Condvar) until enough bytes arrive for format probing.
+        let source = match open_decoder(reader, byte_len) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("audio_play decode error: {e}");
@@ -269,25 +274,7 @@ pub async fn audio_play(
         let channels = source.channels();
         let sample_rate = source.sample_rate();
 
-        let sink = match Sink::try_new(&handle) {
-            Ok(s) => Arc::new(s),
-            // Without an event here the frontend is left asserting "buffering" forever: the
-            // position never leaves zero, so the stall watchdog cannot arm either.
-            Err(e) => {
-                eprintln!("audio_play sink error: {e}");
-                app.emit(
-                    "audio-error",
-                    serde_json::json!({
-                        "url": url,
-                        "message": "The audio output device is unavailable",
-                        "detail": e.to_string(),
-                        "retryable": false,
-                    }),
-                )
-                .ok();
-                return;
-            }
-        };
+        let sink = Arc::new(Player::connect_new(&mixer));
         let current_volume = *volume_arc.lock().unwrap_or_else(|e| e.into_inner());
         let current_speed = *speed_arc.lock().unwrap_or_else(|e| e.into_inner());
         sink.set_volume(current_volume);
@@ -432,8 +419,8 @@ pub async fn audio_enqueue_next(
             return;
         }
 
-        let cursor = std::io::Cursor::new(bytes);
-        let source = match Decoder::new(cursor) {
+        let byte_len = bytes.len() as u64;
+        let source = match open_decoder(Cursor::new(bytes), Some(byte_len)) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("audio_enqueue_next decode error: {e}");
@@ -468,15 +455,25 @@ pub async fn audio_enqueue_next(
     Ok(())
 }
 
+/// rodio's plain `Decoder::new` marks the reader unseekable, so every backward seek fails.
+fn open_decoder<R>(reader: R, byte_len: Option<u64>) -> Result<Decoder<R>, DecoderError>
+where
+    R: Read + Seek + Send + Sync + 'static,
+{
+    let builder = Decoder::builder().with_data(reader).with_seekable(true);
+    match byte_len {
+        Some(len) => builder.with_byte_len(len).build(),
+        None => builder.build(),
+    }
+}
+
 /// Appends `source` behind a zero-length marker that records `play_id` in `started` at the
 /// sample where playback reaches it, so the watcher cannot miss a hand-off between polls.
-fn append_gapless<S>(sink: &Sink, source: S, started: Arc<AtomicU64>, play_id: u64)
+fn append_gapless<S>(sink: &Player, source: S, started: Arc<AtomicU64>, play_id: u64)
 where
     S: Source + Send + 'static,
-    f32: FromSample<S::Item>,
-    S::Item: Sample + Send,
 {
-    sink.append::<EmptyCallback<f32>>(EmptyCallback::new(Box::new(move || {
+    sink.append(EmptyCallback::new(Box::new(move || {
         started.store(play_id, Ordering::Release);
     })));
     sink.append(source);
@@ -544,9 +541,10 @@ pub async fn audio_prefetch(
 mod tests {
     use super::*;
     use rodio::buffer::SamplesBuffer;
+    use rodio::nz;
 
-    fn tone(samples: usize) -> SamplesBuffer<f32> {
-        SamplesBuffer::new(1, 44_100, vec![0.5; samples])
+    fn tone(samples: usize) -> SamplesBuffer {
+        SamplesBuffer::new(nz!(1), nz!(44_100), vec![0.5; samples])
     }
 
     fn pull(output: &mut impl Iterator<Item = f32>, samples: usize) {
@@ -555,9 +553,47 @@ mod tests {
         }
     }
 
+    fn wav(seconds: u32) -> Vec<u8> {
+        const RATE: u32 = 8_000;
+        let data_len = RATE * seconds * 2;
+        let mut bytes = Vec::with_capacity(44 + data_len as usize);
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&(36 + data_len).to_le_bytes());
+        bytes.extend_from_slice(b"WAVEfmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&RATE.to_le_bytes());
+        bytes.extend_from_slice(&(RATE * 2).to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_len.to_le_bytes());
+        bytes.resize(44 + data_len as usize, 0);
+        bytes
+    }
+
+    #[test]
+    fn decoder_seeks_backwards_in_a_fully_fetched_track() {
+        let bytes = wav(2);
+        let len = bytes.len() as u64;
+        let mut decoder = open_decoder(Cursor::new(bytes), Some(len)).unwrap();
+
+        decoder.try_seek(Duration::from_millis(1_500)).unwrap();
+        decoder.try_seek(Duration::from_millis(200)).unwrap();
+    }
+
+    #[test]
+    fn decoder_seeks_backwards_in_a_track_of_unknown_length() {
+        let mut decoder = open_decoder(Cursor::new(wav(2)), None).unwrap();
+
+        decoder.try_seek(Duration::from_millis(1_500)).unwrap();
+        decoder.try_seek(Duration::from_millis(200)).unwrap();
+    }
+
     #[test]
     fn reports_a_hand_off_that_the_source_count_cannot_see() {
-        let (sink, mut output) = Sink::new_idle();
+        let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(4));
         let len_before = sink.len();
@@ -571,7 +607,7 @@ mod tests {
 
     #[test]
     fn reports_each_hand_off_exactly_once() {
-        let (sink, mut output) = Sink::new_idle();
+        let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(4));
         append_gapless(&sink, tone(4), Arc::clone(&started), 7);
@@ -583,7 +619,7 @@ mod tests {
 
     #[test]
     fn does_not_report_a_hand_off_before_playback_reaches_it() {
-        let (sink, mut output) = Sink::new_idle();
+        let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(4));
         append_gapless(&sink, tone(4), Arc::clone(&started), 7);
@@ -597,7 +633,7 @@ mod tests {
 
     #[test]
     fn stopped_sink_never_reports_its_queued_hand_off() {
-        let (sink, mut output) = Sink::new_idle();
+        let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(2_000));
         append_gapless(&sink, tone(2_000), Arc::clone(&started), 5);
