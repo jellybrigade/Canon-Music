@@ -1,4 +1,5 @@
 import { cappedSet } from "../lib/boundedCache";
+import { boundedFetch } from "./boundedFetch";
 
 const MAX_CACHE_ENTRIES = 2000;
 const cache = new Map<string, string | null>();
@@ -16,7 +17,7 @@ export async function fetchItunesCoverArt(
   if (cache.has(key)) return cache.get(key) ?? null;
   try {
     const term = encodeURIComponent(`${artist} ${album}`);
-    const res = await fetch(
+    const res = await boundedFetch(
       `https://itunes.apple.com/search?term=${term}&entity=album&limit=1&media=music`
     );
     if (!res.ok) { setCached(key, null); return null; }

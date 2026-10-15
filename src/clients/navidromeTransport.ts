@@ -6,10 +6,10 @@ import {
 } from "../lib/transportHealth";
 import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import { normalizeUrl, buildAuthParams, type NavidromeCredential } from "./navidromeUrls";
+import { REQUEST_TIMEOUT_MS, boundedFetch } from "./boundedFetch";
 
 // Stuck DNS resolution (stale systemd-resolved entry) hangs fetch ~25s then rejects
 // with an opaque "Load failed"; cap well under that and retry instead of aborting.
-const REQUEST_TIMEOUT_MS = 12_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_DELAY_MS = 400;
 
@@ -46,37 +46,6 @@ function isRetriableEndpoint(endpoint: string, params: URLSearchParams): boolean
  *  network is fixed, so it always gets its ladder. */
 function isLivenessCheck(endpoint: string): boolean {
   return endpoint.replace(/\.view$/, "") === "ping";
-}
-
-async function fetchWithTimeout(url: string, body: string, signal?: AbortSignal): Promise<Response> {
-  // Manual AbortController rather than AbortSignal.timeout: the latter is missing on
-  // the older WebKitGTK builds Canon still runs against on Linux.
-  const controller = new AbortController();
-  let timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const abortFromCaller = () => controller.abort();
-  signal?.addEventListener("abort", abortFromCaller);
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body,
-      signal: controller.signal,
-    });
-    // Rearm the abort across the body read: headers arriving doesn't bound the transfer, and
-    // a stall mid-body would otherwise hang `res.json()` forever.
-    clearTimeout(timer);
-    timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    const text = await res.text();
-    // A null-body status (204/304) rejects a non-null body, and "" is non-null.
-    return new Response(text === "" ? null : text, {
-      status: res.status,
-      statusText: res.statusText,
-      headers: res.headers,
-    });
-  } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", abortFromCaller);
-  }
 }
 
 function isTimeout(err: unknown): boolean {
@@ -124,7 +93,12 @@ export async function apiPost(
       // Not `throwIfAborted`, which older WebKitGTK builds lack.
       if (signal?.aborted) throw new DOMException(`${endpoint} withdrawn`, "AbortError");
       try {
-        const res = await fetchWithTimeout(url, body, signal);
+        const res = await boundedFetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body,
+          signal,
+        });
         recordTransportSuccess(server);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;

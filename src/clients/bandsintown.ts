@@ -1,4 +1,5 @@
 import { cappedSet } from "../lib/boundedCache";
+import { boundedFetch } from "./boundedFetch";
 
 const APP_ID = "js_app_id";
 const BASE_URL = "https://rest.bandsintown.com";
@@ -36,7 +37,7 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
   const promise = (async () => {
     try {
       const encoded = encodeURIComponent(artistName.trim());
-      const res = await fetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
+      const res = await boundedFetch(`${BASE_URL}/artists/${encoded}/events?app_id=${APP_ID}`);
       if (!res.ok) {
         setCached(key, []);
         return [];

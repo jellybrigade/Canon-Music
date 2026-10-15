@@ -4,6 +4,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { logger } from "../lib/logger";
 import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
+import { boundedFetch } from "../clients/boundedFetch";
 import "./FeedbackModal.css";
 
 const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
@@ -111,9 +112,9 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
         const form = new FormData();
         form.append("payload_json", JSON.stringify(payload));
         form.append("files[0]", new Blob([logText], { type: "text/plain" }), "canon-logs.txt");
-        res = await fetch(WEBHOOK_URL, { method: "POST", body: form });
+        res = await boundedFetch(WEBHOOK_URL, { method: "POST", body: form });
       } else {
-        res = await fetch(WEBHOOK_URL, {
+        res = await boundedFetch(WEBHOOK_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),

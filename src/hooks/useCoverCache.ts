@@ -4,6 +4,7 @@ import { getDb } from "../db";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { QK } from "../lib/queryKeys";
 import type { ServerWithCredential } from "./useServer";
+import { boundedFetch } from "../clients/boundedFetch";
 
 const BATCH_SIZE = 5;
 const BATCH_DELAY_MS = 100;
@@ -25,7 +26,7 @@ async function fetchAndStoreCover(
   let url = "";
   try {
     url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
-    const res = await fetch(url);
+    const res = await boundedFetch(url);
     if (!res.ok) {
       console.error(`Cover cache: ${res.status} ${res.statusText} fetching album ${albumId} from ${url}`);
       return false;

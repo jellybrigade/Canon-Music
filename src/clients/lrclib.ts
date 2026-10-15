@@ -1,3 +1,5 @@
+import { boundedFetch } from "./boundedFetch";
+
 const LRCLIB_BASE = "https://lrclib.net/api/get";
 
 export interface LrclibResult {
@@ -19,7 +21,7 @@ export async function fetchLyrics(params: {
     url.searchParams.set("duration", String(Math.round(params.durationSec)));
   }
 
-  const res = await fetch(url.toString());
+  const res = await boundedFetch(url.toString());
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`LRClib returned ${res.status}`);
 

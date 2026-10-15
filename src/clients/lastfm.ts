@@ -4,6 +4,7 @@ import { canonicalKey } from "../features/tags/lib/canonicalize";
 import type { TagKind } from "../features/tags/lib/canonicalize";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { parseNumberOr } from "../lib/numberSetting";
+import { boundedFetch } from "./boundedFetch";
 
 const LASTFM_KEYCHAIN_SERVICE = "canon.lastfm";
 const LASTFM_KEYCHAIN_ACCOUNT = "api_key";
@@ -78,7 +79,7 @@ async function fetchTags(method: string, params: Record<string, string>, apiKey:
   url.searchParams.set("format", "json");
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
-  const res = await fetch(url.toString());
+  const res = await boundedFetch(url.toString());
   if (!res.ok) throw new Error(`Last.fm ${method} returned ${res.status}`);
 
   const data = (await res.json()) as {
@@ -194,7 +195,7 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) throw new Error(`Last.fm artist.getInfo returned ${res.status}`);
     const data = (await res.json()) as {
       artist?: {
@@ -275,7 +276,7 @@ export async function fetchSimilarArtistsFull(artist: string, knownApiKey?: stri
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return [];
     const data = (await res.json()) as {
       similarartists?: { artist?: Array<{ name: string; match: string }> };
@@ -322,7 +323,7 @@ export async function fetchSimilarTracks(artist: string, title: string): Promise
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return [];
     const data = (await res.json()) as {
       similartracks?: { track?: Array<{ name: string; artist: { name: string }; match: number }> };
@@ -358,7 +359,7 @@ export async function fetchAlbumInfo(artist: string, album: string): Promise<Las
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return { bio: null, url: null };
     const data = (await res.json()) as {
       album?: {
@@ -412,7 +413,7 @@ export async function fetchArtistTopAlbums(artist: string): Promise<LastfmTopAlb
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return [];
     const data = (await res.json()) as {
       topalbums?: { album?: Array<{ name: string; playcount?: string; listeners?: string }> };
@@ -441,7 +442,7 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return [];
     const data = (await res.json()) as {
       toptracks?: { track?: Array<{ name: string; playcount?: string }> };
@@ -471,7 +472,7 @@ export async function fetchTrackAlbum(artist: string, track: string): Promise<st
   url.searchParams.set("format", "json");
 
   try {
-    const res = await fetch(url.toString());
+    const res = await boundedFetch(url.toString());
     if (!res.ok) return null;
     const data = (await res.json()) as {
       track?: { album?: { title?: string } };

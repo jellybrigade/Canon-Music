@@ -5,6 +5,7 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import { installAndRestart, type DownloadProgress } from "../lib/updater";
 import { useModalChrome } from "../ui/useModalChrome";
 import "./UpdatePrompt.css";
+import { boundedFetch } from "../clients/boundedFetch";
 
 interface ChangelogSection {
   heading: string;
@@ -69,7 +70,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
     void (async () => {
       try {
         const currentVersion = await getVersion();
-        const resp = await fetch(
+        const resp = await boundedFetch(
           "https://api.github.com/repos/jellybrigade/Canon-Music/releases?per_page=50"
         );
         if (!resp.ok) throw new Error("fetch failed");

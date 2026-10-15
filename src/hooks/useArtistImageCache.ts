@@ -6,6 +6,7 @@ import { resolvePortraitUrl } from "../clients/lastfm";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { runPool } from "../lib/asyncPool";
 import { QK } from "../lib/queryKeys";
+import { boundedFetch } from "../clients/boundedFetch";
 
 // Wikimedia 429s on bursts: a per-host token bucket owns the rate, a worker pool owns
 // concurrency, and 429s retry with backoff.
@@ -77,7 +78,7 @@ async function fetchAndStoreArtistImage(artistName: string, portraitUrl: string)
     let res: Response | null = null;
     for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt++) {
       await awaitHostBudget(budget);
-      res = await fetch(url);
+      res = await boundedFetch(url);
       if (res.status !== 429) break;
       if (attempt === MAX_RETRIES_429) break;
       // Back off the whole host, not just this request: a per-request sleep lets other workers

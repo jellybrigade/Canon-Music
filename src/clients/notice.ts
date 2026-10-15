@@ -1,3 +1,5 @@
+import { boundedFetch } from "./boundedFetch";
+
 export interface RemoteNotice {
   id: string;
   message: string;
@@ -9,7 +11,7 @@ const NOTICE_URL =
 
 export async function fetchRemoteNotice(): Promise<RemoteNotice | null> {
   try {
-    const resp = await fetch(NOTICE_URL, { cache: "no-store" });
+    const resp = await boundedFetch(NOTICE_URL, { cache: "no-store" });
     if (!resp.ok) return null;
     const data = (await resp.json()) as Partial<RemoteNotice>;
     if (!data.id || !data.message) return null;
