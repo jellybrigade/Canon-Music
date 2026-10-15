@@ -11,6 +11,7 @@ import { fetchTheAudioDbArtist, fetchWikipediaBio, fetchWikipediaBioByMbid } fro
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useSetting } from "../../../hooks/useSetting";
+import { errorMessage } from "../../../lib/errorMessage";
 import { stripServerPrefix } from "../../../lib/ids";
 import { parseStalenessDays } from "../../../lib/numberSetting";
 import { QK } from "../../../lib/queryKeys";
@@ -425,7 +426,7 @@ export function useEnrichArtist(
       useArtistBrowseSessionStore.getState().bumpRefresh();
     } catch (e) {
       console.error("[useEnrichArtist] refresh failed:", e);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     } finally {
       setIsRefreshing(false);
     }

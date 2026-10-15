@@ -6,6 +6,7 @@ import { useModalChrome } from "../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../ui/useOverlayDismiss";
 import { DEFAULT_SMART_FILTERS, LIMIT_MAX, type SmartFilters, SORT_OPTIONS, YEAR_MAX, YEAR_MIN } from "./smartPlaylist";
 import "./SmartPlaylistModal.css";
+import { errorMessage } from "../../lib/errorMessage";
 import { parseIntegerOr, parseNumberOr } from "../../lib/numberSetting";
 
 const GENRE_CHIP_LIMIT = 60;
@@ -69,7 +70,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
       onClose();
     } catch (e) {
       console.error("Failed to save smart playlist:", e);
-      setFailedSave({ filters, message: `Couldn't save playlist: ${e instanceof Error ? e.message : String(e)}` });
+      setFailedSave({ filters, message: `Couldn't save playlist: ${errorMessage(e)}` });
     } finally {
       setSaving(false);
     }

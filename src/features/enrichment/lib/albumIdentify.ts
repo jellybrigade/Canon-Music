@@ -8,6 +8,7 @@ import {
   type MbReleaseGroupDetail,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
+import { errorMessage } from "../../../lib/errorMessage";
 import { filterByTrackCount, pickClearWinner, rankCandidates } from "./fuzzyMatch";
 
 export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
@@ -172,7 +173,7 @@ export async function autoIdentifyAlbum({
       release: null,
       combinedGenres: [],
       combinedTags: [],
-      error: e instanceof Error ? e.message : String(e),
+      error: errorMessage(e),
     };
   }
 }

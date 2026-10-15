@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getDb } from "../db";
+import { errorMessage } from "../lib/errorMessage";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 
 export interface AllTrackRow {
@@ -68,7 +69,7 @@ export function useAllTracks(enabled: boolean = true) {
       } catch (err) {
         console.error("useAllTracks: failed to load tracks", err);
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(errorMessage(err));
           setIsFetching(false);
         }
       }

@@ -1,6 +1,7 @@
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useState } from "react";
 import { SchemaTooNewError } from "../db/migrations";
+import { errorMessage } from "../lib/errorMessage";
 import { checkForUpdate, type DownloadProgress, installAndRestart } from "../lib/updater";
 
 interface Props {
@@ -31,7 +32,7 @@ export function DatabaseErrorScreen({ error, onRetry }: Props) {
   return (
     <div className="app-fatal">
       <h1 className="app-fatal-title">Canon could not read its database</h1>
-      <p className="app-fatal-message">{error instanceof Error ? error.message : String(error)}</p>
+      <p className="app-fatal-message">{errorMessage(error)}</p>
       <p className="app-fatal-hint">
         Your server settings and library are still on disk. This is usually a locked or in-use database file, so closing
         any other running copy of Canon and trying again is the first thing to check.
@@ -113,8 +114,4 @@ function describeUpdateState(state: Exclude<UpdateState, { phase: "idle" }>): st
     case "failed":
       return state.message;
   }
-}
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }

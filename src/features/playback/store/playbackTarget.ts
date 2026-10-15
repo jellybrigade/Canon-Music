@@ -11,6 +11,7 @@ import {
   getTransportInfo,
   setAvTransportUri,
 } from "../../../clients/dlna";
+import { errorMessage } from "../../../lib/errorMessage";
 import type { CurrentTrack } from "./playerTypes";
 
 // How often DlnaTarget re-checks the renderer's transport state once the track is expected to
@@ -139,7 +140,7 @@ export class DlnaTarget implements PlaybackTarget {
   private noteFailure(context: string, e: unknown): boolean {
     this.consecutiveFailures++;
     if (this.consecutiveFailures < DLNA_MAX_CONSECUTIVE_FAILURES) return false;
-    this.onError?.(`${context}: ${e instanceof Error ? e.message : String(e)}`);
+    this.onError?.(`${context}: ${errorMessage(e)}`);
     return true;
   }
 

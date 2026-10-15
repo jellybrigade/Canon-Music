@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { getMissingArtistImageCount, useCacheAllArtistImages } from "../../../hooks/useArtistImageCache";
 import { getMissingCoverCount, useCacheAllCovers } from "../../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { errorMessage } from "../../../lib/errorMessage";
 import { QK } from "../../../lib/queryKeys";
 import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
 import { exportSettingsFile, importSettingsFile } from "../lib/settingsBackup";
@@ -101,7 +102,7 @@ export function DiagnosticsTab({
       await queryClient.invalidateQueries({ queryKey: QK.settingsAll() });
       window.location.reload();
     } catch (e) {
-      alert(`Import failed: ${e instanceof Error ? e.message : String(e)}`);
+      alert(`Import failed: ${errorMessage(e)}`);
     }
   }
 

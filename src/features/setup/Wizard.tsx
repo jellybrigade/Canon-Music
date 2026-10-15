@@ -14,6 +14,7 @@ import { importSettingsFile } from "../settings/lib/settingsBackup";
 import { loginFailureMessage } from "./loginFailureMessage";
 import "../settings/components/SettingsView.css";
 import "./Wizard.css";
+import { errorMessage } from "../../lib/errorMessage";
 
 interface Props {
   onSuccess: (server: Server) => void;
@@ -182,7 +183,7 @@ export function Wizard({ onSuccess }: Props) {
         throw err;
       }
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(errorMessage(err));
       setSaving(false);
     }
   }

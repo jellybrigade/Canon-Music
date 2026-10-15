@@ -1,3 +1,4 @@
+import { errorMessage } from "../lib/errorMessage";
 export interface Migration {
   version: number;
   sql: string;
@@ -124,7 +125,7 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
           } catch (e) {
             // Duplicate column name happens when a version was recorded but the DDL ran twice
             // (e.g. HMR race); tauri-plugin-sql rejects with a plain string, not an Error, so check both.
-            const message = e instanceof Error ? e.message : String(e);
+            const message = errorMessage(e);
             if (!message.includes("duplicate column name")) throw e;
           }
         }

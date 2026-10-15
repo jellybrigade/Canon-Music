@@ -6,6 +6,7 @@ import { type DownloadProgress, installAndRestart } from "../lib/updater";
 import { useModalChrome } from "../ui/useModalChrome";
 import "./UpdatePrompt.css";
 import { boundedFetch } from "../clients/boundedFetch";
+import { errorMessage } from "../lib/errorMessage";
 
 interface ChangelogSection {
   heading: string;
@@ -115,7 +116,7 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
     } catch (e) {
       setInstalling(false);
       setProgress(null);
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorMessage(e));
     }
   }
 

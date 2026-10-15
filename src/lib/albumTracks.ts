@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { syncAlbumTracks } from "../features/sync/syncTracks";
 import { useAlbumTracksNoticeStore } from "../store/albumTracksNotice";
 import type { Server } from "../types/server";
+import { errorMessage } from "./errorMessage";
 import { REPLAY_GAIN_COLUMNS, type ReplayGainColumns } from "./replayGainRow";
 
 export interface AlbumTrackRow extends ReplayGainColumns {
@@ -81,7 +82,7 @@ export async function loadAlbumTracksForPlay(
     return tracks;
   } catch (err) {
     console.error("loadAlbumTracksForPlay: fetch failed", err);
-    report(`Couldn't get the tracks for ${album.name}: ${err instanceof Error ? err.message : String(err)}`);
+    report(`Couldn't get the tracks for ${album.name}: ${errorMessage(err)}`);
     return [];
   }
 }
