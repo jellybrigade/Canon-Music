@@ -995,7 +995,7 @@ describe("player store - buffering vs loading", () => {
     const state = usePlayerStore.getState();
     expect(state.isBuffering).toBe(false);
     expect(state.isPlaying).toBe(false);
-    expect(state.error?.message).toMatch(/never started playing/);
+    expect(state.error?.message).toMatch(/never started/);
   });
 
   it("buffer deadline does not fire if audio-format already cleared it", async () => {

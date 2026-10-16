@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle,
   Cast,
   Check,
   ChevronUp,
@@ -21,24 +20,18 @@ import { useEffect, useRef, useState } from "react";
 import { fetchTrackRating, setRating } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { AlbumArt } from "../../../components/AlbumArt";
-import { AlbumTracksNotice } from "../../../components/AlbumTracksNotice";
 import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
 import { useLoved } from "../../../hooks/useLoved";
 import type { ServerWithCredential } from "../../../hooks/useServer";
-import { useSetting } from "../../../hooks/useSetting";
 import { stripServerPrefix } from "../../../lib/ids";
 import { QK } from "../../../lib/queryKeys";
-import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
-import { ContextMenu } from "../../../ui/ContextMenu";
 import { useClickOutside } from "../../../ui/useClickOutside";
 import { RadioButton } from "../../radio/components/RadioButton";
-import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
-import { useTagsStore } from "../../tags/store/tags";
 import { popoverAbove } from "../lib/popoverAbove";
 import { sleepTimerCountdown } from "../lib/sleepTimer";
 import { usePlayerStore } from "../store/player";
 import { isNextDisabled, repeatModeLabel } from "../store/playerTypes";
-import { PlaybackErrorActions } from "./PlaybackErrorActions";
+import { BottomNotices } from "./BottomNotices";
 import { PlayerMoreControls } from "./PlayerMoreControls";
 import { PlayerProgress } from "./PlayerProgress";
 import { SleepTimerPopover } from "./SleepTimerPopover";
@@ -76,8 +69,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const coverMap = useAlbumCoverMap();
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const isLoading = usePlayerStore((s) => s.isLoading);
-  const error = usePlayerStore((s) => s.error);
-  const retryCurrent = usePlayerStore((s) => s.retryCurrent);
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
@@ -91,10 +82,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const seek = usePlayerStore((s) => s.seek);
   const toggleRepeat = usePlayerStore((s) => s.toggleRepeat);
   const toggleShuffle = usePlayerStore((s) => s.toggleShuffle);
-  const pullProgress = useTagsStore((s) => s.pullProgress);
-  const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
-  const setEnrichmentPending = useTagsStore((s) => s.setEnrichmentPending);
-  const [, setSnoozeUntil] = useSetting("enrichment.snooze_until", "");
   const { lovedTrackIds, toggleTrackLove } = useLoved();
 
   const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
@@ -111,7 +98,6 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   const [castPopoverPos, setCastPopoverPos] = useState<{ right: number; bottom: number } | null>(null);
   const castBtnRef = useRef<HTMLButtonElement>(null);
   const castPopoverRef = useRef<HTMLDivElement>(null);
-  const [snoozeMenu, setSnoozeMenu] = useState<{ x: number; y: number } | null>(null);
   const [artOpen, setArtOpen] = useState(false);
   const artPopoverRef = useRef<HTMLDivElement>(null);
   const artThumbRef = useRef<HTMLButtonElement>(null);
@@ -170,22 +156,12 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
   };
 
   const isLoved = currentTrack ? lovedTrackIds.has(currentTrack.id) : false;
-  const albumTracksNotice = useAlbumTracksNoticeStore((s) => s.notice);
 
   useEffect(() => {
     return () => {
       if (prevHoldTimer.current) clearTimeout(prevHoldTimer.current);
     };
   }, []);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--normalizing-bar-height",
-      pullProgress || enrichmentPending || albumTracksNotice ? "24px" : "0px",
-    );
-    // The badge unmounts with the bar (Now Playing); a stale height would reserve an empty strip.
-    return () => document.documentElement.style.setProperty("--normalizing-bar-height", "0px");
-  }, [pullProgress, enrichmentPending, albumTracksNotice]);
 
   useEffect(() => {
     if (!artOpen) return;
@@ -239,61 +215,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
 
   return (
     <>
-      {albumTracksNotice && <AlbumTracksNotice abovePlayer={currentTrack !== null} />}
-      {enrichmentPending && !pullProgress && !albumTracksNotice && (
-        <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
-          Metadata not fetched for {enrichmentPending} albums
-          <button
-            className="normalizing-bar__action"
-            onClick={() => {
-              void runEnrichment();
-            }}
-          >
-            Fetch now
-          </button>
-          <button className="normalizing-bar__dismiss" onClick={() => setEnrichmentPending(null)}>
-            Dismiss
-          </button>
-          <button
-            className="normalizing-bar__more"
-            onClick={(e) => {
-              e.stopPropagation();
-              const r = e.currentTarget.getBoundingClientRect();
-              setSnoozeMenu({ x: r.left, y: r.bottom });
-            }}
-          >
-            …
-          </button>
-          {snoozeMenu && (
-            <ContextMenu x={snoozeMenu.x} y={snoozeMenu.y} onClose={() => setSnoozeMenu(null)}>
-              {(
-                [
-                  ["Snooze 1 day", String(Math.floor(Date.now() / 1000) + 86400)],
-                  ["Snooze 1 week", String(Math.floor(Date.now() / 1000) + 604800)],
-                  ["Snooze 1 month", String(Math.floor(Date.now() / 1000) + 2592000)],
-                  ["Never show again", "forever"],
-                ] as [string, string][]
-              ).map(([label, value]) => (
-                <button
-                  key={label}
-                  onClick={() => {
-                    void setSnoozeUntil(value);
-                    setEnrichmentPending(null);
-                    setSnoozeMenu(null);
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </ContextMenu>
-          )}
-        </div>
-      )}
-      {pullProgress && !albumTracksNotice && (
-        <div className={`normalizing-bar${currentTrack ? " normalizing-bar--above-player" : ""}`}>
-          Fetching metadata… {pullProgress.done} / {pullProgress.total}
-        </div>
-      )}
+      <BottomNotices onOpenResync={onOpenResync} />
       {!currentTrack ? null : (
         <div className="player-bar">
           <div className="player-section player-section--left">
@@ -333,22 +255,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
             </div>
             <div className="player-track-info">
               <span className="player-title">{currentTrack.title}</span>
-              {error ? (
-                <div className="player-error" role="alert">
-                  <AlertCircle size={13} className="player-error-icon" aria-hidden="true" />
-                  <span className="player-error-msg" title={error.message}>
-                    {error.message}
-                  </span>
-                  <PlaybackErrorActions
-                    cause={error.cause}
-                    onRetry={retryCurrent}
-                    onSkip={() => void next()}
-                    skipDisabled={nextDisabled}
-                    onOpenResync={onOpenResync}
-                  />
-                </div>
-              ) : (
-                currentTrack.artist &&
+              {currentTrack.artist &&
                 (onSelectArtist ? (
                   <button
                     className="player-artist player-artist--link"
@@ -358,8 +265,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                   </button>
                 ) : (
                   <span className="player-artist">{currentTrack.artist}</span>
-                ))
-              )}
+                ))}
             </div>
           </div>
 

@@ -492,7 +492,11 @@ html[data-app-blurred] * {
   flex-direction: row;
   height: 100vh;
   overflow: hidden;
-  --bottom-chrome-reserve: calc(var(--player-bar-reserve, 0px) + var(--normalizing-bar-height, 0px));
+  --bottom-chrome-reserve: calc(
+    var(--player-bar-reserve, 0px) +
+    var(--bottom-notice-rows, 0) *
+    var(--notice-bar-height)
+  );
 }
 
 /* The player bar and status badge are fixed and take no flow space. Reserved here once, as a

@@ -53,7 +53,7 @@ export function createPlayerEngine(
         isPlaying: false,
         isLoading: false,
         isBuffering: false,
-        error: plainError("The track never started playing. The server may be unreachable or overloaded"),
+        error: plainError("This track never started. The server may be down or busy"),
       });
     }, BUFFER_DEADLINE_MS);
   }
