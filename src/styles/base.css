@@ -511,14 +511,31 @@ html[data-app-blurred] * {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: var(--space-sm) 0;
-  padding-bottom: var(--space-2xs);
-  gap: var(--space-2xs);
   border-right: 1px solid var(--border);
   background-color: var(--bg-sidebar);
   transition: width var(--duration-slow) ease;
   position: relative;
+}
+
+/* Scrolls only when the buttons outgrow the window (short window plus notice rows); without it
+   the bottom buttons were cut off and unreachable. Inner, so the resize handle can overhang. */
+.sidebar-items {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-sm) 0;
+  padding-bottom: var(--space-2xs);
+  overflow-x: hidden;
+  overflow-y: auto;
+  container-type: size;
+  /* Feedback and expand buttons, below the nav buttons. */
+  --sidebar-footer-height: calc(2 * var(--space-xl));
+}
+
+.sidebar-items--no-footer {
+  --sidebar-footer-height: 0px;
 }
 
 .sidebar--dragging {
@@ -545,12 +562,23 @@ html[data-app-blurred] * {
 
 .sidebar--expanded {
   width: 180px;
+}
+
+.sidebar--expanded .sidebar-items {
   align-items: stretch;
 }
 
+/* Sized from the column's height: buttons grow from 32px to 40px first, then the gaps from
+   0 to 4px, so the column fills the window exactly from the 560px floor up to full size. */
 .sidebar-btn {
   width: 40px;
-  height: 40px;
+  height: clamp(var(--space-xl), (100cqh - var(--sidebar-footer-height)) / var(--sidebar-nav-count), 40px);
+  margin-block-end: clamp(
+    0px,
+    (100cqh - var(--sidebar-footer-height) - 40px * var(--sidebar-nav-count)) /
+    var(--sidebar-nav-count),
+    var(--space-2xs)
+  );
   border-radius: var(--radius-md-lg);
   border: none;
   background: transparent;
@@ -572,8 +600,7 @@ html[data-app-blurred] * {
 
 .sidebar--expanded .sidebar-btn {
   width: auto;
-  height: 40px;
-  margin: 0 var(--space-xs);
+  margin-inline: var(--space-xs);
   padding: 0 var(--space-xs);
   justify-content: flex-start;
   gap: var(--space-xs);
