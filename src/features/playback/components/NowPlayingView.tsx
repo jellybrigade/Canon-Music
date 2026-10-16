@@ -174,17 +174,19 @@ export function NowPlayingView({
       <div className="now-playing-main">
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
-          {largeArtUrl ? (
-            <AlbumArt
-              src={largeArtUrl}
-              artist={currentTrack.artist}
-              album={currentTrack.album ?? null}
-              alt={currentTrack.title}
-              className="now-playing-art"
-            />
-          ) : (
-            <div className="now-playing-art now-playing-art--placeholder" />
-          )}
+          <div className="now-playing-art-frame">
+            {largeArtUrl ? (
+              <AlbumArt
+                src={largeArtUrl}
+                artist={currentTrack.artist}
+                album={currentTrack.album ?? null}
+                alt={currentTrack.title}
+                className="now-playing-art"
+              />
+            ) : (
+              <div className="now-playing-art now-playing-art--placeholder" />
+            )}
+          </div>
 
           <div className="now-playing-info">
             <div className="now-playing-title-row">
