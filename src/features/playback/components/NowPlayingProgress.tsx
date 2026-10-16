@@ -1,9 +1,11 @@
-import { useMemo } from "react";
 import { formatDuration } from "../../../lib/trackCells";
 import { useSeekBar } from "../hooks/useSeekBar";
 import { usePlayerStore } from "../store/player";
 import { WaveformBars } from "./WaveformBars";
 import "./NowPlayingProgress.css";
+
+// Chunkier than the player bar's to suit the taller track, and keeps the bar count low there.
+const NOW_PLAYING_WAVEFORM_BAR_PITCH = 6;
 
 export function NowPlayingProgress({
   duration,
@@ -14,10 +16,6 @@ export function NowPlayingProgress({
 }) {
   const { barRef, elapsed, progress, isJump, sliderProps } = useSeekBar(duration);
   const isBuffering = usePlayerStore((s) => s.isBuffering);
-  const overlayFilledCount = useMemo(
-    () => (overlayPeaks ? Math.round(progress * overlayPeaks.length) : 0),
-    [progress, overlayPeaks],
-  );
 
   return (
     <div className="now-playing-progress-row">
@@ -31,7 +29,8 @@ export function NowPlayingProgress({
         {overlayPeaks ? (
           <WaveformBars
             peaks={overlayPeaks}
-            filledCount={overlayFilledCount}
+            progress={progress}
+            barPitch={NOW_PLAYING_WAVEFORM_BAR_PITCH}
             barClass="now-playing-waveform-bar"
             filledClass="now-playing-waveform-bar now-playing-waveform-bar--filled"
           />

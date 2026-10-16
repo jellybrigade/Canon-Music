@@ -10,3 +10,18 @@ export function displayedWaveformPeaks(showWaveform: boolean, peaks: number[] | 
   if (!showWaveform) return null;
   return peaks && peaks.length > 0 ? peaks : PLACEHOLDER_PEAKS;
 }
+
+// Fixed 200 bars squeezed into a narrow bar left each one a subpixel sliver between 1px gaps,
+// so the bar count follows the width instead. Merged runs keep their loudest peak.
+export function fitWaveformPeaks(peaks: readonly number[], width: number, barPitch: number): readonly number[] {
+  const count = Math.max(1, Math.floor(width / barPitch));
+  if (width <= 0 || count >= peaks.length) return peaks;
+  const ratio = peaks.length / count;
+  return Array.from({ length: count }, (_, i) => {
+    const start = Math.floor(i * ratio);
+    const end = Math.floor((i + 1) * ratio);
+    let loudest = 0;
+    for (let j = start; j < end; j++) loudest = Math.max(loudest, peaks[j] ?? 0);
+    return loudest;
+  });
+}

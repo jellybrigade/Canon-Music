@@ -7,7 +7,7 @@ vi.mock("../../../hooks/useSetting", () => ({
 }));
 
 import { act, cleanup, render } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { usePlayerStore } from "../store/player";
 import { PlayerProgress } from "./PlayerProgress";
 
@@ -15,6 +15,21 @@ let showWaveform = true;
 
 const bar = () => document.querySelector(".player-progress-bar");
 const waveformBars = () => Array.from(document.querySelectorAll<HTMLElement>(".waveform-bar"));
+
+const originalResizeObserver = globalThis.ResizeObserver;
+
+// jsdom has no ResizeObserver; the waveform measures itself to fit its bar count.
+beforeAll(() => {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+});
+
+afterAll(() => {
+  globalThis.ResizeObserver = originalResizeObserver;
+});
 
 beforeEach(() => {
   showWaveform = true;

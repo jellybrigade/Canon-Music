@@ -116,22 +116,7 @@ export function NowPlayingView({
     };
   }, [bandsintownEnabled, primaryArtist]);
 
-  // Downsample to 80 bars for the overlay, reduces DOM nodes from 200 and cuts jank.
-  // Also quantize filledCount so WaveformBars only re-renders when the fill boundary moves.
-  const overlayPeaks = useMemo(() => {
-    const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
-    if (!peaks) return null;
-    const TARGET = 80;
-    if (peaks.length <= TARGET) return peaks;
-    const ratio = peaks.length / TARGET;
-    return Array.from({ length: TARGET }, (_, i) => {
-      const start = Math.floor(i * ratio);
-      const end = Math.floor((i + 1) * ratio);
-      let sum = 0;
-      for (let j = start; j < end; j++) sum += peaks[j] ?? 0;
-      return sum / (end - start);
-    });
-  }, [showWaveform, waveformPeaks]);
+  const overlayPeaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
 
   const largeArtUrl = currentTrack?.artworkRef
     ? getCoverArtUrl(server.url, server.username, credential, currentTrack.artworkRef, 600)

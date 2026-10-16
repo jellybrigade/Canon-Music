@@ -1,10 +1,12 @@
-import { useMemo } from "react";
 import { useBoolSetting } from "../../../hooks/useSetting";
 import { formatDuration } from "../../../lib/trackCells";
 import { useSeekBar } from "../hooks/useSeekBar";
 import { displayedWaveformPeaks } from "../lib/waveformDisplay";
 import { usePlayerStore } from "../store/player";
 import { WaveformBars } from "./WaveformBars";
+
+// 3px bars with the 1px gap: dense enough to read as a waveform, wide enough to stay crisp.
+const PLAYER_WAVEFORM_BAR_PITCH = 4;
 
 export function PlayerProgress() {
   const duration = usePlayerStore((s) => s.currentTrack?.duration ?? 0);
@@ -15,7 +17,6 @@ export function PlayerProgress() {
   const { barRef, elapsed, progress, isJump, sliderProps } = useSeekBar(duration);
 
   const peaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
-  const filledCount = useMemo(() => (peaks ? Math.round(progress * peaks.length) : 0), [progress, peaks]);
 
   return (
     <div className="player-progress">
@@ -29,7 +30,8 @@ export function PlayerProgress() {
         {peaks ? (
           <WaveformBars
             peaks={peaks}
-            filledCount={filledCount}
+            progress={progress}
+            barPitch={PLAYER_WAVEFORM_BAR_PITCH}
             barClass="waveform-bar"
             filledClass="waveform-bar waveform-bar--filled"
           />
