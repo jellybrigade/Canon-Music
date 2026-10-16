@@ -1,4 +1,4 @@
-import { AlertCircle, ChevronLeft, ListX, RefreshCw } from "lucide-react";
+import { AlertCircle, ChevronLeft, ListX, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type BandsintownEvent, fetchBandsintownEvents } from "../../../clients/bandsintown";
@@ -10,7 +10,9 @@ import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
 import { useLoved } from "../../../hooks/useLoved";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useBoolSetting } from "../../../hooks/useSetting";
+import { isTextEntryTarget } from "../../../lib/keyboard";
 import type { AlbumRow } from "../../../types/library";
+import { useAnyModalOpen } from "../../../ui/useModalChrome";
 import { type LyricsOverride, useLyrics } from "../hooks/useLyrics";
 import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
 import { primaryArtistOf } from "../lib/nowPlayingQueries";
@@ -27,6 +29,9 @@ import { UpNextList } from "./UpNextList";
 import "./NowPlayingView.css";
 
 type Tab = "up-next" | "about" | "lyrics";
+
+const TABS: readonly Tab[] = ["up-next", "about", "lyrics"];
+const TAB_LABELS: Record<Tab, string> = { "up-next": "Up Next", about: "About", lyrics: "Lyrics" };
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -59,6 +64,10 @@ export function NowPlayingView({
   const albumDisplayName = useAlbumDisplayName();
   const upNextRef = useRef<HTMLDivElement>(null);
   const [tab, setTab] = useState<Tab>("up-next");
+  // Only the narrow layout reads this: there the tab panel replaces the hero instead of sitting
+  // under it, so neither state needs a scrollbar.
+  const [isExpanded, setIsExpanded] = useState(false);
+  const isAnyModalOpen = useAnyModalOpen();
   const [lyricsSearchOpen, setLyricsSearchOpen] = useState(false);
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
@@ -148,6 +157,20 @@ export function NowPlayingView({
     if (active) active.scrollIntoView({ block: "nearest" });
   }, [tab, queueIndex]);
 
+  useEffect(() => {
+    if (!isExpanded || isAnyModalOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isTextEntryTarget(e)) setIsExpanded(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isExpanded, isAnyModalOpen]);
+
+  const expandTo = (t: Tab) => {
+    setTab(t);
+    setIsExpanded(true);
+  };
+
   if (!currentTrack) {
     return (
       <div className="now-playing-view now-playing-view--empty">
@@ -158,7 +181,7 @@ export function NowPlayingView({
 
   return (
     <div
-      className="now-playing-view"
+      className={`now-playing-view${isExpanded ? " now-playing-view--expanded" : ""}`}
       style={
         {
           ...(accent ? { "--np-dominant": accent } : {}),
@@ -172,6 +195,31 @@ export function NowPlayingView({
         </button>
       )}
       <div className="now-playing-main">
+        <div className="now-playing-mini-bar">
+          <button className="now-playing-mini" onClick={() => setIsExpanded(false)} title="Show full player">
+            {largeArtUrl ? (
+              <AlbumArt
+                src={largeArtUrl}
+                artist={currentTrack.artist}
+                album={currentTrack.album ?? null}
+                alt=""
+                className="now-playing-mini-art"
+              />
+            ) : (
+              <div className="now-playing-mini-art now-playing-art--placeholder" />
+            )}
+            <span className="now-playing-mini-title">{currentTrack.title}</span>
+          </button>
+          <button
+            className="now-playing-collapse-btn player-btn player-btn--icon"
+            onClick={() => setIsExpanded(false)}
+            title="Close"
+            aria-label="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
           <div className="now-playing-art-frame">
@@ -188,78 +236,88 @@ export function NowPlayingView({
             )}
           </div>
 
-          <div className="now-playing-info">
-            <div className="now-playing-title-row">
-              <p className="now-playing-title" title={currentTrack.title}>
-                {currentTrack.title}
-              </p>
+          <div className="now-playing-hero-body">
+            <div className="now-playing-info">
+              <div className="now-playing-title-row">
+                <p className="now-playing-title" title={currentTrack.title}>
+                  {currentTrack.title}
+                </p>
+              </div>
+              {currentTrack.artist &&
+                (onSelectArtist ? (
+                  <button
+                    className="now-playing-artist now-playing-artist--link"
+                    onClick={() => onSelectArtist(currentTrack.artist!)}
+                  >
+                    {currentTrack.artist}
+                  </button>
+                ) : (
+                  <p className="now-playing-artist">{currentTrack.artist}</p>
+                ))}
+              {currentTrack.album &&
+                (currentAlbum ? (
+                  <button
+                    className="now-playing-album now-playing-album--link"
+                    onClick={() => onSelectAlbum(currentAlbum)}
+                  >
+                    {albumDisplayName(currentTrack.album!)}
+                  </button>
+                ) : (
+                  <p className="now-playing-album">{albumDisplayName(currentTrack.album!)}</p>
+                ))}
             </div>
-            {currentTrack.artist &&
-              (onSelectArtist ? (
-                <button
-                  className="now-playing-artist now-playing-artist--link"
-                  onClick={() => onSelectArtist(currentTrack.artist!)}
-                >
-                  {currentTrack.artist}
-                </button>
-              ) : (
-                <p className="now-playing-artist">{currentTrack.artist}</p>
-              ))}
-            {currentTrack.album &&
-              (currentAlbum ? (
-                <button
-                  className="now-playing-album now-playing-album--link"
-                  onClick={() => onSelectAlbum(currentAlbum)}
-                >
-                  {albumDisplayName(currentTrack.album!)}
-                </button>
-              ) : (
-                <p className="now-playing-album">{albumDisplayName(currentTrack.album!)}</p>
-              ))}
+
+            <NowPlayingProgress duration={duration} overlayPeaks={overlayPeaks} />
+
+            {error && (
+              <div className="now-playing-error" role="alert">
+                <AlertCircle size={15} className="now-playing-error-icon" aria-hidden="true" />
+                <span className="now-playing-error-msg">{error.message}</span>
+                <PlaybackErrorActions
+                  cause={error.cause}
+                  onRetry={retryCurrent}
+                  onSkip={() => void next()}
+                  skipDisabled={nextDisabled}
+                  onOpenResync={onOpenResync}
+                />
+              </div>
+            )}
+
+            {audioFormat && (
+              <div className="now-playing-format">
+                {audioFormat.codec && `${audioFormat.codec} · `}
+                {audioFormat.sampleRate >= 1000
+                  ? `${(audioFormat.sampleRate / 1000).toFixed(1)} kHz`
+                  : `${audioFormat.sampleRate} Hz`}
+                {" · "}
+                {audioFormat.channels === 1
+                  ? "mono"
+                  : audioFormat.channels === 2
+                    ? "stereo"
+                    : `${audioFormat.channels}ch`}
+              </div>
+            )}
+
+            <NowPlayingControls
+              nextDisabled={nextDisabled}
+              isLoved={isLoved}
+              onToggleLove={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
+            />
           </div>
+        </div>
 
-          <NowPlayingProgress duration={duration} overlayPeaks={overlayPeaks} />
-
-          {error && (
-            <div className="now-playing-error" role="alert">
-              <AlertCircle size={15} className="now-playing-error-icon" aria-hidden="true" />
-              <span className="now-playing-error-msg">{error.message}</span>
-              <PlaybackErrorActions
-                cause={error.cause}
-                onRetry={retryCurrent}
-                onSkip={() => void next()}
-                skipDisabled={nextDisabled}
-                onOpenResync={onOpenResync}
-              />
-            </div>
-          )}
-
-          {audioFormat && (
-            <div className="now-playing-format">
-              {audioFormat.codec && `${audioFormat.codec} · `}
-              {audioFormat.sampleRate >= 1000
-                ? `${(audioFormat.sampleRate / 1000).toFixed(1)} kHz`
-                : `${audioFormat.sampleRate} Hz`}
-              {" · "}
-              {audioFormat.channels === 1
-                ? "mono"
-                : audioFormat.channels === 2
-                  ? "stereo"
-                  : `${audioFormat.channels}ch`}
-            </div>
-          )}
-
-          <NowPlayingControls
-            nextDisabled={nextDisabled}
-            isLoved={isLoved}
-            onToggleLove={() => void toggleTrackLove(currentTrack.id, serverWithCredential)}
-          />
+        <div className="now-playing-launcher">
+          {TABS.map((t) => (
+            <button key={t} className="now-playing-launcher-btn" onClick={() => expandTo(t)}>
+              {TAB_LABELS[t]}
+            </button>
+          ))}
         </div>
 
         {/* ── Right: tabbed panel ── */}
         <div className="now-playing-right">
           <div className="now-playing-tabs" role="tablist">
-            {(["up-next", "about", "lyrics"] as Tab[]).map((t) => (
+            {TABS.map((t) => (
               <button
                 key={t}
                 role="tab"
@@ -267,7 +325,7 @@ export function NowPlayingView({
                 className={`now-playing-tab-btn${tab === t ? " now-playing-tab-btn--active" : ""}`}
                 onClick={() => setTab(t)}
               >
-                {t === "up-next" ? "Up Next" : t === "about" ? "About" : "Lyrics"}
+                {TAB_LABELS[t]}
               </button>
             ))}
             {tab === "up-next" && queue.length > 0 && (
