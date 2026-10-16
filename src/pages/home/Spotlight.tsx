@@ -144,7 +144,15 @@ export function Spotlight({
       </button>
       <div className="home-spotlight__text">
         <p className="home-spotlight__kicker">{pick.kicker}</p>
-        <h2 className="home-spotlight__title">{albumDisplayName(pick.album.name, pick.album.id)}</h2>
+        <h2 className="home-spotlight__title">
+          {primary ? (
+            albumDisplayName(pick.album.name, pick.album.id)
+          ) : (
+            <button type="button" className="home-spotlight__title-link" onClick={() => onSelectAlbum(pick.album)}>
+              {albumDisplayName(pick.album.name, pick.album.id)}
+            </button>
+          )}
+        </h2>
         {(pick.album.artist || pick.album.year) && (
           <p className="home-spotlight__meta">
             {pick.album.artist && onSelectArtist ? (
@@ -164,12 +172,24 @@ export function Spotlight({
               <Play size={14} fill="currentColor" /> Play
             </button>
             {onAddToQueue && (
-              <button className="home-spotlight__queue-btn" onClick={() => onAddToQueue(pick.album)}>
-                <ListEnd size={14} /> Add to Queue
+              <button
+                className="home-spotlight__queue-btn"
+                onClick={() => onAddToQueue(pick.album)}
+                title="Add to Queue"
+                aria-label="Add to Queue"
+              >
+                <ListEnd size={14} />
+                <span className="home-spotlight__btn-label">Add to Queue</span>
               </button>
             )}
-            <button className="home-spotlight__open-btn" onClick={() => onSelectAlbum(pick.album)}>
-              Open
+            <button
+              className="home-spotlight__open-btn"
+              onClick={() => onSelectAlbum(pick.album)}
+              title="Open album"
+              aria-label="Open album"
+            >
+              <ArrowUpRight size={14} className="home-spotlight__btn-icon" />
+              <span className="home-spotlight__btn-label">Open</span>
             </button>
           </div>
         )}

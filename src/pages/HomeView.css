@@ -21,7 +21,7 @@
   z-index: 2;
   padding: var(--space-xl) var(--space-lg) var(--space-md);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: 1fr minmax(0, auto) 1fr;
   align-items: center;
   gap: var(--space-md);
   background: var(--bg-elevated, #141414);
@@ -41,6 +41,7 @@
   border-radius: var(--radius-base);
   padding: 0.3em 0.6em;
   width: 440px;
+  max-width: 100%;
   transition:
     border-color var(--duration-slower),
     width var(--duration-slower) var(--ease-standard),
@@ -162,7 +163,7 @@
 /* ── Spotlight + Genres fusion: elevated surface, labeled, internal divider ── */
 
 .home-fusion {
-  container-type: inline-size;
+  container: home-fusion / inline-size;
   margin: var(--space-xs) 0 0;
   padding: var(--space-lg) var(--space-lg);
 }
@@ -188,9 +189,15 @@
   border-top: 1px solid var(--border, var(--tint-3));
 }
 
-@container (max-width: 720px) {
+@container home-fusion (max-width: 720px) {
   .home-fusion__spotlights {
     flex-direction: column;
+  }
+
+  /* In a column the row layout's flex-basis becomes a height, padding each pick with empty space. */
+  .home-fusion__spotlights > .home-spotlight--primary,
+  .home-fusion__spotlights-secondary {
+    flex: none;
   }
 
   .home-fusion__spotlights-secondary {
@@ -211,6 +218,20 @@
   .home-fusion__spotlights-secondary .home-spotlight {
     flex: 1 1 0;
     min-width: 0;
+  }
+}
+
+@container home-fusion (max-width: 480px) {
+  .home-fusion__spotlights-secondary {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .home-fusion__spotlights-secondary .home-spotlight:not(:first-child) {
+    padding-top: var(--space-sm);
+    padding-left: 0;
+    border-left: none;
+    border-top: 1px solid var(--border, var(--tint-3));
   }
 }
 
