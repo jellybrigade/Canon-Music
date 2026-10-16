@@ -85,6 +85,7 @@
   color: inherit;
   font-size: inherit;
   font-family: inherit;
+  text-align: inherit;
   cursor: pointer;
 }
 
@@ -193,7 +194,8 @@
   container: spotlight-primary / inline-size;
   flex: 2 1 420px;
   min-width: 0;
-  align-items: center;
+  /* Stretch, not center: the text centers itself beside the art, but once it outgrows the art the art stays on top. */
+  align-items: stretch;
   gap: var(--space-lg);
 }
 

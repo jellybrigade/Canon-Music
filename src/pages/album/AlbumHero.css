@@ -77,6 +77,7 @@
   font-size: inherit;
   font-weight: inherit;
   letter-spacing: inherit;
+  text-align: inherit;
   color: var(--text-secondary);
   text-decoration: none;
 }
