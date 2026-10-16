@@ -92,6 +92,44 @@
   text-decoration: underline;
 }
 
+.home-spotlight__title-link {
+  display: block;
+  max-width: 100%;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-sm);
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.home-spotlight__title-link:hover {
+  text-decoration: underline;
+}
+
+.home-spotlight__title-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.home-spotlight__title-link:active {
+  color: var(--text-secondary);
+}
+
+.home-spotlight:not(.home-spotlight--primary) .home-spotlight__kicker,
+.home-spotlight:not(.home-spotlight--primary) .home-spotlight__meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .home-spotlight__actions {
   display: flex;
   align-items: center;
@@ -152,6 +190,7 @@
 /* ── Primary spotlight: restored hero presence ───────────────────────────── */
 
 .home-spotlight--primary {
+  container: spotlight-primary / inline-size;
   flex: 2 1 420px;
   min-width: 0;
   align-items: center;
@@ -193,6 +232,7 @@
 
 .home-spotlight__cta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-xs);
   margin-top: var(--space-md);
@@ -236,4 +276,96 @@
 .home-spotlight__queue-btn:hover,
 .home-spotlight__open-btn:hover {
   background: var(--bg-hover, var(--tint-2));
+}
+
+.home-spotlight__btn-icon {
+  display: none;
+}
+
+/* Narrow sections shed buttons, then columns. */
+@container home-fusion (max-width: 720px) {
+  .home-spotlight:not(.home-spotlight--primary) {
+    gap: var(--space-sm);
+  }
+
+  .home-spotlight:not(.home-spotlight--primary) .home-spotlight__art-wrap {
+    width: 48px;
+    height: 48px;
+  }
+
+  .home-spotlight__actions {
+    display: none;
+  }
+
+  .home-spotlight--primary .home-spotlight__art-wrap {
+    width: 112px;
+    height: 112px;
+  }
+
+  .home-spotlight--primary .home-spotlight__title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Labels fold by the hero's own width: beside the secondary column it is narrower than the section. */
+@container spotlight-primary (max-width: 540px) {
+  .home-spotlight__btn-label {
+    display: none;
+  }
+
+  .home-spotlight__btn-icon {
+    display: block;
+  }
+
+  .home-spotlight__queue-btn,
+  .home-spotlight__open-btn {
+    padding: var(--space-xs);
+  }
+}
+
+@container home-fusion (max-width: 480px) {
+  .home-spotlight:not(.home-spotlight--primary) .home-spotlight__art-wrap {
+    width: 40px;
+    height: 40px;
+  }
+
+  .home-spotlight:not(.home-spotlight--primary) .home-spotlight__text {
+    display: grid;
+    grid-template-columns: fit-content(50%) minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: var(--space-xs);
+  }
+
+  .home-spotlight:not(.home-spotlight--primary) .home-spotlight__kicker {
+    margin: 0;
+  }
+
+  .home-spotlight:not(.home-spotlight--primary) .home-spotlight__meta {
+    grid-column: 1 / -1;
+  }
+
+  .home-spotlight--primary {
+    gap: var(--space-md);
+  }
+
+  .home-spotlight--primary .home-spotlight__art-wrap {
+    width: 88px;
+    height: 88px;
+  }
+
+  .home-spotlight--primary .home-spotlight__title {
+    font-size: var(--text-2xl);
+  }
+
+  .home-spotlight--primary .home-spotlight__meta {
+    font-size: var(--text-base);
+  }
+
+  .home-spotlight__cta {
+    margin-top: var(--space-sm);
+  }
 }
