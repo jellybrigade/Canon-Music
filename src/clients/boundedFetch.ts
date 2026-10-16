@@ -81,7 +81,7 @@ async function boundedRequest(
   }
 }
 
-function concat(chunks: Uint8Array[]): Uint8Array {
+function concat(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {
   const out = new Uint8Array(chunks.reduce((total, chunk) => total + chunk.length, 0));
   let offset = 0;
   for (const chunk of chunks) {
