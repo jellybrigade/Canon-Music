@@ -35,6 +35,19 @@ describe("loadRandomLibraryTrack", () => {
     expect(track?.album_name).toBe("Album");
   });
 
+  it("draws by position from a count instead of sorting the whole library at random", async () => {
+    for (const id of ["t-a", "t-b", "t-c"]) seedTrack("srv-a", id);
+    const random = vi.spyOn(Math, "random").mockReturnValue(0.99);
+    try {
+      expect((await loadRandomLibraryTrack("srv-a"))?.id).toBe("t-c");
+      random.mockReturnValue(0);
+      expect((await loadRandomLibraryTrack("srv-a"))?.id).toBe("t-a");
+    } finally {
+      random.mockRestore();
+    }
+    expect(db.queryLog.filter((q) => /RANDOM\(\)/i.test(q.sql))).toEqual([]);
+  });
+
   it("reports an empty library as no track", async () => {
     seedTrack("srv-b", "theirs");
     expect(await loadRandomLibraryTrack("srv-a")).toBeNull();
