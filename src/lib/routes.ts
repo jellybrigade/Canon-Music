@@ -27,6 +27,9 @@ export function albumPath(albumId: string, trackId?: string) {
 export function artistPath(artistName: string) {
   return `/artist/${encodeURIComponent(artistName)}`;
 }
+export function searchPath(query: string) {
+  return `${ROUTES.SEARCH}?${new URLSearchParams({ q: query })}`;
+}
 export function playlistPath(playlistId: string) {
   return `/playlist/${encodeURIComponent(playlistId)}`;
 }

@@ -50,6 +50,10 @@ function seedAlbum(opts: { id: string; name: string; artist?: string | null; ser
     .run(opts.id, opts.serverId ?? "srv-a", opts.name, opts.artist ?? null);
 }
 
+function seedArtistPortrait(name: string, url: string) {
+  db.raw.prepare(`INSERT INTO artist_identity (artist_name, wikidata_image_url) VALUES (?, ?)`).run(name, url);
+}
+
 function seedTrack(opts: {
   id: string;
   title: string;
@@ -90,6 +94,7 @@ const onPlayTrack = vi.fn();
 const onOpenTrack = vi.fn();
 const onPlayAlbum = vi.fn();
 const onStartArtistRadio = vi.fn();
+const onSearchAll = vi.fn();
 
 function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -103,6 +108,7 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
     onOpenTrack,
     onPlayAlbum,
     onStartArtistRadio,
+    onSearchAll,
     serverWithCredential: SRV,
     ...props,
   } as React.ComponentProps<typeof CommandPalette>;
@@ -136,7 +142,7 @@ function resultPrimaries(): string[] {
 
 function focusedLabel(): string | null {
   const el = document.querySelector(
-    ".cp-item--focused .cp-nav-label, .cp-item--focused .cp-result-primary, .cp-item--focused .cp-shelf-name",
+    ".cp-item--focused .cp-nav-label, .cp-item--focused .cp-result-primary, .cp-item--focused .cp-shelf-name, .cp-item--focused .cp-see-all-label",
   );
   return el ? el.textContent : null;
 }
@@ -198,6 +204,7 @@ beforeEach(async () => {
   onOpenTrack.mockClear();
   onPlayAlbum.mockClear();
   onStartArtistRadio.mockClear();
+  onSearchAll.mockClear();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
 });
@@ -440,10 +447,13 @@ describe("CommandPalette pinned shelf", () => {
 });
 
 describe("CommandPalette debounce", () => {
+  // The searches only: the portrait keyset read on mount is the image cache's, once per app.
+  const searchSelects = () => db.queryLog.filter((q) => q.kind === "select" && q.sql.includes("tracks_fts")).length;
+
   it("fires no query before the debounce settles", () => {
     renderPalette();
     typeRaw("wilco");
-    expect(db.selectCount).toBe(0);
+    expect(searchSelects()).toBe(0);
   });
 
   it("does not fire at 149ms, fires exactly 3 selects (albums/tracks/artists) at 150ms", async () => {
@@ -453,11 +463,11 @@ describe("CommandPalette debounce", () => {
     await act(async () => {
       vi.advanceTimersByTime(149);
     });
-    expect(db.selectCount).toBe(0);
+    expect(searchSelects()).toBe(0);
     await act(async () => {
       vi.advanceTimersByTime(1);
     });
-    expect(db.selectCount).toBe(3);
+    expect(searchSelects()).toBe(3);
   });
 
   it("collapses a rapid multi-keystroke burst into one settled query, not one per keystroke", async () => {
@@ -475,11 +485,12 @@ describe("CommandPalette debounce", () => {
         vi.advanceTimersByTime(50);
       });
     }
-    expect(db.selectCount).toBe(0);
+    expect(searchSelects()).toBe(0);
     await settleDebounce();
     // Exactly 3, not 3 * 5 keystrokes: the burst produced one settled value.
-    expect(db.selectCount).toBe(3);
+    expect(searchSelects()).toBe(3);
     expect(resultPrimaries()).toEqual(["Wilco Album"]);
+    expect(db.queryLog.filter((q) => q.sql.includes("FROM artist_covers"))).toHaveLength(1);
   });
 
   it("clears the previous session's results on reopen rather than painting them until the timer catches up", async () => {
@@ -609,12 +620,12 @@ describe("CommandPalette keyboard navigation", () => {
     renderPalette();
     typeRaw("zebra");
     await settleDebounce();
-    const [first, last] = resultPrimaries();
+    const [first] = resultPrimaries();
     expect(focusedLabel()).toBe(first);
     fireEvent.keyDown(window, { key: "ArrowUp" });
     expect(focusedLabel()).toBe(first);
     for (let i = 0; i < 5; i++) fireEvent.keyDown(window, { key: "ArrowDown" });
-    expect(focusedLabel()).toBe(last);
+    expect(focusedLabel()).toBe('See all results for "zebra"');
   });
 
   it("activates the focused item on Enter and closes", () => {
@@ -771,7 +782,7 @@ describe("CommandPalette result states", () => {
     renderPalette();
     typeRaw("wilco");
     await settleDebounce();
-    expect(document.querySelector(".cp-result-row .cp-result-secondary")!.textContent).toBe("1 album");
+    expect(document.querySelector(".cp-result-row .cp-result-detail")!.textContent).toBe("Artist · 1 album");
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onSelectArtist).toHaveBeenCalledTimes(1);
     expect(onSelectArtist).toHaveBeenCalledWith("Wilco", 1);
@@ -913,5 +924,162 @@ describe("CommandPalette Enter opens, Shift+Enter plays", () => {
   it("offers no play hint where there is nothing to play", () => {
     renderPalette();
     expect(footerHints()).toEqual(["↑↓ navigate", "↵ go to", "esc close"]);
+  });
+});
+
+function sectionLabels(): string[] {
+  return Array.from(document.querySelectorAll(".cp-section-label")).map((n) => n.textContent!);
+}
+
+describe("CommandPalette top result", () => {
+  function seedZebraArtist() {
+    seedAlbum({ id: "a1", name: "Zebra One", artist: "Zebra" });
+    seedTrack({ id: "t1", title: "Filler Song", artist: "Zebra", albumId: "a1" });
+  }
+
+  it("lifts the best match across kinds into one row on top, out of its own section", async () => {
+    seedZebraArtist();
+    renderPalette();
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(sectionLabels()).toEqual(["Top result", "Albums", "Tracks"]);
+    expect(document.querySelector(".cp-top-row .cp-result-primary")?.textContent).toBe("Zebra");
+    expect(document.querySelector(".cp-top-row .cp-result-detail")?.textContent).toBe("Artist · 1 album");
+    expect(focusedLabel()).toBe("Zebra");
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onSelectArtist.mock.calls).toEqual([["Zebra", 1]]);
+  });
+
+  it("shows four rows a section under the top result", async () => {
+    for (let i = 1; i <= 6; i++) seedFindableAlbum({ id: `a${i}`, name: `Zebra ${i}` });
+    renderPalette();
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(resultPrimaries()).toEqual(["Zebra 1", "Zebra 2", "Zebra 3", "Zebra 4", "Zebra 5"]);
+    const albumsSection = Array.from(document.querySelectorAll(".cp-section")).find(
+      (section) => section.querySelector(".cp-section-label")?.textContent === "Albums",
+    );
+    expect(albumsSection?.querySelectorAll(".cp-result-row")).toHaveLength(4);
+  });
+
+  it("ends with a row that opens Search at the query, and closes", async () => {
+    seedZebraArtist();
+    renderPalette();
+    typeRaw("zebra");
+    await settleDebounce();
+    for (let i = 0; i < 10; i++) fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(focusedLabel()).toBe('See all results for "zebra"');
+    expect(document.querySelector(".cp-footer")?.textContent).toContain("show all results");
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onSearchAll.mock.calls).toEqual([["zebra"]]);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers no See all row when nothing matched", async () => {
+    renderPalette();
+    typeRaw("nonexistentxyz");
+    await settleDebounce();
+    expect(document.querySelector(".cp-see-all-label")).toBeNull();
+  });
+});
+
+describe("CommandPalette result rows", () => {
+  it("keeps the previous rows, without an empty notice, while the next query runs", async () => {
+    seedFindableAlbum({ id: "a1", name: "Zebra One" });
+    renderPalette();
+    typeRaw("zebra");
+    await settleDebounce();
+    setQuery("zebrx");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(resultPrimaries()).toEqual(["Zebra One"]);
+    expect(document.querySelector(".cp-empty")).toBeNull();
+  });
+
+  it("shows an artist's portrait and a track's album art", async () => {
+    seedAlbum({ id: "a1", name: "Yankee Hotel", artist: "Wilco" });
+    db.raw.prepare(`UPDATE albums SET artwork_url = 'al-a1' WHERE id = 'a1'`).run();
+    seedTrack({ id: "t1", title: "Wilco (The Song)", artist: "Wilco", albumId: "a1" });
+    seedArtistPortrait("Wilco", "https://img.example/wilco.jpg");
+    renderPalette();
+    typeRaw("wilco");
+    await settleDebounce();
+    const artistArt = document.querySelector(".cp-top-row img.cp-art--artist");
+    expect(artistArt?.getAttribute("src")).toContain("wilco.jpg");
+    const trackRow = Array.from(document.querySelectorAll(".cp-result-row")).find(
+      (row) => row.querySelector(".cp-result-primary")?.textContent === "Wilco (The Song)",
+    );
+    expect(trackRow?.querySelector("img.cp-art")?.getAttribute("src")).toContain("al-a1");
+    expect(trackRow?.querySelector(".cp-result-detail")?.textContent).toBe("Wilco · Yankee Hotel");
+  });
+
+  it("sets the typed words in bold inside each name", async () => {
+    seedFindableAlbum({ id: "a1", name: "Zebra One" });
+    renderPalette();
+    typeRaw("zeb");
+    await settleDebounce();
+    const name = document.querySelector(".cp-top-row .cp-result-primary");
+    expect(name?.textContent).toBe("Zebra One");
+    expect(Array.from(name?.querySelectorAll(".cp-match") ?? []).map((n) => n.textContent)).toEqual(["Zeb"]);
+  });
+
+  it("holds the result space with skeleton rows while the first search runs", async () => {
+    seedFindableAlbum({ id: "a1", name: "Zebra One" });
+    renderPalette();
+    typeRaw("zebra");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150);
+    });
+    expect(document.querySelectorAll(".cp-skeleton-row").length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain("Searching");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(document.querySelectorAll(".cp-skeleton-row")).toHaveLength(0);
+    expect(resultPrimaries()).toEqual(["Zebra One"]);
+  });
+});
+
+describe("CommandPalette accessibility", () => {
+  it("exposes the rows as a listbox the field points into, following the highlight", async () => {
+    seedFindableAlbum({ id: "a1", name: "Zebra One" });
+    seedFindableAlbum({ id: "a2", name: "Zebra Two" });
+    renderPalette();
+    const listbox = document.querySelector('[role="listbox"]');
+    expect(listbox).not.toBeNull();
+    expect(input().getAttribute("role")).toBe("combobox");
+    expect(input().getAttribute("aria-controls")).toBe(listbox?.id);
+
+    const activeOption = () => document.getElementById(input().getAttribute("aria-activedescendant") ?? "");
+    expect(activeOption()?.textContent).toContain("Home");
+    expect(activeOption()?.getAttribute("role")).toBe("option");
+    expect(activeOption()?.getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(activeOption()?.textContent).toContain("Library");
+
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(activeOption()?.textContent).toContain("Zebra One");
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(activeOption()?.textContent).toContain("Zebra Two");
+    const options = document.querySelectorAll('[role="option"]');
+    expect(Array.from(options).filter((o) => o.getAttribute("aria-selected") === "true")).toHaveLength(1);
+    expect(new Set(Array.from(options, (o) => o.id)).size).toBe(options.length);
+  });
+
+  it("marks pinned tiles as options too", () => {
+    const wilco: Pins["artists"][number] = {
+      name: "Wilco",
+      album_count: 2,
+      lastfm_image_url: null,
+      wikidata_image_url: null,
+      navidrome_image_url: null,
+      pinned_at: 1,
+    };
+    renderPalette({ pins: { artists: [wilco], albums: [] } });
+    const tile = document.querySelector(".cp-shelf-tile");
+    expect(tile?.getAttribute("role")).toBe("option");
+    expect(input().getAttribute("aria-activedescendant")).toBe(tile?.id);
   });
 });

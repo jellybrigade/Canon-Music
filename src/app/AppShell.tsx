@@ -54,6 +54,7 @@ export function AppShell(props: AppViewProps) {
     openAlbumAtTrack,
     openArtist,
     openAlbumById,
+    searchFor,
     handleStartRadioFromArtist,
     handlePlayTrack,
     setCanonicalIdFilters,
@@ -167,6 +168,7 @@ export function AppShell(props: AppViewProps) {
         onSelectAlbum={openAlbum}
         onSelectArtist={(name, albumCount) => openArtist(artistRowOf(name, albumCount))}
         onOpenTrack={openAlbumAtTrack}
+        onSearchAll={searchFor}
         onStartArtistRadio={(name) => {
           void handleStartRadioFromArtist(artistRowOf(name), "curated");
         }}

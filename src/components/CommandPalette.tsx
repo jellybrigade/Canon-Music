@@ -1,6 +1,7 @@
-import { House, List, ListMusic, Music, Play, Settings, User, Users } from "lucide-react";
+import { House, List, ListMusic, Music, Search, Settings, User, Users } from "lucide-react";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { resolvePortraitUrl } from "../clients/lastfm";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import {
   type ActivateIntent,
@@ -11,10 +12,13 @@ import {
   shelfEntries,
 } from "../features/pins/components/PinShelf";
 import { type Pins, pinsNewestFirst } from "../features/pins/pins";
-import { useSearch } from "../features/search/useSearch";
+import { pickTopResult, type TopResult, toSearchTokens } from "../features/search/searchScore";
+import { type SearchAlbum, type SearchArtist, type SearchTrack, useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
+import { resolveArtistImageUrl, useArtistImageMap } from "../hooks/useArtistImageCache";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { rankCommands } from "../lib/commandMatch";
+import { matchRanges } from "../lib/matchRanges";
 import { plural } from "../lib/plural";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
@@ -59,16 +63,23 @@ interface TrackResult {
   title: string;
   artist: string | null;
   album_name: string | null;
+  artwork_url: string | null;
 }
 
-interface ArtistResult {
+interface ArtistResult extends Omit<SearchArtist, "kind"> {
   kind: "artist";
   id: string;
-  name: string;
-  album_count: number;
 }
 
-type Item = ShelfEntry | Command | AlbumResult | TrackResult | ArtistResult;
+interface SeeAllRow {
+  kind: "all";
+  id: "all";
+  query: string;
+}
+
+type LibraryResult = AlbumResult | TrackResult | ArtistResult;
+
+type Item = ShelfEntry | Command | LibraryResult | SeeAllRow;
 
 // What Enter and Shift+Enter say they do, per focused row; null where Shift+Enter has nothing to play.
 type HintKey = Exclude<Item["kind"], "pin"> | `${Extract<Item, { kind: "pin" }>["pin"]["kind"]}-pin`;
@@ -77,6 +88,7 @@ const HINTS: Record<HintKey, { open: string; play: string | null }> = {
   nav: { open: "go to", play: null },
   action: { open: "run", play: null },
   more: { open: "show all", play: null },
+  all: { open: "show all results", play: null },
   album: { open: "open", play: "play" },
   "album-pin": { open: "open", play: "play" },
   artist: { open: "open", play: "start radio" },
@@ -99,7 +111,64 @@ const NAV_COMMANDS: NavCommand[] = [
   { kind: "nav", id: "nav-settings", label: "Settings", icon: <Settings size={16} />, view: "settings" },
 ];
 
-const RESULTS_CAP = 5;
+const RESULTS_CAP = 4;
+const SKELETON_ROWS = 3;
+const ROW_ART_SIZE = 48;
+const TOP_ART_SIZE = 96;
+
+const toAlbumResult = (album: SearchAlbum): AlbumResult => ({
+  kind: "album",
+  id: album.id,
+  server_id: album.server_id,
+  name: album.name,
+  artist: album.artist,
+  artwork_url: album.artwork_url,
+});
+
+const toTrackResult = (track: SearchTrack): TrackResult => ({
+  kind: "track",
+  id: track.id,
+  album_id: track.album_id,
+  title: track.title,
+  artist: track.artist,
+  album_name: track.album_name,
+  artwork_url: track.artwork_url,
+});
+
+const toArtistResult = (artist: SearchArtist): ArtistResult => ({
+  ...artist,
+  kind: "artist",
+  id: `artist-${artist.name}`,
+});
+
+const KIND_LABEL: Record<LibraryResult["kind"], string> = { artist: "Artist", album: "Album", track: "Track" };
+
+function toLibraryResult(top: TopResult): LibraryResult {
+  if (top.kind === "artist") return toArtistResult(top.artist);
+  if (top.kind === "album") return toAlbumResult(top.album);
+  return toTrackResult(top.track);
+}
+
+// The head of a section, minus the row already lifted into the top result.
+function sectionOf<T extends LibraryResult>(rows: T[], top: LibraryResult | null): T[] {
+  return rows.filter((row) => !top || itemKey(row) !== itemKey(top)).slice(0, RESULTS_CAP);
+}
+
+function MatchedText({ text, tokens }: { text: string; tokens: readonly string[] }) {
+  const parts: React.ReactNode[] = [];
+  let at = 0;
+  for (const { start, end } of matchRanges(text, tokens)) {
+    if (start > at) parts.push(text.slice(at, start));
+    parts.push(
+      <strong key={start} className="cp-match">
+        {text.slice(start, end)}
+      </strong>,
+    );
+    at = end;
+  }
+  if (at < text.length) parts.push(text.slice(at));
+  return <>{parts}</>;
+}
 
 const isShelfItem = (item: Item | undefined): item is ShelfEntry => item?.kind === "pin" || item?.kind === "more";
 
@@ -159,6 +228,7 @@ interface Props {
   onOpenTrack: (trackId: string, albumId: string) => void;
   onPlayAlbum: (album: AlbumRow) => void;
   onStartArtistRadio: (name: string) => void;
+  onSearchAll: (query: string) => void;
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
   pins?: Pins;
@@ -175,6 +245,7 @@ export function CommandPalette({
   onOpenTrack,
   onPlayAlbum,
   onStartArtistRadio,
+  onSearchAll,
   serverWithCredential,
   serverId,
   pins,
@@ -204,37 +275,30 @@ export function CommandPalette({
         deferred,
       ).slice(0, RESULTS_CAP)
     : [];
-  const searchAlbums: AlbumResult[] = deferred
-    ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({
-        kind: "album" as const,
-        id: a.id,
-        server_id: a.server_id,
-        name: a.name,
-        artist: a.artist,
-        artwork_url: a.artwork_url,
-      })) ?? [])
-    : [];
-  const searchTracks: TrackResult[] = deferred
-    ? (results?.tracks.slice(0, RESULTS_CAP).map((t) => ({
-        kind: "track" as const,
-        id: t.id,
-        album_id: t.album_id,
-        title: t.title,
-        artist: t.artist,
-        album_name: t.album_name,
-      })) ?? [])
-    : [];
-  const searchArtists: ArtistResult[] = deferred
-    ? (results?.artists
-        .slice(0, RESULTS_CAP)
-        .map((a) => ({ kind: "artist" as const, id: `artist-${a.name}`, name: a.name, album_count: a.album_count })) ??
-      [])
-    : [];
+  const library = deferred && !isError ? results : undefined;
+  const top = library ? pickTopResult(library, deferred) : null;
+  const topResult = top ? toLibraryResult(top) : null;
+  // One past the cap: the top result may be the head of any of these.
+  const searchArtists = sectionOf(library?.artists.slice(0, RESULTS_CAP + 1).map(toArtistResult) ?? [], topResult);
+  const searchAlbums = sectionOf(library?.albums.slice(0, RESULTS_CAP + 1).map(toAlbumResult) ?? [], topResult);
+  const searchTracks = sectionOf(library?.tracks.slice(0, RESULTS_CAP + 1).map(toTrackResult) ?? [], topResult);
+  // From the rows, not the top result: the previous query's rows, kept on screen while the next
+  // one runs, need not score against the new text.
+  const hasLibraryResults = library
+    ? library.artists.length + library.albums.length + library.tracks.length > 0
+    : false;
 
   const pinned = !deferred && pins && serverWithCredential ? pinsNewestFirst(pins) : [];
   const shelf = shelfEntries(pinned, expandedShelfRows);
   const items: Item[] = deferred
-    ? [...searchCommands, ...searchArtists, ...searchAlbums, ...searchTracks]
+    ? [
+        ...searchCommands,
+        ...(topResult ? [topResult] : []),
+        ...searchArtists,
+        ...searchAlbums,
+        ...searchTracks,
+        ...(hasLibraryResults ? [{ kind: "all" as const, id: "all" as const, query: deferred }] : []),
+      ]
     : [...shelf, ...NAV_COMMANDS];
   const rows: GridRow[] = deferred
     ? items.map(() => null)
@@ -253,12 +317,23 @@ export function CommandPalette({
   const navOffset = shelf.length;
   const focusedItem = items[focusedIdx];
   const focusedHint = focusedItem ? HINTS[hintKey(focusedItem)] : null;
-  const artistOffset = searchCommands.length;
+  const topOffset = searchCommands.length;
+  const artistOffset = topOffset + (topResult ? 1 : 0);
   const albumOffset = artistOffset + searchArtists.length;
   const trackOffset = albumOffset + searchAlbums.length;
+  const seeAllOffset = trackOffset + searchTracks.length;
+  const listboxId = useId();
+  const optionId = (idx: number) => `${listboxId}-option-${idx}`;
+  const tokens = toSearchTokens(deferred);
+  const artistImageMap = useArtistImageMap();
 
   const activate = useCallback(
     (item: Item, intent: ActivateIntent) => {
+      if (item.kind === "all") {
+        onSearchAll(item.query);
+        onClose();
+        return;
+      }
       if (item.kind === "more") {
         setExpandedShelfRows((rows) => [...rows, item.row]);
         // The count tile is gone once its row unfolds; the first pin it was hiding takes the focus.
@@ -299,7 +374,17 @@ export function CommandPalette({
       // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
       // replaced server object would only churn this callback's identity.
     },
-    [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onOpenTrack, onPlayAlbum, onStartArtistRadio, onClose],
+    [
+      onNavigate,
+      onSelectAlbum,
+      onSelectArtist,
+      onPlayTrack,
+      onOpenTrack,
+      onPlayAlbum,
+      onStartArtistRadio,
+      onSearchAll,
+      onClose,
+    ],
   );
 
   useEffect(() => {
@@ -318,8 +403,8 @@ export function CommandPalette({
     setFocusedKey(null);
   }, [deferred]);
 
-  // .cp-results is a 420px scroller and there can be 20 result rows, so arrowing
-  // down past the fold otherwise moves a selection the user can't see.
+  // .cp-results scrolls and can hold more rows than fit, so arrowing down past the fold
+  // otherwise moves a selection the user can't see.
   useEffect(() => {
     focusedRef.current?.scrollIntoView({ block: "nearest" });
   }, [focusedIdx]);
@@ -366,20 +451,15 @@ export function CommandPalette({
 
   if (!open) return null;
 
-  // placeholderData keeps the previous query's rows around on failure, so the
-  // error branch has to win outright rather than render alongside stale results.
-  const showResults = !isError && results;
-  const isEmpty =
-    deferred &&
-    showResults &&
-    searchCommands.length === 0 &&
-    searchAlbums.length === 0 &&
-    searchTracks.length === 0 &&
-    searchArtists.length === 0;
+  const isSearching = Boolean(deferred) && !isError && !results;
+  const isEmpty = Boolean(library) && !hasLibraryResults && searchCommands.length === 0;
 
-  const rowProps = (item: Item, idx: number) => ({
+  const optionProps = (item: Item, idx: number, className: string) => ({
     ref: idx === focusedIdx ? focusedRef : null,
-    className: `cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`,
+    id: optionId(idx),
+    role: "option",
+    "aria-selected": idx === focusedIdx,
+    className: `${className}${idx === focusedIdx ? " cp-item--focused" : ""}`,
     onMouseEnter: () => setFocusedKey(itemKey(item)),
     onMouseDown: (e: React.MouseEvent) => {
       e.preventDefault();
@@ -387,54 +467,73 @@ export function CommandPalette({
     },
   });
 
-  const renderCommandRow = (command: Command, idx: number) => (
-    <button key={itemKey(command)} {...rowProps(command, idx)}>
-      <div className="cp-track-icon">{command.icon}</div>
-      <span className="cp-result-primary">{command.label}</span>
-    </button>
-  );
+  const coverUrl = (artworkUrl: string | null, size: number) =>
+    serverWithCredential && artworkUrl
+      ? getCoverArtUrl(
+          serverWithCredential.server.url,
+          serverWithCredential.server.username,
+          serverWithCredential.credential,
+          artworkUrl,
+          size,
+        )
+      : null;
 
-  const renderArtistRow = (artist: ArtistResult, idx: number) => (
-    <button key={itemKey(artist)} {...rowProps(artist, idx)}>
-      <div className="cp-track-icon">
-        <User size={14} />
-      </div>
-      <span className="cp-result-primary">{artist.name}</span>
-      <span className="cp-result-secondary">
-        {artist.album_count} {plural(artist.album_count, "album")}
-      </span>
-    </button>
-  );
+  const artOf = (result: LibraryResult, size: number) => {
+    if (result.kind === "artist") {
+      return {
+        url: resolveArtistImageUrl(artistImageMap, result.name, resolvePortraitUrl(result)),
+        isRound: true,
+        fallback: <User size={16} />,
+      };
+    }
+    return { url: coverUrl(result.artwork_url, size), isRound: false, fallback: <Music size={16} /> };
+  };
 
-  const renderAlbumRow = (album: AlbumResult, idx: number) => {
-    const artUrl =
-      serverWithCredential && album.artwork_url
-        ? getCoverArtUrl(
-            serverWithCredential.server.url,
-            serverWithCredential.server.username,
-            serverWithCredential.credential,
-            album.artwork_url,
-            48,
-          )
-        : null;
+  const nameOf = (result: LibraryResult) =>
+    result.kind === "album" ? albumDisplayName(result.name) : result.kind === "track" ? result.title : result.name;
+
+  const detailOf = (result: LibraryResult) =>
+    result.kind === "artist"
+      ? `${result.album_count} ${plural(result.album_count, "album")}`
+      : [result.artist, result.kind === "track" ? result.album_name : null].filter(Boolean).join(" · ");
+
+  const renderResultRow = (result: LibraryResult, idx: number, isTop = false) => {
+    const art = artOf(result, isTop ? TOP_ART_SIZE : ROW_ART_SIZE);
+    const artClass = `cp-art${isTop ? " cp-art--large" : ""}${art.isRound ? " cp-art--artist" : ""}`;
+    const detail = isTop ? [KIND_LABEL[result.kind], detailOf(result)].filter(Boolean).join(" · ") : detailOf(result);
     return (
-      <button key={itemKey(album)} {...rowProps(album, idx)}>
-        {artUrl ? <img className="cp-art" src={artUrl} alt="" /> : <div className="cp-art cp-art--placeholder" />}
-        <span className="cp-result-primary">{albumDisplayName(album.name)}</span>
-        {album.artist && <span className="cp-result-secondary">{album.artist}</span>}
+      <button key={itemKey(result)} {...optionProps(result, idx, `cp-result-row${isTop ? " cp-top-row" : ""}`)}>
+        {art.url ? (
+          <img className={artClass} src={art.url} alt="" decoding="async" />
+        ) : (
+          <span className={`${artClass} cp-art--placeholder`}>{art.fallback}</span>
+        )}
+        <span className="cp-result-text">
+          <span className="cp-result-primary">
+            <MatchedText text={nameOf(result)} tokens={tokens} />
+          </span>
+          {detail && <span className="cp-result-detail">{detail}</span>}
+        </span>
       </button>
     );
   };
 
-  const renderTrackRow = (track: TrackResult, idx: number) => (
-    <button key={itemKey(track)} {...rowProps(track, idx)}>
-      <div className="cp-track-icon">
-        <Play size={14} />
-      </div>
-      <span className="cp-result-primary">{track.title}</span>
-      <span className="cp-result-secondary">{[track.artist, track.album_name].filter(Boolean).join(" · ")}</span>
+  const renderCommandRow = (command: Command, idx: number) => (
+    <button key={itemKey(command)} {...optionProps(command, idx, "cp-result-row")}>
+      <span className="cp-row-icon">{command.icon}</span>
+      <span className="cp-result-primary">{command.label}</span>
     </button>
   );
+
+  const resultSection = (label: string, rows: LibraryResult[], offset: number) =>
+    rows.length > 0 && (
+      <div className="cp-section" role="group" aria-label={label}>
+        <p className="cp-section-label">{label}</p>
+        {rows.map((row, i) => renderResultRow(row, offset + i))}
+      </div>
+    );
+
+  const seeAll = items[seeAllOffset];
 
   return (
     <div className="cp-backdrop" {...dismiss}>
@@ -448,19 +547,25 @@ export function CommandPalette({
             onChange={(e) => setRaw(e.target.value)}
             autoComplete="off"
             spellCheck={false}
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listboxId}
+            aria-autocomplete="list"
+            aria-activedescendant={focusedItem ? optionId(focusedIdx) : undefined}
           />
           <kbd className="cp-esc-hint">esc</kbd>
         </div>
 
-        <div className="cp-results">
+        <div className="cp-results" id={listboxId} role="listbox" aria-label="Results" aria-busy={isSearching}>
           {serverWithCredential && shelf.length > 0 && (
-            <div className="cp-section">
+            <div className="cp-section" role="group" aria-label="Pinned">
               <p className="cp-section-label">Pinned</p>
               <PinShelf
                 entries={shelf}
                 serverWithCredential={serverWithCredential}
                 focusedId={isShelfItem(focusedItem) ? focusedItem.id : null}
                 focusedRef={focusedRef}
+                optionIdOf={(entry) => optionId(shelf.indexOf(entry))}
                 onHover={(entry) => setFocusedKey(itemKey(entry))}
                 onActivate={activate}
               />
@@ -468,20 +573,11 @@ export function CommandPalette({
           )}
 
           {!deferred && (
-            <div className="cp-section">
+            <div className="cp-section" role="group" aria-label="Go to">
               <p className="cp-section-label">Go to</p>
               <div className="cp-nav-grid" style={{ "--cp-nav-columns": NAV_GRID_COLUMNS } as React.CSSProperties}>
                 {NAV_COMMANDS.map((cmd, i) => (
-                  <button
-                    key={cmd.id}
-                    ref={navOffset + i === focusedIdx ? focusedRef : null}
-                    className={`cp-nav-item${navOffset + i === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedKey(itemKey(cmd))}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      activate(cmd, intentOf(e));
-                    }}
-                  >
+                  <button key={cmd.id} {...optionProps(cmd, navOffset + i, "cp-nav-item")}>
                     <span className="cp-nav-icon">{cmd.icon}</span>
                     <span className="cp-nav-label">{cmd.label}</span>
                   </button>
@@ -491,7 +587,7 @@ export function CommandPalette({
           )}
 
           {searchCommands.length > 0 && (
-            <div className="cp-section">
+            <div className="cp-section" role="group" aria-label="Commands">
               <p className="cp-section-label">Commands</p>
               {searchCommands.map(renderCommandRow)}
             </div>
@@ -499,28 +595,41 @@ export function CommandPalette({
 
           {deferred && isError && <p className="cp-empty">Search failed. The library database could not be read.</p>}
 
-          {deferred && !isError && !results && <p className="cp-empty">Searching…</p>}
-
-          {deferred && showResults && isEmpty && <p className="cp-empty">No results for "{deferred}"</p>}
-
-          {deferred && showResults && searchArtists.length > 0 && (
-            <div className="cp-section">
-              <p className="cp-section-label">Artists</p>
-              {searchArtists.map((artist, i) => renderArtistRow(artist, artistOffset + i))}
+          {isSearching && (
+            <div className="cp-section" aria-hidden="true">
+              {Array.from({ length: SKELETON_ROWS }, (_, i) => (
+                <div key={i} className="cp-skeleton-row">
+                  <span className="cp-art cp-skeleton-block" />
+                  <span className="cp-result-text">
+                    <span className="cp-skeleton-bar" />
+                    <span className="cp-skeleton-bar cp-skeleton-bar--short" />
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
-          {deferred && showResults && searchAlbums.length > 0 && (
-            <div className="cp-section">
-              <p className="cp-section-label">Albums</p>
-              {searchAlbums.map((album, i) => renderAlbumRow(album, albumOffset + i))}
+          {isEmpty && <p className="cp-empty">No results for "{deferred}"</p>}
+
+          {topResult && (
+            <div className="cp-section" role="group" aria-label="Top result">
+              <p className="cp-section-label">Top result</p>
+              {renderResultRow(topResult, topOffset, true)}
             </div>
           )}
 
-          {deferred && showResults && searchTracks.length > 0 && (
+          {resultSection("Artists", searchArtists, artistOffset)}
+          {resultSection("Albums", searchAlbums, albumOffset)}
+          {resultSection("Tracks", searchTracks, trackOffset)}
+
+          {seeAll?.kind === "all" && (
             <div className="cp-section">
-              <p className="cp-section-label">Tracks</p>
-              {searchTracks.map((track, i) => renderTrackRow(track, trackOffset + i))}
+              <button {...optionProps(seeAll, seeAllOffset, "cp-result-row")}>
+                <span className="cp-row-icon">
+                  <Search size={16} />
+                </span>
+                <span className="cp-see-all-label">See all results for "{seeAll.query}"</span>
+              </button>
             </div>
           )}
         </div>

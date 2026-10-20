@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../features/playback/store/player";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
-import { albumPath, artistPath, playlistPath } from "../lib/routes";
+import { albumPath, artistPath, playlistPath, ROUTES, searchPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 
 export type AppView =
@@ -103,6 +103,12 @@ export function useAppNavigation(dismissOverlays: () => void) {
     goTo(artistPath(name));
   }
 
+  // Replaces inside search, as typing there does, so Back still leaves search in one step.
+  function searchFor(query: string) {
+    navigate(searchPath(query), { replace: pathname === ROUTES.SEARCH });
+    dismiss();
+  }
+
   function openPlaylist(playlist: PlaylistRow) {
     goTo(playlistPath(playlist.id));
   }
@@ -166,6 +172,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
     openAlbumAtTrack,
     openArtist,
     openPlaylist,
+    searchFor,
     goBack,
     leaveSearch,
   };

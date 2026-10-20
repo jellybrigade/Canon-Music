@@ -46,6 +46,7 @@ interface Props {
   serverWithCredential: ServerWithCredential;
   focusedId: string | null;
   focusedRef: React.Ref<HTMLButtonElement>;
+  optionIdOf: (entry: ShelfEntry) => string;
   onHover: (entry: ShelfEntry) => void;
   onActivate: (entry: ShelfEntry, intent: ActivateIntent) => void;
 }
@@ -55,7 +56,15 @@ export type ActivateIntent = "open" | "play";
 
 export const intentOf = (e: { shiftKey: boolean }): ActivateIntent => (e.shiftKey ? "play" : "open");
 
-export function PinShelf({ entries, serverWithCredential, focusedId, focusedRef, onHover, onActivate }: Props) {
+export function PinShelf({
+  entries,
+  serverWithCredential,
+  focusedId,
+  focusedRef,
+  optionIdOf,
+  onHover,
+  onActivate,
+}: Props) {
   const { nameOf, thumbOf } = usePinArt(serverWithCredential, THUMB_SIZE);
 
   const renderTile = (entry: ShelfEntry) => {
@@ -67,6 +76,9 @@ export function PinShelf({ entries, serverWithCredential, focusedId, focusedRef,
       <button
         key={entry.id}
         ref={isFocused ? focusedRef : null}
+        id={optionIdOf(entry)}
+        role="option"
+        aria-selected={isFocused}
         className={`cp-shelf-tile${entry.kind === "more" ? " cp-shelf-more" : ""}${isFocused ? " cp-item--focused" : ""}`}
         title={entry.kind === "pin" ? [name, detail].filter(Boolean).join(" · ") : `Show ${entry.hiddenCount} more`}
         onMouseEnter={() => onHover(entry)}

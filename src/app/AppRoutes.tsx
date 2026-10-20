@@ -117,6 +117,7 @@ export interface AppViewProps {
   openArtist: (artist: ArtistRow | string) => void;
   openPlaylist: (playlist: PlaylistRow) => void;
   openAlbumById: (albumId: string) => void | Promise<void>;
+  searchFor: (query: string) => void;
   goBack: () => void;
   leaveSearch: () => void;
 

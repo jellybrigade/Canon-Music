@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { albumPath, artistPath, playlistPath, ROUTES } from "./routes";
+import { albumPath, artistPath, playlistPath, ROUTES, searchPath } from "./routes";
 
 // React Router decodes a `:param` segment with decodeURIComponent, so the round trip a route
 // actually performs is encodeURIComponent -> decodeURIComponent. Ids and artist names carry
@@ -37,6 +37,12 @@ describe("path builders", () => {
     const url = new URL(albumPath("AC/DC", trackId), "http://canon.test");
     expect(url.pathname).toBe("/album/AC%2FDC");
     expect(url.searchParams.get("track")).toBe(trackId);
+  });
+
+  it.each(AWKWARD)("searchPath carries query %s through the query string", (query) => {
+    const url = new URL(searchPath(query), "http://canon.test");
+    expect(url.pathname).toBe(ROUTES.SEARCH);
+    expect(url.searchParams.get("q")).toBe(query);
   });
 
   it("encodes a slash so it cannot become an extra path segment", () => {
