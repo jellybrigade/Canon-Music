@@ -1,13 +1,14 @@
 import { Music, User } from "lucide-react";
 import type React from "react";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { CarouselTrack } from "../../../pages/home/CarouselTrack";
 import type { PinnedItem } from "../pins";
 import { usePinArt } from "../usePinArt";
 import "./PinShelf.css";
 
 const THUMB_SIZE = 128;
-// Ctrl+K is a launcher: one row of tiles per kind, and past that the rest wait behind a count tile.
-const SHELF_LIMIT = 6;
+// Ctrl+K is a launcher: one scrolling row of tiles per kind, and past that the rest wait behind a count tile.
+const SHELF_LIMIT = 24;
 
 export type ShelfRow = PinnedItem["kind"];
 
@@ -91,8 +92,9 @@ export function PinShelf({ entries, serverWithCredential, focusedId, focusedRef,
       {ROW_ORDER.map((row) => {
         const rowTiles = entries.filter((entry) => entry.row === row);
         return rowTiles.length > 0 ? (
-          <div key={row} className="cp-shelf">
-            {rowTiles.map(renderTile)}
+          // Cancelling mousedown keeps the search field focused when an arrow scrolls the row.
+          <div key={row} className="cp-shelf" onMouseDown={(e) => e.preventDefault()}>
+            <CarouselTrack>{rowTiles.map(renderTile)}</CarouselTrack>
           </div>
         ) : null;
       })}

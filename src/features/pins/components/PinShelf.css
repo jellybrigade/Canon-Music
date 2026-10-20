@@ -1,12 +1,28 @@
 .cp-shelf {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
   padding: 0 var(--space-sm) var(--space-xs);
+}
+
+.cp-shelf .album-carousel__track {
+  gap: var(--space-xs);
+  padding-bottom: 0;
+}
+
+/* Centered on the tile art; inset so the palette's own scroller doesn't clip them. */
+.cp-shelf .album-carousel__arrow {
+  top: calc(var(--space-xs) + (56px - 32px) / 2);
+}
+
+.cp-shelf .album-carousel__arrow--prev {
+  left: 0;
+}
+
+.cp-shelf .album-carousel__arrow--next {
+  right: 0;
 }
 
 .cp-shelf-tile {
   width: 80px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   align-items: center;

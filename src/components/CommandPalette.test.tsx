@@ -164,7 +164,14 @@ async function settleDebounce() {
   });
 }
 
+// jsdom lays nothing out, so the shelf rows' carousels have nothing to observe.
+class StubResizeObserver {
+  observe() {}
+  disconnect() {}
+}
+
 beforeAll(() => {
+  vi.stubGlobal("ResizeObserver", StubResizeObserver);
   // The palette scrolls the focused row into view on every focusedIdx change, and jsdom
   // does not implement scrollIntoView at all - without this the component throws on mount.
   Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
@@ -227,11 +234,12 @@ describe("CommandPalette pinned shelf", () => {
     pinned_at: pinnedAt,
   });
   const PINS: Pins = { artists: [RADIOHEAD], albums: [pinnedAlbum("al-1", "Kid A", 3)] };
-  // Seven albums, newest first by name: one more than a shelf row holds.
+  // Twenty-six albums, newest first by name: two more than a shelf row holds.
   const MANY: Pins = {
     artists: [],
-    albums: ["A1", "A2", "A3", "A4", "A5", "A6", "A7"].map((name, i) => pinnedAlbum(`al-${name}`, name, 100 - i)),
+    albums: Array.from({ length: 26 }, (_, i) => pinnedAlbum(`al-A${i + 1}`, `A${i + 1}`, 100 - i)),
   };
+  const albumNames = (count: number) => MANY.albums.slice(0, count).map((album) => album.name);
 
   const shelfNames = () => Array.from(document.querySelectorAll(".cp-shelf-name"), (n) => n.textContent);
   const press = (key: string) => fireEvent.keyDown(window, { key });
@@ -320,30 +328,37 @@ describe("CommandPalette pinned shelf", () => {
     expect(onSelectArtist.mock.calls).toEqual([["Radiohead", 9]]);
   });
 
-  it("holds six tiles a row, folding the rest of that row behind a count", () => {
-    renderPalette({ pins: { artists: [], albums: MANY.albums.slice(0, 6) } });
-    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "A6"]);
+  it("holds twenty-four tiles a row, folding the rest of that row behind a count", () => {
+    renderPalette({ pins: { artists: [], albums: MANY.albums.slice(0, 24) } });
+    expect(shelfNames()).toEqual(albumNames(24));
     expect(document.querySelector(".cp-shelf-more")).toBeNull();
 
     cleanup();
     renderPalette({ pins: MANY });
-    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "More"]);
-    expect(document.querySelector(".cp-shelf-more .cp-shelf-art")?.textContent).toBe("+2");
+    expect(shelfNames()).toEqual([...albumNames(23), "More"]);
+    expect(document.querySelector(".cp-shelf-more .cp-shelf-art")?.textContent).toBe("+3");
 
     cleanup();
     renderPalette({ pins: { artists: [RADIOHEAD], albums: MANY.albums } });
-    expect(rowNames()).toEqual([["Radiohead"], ["A1", "A2", "A3", "A4", "A5", "More"]]);
+    expect(rowNames()).toEqual([["Radiohead"], [...albumNames(23), "More"]]);
   });
 
   it("unfolds the rest in place from the count tile, keeping the palette open", () => {
     renderPalette({ pins: MANY });
-    for (let i = 0; i < 5; i++) press("ArrowRight");
+    for (let i = 0; i < 23; i++) press("ArrowRight");
     expect(focusedLabel()).toBe("More");
     press("Enter");
-    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "A6", "A7"]);
-    expect(focusedLabel()).toBe("A6");
+    expect(shelfNames()).toEqual(albumNames(26));
+    expect(focusedLabel()).toBe("A24");
     expect(onClose).not.toHaveBeenCalled();
     expect(onSelectAlbum).not.toHaveBeenCalled();
+  });
+
+  it("scrolls a row with its arrows without taking focus from the search field", () => {
+    renderPalette({ pins: MANY });
+    const next = document.querySelector(".cp-shelf .album-carousel__arrow--next");
+    if (!next) throw new Error("no carousel arrow");
+    expect(fireEvent.mouseDown(next)).toBe(false);
   });
 
   it("hides the shelf once a query is typed", async () => {
