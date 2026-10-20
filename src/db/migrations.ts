@@ -811,6 +811,28 @@ export const migrations: Migration[] = [
     version: 55,
     sql: `DROP TABLE IF EXISTS pinned_tracks;`,
   },
+  {
+    // What Ctrl+K opened last, per server. Artists by name, as pins: their ids are regenerated per rebuild.
+    version: 56,
+    sql: `
+      CREATE TABLE IF NOT EXISTS recent_albums (
+        album_id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        opened_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS recent_artists (
+        server_id TEXT NOT NULL,
+        artist_name TEXT NOT NULL,
+        opened_at INTEGER NOT NULL,
+        PRIMARY KEY (server_id, artist_name)
+      );
+      CREATE TABLE IF NOT EXISTS recent_tracks (
+        track_id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        opened_at INTEGER NOT NULL
+      );
+    `,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

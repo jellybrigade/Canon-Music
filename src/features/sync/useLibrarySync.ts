@@ -163,8 +163,11 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
           useAlbumBrowseSessionStore.getState().bumpRefresh();
           invalidateGenreTreeCache();
         }
-        // A prune drops pins along with their albums, tracks or last album of an artist.
-        if (libraryChanged || changed.artists) void queryClient.invalidateQueries({ queryKey: QK.pinsAll() });
+        // A prune drops pins and recents along with their albums, tracks or last album of an artist.
+        if (libraryChanged || changed.artists) {
+          void queryClient.invalidateQueries({ queryKey: QK.pinsAll() });
+          void queryClient.invalidateQueries({ queryKey: QK.recentsAll() });
+        }
         scheduleFanout(() => {
           if (changed.artists) useArtistBrowseSessionStore.getState().bumpRefresh();
           if (libraryChanged) {

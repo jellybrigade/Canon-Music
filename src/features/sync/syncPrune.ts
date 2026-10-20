@@ -32,6 +32,7 @@ export async function pruneAlbums(db: Database, albumIds: readonly string[]): Pr
     (ph: string) => `DELETE FROM tracks WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM loved_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM pinned_albums WHERE album_id IN (${ph})`,
+    (ph: string) => `DELETE FROM recent_albums WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_unresolved_genres WHERE album_id IN (${ph})`,
     (ph: string) => `DELETE FROM album_covers WHERE album_id IN (${ph})`,
@@ -66,6 +67,8 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
     "DELETE FROM artists WHERE server_id = ?",
     "DELETE FROM pinned_albums WHERE server_id = ?",
     "DELETE FROM pinned_artists WHERE server_id = ?",
+    "DELETE FROM recent_albums WHERE server_id = ?",
+    "DELETE FROM recent_artists WHERE server_id = ?",
   ];
   for (const sql of statements) {
     await db.execute(sql, [serverId]);

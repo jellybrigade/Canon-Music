@@ -351,10 +351,12 @@ export async function syncLibrary(
        GROUP BY artist`,
       [server.id, server.type, server.id],
     );
-    await db.execute(
-      "DELETE FROM pinned_artists WHERE server_id = ? AND artist_name NOT IN (SELECT name FROM artists WHERE server_id = ?)",
-      [server.id, server.id],
-    );
+    for (const table of ["pinned_artists", "recent_artists"]) {
+      await db.execute(
+        `DELETE FROM ${table} WHERE server_id = ? AND artist_name NOT IN (SELECT name FROM artists WHERE server_id = ?)`,
+        [server.id, server.id],
+      );
+    }
   }
 
   // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row

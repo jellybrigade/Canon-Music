@@ -601,20 +601,20 @@ describe("useLibrarySync auto-sync interval", () => {
     expect(fanoutTicks()).toEqual({ genres: before.genres + 1, playlists: before.playlists + 1 });
   });
 
-  it("refreshes the Home pins once for a run that changed the library or its artists", async () => {
+  it("refreshes the pins and Ctrl+K recents once for a run that changed the library or its artists", async () => {
     queryClient = new QueryClient();
     const invalidate = vi.spyOn(queryClient, "invalidateQueries");
-    const pinRefreshes = () =>
-      invalidate.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === QK.pinsAll()[0]).length;
+    const refreshesOf = (key: string) =>
+      invalidate.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === key).length;
     const { result } = renderSync(SRV_A);
     await tick();
 
     await settle(0, { changed: { loved: true, playlists: true } });
-    expect(pinRefreshes()).toBe(0);
+    expect([refreshesOf(QK.pinsAll()[0]), refreshesOf(QK.recentsAll()[0])]).toEqual([0, 0]);
 
     act(() => void result.current.runSync(SRV_A));
     await settle(1, { changed: { artists: true } });
-    expect(pinRefreshes()).toBe(1);
+    expect([refreshesOf(QK.pinsAll()[0]), refreshesOf(QK.recentsAll()[0])]).toEqual([1, 1]);
   });
 
   it("drops the settle fan-out for a sync that outlives its hook", async () => {

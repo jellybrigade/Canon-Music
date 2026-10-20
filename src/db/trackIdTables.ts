@@ -23,6 +23,7 @@ export const TRACK_ID_TABLES: readonly TrackIdTable[] = [
   { table: "tag_issues", column: "track_id", pruned: true, purged: true, remapped: true, inert: false },
   { table: "lyrics", column: "track_id", pruned: true, purged: true, remapped: true, inert: false },
   { table: "waveform_cache", column: "track_id", pruned: true, purged: true, remapped: true, inert: false },
+  { table: "recent_tracks", column: "track_id", pruned: true, purged: true, remapped: true, inert: false },
   { table: "scrobble_queue", column: "track_id", pruned: false, purged: true, remapped: true, inert: false },
   { table: "scrobble_history", column: "track_id", pruned: false, purged: true, remapped: true, inert: false },
   { table: "playlist_resume", column: "last_track_id", pruned: false, purged: true, remapped: true, inert: false },

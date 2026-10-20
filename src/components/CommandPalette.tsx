@@ -12,8 +12,9 @@ import {
   shelfEntries,
 } from "../features/pins/components/PinShelf";
 import { type Pins, pinsNewestFirst } from "../features/pins/pins";
+import type { RecentItem, RecentTarget, RecentTrack } from "../features/recents/recents";
 import { pickTopResult, type TopResult, toSearchTokens } from "../features/search/searchScore";
-import { type SearchAlbum, type SearchArtist, type SearchTrack, useSearch } from "../features/search/useSearch";
+import { type SearchAlbum, type SearchArtist, useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import { resolveArtistImageUrl, useArtistImageMap } from "../hooks/useArtistImageCache";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -59,6 +60,7 @@ interface AlbumResult {
 interface TrackResult {
   kind: "track";
   id: string;
+  server_id: string;
   album_id: string;
   title: string;
   artist: string | null;
@@ -125,9 +127,10 @@ const toAlbumResult = (album: SearchAlbum): AlbumResult => ({
   artwork_url: album.artwork_url,
 });
 
-const toTrackResult = (track: SearchTrack): TrackResult => ({
+const toTrackResult = (track: RecentTrack): TrackResult => ({
   kind: "track",
   id: track.id,
+  server_id: track.server_id,
   album_id: track.album_id,
   title: track.title,
   artist: track.artist,
@@ -143,7 +146,7 @@ const toArtistResult = (artist: SearchArtist): ArtistResult => ({
 
 const KIND_LABEL: Record<LibraryResult["kind"], string> = { artist: "Artist", album: "Album", track: "Track" };
 
-function toLibraryResult(top: TopResult): LibraryResult {
+function toLibraryResult(top: TopResult | RecentItem): LibraryResult {
   if (top.kind === "artist") return toArtistResult(top.artist);
   if (top.kind === "album") return toAlbumResult(top.album);
   return toTrackResult(top.track);
@@ -229,9 +232,11 @@ interface Props {
   onPlayAlbum: (album: AlbumRow) => void;
   onStartArtistRadio: (name: string) => void;
   onSearchAll: (query: string) => void;
+  onOpened: (target: RecentTarget) => void;
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
   pins?: Pins;
+  recents?: RecentItem[];
   actions?: PaletteAction[];
 }
 
@@ -246,9 +251,11 @@ export function CommandPalette({
   onPlayAlbum,
   onStartArtistRadio,
   onSearchAll,
+  onOpened,
   serverWithCredential,
   serverId,
   pins,
+  recents,
   actions,
 }: Props) {
   const albumDisplayName = useAlbumDisplayName();
@@ -267,7 +274,8 @@ export function CommandPalette({
     return () => clearTimeout(t);
   }, [trimmedRaw]);
 
-  const { data: results, isError } = useSearch(deferred, serverId ?? serverWithCredential?.server.id);
+  const libraryServerId = serverId ?? serverWithCredential?.server.id;
+  const { data: results, isError } = useSearch(deferred, libraryServerId);
 
   const searchCommands: Command[] = deferred
     ? rankCommands<Command>(
@@ -290,6 +298,7 @@ export function CommandPalette({
 
   const pinned = !deferred && pins && serverWithCredential ? pinsNewestFirst(pins) : [];
   const shelf = shelfEntries(pinned, expandedShelfRows);
+  const recentRows = !deferred && recents ? recents.map(toLibraryResult) : [];
   const items: Item[] = deferred
     ? [
         ...searchCommands,
@@ -299,11 +308,12 @@ export function CommandPalette({
         ...searchTracks,
         ...(hasLibraryResults ? [{ kind: "all" as const, id: "all" as const, query: deferred }] : []),
       ]
-    : [...shelf, ...NAV_COMMANDS];
+    : [...shelf, ...recentRows, ...NAV_COMMANDS];
   const rows: GridRow[] = deferred
     ? items.map(() => null)
     : [
         ...shelf.map((entry) => `shelf:${entry.row}`),
+        ...recentRows.map(() => null),
         ...NAV_COMMANDS.map((_, i) => `nav:${Math.floor(i / NAV_GRID_COLUMNS)}`),
       ];
 
@@ -314,7 +324,8 @@ export function CommandPalette({
     items.findIndex((item) => itemKey(item) === focusedKey),
   );
 
-  const navOffset = shelf.length;
+  const recentOffset = shelf.length;
+  const navOffset = recentOffset + recentRows.length;
   const focusedItem = items[focusedIdx];
   const focusedHint = focusedItem ? HINTS[hintKey(focusedItem)] : null;
   const topOffset = searchCommands.length;
@@ -341,9 +352,16 @@ export function CommandPalette({
         return;
       }
       const isPlay = intent === "play";
-      const album = (row: AlbumRow) => (isPlay ? onPlayAlbum(row) : onSelectAlbum(row));
-      const artist = (name: string, albumCount: number) =>
-        isPlay ? onStartArtistRadio(name) : onSelectArtist(name, albumCount);
+      const album = (row: AlbumRow) => {
+        onOpened({ kind: "album", serverId: row.server_id, albumId: row.id });
+        if (isPlay) onPlayAlbum(row);
+        else onSelectAlbum(row);
+      };
+      const artist = (name: string, albumCount: number) => {
+        if (libraryServerId) onOpened({ kind: "artist", serverId: libraryServerId, artistName: name });
+        if (isPlay) onStartArtistRadio(name);
+        else onSelectArtist(name, albumCount);
+      };
       if (item.kind === "pin") {
         const { pin } = item;
         if (pin.kind === "album") album(pin.album);
@@ -365,6 +383,7 @@ export function CommandPalette({
           artwork_url: item.artwork_url,
         });
       } else if (item.kind === "track") {
+        onOpened({ kind: "track", serverId: item.server_id, trackId: item.id });
         if (isPlay) onPlayTrack(item.id);
         else onOpenTrack(item.id, item.album_id);
       } else if (item.kind === "artist") {
@@ -383,6 +402,8 @@ export function CommandPalette({
       onPlayAlbum,
       onStartArtistRadio,
       onSearchAll,
+      onOpened,
+      libraryServerId,
       onClose,
     ],
   );
@@ -497,10 +518,13 @@ export function CommandPalette({
       ? `${result.album_count} ${plural(result.album_count, "album")}`
       : [result.artist, result.kind === "track" ? result.album_name : null].filter(Boolean).join(" · ");
 
-  const renderResultRow = (result: LibraryResult, idx: number, isTop = false) => {
+  // Rows outside a kind's own section (the top result, recents) say which kind they are.
+  const renderResultRow = (result: LibraryResult, idx: number, variant: "row" | "top" | "mixed" = "row") => {
+    const isTop = variant === "top";
     const art = artOf(result, isTop ? TOP_ART_SIZE : ROW_ART_SIZE);
     const artClass = `cp-art${isTop ? " cp-art--large" : ""}${art.isRound ? " cp-art--artist" : ""}`;
-    const detail = isTop ? [KIND_LABEL[result.kind], detailOf(result)].filter(Boolean).join(" · ") : detailOf(result);
+    const detail =
+      variant === "row" ? detailOf(result) : [KIND_LABEL[result.kind], detailOf(result)].filter(Boolean).join(" · ");
     return (
       <button key={itemKey(result)} {...optionProps(result, idx, `cp-result-row${isTop ? " cp-top-row" : ""}`)}>
         {art.url ? (
@@ -572,6 +596,13 @@ export function CommandPalette({
             </div>
           )}
 
+          {recentRows.length > 0 && (
+            <div className="cp-section" role="group" aria-label="Recent">
+              <p className="cp-section-label">Recent</p>
+              {recentRows.map((row, i) => renderResultRow(row, recentOffset + i, "mixed"))}
+            </div>
+          )}
+
           {!deferred && (
             <div className="cp-section" role="group" aria-label="Go to">
               <p className="cp-section-label">Go to</p>
@@ -614,7 +645,7 @@ export function CommandPalette({
           {topResult && (
             <div className="cp-section" role="group" aria-label="Top result">
               <p className="cp-section-label">Top result</p>
-              {renderResultRow(topResult, topOffset, true)}
+              {renderResultRow(topResult, topOffset, "top")}
             </div>
           )}
 

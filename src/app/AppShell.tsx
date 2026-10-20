@@ -8,6 +8,7 @@ import { usePins } from "../features/pins/usePins";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
+import { useRecents, useRecordRecent } from "../features/recents/useRecents";
 import { usePaletteActions } from "../hooks/usePaletteActions";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
 import type { ArtistRow } from "../types/library";
@@ -79,6 +80,8 @@ export function AppShell(props: AppViewProps) {
   } = props;
 
   const { data: pins } = usePins(server?.id);
+  const { data: recents } = useRecents(server?.id);
+  const recordRecent = useRecordRecent();
 
   function renderContent() {
     return <AppRoutes {...props} />;
@@ -169,6 +172,9 @@ export function AppShell(props: AppViewProps) {
         onSelectArtist={(name, albumCount) => openArtist(artistRowOf(name, albumCount))}
         onOpenTrack={openAlbumAtTrack}
         onSearchAll={searchFor}
+        onOpened={(target) => {
+          void recordRecent(target).catch((err: unknown) => console.error("Ctrl+K recents:", err));
+        }}
         onStartArtistRadio={(name) => {
           void handleStartRadioFromArtist(artistRowOf(name), "curated");
         }}
@@ -178,6 +184,7 @@ export function AppShell(props: AppViewProps) {
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
         pins={pins}
+        recents={recents}
         runSync={runSync}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}

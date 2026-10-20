@@ -21,6 +21,7 @@ import type React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
 import type { Pins } from "../features/pins/pins";
+import type { RecentItem } from "../features/recents/recents";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
@@ -95,6 +96,7 @@ const onOpenTrack = vi.fn();
 const onPlayAlbum = vi.fn();
 const onStartArtistRadio = vi.fn();
 const onSearchAll = vi.fn();
+const onOpened = vi.fn();
 
 function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -109,6 +111,7 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
     onPlayAlbum,
     onStartArtistRadio,
     onSearchAll,
+    onOpened,
     serverWithCredential: SRV,
     ...props,
   } as React.ComponentProps<typeof CommandPalette>;
@@ -205,6 +208,7 @@ beforeEach(async () => {
   onPlayAlbum.mockClear();
   onStartArtistRadio.mockClear();
   onSearchAll.mockClear();
+  onOpened.mockClear();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
 });
@@ -1081,5 +1085,108 @@ describe("CommandPalette accessibility", () => {
     const tile = document.querySelector(".cp-shelf-tile");
     expect(tile?.getAttribute("role")).toBe("option");
     expect(input().getAttribute("aria-activedescendant")).toBe(tile?.id);
+  });
+});
+
+describe("CommandPalette recents", () => {
+  const RECENTS: RecentItem[] = [
+    {
+      kind: "track",
+      key: "track:t1",
+      openedAt: 3,
+      track: {
+        id: "t1",
+        server_id: "srv-a",
+        title: "Jesus, Etc.",
+        artist: "Wilco",
+        album_id: "a1",
+        album_name: "Yankee Hotel",
+        artwork_url: null,
+      },
+    },
+    {
+      kind: "album",
+      key: "album:a2",
+      openedAt: 2,
+      album: { id: "a2", server_id: "srv-b", name: "Kid A", artist: "Radiohead", artwork_url: null },
+    },
+    {
+      kind: "artist",
+      key: "artist:Wilco",
+      openedAt: 1,
+      artist: {
+        name: "Wilco",
+        album_count: 3,
+        lastfm_image_url: null,
+        wikidata_image_url: null,
+        navidrome_image_url: null,
+      },
+    },
+  ];
+
+  it("lists what was opened last between the pins and Go to, with what kind each is", () => {
+    renderPalette({ recents: RECENTS });
+    expect(sectionLabels()).toEqual(["Recent", "Go to"]);
+    expect(resultPrimaries()).toEqual(["Jesus, Etc.", "Kid A", "Wilco"]);
+    expect(Array.from(document.querySelectorAll(".cp-result-detail"), (n) => n.textContent)).toEqual([
+      "Track · Wilco · Yankee Hotel",
+      "Album · Radiohead",
+      "Artist · 3 albums",
+    ]);
+    expect(focusedLabel()).toBe("Jesus, Etc.");
+  });
+
+  it("walks down the recents into the Go to grid and back up", () => {
+    const press = (key: string) => fireEvent.keyDown(window, { key });
+    renderPalette({ recents: RECENTS });
+    press("ArrowDown");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Wilco");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Home");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Wilco");
+  });
+
+  it("opens and plays a recent like a search row, with the row's own server", () => {
+    renderPalette({ recents: RECENTS });
+    fireEvent.keyDown(window, { key: "Enter", shiftKey: true });
+    expect(onPlayTrack.mock.calls).toEqual([["t1"]]);
+  });
+
+  it("keeps recents out of a search", async () => {
+    seedFindableAlbum({ id: "z1", name: "Zebra One" });
+    renderPalette({ recents: RECENTS });
+    typeRaw("zebra");
+    await settleDebounce();
+    expect(sectionLabels()).not.toContain("Recent");
+  });
+
+  it("records every album, artist and track it opens or plays, and no command", async () => {
+    seedAlbum({ id: "a1", name: "Yankee Hotel", artist: "Wilco" });
+    seedTrack({ id: "t1", title: "Wilco Song", artist: "Wilco", albumId: "a1" });
+    renderPalette({ serverId: "srv-a", recents: RECENTS });
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onOpened.mock.calls).toEqual([[{ kind: "album", serverId: "srv-b", albumId: "a2" }]]);
+
+    onOpened.mockClear();
+    typeRaw("wilco");
+    await settleDebounce();
+    fireEvent.keyDown(window, { key: "Enter", shiftKey: true });
+    expect(onOpened.mock.calls).toEqual([[{ kind: "artist", serverId: "srv-a", artistName: "Wilco" }]]);
+
+    onOpened.mockClear();
+    setQuery("wilco song");
+    await settleDebounce();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onOpened.mock.calls).toEqual([[{ kind: "track", serverId: "srv-a", trackId: "t1" }]]);
+
+    onOpened.mockClear();
+    setQuery("settings");
+    await settleDebounce();
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onNavigate).toHaveBeenCalledWith("settings");
+    expect(onOpened).not.toHaveBeenCalled();
   });
 });
