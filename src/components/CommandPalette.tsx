@@ -7,6 +7,7 @@ import { type Pins, pinsNewestFirst } from "../features/pins/pins";
 import { useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { rankCommands } from "../lib/commandMatch";
 import { plural } from "../lib/plural";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
@@ -21,6 +22,19 @@ interface NavCommand {
   icon: React.ReactNode;
   view: View;
 }
+
+export interface PaletteAction {
+  id: string;
+  label: string;
+  icon: React.ReactNode;
+  run: () => void;
+}
+
+interface ActionCommand extends PaletteAction {
+  kind: "action";
+}
+
+type Command = NavCommand | ActionCommand;
 
 interface AlbumResult {
   kind: "album";
@@ -46,7 +60,7 @@ interface ArtistResult {
   album_count: number;
 }
 
-type Item = ShelfEntry | NavCommand | AlbumResult | TrackResult | ArtistResult;
+type Item = ShelfEntry | Command | AlbumResult | TrackResult | ArtistResult;
 
 // Ids are unique inside a kind but not across them, and an album and a track can carry the
 // same native id on some servers.
@@ -119,6 +133,7 @@ interface Props {
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
   pins?: Pins;
+  actions?: PaletteAction[];
 }
 
 export function CommandPalette({
@@ -131,6 +146,7 @@ export function CommandPalette({
   serverWithCredential,
   serverId,
   pins,
+  actions,
 }: Props) {
   const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
@@ -150,6 +166,12 @@ export function CommandPalette({
 
   const { data: results, isError } = useSearch(deferred, serverId ?? serverWithCredential?.server.id);
 
+  const searchCommands: Command[] = deferred
+    ? rankCommands<Command>(
+        [...NAV_COMMANDS, ...(actions ?? []).map((action) => ({ ...action, kind: "action" as const }))],
+        deferred,
+      ).slice(0, RESULTS_CAP)
+    : [];
   const searchAlbums: AlbumResult[] = deferred
     ? (results?.albums.slice(0, RESULTS_CAP).map((a) => ({
         kind: "album" as const,
@@ -178,7 +200,9 @@ export function CommandPalette({
 
   const pinned = !deferred && pins && serverWithCredential ? pinsNewestFirst(pins) : [];
   const shelf = shelfEntries(pinned, expandedShelfRows);
-  const items: Item[] = deferred ? [...searchArtists, ...searchAlbums, ...searchTracks] : [...shelf, ...NAV_COMMANDS];
+  const items: Item[] = deferred
+    ? [...searchCommands, ...searchArtists, ...searchAlbums, ...searchTracks]
+    : [...shelf, ...NAV_COMMANDS];
 
   // Nothing focused, or a row that has since gone: the first row, which is what a freshly
   // arrived result set should offer Enter.
@@ -189,9 +213,9 @@ export function CommandPalette({
 
   const navOffset = shelf.length;
   const focusedItem = items[focusedIdx];
-  const artistOffset = 0;
-  const albumOffset = searchArtists.length;
-  const trackOffset = searchArtists.length + searchAlbums.length;
+  const artistOffset = searchCommands.length;
+  const albumOffset = artistOffset + searchArtists.length;
+  const trackOffset = albumOffset + searchAlbums.length;
 
   const activate = useCallback(
     (item: Item) => {
@@ -207,6 +231,8 @@ export function CommandPalette({
         else onSelectArtist(pin.artist.name, pin.artist.album_count);
       } else if (item.kind === "nav") {
         onNavigate(item.view);
+      } else if (item.kind === "action") {
+        item.run();
       } else if (item.kind === "album") {
         onSelectAlbum({
           id: item.id,
@@ -247,7 +273,7 @@ export function CommandPalette({
     setFocusedKey(null);
   }, [deferred]);
 
-  // .cp-results is a 420px scroller and there can be 15 result rows, so arrowing
+  // .cp-results is a 420px scroller and there can be 20 result rows, so arrowing
   // down past the fold otherwise moves a selection the user can't see.
   useEffect(() => {
     focusedRef.current?.scrollIntoView({ block: "nearest" });
@@ -299,7 +325,12 @@ export function CommandPalette({
   // error branch has to win outright rather than render alongside stale results.
   const showResults = !isError && results;
   const isEmpty =
-    deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
+    deferred &&
+    showResults &&
+    searchCommands.length === 0 &&
+    searchAlbums.length === 0 &&
+    searchTracks.length === 0 &&
+    searchArtists.length === 0;
 
   const rowProps = (item: Item, idx: number) => ({
     ref: idx === focusedIdx ? focusedRef : null,
@@ -310,6 +341,13 @@ export function CommandPalette({
       activate(item);
     },
   });
+
+  const renderCommandRow = (command: Command, idx: number) => (
+    <button key={itemKey(command)} {...rowProps(command, idx)}>
+      <div className="cp-track-icon">{command.icon}</div>
+      <span className="cp-result-primary">{command.label}</span>
+    </button>
+  );
 
   const renderArtistRow = (artist: ArtistResult, idx: number) => (
     <button key={itemKey(artist)} {...rowProps(artist, idx)}>
@@ -404,6 +442,13 @@ export function CommandPalette({
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {searchCommands.length > 0 && (
+            <div className="cp-section">
+              <p className="cp-section-label">Commands</p>
+              {searchCommands.map(renderCommandRow)}
             </div>
           )}
 

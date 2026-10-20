@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
-import { type CSSProperties, lazy, Suspense } from "react";
+import { type ComponentProps, type CSSProperties, lazy, Suspense } from "react";
 import { FeedbackModal } from "../components/FeedbackModal";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { UpdatePrompt } from "../components/UpdatePrompt";
@@ -8,9 +8,19 @@ import { usePins } from "../features/pins/usePins";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
+import { usePaletteActions } from "../hooks/usePaletteActions";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
+
+// Its own component so the player state the actions read re-renders only the palette, not every view.
+function CommandPaletteWithActions({
+  runSync,
+  ...paletteProps
+}: Omit<ComponentProps<typeof CommandPalette>, "actions"> & { runSync: AppViewProps["runSync"] }) {
+  const actions = usePaletteActions(paletteProps.serverWithCredential, runSync);
+  return <CommandPalette {...paletteProps} actions={actions} />;
+}
 
 export function AppShell(props: AppViewProps) {
   const {
@@ -41,6 +51,7 @@ export function AppShell(props: AppViewProps) {
     remoteNotice,
     setRemoteNotice,
     setLastSeenNoticeId,
+    runSync,
   } = props;
 
   const { data: pins } = usePins(server?.id);
@@ -126,7 +137,7 @@ export function AppShell(props: AppViewProps) {
           serverWithCred={serverWithCred ?? undefined}
         />
       )}
-      <CommandPalette
+      <CommandPaletteWithActions
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={navigateTo}
@@ -151,6 +162,7 @@ export function AppShell(props: AppViewProps) {
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
         pins={pins}
+        runSync={runSync}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
       {remoteNotice && (

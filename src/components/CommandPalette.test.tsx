@@ -215,6 +215,62 @@ describe("CommandPalette empty-query state", () => {
   });
 });
 
+describe("CommandPalette commands in search", () => {
+  const shuffle = vi.fn();
+  const resync = vi.fn();
+  const actions = [
+    { id: "shuffle-library", label: "Shuffle library", icon: null, run: shuffle },
+    { id: "resync-library", label: "Resync library", icon: null, run: resync },
+  ];
+
+  beforeEach(() => {
+    shuffle.mockClear();
+    resync.mockClear();
+  });
+
+  it("offers the matching Go to entry first, focused for Enter", async () => {
+    seedFindableAlbum({ id: "a1", name: "Settlers" });
+    renderPalette({ actions });
+    typeRaw("sett");
+    await settleDebounce();
+    expect(resultPrimaries()).toEqual(["Settings", "Settlers"]);
+    expect(focusedLabel()).toBe("Settings");
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(onNavigate).toHaveBeenCalledWith("settings");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a matching action once and closes", async () => {
+    renderPalette({ actions });
+    typeRaw("library");
+    await settleDebounce();
+    expect(resultPrimaries()).toEqual(["Library", "Shuffle library", "Resync library"]);
+    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(shuffle).toHaveBeenCalledTimes(1);
+    expect(resync).not.toHaveBeenCalled();
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps actions out of the empty palette", () => {
+    renderPalette({ actions });
+    expect(resultPrimaries()).toEqual([]);
+    expect(navLabels()).toEqual(["Home", "Library", "Artists", "Playlists", "Queue", "Settings"]);
+  });
+
+  it("still offers commands when the library search fails", async () => {
+    renderPalette({ actions });
+    db.select = () => Promise.reject(new Error("db locked"));
+    typeRaw("resync");
+    await settleDebounce();
+    expect(resultPrimaries()).toEqual(["Resync library"]);
+    expect(document.querySelector(".cp-empty")?.textContent).toBe(
+      "Search failed. The library database could not be read.",
+    );
+  });
+});
+
 describe("CommandPalette pinned shelf", () => {
   const RADIOHEAD: Pins["artists"][number] = {
     name: "Radiohead",

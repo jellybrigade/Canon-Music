@@ -11,9 +11,9 @@ import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import type { Server as ServerRow } from "../../../types/server";
 import { loginFailureMessage } from "../../setup/loginFailureMessage";
+import { resyncLibrary } from "../../sync/resyncLibrary";
 import type { SyncOptions } from "../../sync/sync";
 import { purgeServerData } from "../../sync/syncPrune";
-import { clearSyncWatermark } from "../../sync/syncWatermark";
 
 type TestState = "idle" | "testing" | "ok" | "error";
 type AuthMethod = "password" | "apikey";
@@ -195,12 +195,8 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     if (!serverWithCredential) return;
     setResyncError("");
     try {
-      const db = await getDb();
-      // The flag is what actually forces the pass; clearing the watermark is what makes the
-      // next sync do it too, so a resync interrupted half way is not silently skipped.
-      await clearSyncWatermark(db, serverWithCredential.server.id);
+      await resyncLibrary(serverWithCredential, runSync);
       setResyncConfirm(false);
-      runSync(serverWithCredential, { forceTrackPass: true });
     } catch (err) {
       setResyncError(errorMessage(err));
     }
