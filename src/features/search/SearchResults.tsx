@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Music, User } from "lucide-react";
-import { type ReactNode, type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
@@ -58,12 +58,12 @@ const TRACK_CARD_MIN = 300; // .search-track-list minmax
 // offset within it (offsetTop) and feeds it as scrollMargin.
 function VirtualSection<T>({
   items,
-  scrollRef,
+  scrollElement,
   cardMin,
   renderItem,
 }: {
   items: T[];
-  scrollRef: RefObject<HTMLDivElement | null>;
+  scrollElement: HTMLDivElement | null;
   cardMin: number;
   renderItem: (item: T) => ReactNode;
 }) {
@@ -72,14 +72,13 @@ function VirtualSection<T>({
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    if (!scrollElement) return;
+    const measure = () => setWidth(scrollElement.clientWidth);
     measure();
     const obs = new ResizeObserver(measure);
-    obs.observe(el);
+    obs.observe(scrollElement);
     return () => obs.disconnect();
-  }, [scrollRef]);
+  }, [scrollElement]);
 
   // Re-measure this list's offset within the shared scroller on every layout
   // pass (sections above can expand/collapse). Guarded so it converges.
@@ -101,7 +100,7 @@ function VirtualSection<T>({
 
   const virtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: () => ROW_HEIGHT,
     overscan: 3,
     scrollMargin,
@@ -202,7 +201,9 @@ export function SearchResults({
   onAddAlbumToPlaylist,
 }: Props) {
   const { server, credential } = serverWithCredential;
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // State, not a ref: the sections' layout effects run before this element's ref attaches, so
+  // only a re-render once it exists can bind their virtualizers to it.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const albumDisplayName = useAlbumDisplayName();
   const artistImageMap = useArtistImageMap();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -252,13 +253,13 @@ export function SearchResults({
   }
 
   return (
-    <div className="search-results" ref={scrollRef}>
+    <div className="search-results" ref={setScrollElement}>
       {artists.length > 0 && (
         <section className="search-group">
           <h2 className="search-group-title">Artists</h2>
           <VirtualSection
             items={visibleArtists}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={ARTIST_CARD_MIN}
             renderItem={(artist) => (
               <button
@@ -299,7 +300,7 @@ export function SearchResults({
           <h2 className="search-group-title">Albums</h2>
           <VirtualSection
             items={visibleAlbums}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={ALBUM_CARD_MIN}
             renderItem={(album) => (
               <button
@@ -342,7 +343,7 @@ export function SearchResults({
           <h2 className="search-group-title">Tracks</h2>
           <VirtualSection
             items={visibleTracks}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={TRACK_CARD_MIN}
             renderItem={(track) => (
               <button
