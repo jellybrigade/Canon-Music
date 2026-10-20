@@ -1,14 +1,59 @@
 import { ChevronLeft, ChevronRight, MessageSquare } from "lucide-react";
-import { type CSSProperties, lazy, Suspense } from "react";
+import { type ComponentProps, type CSSProperties, lazy, Suspense } from "react";
 import { FeedbackModal } from "../components/FeedbackModal";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { UpdatePrompt } from "../components/UpdatePrompt";
+import { SidebarPins } from "../features/pins/components/SidebarPins";
+import { pinTargetOf } from "../features/pins/pins";
+import { usePins, useSetPinned } from "../features/pins/usePins";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
+import { useRecents, useRecordRecent } from "../features/recents/useRecents";
+import { usePaletteActions } from "../hooks/usePaletteActions";
+import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import type { ArtistRow } from "../types/library";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
+
+// Its own component so the player state the actions read re-renders only the palette, not every view.
+function CommandPaletteWithActions({
+  runSync,
+  ...paletteProps
+}: Omit<ComponentProps<typeof CommandPalette>, "actions" | "onPlayAlbum" | "onUnpin"> & {
+  runSync: AppViewProps["runSync"];
+}) {
+  const actions = usePaletteActions(paletteProps.serverWithCredential, runSync);
+  const playAlbum = usePlayAlbum(paletteProps.serverWithCredential);
+  const setPinned = useSetPinned();
+  const { serverId } = paletteProps;
+  return (
+    <CommandPalette
+      {...paletteProps}
+      actions={actions}
+      onPlayAlbum={(album) => {
+        void playAlbum(album);
+      }}
+      onUnpin={(pin) => {
+        if (!serverId) return;
+        setPinned(pinTargetOf(pin, serverId), false).catch((err: unknown) =>
+          console.error("pins: couldn't remove the pin", err),
+        );
+      }}
+    />
+  );
+}
+
+const artistRowOf = (name: string, albumCount = 0): ArtistRow => ({
+  name,
+  album_count: albumCount,
+  artwork_url: null,
+  lastfm_image_url: null,
+  wikidata_image_url: null,
+  navidrome_image_url: null,
+  enriched_at: null,
+});
 
 export function AppShell(props: AppViewProps) {
   const {
@@ -18,8 +63,11 @@ export function AppShell(props: AppViewProps) {
     navItems,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openAlbumById,
+    searchFor,
+    handleStartRadioFromArtist,
     handlePlayTrack,
     setCanonicalIdFilters,
     currentTrack,
@@ -39,7 +87,12 @@ export function AppShell(props: AppViewProps) {
     remoteNotice,
     setRemoteNotice,
     setLastSeenNoticeId,
+    runSync,
   } = props;
+
+  const { data: pins } = usePins(server?.id);
+  const { data: recents } = useRecents(server?.id);
+  const recordRecent = useRecordRecent();
 
   function renderContent() {
     return <AppRoutes {...props} />;
@@ -84,6 +137,12 @@ export function AppShell(props: AppViewProps) {
                 {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
               </button>
             ))}
+            <SidebarPins
+              serverWithCredential={serverWithCred ?? undefined}
+              isExpanded={sidebarExpanded}
+              onSelectAlbum={openAlbum}
+              onSelectArtist={(artist) => openArtist({ ...artist, artwork_url: null, enriched_at: null })}
+            />
             {hasSidebarFooter && (
               <>
                 <button className="sidebar-feedback-btn" title="Send feedback" onClick={() => setFeedbackOpen(true)}>
@@ -116,30 +175,28 @@ export function AppShell(props: AppViewProps) {
           serverWithCred={serverWithCred ?? undefined}
         />
       )}
-      <CommandPalette
+      <CommandPaletteWithActions
         open={commandPaletteOpen}
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={navigateTo}
         onSelectAlbum={openAlbum}
-        onSelectArtist={(name, albumCount) =>
-          openArtist({
-            name,
-            album_count: albumCount,
-            artwork_url: null,
-            lastfm_image_url: null,
-            wikidata_image_url: null,
-            navidrome_image_url: null,
-            enriched_at: null,
-          })
-        }
-        // The only handler here that does not navigate, so the only one still
-        // closing the palette itself.
+        onSelectArtist={(name, albumCount) => openArtist(artistRowOf(name, albumCount))}
+        onOpenTrack={openAlbumAtTrack}
+        onSearchAll={searchFor}
+        onOpened={(target) => {
+          void recordRecent(target).catch((err: unknown) => console.error("Ctrl+K recents:", err));
+        }}
+        onStartArtistRadio={(name) => {
+          void handleStartRadioFromArtist(artistRowOf(name), "curated");
+        }}
         onPlayTrack={(id) => {
           void handlePlayTrack(id);
-          setCommandPaletteOpen(false);
         }}
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
+        pins={pins}
+        recents={recents}
+        runSync={runSync}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
       {remoteNotice && (

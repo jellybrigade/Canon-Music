@@ -532,6 +532,15 @@ html[data-app-blurred] * {
   container-type: size;
   /* Feedback and expand buttons, below the nav buttons. */
   --sidebar-footer-height: calc(2 * var(--space-xl));
+  --sidebar-pins-reserve: 0px;
+  --sidebar-btn-min-height: var(--space-xl);
+}
+
+/* Pins keep one row (and their heading) at the 560px window floor: the nav buttons give up 4px
+   each to make the room, and only while something is pinned. */
+.sidebar-items:has(> .sidebar-pins) {
+  --sidebar-pins-reserve: calc(var(--space-md) + var(--space-xl));
+  --sidebar-btn-min-height: calc(var(--space-xl) - var(--space-2xs));
 }
 
 .sidebar-items--no-footer {
@@ -572,10 +581,15 @@ html[data-app-blurred] * {
    0 to 4px, so the column fills the window exactly from the 560px floor up to full size. */
 .sidebar-btn {
   width: 40px;
-  height: clamp(var(--space-xl), (100cqh - var(--sidebar-footer-height)) / var(--sidebar-nav-count), 40px);
+  height: clamp(
+    var(--sidebar-btn-min-height),
+    (100cqh - var(--sidebar-footer-height) - var(--sidebar-pins-reserve)) /
+    var(--sidebar-nav-count),
+    40px
+  );
   margin-block-end: clamp(
     0px,
-    (100cqh - var(--sidebar-footer-height) - 40px * var(--sidebar-nav-count)) /
+    (100cqh - var(--sidebar-footer-height) - var(--sidebar-pins-reserve) - 40px * var(--sidebar-nav-count)) /
     var(--sidebar-nav-count),
     var(--space-2xs)
   );

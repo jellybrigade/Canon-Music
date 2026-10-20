@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { useSetting } from "../../hooks/useSetting";
 import { errorMessage } from "../../lib/errorMessage";
+import { QK } from "../../lib/queryKeys";
 import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 import { useAllTracksSessionStore } from "../../store/allTracksSessionStore";
 import { useArtistBrowseSessionStore } from "../../store/artistBrowseSessionStore";
@@ -37,6 +39,7 @@ function listPhrase(items: readonly string[]): string {
 }
 
 export function useLibrarySync(target: ServerWithCredential | undefined) {
+  const queryClient = useQueryClient();
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [syncError, setSyncError] = useState<string>("");
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -159,6 +162,11 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         if (libraryChanged) {
           useAlbumBrowseSessionStore.getState().bumpRefresh();
           invalidateGenreTreeCache();
+        }
+        // A prune drops pins and recents along with their albums, tracks or last album of an artist.
+        if (libraryChanged || changed.artists) {
+          void queryClient.invalidateQueries({ queryKey: QK.pinsAll() });
+          void queryClient.invalidateQueries({ queryKey: QK.recentsAll() });
         }
         scheduleFanout(() => {
           if (changed.artists) useArtistBrowseSessionStore.getState().bumpRefresh();

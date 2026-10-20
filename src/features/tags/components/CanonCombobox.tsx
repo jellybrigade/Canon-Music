@@ -18,6 +18,7 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const currentName = useMemo(() => treeNodes.find((n) => n.id === currentId)?.name ?? null, [treeNodes, currentId]);
 
@@ -73,7 +74,7 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
   }
 
   useClickOutside(
-    wrapRef,
+    [wrapRef, dropdownRef],
     () => {
       setOpen(false);
       setQuery("");
@@ -109,7 +110,7 @@ export function CanonCombobox({ treeNodes, currentId, onSelect, onClear, onCreat
       />
       {showDropdown &&
         createPortal(
-          <div className="tags-combobox-dropdown" style={dropdownStyle}>
+          <div ref={dropdownRef} className="tags-combobox-dropdown" style={dropdownStyle}>
             {matches.map((n) => (
               <button
                 key={n.id}

@@ -4,6 +4,7 @@ import type { AppViewProps } from "../app/AppRoutes";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { FilterSidebar } from "../components/FilterSidebar";
 import { SyncErrorBanner } from "../features/sync/SyncErrorBanner";
+import { plural } from "../lib/plural";
 import { useAlbumBrowseSessionStore } from "../store/albumBrowseSessionStore";
 import type { AlbumSort } from "../types/library";
 import { CanonLockup } from "../ui/CanonIcon";
@@ -153,7 +154,7 @@ export function LibraryView({
           {syncStatus === "syncing" && (
             <span className="sync-status">
               {syncProgress && syncProgress.total > 0
-                ? `Syncing ${syncProgress.done} of ${syncProgress.total} albums…`
+                ? `Syncing ${syncProgress.done} of ${syncProgress.total} ${plural(syncProgress.total, "album")}…`
                 : "Syncing…"}
             </span>
           )}

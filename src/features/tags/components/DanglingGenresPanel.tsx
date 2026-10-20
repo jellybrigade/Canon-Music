@@ -1,3 +1,4 @@
+import { plural } from "../../../lib/plural";
 import { useDanglingGenreIds, useRepairDanglingGenreId } from "../hooks/useDanglingGenreIds";
 import type { TreeNode } from "../lib/canonicalize";
 import type { DanglingGenreId } from "../lib/danglingGenreIds";
@@ -44,7 +45,7 @@ export function DanglingGenresPanel({ treeNodes }: { treeNodes: TreeNode[] }) {
   return (
     <section className="review-dangling" aria-label="Genres missing from the tree">
       <p className="review-dangling-note">
-        {dangling.length === 1 ? "1 genre is" : `${dangling.length} genres are`} still used but no longer in the genre
+        {dangling.length} {plural(dangling.length, "genre is", "genres are")} still used but no longer in the genre
         tree. Map each to a genre, or remove it everywhere.
       </p>
       {repair.isError && (

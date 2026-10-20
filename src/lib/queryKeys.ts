@@ -24,6 +24,11 @@ export const QK = {
 
   search: (serverId: string, query: string) => ["search", serverId, query] as const,
 
+  pins: (serverId: string | undefined) => ["pins", serverId] as const,
+  pinsAll: () => ["pins"] as const,
+  recents: (serverId: string | undefined) => ["recents", serverId] as const,
+  recentsAll: () => ["recents"] as const,
+
   tagVocab: () => ["tag-vocab"] as const,
   /** Under `tagVocab` so every mapping or tree write that refreshes the vocabulary re-sweeps it. */
   danglingGenreIds: () => ["tag-vocab", "dangling-genre-ids"] as const,

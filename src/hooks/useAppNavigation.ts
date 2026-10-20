@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../features/playback/store/player";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
-import { albumPath, artistPath, playlistPath } from "../lib/routes";
+import { type AlbumTrackTarget, albumPath, artistPath, playlistPath, ROUTES, searchPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 
 export type AppView =
@@ -91,9 +91,22 @@ export function useAppNavigation(dismissOverlays: () => void) {
     goTo(albumPath(album.id));
   }
 
+  // Replaces rather than pushes when the album is already open, so Back still leaves the album.
+  function openAlbumAtTrack({ albumId, trackId }: AlbumTrackTarget) {
+    const isAlbumOpen = pathname === albumPath(albumId);
+    navigate(albumPath(albumId, trackId), { replace: isAlbumOpen });
+    dismiss();
+  }
+
   function openArtist(artist: ArtistRow | string) {
     const name = typeof artist === "string" ? artist : artist.name;
     goTo(artistPath(name));
+  }
+
+  // Replaces inside search, as typing there does, so Back still leaves search in one step.
+  function searchFor(query: string) {
+    navigate(searchPath(query), { replace: pathname === ROUTES.SEARCH });
+    dismiss();
   }
 
   function openPlaylist(playlist: PlaylistRow) {
@@ -156,8 +169,10 @@ export function useAppNavigation(dismissOverlays: () => void) {
     pathname,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openPlaylist,
+    searchFor,
     goBack,
     leaveSearch,
   };

@@ -4,6 +4,7 @@ import { useGenreTree } from "../features/tags/hooks/useGenreTree";
 import type { NodeSection } from "../features/tags/lib/canonicalize";
 import { getParentChain } from "../features/tags/lib/canonicalize";
 import "./GenreView.css";
+import { plural } from "../lib/plural";
 
 const EMPTY_MAP = new Map<string, never>();
 const EMPTY_SECTION: Record<string, string[]> = {};
@@ -185,7 +186,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                     </span>
                   )}
                   <span className="genre-col-count">
-                    {count} {count === 1 ? "album" : "albums"}
+                    {count} {plural(count, "album")}
                   </span>
                   <div className="genre-col-actions">
                     <button
@@ -244,7 +245,7 @@ export function GenreView({ onSelectGenre, onPlayGenre }: Props) {
                       <span className="genre-col-name">{node.name}</span>
                       <div className="genre-col-right">
                         <span className="genre-col-count">
-                          {count} {count === 1 ? "album" : "albums"}
+                          {count} {plural(count, "album")}
                         </span>
                         <span
                           className={`genre-col-chevron${hasChildren ? "" : " genre-col-chevron--hidden"}`}

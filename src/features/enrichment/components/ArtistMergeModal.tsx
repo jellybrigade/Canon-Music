@@ -6,6 +6,7 @@ import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useSetArtistAlias } from "../hooks/useArtistAliases";
 import "./ArtistMergeModal.css";
+import { plural } from "../../../lib/plural";
 
 interface Props {
   aliasArtistName: string;
@@ -77,7 +78,7 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
               >
                 {a.name}
                 <span className="merge-candidate-meta">
-                  {a.album_count} {a.album_count === 1 ? "album" : "albums"}
+                  {a.album_count} {plural(a.album_count, "album")}
                 </span>
               </button>
             ))}

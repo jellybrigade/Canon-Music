@@ -14,6 +14,7 @@ import { resolvePortraitUrl } from "../clients/lastfm";
 import { getArtistImageUrl, getCoverArtUrl } from "../clients/navidromeUrls";
 import { ArtistIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
+import { PinMenuItem } from "../features/pins/components/PinMenuItem";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
@@ -22,6 +23,7 @@ import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import { parseStalenessDays } from "../lib/numberSetting";
+import { plural } from "../lib/plural";
 import type { ArtistRow } from "../types/library";
 import { ContextMenu } from "../ui/ContextMenu";
 import { CardGridSkeleton } from "../ui/Skeleton";
@@ -218,6 +220,10 @@ export function ArtistGrid({
           >
             Open artist
           </button>
+          <PinMenuItem
+            target={{ kind: "artist", serverId: serverWithCredential.server.id, artistName: contextMenu.artist.name }}
+            onDone={() => setContextMenu(null)}
+          />
           {onStartRadio && (
             <StartRadioSubmenu
               onSelect={(mode) => {
@@ -319,7 +325,7 @@ const ArtistGridCard = memo(function ArtistGridCard({
       <div className="album-overlay">
         <span className="album-name">{artist.name}</span>
         <span className="album-artist">
-          {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+          {artist.album_count} {plural(artist.album_count, "album")}
         </span>
       </div>
     </div>

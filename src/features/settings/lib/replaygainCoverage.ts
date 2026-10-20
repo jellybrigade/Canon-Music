@@ -1,3 +1,4 @@
+import { plural } from "../../../lib/plural";
 import type { ReplayGainMode } from "../../playback/store/playerTypes";
 
 export interface ReplayGainCoverage {
@@ -46,7 +47,7 @@ export function describeReplayGainCoverage(
       detail:
         withAnyGain === 0
           ? "No track in this library carries ReplayGain tags, so either mode would sound the same as this."
-          : `${count(withAnyGain)} of ${count(total)} tracks (${percent(withAnyGain, total)}) carry ReplayGain tags.`,
+          : `${count(withAnyGain)} of ${count(total)} ${plural(total, "track")} (${percent(withAnyGain, total)}) carry ReplayGain tags.`,
     };
   }
 
@@ -63,7 +64,7 @@ export function describeReplayGainCoverage(
     };
   }
 
-  const headline = `${count(preferred)} of ${count(total)} tracks (${percent(preferred, total)}) carry ${preferredLabel}.`;
+  const headline = `${count(preferred)} of ${count(total)} ${plural(total, "track")} (${percent(preferred, total)}) carry ${preferredLabel}.`;
   const parts: string[] = [];
   if (crossFallback > 0) parts.push(`${count(crossFallback)} more fall back to ${otherLabel}.`);
   parts.push(

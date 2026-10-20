@@ -76,6 +76,7 @@ async function seedLibrary() {
       VALUES ('srv-a:tr-1', 'srv-a', 'navidrome', 'Dancing Queen', 'srv-a:al-1', 'Abba');
     INSERT INTO tracks_fts (id, title, artist, album, genre)
       VALUES ('srv-a:tr-1', 'Dancing Queen', 'Abba', 'Arrival', 'Pop');
+    INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('srv-a:al-1', 'srv-a', 1);
   `);
 }
 

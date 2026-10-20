@@ -41,7 +41,7 @@ import { useScrobbleFlush } from "./features/playback/hooks/useScrobbleFlush";
 import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
 import { useWakeLock } from "./features/playback/hooks/useWakeLock";
 import { usePlayerStore } from "./features/playback/store/player";
-import type { CurrentTrack, RadioMode } from "./features/playback/store/playerTypes";
+import type { RadioMode } from "./features/playback/store/playerTypes";
 import { usePlaylists } from "./features/playlists/usePlaylists";
 import { useRadio } from "./features/radio/hooks/useRadio";
 import { useStartRadio } from "./features/radio/hooks/useStartRadio";
@@ -66,7 +66,7 @@ import { useSidebarResize } from "./hooks/useSidebarResize";
 import { loadAlbumTracksForPlay } from "./lib/albumTracks";
 import { extractAccent } from "./lib/artColor";
 import { ROUTES } from "./lib/routes";
-import { makeStreamUrlBuilder } from "./lib/track";
+import { currentTrackFromRow, makeStreamUrlBuilder, type PlayableTrackRow } from "./lib/track";
 import { checkForUpdate } from "./lib/updater";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
@@ -121,8 +121,18 @@ export default function App() {
     setCommandPaletteOpen(false);
   }, []);
 
-  const { view, pathname, navigateTo, openAlbum, openArtist, openPlaylist, goBack, leaveSearch } =
-    useAppNavigation(dismissOverlays);
+  const {
+    view,
+    pathname,
+    navigateTo,
+    openAlbum,
+    openAlbumAtTrack,
+    openArtist,
+    openPlaylist,
+    searchFor,
+    goBack,
+    leaveSearch,
+  } = useAppNavigation(dismissOverlays);
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
   const {
@@ -391,23 +401,8 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = {
-      id: string;
-      title: string;
-      artist: string | null;
-      duration: number | null;
-      album_id: string;
-      replay_gain_track_gain: number | null;
-      replay_gain_track_peak: number | null;
-      replay_gain_album_gain: number | null;
-      replay_gain_album_peak: number | null;
-      album_name: string | null;
-      artwork_url: string | null;
-    };
-    const rows = await db.select<TrackRow[]>(
-      `SELECT t.id, t.title, t.artist, t.duration, t.album_id,
-              t.replay_gain_track_gain, t.replay_gain_track_peak,
-              t.replay_gain_album_gain, t.replay_gain_album_peak,
+    const rows = await db.select<PlayableTrackRow[]>(
+      `SELECT t.id, t.title, t.artist, t.duration, t.album_id, ${REPLAY_GAIN_COLUMNS},
               a.name AS album_name, a.artwork_url
        FROM tracks t
        LEFT JOIN albums a ON a.id = t.album_id
@@ -416,22 +411,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    const artworkUrl = t.artwork_url;
-    const coverArtUrl = artworkUrl ? getCoverArtUrl(srv.url, srv.username, credential, artworkUrl, 64) : null;
-    await play(
-      {
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        duration: t.duration,
-        coverArtUrl,
-        artworkRef: artworkUrl,
-        album: t.album_name,
-        albumId: t.album_id,
-        replayGain: replayGainFromRow(t),
-      },
-      makeStreamUrlBuilder(srv, credential),
-    );
+    await play(currentTrackFromRow(t, srv, credential), makeStreamUrlBuilder(srv, credential));
   }
 
   async function handleStartRadioFromAlbum(album: AlbumRow, mode: RadioMode) {
@@ -495,17 +475,7 @@ export default function App() {
     const { server: srv, credential } = serverWithCred;
     const rows = await loadGenreSeedTracks({ serverId: srv.id, canonicalId, isDirectOnly: false });
     if (rows.length === 0) return;
-    const tracks: CurrentTrack[] = rows.map((t) => ({
-      id: t.id,
-      title: t.title,
-      artist: t.artist,
-      duration: t.duration,
-      coverArtUrl: t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null,
-      artworkRef: t.artwork_url ?? null,
-      album: t.album_name ?? null,
-      albumId: t.album_id,
-      replayGain: replayGainFromRow(t),
-    }));
+    const tracks = rows.map((t) => currentTrackFromRow(t, srv, credential));
     await startRadio({
       tracks,
       streamUrlFor: makeStreamUrlBuilder(srv, credential),
@@ -518,16 +488,7 @@ export default function App() {
     if (!serverWithCred) return;
     const { server: srv, credential } = serverWithCred;
     const db = await getDb();
-    type TrackRow = {
-      id: string;
-      title: string;
-      artist: string | null;
-      duration: number | null;
-      album_id: string;
-      artwork_url: string | null;
-      album_name: string | null;
-    } & ReplayGainColumns;
-    const rows = await db.select<TrackRow[]>(
+    const rows = await db.select<PlayableTrackRow[]>(
       `SELECT t.id, t.title, t.artist, t.duration, t.album_id, a.artwork_url, a.name AS album_name,
               ${REPLAY_GAIN_COLUMNS}
        FROM tracks t LEFT JOIN albums a ON t.album_id = a.id
@@ -538,18 +499,7 @@ export default function App() {
     );
     const t = rows[0];
     if (!t) return;
-    const coverArtUrl = t.artwork_url ? getCoverArtUrl(srv.url, srv.username, credential, t.artwork_url, 64) : null;
-    const track = {
-      id: t.id,
-      title: t.title,
-      artist: t.artist,
-      duration: t.duration,
-      coverArtUrl,
-      artworkRef: t.artwork_url ?? null,
-      album: t.album_name ?? null,
-      albumId: t.album_id,
-      replayGain: replayGainFromRow(t),
-    };
+    const track = currentTrackFromRow(t, srv, credential);
     await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(srv, credential), mode });
   }
 
@@ -670,9 +620,11 @@ export default function App() {
     view,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openPlaylist,
     openAlbumById,
+    searchFor,
     goBack,
     leaveSearch,
     handlePlayTrack,

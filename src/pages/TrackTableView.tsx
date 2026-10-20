@@ -16,6 +16,7 @@ import { ContextMenu } from "../ui/ContextMenu";
 import "./AlbumDetail.css";
 import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
+import { plural } from "../lib/plural";
 import { replayGainFromRow } from "../lib/replayGainRow";
 import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../lib/trackCells";
 import { useClickOutside } from "../ui/useClickOutside";
@@ -605,7 +606,7 @@ export function TrackTableView({
                 setContextMenu(null);
               }}
             >
-              Play {bulkTarget.length} tracks
+              Play {bulkTarget.length} {plural(bulkTarget.length, "track")}
             </button>
             <button
               onClick={() => {
@@ -631,7 +632,7 @@ export function TrackTableView({
                 setContextMenu(null);
               }}
             >
-              Love {bulkTarget.length} tracks
+              Love {bulkTarget.length} {plural(bulkTarget.length, "track")}
             </button>
             <button
               onClick={() => {

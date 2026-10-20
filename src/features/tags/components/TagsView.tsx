@@ -19,6 +19,7 @@ import type { NodeFormState } from "./TagTreeTab";
 import { NodeModal, TagTreeTab } from "./TagTreeTab";
 import { TitleCleanupTab } from "./TitleCleanupTab";
 import "./TagsView.css";
+import { plural } from "../../../lib/plural";
 
 type TabId = "review" | "decided" | "tree" | "title-cleanup";
 
@@ -53,7 +54,7 @@ export function TagsView() {
     autoMapExact.mutate(undefined, {
       onSuccess: (result) => {
         if (result.mapped > 0) {
-          setAutoNote(`${result.mapped} tag${result.mapped === 1 ? "" : "s"} auto-mapped on entry.`);
+          setAutoNote(`${result.mapped} ${plural(result.mapped, "tag")} auto-mapped on entry.`);
         }
       },
     });

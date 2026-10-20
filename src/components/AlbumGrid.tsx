@@ -4,6 +4,7 @@ import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useM
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
+import { PinMenuItem } from "../features/pins/components/PinMenuItem";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
@@ -453,6 +454,10 @@ export function AlbumGrid({
           >
             {lovedAlbumIds.has(contextMenu.album.id) ? "Unlove album" : "Love album"}
           </button>
+          <PinMenuItem
+            target={{ kind: "album", serverId: contextMenu.album.server_id, albumId: contextMenu.album.id }}
+            onDone={() => setContextMenu(null)}
+          />
           {onAddAlbumToPlaylist && playlists && playlists.length > 0 && (
             <ContextMenuSubmenu label="Add to Playlist">
               {playlists.map((pl) => (

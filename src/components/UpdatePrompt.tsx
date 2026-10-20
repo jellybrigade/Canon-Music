@@ -7,6 +7,7 @@ import { useModalChrome } from "../ui/useModalChrome";
 import "./UpdatePrompt.css";
 import { boundedFetch } from "../clients/boundedFetch";
 import { errorMessage } from "../lib/errorMessage";
+import { plural } from "../lib/plural";
 
 interface ChangelogSection {
   heading: string;
@@ -139,7 +140,9 @@ export function UpdatePrompt({ update, onDismiss }: Props) {
         {changelogs && changelogs.length > 0 && (
           <div className="update-prompt-changelog">
             <p className="update-prompt-changelog-label">
-              {multiVersion ? `What's new (${changelogs.length} versions)` : "What's new"}
+              {multiVersion
+                ? `What's new (${changelogs.length} ${plural(changelogs.length, "version")})`
+                : "What's new"}
             </p>
             <div className="update-prompt-changelog-sections">
               {changelogs.map((cl) => (

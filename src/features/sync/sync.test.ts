@@ -138,6 +138,11 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('${al}', 'rock', 'direct', 'Rock');
     INSERT INTO album_unresolved_genres (album_id, raw_value, source) VALUES ('${al}', 'weird', 'server');
     INSERT INTO settings (key, value) VALUES ('server.opensub_extensions.${serverId}', '["x"]');
+    INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${al}', '${serverId}', 1);
+    INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${serverId}', 'Artist', 1);
+    INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${al}', '${serverId}', 1);
+    INSERT INTO recent_artists (server_id, artist_name, opened_at) VALUES ('${serverId}', 'Artist', 1);
+    INSERT INTO recent_tracks (track_id, server_id, opened_at) VALUES ('${tr}', '${serverId}', 1);
   `);
 }
 
@@ -163,6 +168,11 @@ const OWNED_TABLES = [
   "album_genre_exclusions",
   "album_genres",
   "album_unresolved_genres",
+  "pinned_albums",
+  "pinned_artists",
+  "recent_albums",
+  "recent_artists",
+  "recent_tracks",
 ];
 
 describe("purgeServerData", () => {
@@ -497,6 +507,9 @@ describe("syncLibrary album prune", () => {
       INSERT INTO lyrics (track_id, plain, source, fetched_at) VALUES ('${SRV}:t3', 'la', 'lrclib', '2026-01-01');
       INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t3', '[]', 1);
       INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${SRV}:al-2', 'data:x', 1);
+      INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
+      INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
+      INSERT INTO recent_tracks (track_id, server_id, opened_at) VALUES ('${SRV}:t3', '${SRV}', 1);
     `);
 
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
@@ -511,15 +524,93 @@ describe("syncLibrary album prune", () => {
       ["album_genres", "album_id"],
       ["album_unresolved_genres", "album_id"],
       ["album_covers", "album_id"],
+      ["pinned_albums", "album_id"],
+      ["recent_albums", "album_id"],
     ];
     for (const [table, column] of albumKeyed) {
       expect({ table, rows: await count(table, `WHERE ${column} = '${SRV}:al-2'`) }).toEqual({ table, rows: 0 });
     }
-    for (const table of ["loved_tracks", "lyrics", "waveform_cache"]) {
+    for (const table of ["loved_tracks", "lyrics", "waveform_cache", "recent_tracks"]) {
       expect({ table, rows: await count(table, `WHERE track_id = '${SRV}:t3'`) }).toEqual({ table, rows: 0 });
     }
     // Losing albums can drop an artist or move an album_count, so the derived table is dirty.
     expect(result.changed).toMatchObject({ albums: true, tracks: true, artists: true });
+  });
+
+  it("drops a pinned or recent artist once the server lists none of their albums", async () => {
+    serveLibrary([album("al-1"), album("al-2", { artist: "Artist Two" })], {
+      "al-1": [track("t1", "al-1")],
+      "al-2": [track("t3", "al-2")],
+    });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`
+      INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES
+        ('${SRV}', 'Artist One', 1), ('${SRV}', 'Artist Two', 1), ('${OTHER}', 'Artist Two', 1);
+      INSERT INTO recent_artists (server_id, artist_name, opened_at) VALUES
+        ('${SRV}', 'Artist One', 1), ('${SRV}', 'Artist Two', 1), ('${OTHER}', 'Artist Two', 1);
+    `);
+
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    const rows = await db().select<{ server_id: string; artist_name: string }[]>(
+      "SELECT server_id, artist_name FROM pinned_artists ORDER BY server_id, artist_name",
+    );
+    expect(rows).toEqual([
+      { server_id: SRV, artist_name: "Artist One" },
+      { server_id: OTHER, artist_name: "Artist Two" },
+    ]);
+    expect(
+      await db().select<{ server_id: string; artist_name: string }[]>(
+        "SELECT server_id, artist_name FROM recent_artists ORDER BY server_id, artist_name",
+      ),
+    ).toEqual(rows);
+  });
+
+  it("keeps a pinned or recent artist who appears only on tracks when the artists are rebuilt", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1", { artist: "Guest Only" })] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`
+      INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${SRV}', 'Guest Only', 1);
+      INSERT INTO recent_artists (server_id, artist_name, opened_at) VALUES ('${SRV}', 'Guest Only', 1);
+    `);
+
+    serveLibrary([album("al-1"), album("al-2", { artist: "Artist Two" })], {
+      "al-1": [track("t1", "al-1", { artist: "Guest Only" })],
+      "al-2": [track("t3", "al-2")],
+    });
+    const result = await syncLibrary(server(), CRED);
+
+    expect(result.changed.artists).toBe(true);
+    expect([await count("pinned_artists"), await count("recent_artists")]).toEqual([1, 1]);
+  });
+
+  it("carries a pin to the album the server relists under a new id", async () => {
+    await seedTwoAlbums();
+    db().raw.exec(`INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 7)`);
+
+    serveLibrary([album("al-1"), album("al-2b", { name: "Album al-2" })], {
+      "al-1": [track("t1", "al-1"), track("t2", "al-1")],
+      "al-2b": [track("t3b", "al-2b"), track("t4b", "al-2b")],
+    });
+    await syncLibrary(server(), CRED);
+
+    expect(await db().select("SELECT album_id, server_id, pinned_at FROM pinned_albums")).toEqual([
+      { album_id: `${SRV}:al-2b`, server_id: SRV, pinned_at: 7 },
+    ]);
+  });
+
+  it("carries an artist pin across a change in the name's capitalisation", async () => {
+    serveLibrary([album("al-1", { artist: "The band" })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${SRV}', 'The band', 7)`);
+
+    serveLibrary([album("al-1", { artist: "The Band" })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    expect(await db().select("SELECT server_id, artist_name, pinned_at FROM pinned_artists")).toEqual([
+      { server_id: SRV, artist_name: "The Band", pinned_at: 7 },
+    ]);
   });
 
   it("keeps user-authored rows for a pruned album", async () => {

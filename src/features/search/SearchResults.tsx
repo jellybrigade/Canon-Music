@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Music, User } from "lucide-react";
-import { type ReactNode, type RefObject, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
@@ -10,12 +10,14 @@ import { makeStreamUrlBuilder } from "../../lib/track";
 import type { AlbumRow, ArtistRow } from "../../types/library";
 import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
 import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
+import { PinMenuItem } from "../pins/components/PinMenuItem";
 import { usePlayerStore } from "../playback/store/player";
 import type { RadioMode } from "../playback/store/playerTypes";
 import type { PlaylistRow } from "../playlists/usePlaylists";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import type { SearchAlbum, SearchArtist, SearchTrack } from "./useSearch";
 import "./SearchResults.css";
+import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 
 interface Props {
@@ -57,12 +59,12 @@ const TRACK_CARD_MIN = 300; // .search-track-list minmax
 // offset within it (offsetTop) and feeds it as scrollMargin.
 function VirtualSection<T>({
   items,
-  scrollRef,
+  scrollElement,
   cardMin,
   renderItem,
 }: {
   items: T[];
-  scrollRef: RefObject<HTMLDivElement | null>;
+  scrollElement: HTMLDivElement | null;
   cardMin: number;
   renderItem: (item: T) => ReactNode;
 }) {
@@ -71,14 +73,13 @@ function VirtualSection<T>({
   const [scrollMargin, setScrollMargin] = useState(0);
 
   useLayoutEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    if (!scrollElement) return;
+    const measure = () => setWidth(scrollElement.clientWidth);
     measure();
     const obs = new ResizeObserver(measure);
-    obs.observe(el);
+    obs.observe(scrollElement);
     return () => obs.disconnect();
-  }, [scrollRef]);
+  }, [scrollElement]);
 
   // Re-measure this list's offset within the shared scroller on every layout
   // pass (sections above can expand/collapse). Guarded so it converges.
@@ -100,7 +101,7 @@ function VirtualSection<T>({
 
   const virtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: () => ROW_HEIGHT,
     overscan: 3,
     scrollMargin,
@@ -164,7 +165,8 @@ function toAlbumRow(album: SearchAlbum): AlbumRow {
   };
 }
 
-function trackAlbumRow(track: SearchTrack): AlbumRow {
+function trackAlbumRow(track: SearchTrack): AlbumRow | null {
+  if (track.album_id === null) return null;
   return {
     id: track.album_id,
     server_id: track.server_id,
@@ -201,7 +203,9 @@ export function SearchResults({
   onAddAlbumToPlaylist,
 }: Props) {
   const { server, credential } = serverWithCredential;
-  const scrollRef = useRef<HTMLDivElement>(null);
+  // State, not a ref: the sections' layout effects run before this element's ref attaches, so
+  // only a re-render once it exists can bind their virtualizers to it.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null);
   const albumDisplayName = useAlbumDisplayName();
   const artistImageMap = useArtistImageMap();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
@@ -212,6 +216,7 @@ export function SearchResults({
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [albumMenu, setAlbumMenu] = useState<AlbumMenu | null>(null);
   const [trackMenu, setTrackMenu] = useState<TrackMenu | null>(null);
+  const trackMenuAlbum = trackMenu ? trackAlbumRow(trackMenu.track) : null;
   const [artistMenu, setArtistMenu] = useState<ArtistMenu | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<SearchAlbum | null>(null);
   const [identifyArtistName, setIdentifyArtistName] = useState<string | null>(null);
@@ -251,13 +256,13 @@ export function SearchResults({
   }
 
   return (
-    <div className="search-results" ref={scrollRef}>
+    <div className="search-results" ref={setScrollElement}>
       {artists.length > 0 && (
         <section className="search-group">
           <h2 className="search-group-title">Artists</h2>
           <VirtualSection
             items={visibleArtists}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={ARTIST_CARD_MIN}
             renderItem={(artist) => (
               <button
@@ -279,7 +284,7 @@ export function SearchResults({
                 <div className="search-artist-info">
                   <span className="search-item-primary">{artist.name}</span>
                   <span className="search-item-secondary">
-                    {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+                    {artist.album_count} {plural(artist.album_count, "album")}
                   </span>
                 </div>
               </button>
@@ -287,7 +292,7 @@ export function SearchResults({
           />
           {artists.length > ARTIST_LIMIT && !showAllArtists && (
             <button className="search-show-all" onClick={() => setShowAllArtists(true)}>
-              Show all {artists.length} artists
+              Show all {artists.length} {plural(artists.length, "artist")}
             </button>
           )}
         </section>
@@ -298,7 +303,7 @@ export function SearchResults({
           <h2 className="search-group-title">Albums</h2>
           <VirtualSection
             items={visibleAlbums}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={ALBUM_CARD_MIN}
             renderItem={(album) => (
               <button
@@ -330,7 +335,7 @@ export function SearchResults({
           />
           {albums.length > ALBUM_LIMIT && !showAllAlbums && (
             <button className="search-show-all" onClick={() => setShowAllAlbums(true)}>
-              Show all {albums.length} albums
+              Show all {albums.length} {plural(albums.length, "album")}
             </button>
           )}
         </section>
@@ -341,7 +346,7 @@ export function SearchResults({
           <h2 className="search-group-title">Tracks</h2>
           <VirtualSection
             items={visibleTracks}
-            scrollRef={scrollRef}
+            scrollElement={scrollElement}
             cardMin={TRACK_CARD_MIN}
             renderItem={(track) => (
               <button
@@ -378,7 +383,7 @@ export function SearchResults({
           />
           {tracks.length > TRACK_LIMIT && !showAllTracks && (
             <button className="search-show-all" onClick={() => setShowAllTracks(true)}>
-              Show all {tracks.length} tracks
+              Show all {tracks.length} {plural(tracks.length, "track")}
             </button>
           )}
         </section>
@@ -394,6 +399,10 @@ export function SearchResults({
           >
             Open album
           </button>
+          <PinMenuItem
+            target={{ kind: "album", serverId: albumMenu.album.server_id, albumId: albumMenu.album.id }}
+            onDone={() => setAlbumMenu(null)}
+          />
           <StartRadioSubmenu
             onSelect={(mode) => {
               onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode);
@@ -452,20 +461,24 @@ export function SearchResults({
           >
             Add to Queue
           </button>
-          <StartRadioSubmenu
-            onSelect={(mode) => {
-              onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode);
-              setTrackMenu(null);
-            }}
-          />
-          <button
-            onClick={() => {
-              onSelectAlbum(trackAlbumRow(trackMenu.track));
-              setTrackMenu(null);
-            }}
-          >
-            Go to Album
-          </button>
+          {trackMenuAlbum && (
+            <>
+              <StartRadioSubmenu
+                onSelect={(mode) => {
+                  onStartRadioFromAlbum(trackMenuAlbum, mode);
+                  setTrackMenu(null);
+                }}
+              />
+              <button
+                onClick={() => {
+                  onSelectAlbum(trackMenuAlbum);
+                  setTrackMenu(null);
+                }}
+              >
+                Go to Album
+              </button>
+            </>
+          )}
           {trackMenu.track.artist && (
             <button
               onClick={() => {
@@ -495,6 +508,10 @@ export function SearchResults({
           >
             Open artist
           </button>
+          <PinMenuItem
+            target={{ kind: "artist", serverId: server.id, artistName: artistMenu.artist.name }}
+            onDone={() => setArtistMenu(null)}
+          />
           <StartRadioSubmenu
             onSelect={(mode) => {
               onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode);

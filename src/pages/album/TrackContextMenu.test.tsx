@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../db", () => ({ getDb: () => new Promise(() => {}) }));
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlaylistRow } from "../../features/playlists/usePlaylists";
 import { TrackContextMenu } from "./TrackContextMenu";
 
@@ -20,11 +24,13 @@ const playlist: PlaylistRow = {
   rules_json: null,
 };
 
+const queryClient = new QueryClient();
+
 function Harness({ onAddToPlaylist }: { onAddToPlaylist: (pl: PlaylistRow) => void }) {
   const [open, setOpen] = useState(true);
   const noop = () => {};
   return (
-    <>
+    <QueryClientProvider client={queryClient}>
       <button className="reopen" onClick={() => setOpen(true)}>
         reopen
       </button>
@@ -45,7 +51,7 @@ function Harness({ onAddToPlaylist }: { onAddToPlaylist: (pl: PlaylistRow) => vo
           onAddToPlaylist={onAddToPlaylist}
         />
       )}
-    </>
+    </QueryClientProvider>
   );
 }
 
@@ -62,6 +68,12 @@ function clickMenuButton(label: string) {
 }
 
 describe("TrackContextMenu", () => {
+  it("offers no pin: only albums and artists can be pinned", () => {
+    render(<Harness onAddToPlaylist={vi.fn()} />);
+    expect(menuButtons()).toContain("Play Now");
+    expect(menuButtons().filter((label) => /pin/i.test(label))).toEqual([]);
+  });
+
   it("opens on the main list again after a track was added to a playlist", () => {
     const onAddToPlaylist = vi.fn();
     const { container } = render(<Harness onAddToPlaylist={onAddToPlaylist} />);

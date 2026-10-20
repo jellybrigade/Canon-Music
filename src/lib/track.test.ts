@@ -5,7 +5,7 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 import { type NavidromeCredential, setStreamMaxBitrate } from "../clients/navidromeUrls";
 import type { CurrentTrack } from "../features/playback/store/playerTypes";
 import type { Server } from "../types/server";
-import { makeStreamUrlBuilder } from "./track";
+import { currentTrackFromRow, makeStreamUrlBuilder } from "./track";
 
 function makeServer(overrides: Partial<Server> = {}): Server {
   return {
@@ -139,5 +139,41 @@ describe("makeStreamUrlBuilder", () => {
     const build = makeStreamUrlBuilder(makeServer({ id: "" }), md5Cred);
     expect(params(build(makeTrack(":abc"))).get("id")).toBe("abc");
     expect(() => build(makeTrack("abc"))).toThrow();
+  });
+});
+
+describe("currentTrackFromRow", () => {
+  const row = {
+    id: "srv1:t1",
+    title: "Title",
+    artist: "Artist",
+    duration: 100,
+    album_id: "srv1:al-1",
+    album_name: "Album",
+    artwork_url: "co-1",
+    replay_gain_track_gain: -6,
+    replay_gain_track_peak: 0.9,
+    replay_gain_album_gain: null,
+    replay_gain_album_peak: null,
+  };
+
+  it("carries every field a play path needs, ReplayGain included", () => {
+    const track = currentTrackFromRow(row, makeServer(), md5Cred);
+    expect(track).toMatchObject({
+      id: "srv1:t1",
+      title: "Title",
+      artist: "Artist",
+      duration: 100,
+      artworkRef: "co-1",
+      album: "Album",
+      albumId: "srv1:al-1",
+      replayGain: { trackGain: -6, trackPeak: 0.9, albumGain: null, albumPeak: null },
+    });
+    expect(params(track.coverArtUrl ?? "").get("id")).toBe("co-1");
+  });
+
+  it("leaves the cover empty for a row with no art", () => {
+    const track = currentTrackFromRow({ ...row, artwork_url: null }, makeServer(), md5Cred);
+    expect([track.coverArtUrl, track.artworkRef]).toEqual([null, null]);
   });
 });

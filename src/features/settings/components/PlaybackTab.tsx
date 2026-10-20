@@ -7,6 +7,7 @@ import { useReplayGainCoverage } from "../hooks/useReplayGainCoverage";
 import { describeReplayGainCoverage } from "../lib/replaygainCoverage";
 import { SettingRow } from "./SettingRow";
 import "../../tags/components/TagsView.css";
+import { plural } from "../../../lib/plural";
 
 const RADIO_SIMILARITY_STEPS = [
   { label: "Narrow", value: "0" },
@@ -422,7 +423,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
                   ? "Scanning for UPnP/DLNA renderers…"
                   : availableRenderers.length === 0
                     ? "No renderers found."
-                    : `${availableRenderers.length} renderer${availableRenderers.length === 1 ? "" : "s"} found.`
+                    : `${availableRenderers.length} ${plural(availableRenderers.length, "renderer")} found.`
                 : "Scan the network for UPnP/DLNA renderers."
             }
           >

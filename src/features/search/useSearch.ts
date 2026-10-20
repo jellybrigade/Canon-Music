@@ -1,6 +1,7 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, skipToken, useQuery } from "@tanstack/react-query";
 import { getDb } from "../../db";
 import { QK } from "../../lib/queryKeys";
+import { albumScore, artistScore, toSearchTokens, trackScore } from "./searchScore";
 
 export interface SearchAlbum {
   id: string;
@@ -15,7 +16,7 @@ export interface SearchTrack {
   server_id: string;
   title: string;
   artist: string | null;
-  album_id: string;
+  album_id: string | null;
   album_name: string | null;
   artwork_url: string | null;
   duration: number | null;
@@ -39,48 +40,9 @@ export interface SearchResults {
   artists: SearchArtist[];
 }
 
-// Double quotes are stripped to avoid breaking FTS5 syntax. Scoring must see the same
-// tokens the index matched, or a doubled space or stray quote filters every hit back out.
-function toSearchTokens(q: string): string[] {
-  return q
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((t) => t.replace(/"/g, ""));
-}
-
 // Each token becomes "token"* to match prefixes.
 function toFtsQuery(tokens: string[]): string {
   return tokens.map((t) => `"${t}"*`).join(" ");
-}
-
-const BRACKETED = /\(([^)]*)\)|\[([^\]]*)\]/g;
-// Keeps a bracket-only exact match (100) under the lowest plain score, an artist substring (180).
-const BRACKETED_DIVISOR = 10;
-
-// Text in brackets ("(Expanded Edition)", "[Live]") still matches, but ranks below any match
-// in the rest of the field.
-function scoreMatch(field: string | null, query: string): number {
-  if (!field || !query) return 0;
-  const f = field.toLowerCase();
-  const q = query.toLowerCase();
-  const plain = f.replace(BRACKETED, " ").replace(/\s+/g, " ").trim();
-  const bracketed = Array.from(f.matchAll(BRACKETED), (m) => m[1] ?? m[2] ?? "")
-    .join(" ")
-    .trim();
-  if (!plain) return scoreTier(bracketed, q);
-  const plainScore = scoreTier(plain, q);
-  if (plainScore > 0) return plainScore;
-  return Math.floor(scoreTier(bracketed, q) / BRACKETED_DIVISOR);
-}
-
-// Tiers: exact > starts-with > word-starts-with > substring > no match.
-function scoreTier(f: string, q: string): number {
-  if (f === q) return 1000;
-  if (f.startsWith(q)) return 800;
-  if (f.split(/\s+/).some((t) => t.startsWith(q))) return 600;
-  if (f.includes(q)) return 300;
-  return 0;
 }
 
 // FTS pool ranked by weighted bm25 (title > artist > album > genre) inside the CTE, so the
@@ -156,13 +118,13 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
   // Re-rank in JS: FTS5 gives recall, scoring gives relevance. A zero score (e.g. an album
   // matched only via genre) is dropped rather than kept at the bottom.
   const albums: SearchAlbum[] = albumRows
-    .map((a) => ({ item: a, s: Math.max(scoreMatch(a.name, query), Math.floor(scoreMatch(a.artist, query) * 0.6)) }))
+    .map((a) => ({ item: a, s: albumScore(a, query) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.item.name.localeCompare(b.item.name))
     .map((x) => x.item);
 
   const tracks: SearchTrack[] = trackRows
-    .map((t) => ({ item: t, s: Math.max(scoreMatch(t.title, query), Math.floor(scoreMatch(t.artist, query) * 0.6)) }))
+    .map((t) => ({ item: t, s: trackScore(t, query) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.item.title.localeCompare(b.item.title))
     .map((x) => x.item);
@@ -170,7 +132,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
   const FEAT_RE = /^(.+?)\s+(?:feat\.|ft\.|featuring)\s+/i;
 
   const scoredArtists = artistRows
-    .map((a) => ({ item: a, s: scoreMatch(a.name, query) }))
+    .map((a) => ({ item: a, s: artistScore(a, query) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || b.item.album_count - a.item.album_count);
 
@@ -190,8 +152,7 @@ export function useSearch(query: string, serverId: string | undefined) {
   const trimmed = query.trim();
   return useQuery<SearchResults>({
     queryKey: QK.search(serverId ?? "", trimmed),
-    queryFn: () => runSearch(trimmed, serverId!),
-    enabled: trimmed.length > 0 && !!serverId,
+    queryFn: trimmed.length > 0 && serverId ? () => runSearch(trimmed, serverId) : skipToken,
     staleTime: 10_000,
     // Keep the previous query's rows on screen while the next one runs, so
     // typing doesn't flash the "Searching…" state between every keystroke.

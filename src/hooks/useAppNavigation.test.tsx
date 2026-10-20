@@ -102,6 +102,25 @@ describe("asking for the route already showing", () => {
     expect(result.current.search).toBe("?q=abba");
   });
 
+  it("opens search at a query as a new entry, so leaving search returns to where it was asked", () => {
+    const { result } = nav(["/home"]);
+    act(() => result.current.app.searchFor("AC/DC & more"));
+    expect(result.current.app.pathname).toBe("/search");
+    expect(new URLSearchParams(result.current.search).get("q")).toBe("AC/DC & more");
+
+    act(() => result.current.app.leaveSearch());
+    expect(result.current.app.pathname).toBe("/home");
+  });
+
+  it("swaps the query in place when search is already showing", () => {
+    const { result } = nav(["/library", "/search?q=abba"]);
+    act(() => result.current.app.searchFor("bjork"));
+    expect(new URLSearchParams(result.current.search).get("q")).toBe("bjork");
+
+    act(() => result.current.app.leaveSearch());
+    expect(result.current.app.pathname).toBe("/library");
+  });
+
   it("pushes no second entry for the browse view already open", () => {
     const { result } = nav(["/home", "/library"]);
     act(() => result.current.app.navigateTo("library"));
@@ -112,6 +131,23 @@ describe("asking for the route already showing", () => {
   it("pushes no second entry for the album page already open", () => {
     const { result } = nav(["/home", "/album/a1"]);
     act(() => result.current.app.openAlbum(album("a1")));
+    act(() => result.current.app.goBack());
+    expect(result.current.app.pathname).toBe("/home");
+  });
+
+  it("opens an album at a track as a new entry, so Back returns to where it was opened", () => {
+    const { result } = nav(["/home"]);
+    act(() => result.current.app.openAlbumAtTrack({ albumId: "a1", trackId: "t1" }));
+    expect(result.current.app.pathname).toBe("/album/a1");
+    expect(result.current.search).toBe("?track=t1");
+    act(() => result.current.app.goBack());
+    expect(result.current.app.pathname).toBe("/home");
+  });
+
+  it("points at a track on the album page already open without pushing a second entry", () => {
+    const { result } = nav(["/home", "/album/a1"]);
+    act(() => result.current.app.openAlbumAtTrack({ albumId: "a1", trackId: "t1" }));
+    expect(result.current.search).toBe("?track=t1");
     act(() => result.current.app.goBack());
     expect(result.current.app.pathname).toBe("/home");
   });

@@ -11,6 +11,7 @@ import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 import type { PlaylistRow } from "./usePlaylists";
 import "./PlaylistList.css";
+import { plural } from "../../lib/plural";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
 const CARD_MIN = 160; // minmax(160px, 1fr)
@@ -332,7 +333,7 @@ export function PlaylistList({
                         )}
                         <span className="playlist-card-meta">
                           {pl.is_smart ? "Smart · " : ""}
-                          {pl.track_count} {pl.track_count === 1 ? "track" : "tracks"}
+                          {pl.track_count} {plural(pl.track_count, "track")}
                         </span>
                       </div>
                     </button>

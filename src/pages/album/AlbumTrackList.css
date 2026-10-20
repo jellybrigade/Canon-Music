@@ -25,6 +25,11 @@
   background-color: var(--bg-hover);
 }
 
+.tracklist-row--highlighted,
+.tracklist-row--highlighted:hover {
+  background-color: var(--accent-subtle);
+}
+
 .tracklist td {
   padding: var(--space-xs) var(--space-xs);
   vertical-align: middle;

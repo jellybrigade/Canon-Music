@@ -13,6 +13,7 @@ import type { useAllTracks } from "../hooks/useAllTracks";
 import type { AppView } from "../hooks/useAppNavigation";
 import type { useGenres } from "../hooks/useGenres";
 import type { ServerWithCredential } from "../hooks/useServer";
+import type { AlbumTrackTarget } from "../lib/routes";
 import { LibraryView } from "../pages/LibraryView";
 import { useAllTracksSessionStore } from "../store/allTracksSessionStore";
 import { useArtistBrowseSessionStore } from "../store/artistBrowseSessionStore";
@@ -113,9 +114,11 @@ export interface AppViewProps {
   view: AppView;
   navigateTo: (v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) => void;
   openAlbum: (album: AlbumRow) => void;
+  openAlbumAtTrack: (target: AlbumTrackTarget) => void;
   openArtist: (artist: ArtistRow | string) => void;
   openPlaylist: (playlist: PlaylistRow) => void;
   openAlbumById: (albumId: string) => void | Promise<void>;
+  searchFor: (query: string) => void;
   goBack: () => void;
   leaveSearch: () => void;
 

@@ -44,8 +44,10 @@ export function useAddAlbumToQueue(serverWithCred: ServerWithCredential) {
   );
 }
 
-export function usePlayAlbum(serverWithCred: ServerWithCredential) {
-  const { server, credential } = serverWithCred;
+// Undefined while the credential loads; playing then does nothing, as the play buttons are not shown yet.
+export function usePlayAlbum(serverWithCred: ServerWithCredential | undefined) {
+  const server = serverWithCred?.server;
+  const credential = serverWithCred?.credential;
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -53,6 +55,7 @@ export function usePlayAlbum(serverWithCred: ServerWithCredential) {
 
   return useCallback(
     async (album: AlbumRow) => {
+      if (!server || !credential) return;
       const tracks = await loadAlbumTracksForPlay(server, credential, album);
       if (tracks.length === 0) return;
 

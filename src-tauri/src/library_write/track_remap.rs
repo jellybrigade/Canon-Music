@@ -10,6 +10,7 @@ const REMAPPED_TRACK_ID_TABLES: &[(&str, &str)] = &[
     ("tag_issues", "track_id"),
     ("lyrics", "track_id"),
     ("waveform_cache", "track_id"),
+    ("recent_tracks", "track_id"),
     ("scrobble_queue", "track_id"),
     ("scrobble_history", "track_id"),
     ("playlist_resume", "last_track_id"),
@@ -88,6 +89,8 @@ mod tests {
           UNIQUE(track_id, issue_type));
         CREATE TABLE lyrics (track_id TEXT PRIMARY KEY, content TEXT);
         CREATE TABLE waveform_cache (track_id TEXT PRIMARY KEY, peaks_json TEXT);
+        CREATE TABLE recent_tracks (track_id TEXT PRIMARY KEY, server_id TEXT NOT NULL,
+          opened_at INTEGER NOT NULL);
         CREATE TABLE scrobble_queue (track_id TEXT NOT NULL, timestamp INTEGER);
         CREATE TABLE scrobble_history (track_id TEXT NOT NULL, timestamp INTEGER,
           UNIQUE(track_id, timestamp));
@@ -111,6 +114,7 @@ mod tests {
              INSERT INTO tag_issues VALUES ('{id}', 'missing-year');
              INSERT INTO lyrics VALUES ('{id}', 'words');
              INSERT INTO waveform_cache VALUES ('{id}', '[1,2]');
+             INSERT INTO recent_tracks VALUES ('{id}', 'srv', 1);
              INSERT INTO scrobble_queue VALUES ('{id}', 111);
              INSERT INTO scrobble_history VALUES ('{id}', 222);
              INSERT INTO playlist_resume VALUES ('p-{id}', '{id}', 30);"
