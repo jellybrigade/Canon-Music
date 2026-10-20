@@ -784,6 +784,33 @@ export const migrations: Migration[] = [
     version: 53,
     sql: `UPDATE album_identity SET looked_up_at = 0 WHERE mb_release_group_id IS NULL AND confirmed_at IS NULL;`,
   },
+  {
+    // Artists are pinned by name: their ids are regenerated whenever the sync rebuilds the table.
+    version: 54,
+    sql: `
+      CREATE TABLE IF NOT EXISTS pinned_artists (
+        server_id TEXT NOT NULL,
+        artist_name TEXT NOT NULL,
+        pinned_at INTEGER NOT NULL,
+        PRIMARY KEY (server_id, artist_name)
+      );
+      CREATE TABLE IF NOT EXISTS pinned_albums (
+        album_id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        pinned_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS pinned_tracks (
+        track_id TEXT PRIMARY KEY,
+        server_id TEXT NOT NULL,
+        pinned_at INTEGER NOT NULL
+      );
+    `,
+  },
+  {
+    // Songs can no longer be pinned; only albums and artists.
+    version: 55,
+    sql: `DROP TABLE IF EXISTS pinned_tracks;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

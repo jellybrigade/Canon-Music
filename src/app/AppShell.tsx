@@ -3,6 +3,8 @@ import { type CSSProperties, lazy, Suspense } from "react";
 import { FeedbackModal } from "../components/FeedbackModal";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { UpdatePrompt } from "../components/UpdatePrompt";
+import { SidebarPins } from "../features/pins/components/SidebarPins";
+import { usePins } from "../features/pins/usePins";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
@@ -40,6 +42,8 @@ export function AppShell(props: AppViewProps) {
     setRemoteNotice,
     setLastSeenNoticeId,
   } = props;
+
+  const { data: pins } = usePins(server?.id);
 
   function renderContent() {
     return <AppRoutes {...props} />;
@@ -84,6 +88,12 @@ export function AppShell(props: AppViewProps) {
                 {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
               </button>
             ))}
+            <SidebarPins
+              serverWithCredential={serverWithCred ?? undefined}
+              isExpanded={sidebarExpanded}
+              onSelectAlbum={openAlbum}
+              onSelectArtist={(artist) => openArtist({ ...artist, artwork_url: null, enriched_at: null })}
+            />
             {hasSidebarFooter && (
               <>
                 <button className="sidebar-feedback-btn" title="Send feedback" onClick={() => setFeedbackOpen(true)}>
@@ -140,6 +150,7 @@ export function AppShell(props: AppViewProps) {
         }}
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}
+        pins={pins}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
       {remoteNotice && (

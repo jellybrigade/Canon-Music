@@ -14,6 +14,7 @@ import { resolvePortraitUrl } from "../clients/lastfm";
 import { getArtistImageUrl, getCoverArtUrl } from "../clients/navidromeUrls";
 import { ArtistIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
+import { PinMenuItem } from "../features/pins/components/PinMenuItem";
 import type { RadioMode } from "../features/playback/store/playerTypes";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { useArtistImageMap } from "../hooks/useArtistImageCache";
@@ -218,6 +219,10 @@ export function ArtistGrid({
           >
             Open artist
           </button>
+          <PinMenuItem
+            target={{ kind: "artist", serverId: serverWithCredential.server.id, artistName: contextMenu.artist.name }}
+            onDone={() => setContextMenu(null)}
+          />
           {onStartRadio && (
             <StartRadioSubmenu
               onSelect={(mode) => {

@@ -10,6 +10,7 @@ import { makeStreamUrlBuilder } from "../../lib/track";
 import type { AlbumRow, ArtistRow } from "../../types/library";
 import { ContextMenu, ContextMenuSubmenu } from "../../ui/ContextMenu";
 import { AlbumIdentifyDialog, ArtistIdentifyDialog } from "../enrichment/components/IdentifyDialog";
+import { PinMenuItem } from "../pins/components/PinMenuItem";
 import { usePlayerStore } from "../playback/store/player";
 import type { RadioMode } from "../playback/store/playerTypes";
 import type { PlaylistRow } from "../playlists/usePlaylists";
@@ -394,6 +395,10 @@ export function SearchResults({
           >
             Open album
           </button>
+          <PinMenuItem
+            target={{ kind: "album", serverId: albumMenu.album.server_id, albumId: albumMenu.album.id }}
+            onDone={() => setAlbumMenu(null)}
+          />
           <StartRadioSubmenu
             onSelect={(mode) => {
               onStartRadioFromAlbum(toAlbumRow(albumMenu.album), mode);
@@ -495,6 +500,10 @@ export function SearchResults({
           >
             Open artist
           </button>
+          <PinMenuItem
+            target={{ kind: "artist", serverId: server.id, artistName: artistMenu.artist.name }}
+            onDone={() => setArtistMenu(null)}
+          />
           <StartRadioSubmenu
             onSelect={(mode) => {
               onStartRadioFromArtist(toArtistRow(artistMenu.artist), mode);

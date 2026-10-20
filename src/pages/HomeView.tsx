@@ -2,6 +2,7 @@ import { Search, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
+import { PinMenuItem } from "../features/pins/components/PinMenuItem";
 import { usePlayerStore } from "../features/playback/store/player";
 import type { CurrentTrack, RadioMode } from "../features/playback/store/playerTypes";
 import { usePlaylists } from "../features/playlists/usePlaylists";
@@ -561,6 +562,10 @@ export function HomeView({
           >
             Add to Queue
           </button>
+          <PinMenuItem
+            target={{ kind: "album", serverId: contextMenu.album.server_id, albumId: contextMenu.album.id }}
+            onDone={() => setContextMenu(null)}
+          />
           <StartRadioSubmenu
             onSelect={(mode) => {
               onStartRadio(contextMenu.album, mode);

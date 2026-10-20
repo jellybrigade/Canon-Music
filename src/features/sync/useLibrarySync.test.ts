@@ -8,9 +8,12 @@ vi.mock("./sync", () => ({ syncLibrary: vi.fn() }));
 vi.mock("../tags/hooks/useGenreTree", () => ({ invalidateGenreTreeCache: vi.fn() }));
 vi.mock("../../hooks/useSetting", () => ({ useSetting: vi.fn(() => [intervalSetting, vi.fn(), true]) }));
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import type { ServerWithCredential } from "../../hooks/useServer";
+import { QK } from "../../lib/queryKeys";
 import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 import { useGenresSessionStore } from "../../store/genresSessionStore";
 import { usePlaylistSessionStore } from "../../store/playlistSessionStore";
@@ -119,9 +122,13 @@ async function failRun(index: number, e: unknown) {
   await tick(FANOUT_MS);
 }
 
+let queryClient = new QueryClient();
+
 function renderSync(server: ServerWithCredential | undefined) {
   return renderHook(({ server }: { server: ServerWithCredential | undefined }) => useLibrarySync(server), {
     initialProps: { server },
+    wrapper: ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client: queryClient }, children),
   });
 }
 
@@ -592,6 +599,22 @@ describe("useLibrarySync auto-sync interval", () => {
     await settle(0, { changed: { albums: true, playlists: true } });
 
     expect(fanoutTicks()).toEqual({ genres: before.genres + 1, playlists: before.playlists + 1 });
+  });
+
+  it("refreshes the Home pins once for a run that changed the library or its artists", async () => {
+    queryClient = new QueryClient();
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries");
+    const pinRefreshes = () =>
+      invalidate.mock.calls.filter(([filters]) => filters?.queryKey?.[0] === QK.pinsAll()[0]).length;
+    const { result } = renderSync(SRV_A);
+    await tick();
+
+    await settle(0, { changed: { loved: true, playlists: true } });
+    expect(pinRefreshes()).toBe(0);
+
+    act(() => void result.current.runSync(SRV_A));
+    await settle(1, { changed: { artists: true } });
+    expect(pinRefreshes()).toBe(1);
   });
 
   it("drops the settle fan-out for a sync that outlives its hook", async () => {

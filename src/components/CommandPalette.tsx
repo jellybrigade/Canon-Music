@@ -2,6 +2,8 @@ import { House, List, ListMusic, Music, Play, Settings, User, Users } from "luci
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { PinShelf, type ShelfEntry, type ShelfRow, shelfEntries } from "../features/pins/components/PinShelf";
+import { type Pins, pinsNewestFirst } from "../features/pins/pins";
 import { useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../hooks/useServer";
@@ -43,7 +45,7 @@ interface ArtistResult {
   album_count: number;
 }
 
-type Item = NavCommand | AlbumResult | TrackResult | ArtistResult;
+type Item = ShelfEntry | NavCommand | AlbumResult | TrackResult | ArtistResult;
 
 // Ids are unique inside a kind but not across them, and an album and a track can carry the
 // same native id on some servers.
@@ -60,6 +62,48 @@ const NAV_COMMANDS: NavCommand[] = [
 
 const RESULTS_CAP = 5;
 
+const isShelfItem = (item: Item | undefined): item is ShelfEntry => item?.kind === "pin" || item?.kind === "more";
+
+const isInRow = (item: Item | undefined, row: ShelfRow): item is ShelfEntry => isShelfItem(item) && item.row === row;
+
+// Each shelf row is read with left and right; up and down step between the rows, keeping the column
+// where the row is long enough, and on into the lists below. Null leaves the key to the text field.
+function arrowTarget(items: Item[], from: number, key: string): number | null {
+  const current = items[from];
+  if (key === "ArrowLeft" || key === "ArrowRight") {
+    if (!isShelfItem(current)) return null;
+    const to = from + (key === "ArrowRight" ? 1 : -1);
+    return isInRow(items[to], current.row) ? to : from;
+  }
+  if (key === "ArrowDown") {
+    if (!isShelfItem(current)) return Math.min(from + 1, items.length - 1);
+    const below = items.findIndex((item, i) => i > from && !isInRow(item, current.row));
+    if (below === -1) return from;
+    return inColumn(items, below, from - rowStart(items, current.row));
+  }
+  if (key === "ArrowUp") {
+    if (!isShelfItem(current)) {
+      const above = items[from - 1];
+      return isShelfItem(above) ? rowStart(items, above.row) : Math.max(from - 1, 0);
+    }
+    const above = items[rowStart(items, current.row) - 1];
+    if (!isShelfItem(above)) return from;
+    return inColumn(items, rowStart(items, above.row), from - rowStart(items, current.row));
+  }
+  return null;
+}
+
+const rowStart = (items: Item[], row: ShelfRow) => items.findIndex((item) => isInRow(item, row));
+
+// The tile at `column` in the row starting at `start`, or that row's last tile if it is shorter.
+function inColumn(items: Item[], start: number, column: number): number {
+  const first = items[start];
+  if (!isShelfItem(first)) return start;
+  let to = start;
+  while (to - start < column && isInRow(items[to + 1], first.row)) to++;
+  return to;
+}
+
 // useDeferredValue only defers rendering - it still fires one search per
 // keystroke. A real debounce keeps typing from queuing an FTS scan per character.
 const SEARCH_DEBOUNCE_MS = 150;
@@ -73,6 +117,7 @@ interface Props {
   onPlayTrack: (id: string) => void;
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
+  pins?: Pins;
 }
 
 export function CommandPalette({
@@ -84,6 +129,7 @@ export function CommandPalette({
   onPlayTrack,
   serverWithCredential,
   serverId,
+  pins,
 }: Props) {
   const albumDisplayName = useAlbumDisplayName();
   const [raw, setRaw] = useState("");
@@ -93,6 +139,7 @@ export function CommandPalette({
   // Held by identity, not position: `items` rebuilds asynchronously, so a stored index would
   // silently land the highlight (and Enter) on whatever row inherited that ordinal.
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [expandedShelfRows, setExpandedShelfRows] = useState<ShelfRow[]>([]);
 
   const trimmedRaw = raw.trim();
   useEffect(() => {
@@ -128,7 +175,9 @@ export function CommandPalette({
       [])
     : [];
 
-  const items: Item[] = deferred ? [...searchArtists, ...searchAlbums, ...searchTracks] : NAV_COMMANDS;
+  const pinned = !deferred && pins && serverWithCredential ? pinsNewestFirst(pins) : [];
+  const shelf = shelfEntries(pinned, expandedShelfRows);
+  const items: Item[] = deferred ? [...searchArtists, ...searchAlbums, ...searchTracks] : [...shelf, ...NAV_COMMANDS];
 
   // Nothing focused, or a row that has since gone: the first row, which is what a freshly
   // arrived result set should offer Enter.
@@ -137,13 +186,25 @@ export function CommandPalette({
     items.findIndex((item) => itemKey(item) === focusedKey),
   );
 
+  const navOffset = shelf.length;
+  const focusedItem = items[focusedIdx];
   const artistOffset = 0;
   const albumOffset = searchArtists.length;
   const trackOffset = searchArtists.length + searchAlbums.length;
 
   const activate = useCallback(
     (item: Item) => {
-      if (item.kind === "nav") {
+      if (item.kind === "more") {
+        setExpandedShelfRows((rows) => [...rows, item.row]);
+        // The count tile is gone once its row unfolds; the first pin it was hiding takes the focus.
+        setFocusedKey(`pin:${item.firstHiddenId}`);
+        return;
+      }
+      if (item.kind === "pin") {
+        const { pin } = item;
+        if (pin.kind === "album") onSelectAlbum(pin.album);
+        else onSelectArtist(pin.artist.name, pin.artist.album_count);
+      } else if (item.kind === "nav") {
         onNavigate(item.view);
       } else if (item.kind === "album") {
         onSelectAlbum({
@@ -176,6 +237,7 @@ export function CommandPalette({
       // previous session's results for the 150ms until the timer catches up.
       setDeferred("");
       setFocusedKey(null);
+      setExpandedShelfRows([]);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
@@ -206,9 +268,9 @@ export function CommandPalette({
         onClose();
         return;
       }
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (arrowTarget(items, focusedIdx, e.key) !== null) {
         e.preventDefault();
-        const delta = e.key === "ArrowDown" ? 1 : -1;
+        const { key } = e;
         // Derived from the previous key rather than the render-time index: this is a native
         // listener, so two presses arriving in one task are batched and both would read the
         // same snapshot and move a single row between them.
@@ -217,7 +279,7 @@ export function CommandPalette({
             0,
             items.findIndex((item) => itemKey(item) === current),
           );
-          const to = items[Math.min(Math.max(from + delta, 0), items.length - 1)];
+          const to = items[arrowTarget(items, from, key) ?? from];
           return to ? itemKey(to) : current;
         });
       } else if (e.key === "Enter") {
@@ -238,6 +300,56 @@ export function CommandPalette({
   const isEmpty =
     deferred && showResults && searchAlbums.length === 0 && searchTracks.length === 0 && searchArtists.length === 0;
 
+  const rowProps = (item: Item, idx: number) => ({
+    ref: idx === focusedIdx ? focusedRef : null,
+    className: `cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`,
+    onMouseEnter: () => setFocusedKey(itemKey(item)),
+    onMouseDown: (e: React.MouseEvent) => {
+      e.preventDefault();
+      activate(item);
+    },
+  });
+
+  const renderArtistRow = (artist: ArtistResult, idx: number) => (
+    <button key={itemKey(artist)} {...rowProps(artist, idx)}>
+      <div className="cp-track-icon">
+        <User size={14} />
+      </div>
+      <span className="cp-result-primary">{artist.name}</span>
+      <span className="cp-result-secondary">{artist.album_count} albums</span>
+    </button>
+  );
+
+  const renderAlbumRow = (album: AlbumResult, idx: number) => {
+    const artUrl =
+      serverWithCredential && album.artwork_url
+        ? getCoverArtUrl(
+            serverWithCredential.server.url,
+            serverWithCredential.server.username,
+            serverWithCredential.credential,
+            album.artwork_url,
+            48,
+          )
+        : null;
+    return (
+      <button key={itemKey(album)} {...rowProps(album, idx)}>
+        {artUrl ? <img className="cp-art" src={artUrl} alt="" /> : <div className="cp-art cp-art--placeholder" />}
+        <span className="cp-result-primary">{albumDisplayName(album.name)}</span>
+        {album.artist && <span className="cp-result-secondary">{album.artist}</span>}
+      </button>
+    );
+  };
+
+  const renderTrackRow = (track: TrackResult, idx: number) => (
+    <button key={itemKey(track)} {...rowProps(track, idx)}>
+      <div className="cp-track-icon">
+        <Play size={14} />
+      </div>
+      <span className="cp-result-primary">{track.title}</span>
+      <span className="cp-result-secondary">{[track.artist, track.album_name].filter(Boolean).join(" · ")}</span>
+    </button>
+  );
+
   return (
     <div className="cp-backdrop" {...dismiss}>
       <div className="cp-modal" role="dialog" aria-modal="true" aria-label="Command palette">
@@ -255,6 +367,20 @@ export function CommandPalette({
         </div>
 
         <div className="cp-results">
+          {serverWithCredential && shelf.length > 0 && (
+            <div className="cp-section">
+              <p className="cp-section-label">Pinned</p>
+              <PinShelf
+                entries={shelf}
+                serverWithCredential={serverWithCredential}
+                focusedId={isShelfItem(focusedItem) ? focusedItem.id : null}
+                focusedRef={focusedRef}
+                onHover={(entry) => setFocusedKey(itemKey(entry))}
+                onActivate={activate}
+              />
+            </div>
+          )}
+
           {!deferred && (
             <div className="cp-section">
               <p className="cp-section-label">Go to</p>
@@ -262,8 +388,8 @@ export function CommandPalette({
                 {NAV_COMMANDS.map((cmd, i) => (
                   <button
                     key={cmd.id}
-                    ref={i === focusedIdx ? focusedRef : null}
-                    className={`cp-nav-item${i === focusedIdx ? " cp-item--focused" : ""}`}
+                    ref={navOffset + i === focusedIdx ? focusedRef : null}
+                    className={`cp-nav-item${navOffset + i === focusedIdx ? " cp-item--focused" : ""}`}
                     onMouseEnter={() => setFocusedKey(itemKey(cmd))}
                     onMouseDown={(e) => {
                       e.preventDefault();
@@ -287,95 +413,21 @@ export function CommandPalette({
           {deferred && showResults && searchArtists.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Artists</p>
-              {searchArtists.map((artist, i) => {
-                const idx = artistOffset + i;
-                return (
-                  <button
-                    key={artist.name}
-                    ref={idx === focusedIdx ? focusedRef : null}
-                    className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedKey(itemKey(artist))}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      activate(artist);
-                    }}
-                  >
-                    <div className="cp-track-icon">
-                      <User size={14} />
-                    </div>
-                    <span className="cp-result-primary">{artist.name}</span>
-                    <span className="cp-result-secondary">{artist.album_count} albums</span>
-                  </button>
-                );
-              })}
+              {searchArtists.map((artist, i) => renderArtistRow(artist, artistOffset + i))}
             </div>
           )}
 
           {deferred && showResults && searchAlbums.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Albums</p>
-              {searchAlbums.map((album, i) => {
-                const idx = albumOffset + i;
-                const artUrl =
-                  serverWithCredential && album.artwork_url
-                    ? getCoverArtUrl(
-                        serverWithCredential.server.url,
-                        serverWithCredential.server.username,
-                        serverWithCredential.credential,
-                        album.artwork_url,
-                        48,
-                      )
-                    : null;
-                return (
-                  <button
-                    key={album.id}
-                    ref={idx === focusedIdx ? focusedRef : null}
-                    className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedKey(itemKey(album))}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      activate(album);
-                    }}
-                  >
-                    {artUrl ? (
-                      <img className="cp-art" src={artUrl} alt="" />
-                    ) : (
-                      <div className="cp-art cp-art--placeholder" />
-                    )}
-                    <span className="cp-result-primary">{albumDisplayName(album.name)}</span>
-                    {album.artist && <span className="cp-result-secondary">{album.artist}</span>}
-                  </button>
-                );
-              })}
+              {searchAlbums.map((album, i) => renderAlbumRow(album, albumOffset + i))}
             </div>
           )}
 
           {deferred && showResults && searchTracks.length > 0 && (
             <div className="cp-section">
               <p className="cp-section-label">Tracks</p>
-              {searchTracks.map((track, i) => {
-                const idx = trackOffset + i;
-                return (
-                  <button
-                    key={track.id}
-                    ref={idx === focusedIdx ? focusedRef : null}
-                    className={`cp-result-row${idx === focusedIdx ? " cp-item--focused" : ""}`}
-                    onMouseEnter={() => setFocusedKey(itemKey(track))}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      activate(track);
-                    }}
-                  >
-                    <div className="cp-track-icon">
-                      <Play size={14} />
-                    </div>
-                    <span className="cp-result-primary">{track.title}</span>
-                    <span className="cp-result-secondary">
-                      {[track.artist, track.album_name].filter(Boolean).join(" · ")}
-                    </span>
-                  </button>
-                );
-              })}
+              {searchTracks.map((track, i) => renderTrackRow(track, trackOffset + i))}
             </div>
           )}
         </div>

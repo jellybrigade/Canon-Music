@@ -1,0 +1,146 @@
+/* Takes whatever height the nav buttons leave and scrolls on its own, so its rows never push
+   Settings or the footer out of reach. */
+.sidebar-pins {
+  flex: 1 1 0;
+  min-height: var(--sidebar-pins-reserve);
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-pins__heading {
+  flex-shrink: 0;
+  height: var(--space-md);
+  line-height: var(--space-md);
+  margin: 0;
+  padding: 0 var(--space-sm);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-pins__divider {
+  flex-shrink: 0;
+  height: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-pins__divider::before {
+  content: "";
+  width: var(--space-lg);
+  height: 1px;
+  background: var(--border);
+}
+
+.sidebar-pins__separator {
+  flex-shrink: 0;
+  align-self: center;
+  /* Shorter than the rule above the group, which separates pins from the nav. */
+  width: var(--space-sm);
+  height: 1px;
+  margin-block: var(--space-2xs);
+  background: var(--border);
+}
+
+.sidebar--expanded .sidebar-pins__separator {
+  align-self: stretch;
+  width: auto;
+  margin-inline: var(--space-sm);
+}
+
+.sidebar-pins__list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.sidebar--expanded .sidebar-pins__list {
+  align-items: stretch;
+}
+
+.sidebar-pin {
+  flex-shrink: 0;
+  width: 40px;
+  height: var(--space-xl);
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-md-lg);
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  text-align: left;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--duration-base),
+    background-color var(--duration-base);
+}
+
+.sidebar--expanded .sidebar-pin {
+  width: auto;
+  margin-inline: var(--space-xs);
+  padding: 0 var(--space-xs);
+  justify-content: flex-start;
+}
+
+.sidebar-pin:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-hover);
+}
+
+.sidebar-pin:active {
+  background-color: var(--tint-4);
+}
+
+/* Inset: the list scrolls, and a ring drawn outside the button would be clipped by it. */
+.sidebar-pin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.sidebar-pin__thumb {
+  flex-shrink: 0;
+  width: var(--space-lg);
+  height: var(--space-lg);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sidebar-pin__thumb--artist {
+  border-radius: var(--radius-full);
+}
+
+.sidebar-pin__thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: inherit;
+}
+
+.sidebar-pin__label {
+  min-width: 0;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

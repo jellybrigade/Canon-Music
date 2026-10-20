@@ -20,6 +20,7 @@ import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type React from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../db";
+import type { Pins } from "../features/pins/pins";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { resetTauriMocks } from "../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../test/sqlite";
@@ -128,7 +129,9 @@ function resultPrimaries(): string[] {
 }
 
 function focusedLabel(): string | null {
-  const el = document.querySelector(".cp-item--focused .cp-nav-label, .cp-item--focused .cp-result-primary");
+  const el = document.querySelector(
+    ".cp-item--focused .cp-nav-label, .cp-item--focused .cp-result-primary, .cp-item--focused .cp-shelf-name",
+  );
   return el ? el.textContent : null;
 }
 
@@ -202,6 +205,152 @@ describe("CommandPalette empty-query state", () => {
       vi.advanceTimersByTime(0);
     });
     expect(document.activeElement).toBe(input());
+  });
+});
+
+describe("CommandPalette pinned shelf", () => {
+  const RADIOHEAD: Pins["artists"][number] = {
+    name: "Radiohead",
+    album_count: 9,
+    lastfm_image_url: null,
+    wikidata_image_url: null,
+    navidrome_image_url: null,
+    pinned_at: 1,
+  };
+  const pinnedAlbum = (id: string, name: string, pinnedAt: number): Pins["albums"][number] => ({
+    id,
+    server_id: "srv-b",
+    name,
+    artist: "Radiohead",
+    year: null,
+    artwork_url: null,
+    pinned_at: pinnedAt,
+  });
+  const PINS: Pins = { artists: [RADIOHEAD], albums: [pinnedAlbum("al-1", "Kid A", 3)] };
+  // Seven albums, newest first by name: one more than a shelf row holds.
+  const MANY: Pins = {
+    artists: [],
+    albums: ["A1", "A2", "A3", "A4", "A5", "A6", "A7"].map((name, i) => pinnedAlbum(`al-${name}`, name, 100 - i)),
+  };
+
+  const shelfNames = () => Array.from(document.querySelectorAll(".cp-shelf-name"), (n) => n.textContent);
+  const press = (key: string) => fireEvent.keyDown(window, { key });
+
+  const rowNames = () =>
+    Array.from(document.querySelectorAll(".cp-shelf"), (row) =>
+      Array.from(row.querySelectorAll(".cp-shelf-name"), (n) => n.textContent),
+    );
+
+  it("shows artists and albums as two rows of tiles above the nav commands", () => {
+    renderPalette({ pins: PINS });
+    expect(rowNames()).toEqual([["Radiohead"], ["Kid A"]]);
+    expect(resultPrimaries()).toEqual([]);
+    expect(document.querySelector(".cp-section-label")?.textContent).toBe("Pinned");
+    expect(document.querySelectorAll(".cp-shelf-art--artist")).toHaveLength(1);
+    expect(navLabels()).toHaveLength(6);
+  });
+
+  const TWO_ROWS: Pins = {
+    artists: [RADIOHEAD, { ...RADIOHEAD, name: "Portishead", pinned_at: 0 }],
+    albums: [pinnedAlbum("al-1", "Kid A", 3), pinnedAlbum("al-2", "Amnesiac", 2), pinnedAlbum("al-3", "OK", 1)],
+  };
+
+  it("moves along a row with left and right, stopping at either end instead of wrapping into the next row", () => {
+    renderPalette({ pins: TWO_ROWS });
+    expect(focusedLabel()).toBe("Radiohead");
+    press("ArrowRight");
+    expect(focusedLabel()).toBe("Portishead");
+    press("ArrowRight");
+    expect(focusedLabel()).toBe("Portishead");
+    press("ArrowLeft");
+    press("ArrowLeft");
+    expect(focusedLabel()).toBe("Radiohead");
+  });
+
+  it("steps between the rows keeping the column, landing on the last tile of a shorter row", () => {
+    renderPalette({ pins: TWO_ROWS });
+    press("ArrowRight");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Amnesiac");
+    press("ArrowRight");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Portishead");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Portishead");
+  });
+
+  it("drops from the last row to the nav commands and comes back up to its first tile", () => {
+    renderPalette({ pins: TWO_ROWS });
+    press("ArrowDown");
+    press("ArrowRight");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Home");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Library");
+    press("ArrowUp");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Kid A");
+  });
+
+  it("drops straight to the nav commands from a lone row", () => {
+    renderPalette({ pins: { artists: [], albums: TWO_ROWS.albums } });
+    press("ArrowRight");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Home");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Kid A");
+  });
+
+  it("leaves left and right to the text field outside the shelf", () => {
+    renderPalette();
+    expect(press("ArrowLeft")).toBe(true);
+    expect(press("ArrowRight")).toBe(true);
+    expect(focusedLabel()).toBe("Home");
+  });
+
+  it("opens a pinned album with its own server id, and a pinned artist", () => {
+    renderPalette({ pins: PINS });
+    press("ArrowDown");
+    press("Enter");
+    expect(onSelectAlbum.mock.calls.map(([album]) => [album.id, album.server_id])).toEqual([["al-1", "srv-b"]]);
+
+    cleanup();
+    renderPalette({ pins: PINS });
+    press("Enter");
+    expect(onSelectArtist.mock.calls).toEqual([["Radiohead", 9]]);
+  });
+
+  it("holds six tiles a row, folding the rest of that row behind a count", () => {
+    renderPalette({ pins: { artists: [], albums: MANY.albums.slice(0, 6) } });
+    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "A6"]);
+    expect(document.querySelector(".cp-shelf-more")).toBeNull();
+
+    cleanup();
+    renderPalette({ pins: MANY });
+    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "More"]);
+    expect(document.querySelector(".cp-shelf-more .cp-shelf-art")?.textContent).toBe("+2");
+
+    cleanup();
+    renderPalette({ pins: { artists: [RADIOHEAD], albums: MANY.albums } });
+    expect(rowNames()).toEqual([["Radiohead"], ["A1", "A2", "A3", "A4", "A5", "More"]]);
+  });
+
+  it("unfolds the rest in place from the count tile, keeping the palette open", () => {
+    renderPalette({ pins: MANY });
+    for (let i = 0; i < 5; i++) press("ArrowRight");
+    expect(focusedLabel()).toBe("More");
+    press("Enter");
+    expect(shelfNames()).toEqual(["A1", "A2", "A3", "A4", "A5", "A6", "A7"]);
+    expect(focusedLabel()).toBe("A6");
+    expect(onClose).not.toHaveBeenCalled();
+    expect(onSelectAlbum).not.toHaveBeenCalled();
+  });
+
+  it("hides the shelf once a query is typed", async () => {
+    renderPalette({ pins: PINS });
+    typeRaw("zzz");
+    await settleDebounce();
+    expect(shelfNames()).toEqual([]);
   });
 });
 

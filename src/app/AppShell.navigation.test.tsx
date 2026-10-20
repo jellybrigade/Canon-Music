@@ -70,6 +70,10 @@ vi.mock("../features/playback/components/PlayerBar", () => ({
   ),
 }));
 
+// Pins read SQLite through React Query; this suite drives navigation, not pins.
+vi.mock("../features/pins/usePins", () => ({ usePins: () => ({ data: undefined }) }));
+vi.mock("../features/pins/components/SidebarPins", () => ({ SidebarPins: () => null }));
+
 vi.mock("../components/CommandPalette", () => ({
   CommandPalette: (props: {
     open: boolean;

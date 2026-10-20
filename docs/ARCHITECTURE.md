@@ -19,7 +19,7 @@ Agent reference. Update in the same commit as any change that adds, moves, delet
 | `src/App.tsx` | MainApp: owns every app-level hook, state and playback handler; builds `AppViewProps` for `AppShell`. |
 | `src/app/` | `AppShell.tsx` (sidebar + persistent overlays), `AppRoutes.tsx` (route table, `AppViewProps`), `DetailRoutes.tsx` (lazy album/artist/playlist routes keyed by URL param), `DatabaseErrorScreen.tsx`. |
 | `src/pages/` | Route targets no feature owns: Home, Library, AlbumDetail, ArtistDetail, ArtistGrid, GenreView, YearsView, TrackTableView, plus `album/`, `artist/`, `home/` subparts. |
-| `src/features/<name>/` | Feature-owned code, `components/ hooks/ lib/ store/` (flat for small features): `tags`, `radio`, `search`, `sync`, `enrichment`, `playlists`, `playback`, `settings`, `setup`. |
+| `src/features/<name>/` | Feature-owned code, `components/ hooks/ lib/ store/` (flat for small features): `tags`, `radio`, `search`, `sync`, `enrichment`, `playlists`, `playback`, `pins`, `settings`, `setup`. |
 | `src/components/` | Shared presentation: `AlbumGrid`, `AlbumGenreEditor`, `FilterSidebar`, `CommandPalette`, `ArtBackdrop`, `FeedbackModal`, banners. |
 | `src/ui/` | Primitives: `ContextMenu`, `ErrorBoundary` (root; recovery moves to Home, then offers a reload), `Skeleton`, `CanonIcon`, `useClickOutside`, `useModalChrome`, `useOverlayDismiss`. |
 | `src/hooks/` | Stateful shared hooks: library reads (`useAlbums`, `useArtists`, `useTracks`, `useAllTracks`, `useGenres`, `useLoved`), `useServer`, `useSetting`, caches, navigation. |
@@ -55,7 +55,7 @@ Rust (`src-tauri/src/`):
 
 - Sync: `useLibrarySync` -> `syncLibrary` (`src/features/sync/sync.ts`): album list + scan status -> album upsert + prune -> per-album track pass -> id remap -> FTS rebuild -> artists -> loved -> playlists.
 - Track pass reads only changed albums (song count differs) unless the watermark moved, a resync forced it, or the track-id probe failed. `scanForIssues` + `rebuildTagVocabCache` run only if albums/tracks changed.
-- After sync, `useLibrarySync` bumps only the session stores whose domain changed (`changed.*`), staggered 300/600 ms, and busts the genre tree cache. No React Query invalidation happens there.
+- After sync, `useLibrarySync` bumps only the session stores whose domain changed (`changed.*`), staggered 300/600 ms, and busts the genre tree cache. Its only React Query invalidation is the pins (`QK.pinsAll`), when albums, tracks or artists changed.
 - `runSync(server, { onSettled })` reports `{ status, albumsChanged, error }` once to the caller that started the run, after its album refresh is requested. Home's Newly Added "Check for new albums" button (`src/pages/home/useNewAlbumsCheck.ts`) uses it for its own spinner and failure note, and scrolls back to the start only when an album not shown at click lands at the front before the run's own read (or the next sync) ends the watch.
 - Reads: browse lists go `invoke("get_*")` -> rusqlite -> row cache on a `*SessionStore` keyed by its tick. Detail/feature queries (tags, identity, enrichment, search, playlists mutations) use React Query or direct `getDb()` over `tauri-plugin-sql`.
 - Playback: component -> `usePlayerStore` action with a `streamUrlFor` callback -> `PlaybackTarget` (`LocalTarget` = `audio_*` commands, `DlnaTarget` = SOAP).
@@ -121,6 +121,7 @@ Rust (`src-tauri/src/`):
 | Playlists | `usePlaylists.ts`, `usePlaylistTracks.ts`, `playlists.rs` | Removal is by position index on server and locally (`playlist_remove_track` closes the gap in a transaction); concurrent edits from other clients can remove the wrong track. |
 | Playlists | same | `INSERT OR IGNORE` only guards the `(playlist_id, position)` key, so the same track can be added twice; `track_count` is incremented regardless. |
 | Smart playlists | `smartPlaylist.ts` | Genre exclude = `NOT IN` over direct `album_genres`, so untagged albums pass. Text filters use `LIKE ... ESCAPE`; limit clamped 1..500. |
+| Pins | `features/pins/` | Pin/unpin via `PinMenuItem` ("Pin"/"Unpin") in album and artist context menus (songs can't be pinned; v55 dropped `pinned_tracks`). `SidebarPins` shows the 3 newest album/artist pins under the nav, albums above artists with a rule between (thumb only when collapsed, thumb plus name when expanded; right-click unpins); the rest live in Ctrl+K, whose empty query shows a `PinShelf` above "Go to": a row of round artist tiles over a row of square album tiles, each newest first (`pinsNewestFirst`); past six in a row its fifth onward folds behind a count tile that unfolds that row in place; left/right move along a row, up/down step between rows (keeping the column) and on to the lists. Both read names and art through `usePinArt`. The sidebar reserves one pin row at the 560px floor by letting nav buttons shrink to 28px only while a pin shows (`:has(> .sidebar-pins)`), and the pin list scrolls on its own. `AppShell` reads pins once for the palette; the query never goes stale (writes and sync invalidate it). |
 | Loved | `useLoved.ts`, `syncLoved.ts` | Local write first, star/unstar fire-and-forget; sync replaces local state from `getStarred2`. Album shows loved if starred or any track loved. |
 | Overlays / modals | `useModalChrome.ts`, `useSearchShortcuts.ts`, `useDismissOnNavigate.ts`, `useAppNavigation.ts` | Modals register in an ordered module registry; only the topmost acts on Escape, and `useAnyModalOpen` feeds `overlayAbove` so /search stands down. Focus restores to the opener only if still connected. The command palette is non-URL state: `useAppNavigation` dismisses it on nav intent, `useDismissOnNavigate` on route-driven navigation (pathname only). |
 | Covers | `cover.rs`, `navidromeUrls.ts`, `useCoverCache.ts` | `getCoverArtUrl` returns `cover://` once proxy config is set; `album_covers`/`artist_covers` are data-URL art caches filled by a background pass (batches of 5). `useAlbumCoverMap` loads only the keyset eagerly; each data_url is fetched on first `.get()` (sync, LRU 2000). |
@@ -133,7 +134,7 @@ Rust (`src-tauri/src/`):
 - Sections: genres, descriptors, scenes-and-movements. Top-level `version` + `renames`. Generated by `scripts/parse-rym.mjs` from `scripts/data/rym-hierarchy.txt`; never hand-edited.
 - DAG: a node may have several parents. `getAncestorIds` expands all parents for `album_genres` ancestor rows. User nodes live in `user_tree_nodes` and are resolved beside the canon tree, never merged into it.
 
-## 7. SQLite schema (v53)
+## 7. SQLite schema (v55)
 
 Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids of mirrored rows carry the server prefix.
 
@@ -146,6 +147,7 @@ Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids
 | `artists` | Mirror, rebuilt per sync: id, server_id, name, album_count. |
 | `tracks_fts` | FTS5 over id, title, artist, album, genre; rebuilt per dirty album. |
 | `loved_tracks` / `loved_albums` | Starred ids + loved_at. |
+| `pinned_albums` / `pinned_artists` | Pins (sidebar, Ctrl+K): album_id PK, or PK (server_id, artist_name) since artist ids are regenerated per rebuild; server_id, pinned_at (ms). Pruned with the item (albums in `pruneAlbums`, artists after the artists rebuild), purged with the server. |
 | `playlists` | id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json. |
 | `playlist_tracks` | playlist_id, track_id, position; PK (playlist_id, position). |
 | `playlist_resume` | playlist_id PK, last_track_id, track_position. |

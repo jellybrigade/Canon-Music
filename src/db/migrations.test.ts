@@ -305,6 +305,8 @@ describe("post-migration schema", () => {
       "loved_tracks",
       "lyrics",
       "pending_edits",
+      "pinned_albums",
+      "pinned_artists",
       "playlist_resume",
       "playlist_tracks",
       "playlists",
