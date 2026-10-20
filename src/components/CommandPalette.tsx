@@ -458,16 +458,36 @@ export function CommandPalette({
     onUnpin(pin);
   };
 
-  const keysRef = useRef({ items, rows, focusedIdx, activate, unpin, isMenuOpen: pinMenu !== null, onClose });
-  keysRef.current = { items, rows, focusedIdx, activate, unpin, isMenuOpen: pinMenu !== null, onClose };
+  const keys = {
+    items,
+    rows,
+    focusedIdx,
+    activate,
+    unpin,
+    isMenuOpen: pinMenu !== null,
+    onClose,
+    trimmedRaw,
+    deferred,
+  };
+  const keysRef = useRef(keys);
+  keysRef.current = keys;
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      const { items, rows, focusedIdx, activate, unpin, isMenuOpen, onClose } = keysRef.current;
+      const { items, rows, focusedIdx, activate, unpin, isMenuOpen, onClose, trimmedRaw, deferred } = keysRef.current;
       if (isMenuOpen) return;
       if (e.key === "Escape") {
         onClose();
+        return;
+      }
+      // Until the debounce catches up the rows answer the previous text, so keys stay with the field
+      // and Enter searches what was typed.
+      if (trimmedRaw !== deferred) {
+        if (e.key === "Enter" && trimmedRaw) {
+          e.preventDefault();
+          activate({ kind: "all", id: "all", query: trimmedRaw }, intentOf(e));
+        }
         return;
       }
       if (arrowTarget(rows, focusedIdx, e.key) !== null) {

@@ -391,6 +391,17 @@ describe("CommandPalette pinned shelf", () => {
     expect(focusedLabel()).toBe("Amnesiac");
   });
 
+  it("keeps keys pressed before the typed search settles off the pins", () => {
+    renderPalette({ pins: TWO_ROWS });
+    typeRaw("abbey");
+    expect(press("ArrowRight")).toBe(true);
+    expect(press("Delete")).toBe(true);
+    press("Enter");
+    expect(onUnpin).not.toHaveBeenCalled();
+    expect(onSelectArtist).not.toHaveBeenCalled();
+    expect(onSearchAll.mock.calls).toEqual([["abbey"]]);
+  });
+
   it("leaves left and right to the text field in the result lists", async () => {
     renderPalette();
     typeRaw("settings");
