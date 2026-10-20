@@ -9,6 +9,7 @@ import {
 } from "../../../hooks/useAlbumDisplayName";
 import { useAlbums } from "../../../hooks/useAlbums";
 import "./TitleCleanupTab.css";
+import { plural } from "../../../lib/plural";
 
 type AlbumEntry = { id: string; name: string; artist: string | null };
 
@@ -74,7 +75,7 @@ function CountBtn({
   }
   return (
     <button className={`title-cleanup-count${open ? " title-cleanup-count--open" : ""}`} onClick={onToggle}>
-      {albums.length} album{albums.length !== 1 ? "s" : ""}
+      {albums.length} {plural(albums.length, "album")}
     </button>
   );
 }

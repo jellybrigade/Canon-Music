@@ -23,6 +23,7 @@ import { useScrollMemory } from "../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import { parseStalenessDays } from "../lib/numberSetting";
+import { plural } from "../lib/plural";
 import type { ArtistRow } from "../types/library";
 import { ContextMenu } from "../ui/ContextMenu";
 import { CardGridSkeleton } from "../ui/Skeleton";
@@ -324,7 +325,7 @@ const ArtistGridCard = memo(function ArtistGridCard({
       <div className="album-overlay">
         <span className="album-name">{artist.name}</span>
         <span className="album-artist">
-          {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+          {artist.album_count} {plural(artist.album_count, "album")}
         </span>
       </div>
     </div>

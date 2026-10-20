@@ -55,6 +55,13 @@ describe("BottomNotices", () => {
     expect(reservedRows()).toBe("1");
   });
 
+  it("counts a single album without metadata in the singular", () => {
+    useTagsStore.setState({ enrichmentPending: 1 });
+    render(<BottomNotices onOpenResync={() => {}} />);
+    expect(rows()[0]?.textContent).toContain("Metadata not fetched for 1 album");
+    expect(rows()[0]?.textContent).not.toContain("1 albums");
+  });
+
   it("offers a resync only when the library's track ids went stale", () => {
     const onOpenResync = vi.fn();
     render(<BottomNotices onOpenResync={onOpenResync} />);

@@ -676,6 +676,7 @@ describe("CommandPalette result states", () => {
     renderPalette();
     typeRaw("wilco");
     await settleDebounce();
+    expect(document.querySelector(".cp-result-row .cp-result-secondary")!.textContent).toBe("1 album");
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onSelectArtist).toHaveBeenCalledTimes(1);
     expect(onSelectArtist).toHaveBeenCalledWith("Wilco", 1);

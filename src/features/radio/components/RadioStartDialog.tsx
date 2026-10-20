@@ -9,6 +9,7 @@ import type { RadioStartAction, RadioStartRequest } from "../../playback/store/p
 import { RADIO_START_ACTION_SETTING } from "../hooks/useStartRadio";
 import { useRadioStartStore } from "../store/radioStart";
 import "./RadioStartDialog.css";
+import { plural } from "../../../lib/plural";
 
 export function RadioStartDialogHost() {
   const pending = useRadioStartStore((s) => s.pending);
@@ -47,8 +48,7 @@ function RadioStartDialog({ request }: { request: RadioStartRequest }) {
 
         <div className="radio-start-body">
           <p className="radio-start-description">
-            Your queue has {queueLength} {queueLength === 1 ? "track" : "tracks"}. Replace it, or let radio continue
-            after it?
+            Your queue has {queueLength} {plural(queueLength, "track")}. Replace it, or let radio continue after it?
           </p>
         </div>
 

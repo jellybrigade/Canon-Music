@@ -4,6 +4,7 @@ import { getMissingArtistImageCount, useCacheAllArtistImages } from "../../../ho
 import { getMissingCoverCount, useCacheAllCovers } from "../../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { errorMessage } from "../../../lib/errorMessage";
+import { plural } from "../../../lib/plural";
 import { QK } from "../../../lib/queryKeys";
 import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
 import { exportSettingsFile, importSettingsFile } from "../lib/settingsBackup";
@@ -162,7 +163,7 @@ export function DiagnosticsTab({
             {coverProgress === null && (
               <span className="settings-hint">
                 {missingCoverCount
-                  ? `${missingCoverCount} album${missingCoverCount === 1 ? "" : "s"} not yet cached (~${formatSizeRange(missingCoverCount, MIN_COVER_KB, MAX_COVER_KB)})`
+                  ? `${missingCoverCount} ${plural(missingCoverCount, "album")} not yet cached (~${formatSizeRange(missingCoverCount, MIN_COVER_KB, MAX_COVER_KB)})`
                   : "All covers cached"}
               </span>
             )}
@@ -199,7 +200,7 @@ export function DiagnosticsTab({
             {artistImageProgress === null && (
               <span className="settings-hint">
                 {missingArtistImageCount
-                  ? `${missingArtistImageCount} artist${missingArtistImageCount === 1 ? "" : "s"} not yet cached (~${formatSizeRange(missingArtistImageCount, MIN_ARTIST_IMAGE_KB, MAX_ARTIST_IMAGE_KB)})`
+                  ? `${missingArtistImageCount} ${plural(missingArtistImageCount, "artist")} not yet cached (~${formatSizeRange(missingArtistImageCount, MIN_ARTIST_IMAGE_KB, MAX_ARTIST_IMAGE_KB)})`
                   : "All artist portraits cached"}
               </span>
             )}

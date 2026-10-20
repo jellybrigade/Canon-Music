@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AlbumTracksNotice } from "../../../components/AlbumTracksNotice";
 import { useSetting } from "../../../hooks/useSetting";
+import { plural } from "../../../lib/plural";
 import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
 import { ContextMenu } from "../../../ui/ContextMenu";
 import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
@@ -25,7 +26,7 @@ function EnrichmentPendingNotice({ count }: { count: number }) {
 
   return (
     <div className="normalizing-bar">
-      Metadata not fetched for {count} albums
+      Metadata not fetched for {count} {plural(count, "album")}
       <button
         className="normalizing-bar__action"
         onClick={() => {

@@ -3,6 +3,7 @@ import { memo } from "react";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import type { CurrentTrack } from "../../features/playback/store/playerTypes";
+import { plural } from "../../lib/plural";
 import type { Server } from "../../types/server";
 import type { TopTrack } from "./artistQueries";
 
@@ -54,8 +55,8 @@ export const TrackRow = memo(function TrackRow({
     ? getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)
     : null;
 
-  const showPlaycount = lastfmPlaycount !== undefined && lastfmPlaycount > 0;
-  const showLibraryCount = !showPlaycount && track.play_count != null && track.play_count > 0;
+  const lastfmPlays = lastfmPlaycount !== undefined && lastfmPlaycount > 0 ? lastfmPlaycount : null;
+  const showLibraryCount = lastfmPlays === null && track.play_count != null && track.play_count > 0;
 
   return (
     <div
@@ -99,7 +100,7 @@ export const TrackRow = memo(function TrackRow({
           <span className="artist-track-album">{track.album_name}</span>
         ) : null}
       </div>
-      {showPlaycount ? (
+      {lastfmPlays !== null ? (
         <span
           className="artist-track-playcount"
           title={
@@ -108,7 +109,8 @@ export const TrackRow = memo(function TrackRow({
               : undefined
           }
         >
-          {formatCount(lastfmPlaycount!)} plays{lastfmCombined ? " · combined" : ""}
+          {formatCount(lastfmPlays)} {plural(lastfmPlays, "play")}
+          {lastfmCombined ? " · combined" : ""}
         </span>
       ) : showLibraryCount ? (
         <span className="artist-track-playcount">{track.play_count}×</span>

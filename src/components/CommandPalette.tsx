@@ -7,6 +7,7 @@ import { type Pins, pinsNewestFirst } from "../features/pins/pins";
 import { useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
 import type { ServerWithCredential } from "../hooks/useServer";
+import { plural } from "../lib/plural";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
@@ -316,7 +317,9 @@ export function CommandPalette({
         <User size={14} />
       </div>
       <span className="cp-result-primary">{artist.name}</span>
-      <span className="cp-result-secondary">{artist.album_count} albums</span>
+      <span className="cp-result-secondary">
+        {artist.album_count} {plural(artist.album_count, "album")}
+      </span>
     </button>
   );
 

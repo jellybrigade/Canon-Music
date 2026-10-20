@@ -44,6 +44,7 @@ import { useVaultPicks } from "./home/useVaultPicks";
 import "./HomeView.css";
 import "./GenreView.css";
 import { loadGenreSeedTracks } from "../features/radio/lib/genreSeed";
+import { plural } from "../lib/plural";
 import { replayGainFromRow } from "../lib/replayGainRow";
 
 interface Props {
@@ -357,7 +358,9 @@ export function HomeView({
             )}
           </div>
           {allAlbums != null && !isSearching && (
-            <span className="home-greeting__sub">{allAlbums.length.toLocaleString()} albums</span>
+            <span className="home-greeting__sub">
+              {allAlbums.length.toLocaleString()} {plural(allAlbums.length, "album")}
+            </span>
           )}
         </header>
 

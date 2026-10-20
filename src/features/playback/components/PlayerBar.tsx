@@ -35,6 +35,7 @@ import { PlayPauseButton } from "./PlayPauseButton";
 import { SleepTimerPopover } from "./SleepTimerPopover";
 import { VolumeControl } from "./VolumeControl";
 import "./PlayerBar.css";
+import { plural } from "../../../lib/plural";
 
 interface LoveButtonProps {
   isLoved: boolean;
@@ -322,8 +323,8 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
                         className={`player-star-btn${filled ? " player-star-btn--filled" : ""}`}
                         onClick={() => handleStarClick(star)}
                         onMouseEnter={() => setHoverRating(star)}
-                        title={`Rate ${star} star${star !== 1 ? "s" : ""}`}
-                        aria-label={`Rate ${star} star${star !== 1 ? "s" : ""}`}
+                        title={`Rate ${star} ${plural(star, "star")}`}
+                        aria-label={`Rate ${star} ${plural(star, "star")}`}
                       >
                         <Star size={13} fill={filled ? "currentColor" : "none"} strokeWidth={filled ? 0 : 1.5} />
                       </button>

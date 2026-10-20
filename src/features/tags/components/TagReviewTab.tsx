@@ -15,6 +15,7 @@ import {
   TagSourceDots,
 } from "./TagsViewHelpers";
 import "./TagReviewTab.css";
+import { plural } from "../../../lib/plural";
 
 // ── ReviewRow ─────────────────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ export function TagReviewTab({ treeNodes, autoNote, onDismissAutoNote, onCreateN
         <div className="review-empty">
           <strong>{unresolvedRows.length === 0 ? "All tags resolved" : "No tags match"}</strong>
           {unresolvedRows.length === 0
-            ? `${vocab.length} tag${vocab.length === 1 ? "" : "s"} total, all mapped, accepted, or ignored.`
+            ? `${vocab.length} ${plural(vocab.length, "tag")} total, all mapped, accepted, or ignored.`
             : "Clear the search filter to see all pending tags."}
         </div>
       ) : (

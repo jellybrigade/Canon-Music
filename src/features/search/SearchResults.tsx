@@ -17,6 +17,7 @@ import type { PlaylistRow } from "../playlists/usePlaylists";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import type { SearchAlbum, SearchArtist, SearchTrack } from "./useSearch";
 import "./SearchResults.css";
+import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 
 interface Props {
@@ -281,7 +282,7 @@ export function SearchResults({
                 <div className="search-artist-info">
                   <span className="search-item-primary">{artist.name}</span>
                   <span className="search-item-secondary">
-                    {artist.album_count} {artist.album_count === 1 ? "album" : "albums"}
+                    {artist.album_count} {plural(artist.album_count, "album")}
                   </span>
                 </div>
               </button>
@@ -289,7 +290,7 @@ export function SearchResults({
           />
           {artists.length > ARTIST_LIMIT && !showAllArtists && (
             <button className="search-show-all" onClick={() => setShowAllArtists(true)}>
-              Show all {artists.length} artists
+              Show all {artists.length} {plural(artists.length, "artist")}
             </button>
           )}
         </section>
@@ -332,7 +333,7 @@ export function SearchResults({
           />
           {albums.length > ALBUM_LIMIT && !showAllAlbums && (
             <button className="search-show-all" onClick={() => setShowAllAlbums(true)}>
-              Show all {albums.length} albums
+              Show all {albums.length} {plural(albums.length, "album")}
             </button>
           )}
         </section>
@@ -380,7 +381,7 @@ export function SearchResults({
           />
           {tracks.length > TRACK_LIMIT && !showAllTracks && (
             <button className="search-show-all" onClick={() => setShowAllTracks(true)}>
-              Show all {tracks.length} tracks
+              Show all {tracks.length} {plural(tracks.length, "track")}
             </button>
           )}
         </section>

@@ -9,6 +9,7 @@ import { isSuperseeded, useUserNodes, useUserTreeChangelog } from "../hooks/useU
 import type { TreeNode } from "../lib/canonicalize";
 import { canonicalKey } from "../lib/canonicalize";
 import "./TagTreeTab.css";
+import { plural } from "../../../lib/plural";
 
 // ── NodeModal ─────────────────────────────────────────────────────────────────
 
@@ -286,8 +287,8 @@ export function TagTreeTab({ treeNodes, supersededCount, onCreateNode, onEditNod
       {supersededCount > 0 && (
         <div className="tree-conflict-banner">
           <AlertTriangle size={13} />
-          {supersededCount} of your node{supersededCount === 1 ? "" : "s"} now{" "}
-          {supersededCount === 1 ? "exists" : "exist"} in the bundled tree. Review and delete if no longer needed.
+          {supersededCount} of your {plural(supersededCount, "node")} now {plural(supersededCount, "exists", "exist")}{" "}
+          in the bundled tree. Review and delete if no longer needed.
         </div>
       )}
 

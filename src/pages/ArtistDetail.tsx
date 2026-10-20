@@ -24,6 +24,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { useBoolSetting } from "../hooks/useSetting";
 import { extractAccent } from "../lib/artColor";
 import { mostPlayedHere } from "../lib/artistRanking";
+import { plural } from "../lib/plural";
 import { shuffleArray } from "../lib/shuffle";
 import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
@@ -217,7 +218,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const metaItems: string[] = [
     enrichment?.listeners != null ? `${formatCount(enrichment.listeners)} listeners` : null,
     enrichment?.playcount != null ? `${formatCount(enrichment.playcount)} scrobbles` : null,
-    `${artist.album_count} ${artist.album_count === 1 ? "album" : "albums"} in library`,
+    `${artist.album_count} ${plural(artist.album_count, "album")} in library`,
   ].filter((x): x is string => x !== null);
 
   const toTrackObj = useCallback((track: TopTrack) => buildTrackObj(track, server, credential), [server, credential]);
@@ -301,7 +302,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
               {canonicalOf && <span className="artist-alias-badge">alias of {canonicalOf}</span>}
               {aliases.length > 0 && (
                 <span className="artist-alias-badge">
-                  {aliases.length} {aliases.length === 1 ? "alias" : "aliases"}
+                  {aliases.length} {plural(aliases.length, "alias", "aliases")}
                 </span>
               )}
             </div>
@@ -456,7 +457,9 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
                       <div key={t.name} className="artist-lastfm-only-row">
                         <span className="artist-lastfm-only-title">{t.name}</span>
                         {t.playcount > 0 && (
-                          <span className="artist-lastfm-only-plays">{formatCount(t.playcount)} plays</span>
+                          <span className="artist-lastfm-only-plays">
+                            {formatCount(t.playcount)} {plural(t.playcount, "play")}
+                          </span>
                         )}
                       </div>
                     ))}

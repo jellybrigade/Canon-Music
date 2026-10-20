@@ -34,6 +34,7 @@ import "../../pages/AlbumDetail.css";
 import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
+import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../../lib/trackCells";
 import { useClickOutside } from "../../ui/useClickOutside";
@@ -476,7 +477,7 @@ export function PlaylistDetail({
             )}
 
             <p className="album-detail-year">
-              {playlist.track_count} {playlist.track_count === 1 ? "track" : "tracks"}
+              {playlist.track_count} {plural(playlist.track_count, "track")}
               {totalSeconds > 0 && ` · ${formatTotalDuration(totalSeconds)}`}
             </p>
             <div className="playlist-detail-actions">
