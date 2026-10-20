@@ -97,6 +97,7 @@ const onPlayAlbum = vi.fn();
 const onStartArtistRadio = vi.fn();
 const onSearchAll = vi.fn();
 const onOpened = vi.fn();
+const onUnpin = vi.fn();
 
 function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -112,6 +113,7 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
     onStartArtistRadio,
     onSearchAll,
     onOpened,
+    onUnpin,
     serverWithCredential: SRV,
     ...props,
   } as React.ComponentProps<typeof CommandPalette>;
@@ -209,6 +211,7 @@ beforeEach(async () => {
   onStartArtistRadio.mockClear();
   onSearchAll.mockClear();
   onOpened.mockClear();
+  onUnpin.mockClear();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
 });
@@ -440,6 +443,71 @@ describe("CommandPalette pinned shelf", () => {
     const next = document.querySelector(".cp-shelf .album-carousel__arrow--next");
     if (!next) throw new Error("no carousel arrow");
     expect(fireEvent.mouseDown(next)).toBe(false);
+  });
+
+  const tile = (name: string) => {
+    const found = Array.from(document.querySelectorAll(".cp-shelf-tile")).find(
+      (el) => el.querySelector(".cp-shelf-name")?.textContent === name,
+    );
+    if (!found) throw new Error(`no tile ${name}`);
+    return found;
+  };
+  const rightClick = (el: Element) => {
+    fireEvent.mouseDown(el, { button: 2 });
+    fireEvent.contextMenu(el);
+  };
+  const unpinnedKeys = () => onUnpin.mock.calls.map(([pin]) => pin.key);
+
+  it("unpins a tile from its right-click menu without opening it or closing the palette", () => {
+    renderPalette({ pins: PINS });
+    rightClick(tile("Kid A"));
+    expect(onSelectAlbum).not.toHaveBeenCalled();
+
+    const unpin = document.querySelector(".context-menu button");
+    if (!unpin) throw new Error("no menu");
+    expect(unpin.textContent).toBe("Unpin");
+    fireEvent.click(unpin);
+
+    expect(unpinnedKeys()).toEqual(["album:al-1"]);
+    expect(document.querySelector(".context-menu")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("leaves Escape and Enter to the open menu", () => {
+    renderPalette({ pins: PINS });
+    rightClick(tile("Radiohead"));
+    // From the search field, as a real key arrives: the menu listens on the document.
+    const key = (name: string) => fireEvent.keyDown(input(), { key: name });
+    key("Enter");
+    expect(onSelectArtist).not.toHaveBeenCalled();
+    key("Escape");
+    expect(document.querySelector(".context-menu")).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+    key("Escape");
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("unpins the focused tile with Delete, the focus staying in its row", () => {
+    const { rerenderWith } = renderPalette({ pins: TWO_ROWS });
+    press("ArrowDown");
+    press("ArrowRight");
+    press("Delete");
+    expect(unpinnedKeys()).toEqual(["album:al-2"]);
+    rerenderWith({ pins: { ...TWO_ROWS, albums: TWO_ROWS.albums.filter((album) => album.id !== "al-2") } });
+    expect(focusedLabel()).toBe("OK");
+
+    press("Delete");
+    expect(unpinnedKeys()).toEqual(["album:al-2", "album:al-3"]);
+    rerenderWith({ pins: { ...TWO_ROWS, albums: TWO_ROWS.albums.slice(0, 1) } });
+    expect(focusedLabel()).toBe("Kid A");
+  });
+
+  it("does nothing on Delete away from the pins", () => {
+    renderPalette({ pins: { artists: [], albums: TWO_ROWS.albums } });
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Home");
+    press("Delete");
+    expect(onUnpin).not.toHaveBeenCalled();
   });
 
   it("hides the shelf once a query is typed", async () => {

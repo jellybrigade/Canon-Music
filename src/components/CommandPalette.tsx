@@ -11,7 +11,7 @@ import {
   type ShelfRow,
   shelfEntries,
 } from "../features/pins/components/PinShelf";
-import { type Pins, pinsNewestFirst } from "../features/pins/pins";
+import { type PinnedItem, type Pins, pinsNewestFirst } from "../features/pins/pins";
 import type { RecentItem, RecentTarget, RecentTrack } from "../features/recents/recents";
 import { pickTopResult, type TopResult, toSearchTokens } from "../features/search/searchScore";
 import { type SearchAlbum, type SearchArtist, useSearch } from "../features/search/useSearch";
@@ -24,6 +24,7 @@ import { plural } from "../lib/plural";
 import type { AlbumTrackTarget } from "../lib/routes";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
+import { ContextMenu } from "../ui/ContextMenu";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
@@ -242,6 +243,7 @@ interface Props {
   onStartArtistRadio: (name: string) => void;
   onSearchAll: (query: string) => void;
   onOpened: (target: RecentTarget) => void;
+  onUnpin: (pin: PinnedItem) => void;
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
   pins?: Pins;
@@ -261,6 +263,7 @@ export function CommandPalette({
   onStartArtistRadio,
   onSearchAll,
   onOpened,
+  onUnpin,
   serverWithCredential,
   serverId,
   pins,
@@ -276,6 +279,7 @@ export function CommandPalette({
   // silently land the highlight (and Enter) on whatever row inherited that ordinal.
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [expandedShelfRows, setExpandedShelfRows] = useState<ShelfRow[]>([]);
+  const [pinMenu, setPinMenu] = useState<{ x: number; y: number; pin: PinnedItem } | null>(null);
 
   const trimmedRaw = raw.trim();
   useEffect(() => {
@@ -425,6 +429,7 @@ export function CommandPalette({
       setDeferred("");
       setFocusedKey(null);
       setExpandedShelfRows([]);
+      setPinMenu(null);
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
@@ -444,13 +449,23 @@ export function CommandPalette({
   // which rebuild `items`. Same pattern as useSearchShortcuts.
   const dismiss = useOverlayDismiss(onClose);
 
-  const keysRef = useRef({ items, rows, focusedIdx, activate, onClose });
-  keysRef.current = { items, rows, focusedIdx, activate, onClose };
+  // The tile's neighbour in its row takes the focus, so Delete can be pressed again in place.
+  const unpin = (pin: PinnedItem) => {
+    const row = shelf.filter((entry) => entry.row === pin.kind);
+    const at = row.findIndex((entry) => entry.kind === "pin" && entry.pin.key === pin.key);
+    const neighbour = row[at + 1] ?? row[at - 1];
+    setFocusedKey(neighbour ? itemKey(neighbour) : null);
+    onUnpin(pin);
+  };
+
+  const keysRef = useRef({ items, rows, focusedIdx, activate, unpin, isMenuOpen: pinMenu !== null, onClose });
+  keysRef.current = { items, rows, focusedIdx, activate, unpin, isMenuOpen: pinMenu !== null, onClose };
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      const { items, rows, focusedIdx, activate, onClose } = keysRef.current;
+      const { items, rows, focusedIdx, activate, unpin, isMenuOpen, onClose } = keysRef.current;
+      if (isMenuOpen) return;
       if (e.key === "Escape") {
         onClose();
         return;
@@ -473,6 +488,11 @@ export function CommandPalette({
         e.preventDefault();
         const item = items[focusedIdx];
         if (item) activate(item, intentOf(e));
+      } else if (e.key === "Delete") {
+        const item = items[focusedIdx];
+        if (item?.kind !== "pin") return;
+        e.preventDefault();
+        unpin(item.pin);
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -601,6 +621,7 @@ export function CommandPalette({
                 optionIdOf={(entry) => optionId(shelf.indexOf(entry))}
                 onHover={(entry) => setFocusedKey(itemKey(entry))}
                 onActivate={activate}
+                onPinMenu={(pin, x, y) => setPinMenu({ x, y, pin })}
               />
             </div>
           )}
@@ -688,11 +709,28 @@ export function CommandPalette({
               <kbd>⇧↵</kbd> {focusedHint.play}
             </span>
           )}
+          {focusedItem?.kind === "pin" && (
+            <span>
+              <kbd>del</kbd> unpin
+            </span>
+          )}
           <span>
             <kbd>esc</kbd> close
           </span>
         </div>
       </div>
+      {pinMenu && (
+        <ContextMenu x={pinMenu.x} y={pinMenu.y} onClose={() => setPinMenu(null)}>
+          <button
+            onClick={() => {
+              unpin(pinMenu.pin);
+              setPinMenu(null);
+            }}
+          >
+            Unpin
+          </button>
+        </ContextMenu>
+      )}
     </div>
   );
 }

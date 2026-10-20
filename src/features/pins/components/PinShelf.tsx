@@ -49,6 +49,7 @@ interface Props {
   optionIdOf: (entry: ShelfEntry) => string;
   onHover: (entry: ShelfEntry) => void;
   onActivate: (entry: ShelfEntry, intent: ActivateIntent) => void;
+  onPinMenu: (pin: PinnedItem, x: number, y: number) => void;
 }
 
 // What the user asked of a row: open it, or (Shift) play it.
@@ -64,6 +65,7 @@ export function PinShelf({
   optionIdOf,
   onHover,
   onActivate,
+  onPinMenu,
 }: Props) {
   const { nameOf, thumbOf } = usePinArt(serverWithCredential, THUMB_SIZE);
 
@@ -84,7 +86,11 @@ export function PinShelf({
         onMouseEnter={() => onHover(entry)}
         onMouseDown={(e) => {
           e.preventDefault();
-          onActivate(entry, intentOf(e));
+          if (e.button === 0) onActivate(entry, intentOf(e));
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          if (entry.kind === "pin") onPinMenu(entry.pin, e.clientX, e.clientY);
         }}
       >
         <span className={`cp-shelf-art${entry.kind === "pin" ? ` cp-shelf-art--${entry.pin.kind}` : ""}`}>

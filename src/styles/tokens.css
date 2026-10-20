@@ -134,6 +134,8 @@
   --z-dropdown: 100;
   --z-overlay: 200;
   --z-modal: 300;
+  /* A context menu opens from whatever is on top, a modal included. */
+  --z-menu: 400;
 
   /* Typography */
   --font-sans: "Inter", system-ui, sans-serif;

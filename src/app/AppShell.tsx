@@ -4,7 +4,8 @@ import { FeedbackModal } from "../components/FeedbackModal";
 import { RemoteNoticeBanner } from "../components/RemoteNoticeBanner";
 import { UpdatePrompt } from "../components/UpdatePrompt";
 import { SidebarPins } from "../features/pins/components/SidebarPins";
-import { usePins } from "../features/pins/usePins";
+import { pinTargetOf } from "../features/pins/pins";
+import { usePins, useSetPinned } from "../features/pins/usePins";
 import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
@@ -20,15 +21,25 @@ const CommandPalette = lazy(() => import("../components/CommandPalette").then((m
 function CommandPaletteWithActions({
   runSync,
   ...paletteProps
-}: Omit<ComponentProps<typeof CommandPalette>, "actions" | "onPlayAlbum"> & { runSync: AppViewProps["runSync"] }) {
+}: Omit<ComponentProps<typeof CommandPalette>, "actions" | "onPlayAlbum" | "onUnpin"> & {
+  runSync: AppViewProps["runSync"];
+}) {
   const actions = usePaletteActions(paletteProps.serverWithCredential, runSync);
   const playAlbum = usePlayAlbum(paletteProps.serverWithCredential);
+  const setPinned = useSetPinned();
+  const { serverId } = paletteProps;
   return (
     <CommandPalette
       {...paletteProps}
       actions={actions}
       onPlayAlbum={(album) => {
         void playAlbum(album);
+      }}
+      onUnpin={(pin) => {
+        if (!serverId) return;
+        setPinned(pinTargetOf(pin, serverId), false).catch((err: unknown) =>
+          console.error("pins: couldn't remove the pin", err),
+        );
       }}
     />
   );
