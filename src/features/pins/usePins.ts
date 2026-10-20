@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getDb } from "../../db";
 import { QK } from "../../lib/queryKeys";
@@ -7,8 +7,7 @@ import { type Pins, type PinTarget, readPins, setPinned } from "./pins";
 export function usePins(serverId: string | undefined) {
   return useQuery<Pins>({
     queryKey: QK.pins(serverId),
-    queryFn: async () => readPins(await getDb(), serverId!),
-    enabled: !!serverId,
+    queryFn: serverId ? async () => readPins(await getDb(), serverId) : skipToken,
     // Changes only through a pin write or a sync, and both invalidate it; the sidebar and Ctrl+K share the read.
     staleTime: Number.POSITIVE_INFINITY,
   });

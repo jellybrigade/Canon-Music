@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, skipToken, useQuery } from "@tanstack/react-query";
 import { getDb } from "../../db";
 import { QK } from "../../lib/queryKeys";
 import { albumScore, artistScore, toSearchTokens, trackScore } from "./searchScore";
@@ -152,8 +152,7 @@ export function useSearch(query: string, serverId: string | undefined) {
   const trimmed = query.trim();
   return useQuery<SearchResults>({
     queryKey: QK.search(serverId ?? "", trimmed),
-    queryFn: () => runSearch(trimmed, serverId!),
-    enabled: trimmed.length > 0 && !!serverId,
+    queryFn: trimmed.length > 0 && serverId ? () => runSearch(trimmed, serverId) : skipToken,
     staleTime: 10_000,
     // Keep the previous query's rows on screen while the next one runs, so
     // typing doesn't flash the "Searching…" state between every keystroke.

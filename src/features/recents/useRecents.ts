@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { getDb } from "../../db";
 import { QK } from "../../lib/queryKeys";
@@ -7,8 +7,7 @@ import { type RecentItem, type RecentTarget, readRecents, recordRecent } from ".
 export function useRecents(serverId: string | undefined) {
   return useQuery<RecentItem[]>({
     queryKey: QK.recents(serverId),
-    queryFn: async () => readRecents(await getDb(), serverId!),
-    enabled: !!serverId,
+    queryFn: serverId ? async () => readRecents(await getDb(), serverId) : skipToken,
     // Changes only through Ctrl+K opening something or a sync, and both invalidate it.
     staleTime: Number.POSITIVE_INFINITY,
   });
