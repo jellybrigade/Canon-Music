@@ -131,7 +131,7 @@ function VirtualSection<T>({
               transform: `translateY(${virtualRow.start - scrollMargin}px)`,
               height: `${ROW_CONTENT_HEIGHT}px`,
               display: "grid",
-              gridTemplateColumns: `repeat(${cols}, 1fr)`,
+              gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
               columnGap: `${GRID_GAP}px`,
             }}
           >

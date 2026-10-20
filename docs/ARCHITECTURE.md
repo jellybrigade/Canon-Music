@@ -70,6 +70,7 @@ Rust (`src-tauri/src/`):
 - Every LIKE binds through `escapeLike` (`src/lib/sql.ts`) with `ESCAPE '\\'`.
 - Every read that becomes a playable track selects `REPLAY_GAIN_COLUMNS` and builds `replayGain` via `replayGainFromRow` (`src/lib/replayGainRow.ts`).
 - Every numeric parse with a fallback goes through `parseNumberOr` (`src/lib/numberSetting.ts`), so a stored `0` stays `0` (whole-string `Number`, `parseIntegerOr` truncates; staleness floors at 1 day); `src/lib/numericFallbackGuard.test.ts` bans `Number(x) || fallback`.
+- Equal grid columns are `repeat(n, minmax(0, 1fr))`, never bare `1fr`, which grows to fit content (a long one-line name widened its card); `src/lib/equalColumnsGuard.test.ts` sweeps CSS and inline styles.
 - Tables keyed by track id are listed once in `TRACK_ID_TABLES` (`src/db/trackIdTables.ts`) with prune/purge/remap policy; Rust mirror `REMAPPED_TRACK_ID_TABLES` is pinned by test.
 - Every stored genre-tree id is listed in `GENRE_ID_HOLDERS` (`src/db/genreIdTables.ts`); `genreIdTables.test.ts` sweeps migrations and pins the Rust `GENRE_ID_COLUMNS` copy.
 - A multi-statement write whose intermediate state is invalid goes in `library_write/` (the sqlx pool gives no connection affinity, so TS `BEGIN` does not hold). Migration blocks are the one exception.

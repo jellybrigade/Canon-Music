@@ -281,7 +281,7 @@ describe("AlbumGrid row chunking", () => {
 
   it("lays each row out as a column-count grid", () => {
     renderGrid({ albums: lettered(["A"], COLS) });
-    expect(gridRows()[0]!.style.gridTemplateColumns).toBe(`repeat(${COLS}, 1fr)`);
+    expect(gridRows()[0]!.style.gridTemplateColumns).toBe(`repeat(${COLS}, minmax(0, 1fr))`);
     expect(gridRows()[0]!.style.gap).toBe(`${COL_GAP}px`);
   });
 
