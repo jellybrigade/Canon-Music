@@ -1,5 +1,6 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { artistAlbumCountSql, artistInLibrarySql } from "../../lib/libraryArtists";
+import { sortNewestFirst } from "../../lib/newestFirst";
 import type { SearchAlbum, SearchArtist, SearchTrack } from "../search/useSearch";
 
 export const RECENTS_LIMIT = 5;
@@ -114,12 +115,5 @@ export async function readRecents(db: Database, serverId: string): Promise<Recen
       track,
     })),
   ];
-  return items
-    .sort(
-      (a, b) =>
-        b.openedAt - a.openedAt ||
-        KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
-        (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
-    )
-    .slice(0, RECENTS_LIMIT);
+  return sortNewestFirst(items, (item) => item.openedAt, KIND_ORDER).slice(0, RECENTS_LIMIT);
 }

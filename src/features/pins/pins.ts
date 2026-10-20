@@ -1,5 +1,6 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { artistAlbumCountSql, artistInLibrarySql } from "../../lib/libraryArtists";
+import { sortNewestFirst } from "../../lib/newestFirst";
 import type { AlbumRow } from "../../types/library";
 import type { SearchArtist } from "../search/useSearch";
 
@@ -94,12 +95,7 @@ export function pinsNewestFirst(pins: Pins): PinnedItem[] {
       album,
     })),
   ];
-  return items.sort(
-    (a, b) =>
-      b.pinnedAt - a.pinnedAt ||
-      KIND_ORDER[a.kind] - KIND_ORDER[b.kind] ||
-      (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
-  );
+  return sortNewestFirst(items, (item) => item.pinnedAt, KIND_ORDER);
 }
 
 export function pinTargetOf(item: PinnedItem, serverId: string): PinTarget {
