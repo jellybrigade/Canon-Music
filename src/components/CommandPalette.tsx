@@ -21,6 +21,7 @@ import type { ServerWithCredential } from "../hooks/useServer";
 import { rankCommands } from "../lib/commandMatch";
 import { matchRanges } from "../lib/matchRanges";
 import { plural } from "../lib/plural";
+import type { AlbumTrackTarget } from "../lib/routes";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
@@ -61,7 +62,7 @@ interface TrackResult {
   kind: "track";
   id: string;
   server_id: string;
-  album_id: string;
+  album_id: string | null;
   title: string;
   artist: string | null;
   album_name: string | null;
@@ -84,7 +85,10 @@ type LibraryResult = AlbumResult | TrackResult | ArtistResult;
 type Item = ShelfEntry | Command | LibraryResult | SeeAllRow;
 
 // What Enter and Shift+Enter say they do, per focused row; null where Shift+Enter has nothing to play.
-type HintKey = Exclude<Item["kind"], "pin"> | `${Extract<Item, { kind: "pin" }>["pin"]["kind"]}-pin`;
+type HintKey =
+  | Exclude<Item["kind"], "pin">
+  | `${Extract<Item, { kind: "pin" }>["pin"]["kind"]}-pin`
+  | "track-without-album";
 
 const HINTS: Record<HintKey, { open: string; play: string | null }> = {
   nav: { open: "go to", play: null },
@@ -96,9 +100,14 @@ const HINTS: Record<HintKey, { open: string; play: string | null }> = {
   artist: { open: "open", play: "start radio" },
   "artist-pin": { open: "open", play: "start radio" },
   track: { open: "open album", play: "play" },
+  "track-without-album": { open: "play", play: null },
 };
 
-const hintKey = (item: Item): HintKey => (item.kind === "pin" ? `${item.pin.kind}-pin` : item.kind);
+const hintKey = (item: Item): HintKey => {
+  if (item.kind === "pin") return `${item.pin.kind}-pin`;
+  if (item.kind === "track" && item.album_id === null) return "track-without-album";
+  return item.kind;
+};
 
 // Ids are unique inside a kind but not across them, and an album and a track can carry the
 // same native id on some servers.
@@ -228,7 +237,7 @@ interface Props {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string, albumCount: number) => void;
   onPlayTrack: (id: string) => void;
-  onOpenTrack: (trackId: string, albumId: string) => void;
+  onOpenTrack: (target: AlbumTrackTarget) => void;
   onPlayAlbum: (album: AlbumRow) => void;
   onStartArtistRadio: (name: string) => void;
   onSearchAll: (query: string) => void;
@@ -384,8 +393,8 @@ export function CommandPalette({
         });
       } else if (item.kind === "track") {
         onOpened({ kind: "track", serverId: item.server_id, trackId: item.id });
-        if (isPlay) onPlayTrack(item.id);
-        else onOpenTrack(item.id, item.album_id);
+        if (isPlay || item.album_id === null) onPlayTrack(item.id);
+        else onOpenTrack({ albumId: item.album_id, trackId: item.id });
       } else if (item.kind === "artist") {
         artist(item.name, item.album_count);
       }

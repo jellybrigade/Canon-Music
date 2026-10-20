@@ -16,7 +16,7 @@ export interface SearchTrack {
   server_id: string;
   title: string;
   artist: string | null;
-  album_id: string;
+  album_id: string | null;
   album_name: string | null;
   artwork_url: string | null;
   duration: number | null;

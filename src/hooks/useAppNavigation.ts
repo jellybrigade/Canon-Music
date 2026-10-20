@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { usePlayerStore } from "../features/playback/store/player";
 import type { PlaylistRow } from "../features/playlists/usePlaylists";
-import { albumPath, artistPath, playlistPath, ROUTES, searchPath } from "../lib/routes";
+import { type AlbumTrackTarget, albumPath, artistPath, playlistPath, ROUTES, searchPath } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 
 export type AppView =
@@ -92,7 +92,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
   }
 
   // Replaces rather than pushes when the album is already open, so Back still leaves the album.
-  function openAlbumAtTrack(albumId: string, trackId: string) {
+  function openAlbumAtTrack({ albumId, trackId }: AlbumTrackTarget) {
     const isAlbumOpen = pathname === albumPath(albumId);
     navigate(albumPath(albumId, trackId), { replace: isAlbumOpen });
     dismiss();

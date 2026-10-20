@@ -84,6 +84,7 @@ vi.mock("../components/CommandPalette", () => ({
     onNavigate: (view: string) => void;
     onSelectAlbum: (album: { id: string; title: string }) => void;
     onSelectArtist: (name: string, albumCount: number) => void;
+    onOpenTrack: (target: { albumId: string; trackId: string }) => void;
   }) =>
     !props.open ? null : (
       <div data-testid="command-palette-stub">
@@ -98,6 +99,12 @@ vi.mock("../components/CommandPalette", () => ({
         </button>
         <button data-testid="cp-select-artist" onClick={() => props.onSelectArtist("Artist X", 3)}>
           artist
+        </button>
+        <button
+          data-testid="cp-open-track"
+          onClick={() => props.onOpenTrack({ albumId: "srv:alb1", trackId: "srv:trk1" })}
+        >
+          track
         </button>
       </div>
     ),
@@ -144,7 +151,7 @@ async function mockLookupAlbum(id: string) {
 function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(Boolean(startPaletteOpen));
   const dismissOverlays = () => setCommandPaletteOpen(false);
-  const { view, pathname, navigateTo, openAlbum, openArtist } = useAppNavigation(dismissOverlays);
+  const { view, pathname, navigateTo, openAlbum, openAlbumAtTrack, openArtist } = useAppNavigation(dismissOverlays);
   useDismissOnNavigate(pathname, dismissOverlays);
   const rawNavigate = useNavigate();
 
@@ -175,6 +182,7 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     ],
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openAlbumById,
     handlePlayTrack: async () => {},
@@ -253,6 +261,13 @@ describe("AppShell: command palette dismissed by every navigation source", () =>
   it("command palette onSelectAlbum dismisses the palette", () => {
     renderHarness({ entries: ["/library"] });
     fireEvent.click(screen.getByTestId("cp-select-album"));
+    expectPaletteDismissed();
+    expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb1");
+  });
+
+  it("command palette onOpenTrack opens the track's album, not a page named after the track", () => {
+    renderHarness({ entries: ["/library"] });
+    fireEvent.click(screen.getByTestId("cp-open-track"));
     expectPaletteDismissed();
     expect(screen.getByTestId("route-content")).toHaveTextContent("/album/srv%3Aalb1");
   });

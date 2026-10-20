@@ -165,7 +165,8 @@ function toAlbumRow(album: SearchAlbum): AlbumRow {
   };
 }
 
-function trackAlbumRow(track: SearchTrack): AlbumRow {
+function trackAlbumRow(track: SearchTrack): AlbumRow | null {
+  if (track.album_id === null) return null;
   return {
     id: track.album_id,
     server_id: track.server_id,
@@ -215,6 +216,7 @@ export function SearchResults({
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [albumMenu, setAlbumMenu] = useState<AlbumMenu | null>(null);
   const [trackMenu, setTrackMenu] = useState<TrackMenu | null>(null);
+  const trackMenuAlbum = trackMenu ? trackAlbumRow(trackMenu.track) : null;
   const [artistMenu, setArtistMenu] = useState<ArtistMenu | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<SearchAlbum | null>(null);
   const [identifyArtistName, setIdentifyArtistName] = useState<string | null>(null);
@@ -459,20 +461,24 @@ export function SearchResults({
           >
             Add to Queue
           </button>
-          <StartRadioSubmenu
-            onSelect={(mode) => {
-              onStartRadioFromAlbum(trackAlbumRow(trackMenu.track), mode);
-              setTrackMenu(null);
-            }}
-          />
-          <button
-            onClick={() => {
-              onSelectAlbum(trackAlbumRow(trackMenu.track));
-              setTrackMenu(null);
-            }}
-          >
-            Go to Album
-          </button>
+          {trackMenuAlbum && (
+            <>
+              <StartRadioSubmenu
+                onSelect={(mode) => {
+                  onStartRadioFromAlbum(trackMenuAlbum, mode);
+                  setTrackMenu(null);
+                }}
+              />
+              <button
+                onClick={() => {
+                  onSelectAlbum(trackMenuAlbum);
+                  setTrackMenu(null);
+                }}
+              >
+                Go to Album
+              </button>
+            </>
+          )}
           {trackMenu.track.artist && (
             <button
               onClick={() => {

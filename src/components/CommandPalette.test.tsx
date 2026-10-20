@@ -663,7 +663,7 @@ describe("CommandPalette keyboard navigation", () => {
     expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
     expect(focusedLabel()).toBe("Jesus, Etc.");
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
+    expect(onOpenTrack.mock.calls).toEqual([[{ albumId: "a1", trackId: "t1" }]]);
   });
 
   it("falls back to the first row rather than holding the ordinal when the rows are replaced", async () => {
@@ -712,7 +712,7 @@ describe("CommandPalette keyboard navigation", () => {
     await settleDebounce();
     expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
+    expect(onOpenTrack.mock.calls).toEqual([[{ albumId: "a1", trackId: "t1" }]]);
     expect(onPlayTrack).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onNavigate).not.toHaveBeenCalled();
@@ -839,6 +839,15 @@ describe("CommandPalette Enter opens, Shift+Enter plays", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("plays a track with no album on Enter, having no album to open", async () => {
+    seedTrack({ id: "t1", title: "Loose Single", artist: "Wilco", albumId: null });
+    await searchFor("loose");
+    expect(footerHints()).toEqual(["↑↓ navigate", "↵ play", "esc close"]);
+    press("Enter");
+    expect(onPlayTrack.mock.calls).toEqual([["t1"]]);
+    expect(onOpenTrack).not.toHaveBeenCalled();
+  });
+
   it("plays an album on Shift+Enter with the row's own server id, without opening it", async () => {
     seedAlbum({ id: "a1", name: "Kid A", artist: "Radiohead", serverId: "srv-a" });
     seedTrack({ id: "t1", title: "Everything In Its Right Place", artist: "Radiohead", albumId: "a1" });
@@ -910,7 +919,7 @@ describe("CommandPalette Enter opens, Shift+Enter plays", () => {
     expect(onPlayTrack.mock.calls).toEqual([["t1"]]);
     expect(onOpenTrack).not.toHaveBeenCalled();
     fireEvent.mouseDown(row());
-    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
+    expect(onOpenTrack.mock.calls).toEqual([[{ albumId: "a1", trackId: "t1" }]]);
   });
 
   it("names what Enter and Shift+Enter do for the focused row", async () => {
