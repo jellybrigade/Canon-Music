@@ -22,7 +22,6 @@ import { useRecommendedAlbum } from "../hooks/useRecommendedAlbum";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { useSetting } from "../hooks/useSetting";
 import type { ForYouCategoryConfig } from "../lib/forYouGroups";
-import { sampleFromHead } from "../lib/shuffle";
 import { makeStreamUrlBuilder } from "../lib/track";
 import type { AlbumRow, ArtistRow } from "../types/library";
 import { CanonIcon } from "../ui/CanonIcon";
@@ -40,6 +39,7 @@ import {
   stripFeaturedArtists,
 } from "./home/Spotlight";
 import { useNewAlbumsCheck } from "./home/useNewAlbumsCheck";
+import { useVaultPicks } from "./home/useVaultPicks";
 import "./HomeView.css";
 import "./GenreView.css";
 import { loadGenreSeedTracks } from "../features/radio/lib/genreSeed";
@@ -59,9 +59,6 @@ interface Props {
   syncStatus: SyncStatus;
   runSync: (s: ServerWithCredential, options?: RunSyncOptions) => boolean;
 }
-
-/** Oldest-played albums a vault refresh draws from, so a refresh stays long-forgotten. */
-const VAULT_POOL_SIZE = 100;
 
 function getGreeting(): string {
   const h = new Date().getHours();
@@ -90,8 +87,6 @@ export function HomeView({
   const playAlbum = usePlayAlbum(serverWithCredential);
   const [forYouSeed, setForYouSeed] = useState(getForYouSeed);
   const refreshForYou = useCallback(() => setForYouSeed(nextForYouSeed()), []);
-  const [vaultSeed, setVaultSeed] = useState(0);
-  const refreshVault = useCallback(() => setVaultSeed((s) => s + 1), []);
 
   const [rawCategoryConfig, setRawCategoryConfig] = useSetting("for_you_categories", DEFAULT_FOR_YOU_CONFIG_JSON);
   const categoryConfig = useMemo<ForYouCategoryConfig[]>(() => {
@@ -283,10 +278,7 @@ export function HomeView({
     items: newestItems,
     syncStatus,
   });
-  const vaultItems = useMemo(
-    () => sampleFromHead(vault, vaultSeed, 20, VAULT_POOL_SIZE) as AlbumRow[],
-    [vault, vaultSeed],
-  );
+  const { items: vaultItems, refresh: refreshVault } = useVaultPicks(vault);
 
   const featuredGenres = recentGenres;
 

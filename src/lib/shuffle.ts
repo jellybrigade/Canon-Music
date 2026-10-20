@@ -20,8 +20,7 @@ export function seededShuffle<T>(arr: T[], seed: number): T[] {
   return result;
 }
 
-/** Seed 0 keeps the list's own order; any other seed samples `count` from its first `poolSize`. */
+/** Samples `count` from the first `poolSize` items, stable for a given seed. */
 export function sampleFromHead<T>(items: T[], seed: number, count: number, poolSize: number): T[] {
-  if (seed === 0) return items.slice(0, count);
   return seededShuffle(items.slice(0, poolSize), seed).slice(0, count);
 }

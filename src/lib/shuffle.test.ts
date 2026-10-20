@@ -53,11 +53,8 @@ describe("seededShuffle", () => {
 describe("sampleFromHead", () => {
   const items = Array.from({ length: 100 }, (_, i) => i);
 
-  it("returns the leading items in order for seed 0", () => {
-    expect(sampleFromHead(items, 0, 5, 40)).toEqual([0, 1, 2, 3, 4]);
-  });
-
-  it("draws a different set from the head pool for a non-zero seed", () => {
+  it("draws a shuffled set from the head pool for any seed, zero included", () => {
+    expect(sampleFromHead(items, 0, 5, 40)).not.toEqual([0, 1, 2, 3, 4]);
     const out = sampleFromHead(items, 1, 5, 40);
     expect(out).toHaveLength(5);
     expect(out.every((n) => n < 40)).toBe(true);
