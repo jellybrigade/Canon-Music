@@ -17,7 +17,7 @@ import "./AlbumDetail.css";
 import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
 import { replayGainFromRow } from "../lib/replayGainRow";
-import { bitrateCell, durationCell } from "../lib/trackCells";
+import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../lib/trackCells";
 import { useClickOutside } from "../ui/useClickOutside";
 
 const ROW_HEIGHT = 40;
@@ -410,10 +410,8 @@ export function TrackTableView({
     return rows.map(buildTrackObj);
   }, [contextMenu, selectedIds, sorted, buildTrackObj]);
 
-  const numColWidth = `${Math.max(2, String(sorted.length).length) + 1.5}ch`;
-
   const gridTemplate = [
-    numColWidth,
+    trackNumberColumn(sorted.length),
     "minmax(0, 2fr)",
     cols.artist ? "minmax(0, 1.25fr)" : null,
     cols.album ? "minmax(0, 1.25fr)" : null,
@@ -422,7 +420,7 @@ export function TrackTableView({
     cols.format ? "3.5rem" : null,
     cols.bitrate ? "4.5rem" : null,
     cols.plays ? "3.5rem" : null,
-    cols.duration ? "4.5rem" : null,
+    cols.duration ? DURATION_COLUMN : null,
     "2rem",
   ]
     .filter(Boolean)
