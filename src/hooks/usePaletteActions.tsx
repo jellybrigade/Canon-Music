@@ -7,6 +7,7 @@ import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import { loadRandomLibraryTrack } from "../features/radio/lib/librarySeed";
 import { resyncLibrary } from "../features/sync/resyncLibrary";
 import type { useLibrarySync } from "../features/sync/useLibrarySync";
+import { plural } from "../lib/plural";
 import { replayGainFromRow } from "../lib/replayGainRow";
 import { makeStreamUrlBuilder } from "../lib/track";
 import type { ServerWithCredential } from "./useServer";
@@ -58,7 +59,7 @@ export function usePaletteActions(
     }
     actions.push({
       id: "sleep-timer",
-      label: `Sleep timer: ${SLEEP_TIMER_PRESET_MINUTES} minutes`,
+      label: `Sleep timer: ${SLEEP_TIMER_PRESET_MINUTES} ${plural(SLEEP_TIMER_PRESET_MINUTES, "minute")}`,
       icon: <Timer size={16} />,
       run: () => usePlayerStore.getState().setSleepTimer(SLEEP_TIMER_PRESET_MINUTES),
     });

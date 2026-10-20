@@ -21,10 +21,11 @@ function sourceFiles(dir: string): string[] {
   return out.sort();
 }
 
-const NOUNS = "albums|tracks|artists|songs|plays|playlists|genres|tags";
 // `{n} albums` in JSX, `${n} albums` in a template, and `n === 1 ? "" : "s"` either way round.
+// Any word ending in s after an interpolation, not a list of nouns: a list missed "1 scrobbles".
+// An attribute (`xmlns:u=`, `tokens={...}`) is not a count.
 const PLURAL_SHAPES = [
-  new RegExp(`\\}\\s+(?:${NOUNS})\\b`),
+  /\}\s+[a-z]{2,}s\b(?![=:])/,
   /=== 1 \? ["'](\w*)["'] : ["']\1e?s["']/,
   /!== 1 \? ["'](\w*)e?s["'] : ["']\1["']/,
 ];
@@ -57,12 +58,14 @@ describe("the sweep's own reach", () => {
     expect(handPluralLines('{n} {n === 1 ? "track" : "tracks"}')).toEqual([1]);
     expect(handPluralLines('node{n === 1 ? "" : "s"}')).toEqual([1]);
     expect(handPluralLines("`${n} item${n !== 1 ? 's' : ''}`")).toEqual([1]);
+    expect(handPluralLines("`${formatCount(n)} scrobbles`")).toEqual([1]);
   });
 
   it("ignores comments and counts routed through plural", () => {
     expect(handPluralLines("// shows {n} albums")).toEqual([]);
     expect(handPluralLines('{n} {plural(n, "album")}')).toEqual([]);
     expect(handPluralLines("{albums.length > 0 && <List />}")).toEqual([]);
+    expect(handPluralLines("<MatchedText text={name} tokens={tokens} />")).toEqual([]);
     expect(handPluralLines('{n === 1 ? "Select to confirm:" : "Multiple matches, select one:"}')).toEqual([]);
   });
 });

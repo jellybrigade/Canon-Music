@@ -62,7 +62,7 @@ export async function fetchAllAlbums(
     const page = response.albumList2?.album ?? [];
     const firstId = page[0]?.id;
     if (firstId !== undefined && firstId === previousFirstId) {
-      throw new Error(`getAlbumList2 ignored the offset: the page at ${offset} repeats the last`);
+      throw new Error(`getAlbumList2 ignored the offset: the page at ${offset} repeated the last`);
     }
     previousFirstId = firstId;
     albums.push(...page);

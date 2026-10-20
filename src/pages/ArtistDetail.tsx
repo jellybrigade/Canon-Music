@@ -216,8 +216,12 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const bio = enrichment?.bio ?? null;
 
   const metaItems: string[] = [
-    enrichment?.listeners != null ? `${formatCount(enrichment.listeners)} listeners` : null,
-    enrichment?.playcount != null ? `${formatCount(enrichment.playcount)} scrobbles` : null,
+    enrichment?.listeners != null
+      ? `${formatCount(enrichment.listeners)} ${plural(enrichment.listeners, "listener")}`
+      : null,
+    enrichment?.playcount != null
+      ? `${formatCount(enrichment.playcount)} ${plural(enrichment.playcount, "scrobble")}`
+      : null,
     `${artist.album_count} ${plural(artist.album_count, "album")} in library`,
   ].filter((x): x is string => x !== null);
 
