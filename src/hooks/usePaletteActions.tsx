@@ -1,5 +1,4 @@
 import { Pause, Play, Radio, RefreshCw, Shuffle, SkipForward, Timer } from "lucide-react";
-import { getCoverArtUrl } from "../clients/navidromeUrls";
 import type { PaletteAction } from "../components/CommandPalette";
 import { usePlayerStore } from "../features/playback/store/player";
 import { isNextDisabled } from "../features/playback/store/playerTypes";
@@ -8,8 +7,7 @@ import { loadRandomLibraryTrack } from "../features/radio/lib/librarySeed";
 import { resyncLibrary } from "../features/sync/resyncLibrary";
 import type { useLibrarySync } from "../features/sync/useLibrarySync";
 import { plural } from "../lib/plural";
-import { replayGainFromRow } from "../lib/replayGainRow";
-import { makeStreamUrlBuilder } from "../lib/track";
+import { currentTrackFromRow, makeStreamUrlBuilder } from "../lib/track";
 import type { ServerWithCredential } from "./useServer";
 
 const SLEEP_TIMER_PRESET_MINUTES = 30;
@@ -89,16 +87,6 @@ async function shuffleLibrary(
 ): Promise<void> {
   const row = await loadRandomLibraryTrack(server.id);
   if (!row) return;
-  const track = {
-    id: row.id,
-    title: row.title,
-    artist: row.artist,
-    duration: row.duration,
-    coverArtUrl: row.artwork_url ? getCoverArtUrl(server.url, server.username, credential, row.artwork_url, 64) : null,
-    artworkRef: row.artwork_url ?? null,
-    album: row.album_name ?? null,
-    albumId: row.album_id,
-    replayGain: replayGainFromRow(row),
-  };
+  const track = currentTrackFromRow(row, server, credential);
   await startRadio({ tracks: [track], streamUrlFor: makeStreamUrlBuilder(server, credential), mode: "random" });
 }
