@@ -24,7 +24,7 @@ function stylesheets(dir: string): string[] {
 function bottomChromeReads(text: string): number[] {
   const lines: number[] = [];
   for (const [index, line] of text.split("\n").entries()) {
-    if (/var\(\s*--(player-bar-reserve|normalizing-bar-height)\b/.test(line)) lines.push(index + 1);
+    if (/var\(\s*--(player-bar-reserve|bottom-notice-rows)\b/.test(line)) lines.push(index + 1);
   }
   return lines;
 }
@@ -33,7 +33,7 @@ describe("bottom chrome reserve", () => {
   it("finds a read of either height", () => {
     expect(
       bottomChromeReads(
-        "a { padding: 0 0 calc(var(--player-bar-reserve, 0px) + 4px); }\nb {}\nc { top: var(--normalizing-bar-height); }",
+        "a { padding: 0 0 calc(var(--player-bar-reserve, 0px) + 4px); }\nb {}\nc { top: var(--bottom-notice-rows); }",
       ),
     ).toEqual([1, 3]);
   });

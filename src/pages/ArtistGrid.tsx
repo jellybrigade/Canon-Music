@@ -186,7 +186,7 @@ export function ArtistGrid({
                   right: `${PADDING}px`,
                   height: `${Math.round(cardWidth)}px`,
                   display: "grid",
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                   gap: `${COL_GAP}px`,
                 }}
               >

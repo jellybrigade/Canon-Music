@@ -83,12 +83,11 @@
   font-weight: 500;
 }
 
-/* Column header row: title + add button inline */
+/* Genres title and its edit button, inline with the chips like the other columns. */
 .album-tag-column-header {
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
-  width: 100%;
 }
 
 .album-tag-add-genre-btn {

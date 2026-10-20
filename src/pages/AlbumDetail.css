@@ -460,10 +460,18 @@
   white-space: nowrap;
 }
 
+/* Every track grid sizes its number column from these (trackNumberColumn), so column and cell agree. */
+.playlist-col-header,
+.playlist-vrow,
+.track-skeleton-row {
+  --track-number-padding-start: var(--space-xs);
+  --track-number-padding-end: var(--space-sm);
+}
+
 .playlist-vrow-num {
   color: var(--text-tertiary);
   text-align: right;
-  padding-right: var(--space-sm) !important;
+  padding-inline: var(--track-number-padding-start) var(--track-number-padding-end) !important;
   font-size: var(--text-base);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;

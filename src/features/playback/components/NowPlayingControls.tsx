@@ -1,20 +1,9 @@
-import {
-  Heart,
-  Loader,
-  Pause,
-  Play,
-  Repeat,
-  Repeat1,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { Heart, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX } from "lucide-react";
 import { useState } from "react";
 import { RadioButton } from "../../radio/components/RadioButton";
 import { usePlayerStore } from "../store/player";
 import { repeatModeLabel } from "../store/playerTypes";
+import { PlayPauseButton } from "./PlayPauseButton";
 import "./NowPlayingControls.css";
 
 interface Props {
@@ -24,14 +13,10 @@ interface Props {
 }
 
 export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Props) {
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isLoading = usePlayerStore((s) => s.isLoading);
   const volume = usePlayerStore((s) => s.volume);
   const queueLength = usePlayerStore((s) => s.queue.length);
   const repeat = usePlayerStore((s) => s.repeat);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
-  const pause = usePlayerStore((s) => s.pause);
-  const resume = usePlayerStore((s) => s.resume);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
   const setVolume = usePlayerStore((s) => s.setVolume);
@@ -57,20 +42,7 @@ export function NowPlayingControls({ nextDisabled, isLoved, onToggleLove }: Prop
         <button className="player-btn" onClick={() => void prev()} disabled={queueLength === 0} aria-label="Previous">
           <SkipBack size={26} />
         </button>
-        <button
-          className="player-btn player-btn--play player-btn--play-large"
-          onClick={isPlaying ? pause : resume}
-          disabled={isLoading}
-          aria-label={isPlaying ? "Pause" : "Play"}
-        >
-          {isLoading ? (
-            <Loader size={24} className="player-spin" />
-          ) : isPlaying ? (
-            <Pause size={24} fill="currentColor" strokeWidth={0} />
-          ) : (
-            <Play size={24} fill="currentColor" strokeWidth={0} />
-          )}
-        </button>
+        <PlayPauseButton className="player-btn player-btn--play player-btn--play-large" iconSize={24} />
         <button className="player-btn" onClick={() => void next()} disabled={nextDisabled} aria-label="Next">
           <SkipForward size={26} />
         </button>

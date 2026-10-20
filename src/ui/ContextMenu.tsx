@@ -75,7 +75,9 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      onCloseRef.current();
     };
     // The menu is positioned once at open time (fixed x/y) and never re-anchored,
     // so if the page underneath scrolls, close instead of leaving it floating

@@ -35,7 +35,7 @@ import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
 import { replayGainFromRow } from "../../lib/replayGainRow";
-import { bitrateCell, durationCell } from "../../lib/trackCells";
+import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../../lib/trackCells";
 import { useClickOutside } from "../../ui/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
@@ -191,7 +191,7 @@ export function PlaylistDetail({
   }, [resumeIndex, tracks, playlist.id, virtualizer]);
 
   const gridTemplate = [
-    "2.5rem",
+    trackNumberColumn(tracks?.length ?? 0),
     "minmax(0, 2fr)",
     playlistCols.artist ? "minmax(0, 1.25fr)" : null,
     playlistCols.genre ? "minmax(0, 1fr)" : null,
@@ -199,7 +199,7 @@ export function PlaylistDetail({
     playlistCols.year ? "3.5rem" : null,
     playlistCols.format ? "3.5rem" : null,
     playlistCols.bitrate ? "4.5rem" : null,
-    playlistCols.duration ? "auto" : null,
+    playlistCols.duration ? DURATION_COLUMN : null,
     "2rem",
   ]
     .filter(Boolean)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bitrateCell, durationCell, formatDuration } from "./trackCells";
+import { bitrateCell, durationCell, formatDuration, trackNumberColumn } from "./trackCells";
 
 describe("track cells", () => {
   it("prints a zero and leaves only a missing value blank", () => {
@@ -54,5 +54,22 @@ describe("formatDuration", () => {
   it("produces NaN fields rather than throwing on a missing duration", () => {
     // duration is optional on a track, so undefined reaches this via arithmetic.
     expect(formatDuration(NaN)).toBe("NaN:NaN");
+  });
+});
+
+describe("trackNumberColumn", () => {
+  it("grows with the digits of the last position and keeps room for two", () => {
+    expect(trackNumberColumn(7)).toBe(
+      "calc(2ch + var(--track-number-padding-start) + var(--track-number-padding-end))",
+    );
+    expect(trackNumberColumn(99)).toBe(
+      "calc(2ch + var(--track-number-padding-start) + var(--track-number-padding-end))",
+    );
+    expect(trackNumberColumn(100)).toBe(
+      "calc(3ch + var(--track-number-padding-start) + var(--track-number-padding-end))",
+    );
+    expect(trackNumberColumn(12000)).toBe(
+      "calc(5ch + var(--track-number-padding-start) + var(--track-number-padding-end))",
+    );
   });
 });

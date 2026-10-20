@@ -1,6 +1,6 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ListMusic, Music, Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useScrollMemory } from "../../hooks/useScrollMemory";
 import type { ServerWithCredential } from "../../hooks/useServer";
@@ -17,6 +17,7 @@ const CARD_MIN = 160; // minmax(160px, 1fr)
 const GRID_GAP = 16; // --space-md (row + column gap)
 const GRID_PAD_X = 16; // --space-md (horizontal padding)
 const ART_MARGIN = 8; // --space-xs (art margin-bottom)
+// First-paint estimate only; rows are measured, since a long name wraps to a second line.
 // Info block: name (text-md 18px * 1.5) + gap (--space-2xs 4px) + meta (text-base 16px * 1.5)
 const INFO_HEIGHT = 27 + 4 + 24;
 
@@ -95,8 +96,7 @@ export function PlaylistList({
   const available = containerWidth > 0 ? containerWidth - GRID_PAD_X * 2 : 0;
   const cols = Math.max(1, Math.floor((available + GRID_GAP) / (CARD_MIN + GRID_GAP)));
   const cardWidth = available > 0 ? (available - GRID_GAP * (cols - 1)) / cols : CARD_MIN;
-  const cardHeight = Math.round(cardWidth) + ART_MARGIN + INFO_HEIGHT;
-  const rowHeight = cardHeight + GRID_GAP;
+  const rowHeight = Math.round(cardWidth) + ART_MARGIN + INFO_HEIGHT;
 
   const rows = useMemo<PlaylistRow[][]>(() => {
     const result: PlaylistRow[][] = [];
@@ -104,24 +104,37 @@ export function PlaylistList({
     return result;
   }, [playlists, cols]);
 
+  // Rows are measured, so measure() on a resize would clear heights that no row reports again
+  // unless it changes. Keying by column count starts fresh only when rows regroup.
+  const getRowKey = useCallback((index: number) => `${cols}:${index}`, [cols]);
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => containerRef.current,
+    getItemKey: getRowKey,
     estimateSize: () => rowHeight,
+    gap: GRID_GAP,
     overscan: 3,
     scrollMargin,
   });
 
-  useScrollMemory(containerRef, "playlists", rows.length > 0);
-
-  const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}-${scrollMargin}`);
+  // The virtualizer keeps its sizes until the column count changes, so rows it hasn't measured
+  // would keep the old estimate. Mounted rows report again here: they won't on their own
+  // unless their height changes.
+  const lastRowHeightRef = useRef(rowHeight);
   useLayoutEffect(() => {
-    const key = `${cols}-${rowHeight}-${rows.length}-${scrollMargin}`;
-    if (prevLayoutKey.current !== key) {
-      prevLayoutKey.current = key;
-      virtualizer.measure();
+    if (lastRowHeightRef.current === rowHeight) return;
+    lastRowHeightRef.current = rowHeight;
+    virtualizer.measure();
+    // Rebuild from the new estimate first (getTotalSize does), or each row compares against its
+    // stale size and skips.
+    virtualizer.getTotalSize();
+    for (const row of gridRef.current?.querySelectorAll<HTMLElement>("[data-index]") ?? []) {
+      virtualizer.measureElement(row);
     }
-  }, [cols, rowHeight, rows.length, scrollMargin, virtualizer]);
+  }, [rowHeight, virtualizer]);
+
+  useScrollMemory(containerRef, "playlists", rows.length > 0);
 
   useEffect(() => {
     if (renamingId) renameInputRef.current?.focus();
@@ -262,15 +275,16 @@ export function PlaylistList({
             return (
               <div
                 key={virtualRow.key}
+                ref={virtualizer.measureElement}
+                data-index={virtualRow.index}
                 style={{
                   position: "absolute",
                   top: 0,
                   left: `${GRID_PAD_X}px`,
                   right: `${GRID_PAD_X}px`,
                   transform: `translateY(${virtualRow.start - scrollMargin}px)`,
-                  height: `${cardHeight}px`,
                   display: "grid",
-                  gridTemplateColumns: `repeat(${cols}, 1fr)`,
+                  gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                   columnGap: `${GRID_GAP}px`,
                 }}
               >

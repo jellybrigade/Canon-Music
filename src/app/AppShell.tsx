@@ -49,6 +49,7 @@ export function AppShell(props: AppViewProps) {
   // (and never on the now-playing view). Views reserve bottom space through
   // --player-bar-reserve so they don't leave a dead gap when it isn't there.
   const playerBarVisible = Boolean(currentTrack) && view !== "nowplaying";
+  const hasSidebarFooter = view !== "nowplaying";
 
   return (
     <Suspense fallback={null}>
@@ -62,38 +63,43 @@ export function AppShell(props: AppViewProps) {
             width: sidebarExpanded ? `${sidebarLiveWidth ?? sidebarWidth}px` : undefined,
           }}
         >
-          {navItems.map(({ id, label, icon, badge }) => (
-            <button
-              key={id}
-              className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
-              title={badge ? `${label} (${badge} unmapped)` : label}
-              onClick={() => {
-                setCanonicalIdFilters([]);
-                navigateTo(id);
-              }}
-            >
-              <span className="sidebar-btn-icon">
-                {icon}
-                {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
-              </span>
-              {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
-            </button>
-          ))}
-          {view !== "nowplaying" && (
-            <>
-              <button className="sidebar-feedback-btn" title="Send feedback" onClick={() => setFeedbackOpen(true)}>
-                <MessageSquare size={15} />
-                {sidebarExpanded && <span className="sidebar-btn-label">Feedback</span>}
-              </button>
+          <div
+            className={`sidebar-items${hasSidebarFooter ? "" : " sidebar-items--no-footer"}`}
+            style={{ "--sidebar-nav-count": navItems.length } as CSSProperties}
+          >
+            {navItems.map(({ id, label, icon, badge }) => (
               <button
-                className="sidebar-expand-btn"
-                title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
-                onClick={() => void setSidebarExpanded(!sidebarExpanded)}
+                key={id}
+                className={`sidebar-btn${view === id ? " sidebar-btn--active" : ""}`}
+                title={badge ? `${label} (${badge} unmapped)` : label}
+                onClick={() => {
+                  setCanonicalIdFilters([]);
+                  navigateTo(id);
+                }}
               >
-                {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                <span className="sidebar-btn-icon">
+                  {icon}
+                  {badge ? <span className="sidebar-badge">{badge > 99 ? "99+" : badge}</span> : null}
+                </span>
+                {sidebarExpanded && <span className="sidebar-btn-label">{label}</span>}
               </button>
-            </>
-          )}
+            ))}
+            {hasSidebarFooter && (
+              <>
+                <button className="sidebar-feedback-btn" title="Send feedback" onClick={() => setFeedbackOpen(true)}>
+                  <MessageSquare size={15} />
+                  {sidebarExpanded && <span className="sidebar-btn-label">Feedback</span>}
+                </button>
+                <button
+                  className="sidebar-expand-btn"
+                  title={sidebarExpanded ? "Collapse sidebar" : "Expand sidebar"}
+                  onClick={() => void setSidebarExpanded(!sidebarExpanded)}
+                >
+                  {sidebarExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+                </button>
+              </>
+            )}
+          </div>
           {sidebarExpanded && <div className="sidebar-resize-handle" onMouseDown={handleSidebarResizeMouseDown} />}
         </nav>
         {renderContent()}
