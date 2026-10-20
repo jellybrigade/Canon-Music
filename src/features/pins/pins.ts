@@ -1,4 +1,5 @@
 import type Database from "@tauri-apps/plugin-sql";
+import { artistAlbumCountSql, artistInLibrarySql } from "../../lib/libraryArtists";
 import type { AlbumRow } from "../../types/library";
 import type { SearchArtist } from "../search/useSearch";
 
@@ -33,25 +34,26 @@ export async function setPinned(db: Database, target: PinTarget, isPinned: boole
     case "artist":
       await db.execute(
         isPinned
-          ? `INSERT OR IGNORE INTO pinned_artists (server_id, artist_name, pinned_at)
-             SELECT server_id, name, ? FROM artists WHERE server_id = ? AND name = ?`
-          : "DELETE FROM pinned_artists WHERE server_id = ? AND artist_name = ?",
-        isPinned ? [now, target.serverId, target.artistName] : [target.serverId, target.artistName],
+          ? `WITH arg (pinned_at, name, server_id) AS (SELECT ?, ?, ?)
+             INSERT OR IGNORE INTO pinned_artists (server_id, artist_name, pinned_at)
+             SELECT server_id, name, pinned_at FROM arg WHERE ${artistInLibrarySql("arg.server_id", "arg.name")}`
+          : "DELETE FROM pinned_artists WHERE artist_name = ? AND server_id = ?",
+        isPinned ? [now, target.artistName, target.serverId] : [target.artistName, target.serverId],
       );
       return;
   }
 }
 
-// Inner joins hide a pin whose item is gone before the next sync prunes it.
+// A pin whose item is gone stays hidden until the next sync prunes it.
 export async function readPins(db: Database, serverId: string): Promise<Pins> {
   const [artists, albums] = await Promise.all([
     db.select<Pins["artists"]>(
-      `SELECT a.name, a.album_count, p.pinned_at, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
+      `SELECT p.artist_name AS name, ${artistAlbumCountSql("p.server_id", "p.artist_name")} AS album_count,
+              p.pinned_at, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
        FROM pinned_artists p
-       JOIN artists a ON a.server_id = p.server_id AND a.name = p.artist_name
-       LEFT JOIN artist_identity ai ON ai.artist_name = a.name
-       WHERE p.server_id = ?
-       ORDER BY p.pinned_at DESC, a.name COLLATE NOCASE`,
+       LEFT JOIN artist_identity ai ON ai.artist_name = p.artist_name
+       WHERE p.server_id = ? AND ${artistInLibrarySql("p.server_id", "p.artist_name")}
+       ORDER BY p.pinned_at DESC, p.artist_name COLLATE NOCASE`,
       [serverId],
     ),
     db.select<Pins["albums"]>(

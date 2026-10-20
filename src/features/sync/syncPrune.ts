@@ -1,6 +1,7 @@
 import type Database from "@tauri-apps/plugin-sql";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
+import { artistInLibrarySql } from "../../lib/libraryArtists";
 
 // Which tables carry track-keyed rows, and why the user's own rows are spared, is
 // db/trackIdTables.ts. album_identity/album_user_genres are spared for the same reason.
@@ -19,10 +20,46 @@ async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Pro
   }
 }
 
+// Pins are the user's, so one on an album the server relists under a new id moves to it.
+// Runs after the upsert, while the stale row still names the album.
+async function carryPinnedAlbums(db: Database, staleAlbumIds: readonly string[]): Promise<void> {
+  const stale = new Set(staleAlbumIds);
+  const pins = await db.select<{ album_id: string; server_id: string; name: string; artist: string | null }[]>(
+    `SELECT p.album_id, a.server_id, a.name, a.artist
+     FROM pinned_albums p
+     JOIN albums a ON a.id = p.album_id AND a.server_id = p.server_id`,
+  );
+  for (const pin of pins.filter((row) => stale.has(row.album_id))) {
+    const candidates = await db.select<{ id: string }[]>(
+      "SELECT id FROM albums WHERE server_id = ? AND name = ? AND artist IS ? ORDER BY id",
+      [pin.server_id, pin.name, pin.artist],
+    );
+    const relisted = candidates.find((candidate) => !stale.has(candidate.id));
+    if (relisted === undefined) continue;
+    await db.execute("UPDATE OR IGNORE pinned_albums SET album_id = ? WHERE album_id = ?", [relisted.id, pin.album_id]);
+  }
+}
+
+// Same for an album artist whose name only changed case; run before the artist pins are pruned.
+export async function carryPinnedArtistCase(db: Database, serverId: string): Promise<void> {
+  await db.execute(
+    `UPDATE OR IGNORE pinned_artists SET artist_name = (
+       SELECT a.name FROM artists a
+       WHERE a.server_id = pinned_artists.server_id AND a.name = pinned_artists.artist_name COLLATE NOCASE
+       ORDER BY a.name LIMIT 1)
+     WHERE server_id = ?
+       AND NOT ${artistInLibrarySql("pinned_artists.server_id", "pinned_artists.artist_name")}
+       AND EXISTS (SELECT 1 FROM artists a
+                   WHERE a.server_id = pinned_artists.server_id AND a.name = pinned_artists.artist_name COLLATE NOCASE)`,
+    [serverId],
+  );
+}
+
 // Drop albums the server no longer lists, plus their tracks and derived rows, dependants
 // first. album_covers goes (pure cache); user-authored album rows stay.
 export async function pruneAlbums(db: Database, albumIds: readonly string[]): Promise<void> {
   if (albumIds.length === 0) return;
+  await carryPinnedAlbums(db, albumIds);
   const viaTracks =
     ({ table, column }: { table: string; column: string }) =>
     (ph: string) =>

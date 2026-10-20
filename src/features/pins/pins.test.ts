@@ -18,6 +18,8 @@ beforeEach(async () => {
       ('a1', '${SRV}', 'navidrome', 'Artist One', 1),
       ('a2', '${SRV}', 'navidrome', 'Artist Two', 1),
       ('a9', '${OTHER}', 'navidrome', 'Artist One', 1);
+    INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES
+      ('${SRV}:t1', '${SRV}', 'navidrome', 'Feature', 'Guest Only', '${SRV}:al-1');
   `);
 });
 
@@ -73,6 +75,13 @@ describe("setPinned / readPins", () => {
     const other = await readPins(asDb(db), OTHER);
     expect(other.albums.map((a) => a.id)).toEqual([`${OTHER}:al-9`]);
     expect(other.artists.map((a) => a.name)).toEqual(["Artist One"]);
+  });
+
+  it("pins an artist who appears only on tracks, not as an album artist", async () => {
+    await setPinned(asDb(db), { kind: "artist", serverId: SRV, artistName: "Guest Only" }, true, 1);
+
+    const pins = await readPins(asDb(db), SRV);
+    expect(pins.artists.map((a) => [a.name, a.album_count])).toEqual([["Guest Only", 1]]);
   });
 
   it("writes no pin for an id the library does not hold", async () => {

@@ -567,6 +567,52 @@ describe("syncLibrary album prune", () => {
     ).toEqual(rows);
   });
 
+  it("keeps a pinned or recent artist who appears only on tracks when the artists are rebuilt", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1", { artist: "Guest Only" })] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`
+      INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${SRV}', 'Guest Only', 1);
+      INSERT INTO recent_artists (server_id, artist_name, opened_at) VALUES ('${SRV}', 'Guest Only', 1);
+    `);
+
+    serveLibrary([album("al-1"), album("al-2", { artist: "Artist Two" })], {
+      "al-1": [track("t1", "al-1", { artist: "Guest Only" })],
+      "al-2": [track("t3", "al-2")],
+    });
+    const result = await syncLibrary(server(), CRED);
+
+    expect(result.changed.artists).toBe(true);
+    expect([await count("pinned_artists"), await count("recent_artists")]).toEqual([1, 1]);
+  });
+
+  it("carries a pin to the album the server relists under a new id", async () => {
+    await seedTwoAlbums();
+    db().raw.exec(`INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 7)`);
+
+    serveLibrary([album("al-1"), album("al-2b", { name: "Album al-2" })], {
+      "al-1": [track("t1", "al-1"), track("t2", "al-1")],
+      "al-2b": [track("t3b", "al-2b"), track("t4b", "al-2b")],
+    });
+    await syncLibrary(server(), CRED);
+
+    expect(await db().select("SELECT album_id, server_id, pinned_at FROM pinned_albums")).toEqual([
+      { album_id: `${SRV}:al-2b`, server_id: SRV, pinned_at: 7 },
+    ]);
+  });
+
+  it("carries an artist pin across a change in the name's capitalisation", async () => {
+    serveLibrary([album("al-1", { artist: "The band" })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec(`INSERT INTO pinned_artists (server_id, artist_name, pinned_at) VALUES ('${SRV}', 'The band', 7)`);
+
+    serveLibrary([album("al-1", { artist: "The Band" })], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+
+    expect(await db().select("SELECT server_id, artist_name, pinned_at FROM pinned_artists")).toEqual([
+      { server_id: SRV, artist_name: "The Band", pinned_at: 7 },
+    ]);
+  });
+
   it("keeps user-authored rows for a pruned album", async () => {
     await seedTwoAlbums();
     db().raw.exec(`

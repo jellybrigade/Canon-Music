@@ -7,13 +7,14 @@ import {
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
+import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { Server } from "../../types/server";
 import { scanForIssues } from "../tags/lib/tagIssues";
 import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
 import { syncLoved } from "./syncLoved";
 import { syncPlaylists } from "./syncPlaylists";
-import { pruneAlbums, pruneAlbumTracks } from "./syncPrune";
+import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
 import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
 import {
   mirroredTrackIdsStillResolve,
@@ -351,10 +352,11 @@ export async function syncLibrary(
        GROUP BY artist`,
       [server.id, server.type, server.id],
     );
+    await carryPinnedArtistCase(db, server.id);
     for (const table of ["pinned_artists", "recent_artists"]) {
       await db.execute(
-        `DELETE FROM ${table} WHERE server_id = ? AND artist_name NOT IN (SELECT name FROM artists WHERE server_id = ?)`,
-        [server.id, server.id],
+        `DELETE FROM ${table} WHERE server_id = ? AND NOT ${artistInLibrarySql(`${table}.server_id`, `${table}.artist_name`)}`,
+        [server.id],
       );
     }
   }

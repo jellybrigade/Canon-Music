@@ -48,6 +48,15 @@ describe("recordRecent / readRecents", () => {
     expect(third?.kind === "album" && third.album.artwork_url).toBe("co-1");
   });
 
+  it("records an artist who appears only on tracks, not as an album artist", async () => {
+    db.raw.exec(`INSERT INTO tracks (id, server_id, server_type, title, artist, album_id) VALUES
+      ('${SRV}:t2', '${SRV}', 'navidrome', 'Feature', 'Guest Only', '${SRV}:al-1')`);
+    await recordRecent(asDb(db), artist("Guest Only"), 1);
+
+    const [item] = await readRecents(asDb(db), SRV);
+    expect(item?.kind === "artist" && [item.artist.name, item.artist.album_count]).toEqual(["Guest Only", 1]);
+  });
+
   it("moves an item opened again to the front instead of listing it twice", async () => {
     await recordRecent(asDb(db), album("al-1"), 1);
     await recordRecent(asDb(db), album("al-2"), 2);

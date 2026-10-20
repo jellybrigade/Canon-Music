@@ -1,4 +1,5 @@
 import type Database from "@tauri-apps/plugin-sql";
+import { artistAlbumCountSql, artistInLibrarySql } from "../../lib/libraryArtists";
 import type { SearchAlbum, SearchArtist, SearchTrack } from "../search/useSearch";
 
 export const RECENTS_LIMIT = 5;
@@ -31,8 +32,9 @@ const WRITES: Record<RecentTarget["kind"], { upsert: string; trim: string }> = {
              SELECT album_id FROM recent_albums WHERE server_id = ? ORDER BY opened_at DESC, album_id LIMIT ${RECENTS_LIMIT})`,
   },
   artist: {
-    upsert: `INSERT INTO recent_artists (server_id, artist_name, opened_at)
-             SELECT server_id, name, ? FROM artists WHERE name = ? AND server_id = ?
+    upsert: `WITH arg (opened_at, name, server_id) AS (SELECT ?, ?, ?)
+             INSERT INTO recent_artists (server_id, artist_name, opened_at)
+             SELECT server_id, name, opened_at FROM arg WHERE ${artistInLibrarySql("arg.server_id", "arg.name")}
              ON CONFLICT (server_id, artist_name) DO UPDATE SET opened_at = excluded.opened_at`,
     trim: `DELETE FROM recent_artists WHERE server_id = ? AND artist_name NOT IN (
              SELECT artist_name FROM recent_artists WHERE server_id = ? ORDER BY opened_at DESC, artist_name LIMIT ${RECENTS_LIMIT})`,
@@ -72,12 +74,12 @@ export async function readRecents(db: Database, serverId: string): Promise<Recen
       [serverId],
     ),
     db.select<(SearchArtist & OpenedAt)[]>(
-      `SELECT a.name, a.album_count, r.opened_at, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
+      `SELECT r.artist_name AS name, ${artistAlbumCountSql("r.server_id", "r.artist_name")} AS album_count,
+              r.opened_at, ai.lastfm_image_url, ai.wikidata_image_url, ai.navidrome_image_url
        FROM recent_artists r
-       JOIN artists a ON a.server_id = r.server_id AND a.name = r.artist_name
-       LEFT JOIN artist_identity ai ON ai.artist_name = a.name
-       WHERE r.server_id = ?
-       ORDER BY r.opened_at DESC, a.name COLLATE NOCASE
+       LEFT JOIN artist_identity ai ON ai.artist_name = r.artist_name
+       WHERE r.server_id = ? AND ${artistInLibrarySql("r.server_id", "r.artist_name")}
+       ORDER BY r.opened_at DESC, r.artist_name COLLATE NOCASE
        LIMIT ${RECENTS_LIMIT}`,
       [serverId],
     ),
