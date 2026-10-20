@@ -820,6 +820,17 @@ describe("CommandPalette mouse interaction", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("opens nothing on a right or middle press", () => {
+    renderPalette();
+    const library = Array.from(document.querySelectorAll<HTMLElement>(".cp-nav-item")).find((b) =>
+      b.textContent?.includes("Library"),
+    )!;
+    fireEvent.mouseDown(library, { button: 2 });
+    fireEvent.mouseDown(library, { button: 1 });
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("closes on a backdrop press and release, not on either half alone", () => {
     renderPalette();
     const backdrop = () => document.querySelector(".cp-backdrop")!;

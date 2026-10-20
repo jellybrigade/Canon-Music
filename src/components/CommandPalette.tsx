@@ -532,6 +532,7 @@ export function CommandPalette({
     className: `${className}${idx === focusedIdx ? " cp-item--focused" : ""}`,
     onMouseEnter: () => setFocusedKey(itemKey(item)),
     onMouseDown: (e: React.MouseEvent) => {
+      if (e.button !== 0) return;
       e.preventDefault();
       activate(item, intentOf(e));
     },
