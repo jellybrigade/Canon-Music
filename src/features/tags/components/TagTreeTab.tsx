@@ -40,6 +40,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
   const [parentDropStyle, setParentDropStyle] = useState<React.CSSProperties>({});
   const parentInputRef = useRef<HTMLInputElement>(null);
   const parentWrapRef = useRef<HTMLDivElement>(null);
+  const parentDropRef = useRef<HTMLDivElement>(null);
 
   const sectionForType = (t: UserNodeType) =>
     t === "genre" ? "genres" : t === "descriptor" ? "descriptors" : "scenes-and-movements";
@@ -74,7 +75,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
   }
 
   useClickOutside(
-    parentWrapRef,
+    [parentWrapRef, parentDropRef],
     () => {
       setParentOpen(false);
       setParentQuery("");
@@ -165,7 +166,7 @@ export function NodeModal({ initialName = "", editingNode, treeNodes, onSave, on
               {parentOpen &&
                 parentMatches.length > 0 &&
                 createPortal(
-                  <div className="tags-combobox-dropdown" style={parentDropStyle}>
+                  <div ref={parentDropRef} className="tags-combobox-dropdown" style={parentDropStyle}>
                     {parentMatches.map((n) => (
                       <button
                         key={n.id}

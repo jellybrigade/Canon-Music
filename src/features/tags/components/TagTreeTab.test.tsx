@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __resetModalRegistry, useAnyModalOpen } from "../../../ui/useModalChrome";
 import { NodeModal } from "./TagTreeTab";
@@ -83,5 +83,31 @@ describe("NodeModal", () => {
     );
 
     expect(screen.getByTestId("any-modal")).toHaveTextContent("true");
+  });
+});
+
+describe("NodeModal parent picker", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("treats a press inside the portaled parent list as inside", () => {
+    // The list portals to document.body, outside the wrapper the outside-click check
+    // watched, so pressing a parent closed the list before the pick landed.
+    vi.useFakeTimers();
+    const hipHop = {
+      id: "hip-hop",
+      name: "Hip Hop",
+      type: "genre",
+      canonical_key: "hip hop",
+      parents: [],
+      sections: ["genres" as const],
+    };
+    render(<NodeModal treeNodes={[hipHop]} onSave={vi.fn()} onCancel={vi.fn()} />);
+    const parentInput = screen.getByPlaceholderText("Search for parent node…");
+    fireEvent.change(parentInput, { target: { value: "hip" } });
+    act(() => vi.advanceTimersByTime(0));
+
+    fireEvent.mouseDown(document.querySelector(".tags-combobox-dropdown")!);
+
+    expect(document.querySelector(".tags-combobox-dropdown")).not.toBeNull();
   });
 });
