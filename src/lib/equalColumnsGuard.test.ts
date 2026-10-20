@@ -18,10 +18,12 @@ function sources(dir: string): string[] {
   return out.sort();
 }
 
-function contentSizedRepeats(text: string): number[] {
+const BARE_FR_COLUMNS = /(grid-template-columns:|gridTemplateColumns:)\s*["'`]?1fr(\s+1fr)*["'`]?\s*[;,}]/;
+
+function contentSizedColumns(text: string): number[] {
   const lines: number[] = [];
   for (const [index, line] of text.split("\n").entries()) {
-    if (/repeat\([^()]*(\([^()]*\)[^()]*)*,\s*1fr\s*\)/.test(line)) lines.push(index + 1);
+    if (/repeat\([^()]*(\([^()]*\)[^()]*)*,\s*1fr\s*\)/.test(line) || BARE_FR_COLUMNS.test(line)) lines.push(index + 1);
   }
   return lines;
 }
@@ -29,15 +31,23 @@ function contentSizedRepeats(text: string): number[] {
 describe("equal grid columns", () => {
   it("finds a repeat of bare 1fr tracks", () => {
     expect(
-      contentSizedRepeats(
+      contentSizedColumns(
         "a { grid-template-columns: repeat(3, 1fr); }\ngridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,\ngridTemplateColumns: `repeat(${cols}, 1fr)`,\nb { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }",
       ),
     ).toEqual([1, 3]);
   });
 
+  it("finds bare 1fr columns written out", () => {
+    expect(
+      contentSizedColumns(
+        "a { grid-template-columns: 1fr; }\nb { grid-template-columns: 1fr 1fr; }\nc { grid-template-columns: minmax(0, 1fr); }\nd { grid-template-columns: auto 1fr; }",
+      ),
+    ).toEqual([1, 2]);
+  });
+
   it("never lets content widen a column", () => {
     const offenders = sources(SRC_DIR).flatMap((path) =>
-      contentSizedRepeats(readFileSync(path, "utf-8")).map((line) => `${path.slice(SRC_DIR.length)}:${line}`),
+      contentSizedColumns(readFileSync(path, "utf-8")).map((line) => `${path.slice(SRC_DIR.length)}:${line}`),
     );
     expect(offenders).toEqual([]);
   });

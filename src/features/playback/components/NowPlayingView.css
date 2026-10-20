@@ -513,7 +513,7 @@
 /* Mid: ≤1050px, force single-column track grids, smaller art */
 @container now-playing (max-width: 1050px) {
   .now-playing-top-tracks-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .now-playing-left {
@@ -549,7 +549,7 @@
 /* Narrow: ≤850px, one column. Tall enough, the hero sits over the tab panel. */
 @container now-playing (max-width: 850px) {
   .now-playing-main {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr);
   }
 
