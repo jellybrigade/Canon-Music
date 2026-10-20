@@ -106,10 +106,13 @@
 .playlist-card-name {
   font-size: var(--text-md);
   font-weight: 500;
+  line-height: 1.5;
   color: var(--text-primary);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .playlist-card-meta {
