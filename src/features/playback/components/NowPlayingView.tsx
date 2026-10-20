@@ -25,6 +25,7 @@ import { NowPlayingAbout } from "./NowPlayingAbout";
 import { NowPlayingControls } from "./NowPlayingControls";
 import { NowPlayingProgress } from "./NowPlayingProgress";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
+import { PlayPauseButton } from "./PlayPauseButton";
 import { UpNextList } from "./UpNextList";
 import "./NowPlayingView.css";
 
@@ -160,11 +161,20 @@ export function NowPlayingView({
   useEffect(() => {
     if (!isExpanded || isAnyModalOpen) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !isTextEntryTarget(e)) setIsExpanded(false);
+      // A context menu above handles its own Escape and marks it handled.
+      if (e.key === "Escape" && !e.defaultPrevented && !isTextEntryTarget(e)) setIsExpanded(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isExpanded, isAnyModalOpen]);
+
+  // Only the narrow layout shows the expanded state, and CSS alone knows whether a resize left it.
+  useEffect(() => {
+    if (!isExpanded) return;
+    const collapse = () => setIsExpanded(false);
+    window.addEventListener("resize", collapse);
+    return () => window.removeEventListener("resize", collapse);
+  }, [isExpanded]);
 
   const expandTo = (t: Tab) => {
     setTab(t);
@@ -208,8 +218,17 @@ export function NowPlayingView({
             ) : (
               <div className="now-playing-mini-art now-playing-art--placeholder" />
             )}
-            <span className="now-playing-mini-title">{currentTrack.title}</span>
+            <span className="now-playing-mini-text">
+              <span className="now-playing-mini-title">{currentTrack.title}</span>
+              {error && (
+                <span className="now-playing-mini-error" role="alert">
+                  <AlertCircle size={13} className="now-playing-error-icon" aria-hidden="true" />
+                  <span className="now-playing-mini-error-msg">{error.message}</span>
+                </span>
+              )}
+            </span>
           </button>
+          <PlayPauseButton className="player-btn player-btn--play" iconSize={20} />
           <button
             className="now-playing-collapse-btn player-btn player-btn--icon"
             onClick={() => setIsExpanded(false)}

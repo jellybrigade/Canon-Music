@@ -33,6 +33,7 @@ vi.mock("./NowPlayingProgress", () => ({ NowPlayingProgress: () => null }));
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { ContextMenu } from "../../../ui/ContextMenu";
 import { __resetModalRegistry } from "../../../ui/useModalChrome";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
@@ -70,7 +71,7 @@ function launcherButton(label: string) {
 
 beforeEach(() => {
   __resetModalRegistry();
-  usePlayerStore.setState({ currentTrack: track, queue: [track], queueIndex: 0 });
+  usePlayerStore.setState({ currentTrack: track, queue: [track], queueIndex: 0, isPlaying: false, error: null });
 });
 
 afterEach(() => {
@@ -163,5 +164,49 @@ describe("NowPlayingView narrow expand", () => {
     expect(keydownRemoves()).toBe(1);
     add.mockRestore();
     remove.mockRestore();
+  });
+
+  it("leaves Escape to a context menu open above", () => {
+    const onCloseMenu = vi.fn();
+    const { rerender } = renderView();
+    fireEvent.click(launcherButton("About"));
+    rerender(
+      <>
+        <NowPlayingView
+          serverWithCredential={serverWithCredential}
+          onSelectAlbum={vi.fn()}
+          onStartRadio={vi.fn()}
+          onOpenResync={vi.fn()}
+        />
+        <ContextMenu x={0} y={0} onClose={onCloseMenu}>
+          <button type="button">Item</button>
+        </ContextMenu>
+      </>,
+    );
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(onCloseMenu).toHaveBeenCalledTimes(1);
+    expect(isExpanded()).toBe(true);
+  });
+
+  it("collapses when the window resizes, since the layout may no longer be narrow", () => {
+    renderView();
+    fireEvent.click(launcherButton("Lyrics"));
+    fireEvent(window, new Event("resize"));
+    expect(isExpanded()).toBe(false);
+  });
+
+  it("keeps play and pause in reach while a tab is expanded", () => {
+    renderView();
+    fireEvent.click(launcherButton("Lyrics"));
+    expect(document.querySelector('.now-playing-mini-bar button[aria-label="Play"]')).not.toBeNull();
+  });
+
+  it("shows a playback error while a tab is expanded", () => {
+    usePlayerStore.setState({ error: { message: "The track never started playing", cause: null } });
+    renderView();
+    fireEvent.click(launcherButton("Lyrics"));
+    expect(document.querySelector(".now-playing-mini-bar [role='alert']")?.textContent).toContain(
+      "The track never started playing",
+    );
   });
 });

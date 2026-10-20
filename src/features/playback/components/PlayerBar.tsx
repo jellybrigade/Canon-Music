@@ -5,9 +5,6 @@ import {
   ChevronUp,
   Headphones,
   Heart,
-  Loader,
-  Pause,
-  Play,
   Repeat,
   Repeat1,
   Shuffle,
@@ -34,6 +31,7 @@ import { isNextDisabled, repeatModeLabel } from "../store/playerTypes";
 import { BottomNotices } from "./BottomNotices";
 import { PlayerMoreControls } from "./PlayerMoreControls";
 import { PlayerProgress } from "./PlayerProgress";
+import { PlayPauseButton } from "./PlayPauseButton";
 import { SleepTimerPopover } from "./SleepTimerPopover";
 import { VolumeControl } from "./VolumeControl";
 import "./PlayerBar.css";
@@ -67,16 +65,12 @@ interface Props {
 export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const isLoading = usePlayerStore((s) => s.isLoading);
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
   const isShuffled = usePlayerStore((s) => s.isShuffled);
   const radioOnQueueEnd = usePlayerStore((s) => s.radioOnQueueEnd);
 
-  const pause = usePlayerStore((s) => s.pause);
-  const resume = usePlayerStore((s) => s.resume);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
   const seek = usePlayerStore((s) => s.seek);
@@ -295,20 +289,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               >
                 <SkipBack size={24} />
               </button>
-              <button
-                className="player-btn player-btn--play"
-                onClick={isPlaying ? pause : resume}
-                disabled={isLoading}
-                aria-label={isPlaying ? "Pause" : "Play"}
-              >
-                {isLoading ? (
-                  <Loader size={20} className="player-spin" />
-                ) : isPlaying ? (
-                  <Pause size={20} fill="currentColor" strokeWidth={0} />
-                ) : (
-                  <Play size={20} fill="currentColor" strokeWidth={0} />
-                )}
-              </button>
+              <PlayPauseButton className="player-btn player-btn--play" iconSize={20} />
               <button className="player-btn" onClick={() => void next()} disabled={nextDisabled} aria-label="Next">
                 <SkipForward size={24} />
               </button>
