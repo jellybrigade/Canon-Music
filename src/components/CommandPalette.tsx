@@ -103,43 +103,45 @@ const RESULTS_CAP = 5;
 
 const isShelfItem = (item: Item | undefined): item is ShelfEntry => item?.kind === "pin" || item?.kind === "more";
 
-const isInRow = (item: Item | undefined, row: ShelfRow): item is ShelfEntry => isShelfItem(item) && item.row === row;
+// The 2D row an item sits in (a shelf row, a line of the Go to grid), or null for a plain list row.
+type GridRow = string | null;
 
-// Each shelf row is read with left and right; up and down step between the rows, keeping the column
-// where the row is long enough, and on into the lists below. Null leaves the key to the text field.
-function arrowTarget(items: Item[], from: number, key: string): number | null {
-  const current = items[from];
+const NAV_GRID_COLUMNS = 3;
+
+// Left and right move along a row; up and down step between rows, keeping the column where the
+// row is long enough, and on into the lists below. Null leaves the key to the text field.
+function arrowTarget(rows: GridRow[], from: number, key: string): number | null {
+  const row = rows[from] ?? null;
   if (key === "ArrowLeft" || key === "ArrowRight") {
-    if (!isShelfItem(current)) return null;
+    if (row === null) return null;
     const to = from + (key === "ArrowRight" ? 1 : -1);
-    return isInRow(items[to], current.row) ? to : from;
+    return rows[to] === row ? to : from;
   }
   if (key === "ArrowDown") {
-    if (!isShelfItem(current)) return Math.min(from + 1, items.length - 1);
-    const below = items.findIndex((item, i) => i > from && !isInRow(item, current.row));
+    if (row === null) return Math.min(from + 1, rows.length - 1);
+    const below = rows.findIndex((other, i) => i > from && other !== row);
     if (below === -1) return from;
-    return inColumn(items, below, from - rowStart(items, current.row));
+    return inColumn(rows, below, from - rows.indexOf(row));
   }
   if (key === "ArrowUp") {
-    if (!isShelfItem(current)) {
-      const above = items[from - 1];
-      return isShelfItem(above) ? rowStart(items, above.row) : Math.max(from - 1, 0);
+    if (row === null) {
+      const aboveRow = rows[from - 1] ?? null;
+      return aboveRow === null ? Math.max(from - 1, 0) : rows.indexOf(aboveRow);
     }
-    const above = items[rowStart(items, current.row) - 1];
-    if (!isShelfItem(above)) return from;
-    return inColumn(items, rowStart(items, above.row), from - rowStart(items, current.row));
+    const above = rows.indexOf(row) - 1;
+    const aboveRow = rows[above];
+    if (aboveRow === undefined) return from;
+    return aboveRow === null ? above : inColumn(rows, rows.indexOf(aboveRow), from - rows.indexOf(row));
   }
   return null;
 }
 
-const rowStart = (items: Item[], row: ShelfRow) => items.findIndex((item) => isInRow(item, row));
-
-// The tile at `column` in the row starting at `start`, or that row's last tile if it is shorter.
-function inColumn(items: Item[], start: number, column: number): number {
-  const first = items[start];
-  if (!isShelfItem(first)) return start;
+// The item at `column` in the row starting at `start`, or that row's last item if it is shorter.
+function inColumn(rows: GridRow[], start: number, column: number): number {
+  const row = rows[start];
+  if (row === null) return start;
   let to = start;
-  while (to - start < column && isInRow(items[to + 1], first.row)) to++;
+  while (to - start < column && rows[to + 1] === row) to++;
   return to;
 }
 
@@ -234,6 +236,12 @@ export function CommandPalette({
   const items: Item[] = deferred
     ? [...searchCommands, ...searchArtists, ...searchAlbums, ...searchTracks]
     : [...shelf, ...NAV_COMMANDS];
+  const rows: GridRow[] = deferred
+    ? items.map(() => null)
+    : [
+        ...shelf.map((entry) => `shelf:${entry.row}`),
+        ...NAV_COMMANDS.map((_, i) => `nav:${Math.floor(i / NAV_GRID_COLUMNS)}`),
+      ];
 
   // Nothing focused, or a row that has since gone: the first row, which is what a freshly
   // arrived result set should offer Enter.
@@ -321,18 +329,18 @@ export function CommandPalette({
   // which rebuild `items`. Same pattern as useSearchShortcuts.
   const dismiss = useOverlayDismiss(onClose);
 
-  const keysRef = useRef({ items, focusedIdx, activate, onClose });
-  keysRef.current = { items, focusedIdx, activate, onClose };
+  const keysRef = useRef({ items, rows, focusedIdx, activate, onClose });
+  keysRef.current = { items, rows, focusedIdx, activate, onClose };
 
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
-      const { items, focusedIdx, activate, onClose } = keysRef.current;
+      const { items, rows, focusedIdx, activate, onClose } = keysRef.current;
       if (e.key === "Escape") {
         onClose();
         return;
       }
-      if (arrowTarget(items, focusedIdx, e.key) !== null) {
+      if (arrowTarget(rows, focusedIdx, e.key) !== null) {
         e.preventDefault();
         const { key } = e;
         // Derived from the previous key rather than the render-time index: this is a native
@@ -343,7 +351,7 @@ export function CommandPalette({
             0,
             items.findIndex((item) => itemKey(item) === current),
           );
-          const to = items[arrowTarget(items, from, key) ?? from];
+          const to = items[arrowTarget(rows, from, key) ?? from];
           return to ? itemKey(to) : current;
         });
       } else if (e.key === "Enter") {
@@ -462,7 +470,7 @@ export function CommandPalette({
           {!deferred && (
             <div className="cp-section">
               <p className="cp-section-label">Go to</p>
-              <div className="cp-nav-grid">
+              <div className="cp-nav-grid" style={{ "--cp-nav-columns": NAV_GRID_COLUMNS } as React.CSSProperties}>
                 {NAV_COMMANDS.map((cmd, i) => (
                   <button
                     key={cmd.id}

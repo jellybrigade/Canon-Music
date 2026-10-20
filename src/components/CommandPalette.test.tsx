@@ -352,33 +352,38 @@ describe("CommandPalette pinned shelf", () => {
     expect(focusedLabel()).toBe("Portishead");
   });
 
-  it("drops from the last row to the nav commands and comes back up to its first tile", () => {
+  it("drops from the last row into the Go to grid and back up, keeping the column both ways", () => {
     renderPalette({ pins: TWO_ROWS });
     press("ArrowDown");
     press("ArrowRight");
     press("ArrowDown");
-    expect(focusedLabel()).toBe("Home");
-    press("ArrowDown");
     expect(focusedLabel()).toBe("Library");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Queue");
     press("ArrowUp");
     press("ArrowUp");
-    expect(focusedLabel()).toBe("Kid A");
+    expect(focusedLabel()).toBe("Amnesiac");
+    press("ArrowRight");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Artists");
   });
 
   it("drops straight to the nav commands from a lone row", () => {
     renderPalette({ pins: { artists: [], albums: TWO_ROWS.albums } });
     press("ArrowRight");
     press("ArrowDown");
-    expect(focusedLabel()).toBe("Home");
+    expect(focusedLabel()).toBe("Library");
     press("ArrowUp");
-    expect(focusedLabel()).toBe("Kid A");
+    expect(focusedLabel()).toBe("Amnesiac");
   });
 
-  it("leaves left and right to the text field outside the shelf", () => {
+  it("leaves left and right to the text field in the result lists", async () => {
     renderPalette();
+    typeRaw("settings");
+    await settleDebounce();
+    expect(focusedLabel()).toBe("Settings");
     expect(press("ArrowLeft")).toBe(true);
     expect(press("ArrowRight")).toBe(true);
-    expect(focusedLabel()).toBe("Home");
   });
 
   it("opens a pinned album with its own server id, and a pinned artist", () => {
@@ -572,25 +577,50 @@ describe("CommandPalette keyboard navigation", () => {
     renderPalette();
     expect(focusedLabel()).toBe("Home");
     act(() => {
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
-      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
     });
     expect(focusedLabel()).toBe("Artists");
   });
 
-  it("clamps ArrowDown at the last item and ArrowUp at the first", () => {
+  it("moves through the Go to grid by row and column, stopping at its edges", () => {
+    const press = (key: string) => fireEvent.keyDown(window, { key });
     renderPalette();
     expect(focusedLabel()).toBe("Home");
-    fireEvent.keyDown(window, { key: "ArrowUp" });
+    press("ArrowUp");
+    press("ArrowLeft");
     expect(focusedLabel()).toBe("Home");
-    for (let i = 0; i < 10; i++) fireEvent.keyDown(window, { key: "ArrowDown" });
+    press("ArrowRight");
+    expect(focusedLabel()).toBe("Library");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Queue");
+    press("ArrowDown");
+    expect(focusedLabel()).toBe("Queue");
+    press("ArrowRight");
+    press("ArrowRight");
     expect(focusedLabel()).toBe("Settings");
+    press("ArrowUp");
+    expect(focusedLabel()).toBe("Artists");
+  });
+
+  it("clamps ArrowDown at the last result and ArrowUp at the first", async () => {
+    seedFindableAlbum({ id: "a:one", name: "Zebra One" });
+    seedFindableAlbum({ id: "a:two", name: "Zebra Two" });
+    renderPalette();
+    typeRaw("zebra");
+    await settleDebounce();
+    const [first, last] = resultPrimaries();
+    expect(focusedLabel()).toBe(first);
+    fireEvent.keyDown(window, { key: "ArrowUp" });
+    expect(focusedLabel()).toBe(first);
+    for (let i = 0; i < 5; i++) fireEvent.keyDown(window, { key: "ArrowDown" });
+    expect(focusedLabel()).toBe(last);
   });
 
   it("activates the focused item on Enter and closes", () => {
     renderPalette();
-    fireEvent.keyDown(window, { key: "ArrowDown" });
-    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(focusedLabel()).toBe("Artists");
     fireEvent.keyDown(window, { key: "Enter" });
     expect(onNavigate).toHaveBeenCalledTimes(1);
