@@ -6,6 +6,9 @@
   position: relative;
   flex: 1;
   min-width: 0;
+  /* Breakpoints below query this box, not the viewport: WebKitGTK re-evaluated viewport media
+     queries only on the next style change, so a resize left the old layout until a click. */
+  container: now-playing / size;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -492,11 +495,11 @@
 }
 
 /* ═══════════════════════════════════
-   Responsive breakpoints
+   Responsive breakpoints, in view size: the window less the sidebar and the player bar
    ═══════════════════════════════════ */
 
-/* Wide: ≥1500px, larger art */
-@media (min-width: 1500px) {
+/* Wide: ≥1450px, larger art */
+@container now-playing (min-width: 1450px) {
   .now-playing-title {
     font-size: var(--text-4xl);
   }
@@ -507,8 +510,8 @@
   }
 }
 
-/* Mid: ≤1100px, force single-column track grids, smaller art */
-@media (max-width: 1100px) {
+/* Mid: ≤1050px, force single-column track grids, smaller art */
+@container now-playing (max-width: 1050px) {
   .now-playing-top-tracks-grid {
     grid-template-columns: 1fr;
   }
@@ -526,16 +529,16 @@
   }
 }
 
-/* Short: ≤680px window height, tighter padding leaves the art more room */
-@media (max-height: 680px) {
+/* Short: ≤590px tall, tighter padding leaves the art more room */
+@container now-playing (max-height: 590px) {
   .now-playing-left {
     padding: var(--space-md) var(--space-xl);
     gap: var(--space-sm);
   }
 }
 
-/* Very short: ≤520px window height, tight gaps and a smaller art floor */
-@media (max-height: 520px) {
+/* Very short: ≤430px tall, tight gaps and a smaller art floor */
+@container now-playing (max-height: 430px) {
   .now-playing-left {
     padding: var(--space-xs) var(--space-xl);
     gap: var(--space-xs);
@@ -543,13 +546,36 @@
   }
 }
 
-/* Narrow: ≤900px. Collapsed, the hero (art beside the controls) sits over three tab buttons;
-   expanded, a small cover strip sits over the tab panel. Neither stacks hero and panel, so the
-   view never scrolls as a whole. */
-@media (max-width: 900px) {
+/* Narrow: ≤850px, one column. Tall enough, the hero sits over the tab panel. */
+@container now-playing (max-width: 850px) {
   .now-playing-main {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .now-playing-left {
+    --now-playing-art-max: min(360px, 50vw, 30vh);
+  }
+
+  .now-playing-title {
+    font-size: var(--text-2xl);
+  }
+
+  .now-playing-right {
+    border-left: none;
+    border-top: 1px solid var(--tint-2);
+  }
+}
+
+/* Narrow and not tall: collapsed, the hero sits over three tab buttons; expanded, a small cover
+   strip sits over the tab panel. Neither stacks hero and panel, so the view never scrolls. */
+@container now-playing (max-width: 850px) and (max-height: 910px) {
+  .now-playing-main {
     grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .now-playing-left {
+    --now-playing-art-max: min(360px, 50vw);
   }
 
   .now-playing-view:not(.now-playing-view--expanded) .now-playing-right {
@@ -571,7 +597,10 @@
   .now-playing-view--expanded .now-playing-mini-bar {
     display: flex;
   }
+}
 
+/* Narrow and short: too short to stack, so the art sits beside the controls. */
+@container now-playing (max-width: 850px) and (max-height: 670px) {
   .now-playing-left {
     flex-direction: row;
     /* Top padding clears the back button, which sits over the art's corner. */
@@ -595,19 +624,10 @@
     flex: 1 1 0;
     gap: var(--space-sm);
   }
-
-  .now-playing-title {
-    font-size: var(--text-2xl);
-  }
-
-  .now-playing-right {
-    border-left: none;
-    border-top: 1px solid var(--tint-2);
-  }
 }
 
-/* Narrow and short: one-line title and no format line, so the hero fits above the tab buttons */
-@media (max-width: 900px) and (max-height: 680px) {
+/* Narrow and shorter still: one-line title and no format line, so the hero fits above the tab buttons */
+@container now-playing (max-width: 850px) and (max-height: 590px) {
   .now-playing-title {
     font-size: var(--text-xl);
     -webkit-line-clamp: 1;
