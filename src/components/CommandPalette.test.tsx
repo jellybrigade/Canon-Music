@@ -87,6 +87,9 @@ const onNavigate = vi.fn();
 const onSelectAlbum = vi.fn();
 const onSelectArtist = vi.fn();
 const onPlayTrack = vi.fn();
+const onOpenTrack = vi.fn();
+const onPlayAlbum = vi.fn();
+const onStartArtistRadio = vi.fn();
 
 function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette>> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -97,6 +100,9 @@ function renderPalette(props: Partial<React.ComponentProps<typeof CommandPalette
     onSelectAlbum,
     onSelectArtist,
     onPlayTrack,
+    onOpenTrack,
+    onPlayAlbum,
+    onStartArtistRadio,
     serverWithCredential: SRV,
     ...props,
   } as React.ComponentProps<typeof CommandPalette>;
@@ -189,6 +195,9 @@ beforeEach(async () => {
   onSelectAlbum.mockClear();
   onSelectArtist.mockClear();
   onPlayTrack.mockClear();
+  onOpenTrack.mockClear();
+  onPlayAlbum.mockClear();
+  onStartArtistRadio.mockClear();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
 });
@@ -609,8 +618,7 @@ describe("CommandPalette keyboard navigation", () => {
     expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
     expect(focusedLabel()).toBe("Jesus, Etc.");
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onPlayTrack).toHaveBeenCalledTimes(1);
-    expect(onPlayTrack).toHaveBeenCalledWith("t1");
+    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
   });
 
   it("falls back to the first row rather than holding the ordinal when the rows are replaced", async () => {
@@ -647,10 +655,11 @@ describe("CommandPalette keyboard navigation", () => {
     expect(onSelectAlbum).not.toHaveBeenCalled();
     expect(onSelectArtist).not.toHaveBeenCalled();
     expect(onPlayTrack).not.toHaveBeenCalled();
+    expect(onOpenTrack).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("selects a track result via Enter with its id, leaving other callbacks untouched", async () => {
+  it("opens a track's album at that track on Enter, without playing it", async () => {
     seedAlbum({ id: "a1", name: "Yankee Hotel" });
     seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
     renderPalette();
@@ -658,8 +667,8 @@ describe("CommandPalette keyboard navigation", () => {
     await settleDebounce();
     expect(resultPrimaries()).toEqual(["Jesus, Etc."]);
     fireEvent.keyDown(window, { key: "Enter" });
-    expect(onPlayTrack).toHaveBeenCalledTimes(1);
-    expect(onPlayTrack).toHaveBeenCalledWith("t1");
+    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
+    expect(onPlayTrack).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onNavigate).not.toHaveBeenCalled();
   });
@@ -761,5 +770,118 @@ describe("CommandPalette result states", () => {
     typeRaw("wilco");
     await settleDebounce();
     expect(resultPrimaries()).toEqual(["Wilco Album"]);
+  });
+});
+
+describe("CommandPalette Enter opens, Shift+Enter plays", () => {
+  const press = (key: string, shiftKey = false) => fireEvent.keyDown(window, { key, shiftKey });
+  const footerHints = () =>
+    Array.from(document.querySelectorAll(".cp-footer > span"), (hint) => hint.textContent?.replace(/\s+/g, " ").trim());
+
+  async function searchFor(query: string) {
+    renderPalette();
+    typeRaw(query);
+    await settleDebounce();
+  }
+
+  it("plays a track on Shift+Enter instead of opening its album", async () => {
+    seedAlbum({ id: "a1", name: "Yankee Hotel" });
+    seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
+    await searchFor("jesus");
+    press("Enter", true);
+    expect(onPlayTrack.mock.calls).toEqual([["t1"]]);
+    expect(onOpenTrack).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("plays an album on Shift+Enter with the row's own server id, without opening it", async () => {
+    seedAlbum({ id: "a1", name: "Kid A", artist: "Radiohead", serverId: "srv-a" });
+    seedTrack({ id: "t1", title: "Everything In Its Right Place", artist: "Radiohead", albumId: "a1" });
+    await searchFor("kid a");
+    press("Enter", true);
+    expect(onPlayAlbum.mock.calls.map(([album]) => [album.id, album.server_id])).toEqual([["a1", "srv-a"]]);
+    expect(onSelectAlbum).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts an artist's radio on Shift+Enter instead of opening the artist", async () => {
+    seedAlbum({ id: "a1", name: "Yankee Hotel", artist: "Wilco" });
+    seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
+    await searchFor("wilco");
+    press("Enter", true);
+    expect(onStartArtistRadio.mock.calls).toEqual([["Wilco"]]);
+    expect(onSelectArtist).not.toHaveBeenCalled();
+  });
+
+  it("plays a pinned album and starts a pinned artist's radio on Shift+Enter", () => {
+    const pins: Pins = {
+      artists: [
+        {
+          name: "Radiohead",
+          album_count: 9,
+          lastfm_image_url: null,
+          wikidata_image_url: null,
+          navidrome_image_url: null,
+          pinned_at: 1,
+        },
+      ],
+      albums: [
+        {
+          id: "al-1",
+          server_id: "srv-b",
+          name: "Kid A",
+          artist: "Radiohead",
+          year: null,
+          artwork_url: null,
+          pinned_at: 2,
+        },
+      ],
+    };
+    renderPalette({ pins });
+    press("Enter", true);
+    expect(onStartArtistRadio.mock.calls).toEqual([["Radiohead"]]);
+
+    cleanup();
+    renderPalette({ pins });
+    press("ArrowDown");
+    press("Enter", true);
+    expect(onPlayAlbum.mock.calls.map(([album]) => [album.id, album.server_id])).toEqual([["al-1", "srv-b"]]);
+    expect(onSelectAlbum).not.toHaveBeenCalled();
+    expect(onSelectArtist).not.toHaveBeenCalled();
+  });
+
+  it("goes to a page on Shift+Enter, since there is nothing to play", () => {
+    renderPalette();
+    press("Enter", true);
+    expect(onNavigate.mock.calls).toEqual([["home"]]);
+  });
+
+  it("plays on a Shift+click and opens on a plain click", async () => {
+    seedAlbum({ id: "a1", name: "Yankee Hotel" });
+    seedTrack({ id: "t1", title: "Jesus, Etc.", artist: "Wilco", albumId: "a1" });
+    await searchFor("jesus");
+    const row = () => document.querySelector(".cp-result-row")!;
+    fireEvent.mouseDown(row(), { shiftKey: true });
+    expect(onPlayTrack.mock.calls).toEqual([["t1"]]);
+    expect(onOpenTrack).not.toHaveBeenCalled();
+    fireEvent.mouseDown(row());
+    expect(onOpenTrack.mock.calls).toEqual([["t1", "a1"]]);
+  });
+
+  it("names what Enter and Shift+Enter do for the focused row", async () => {
+    seedAlbum({ id: "a1", name: "Wilco Album", artist: "Wilco" });
+    seedTrack({ id: "t1", title: "Wilco Song", artist: "Wilco", albumId: "a1" });
+    await searchFor("wilco");
+    expect(resultPrimaries()).toEqual(["Wilco", "Wilco Album", "Wilco Song"]);
+    expect(footerHints()).toEqual(["↑↓ navigate", "↵ open", "⇧↵ start radio", "esc close"]);
+    press("ArrowDown");
+    expect(footerHints()).toEqual(["↑↓ navigate", "↵ open", "⇧↵ play", "esc close"]);
+    press("ArrowDown");
+    expect(footerHints()).toEqual(["↑↓ navigate", "↵ open album", "⇧↵ play", "esc close"]);
+  });
+
+  it("offers no play hint where there is nothing to play", () => {
+    renderPalette();
+    expect(footerHints()).toEqual(["↑↓ navigate", "↵ go to", "esc close"]);
   });
 });

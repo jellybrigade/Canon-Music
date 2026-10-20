@@ -18,8 +18,11 @@ export const ROUTES = {
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];
 
-export function albumPath(albumId: string) {
-  return `/album/${encodeURIComponent(albumId)}`;
+export const ALBUM_TRACK_PARAM = "track";
+
+export function albumPath(albumId: string, trackId?: string) {
+  const path = `/album/${encodeURIComponent(albumId)}`;
+  return trackId === undefined ? path : `${path}?${new URLSearchParams({ [ALBUM_TRACK_PARAM]: trackId })}`;
 }
 export function artistPath(artistName: string) {
   return `/artist/${encodeURIComponent(artistName)}`;

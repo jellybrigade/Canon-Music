@@ -121,7 +121,7 @@ export default function App() {
     setCommandPaletteOpen(false);
   }, []);
 
-  const { view, pathname, navigateTo, openAlbum, openArtist, openPlaylist, goBack, leaveSearch } =
+  const { view, pathname, navigateTo, openAlbum, openAlbumAtTrack, openArtist, openPlaylist, goBack, leaveSearch } =
     useAppNavigation(dismissOverlays);
 
   const [sidebarExpanded, setSidebarExpanded] = useBoolSetting("sidebar.expanded", false);
@@ -670,6 +670,7 @@ export default function App() {
     view,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openPlaylist,
     openAlbumById,

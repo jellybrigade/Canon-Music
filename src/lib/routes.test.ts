@@ -33,6 +33,12 @@ describe("path builders", () => {
     expect(decodeURIComponent(path.slice("/playlist/".length))).toBe(id);
   });
 
+  it.each(AWKWARD)("albumPath carries track %s through the query string", (trackId) => {
+    const url = new URL(albumPath("AC/DC", trackId), "http://canon.test");
+    expect(url.pathname).toBe("/album/AC%2FDC");
+    expect(url.searchParams.get("track")).toBe(trackId);
+  });
+
   it("encodes a slash so it cannot become an extra path segment", () => {
     expect(albumPath("AC/DC")).toBe("/album/AC%2FDC");
     expect(albumPath("AC/DC").split("/")).toHaveLength(3);

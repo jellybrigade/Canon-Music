@@ -9,6 +9,8 @@ import { PlayerBar } from "../features/playback/components/PlayerBar";
 import { ScrobbleTracker } from "../features/playback/hooks/useScrobble";
 import { RadioStartDialogHost } from "../features/radio/components/RadioStartDialog";
 import { usePaletteActions } from "../hooks/usePaletteActions";
+import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import type { ArtistRow } from "../types/library";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((m) => ({ default: m.CommandPalette })));
@@ -17,10 +19,29 @@ const CommandPalette = lazy(() => import("../components/CommandPalette").then((m
 function CommandPaletteWithActions({
   runSync,
   ...paletteProps
-}: Omit<ComponentProps<typeof CommandPalette>, "actions"> & { runSync: AppViewProps["runSync"] }) {
+}: Omit<ComponentProps<typeof CommandPalette>, "actions" | "onPlayAlbum"> & { runSync: AppViewProps["runSync"] }) {
   const actions = usePaletteActions(paletteProps.serverWithCredential, runSync);
-  return <CommandPalette {...paletteProps} actions={actions} />;
+  const playAlbum = usePlayAlbum(paletteProps.serverWithCredential);
+  return (
+    <CommandPalette
+      {...paletteProps}
+      actions={actions}
+      onPlayAlbum={(album) => {
+        void playAlbum(album);
+      }}
+    />
+  );
 }
+
+const artistRowOf = (name: string, albumCount = 0): ArtistRow => ({
+  name,
+  album_count: albumCount,
+  artwork_url: null,
+  lastfm_image_url: null,
+  wikidata_image_url: null,
+  navidrome_image_url: null,
+  enriched_at: null,
+});
 
 export function AppShell(props: AppViewProps) {
   const {
@@ -30,8 +51,10 @@ export function AppShell(props: AppViewProps) {
     navItems,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openAlbumById,
+    handleStartRadioFromArtist,
     handlePlayTrack,
     setCanonicalIdFilters,
     currentTrack,
@@ -142,22 +165,13 @@ export function AppShell(props: AppViewProps) {
         onClose={() => setCommandPaletteOpen(false)}
         onNavigate={navigateTo}
         onSelectAlbum={openAlbum}
-        onSelectArtist={(name, albumCount) =>
-          openArtist({
-            name,
-            album_count: albumCount,
-            artwork_url: null,
-            lastfm_image_url: null,
-            wikidata_image_url: null,
-            navidrome_image_url: null,
-            enriched_at: null,
-          })
-        }
-        // The only handler here that does not navigate, so the only one still
-        // closing the palette itself.
+        onSelectArtist={(name, albumCount) => openArtist(artistRowOf(name, albumCount))}
+        onOpenTrack={openAlbumAtTrack}
+        onStartArtistRadio={(name) => {
+          void handleStartRadioFromArtist(artistRowOf(name), "curated");
+        }}
         onPlayTrack={(id) => {
           void handlePlayTrack(id);
-          setCommandPaletteOpen(false);
         }}
         serverWithCredential={serverWithCred ?? undefined}
         serverId={server?.id}

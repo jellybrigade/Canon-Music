@@ -1,5 +1,5 @@
 import { Heart, Play, SlidersHorizontal } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTrackListSessionStore } from "../../store/trackListSessionStore";
 import type { TrackRow } from "../../types/library";
 import { useClickOutside } from "../../ui/useClickOutside";
@@ -17,6 +17,7 @@ interface Props {
   trackTagGenresMap: Map<string, TrackGenre[]>;
   genreMappings: Map<string, string | null>;
   currentTrackId: string | null;
+  highlightTrackId: string | null;
   isPlaying: boolean;
   lovedTrackIds: Set<string>;
   onToggleLove: (trackId: string) => void;
@@ -65,6 +66,7 @@ export function AlbumTrackList({
   trackTagGenresMap,
   genreMappings,
   currentTrackId,
+  highlightTrackId,
   isPlaying,
   lovedTrackIds,
   onToggleLove,
@@ -75,6 +77,11 @@ export function AlbumTrackList({
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
   useClickOutside(colPickerRef, () => setShowColPicker(false), showColPicker);
+  // A callback ref runs when the row mounts, which may be after the skeleton, and a stable one
+  // is not re-run by later renders, so the page scrolls once and then leaves the reader alone.
+  const scrollToHighlighted = useCallback((row: HTMLTableRowElement | null) => {
+    row?.scrollIntoView({ block: "center" });
+  }, []);
 
   if (isLoading) {
     return (
@@ -173,10 +180,12 @@ export function AlbumTrackList({
             const isCurrentlyPlaying = isCurrentTrack && isPlaying;
             const shownGenres = trackGenres(track, trackTagGenresMap, genreMappings).slice(0, 3);
             const isLoved = lovedTrackIds.has(track.id);
+            const isHighlighted = highlightTrackId === track.id;
             return (
               <tr
                 key={track.id}
-                className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}`}
+                ref={isHighlighted ? scrollToHighlighted : undefined}
+                className={`tracklist-row tracklist-row--playable${isCurrentTrack ? " tracklist-row--active" : ""}${isHighlighted ? " tracklist-row--highlighted" : ""}`}
                 onClick={() => onPlayTrack(track)}
                 onContextMenu={(e) => {
                   e.preventDefault();

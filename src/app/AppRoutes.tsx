@@ -113,6 +113,7 @@ export interface AppViewProps {
   view: AppView;
   navigateTo: (v: AppView, select?: { album?: AlbumRow; artist?: ArtistRow }) => void;
   openAlbum: (album: AlbumRow) => void;
+  openAlbumAtTrack: (albumId: string, trackId: string) => void;
   openArtist: (artist: ArtistRow | string) => void;
   openPlaylist: (playlist: PlaylistRow) => void;
   openAlbumById: (albumId: string) => void | Promise<void>;

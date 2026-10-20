@@ -58,6 +58,8 @@ const RELATED_SHELF_LIMIT = 6;
 
 interface Props {
   album: AlbumRow;
+  // A track to point at on arrival, e.g. a song picked from Ctrl+K.
+  highlightTrackId?: string | null;
   serverWithCredential: ServerWithCredential;
   onClose: () => void;
   onSelectAlbum?: (album: AlbumRow) => void;
@@ -72,6 +74,7 @@ interface DrawerState {
 
 export function AlbumDetail({
   album,
+  highlightTrackId = null,
   serverWithCredential,
   onClose,
   onSelectAlbum,
@@ -344,6 +347,7 @@ export function AlbumDetail({
           trackTagGenresMap={trackTagGenresMap}
           genreMappings={genreMappings}
           currentTrackId={currentTrack?.id ?? null}
+          highlightTrackId={highlightTrackId}
           isPlaying={isPlaying}
           lovedTrackIds={lovedTrackIds}
           onToggleLove={(trackId) => void toggleTrackLove(trackId, serverWithCredential)}

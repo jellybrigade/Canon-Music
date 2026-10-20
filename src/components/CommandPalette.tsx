@@ -2,7 +2,14 @@ import { House, List, ListMusic, Music, Play, Settings, User, Users } from "luci
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
-import { PinShelf, type ShelfEntry, type ShelfRow, shelfEntries } from "../features/pins/components/PinShelf";
+import {
+  type ActivateIntent,
+  intentOf,
+  PinShelf,
+  type ShelfEntry,
+  type ShelfRow,
+  shelfEntries,
+} from "../features/pins/components/PinShelf";
 import { type Pins, pinsNewestFirst } from "../features/pins/pins";
 import { useSearch } from "../features/search/useSearch";
 import { useAlbumDisplayName } from "../hooks/useAlbumDisplayName";
@@ -48,6 +55,7 @@ interface AlbumResult {
 interface TrackResult {
   kind: "track";
   id: string;
+  album_id: string;
   title: string;
   artist: string | null;
   album_name: string | null;
@@ -61,6 +69,22 @@ interface ArtistResult {
 }
 
 type Item = ShelfEntry | Command | AlbumResult | TrackResult | ArtistResult;
+
+// What Enter and Shift+Enter say they do, per focused row; null where Shift+Enter has nothing to play.
+type HintKey = Exclude<Item["kind"], "pin"> | `${Extract<Item, { kind: "pin" }>["pin"]["kind"]}-pin`;
+
+const HINTS: Record<HintKey, { open: string; play: string | null }> = {
+  nav: { open: "go to", play: null },
+  action: { open: "run", play: null },
+  more: { open: "show all", play: null },
+  album: { open: "open", play: "play" },
+  "album-pin": { open: "open", play: "play" },
+  artist: { open: "open", play: "start radio" },
+  "artist-pin": { open: "open", play: "start radio" },
+  track: { open: "open album", play: "play" },
+};
+
+const hintKey = (item: Item): HintKey => (item.kind === "pin" ? `${item.pin.kind}-pin` : item.kind);
 
 // Ids are unique inside a kind but not across them, and an album and a track can carry the
 // same native id on some servers.
@@ -130,6 +154,9 @@ interface Props {
   onSelectAlbum: (album: AlbumRow) => void;
   onSelectArtist: (name: string, albumCount: number) => void;
   onPlayTrack: (id: string) => void;
+  onOpenTrack: (trackId: string, albumId: string) => void;
+  onPlayAlbum: (album: AlbumRow) => void;
+  onStartArtistRadio: (name: string) => void;
   serverWithCredential?: ServerWithCredential;
   serverId?: string;
   pins?: Pins;
@@ -143,6 +170,9 @@ export function CommandPalette({
   onSelectAlbum,
   onSelectArtist,
   onPlayTrack,
+  onOpenTrack,
+  onPlayAlbum,
+  onStartArtistRadio,
   serverWithCredential,
   serverId,
   pins,
@@ -186,6 +216,7 @@ export function CommandPalette({
     ? (results?.tracks.slice(0, RESULTS_CAP).map((t) => ({
         kind: "track" as const,
         id: t.id,
+        album_id: t.album_id,
         title: t.title,
         artist: t.artist,
         album_name: t.album_name,
@@ -213,28 +244,33 @@ export function CommandPalette({
 
   const navOffset = shelf.length;
   const focusedItem = items[focusedIdx];
+  const focusedHint = focusedItem ? HINTS[hintKey(focusedItem)] : null;
   const artistOffset = searchCommands.length;
   const albumOffset = artistOffset + searchArtists.length;
   const trackOffset = albumOffset + searchAlbums.length;
 
   const activate = useCallback(
-    (item: Item) => {
+    (item: Item, intent: ActivateIntent) => {
       if (item.kind === "more") {
         setExpandedShelfRows((rows) => [...rows, item.row]);
         // The count tile is gone once its row unfolds; the first pin it was hiding takes the focus.
         setFocusedKey(`pin:${item.firstHiddenId}`);
         return;
       }
+      const isPlay = intent === "play";
+      const album = (row: AlbumRow) => (isPlay ? onPlayAlbum(row) : onSelectAlbum(row));
+      const artist = (name: string, albumCount: number) =>
+        isPlay ? onStartArtistRadio(name) : onSelectArtist(name, albumCount);
       if (item.kind === "pin") {
         const { pin } = item;
-        if (pin.kind === "album") onSelectAlbum(pin.album);
-        else onSelectArtist(pin.artist.name, pin.artist.album_count);
+        if (pin.kind === "album") album(pin.album);
+        else artist(pin.artist.name, pin.artist.album_count);
       } else if (item.kind === "nav") {
         onNavigate(item.view);
       } else if (item.kind === "action") {
         item.run();
       } else if (item.kind === "album") {
-        onSelectAlbum({
+        album({
           id: item.id,
           // From the row, never the selected server: stamping the current
           // selection onto a row is what silently builds URLs against the
@@ -246,15 +282,16 @@ export function CommandPalette({
           artwork_url: item.artwork_url,
         });
       } else if (item.kind === "track") {
-        onPlayTrack(item.id);
+        if (isPlay) onPlayTrack(item.id);
+        else onOpenTrack(item.id, item.album_id);
       } else if (item.kind === "artist") {
-        onSelectArtist(item.name, item.album_count);
+        artist(item.name, item.album_count);
       }
       onClose();
       // No serverWithCredential dep: the album branch deliberately reads item.server_id, so a
       // replaced server object would only churn this callback's identity.
     },
-    [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onClose],
+    [onNavigate, onSelectAlbum, onSelectArtist, onPlayTrack, onOpenTrack, onPlayAlbum, onStartArtistRadio, onClose],
   );
 
   useEffect(() => {
@@ -312,7 +349,7 @@ export function CommandPalette({
       } else if (e.key === "Enter") {
         e.preventDefault();
         const item = items[focusedIdx];
-        if (item) activate(item);
+        if (item) activate(item, intentOf(e));
       }
     }
     window.addEventListener("keydown", onKeyDown);
@@ -338,7 +375,7 @@ export function CommandPalette({
     onMouseEnter: () => setFocusedKey(itemKey(item)),
     onMouseDown: (e: React.MouseEvent) => {
       e.preventDefault();
-      activate(item);
+      activate(item, intentOf(e));
     },
   });
 
@@ -434,7 +471,7 @@ export function CommandPalette({
                     onMouseEnter={() => setFocusedKey(itemKey(cmd))}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      activate(cmd);
+                      activate(cmd, intentOf(e));
                     }}
                   >
                     <span className="cp-nav-icon">{cmd.icon}</span>
@@ -484,9 +521,16 @@ export function CommandPalette({
           <span>
             <kbd>↑↓</kbd> navigate
           </span>
-          <span>
-            <kbd>↵</kbd> select
-          </span>
+          {focusedHint && (
+            <span>
+              <kbd>↵</kbd> {focusedHint.open}
+            </span>
+          )}
+          {focusedHint?.play && (
+            <span>
+              <kbd>⇧↵</kbd> {focusedHint.play}
+            </span>
+          )}
           <span>
             <kbd>esc</kbd> close
           </span>

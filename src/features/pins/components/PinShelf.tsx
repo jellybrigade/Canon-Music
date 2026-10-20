@@ -47,8 +47,13 @@ interface Props {
   focusedId: string | null;
   focusedRef: React.Ref<HTMLButtonElement>;
   onHover: (entry: ShelfEntry) => void;
-  onActivate: (entry: ShelfEntry) => void;
+  onActivate: (entry: ShelfEntry, intent: ActivateIntent) => void;
 }
+
+// What the user asked of a row: open it, or (Shift) play it.
+export type ActivateIntent = "open" | "play";
+
+export const intentOf = (e: { shiftKey: boolean }): ActivateIntent => (e.shiftKey ? "play" : "open");
 
 export function PinShelf({ entries, serverWithCredential, focusedId, focusedRef, onHover, onActivate }: Props) {
   const { nameOf, thumbOf } = usePinArt(serverWithCredential, THUMB_SIZE);
@@ -67,7 +72,7 @@ export function PinShelf({ entries, serverWithCredential, focusedId, focusedRef,
         onMouseEnter={() => onHover(entry)}
         onMouseDown={(e) => {
           e.preventDefault();
-          onActivate(entry);
+          onActivate(entry, intentOf(e));
         }}
       >
         <span className={`cp-shelf-art${entry.kind === "pin" ? ` cp-shelf-art--${entry.pin.kind}` : ""}`}>

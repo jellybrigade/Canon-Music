@@ -25,8 +25,19 @@ vi.mock("../lib/keychain", () => ({
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));
 vi.mock("../pages/AlbumDetail", () => ({
-  AlbumDetail: ({ album }: { album: { id: string; server_id: string } }) => (
-    <div data-testid="album-detail" data-album-id={album.id} data-server-id={album.server_id} />
+  AlbumDetail: ({
+    album,
+    highlightTrackId,
+  }: {
+    album: { id: string; server_id: string };
+    highlightTrackId: string | null;
+  }) => (
+    <div
+      data-testid="album-detail"
+      data-album-id={album.id}
+      data-server-id={album.server_id}
+      data-highlight-track-id={highlightTrackId ?? ""}
+    />
   ),
 }));
 vi.mock("../features/playback/components/PlayerBar", () => ({ PlayerBar: () => <div data-testid="player-bar" /> }));
@@ -174,6 +185,13 @@ describe("the album route when the id resolves", () => {
     mountAt("/album/srv-a%3Aalb1");
 
     expect(await screen.findByTestId("album-detail")).toHaveAttribute("data-server-id", "srv-a");
+  });
+
+  it("hands down the track named in the address, so the page can point at it", async () => {
+    await seedAlbum("srv-a:alb1");
+    mountAt("/album/srv-a%3Aalb1?track=srv-a%3At%2F1");
+
+    expect(await screen.findByTestId("album-detail")).toHaveAttribute("data-highlight-track-id", "srv-a:t/1");
   });
 
   it("does not report an album with no synced tracks as missing", async () => {

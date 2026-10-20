@@ -91,6 +91,13 @@ export function useAppNavigation(dismissOverlays: () => void) {
     goTo(albumPath(album.id));
   }
 
+  // Replaces rather than pushes when the album is already open, so Back still leaves the album.
+  function openAlbumAtTrack(albumId: string, trackId: string) {
+    const isAlbumOpen = pathname === albumPath(albumId);
+    navigate(albumPath(albumId, trackId), { replace: isAlbumOpen });
+    dismiss();
+  }
+
   function openArtist(artist: ArtistRow | string) {
     const name = typeof artist === "string" ? artist : artist.name;
     goTo(artistPath(name));
@@ -156,6 +163,7 @@ export function useAppNavigation(dismissOverlays: () => void) {
     pathname,
     navigateTo,
     openAlbum,
+    openAlbumAtTrack,
     openArtist,
     openPlaylist,
     goBack,

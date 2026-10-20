@@ -116,6 +116,23 @@ describe("asking for the route already showing", () => {
     expect(result.current.app.pathname).toBe("/home");
   });
 
+  it("opens an album at a track as a new entry, so Back returns to where it was opened", () => {
+    const { result } = nav(["/home"]);
+    act(() => result.current.app.openAlbumAtTrack("a1", "t1"));
+    expect(result.current.app.pathname).toBe("/album/a1");
+    expect(result.current.search).toBe("?track=t1");
+    act(() => result.current.app.goBack());
+    expect(result.current.app.pathname).toBe("/home");
+  });
+
+  it("points at a track on the album page already open without pushing a second entry", () => {
+    const { result } = nav(["/home", "/album/a1"]);
+    act(() => result.current.app.openAlbumAtTrack("a1", "t1"));
+    expect(result.current.search).toBe("?track=t1");
+    act(() => result.current.app.goBack());
+    expect(result.current.app.pathname).toBe("/home");
+  });
+
   it("pushes no second entry for the artist page already open", () => {
     const { result } = nav(["/home", "/artist/ABBA"]);
     act(() => result.current.app.openArtist("ABBA"));

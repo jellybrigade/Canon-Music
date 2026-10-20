@@ -1,11 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { lazy, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { CredentialNotice } from "../components/CredentialNotice";
 import { getDb } from "../db";
 import type { PlaylistRow, usePlaylists } from "../features/playlists/usePlaylists";
 import type { ServerWithCredential } from "../hooks/useServer";
 import { QK } from "../lib/queryKeys";
+import { ALBUM_TRACK_PARAM } from "../lib/routes";
 import type { AlbumRow, ArtistRow } from "../types/library";
 
 const AlbumDetail = lazy(() => import("../pages/AlbumDetail").then((m) => ({ default: m.AlbumDetail })));
@@ -57,6 +58,7 @@ export function AlbumDetailRoute({
   queueClass: string;
 }) {
   const { albumId } = useParams<{ albumId: string }>();
+  const highlightTrackId = new URLSearchParams(useLocation().search).get(ALBUM_TRACK_PARAM);
   const { data: fetchedAlbum, isPending: albumPending } = useQuery<AlbumRow | null>({
     queryKey: QK.albumById(albumId, serverWithCred?.server.id),
     enabled: !!albumId && !!serverWithCred,
@@ -103,6 +105,7 @@ export function AlbumDetailRoute({
     <main className={`library${queueClass}`}>
       <AlbumDetail
         album={fetchedAlbum}
+        highlightTrackId={highlightTrackId}
         serverWithCredential={serverWithCred}
         onClose={onClose}
         onSelectAlbum={onSelectAlbum}
