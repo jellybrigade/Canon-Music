@@ -12,7 +12,7 @@ export type { NormalizedTags };
 
 export function useNormalizeAlbum(albumId: string, artist: string, album: string) {
   const queryClient = useQueryClient();
-  const [stalenessDays] = useSetting("tags.staleness_days", "30");
+  const [stalenessDays, , isStalenessDaysLoaded] = useSetting("tags.staleness_days", "30");
   const { data: identity } = useAlbumIdentity(albumId);
   const decrementEnrichmentPending = useTagsStore((s) => s.decrementEnrichmentPending);
   // undefined = not yet seen (first render); null/string = seen value (genres + tags concatenated for change detection)
@@ -29,7 +29,7 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
   });
 
   useEffect(() => {
-    if (query.isLoading || !albumId) return;
+    if (!isStalenessDaysLoaded || query.isLoading || !albumId) return;
 
     const currentMbGenres = identity?.combined_genres_json ?? null;
     const currentMbTags = identity?.combined_tags_json ?? null;
@@ -73,7 +73,17 @@ export function useNormalizeAlbum(albumId: string, artist: string, album: string
         decrementEnrichmentPending();
       }
     });
-  }, [query.isLoading, query.data, albumId, artist, album, queryClient, stalenessDays, identity]);
+  }, [
+    query.isLoading,
+    query.data,
+    albumId,
+    artist,
+    album,
+    queryClient,
+    stalenessDays,
+    isStalenessDaysLoaded,
+    identity,
+  ]);
 
   return { data: query.data ?? null, isLoading: query.isLoading };
 }

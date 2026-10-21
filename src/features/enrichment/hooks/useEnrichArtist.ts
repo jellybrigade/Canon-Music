@@ -312,7 +312,7 @@ export function useEnrichArtist(
   const identifyIfUnidentified = options?.identifyIfUnidentified ?? false;
   const serverWithCredential = options?.serverWithCredential ?? null;
   const queryClient = useQueryClient();
-  const [staleDaysStr] = useSetting("tags.staleness_days", "30");
+  const [staleDaysStr, , isStaleDaysLoaded] = useSetting("tags.staleness_days", "30");
   const staleDays = parseStalenessDays(staleDaysStr);
   const [minAutoSelectScoreRaw, , isMinAutoSelectScoreLoaded] = useSetting(
     ARTIST_AUTO_SELECT_SETTING,
@@ -344,7 +344,7 @@ export function useEnrichArtist(
   });
 
   useEffect(() => {
-    if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded) return;
+    if (!enabled || query.isLoading || !artistName || !isMinAutoSelectScoreLoaded || !isStaleDaysLoaded) return;
     const needsIdentify = identifyIfUnidentified && !query.data?.mb_artist_id && !identifyAttempted.has(artistName);
     if (!isEnrichmentStale(query.data ?? null, staleDays) && !needsIdentify) return;
     if (ranRef.current === artistName) return;
@@ -398,6 +398,7 @@ export function useEnrichArtist(
     query.data,
     artistName,
     staleDays,
+    isStaleDaysLoaded,
     queryClient,
     serverWithCredential,
     minAutoSelectScore,

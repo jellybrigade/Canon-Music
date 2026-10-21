@@ -134,8 +134,8 @@ async function enrichAlbumTracks(
 
 export function useEnrichAlbumTracks(albumId: string, albumArtist: string, albumName: string) {
   const queryClient = useQueryClient();
-  const [enrichTracks] = useSetting("tags.enrich_tracks", "true");
-  const [staleDaysStr] = useSetting("tags.staleness_days", "30");
+  const [enrichTracks, , isEnrichTracksLoaded] = useSetting("tags.enrich_tracks", "true");
+  const [staleDaysStr, , isStaleDaysLoaded] = useSetting("tags.staleness_days", "30");
   const staleDays = parseStalenessDays(staleDaysStr);
   const { data: identity, isSuccess: identityReady } = useAlbumIdentity(albumId);
   // Holds the album the claim was stamped for, not a bare boolean: `AlbumDetail` has no `key`,
@@ -143,6 +143,7 @@ export function useEnrichAlbumTracks(albumId: string, albumArtist: string, album
   const ranRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!isEnrichTracksLoaded || !isStaleDaysLoaded) return;
     if (enrichTracks !== "true") return;
     if (!albumId || !albumArtist) return;
     // Wait for identity query to settle (may be null for albums with no identity).
@@ -167,5 +168,16 @@ export function useEnrichAlbumTracks(albumId: string, albumArtist: string, album
       .finally(() => inFlight.delete(albumId));
 
     inFlight.set(albumId, promise);
-  }, [albumId, albumArtist, albumName, enrichTracks, staleDays, identityReady, identity, queryClient]);
+  }, [
+    albumId,
+    albumArtist,
+    albumName,
+    enrichTracks,
+    staleDays,
+    isEnrichTracksLoaded,
+    isStaleDaysLoaded,
+    identityReady,
+    identity,
+    queryClient,
+  ]);
 }

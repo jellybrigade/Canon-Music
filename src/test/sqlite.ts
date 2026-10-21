@@ -100,3 +100,20 @@ export async function createMigratedTestDb(): Promise<FakeDatabase> {
   db.queryLog.length = 0;
   return db;
 }
+
+/**
+ * Holds reads of the `settings` table (only `key`'s, when given) until the returned release runs,
+ * so a test can show what a hook does while `useSetting` still reports only the caller's default.
+ */
+export function holdSettingReads(db: FakeDatabase, key?: string): () => void {
+  const select = db.select.bind(db);
+  let release: () => void = () => {};
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  db.select = async <T>(query: string, bindValues?: unknown[]): Promise<T> => {
+    if (/\bFROM settings\b/.test(query) && (key === undefined || bindValues?.[0] === key)) await released;
+    return select<T>(query, bindValues);
+  };
+  return release;
+}

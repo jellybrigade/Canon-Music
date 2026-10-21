@@ -123,10 +123,11 @@ async function queryStale(staleDays: number): Promise<{ albums: AlbumRow[]; arti
 }
 
 export function useBackgroundNormalizer() {
-  const [autoRefresh] = useSetting("tags.auto_refresh", "true");
-  const [stalenessDays] = useSetting("tags.staleness_days", "30");
+  const [autoRefresh, , isAutoRefreshLoaded] = useSetting("tags.auto_refresh", "true");
+  const [stalenessDays, , isStalenessDaysLoaded] = useSetting("tags.staleness_days", "30");
 
   useEffect(() => {
+    if (!isAutoRefreshLoaded || !isStalenessDaysLoaded) return;
     if (autoRefresh !== "true") return;
     if (isRunning) return;
 
@@ -166,7 +167,7 @@ export function useBackgroundNormalizer() {
 
     // Deliberately no abort-on-cleanup: StrictMode's double mount would otherwise leave the
     // second mount blocked by `isRunning`, still latched until the aborted pass settles.
-  }, [autoRefresh, stalenessDays]);
+  }, [autoRefresh, stalenessDays, isAutoRefreshLoaded, isStalenessDaysLoaded]);
 }
 
 export async function runEnrichment(): Promise<void> {

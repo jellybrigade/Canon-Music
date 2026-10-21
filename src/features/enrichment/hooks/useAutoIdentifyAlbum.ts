@@ -1,7 +1,8 @@
-// Runs only when `mb.auto_identify` is on, names are non-empty and `needsAutoIdentify` says so.
+// Runs only once `mb.auto_identify` is read back and on, names are non-empty and `needsAutoIdentify` says so.
 // Side-effect free: the caller saves or records the lookup based on `decision`.
 import { useQuery } from "@tanstack/react-query";
 import { getDb } from "../../../db";
+import { useBoolSetting } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
 import type { AutoDecision, AutoIdentifyResult } from "../lib/albumIdentify";
 import { autoIdentifyAlbum, autoIdentifyFailure, needsAutoIdentify } from "../lib/albumIdentify";
@@ -18,7 +19,6 @@ export function useAutoIdentifyAlbum({
   durationSeconds,
   year,
   confirmedArtistMbid,
-  mbAutoIdentify,
   existingIdentity,
 }: {
   albumId: string;
@@ -33,11 +33,12 @@ export function useAutoIdentifyAlbum({
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, `null` when there is none, `undefined` while loading. */
   confirmedArtistMbid: string | null | undefined;
-  mbAutoIdentify: boolean;
   /** The row from useAlbumIdentity, `undefined` while loading, `null` when there is none. */
   existingIdentity: Pick<AlbumIdentityRow, "mb_release_group_id" | "confirmed_at" | "looked_up_at"> | null | undefined;
 }) {
+  const [mbAutoIdentify, , isMbAutoIdentifyLoaded] = useBoolSetting("mb.auto_identify", true);
   const isReady =
+    isMbAutoIdentifyLoaded &&
     mbAutoIdentify &&
     !!albumId &&
     !!artist &&
