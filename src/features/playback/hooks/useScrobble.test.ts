@@ -74,8 +74,22 @@ function failQueueWrites() {
   };
 }
 
-/** Drives one position poll: the store's `elapsed` moving is what re-runs the effect. */
+/**
+ * Drives one position poll after playing up to `elapsed`: the clock moves by the distance
+ * played, as it does under real playback, and the store's `elapsed` moving re-runs the effect.
+ */
 async function tickTo(elapsed: number) {
+  const played = Math.max(0, elapsed - usePlayerStore.getState().elapsed);
+  vi.setSystemTime(Date.now() + played * 1000);
+  await act(async () => {
+    usePlayerStore.setState({ elapsed });
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+/** Moves the playhead with no time passing, as dragging the seek bar does. */
+async function seekTo(elapsed: number) {
   await act(async () => {
     usePlayerStore.setState({ elapsed });
     await Promise.resolve();
@@ -84,6 +98,7 @@ async function tickTo(elapsed: number) {
 }
 
 beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as never);
   usePlayerStore.setState({ elapsed: 0, playStartedAt: 1000, isPlaying: false });
@@ -92,6 +107,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   consoleError.mockRestore();
   vi.clearAllMocks();
 });
@@ -106,6 +122,30 @@ describe("useScrobble", () => {
 
     await tickTo(120);
     expect(queueRows().map((r) => r.track_id)).toEqual(["srv-a:t1"]);
+  });
+
+  it("does not count a seek past the threshold as listening", async () => {
+    const track = makeTrack();
+    renderHook(() => useScrobble(track, SWC));
+
+    await tickTo(10);
+    await seekTo(150);
+    await tickTo(160);
+
+    expect(queueRows()).toHaveLength(0);
+  });
+
+  it("adds up the listening on either side of a seek", async () => {
+    const track = makeTrack();
+    renderHook(() => useScrobble(track, SWC));
+
+    await tickTo(60);
+    await seekTo(150);
+    await tickTo(185);
+    expect(queueRows()).toHaveLength(0);
+
+    await tickTo(190);
+    expect(queueRows()).toHaveLength(1);
   });
 
   it("writes exactly one row however many position polls follow the threshold", async () => {
