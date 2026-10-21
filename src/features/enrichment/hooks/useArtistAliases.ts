@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { useArtistAlbumsSessionStore } from "../../../store/artistAlbumsSessionStore";
@@ -7,6 +7,31 @@ import { useArtistBrowseSessionStore } from "../../../store/artistBrowseSessionS
 export interface ArtistAlias {
   alias_name: string;
   canonical_name: string;
+}
+
+type AliasFoldedRoot =
+  | ReturnType<typeof QK.artistTopTracks>[0]
+  | ReturnType<typeof QK.artistSeedTrack>[0]
+  | ReturnType<typeof QK.artistGenres>[0]
+  | ReturnType<typeof QK.artistAppearsOn>[0]
+  | ReturnType<typeof QK.similarArtistAlbums>[0]
+  | ReturnType<typeof QK.similarInLibrary>[0];
+
+// Reads that fold aliases into their canonical artist: a merge or unmerge changes every one of them.
+const ALIAS_FOLDED_ROOTS: ReadonlySet<unknown> = new Set<AliasFoldedRoot>([
+  "artist-top-tracks",
+  "artist-seed-track",
+  "artist-genres",
+  "artist-appears-on",
+  "similar-artist-albums",
+  "similar-in-library",
+]);
+
+function refreshAliasReads(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: QK.artistAliases() });
+  void qc.invalidateQueries({ predicate: (query) => ALIAS_FOLDED_ROOTS.has(query.queryKey[0]) });
+  useArtistBrowseSessionStore.getState().bumpRefresh();
+  useArtistAlbumsSessionStore.getState().bumpRefresh();
 }
 
 export function useArtistAliases() {
@@ -59,36 +84,17 @@ export function useSetArtistAlias() {
         canonicalName,
       ]);
     },
-    onSuccess: (_data, { aliasName }) => {
-      void qc.invalidateQueries({ queryKey: QK.artistAliases() });
-      useArtistBrowseSessionStore.getState().bumpRefresh();
-      void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
-      useArtistAlbumsSessionStore.getState().bumpRefresh();
-    },
+    onSuccess: () => refreshAliasReads(qc),
   });
 }
 
 export function useRemoveArtistAlias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (aliasName: string): Promise<string | null> => {
+    mutationFn: async (aliasName: string) => {
       const db = await getDb();
-      const rows = await db.select<{ canonical_name: string }[]>(
-        `SELECT canonical_name FROM artist_aliases WHERE alias_name = ?`,
-        [aliasName],
-      );
-      const canonicalName = rows[0]?.canonical_name ?? null;
       await db.execute(`DELETE FROM artist_aliases WHERE alias_name = ?`, [aliasName]);
-      return canonicalName;
     },
-    onSuccess: (canonicalName, aliasName) => {
-      void qc.invalidateQueries({ queryKey: QK.artistAliases() });
-      useArtistBrowseSessionStore.getState().bumpRefresh();
-      void qc.invalidateQueries({ queryKey: QK.artistCanonicalOf(aliasName) });
-      if (canonicalName) {
-        useArtistAlbumsSessionStore.getState().bumpRefresh();
-        void qc.invalidateQueries({ queryKey: [...QK.artistAliases(), "of", canonicalName] });
-      }
-    },
+    onSuccess: () => refreshAliasReads(qc),
   });
 }
