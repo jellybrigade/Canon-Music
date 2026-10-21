@@ -32,7 +32,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 ## Async / lifecycle
 
 - **Single-writer temp files need TS enforcement.** `waveformInFlight: Set<trackId>` in `playerRuntime.ts`. A Rust `Err` without an emit strands a one-shot `listen()`.
-- **Handler resuming after an await checks intent, not state.** `pauseRequestedDuringLoad`; track-id equality is not intent. A shared cancel token cancels intent, not effect: separate `pause_pending`.
+- **Handler resuming after an await checks intent, not state.** `pauseRequestedDuringLoad`; track-id equality is not intent. A shared cancel token cancels intent, not effect: separate `pause_pending`. A gate read before a queued wait is stale after it: portrait workers checked the host's 429 cooldown, then waited their turn and fired into it; `awaitHostBudget` re-checks after the wait.
 - **A fast path around a central action skips its guards.** Gapless advance bypassed `next()` and killed the sleep timer; guard both ends. Every `pause(0)` also stops the elapsed ticker. grep: `grep -n "runtime.activeTarget.pause(0)" src/features/playback/store/*.ts`
 - **A poller diffing two readings misses a change that goes out and back between them.** Gapless hand-off inferred from `sink.len()` dropping missed 1→2→1 inside 100ms; `append_gapless` now inserts an `EmptyCallback` that records the `play_id`.
 - **Fire-and-forget commands owe an event on every exit.** Gapless bail-outs emit `gapless-cancelled`; `await invoke()` on a `thread::spawn` command measures IPC, not work (`isBuffering` cleared by `audio-format`).
