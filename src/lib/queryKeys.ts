@@ -78,6 +78,7 @@ export const QK = {
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
   confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
+  taggedReleaseMbid: (albumId: string) => ["tagged-release-mbid", albumId] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
   lastfmTrackMatch: (artistName: string, trackIds: string[]) => ["lastfm-track-match", artistName, trackIds] as const,
@@ -113,7 +114,8 @@ export const QK = {
     trackCount: number,
     durationSeconds: number,
     confirmedArtistMbid?: string | null,
-  ) => ["auto-identify-album", albumId, trackCount, durationSeconds, confirmedArtistMbid] as const,
+    taggedReleaseMbid?: string | null,
+  ) => ["auto-identify-album", albumId, trackCount, durationSeconds, confirmedArtistMbid, taggedReleaseMbid] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbumIdsFor: (serverId: string) => ["failed-lookup-album-ids", serverId] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,

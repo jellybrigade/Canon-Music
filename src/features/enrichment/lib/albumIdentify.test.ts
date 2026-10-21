@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../clients/musicbrainz", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../clients/musicbrainz")>()),
@@ -10,6 +10,7 @@ vi.mock("../../../clients/musicbrainz", async (importOriginal) => ({
 import {
   lookupRelease,
   lookupReleaseGroup,
+  type MbReleaseDetail,
   type MbReleaseGroupCandidate,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
@@ -28,6 +29,26 @@ function releaseGroup(id: string, primaryType: string): MbReleaseGroupCandidate 
   };
 }
 
+function release(id: string, releaseGroupId: string): MbReleaseDetail {
+  return {
+    id,
+    releaseGroupId,
+    title: "Fresh Album",
+    date: "2026-09-01",
+    country: null,
+    label: null,
+    catalogNumber: null,
+    barcode: null,
+    genres: [],
+    tags: [],
+    trackCount: 2,
+  };
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
 describe("autoIdentifyAlbum", () => {
   it("confirms the album when its same-titled lead single ties on score", async () => {
     vi.mocked(searchReleaseGroups).mockResolvedValue([
@@ -40,21 +61,58 @@ describe("autoIdentifyAlbum", () => {
       tags: [],
       releases: [{ id: "release", title: "Fresh Album", date: "2026-09-01", country: null }],
     });
-    vi.mocked(lookupRelease).mockResolvedValue({
-      id: "release",
-      title: "Fresh Album",
-      date: "2026-09-01",
-      country: null,
-      label: null,
-      catalogNumber: null,
-      barcode: null,
-      genres: [],
-      tags: [],
-      trackCount: 2,
-    });
+    vi.mocked(lookupRelease).mockResolvedValue(release("release", "album"));
 
     const result = await autoIdentifyAlbum({ artist: "Some Artist", album: "Fresh Album", trackCount: 2, year: 2026 });
 
+    expect(result.decision).toBe("auto_confirmed");
+    expect(result.detail?.id).toBe("album");
+  });
+
+  it("takes the release the files are tagged with without searching", async () => {
+    vi.mocked(lookupRelease).mockResolvedValue(release("tagged-release", "tagged-group"));
+    vi.mocked(lookupReleaseGroup).mockResolvedValue({
+      ...releaseGroup("tagged-group", "Album"),
+      genres: [{ name: "rock", count: 1 }],
+      tags: [],
+      releases: [],
+    });
+
+    const result = await autoIdentifyAlbum({
+      artist: "Some Artist",
+      album: "Fresh Album",
+      trackCount: 2,
+      taggedReleaseMbid: "tagged-release",
+    });
+
+    expect(searchReleaseGroups).not.toHaveBeenCalled();
+    expect(lookupRelease).toHaveBeenCalledWith("tagged-release");
+    expect(result).toMatchObject({ decision: "auto_confirmed", score: 1 });
+    expect(result.detail?.id).toBe("tagged-group");
+    expect(result.release?.id).toBe("tagged-release");
+    expect(result.combinedGenres.map((g) => g.name)).toEqual(["rock"]);
+  });
+
+  it("falls back to searching when the tagged release can't be looked up", async () => {
+    vi.mocked(lookupRelease).mockRejectedValueOnce(new Error("MusicBrainz release/gone returned 404"));
+    vi.mocked(searchReleaseGroups).mockResolvedValue([releaseGroup("album", "Album")]);
+    vi.mocked(lookupReleaseGroup).mockResolvedValue({
+      ...releaseGroup("album", "Album"),
+      genres: [],
+      tags: [],
+      releases: [{ id: "release", title: "Fresh Album", date: "2026-09-01", country: null }],
+    });
+    vi.mocked(lookupRelease).mockResolvedValue(release("release", "album"));
+
+    const result = await autoIdentifyAlbum({
+      artist: "Some Artist",
+      album: "Fresh Album",
+      trackCount: 2,
+      year: 2026,
+      taggedReleaseMbid: "gone",
+    });
+
+    expect(searchReleaseGroups).toHaveBeenCalled();
     expect(result.decision).toBe("auto_confirmed");
     expect(result.detail?.id).toBe("album");
   });

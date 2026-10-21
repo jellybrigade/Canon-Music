@@ -102,10 +102,11 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
       year: number | null;
       track_count: number;
       duration_seconds: number;
+      mb_release_id: string | null;
     };
 
     const unmatched = await db.select<Row[]>(
-      `SELECT a.id, a.artist, a.name, a.year, ${ALBUM_SHAPE_COLUMNS}
+      `SELECT a.id, a.artist, a.name, a.year, a.mb_release_id, ${ALBUM_SHAPE_COLUMNS}
        FROM albums a
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
@@ -124,6 +125,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             trackCount: album.track_count,
             durationSeconds: album.duration_seconds,
             year: album.year,
+            taggedReleaseMbid: album.mb_release_id,
           });
           if (result.decision === "auto_confirmed" && result.detail) {
             const now = Math.floor(Date.now() / 1000);

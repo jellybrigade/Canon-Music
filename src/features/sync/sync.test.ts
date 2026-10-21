@@ -398,6 +398,18 @@ describe("syncLibrary initial sync", () => {
     expect(rows.map((r) => r.release_type)).toEqual(["ep", "album", null]);
   });
 
+  it("keeps the MusicBrainz release the files are tagged with, fills it in once tagged, drops a malformed one", async () => {
+    const tagged = "0d1c6a4e-6f8b-4b7f-9a52-3c1e2f6b7a10";
+    serveLibrary([album("al-1", { musicBrainzId: "" }), album("al-2")], {});
+    await syncLibrary(server(), CRED);
+
+    serveLibrary([album("al-1", { musicBrainzId: tagged }), album("al-2", { musicBrainzId: "../artist/x" })], {});
+    await syncLibrary(server(), CRED);
+
+    const rows = await db().select<{ mb_release_id: string | null }[]>("SELECT mb_release_id FROM albums ORDER BY id");
+    expect(rows.map((r) => r.mb_release_id)).toEqual([tagged, null]);
+  });
+
   it("passes a null alt_url to the fetches as undefined, not null", async () => {
     serveLibrary([album("al-1")], { "al-1": [] });
     await syncLibrary(server(), CRED);

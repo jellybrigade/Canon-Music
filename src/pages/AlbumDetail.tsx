@@ -9,6 +9,7 @@ import {
   useConfirmedArtistMbid,
   useRecordFailedLookup,
   useSaveAlbumIdentity,
+  useTaggedReleaseMbid,
 } from "../features/enrichment/hooks/useAlbumIdentity";
 import { useAutoIdentifyAlbum } from "../features/enrichment/hooks/useAutoIdentifyAlbum";
 import { useEnrichAlbum } from "../features/enrichment/hooks/useEnrichAlbum";
@@ -191,6 +192,7 @@ export function AlbumDetail({
   const recordFailed = useRecordFailedLookup();
 
   const { data: confirmedArtistMbid } = useConfirmedArtistMbid(album.artist ?? "");
+  const { data: taggedReleaseMbid } = useTaggedReleaseMbid(album.id);
 
   const { data: autoResult, isFetching: autoIdentifyFetching } = useAutoIdentifyAlbum({
     albumId: album.id,
@@ -199,6 +201,7 @@ export function AlbumDetail({
     ...albumShapeOf(tracks ?? []),
     year: album.year,
     confirmedArtistMbid,
+    taggedReleaseMbid,
     mbAutoIdentify,
     existingIdentity: albumIdentity,
   });

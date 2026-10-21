@@ -20,6 +20,7 @@ const ready: Props = {
   album: "Fresh Album",
   trackCount: 10,
   durationSeconds: 2400,
+  taggedReleaseMbid: null,
   year: 2026,
   confirmedArtistMbid: null,
   mbAutoIdentify: true,
@@ -37,7 +38,7 @@ afterEach(() => {
 });
 
 describe("useAutoIdentifyAlbum", () => {
-  it("waits for the album's tracks and the artist's known MBID before searching, then searches once", async () => {
+  it("waits for the album's tracks, the artist's known MBID and the files' tagged release before searching, then searches once", async () => {
     const { result, rerender } = renderAutoIdentify({
       ...ready,
       trackCount: 0,
@@ -48,6 +49,7 @@ describe("useAutoIdentifyAlbum", () => {
     rerender({ ...ready, trackCount: 0, confirmedArtistMbid: undefined });
     rerender({ ...ready, confirmedArtistMbid: undefined });
     rerender({ ...ready, trackCount: 0 });
+    rerender({ ...ready, taggedReleaseMbid: undefined });
     expect(searchReleaseGroups).not.toHaveBeenCalled();
 
     rerender(ready);

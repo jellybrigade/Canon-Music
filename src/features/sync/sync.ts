@@ -24,6 +24,9 @@ import {
   watermarkMoved,
 } from "./syncWatermark";
 
+// Navidrome passes the files' tag through; anything else would end up in a MusicBrainz URL path.
+const MBID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const BATCH_NOTIFY_INTERVAL = 25;
 
 // Which domains a sync actually wrote to, so callers bump only the affected session stores
@@ -128,12 +131,13 @@ export async function syncLibrary(
     play_count: number | null;
     played_at: string | null;
     release_type: string | null;
+    mb_release_id: string | null;
     tracks_read_scan: string | null;
   };
   type TrackCountRow = { album_id: string; c: number };
   const [existingAlbumRows, trackCountRows] = await Promise.all([
     db.select<ExistingAlbumRow[]>(
-      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, tracks_read_scan
+      `SELECT id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id, tracks_read_scan
        FROM albums WHERE server_id = ?`,
       [server.id],
     ),
@@ -171,6 +175,7 @@ export async function syncLibrary(
     const skipTracks = albumUnchanged && (!forceTrackPass || readInThisPass);
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
+    const mbReleaseId = album.musicBrainzId && MBID_PATTERN.test(album.musicBrainzId) ? album.musicBrainzId : null;
     const row = [
       albumDbId,
       server.id,
@@ -183,6 +188,7 @@ export async function syncLibrary(
       album.playCount ?? 0,
       album.played ?? null,
       releaseType,
+      mbReleaseId,
     ];
 
     if (existing === undefined) {
@@ -199,7 +205,8 @@ export async function syncLibrary(
         sameValue(existing.navidrome_created, album.created) &&
         sameValue(existing.play_count ?? 0, album.playCount ?? 0) &&
         sameValue(existing.played_at, album.played) &&
-        sameValue(existing.release_type, releaseType);
+        sameValue(existing.release_type, releaseType) &&
+        sameValue(existing.mb_release_id, mbReleaseId);
       if (!unchanged) {
         albumUpsertParams.push(row);
         if (!sameValue(existing.artist, album.artist)) artistsDirty = true;
@@ -221,11 +228,11 @@ export async function syncLibrary(
   await executeBatched(
     db,
     albumUpsertParams,
-    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    11,
+    "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    12,
     (
       placeholders,
-    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type)
+    ) => `INSERT INTO albums (id, server_id, server_type, name, artist, year, artwork_url, navidrome_created, play_count, played_at, release_type, mb_release_id)
        VALUES ${placeholders}
        ON CONFLICT(id) DO UPDATE SET
          server_id = excluded.server_id,
@@ -237,7 +244,8 @@ export async function syncLibrary(
          navidrome_created = excluded.navidrome_created,
          play_count = excluded.play_count,
          played_at = excluded.played_at,
-         release_type = excluded.release_type`,
+         release_type = excluded.release_type,
+         mb_release_id = excluded.mb_release_id`,
   );
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing

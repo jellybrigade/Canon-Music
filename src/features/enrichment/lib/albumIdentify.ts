@@ -38,6 +38,28 @@ export function needsAutoIdentify(
   return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
 }
 
+/** The release the files are tagged with, confirmed outright; `null` when MusicBrainz can't resolve it. */
+async function identifyTaggedRelease(releaseMbid: string): Promise<AutoIdentifyResult | null> {
+  try {
+    const release = await lookupRelease(releaseMbid);
+    if (!release.releaseGroupId) return null;
+    const detail = await lookupReleaseGroup(release.releaseGroupId);
+    return {
+      decision: "auto_confirmed",
+      score: 1,
+      top: null,
+      detail,
+      release,
+      combinedGenres: combineGenres(detail.genres, release.genres),
+      combinedTags: combineGenres(detail.tags, release.tags),
+      error: null,
+    };
+  } catch {
+    // A stale or merged id: the search below still has a chance.
+    return null;
+  }
+}
+
 export async function autoIdentifyAlbum({
   artist,
   album,
@@ -45,6 +67,7 @@ export async function autoIdentifyAlbum({
   durationSeconds = 0,
   year = null,
   confirmedArtistMbid = null,
+  taggedReleaseMbid = null,
 }: {
   artist: string;
   album: string;
@@ -55,7 +78,13 @@ export async function autoIdentifyAlbum({
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
+  /** MusicBrainz release from the files' tags (Picard), taken over any search. */
+  taggedReleaseMbid?: string | null;
 }): Promise<AutoIdentifyResult> {
+  if (taggedReleaseMbid) {
+    const tagged = await identifyTaggedRelease(taggedReleaseMbid);
+    if (tagged) return tagged;
+  }
   try {
     let candidates = await searchReleaseGroups(artist, album);
     const local: LocalAlbum = { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds };

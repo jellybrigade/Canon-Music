@@ -53,6 +53,7 @@ export interface MbReleaseSummary {
 
 export interface MbReleaseDetail {
   id: string;
+  releaseGroupId: string | null;
   title: string;
   date: string | null;
   country: string | null;
@@ -203,17 +204,19 @@ interface MbLookupReleaseResponse {
     "catalog-number"?: string;
   }>;
   media?: Array<{ "track-count"?: number }>;
+  "release-group"?: { id: string };
 }
 
 export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetail> {
   const data = await mbGet<MbLookupReleaseResponse>(`release/${releaseMbid}`, {
-    inc: "genres+tags+labels+media",
+    inc: "genres+tags+labels+media+release-groups",
   });
 
   const labelInfo = data["label-info"]?.[0];
   const trackCount = data.media ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0) : null;
   return {
     id: data.id,
+    releaseGroupId: data["release-group"]?.id ?? null,
     title: data.title,
     date: data.date ?? null,
     country: data.country ?? null,

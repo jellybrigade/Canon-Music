@@ -55,6 +55,24 @@ export function useAlbumIdentity(albumId: string) {
   });
 }
 
+/** The MusicBrainz release the album's files are tagged with, as of the last sync. */
+export async function readTaggedReleaseMbid(
+  db: Awaited<ReturnType<typeof getDb>>,
+  albumId: string,
+): Promise<string | null> {
+  const rows = await db.select<{ mb_release_id: string | null }[]>("SELECT mb_release_id FROM albums WHERE id = ?", [
+    albumId,
+  ]);
+  return rows[0]?.mb_release_id ?? null;
+}
+
+export function useTaggedReleaseMbid(albumId: string) {
+  return useQuery({
+    queryKey: QK.taggedReleaseMbid(albumId),
+    queryFn: async () => readTaggedReleaseMbid(await getDb(), albumId),
+  });
+}
+
 /** Used to disambiguate release groups that share a title across different artists. */
 export function useConfirmedArtistMbid(artistName: string) {
   return useQuery({
@@ -360,6 +378,7 @@ export const ALBUM_SHAPE_COLUMNS = `(SELECT COUNT(*) FROM tracks t WHERE t.album
 export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
   duration_seconds: number;
+  mb_release_id: string | null;
 }
 
 /** Album rows (plus track_count) on one server that were looked up but yielded no MB match. */

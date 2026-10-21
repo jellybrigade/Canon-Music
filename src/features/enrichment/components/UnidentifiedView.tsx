@@ -44,6 +44,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
           trackCount: album.track_count,
           durationSeconds: album.duration_seconds,
           year: album.year,
+          taggedReleaseMbid: album.mb_release_id,
         });
         if (result.decision === "auto_confirmed" && result.detail) {
           await persistAlbumIdentity({

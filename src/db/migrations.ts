@@ -833,6 +833,11 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    // The MusicBrainz release the files are tagged with, as Navidrome reports it; identify takes it over a search.
+    version: 57,
+    sql: `ALTER TABLE albums ADD COLUMN mb_release_id TEXT;`,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

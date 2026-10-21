@@ -16,6 +16,7 @@ export function useAutoIdentifyAlbum({
   durationSeconds,
   year,
   confirmedArtistMbid,
+  taggedReleaseMbid,
   mbAutoIdentify,
   existingIdentity,
 }: {
@@ -30,6 +31,8 @@ export function useAutoIdentifyAlbum({
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, `null` when there is none, `undefined` while loading. */
   confirmedArtistMbid: string | null | undefined;
+  /** MusicBrainz release from the files' tags, `null` when untagged, `undefined` while loading. */
+  taggedReleaseMbid: string | null | undefined;
   mbAutoIdentify: boolean;
   /** The row from useAlbumIdentity, `undefined` while loading, `null` when there is none. */
   existingIdentity: Pick<AlbumIdentityRow, "mb_release_group_id" | "confirmed_at" | "looked_up_at"> | null | undefined;
@@ -41,11 +44,12 @@ export function useAutoIdentifyAlbum({
     !!album &&
     trackCount > 0 &&
     confirmedArtistMbid !== undefined &&
+    taggedReleaseMbid !== undefined &&
     existingIdentity !== undefined;
   return useQuery({
-    queryKey: QK.autoIdentifyAlbum(albumId, trackCount, durationSeconds, confirmedArtistMbid),
+    queryKey: QK.autoIdentifyAlbum(albumId, trackCount, durationSeconds, confirmedArtistMbid, taggedReleaseMbid),
     queryFn: (): Promise<AutoIdentifyResult> =>
-      autoIdentifyAlbum({ artist, album, trackCount, durationSeconds, year, confirmedArtistMbid }),
+      autoIdentifyAlbum({ artist, album, trackCount, durationSeconds, year, confirmedArtistMbid, taggedReleaseMbid }),
     enabled: isReady && needsAutoIdentify(existingIdentity, Math.floor(Date.now() / 1000)),
     staleTime: Infinity,
     retry: false,

@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { migrations } from "../../../db/migrations";
 import { createMigratedTestDb } from "../../../test/sqlite";
-import { readFailedLookupAlbumIds, readFailedLookupAlbums, recordFailedLookup } from "./useAlbumIdentity";
+import {
+  readFailedLookupAlbumIds,
+  readFailedLookupAlbums,
+  readTaggedReleaseMbid,
+  recordFailedLookup,
+} from "./useAlbumIdentity";
 
 async function seedTwoServers() {
   const db = await createMigratedTestDb();
@@ -64,6 +69,17 @@ describe("readFailedLookupAlbums", () => {
     await insertTrack("t-4", "srv-a", null);
 
     expect((await readFailedLookupAlbums(db as never, "srv-a")).map((row) => row.duration_seconds)).toEqual([0]);
+  });
+});
+
+describe("readTaggedReleaseMbid", () => {
+  it("reads the album's tagged release, null when untagged or unknown", async () => {
+    const db = await seedTwoServers();
+    await db.execute("UPDATE albums SET mb_release_id = 'release-1' WHERE id = 'srv-a:al-1'");
+
+    expect(await readTaggedReleaseMbid(db as never, "srv-a:al-1")).toBe("release-1");
+    expect(await readTaggedReleaseMbid(db as never, "srv-b:al-1")).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, "missing")).toBeNull();
   });
 });
 
