@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
 
 // Session state and per-server caches, not preferences: restoring them from an older file
@@ -39,14 +40,12 @@ export async function restoreSettingsBackup(text: string): Promise<void> {
   }
 }
 
-export async function exportSettingsFile(): Promise<void> {
-  const blob = new Blob([await readSettingsBackup()], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `canon-settings-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
+/** Resolves to the saved path, or null when the save dialog was cancelled. */
+export async function exportSettingsFile(): Promise<string | null> {
+  return invoke<string | null>("save_settings_backup", {
+    contents: await readSettingsBackup(),
+    fileName: `canon-settings-${new Date().toISOString().slice(0, 10)}.json`,
+  });
 }
 
 export async function importSettingsFile(file: File): Promise<void> {

@@ -4,6 +4,7 @@ mod keychain;
 mod library_read;
 mod library_write;
 mod net_probe;
+mod settings_backup;
 mod stream_classify;
 mod streaming;
 mod tray;
@@ -135,6 +136,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AudioState {
             mixer,
             output_lost,
@@ -282,6 +284,7 @@ pub fn run() {
             cover::set_cover_proxy_config,
             net_probe::probe_server,
             take_crash_report,
+            settings_backup::save_settings_backup,
             library_read::albums::get_albums,
             library_read::artists::get_artists,
             library_read::tracks::get_tracks,
