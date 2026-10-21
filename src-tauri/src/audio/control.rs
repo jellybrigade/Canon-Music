@@ -44,6 +44,11 @@ pub fn audio_set_speed(state: tauri::State<'_, AudioState>, speed: f32) {
     pos.play_start = Some(Instant::now());
 }
 
+/// `Duration::from_secs_f64` panics on negative, NaN and overflowing input.
+fn seek_target(seconds: f64) -> Option<Duration> {
+    Duration::try_from_secs_f64(seconds.max(0.0)).ok()
+}
+
 #[tauri::command]
 pub fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
     let fade_gen = Arc::clone(&state.fade_gen);
@@ -53,7 +58,10 @@ pub fn audio_seek(state: tauri::State<'_, AudioState>, seconds: f64) {
     let sink_opt = state.sink.lock().unwrap_or_else(|e| e.into_inner()).clone();
     if let Some(sink) = sink_opt {
         sink.set_volume(0.0);
-        let duration = std::time::Duration::from_secs_f64(seconds);
+        let Some(duration) = seek_target(seconds) else {
+            sink.set_volume(target_vol);
+            return;
+        };
         if let Err(e) = sink.try_seek(duration) {
             eprintln!("audio_seek error: {e}");
             sink.set_volume(target_vol);
@@ -202,4 +210,25 @@ pub fn audio_stop(state: tauri::State<'_, AudioState>) {
     let mut pos = state.pos.lock().unwrap_or_else(|e| e.into_inner());
     pos.play_start = None;
     pos.offset = 0.0;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seek_target_keeps_a_normal_position() {
+        assert_eq!(seek_target(12.5), Some(Duration::from_millis(12_500)));
+    }
+
+    #[test]
+    fn seek_target_clamps_negative_and_nan_to_start() {
+        assert_eq!(seek_target(-3.0), Some(Duration::ZERO));
+        assert_eq!(seek_target(f64::NAN), Some(Duration::ZERO));
+    }
+
+    #[test]
+    fn seek_target_refuses_an_unrepresentable_position() {
+        assert_eq!(seek_target(f64::INFINITY), None);
+    }
 }
