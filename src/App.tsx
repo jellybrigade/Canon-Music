@@ -31,7 +31,6 @@ import {
   setStreamMaxBitrate,
   updateCoverProxyConfig,
 } from "./clients/navidromeUrls";
-import { fetchRemoteNotice, type RemoteNotice } from "./clients/notice";
 import { getDb } from "./db";
 import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
 import { useMediaSession } from "./features/playback/hooks/useMediaSession";
@@ -60,6 +59,7 @@ import { useDismissOnNavigate } from "./hooks/useDismissOnNavigate";
 import { useGenres } from "./hooks/useGenres";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { useLoved } from "./hooks/useLoved";
+import { useRemoteNotice } from "./hooks/useRemoteNotice";
 import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
 import { useSidebarResize } from "./hooks/useSidebarResize";
@@ -247,13 +247,7 @@ export default function App() {
   }, []);
 
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
-  const [remoteNotice, setRemoteNotice] = useState<RemoteNotice | null>(null);
-  const [lastSeenNoticeId, setLastSeenNoticeId] = useSetting("notice.last_seen_id", "");
-  useEffect(() => {
-    void fetchRemoteNotice().then((n) => {
-      if (n && n.id !== lastSeenNoticeId) setRemoteNotice(n);
-    });
-  }, [lastSeenNoticeId]);
+  const { remoteNotice, dismissRemoteNotice } = useRemoteNotice();
   const [autoCheckUpdates] = useBoolSetting("updates.auto_check", false);
   const [autoCheckIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
   const [streamMaxBitrate] = useSetting("stream.max_bitrate", "0");
@@ -655,8 +649,7 @@ export default function App() {
     pendingUpdate,
     setPendingUpdate,
     remoteNotice,
-    setRemoteNotice,
-    setLastSeenNoticeId,
+    dismissRemoteNotice,
     sidebarExpanded,
     setSidebarExpanded,
     sidebarLiveWidth,

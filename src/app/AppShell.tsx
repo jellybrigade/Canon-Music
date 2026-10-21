@@ -85,8 +85,7 @@ export function AppShell(props: AppViewProps) {
     pendingUpdate,
     setPendingUpdate,
     remoteNotice,
-    setRemoteNotice,
-    setLastSeenNoticeId,
+    dismissRemoteNotice,
     runSync,
   } = props;
 
@@ -199,15 +198,7 @@ export function AppShell(props: AppViewProps) {
         runSync={runSync}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
-      {remoteNotice && (
-        <RemoteNoticeBanner
-          notice={remoteNotice}
-          onDismiss={() => {
-            void setLastSeenNoticeId(remoteNotice.id);
-            setRemoteNotice(null);
-          }}
-        />
-      )}
+      {remoteNotice && <RemoteNoticeBanner notice={remoteNotice} onDismiss={() => void dismissRemoteNotice()} />}
       {feedbackOpen && (
         <FeedbackModal
           serverUrl={server?.url}

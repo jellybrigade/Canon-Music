@@ -206,8 +206,7 @@ function Inner({ startPaletteOpen }: { startPaletteOpen?: boolean }) {
     pendingUpdate: null,
     setPendingUpdate: () => {},
     remoteNotice: null,
-    setRemoteNotice: () => {},
-    setLastSeenNoticeId: async () => {},
+    dismissRemoteNotice: async () => {},
     pathnameForTest: pathname,
   };
 
