@@ -1,4 +1,5 @@
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
 import { QK } from "../../../lib/queryKeys";
 import { useArtistAlbumsSessionStore } from "../../../store/artistAlbumsSessionStore";
@@ -77,13 +78,8 @@ export function useAliasesOfCanonical(canonicalName: string) {
 export function useSetArtistAlias() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ aliasName, canonicalName }: { aliasName: string; canonicalName: string }) => {
-      const db = await getDb();
-      await db.execute(`INSERT OR REPLACE INTO artist_aliases (alias_name, canonical_name) VALUES (?, ?)`, [
-        aliasName,
-        canonicalName,
-      ]);
-    },
+    mutationFn: ({ aliasName, canonicalName }: { aliasName: string; canonicalName: string }) =>
+      invoke<void>("merge_artist", { aliasName, canonicalName }),
     onSuccess: () => refreshAliasReads(qc),
   });
 }

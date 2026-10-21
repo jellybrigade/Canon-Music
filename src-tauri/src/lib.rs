@@ -291,6 +291,7 @@ pub fn run() {
             library_read::loved::get_loved,
             library_read::playlists::get_playlists,
             library_read::tags::get_unmapped_tag_count,
+            library_write::artist_aliases::merge_artist,
             library_write::genre_carry::carry_genre_renames,
             library_write::genre_carry::repair_dangling_genre_id,
             library_write::playlists::playlist_remove_track,

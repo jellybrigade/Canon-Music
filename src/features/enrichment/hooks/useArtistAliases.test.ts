@@ -2,8 +2,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { invoke } from "@tauri-apps/api/core";
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { getDb } from "../../../db";
@@ -36,6 +38,7 @@ function invalidatedKeys() {
 }
 
 beforeEach(async () => {
+  vi.mocked(invoke).mockReset();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as never);
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -46,6 +49,16 @@ afterEach(() => {
 });
 
 describe("artist alias mutations", () => {
+  it("merges through the one transaction that keeps aliases one hop deep", async () => {
+    const { result } = renderHook(() => useSetArtistAlias(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ aliasName: "Ye", canonicalName: "Kanye West" });
+    });
+
+    expect(vi.mocked(invoke).mock.calls).toEqual([["merge_artist", { aliasName: "Ye", canonicalName: "Kanye West" }]]);
+  });
+
   it("refreshes every read that folds aliases into their artist after a merge", async () => {
     seedAliasFoldedReads();
     const { result } = renderHook(() => useSetArtistAlias(), { wrapper });
