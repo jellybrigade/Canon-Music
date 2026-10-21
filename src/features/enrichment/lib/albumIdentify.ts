@@ -9,7 +9,7 @@ import {
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { errorMessage } from "../../../lib/errorMessage";
-import { filterByTrackCount, pickClearWinner, rankCandidates } from "./fuzzyMatch";
+import { type LocalAlbum, pickClearWinner, rankCandidates, stripTrailingBrackets } from "./fuzzyMatch";
 
 export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
 
@@ -38,21 +38,19 @@ export function needsAutoIdentify(
   return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
 }
 
-export function stripTrailingBrackets(title: string): string | null {
-  const stripped = title.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
-  return stripped !== title && stripped.length > 0 ? stripped : null;
-}
-
 export async function autoIdentifyAlbum({
   artist,
   album,
   trackCount = 0,
+  durationSeconds = 0,
   year = null,
   confirmedArtistMbid = null,
 }: {
   artist: string;
   album: string;
   trackCount?: number;
+  /** Total local length, tells an album from its same-titled single. */
+  durationSeconds?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
@@ -60,16 +58,21 @@ export async function autoIdentifyAlbum({
 }): Promise<AutoIdentifyResult> {
   try {
     let candidates = await searchReleaseGroups(artist, album);
-    let searchTitle = album;
+    const local: LocalAlbum = { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds };
+    let ranked = rankCandidates(candidates, local);
 
+    // Mix/edition suffixes ("BRAT (Dolby Atmos Mix)") can hide the plain release from MB's
+    // search; search without them too when the first pass found nothing confident.
     const stripped = stripTrailingBrackets(album);
-
-    if (candidates.length === 0 && stripped) {
-      candidates = await searchReleaseGroups(artist, stripped);
-      if (candidates.length > 0) searchTitle = stripped;
+    if (stripped && (ranked[0]?.score ?? 0) < AUTO_CONFIRM_THRESHOLD) {
+      const seen = new Set(candidates.map((c) => c.id));
+      const strippedCandidates = await searchReleaseGroups(artist, stripped);
+      candidates = candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id)));
+      ranked = rankCandidates(candidates, local);
     }
 
-    if (candidates.length === 0) {
+    const top = ranked[0];
+    if (!top) {
       return {
         decision: "not_found",
         score: 0,
@@ -81,26 +84,6 @@ export async function autoIdentifyAlbum({
         error: null,
       };
     }
-
-    candidates = filterByTrackCount(candidates, trackCount);
-
-    let ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
-
-    // Mix/edition suffixes ("BRAT (Dolby Atmos Mix)") score poorly against MB's
-    // full-title match; retry stripped and merge in if the first pass wasn't confident.
-    if (stripped && stripped !== searchTitle && ranked[0]!.score < AUTO_CONFIRM_THRESHOLD) {
-      const strippedCandidates = await searchReleaseGroups(artist, stripped);
-      const seen = new Set(candidates.map((c) => c.id));
-      const merged = candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id)));
-      const mergedFiltered = filterByTrackCount(merged, trackCount);
-      const rankedByStripped = rankCandidates(mergedFiltered, artist, stripped, year, confirmedArtistMbid);
-      if (rankedByStripped[0]!.score > ranked[0]!.score) {
-        ranked = rankedByStripped;
-        searchTitle = stripped;
-      }
-    }
-
-    const top = ranked[0]!;
 
     if (!pickClearWinner(ranked, { minScore: AUTO_CONFIRM_THRESHOLD, minGap: MIN_SCORE_GAP })) {
       return {

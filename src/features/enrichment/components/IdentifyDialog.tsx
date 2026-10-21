@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import type { MbArtistCandidate, MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
 import { searchArtists, searchReleaseGroups } from "../../../clients/musicbrainz";
 import { useSetting } from "../../../hooks/useSetting";
+import { useTracks } from "../../../hooks/useTracks";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import {
@@ -15,14 +16,13 @@ import {
   useSaveAlbumIdentity,
 } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
-import { stripTrailingBrackets } from "../lib/albumIdentify";
 import {
   ARTIST_AUTO_SELECT_SETTING,
   DEFAULT_ARTIST_AUTO_SELECT_SCORE,
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
-import { rankCandidates } from "../lib/fuzzyMatch";
+import { albumShapeOf, rankCandidates, stripTrailingBrackets } from "../lib/fuzzyMatch";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -57,7 +57,6 @@ interface AlbumIdentifyDialogProps {
   albumId: string;
   artist: string;
   album: string;
-  trackCount?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
@@ -69,11 +68,13 @@ export function AlbumIdentifyDialog({
   albumId,
   artist,
   album,
-  trackCount,
   year,
   confirmedArtistMbid,
   onClose,
 }: AlbumIdentifyDialogProps) {
+  const { data: tracks } = useTracks(albumId);
+  // Unknown until the tracks load; ranking then skips the shape and re-ranks once they arrive.
+  const shape = tracks ? albumShapeOf(tracks) : undefined;
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
   const dismiss = useOverlayDismiss(onClose);
@@ -125,9 +126,9 @@ export function AlbumIdentifyDialog({
   });
 
   // MB's own relevance score can tie same-titled releases by different artists/years at 100%;
-  // our fuzzy score (title + artist + year + known-artist bonus) breaks that ambiguity.
+  // our fuzzy score (title, artist, year, known artist, release type against the local tracks) breaks it.
   const rankedSearchResults = rawSearchResults
-    ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
+    ? rankCandidates(rawSearchResults, { artist, title: album, year, confirmedArtistMbid, ...shape })
     : undefined;
   const searchResults = rankedSearchResults?.map((r) => r.candidate);
 
@@ -137,7 +138,8 @@ export function AlbumIdentifyDialog({
     album: lfmAlbum.trim() || album,
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
-    trackCount,
+    trackCount: shape?.trackCount,
+    durationSeconds: shape?.durationSeconds,
     year,
     confirmedArtistMbid,
     enabled: fetchEnabled,

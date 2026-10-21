@@ -13,8 +13,7 @@ import { getDb } from "../../../db";
 import { errorMessage } from "../../../lib/errorMessage";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
-import { stripTrailingBrackets } from "../lib/albumIdentify";
-import { filterByTrackCount, pickClearWinner, rankCandidates } from "../lib/fuzzyMatch";
+import { pickClearWinner, rankCandidates, stripTrailingBrackets } from "../lib/fuzzyMatch";
 
 const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
@@ -102,6 +101,7 @@ export function useIdentifyAlbum({
   overrideMbRgId,
   overrideMbReleaseId,
   trackCount,
+  durationSeconds,
   year,
   confirmedArtistMbid,
   enabled,
@@ -112,6 +112,8 @@ export function useIdentifyAlbum({
   overrideMbRgId?: string | null;
   overrideMbReleaseId?: string | null;
   trackCount?: number;
+  /** Total local length, tells an album from its same-titled single. */
+  durationSeconds?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
@@ -126,6 +128,7 @@ export function useIdentifyAlbum({
       artist,
       album,
       trackCount,
+      durationSeconds,
       year,
       confirmedArtistMbid,
     ),
@@ -135,7 +138,6 @@ export function useIdentifyAlbum({
         let candidates: MbReleaseGroupCandidate[] = [];
 
         if (!rgId) {
-          let searchTitle = album;
           candidates = await searchReleaseGroups(artist, album);
 
           // Retry without edition noise, "The Suburbs (Deluxe Edition)" → "The Suburbs"
@@ -143,7 +145,6 @@ export function useIdentifyAlbum({
             const stripped = stripTrailingBrackets(album);
             if (stripped) {
               candidates = await searchReleaseGroups(artist, stripped);
-              if (candidates.length > 0) searchTitle = stripped;
             }
           }
 
@@ -159,8 +160,14 @@ export function useIdentifyAlbum({
             };
           }
 
-          const filtered = filterByTrackCount(candidates, trackCount ?? 0);
-          const ranked = rankCandidates(filtered, artist, searchTitle, year, confirmedArtistMbid);
+          const ranked = rankCandidates(candidates, {
+            artist,
+            title: album,
+            year,
+            confirmedArtistMbid,
+            trackCount,
+            durationSeconds,
+          });
           const winner = pickClearWinner(ranked, { minScore: DIALOG_AUTO_PICK_THRESHOLD, minGap: DIALOG_MIN_GAP });
 
           if (winner) {
@@ -345,8 +352,14 @@ export function useRecordFailedLookup() {
   });
 }
 
+/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. */
+export const ALBUM_SHAPE_COLUMNS = `(SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count,
+  (SELECT CASE WHEN COUNT(*) > 0 AND COUNT(*) = COUNT(NULLIF(t.duration, 0)) THEN SUM(t.duration) ELSE 0 END
+   FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS duration_seconds`;
+
 export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
+  duration_seconds: number;
 }
 
 /** Album rows (plus track_count) on one server that were looked up but yielded no MB match. */
@@ -355,8 +368,7 @@ export async function readFailedLookupAlbums(
   serverId: string,
 ): Promise<FailedAlbumRow[]> {
   return db.select<FailedAlbumRow[]>(
-    `SELECT a.*,
-            (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+    `SELECT a.*, ${ALBUM_SHAPE_COLUMNS}
      FROM albums a
      INNER JOIN album_identity ai ON ai.album_id = a.id
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL

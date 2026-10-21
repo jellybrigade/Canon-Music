@@ -42,6 +42,7 @@ export function UnidentifiedView({ serverWithCredential, onSelectAlbum }: Props)
           artist: album.artist ?? "",
           album: album.name,
           trackCount: album.track_count,
+          durationSeconds: album.duration_seconds,
           year: album.year,
         });
         if (result.decision === "auto_confirmed" && result.detail) {

@@ -19,6 +19,7 @@ const ready: Props = {
   artist: "Some Artist",
   album: "Fresh Album",
   trackCount: 10,
+  durationSeconds: 2400,
   year: 2026,
   confirmedArtistMbid: null,
   mbAutoIdentify: true,

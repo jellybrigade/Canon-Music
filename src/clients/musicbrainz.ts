@@ -22,7 +22,11 @@ export interface MbReleaseGroupCandidate {
   title: string;
   firstReleaseDate: string | null;
   primaryType: string | null;
+  /** "Live", "Compilation", "Remix" and the like; empty for a plain studio release. */
+  secondaryTypes: string[];
+  /** The full credit as MB prints it ("Ski Aggu & Filow"), empty when MB credits nobody. */
   artistName: string;
+  /** First credited artist. */
   artistMbid: string | null;
   /** MB's own Lucene relevance score (0-100). Tiebreaker only, use our fuzzy score as primary. */
   score: number | null;
@@ -101,7 +105,10 @@ interface MbSearchRGResponse {
     score?: number;
     "first-release-date"?: string;
     "primary-type"?: string;
+    "secondary-types"?: string[];
     "artist-credit"?: Array<{
+      name?: string;
+      joinphrase?: string;
       artist?: { id: string; name: string };
     }>;
   }>;
@@ -109,15 +116,16 @@ interface MbSearchRGResponse {
 
 export async function searchReleaseGroups(artist: string, album: string): Promise<MbReleaseGroupCandidate[]> {
   type RgHit = NonNullable<MbSearchRGResponse["release-groups"]>[number];
-  const toCandidate = (rg: RgHit) => {
-    const credit = rg["artist-credit"]?.[0]?.artist;
+  const toCandidate = (rg: RgHit): MbReleaseGroupCandidate => {
+    const credits = rg["artist-credit"] ?? [];
     return {
       id: rg.id,
       title: rg.title,
       firstReleaseDate: rg["first-release-date"] ?? null,
       primaryType: rg["primary-type"] ?? null,
-      artistName: credit?.name ?? artist,
-      artistMbid: credit?.id ?? null,
+      secondaryTypes: rg["secondary-types"] ?? [],
+      artistName: credits.map((c) => `${c.name ?? c.artist?.name ?? ""}${c.joinphrase ?? ""}`).join(""),
+      artistMbid: credits[0]?.artist?.id ?? null,
       score: rg.score ?? null,
     };
   };

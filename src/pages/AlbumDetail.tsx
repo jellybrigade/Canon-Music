@@ -16,6 +16,7 @@ import { useEnrichAlbumTracks } from "../features/enrichment/hooks/useEnrichAlbu
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import { useSimilarArtistAlbums } from "../features/enrichment/hooks/useSimilarArtistAlbums";
 import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
+import { albumShapeOf } from "../features/enrichment/lib/fuzzyMatch";
 import { usePlayerStore } from "../features/playback/store/player";
 import type { CurrentTrack } from "../features/playback/store/playerTypes";
 import { usePlaylists } from "../features/playlists/usePlaylists";
@@ -195,7 +196,7 @@ export function AlbumDetail({
     albumId: album.id,
     artist: album.artist ?? "",
     album: album.name,
-    trackCount: tracks?.length ?? 0,
+    ...albumShapeOf(tracks ?? []),
     year: album.year,
     confirmedArtistMbid,
     mbAutoIdentify,
@@ -415,7 +416,6 @@ export function AlbumDetail({
           albumId={album.id}
           artist={album.artist ?? ""}
           album={album.name}
-          trackCount={tracks?.length ?? 0}
           year={album.year}
           confirmedArtistMbid={confirmedArtistMbid}
           onClose={() => setShowIdentify(false)}

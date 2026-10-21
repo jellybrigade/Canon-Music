@@ -13,6 +13,7 @@ export function useAutoIdentifyAlbum({
   artist,
   album,
   trackCount,
+  durationSeconds,
   year,
   confirmedArtistMbid,
   mbAutoIdentify,
@@ -23,6 +24,8 @@ export function useAutoIdentifyAlbum({
   album: string;
   /** Zero while the tracks are still arriving; the lookup waits, since track count decides album vs single. */
   trackCount: number;
+  /** Total local length, tells an album from its same-titled single. */
+  durationSeconds: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, `null` when there is none, `undefined` while loading. */
@@ -40,9 +43,9 @@ export function useAutoIdentifyAlbum({
     confirmedArtistMbid !== undefined &&
     existingIdentity !== undefined;
   return useQuery({
-    queryKey: QK.autoIdentifyAlbum(albumId, trackCount, confirmedArtistMbid),
+    queryKey: QK.autoIdentifyAlbum(albumId, trackCount, durationSeconds, confirmedArtistMbid),
     queryFn: (): Promise<AutoIdentifyResult> =>
-      autoIdentifyAlbum({ artist, album, trackCount, year, confirmedArtistMbid }),
+      autoIdentifyAlbum({ artist, album, trackCount, durationSeconds, year, confirmedArtistMbid }),
     enabled: isReady && needsAutoIdentify(existingIdentity, Math.floor(Date.now() / 1000)),
     staleTime: Infinity,
     retry: false,
