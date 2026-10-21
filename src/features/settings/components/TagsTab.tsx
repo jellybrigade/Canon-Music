@@ -7,7 +7,12 @@ import { getDb } from "../../../db";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
-import { persistAlbumIdentity, recordFailedLookup } from "../../enrichment/hooks/useAlbumIdentity";
+import {
+  ALBUM_SHAPE_COLUMNS,
+  ALBUM_SHAPE_JOIN,
+  persistAlbumIdentity,
+  recordFailedLookup,
+} from "../../enrichment/hooks/useAlbumIdentity";
 import { autoIdentifyAlbum } from "../../enrichment/lib/albumIdentify";
 import { ARTIST_AUTO_SELECT_SETTING, DEFAULT_ARTIST_AUTO_SELECT_SCORE } from "../../enrichment/lib/artistAutoSelect";
 import { useRapToHipHop } from "../../tags/hooks/useTagMappings";
@@ -95,12 +100,20 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
 
   const handleRefreshAll = useCallback(async () => {
     const db = await getDb();
-    type Row = { id: string; artist: string | null; name: string; year: number | null; track_count: number };
+    type Row = {
+      id: string;
+      artist: string | null;
+      name: string;
+      year: number | null;
+      track_count: number;
+      duration_seconds: number;
+      mb_release_id: string | null;
+    };
 
     const unmatched = await db.select<Row[]>(
-      `SELECT a.id, a.artist, a.name, a.year,
-              (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+      `SELECT a.id, a.artist, a.name, a.year, a.mb_release_id, ${ALBUM_SHAPE_COLUMNS}
        FROM albums a
+       ${ALBUM_SHAPE_JOIN}
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
@@ -116,7 +129,9 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
             artist: album.artist ?? "",
             album: album.name,
             trackCount: album.track_count,
+            durationSeconds: album.duration_seconds,
             year: album.year,
+            taggedReleaseMbid: album.mb_release_id,
           });
           if (result.decision === "auto_confirmed" && result.detail) {
             const now = Math.floor(Date.now() / 1000);

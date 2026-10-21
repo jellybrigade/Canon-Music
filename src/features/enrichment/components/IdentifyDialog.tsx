@@ -4,25 +4,27 @@ import { AlertCircle, CheckCircle, ExternalLink, Loader, Search, XCircle } from 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MbArtistCandidate, MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
-import { searchArtists, searchReleaseGroups } from "../../../clients/musicbrainz";
+import { searchArtists } from "../../../clients/musicbrainz";
 import { useSetting } from "../../../hooks/useSetting";
+import { useTracks } from "../../../hooks/useTracks";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import {
+  DIALOG_AUTO_PICK_THRESHOLD,
   useAlbumIdentity,
   useConfirmedArtistMbid,
   useIdentifyAlbum,
   useSaveAlbumIdentity,
 } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
-import { stripTrailingBrackets } from "../lib/albumIdentify";
+import { searchRankedReleaseGroups } from "../lib/albumIdentify";
 import {
   ARTIST_AUTO_SELECT_SETTING,
   DEFAULT_ARTIST_AUTO_SELECT_SCORE,
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
-import { rankCandidates } from "../lib/fuzzyMatch";
+import { albumShapeOf, rankCandidates } from "../lib/fuzzyMatch";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -55,9 +57,9 @@ function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist";
 
 interface AlbumIdentifyDialogProps {
   albumId: string;
+  serverId: string;
   artist: string;
   album: string;
-  trackCount?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
@@ -67,13 +69,16 @@ interface AlbumIdentifyDialogProps {
 
 export function AlbumIdentifyDialog({
   albumId,
+  serverId,
   artist,
   album,
-  trackCount,
   year,
   confirmedArtistMbid,
   onClose,
 }: AlbumIdentifyDialogProps) {
+  const { data: tracks, isLoading: isTracksLoading } = useTracks(albumId);
+  // The preview list ranks without the shape until the tracks load; Look up waits for them.
+  const shape = tracks ? albumShapeOf(tracks) : undefined;
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
   const dismiss = useOverlayDismiss(onClose);
@@ -112,36 +117,34 @@ export function AlbumIdentifyDialog({
 
   const { data: rawSearchResults, isLoading: searchLoading } = useQuery({
     queryKey: ["mb-search-rg", artist, album],
-    queryFn: async () => {
-      const results = await searchReleaseGroups(artist, album);
-      if (results.length > 0) return results;
-      // Retry without a trailing bracket, "BRAT (Dolby Atmos Mix)" → "BRAT",
-      // mirrors the fallback in useIdentifyAlbum's "Look up" flow.
-      const stripped = stripTrailingBrackets(album);
-      return stripped ? searchReleaseGroups(artist, stripped) : results;
-    },
+    queryFn: async () =>
+      (await searchRankedReleaseGroups({ artist, title: album }, DIALOG_AUTO_PICK_THRESHOLD)).map((r) => r.candidate),
     staleTime: 10 * 60 * 1000,
     enabled: !!(artist.trim() || album.trim()),
   });
 
   // MB's own relevance score can tie same-titled releases by different artists/years at 100%;
-  // our fuzzy score (title + artist + year + known-artist bonus) breaks that ambiguity.
+  // our fuzzy score (title, artist, year, known artist, release type against the local tracks) breaks it.
   const rankedSearchResults = rawSearchResults
-    ? rankCandidates(rawSearchResults, artist, album, year, confirmedArtistMbid)
+    ? rankCandidates(rawSearchResults, { artist, title: album, year, confirmedArtistMbid, ...shape })
     : undefined;
   const searchResults = rankedSearchResults?.map((r) => r.candidate);
 
-  const { data: lookupResult, isFetching } = useIdentifyAlbum({
+  const { data: lookupResult, isFetching: isLookupFetching } = useIdentifyAlbum({
     albumId,
+    serverId,
     artist: lfmArtist.trim() || artist,
     album: lfmAlbum.trim() || album,
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
-    trackCount,
+    isTaggedReleasePreferred: !lfmArtist.trim() && !lfmAlbum.trim(),
+    trackCount: shape?.trackCount,
+    durationSeconds: shape?.durationSeconds,
     year,
     confirmedArtistMbid,
-    enabled: fetchEnabled,
+    enabled: fetchEnabled && !isTracksLoading,
   });
+  const isFetching = isLookupFetching || (fetchEnabled && isTracksLoading);
 
   function handleFetch() {
     setSelectedCandidate(null);

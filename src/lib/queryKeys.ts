@@ -86,18 +86,10 @@ export const QK = {
 
   albumIdentity: (albumId: string) => ["album-identity", albumId] as const,
   albumEnrichment: (albumId: string) => ["album-enrichment", albumId] as const,
-  identifyAlbum: (
-    albumId: string,
-    mbRgId?: string | null,
-    mbReleaseId?: string | null,
-    artist?: string,
-    album?: string,
-    trackCount?: number,
-    year?: number | null,
-    confirmedArtistMbid?: string | null,
-  ) => ["identify-album", albumId, mbRgId, mbReleaseId, artist, album, trackCount, year, confirmedArtistMbid],
-  autoIdentifyAlbum: (albumId: string, trackCount: number, confirmedArtistMbid?: string | null) =>
-    ["auto-identify-album", albumId, trackCount, confirmedArtistMbid] as const,
+  identifyAlbum: <Lookup extends { albumId: string }>(lookup: Lookup) =>
+    ["identify-album", lookup.albumId, lookup] as const,
+  autoIdentifyAlbum: <Lookup extends { albumId: string }>(lookup: Lookup) =>
+    ["auto-identify-album", lookup.albumId, lookup] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbumIdsFor: (serverId: string) => ["failed-lookup-album-ids", serverId] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,

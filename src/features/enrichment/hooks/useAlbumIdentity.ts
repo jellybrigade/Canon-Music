@@ -7,16 +7,15 @@ import {
   type MbReleaseDetail,
   type MbReleaseGroupCandidate,
   type MbReleaseGroupDetail,
-  searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { errorMessage } from "../../../lib/errorMessage";
 import { QK } from "../../../lib/queryKeys";
 import type { AlbumRow } from "../../../types/library";
-import { stripTrailingBrackets } from "../lib/albumIdentify";
-import { filterByTrackCount, pickClearWinner, rankCandidates } from "../lib/fuzzyMatch";
+import { lookupTaggedRelease, searchRankedReleaseGroups } from "../lib/albumIdentify";
+import { pickClearWinner } from "../lib/fuzzyMatch";
 
-const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
+export const DIALOG_AUTO_PICK_THRESHOLD = 0.75;
 const DIALOG_MIN_GAP = 0.08;
 
 export interface AlbumIdentityRow {
@@ -54,6 +53,18 @@ export function useAlbumIdentity(albumId: string) {
     enabled: !!albumId,
     staleTime: Infinity,
   });
+}
+
+/** The MusicBrainz release the album's files are tagged with, as of the last sync; read when the lookup runs so it is never stale. */
+export async function readTaggedReleaseMbid(
+  db: Awaited<ReturnType<typeof getDb>>,
+  { albumId, serverId }: { albumId: string; serverId: string },
+): Promise<string | null> {
+  const rows = await db.select<{ mb_release_id: string | null }[]>(
+    "SELECT mb_release_id FROM albums WHERE id = ? AND server_id = ?",
+    [albumId, serverId],
+  );
+  return rows[0]?.mb_release_id ?? null;
 }
 
 /** Used to disambiguate release groups that share a title across different artists. */
@@ -97,21 +108,29 @@ export interface AlbumLookupResult {
 
 export function useIdentifyAlbum({
   albumId,
+  serverId,
   artist,
   album,
   overrideMbRgId,
   overrideMbReleaseId,
+  isTaggedReleasePreferred,
   trackCount,
+  durationSeconds,
   year,
   confirmedArtistMbid,
   enabled,
 }: {
   albumId: string;
+  serverId: string;
   artist: string;
   album: string;
   overrideMbRgId?: string | null;
   overrideMbReleaseId?: string | null;
+  /** Take the release the files are tagged with over a search, as album open does; off once the user redirects the search. */
+  isTaggedReleasePreferred: boolean;
   trackCount?: number;
+  /** Total local length, tells an album from its same-titled single. */
+  durationSeconds?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
@@ -119,35 +138,47 @@ export function useIdentifyAlbum({
   enabled: boolean;
 }) {
   return useQuery({
-    queryKey: QK.identifyAlbum(
+    queryKey: QK.identifyAlbum({
       albumId,
+      serverId,
       overrideMbRgId,
       overrideMbReleaseId,
+      isTaggedReleasePreferred,
       artist,
       album,
       trackCount,
+      durationSeconds,
       year,
       confirmedArtistMbid,
-    ),
+    }),
     queryFn: async (): Promise<AlbumLookupResult> => {
       try {
         let rgId = overrideMbRgId ?? null;
         let candidates: MbReleaseGroupCandidate[] = [];
 
-        if (!rgId) {
-          let searchTitle = album;
-          candidates = await searchReleaseGroups(artist, album);
-
-          // Retry without edition noise, "The Suburbs (Deluxe Edition)" → "The Suburbs"
-          if (candidates.length === 0) {
-            const stripped = stripTrailingBrackets(album);
-            if (stripped) {
-              candidates = await searchReleaseGroups(artist, stripped);
-              if (candidates.length > 0) searchTitle = stripped;
-            }
+        if (!rgId && isTaggedReleasePreferred) {
+          const taggedReleaseMbid = await readTaggedReleaseMbid(await getDb(), { albumId, serverId });
+          const tagged = taggedReleaseMbid ? await lookupTaggedRelease(taggedReleaseMbid) : null;
+          if (tagged) {
+            return {
+              mbStatus: "found",
+              mbDetail: tagged.detail,
+              mbRelease: tagged.release,
+              mbCandidates: [],
+              combinedGenres: combineGenres(tagged.detail.genres, tagged.release.genres),
+              combinedTags: combineGenres(tagged.detail.tags, tagged.release.tags),
+              error: null,
+            };
           }
+        }
 
-          if (candidates.length === 0) {
+        if (!rgId) {
+          const ranked = await searchRankedReleaseGroups(
+            { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds },
+            DIALOG_AUTO_PICK_THRESHOLD,
+          );
+
+          if (ranked.length === 0) {
             return {
               mbStatus: "not_found",
               mbDetail: null,
@@ -159,8 +190,6 @@ export function useIdentifyAlbum({
             };
           }
 
-          const filtered = filterByTrackCount(candidates, trackCount ?? 0);
-          const ranked = rankCandidates(filtered, artist, searchTitle, year, confirmedArtistMbid);
           const winner = pickClearWinner(ranked, { minScore: DIALOG_AUTO_PICK_THRESHOLD, minGap: DIALOG_MIN_GAP });
 
           if (winner) {
@@ -345,8 +374,20 @@ export function useRecordFailedLookup() {
   });
 }
 
+/** `track_count` and `duration_seconds` of album `a`, as `albumShapeOf` reads them: length 0 if any track lacks one. Needs `ALBUM_SHAPE_JOIN`. */
+export const ALBUM_SHAPE_COLUMNS =
+  "COALESCE(shape.track_count, 0) AS track_count, COALESCE(shape.duration_seconds, 0) AS duration_seconds";
+
+export const ALBUM_SHAPE_JOIN = `LEFT JOIN (
+    SELECT album_id, server_id, COUNT(*) AS track_count,
+      CASE WHEN COUNT(*) = COUNT(NULLIF(duration, 0)) THEN SUM(duration) ELSE 0 END AS duration_seconds
+    FROM tracks GROUP BY album_id, server_id
+  ) shape ON shape.album_id = a.id AND shape.server_id = a.server_id`;
+
 export interface FailedAlbumRow extends AlbumRow {
   track_count: number;
+  duration_seconds: number;
+  mb_release_id: string | null;
 }
 
 /** Album rows (plus track_count) on one server that were looked up but yielded no MB match. */
@@ -355,10 +396,10 @@ export async function readFailedLookupAlbums(
   serverId: string,
 ): Promise<FailedAlbumRow[]> {
   return db.select<FailedAlbumRow[]>(
-    `SELECT a.*,
-            (SELECT COUNT(*) FROM tracks t WHERE t.album_id = a.id AND t.server_id = a.server_id) AS track_count
+    `SELECT a.*, ${ALBUM_SHAPE_COLUMNS}
      FROM albums a
      INNER JOIN album_identity ai ON ai.album_id = a.id
+     ${ALBUM_SHAPE_JOIN}
      WHERE a.server_id = ? AND ai.mb_release_group_id IS NULL AND ai.looked_up_at IS NOT NULL
      ORDER BY a.artist, a.name, a.id`,
     [serverId],

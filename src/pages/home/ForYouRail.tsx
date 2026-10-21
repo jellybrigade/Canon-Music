@@ -4,7 +4,12 @@ import { getCoverArtUrl } from "../../clients/navidromeUrls";
 import { useAlbumDisplayName } from "../../hooks/useAlbumDisplayName";
 import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
-import { FOR_YOU_PER_TAB_CHOICES, type ForYouCategoryConfig, type ForYouGroup } from "../../lib/forYouGroups";
+import {
+  FOR_YOU_PER_TAB_MAX,
+  FOR_YOU_PER_TAB_MIN,
+  type ForYouCategoryConfig,
+  type ForYouGroup,
+} from "../../lib/forYouGroups";
 import type { AlbumRow } from "../../types/library";
 import "./ForYouRail.css";
 
@@ -103,6 +108,8 @@ export function ForYouRail({
   const [addType, setAddType] = useState<"decade" | "artist">("decade");
   const [addDecade, setAddDecade] = useState("");
   const [addArtist, setAddArtist] = useState("");
+  // Typing is held locally so a half-typed "1" on the way to "12" doesn't reshuffle every tab.
+  const [perTabDraft, setPerTabDraft] = useState<string | null>(null);
 
   if (groups.length === 0 && !isLoading) return null;
   if (groups.length === 0 && isLoading) {
@@ -187,6 +194,24 @@ export function ForYouRail({
     setAddFormOpen(false);
   }
 
+  function commitPerTabDraft() {
+    if (perTabDraft === null) return;
+    const value = Number(perTabDraft);
+    if (perTabDraft.trim() !== "" && Number.isFinite(value) && value !== perTab) onPerTabChange(value);
+    setPerTabDraft(null);
+  }
+
+  // Locking unmounts the field, and WebKit doesn't focus a clicked button, so no blur arrives to commit it.
+  function handleToggleLocked() {
+    if (!locked) commitPerTabDraft();
+    setLocked((l) => !l);
+  }
+
+  function handlePerTabKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Enter") commitPerTabDraft();
+    else if (e.key === "Escape") setPerTabDraft(null);
+  }
+
   function handleTabDragStart(e: React.DragEvent, index: number) {
     if (locked) return;
     setDragIndex(index);
@@ -229,17 +254,17 @@ export function ForYouRail({
           <p className="foryou-v2-edit-hint">Drag to reorder · Click a tab to enable/disable</p>
           <label className="foryou-v2-per-tab">
             Albums per tab
-            <select
-              className="foryou-v2-per-tab__select"
-              value={perTab}
-              onChange={(e) => onPerTabChange(Number(e.target.value))}
-            >
-              {FOR_YOU_PER_TAB_CHOICES.map((count) => (
-                <option key={count} value={count}>
-                  {count}
-                </option>
-              ))}
-            </select>
+            <input
+              type="number"
+              className="foryou-v2-per-tab__input"
+              min={FOR_YOU_PER_TAB_MIN}
+              max={FOR_YOU_PER_TAB_MAX}
+              step={1}
+              value={perTabDraft ?? String(perTab)}
+              onChange={(e) => setPerTabDraft(e.target.value)}
+              onBlur={commitPerTabDraft}
+              onKeyDown={handlePerTabKeyDown}
+            />
           </label>
         </div>
       )}
@@ -316,7 +341,7 @@ export function ForYouRail({
           )}
           <button
             className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
-            onClick={() => setLocked((l) => !l)}
+            onClick={handleToggleLocked}
             aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
             aria-pressed={!locked}
             title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}

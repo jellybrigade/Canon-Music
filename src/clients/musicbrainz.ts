@@ -22,7 +22,11 @@ export interface MbReleaseGroupCandidate {
   title: string;
   firstReleaseDate: string | null;
   primaryType: string | null;
+  /** "Live", "Compilation", "Remix" and the like; empty for a plain studio release. */
+  secondaryTypes: string[];
+  /** The full credit as MB prints it ("Ski Aggu & Filow"), empty when MB credits nobody. */
   artistName: string;
+  /** First credited artist. */
   artistMbid: string | null;
   /** MB's own Lucene relevance score (0-100). Tiebreaker only, use our fuzzy score as primary. */
   score: number | null;
@@ -49,6 +53,7 @@ export interface MbReleaseSummary {
 
 export interface MbReleaseDetail {
   id: string;
+  releaseGroupId: string | null;
   title: string;
   date: string | null;
   country: string | null;
@@ -77,6 +82,17 @@ export interface MbArtistDetail {
   genres: MbGenre[];
 }
 
+/** A MusicBrainz answer other than 2xx; `status` tells an id MusicBrainz doesn't know (404) from a busy server. */
+export class MusicBrainzError extends Error {
+  constructor(
+    path: string,
+    readonly status: number,
+  ) {
+    super(`MusicBrainz ${path} returned ${status}`);
+    this.name = "MusicBrainzError";
+  }
+}
+
 async function mbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   await rateLimit();
   const url = new URL(path, MB_BASE);
@@ -89,7 +105,7 @@ async function mbGet<T>(path: string, params: Record<string, string> = {}): Prom
   });
 
   if (!res.ok) {
-    throw new Error(`MusicBrainz ${path} returned ${res.status}`);
+    throw new MusicBrainzError(path, res.status);
   }
   return res.json() as Promise<T>;
 }
@@ -101,7 +117,10 @@ interface MbSearchRGResponse {
     score?: number;
     "first-release-date"?: string;
     "primary-type"?: string;
+    "secondary-types"?: string[];
     "artist-credit"?: Array<{
+      name?: string;
+      joinphrase?: string;
       artist?: { id: string; name: string };
     }>;
   }>;
@@ -109,15 +128,16 @@ interface MbSearchRGResponse {
 
 export async function searchReleaseGroups(artist: string, album: string): Promise<MbReleaseGroupCandidate[]> {
   type RgHit = NonNullable<MbSearchRGResponse["release-groups"]>[number];
-  const toCandidate = (rg: RgHit) => {
-    const credit = rg["artist-credit"]?.[0]?.artist;
+  const toCandidate = (rg: RgHit): MbReleaseGroupCandidate => {
+    const credits = rg["artist-credit"] ?? [];
     return {
       id: rg.id,
       title: rg.title,
       firstReleaseDate: rg["first-release-date"] ?? null,
       primaryType: rg["primary-type"] ?? null,
-      artistName: credit?.name ?? artist,
-      artistMbid: credit?.id ?? null,
+      secondaryTypes: rg["secondary-types"] ?? [],
+      artistName: credits.map((c) => `${c.name ?? c.artist?.name ?? ""}${c.joinphrase ?? ""}`).join(""),
+      artistMbid: credits[0]?.artist?.id ?? null,
       score: rg.score ?? null,
     };
   };
@@ -195,17 +215,19 @@ interface MbLookupReleaseResponse {
     "catalog-number"?: string;
   }>;
   media?: Array<{ "track-count"?: number }>;
+  "release-group"?: { id: string };
 }
 
 export async function lookupRelease(releaseMbid: string): Promise<MbReleaseDetail> {
   const data = await mbGet<MbLookupReleaseResponse>(`release/${releaseMbid}`, {
-    inc: "genres+tags+labels+media",
+    inc: "genres+tags+labels+media+release-groups",
   });
 
   const labelInfo = data["label-info"]?.[0];
   const trackCount = data.media ? data.media.reduce((sum, m) => sum + (m["track-count"] ?? 0), 0) : null;
   return {
     id: data.id,
+    releaseGroupId: data["release-group"]?.id ?? null,
     title: data.title,
     date: data.date ?? null,
     country: data.country ?? null,

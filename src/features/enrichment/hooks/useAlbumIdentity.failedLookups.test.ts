@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { migrations } from "../../../db/migrations";
 import { createMigratedTestDb } from "../../../test/sqlite";
-import { readFailedLookupAlbumIds, readFailedLookupAlbums, recordFailedLookup } from "./useAlbumIdentity";
+import {
+  readFailedLookupAlbumIds,
+  readFailedLookupAlbums,
+  readTaggedReleaseMbid,
+  recordFailedLookup,
+} from "./useAlbumIdentity";
 
 async function seedTwoServers() {
   const db = await createMigratedTestDb();
@@ -46,6 +51,36 @@ describe("readFailedLookupAlbums", () => {
     const rows = await readFailedLookupAlbums(db as never, "srv-a");
 
     expect(rows.map((row) => row.track_count)).toEqual([1]);
+  });
+
+  it("sums the album's length, or reports it unknown when a track has none", async () => {
+    const db = await seedTwoServers();
+    const insertTrack = (id: string, server: string, duration: number | null) =>
+      db.execute(
+        "INSERT INTO tracks (id, server_id, server_type, title, album_id, duration) VALUES (?, ?, 'navidrome', ?, 'srv-a:al-1', ?)",
+        [id, server, id, duration],
+      );
+    await insertTrack("t-1", "srv-a", 1200);
+    await insertTrack("t-2", "srv-a", 1300);
+    await insertTrack("t-3", "srv-b", 9999);
+
+    expect((await readFailedLookupAlbums(db as never, "srv-a")).map((row) => row.duration_seconds)).toEqual([2500]);
+
+    await insertTrack("t-4", "srv-a", null);
+
+    expect((await readFailedLookupAlbums(db as never, "srv-a")).map((row) => row.duration_seconds)).toEqual([0]);
+  });
+});
+
+describe("readTaggedReleaseMbid", () => {
+  it("reads the album's tagged release on its own server, null when untagged or unknown", async () => {
+    const db = await seedTwoServers();
+    await db.execute("UPDATE albums SET mb_release_id = 'release-1' WHERE id = 'srv-a:al-1'");
+
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-a:al-1", serverId: "srv-a" })).toBe("release-1");
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-a:al-1", serverId: "srv-b" })).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-b:al-1", serverId: "srv-b" })).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "missing", serverId: "srv-a" })).toBeNull();
   });
 });
 

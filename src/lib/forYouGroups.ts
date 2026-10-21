@@ -20,8 +20,6 @@ export interface ForYouCategoryConfig {
 export const FOR_YOU_PER_TAB_MIN = 1;
 export const FOR_YOU_PER_TAB_MAX = 24;
 export const FOR_YOU_PER_TAB_DEFAULT = 6;
-/** A stored count off this list (hand-edited, or from an older build) is still honoured by the parse. */
-export const FOR_YOU_PER_TAB_CHOICES = [4, 6, 8, 12, 18, 24];
 
 export function parseForYouPerTab(raw: string): number {
   if (raw.trim() === "") return FOR_YOU_PER_TAB_DEFAULT;

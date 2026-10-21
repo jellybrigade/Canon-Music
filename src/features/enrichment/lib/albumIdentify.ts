@@ -6,10 +6,17 @@ import {
   type MbReleaseDetail,
   type MbReleaseGroupCandidate,
   type MbReleaseGroupDetail,
+  MusicBrainzError,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { errorMessage } from "../../../lib/errorMessage";
-import { filterByTrackCount, pickClearWinner, rankCandidates } from "./fuzzyMatch";
+import {
+  type LocalAlbum,
+  pickClearWinner,
+  type RankedCandidate,
+  rankCandidates,
+  stripTrailingBrackets,
+} from "./fuzzyMatch";
 
 export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
 
@@ -38,38 +45,97 @@ export function needsAutoIdentify(
   return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
 }
 
-export function stripTrailingBrackets(title: string): string | null {
-  const stripped = title.replace(/\s*[([].*?[)\]]\s*$/, "").trim();
-  return stripped !== title && stripped.length > 0 ? stripped : null;
+// MusicBrainz doesn't know the id (stale, merged or malformed tag); anything else is a failed lookup, not an answer.
+function isUnknownId(e: unknown): boolean {
+  return e instanceof MusicBrainzError && (e.status === 404 || e.status === 400);
+}
+
+export interface TaggedRelease {
+  release: MbReleaseDetail;
+  detail: MbReleaseGroupDetail;
+}
+
+/** The release the files are tagged with and its group; `null` when MusicBrainz doesn't know it. */
+export async function lookupTaggedRelease(releaseMbid: string): Promise<TaggedRelease | null> {
+  try {
+    const release = await lookupRelease(releaseMbid);
+    if (!release.releaseGroupId) return null;
+    return { release, detail: await lookupReleaseGroup(release.releaseGroupId) };
+  } catch (e) {
+    if (isUnknownId(e)) return null;
+    throw e;
+  }
+}
+
+/**
+ * MusicBrainz search ranked against the local album, shared by album open and Identify. Mix/edition
+ * suffixes ("BRAT (Dolby Atmos Mix)") can hide the plain release, so a top score under `confidentScore`
+ * searches without them too.
+ */
+export async function searchRankedReleaseGroups(local: LocalAlbum, confidentScore: number): Promise<RankedCandidate[]> {
+  const candidates = await searchReleaseGroups(local.artist, local.title);
+  const ranked = rankCandidates(candidates, local);
+  const stripped = stripTrailingBrackets(local.title);
+  if (!stripped || (ranked[0]?.score ?? 0) >= confidentScore) return ranked;
+  const seen = new Set(candidates.map((c) => c.id));
+  const strippedCandidates = await searchReleaseGroups(local.artist, stripped);
+  return rankCandidates(candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id))), local);
+}
+
+export function autoIdentifyFailure(e: unknown): AutoIdentifyResult {
+  return {
+    decision: "error",
+    score: 0,
+    top: null,
+    detail: null,
+    release: null,
+    combinedGenres: [],
+    combinedTags: [],
+    error: errorMessage(e),
+  };
 }
 
 export async function autoIdentifyAlbum({
   artist,
   album,
   trackCount = 0,
+  durationSeconds = 0,
   year = null,
   confirmedArtistMbid = null,
+  taggedReleaseMbid = null,
 }: {
   artist: string;
   album: string;
   trackCount?: number;
+  /** Total local length, tells an album from its same-titled single. */
+  durationSeconds?: number;
   /** Known local release year, disambiguates same-titled releases from different years. */
   year?: number | null;
   /** MBID already confirmed for this artist elsewhere, disambiguates same-titled releases by different artists. */
   confirmedArtistMbid?: string | null;
+  /** MusicBrainz release from the files' tags (Picard), taken over any search. */
+  taggedReleaseMbid?: string | null;
 }): Promise<AutoIdentifyResult> {
   try {
-    let candidates = await searchReleaseGroups(artist, album);
-    let searchTitle = album;
-
-    const stripped = stripTrailingBrackets(album);
-
-    if (candidates.length === 0 && stripped) {
-      candidates = await searchReleaseGroups(artist, stripped);
-      if (candidates.length > 0) searchTitle = stripped;
+    const tagged = taggedReleaseMbid ? await lookupTaggedRelease(taggedReleaseMbid) : null;
+    if (tagged) {
+      return {
+        decision: "auto_confirmed",
+        score: 1,
+        top: null,
+        detail: tagged.detail,
+        release: tagged.release,
+        combinedGenres: combineGenres(tagged.detail.genres, tagged.release.genres),
+        combinedTags: combineGenres(tagged.detail.tags, tagged.release.tags),
+        error: null,
+      };
     }
 
-    if (candidates.length === 0) {
+    const local: LocalAlbum = { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds };
+    const ranked = await searchRankedReleaseGroups(local, AUTO_CONFIRM_THRESHOLD);
+
+    const top = ranked[0];
+    if (!top) {
       return {
         decision: "not_found",
         score: 0,
@@ -81,26 +147,6 @@ export async function autoIdentifyAlbum({
         error: null,
       };
     }
-
-    candidates = filterByTrackCount(candidates, trackCount);
-
-    let ranked = rankCandidates(candidates, artist, searchTitle, year, confirmedArtistMbid);
-
-    // Mix/edition suffixes ("BRAT (Dolby Atmos Mix)") score poorly against MB's
-    // full-title match; retry stripped and merge in if the first pass wasn't confident.
-    if (stripped && stripped !== searchTitle && ranked[0]!.score < AUTO_CONFIRM_THRESHOLD) {
-      const strippedCandidates = await searchReleaseGroups(artist, stripped);
-      const seen = new Set(candidates.map((c) => c.id));
-      const merged = candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id)));
-      const mergedFiltered = filterByTrackCount(merged, trackCount);
-      const rankedByStripped = rankCandidates(mergedFiltered, artist, stripped, year, confirmedArtistMbid);
-      if (rankedByStripped[0]!.score > ranked[0]!.score) {
-        ranked = rankedByStripped;
-        searchTitle = stripped;
-      }
-    }
-
-    const top = ranked[0]!;
 
     if (!pickClearWinner(ranked, { minScore: AUTO_CONFIRM_THRESHOLD, minGap: MIN_SCORE_GAP })) {
       return {
@@ -165,15 +211,6 @@ export async function autoIdentifyAlbum({
       error: null,
     };
   } catch (e) {
-    return {
-      decision: "error",
-      score: 0,
-      top: null,
-      detail: null,
-      release: null,
-      combinedGenres: [],
-      combinedTags: [],
-      error: errorMessage(e),
-    };
+    return autoIdentifyFailure(e);
   }
 }

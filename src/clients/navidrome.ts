@@ -17,6 +17,8 @@ export interface NavidromeAlbum {
   played?: string;
   releaseTypes?: string[];
   releaseType?: string;
+  /** MusicBrainz release id from the files' tags; empty when untagged. */
+  musicBrainzId?: string;
 }
 
 function generateSalt(): string {
