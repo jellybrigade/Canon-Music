@@ -201,6 +201,12 @@ export function ForYouRail({
     setPerTabDraft(null);
   }
 
+  // Locking unmounts the field, and WebKit doesn't focus a clicked button, so no blur arrives to commit it.
+  function handleToggleLocked() {
+    if (!locked) commitPerTabDraft();
+    setLocked((l) => !l);
+  }
+
   function handlePerTabKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") commitPerTabDraft();
     else if (e.key === "Escape") setPerTabDraft(null);
@@ -335,7 +341,7 @@ export function ForYouRail({
           )}
           <button
             className={`foryou-v2-action-btn${!locked ? " foryou-v2-action-btn--active" : ""}`}
-            onClick={() => setLocked((l) => !l)}
+            onClick={handleToggleLocked}
             aria-label={locked ? "Unlock tab reordering" : "Lock tab reordering"}
             aria-pressed={!locked}
             title={locked ? "Unlock to reorder and enable/disable tabs" : "Lock tab order"}

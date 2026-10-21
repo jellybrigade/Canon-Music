@@ -66,6 +66,13 @@ describe("ForYouRail albums per tab", () => {
     expect(onPerTabChange).toHaveBeenCalledExactlyOnceWith(10);
   });
 
+  it("takes a typed count when the rail is locked with the field still focused", () => {
+    const { input, onPerTabChange } = renderUnlockedRail();
+    fireEvent.change(input, { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Lock tab reordering" }));
+    expect(onPerTabChange).toHaveBeenCalledExactlyOnceWith(12);
+  });
+
   it("keeps the saved count when the field is cleared or Escape is pressed", () => {
     const { input, onPerTabChange } = renderUnlockedRail(6);
     fireEvent.change(input, { target: { value: "" } });
