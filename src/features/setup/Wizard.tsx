@@ -397,7 +397,7 @@ export function Wizard({ onSuccess }: Props) {
 
             <section className="settings-section">
               <h3 className="settings-section-title">Updates</h3>
-              <SettingRow title="Auto check for updates">
+              <SettingRow title="Check in the background" description="Canon always checks once at startup.">
                 <input
                   type="checkbox"
                   checked={autoCheck}

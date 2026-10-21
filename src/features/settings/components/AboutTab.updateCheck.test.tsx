@@ -56,4 +56,12 @@ describe("AboutTab update check", () => {
     expect(await screen.findByText("Couldn't install the update: signature verification failed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Install & Restart" })).toBeEnabled();
   });
+
+  it("says the startup check runs whatever the background toggle says", async () => {
+    render(<AboutTab searchQuery="" />);
+
+    expect(await screen.findByText("Check in the background")).toBeInTheDocument();
+    expect(screen.getByText("Canon always checks once at startup.")).toBeInTheDocument();
+    expect(screen.queryByText("Auto check for updates")).not.toBeInTheDocument();
+  });
 });

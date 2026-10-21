@@ -65,7 +65,7 @@ export function AboutTab({ searchQuery }: Props) {
         <span className="settings-diag-label">Version</span>
         <span className="settings-diag-value">{appVersion ?? "…"}</span>
       </div>
-      <SettingRow title="Auto check for updates">
+      <SettingRow title="Check in the background" description="Canon always checks once at startup.">
         <label className="toggle-switch">
           <input type="checkbox" checked={autoCheck} onChange={(e) => void setAutoCheck(e.target.checked)} />
           <span className="toggle-track" />
