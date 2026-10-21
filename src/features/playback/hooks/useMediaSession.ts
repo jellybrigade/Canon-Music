@@ -30,10 +30,17 @@ function pushPositionState() {
   }
 }
 
+function clampToTrack(seconds: number): number {
+  const duration = usePlayerStore.getState().currentTrack?.duration;
+  const atLeastZero = Math.max(0, seconds);
+  return duration ? Math.min(duration, atLeastZero) : atLeastZero;
+}
+
 export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
+  const hasTrack = currentTrack != null;
   const artworkRef = currentTrack?.artworkRef ?? null;
   const fallbackArt = currentTrack?.coverArtUrl ?? null;
 
@@ -75,9 +82,9 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+    navigator.mediaSession.playbackState = !hasTrack ? "none" : isPlaying ? "playing" : "paused";
     pushPositionState();
-  }, [isPlaying, currentTrack?.id]);
+  }, [isPlaying, currentTrack?.id, hasTrack]);
 
   // Seeks are the one timeline jump with no React-visible state change of its own, so
   // they are picked up straight off the store. The 200ms ticker moves `elapsed` in
@@ -112,9 +119,8 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
     });
     navigator.mediaSession.setActionHandler("seekforward", (details) => {
       const offset = details.seekOffset ?? 10;
-      const { elapsed, currentTrack: ct } = usePlayerStore.getState();
-      const dur = ct?.duration ?? null;
-      void usePlayerStore.getState().seek(dur ? Math.min(dur, elapsed + offset) : elapsed + offset);
+      const { elapsed } = usePlayerStore.getState();
+      void usePlayerStore.getState().seek(clampToTrack(elapsed + offset));
     });
     try {
       // Drives the scrubber in the OS panel, as opposed to the fixed-offset skip
@@ -122,7 +128,7 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
       // it throw here rather than ignoring it.
       navigator.mediaSession.setActionHandler("seekto", (details) => {
         if (details.seekTime == null) return;
-        void usePlayerStore.getState().seek(details.seekTime);
+        void usePlayerStore.getState().seek(clampToTrack(details.seekTime));
       });
     } catch {
       /* unsupported action */
