@@ -8,6 +8,7 @@ import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
+import { isMbid } from "../../lib/mbid";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { Server } from "../../types/server";
 import { scanForIssues } from "../tags/lib/tagIssues";
@@ -25,7 +26,6 @@ import {
 } from "./syncWatermark";
 
 // Navidrome passes the files' tag through; anything else would end up in a MusicBrainz URL path.
-const MBID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -175,7 +175,7 @@ export async function syncLibrary(
     const skipTracks = albumUnchanged && (!forceTrackPass || readInThisPass);
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
-    const mbReleaseId = album.musicBrainzId && MBID_PATTERN.test(album.musicBrainzId) ? album.musicBrainzId : null;
+    const mbReleaseId = isMbid(album.musicBrainzId) ? album.musicBrainzId : null;
     const row = [
       albumDbId,
       server.id,
