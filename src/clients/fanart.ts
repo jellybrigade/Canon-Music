@@ -1,4 +1,5 @@
-import { keychain } from "../lib/keychain";
+import { errorMessage } from "../lib/errorMessage";
+import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
 import { boundedNativeFetch } from "./boundedFetch";
 
 interface FanartArtistResponse {
@@ -6,10 +7,13 @@ interface FanartArtistResponse {
   artistbackground?: { url: string }[];
 }
 
+/** Resolves null when no key is stored; rejects when the secret store is locked or not up yet. */
 export async function getFanartApiKey(): Promise<string | null> {
   try {
     return (await keychain.get("canon.fanart", "api_key")) ?? null;
-  } catch {
+  } catch (err) {
+    const detail = errorMessage(err);
+    if (detail.startsWith(SECRET_STORE_UNAVAILABLE)) throw new Error(detail.slice(SECRET_STORE_UNAVAILABLE.length));
     return null;
   }
 }

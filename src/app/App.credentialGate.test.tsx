@@ -20,7 +20,8 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
-vi.mock("../lib/keychain", () => ({
+vi.mock("../lib/keychain", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/keychain")>()),
   keychain: { get: vi.fn(), set: vi.fn(), remove: vi.fn() },
 }));
 vi.mock("../db", () => ({ getDb: vi.fn(async () => testDb) }));

@@ -40,6 +40,7 @@ vi.mock("../../../clients/navidrome", () => ({ getArtistImageFromServer: vi.fn()
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
+import { getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
@@ -163,6 +164,16 @@ describe("useEnrichArtist", () => {
   it("keeps the artist retryable when the Wikidata portrait lookup fails", async () => {
     vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
     vi.mocked(fetchWikidataImageByMbid).mockRejectedValueOnce(new Error("wikidata timed out"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", enriched_at: null });
+  });
+
+  it("keeps the artist retryable when the fanart.tv key can't be read", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(getFanartApiKey).mockRejectedValueOnce(new Error("keyring is locked"));
 
     renderHook(() => useEnrichArtist("slowdive"), { wrapper });
 

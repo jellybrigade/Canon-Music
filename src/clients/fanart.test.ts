@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/plugin-http", () => ({ fetch: vi.fn() }));
-vi.mock("../lib/keychain", () => ({ keychain: {} }));
+vi.mock("../lib/keychain", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/keychain")>()),
+  keychain: { get: vi.fn() },
+}));
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { fetchFanartTvImageByMbid } from "./fanart";
+import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
+import { fetchFanartTvImageByMbid, getFanartApiKey } from "./fanart";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -39,5 +43,19 @@ describe("fetchFanartTvImageByMbid", () => {
     vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(500, {}));
 
     await expect(fetchFanartTvImageByMbid("mbid-1", "key")).rejects.toThrow("500");
+  });
+});
+
+describe("getFanartApiKey", () => {
+  it("returns null when no key is stored", async () => {
+    vi.mocked(keychain.get).mockRejectedValueOnce("No matching entry found in secure storage");
+
+    await expect(getFanartApiKey()).resolves.toBeNull();
+  });
+
+  it("rejects when the secret store is locked or not up yet", async () => {
+    vi.mocked(keychain.get).mockRejectedValueOnce(`${SECRET_STORE_UNAVAILABLE}keyring is locked`);
+
+    await expect(getFanartApiKey()).rejects.toThrow("keyring is locked");
   });
 });

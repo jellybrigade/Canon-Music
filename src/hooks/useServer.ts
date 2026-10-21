@@ -3,7 +3,7 @@ import type { NavidromeCredential } from "../clients/navidromeUrls";
 import { getDb } from "../db";
 import { SchemaTooNewError } from "../db/migrations";
 import { errorMessage } from "../lib/errorMessage";
-import { keychain } from "../lib/keychain";
+import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
 import { QK } from "../lib/queryKeys";
 import type { Server } from "../types/server";
 
@@ -11,12 +11,6 @@ export interface ServerWithCredential {
   server: Server;
   credential: NavidromeCredential;
 }
-
-/**
- * Mirrors `SECRET_STORE_UNAVAILABLE` in `src-tauri/src/keychain.rs`; marks failures that
- * clear on their own (secret store not up yet, collection still locked) and is stripped before display.
- */
-export const SECRET_STORE_UNAVAILABLE = "secret-store-unavailable: ";
 
 /** A keyring read that failed for a reason expected to clear on its own. */
 export class CredentialStoreUnavailableError extends Error {}

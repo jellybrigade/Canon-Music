@@ -8,12 +8,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { getDb } from "../db";
+import { SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
 import type { Server } from "../types/server";
 import {
   credentialReadError,
   credentialRetryDelay,
-  SECRET_STORE_UNAVAILABLE,
   shouldRetryCredentialRead,
   useServerWithCredential,
 } from "./useServer";

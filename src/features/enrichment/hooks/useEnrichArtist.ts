@@ -221,7 +221,7 @@ async function enrichArtist({
   ]);
   let imageUrl = wikidataImageUrl;
   if (!imageUrl && !hasWikidataImage && resolvedMbid) {
-    const fanartKey = await getFanartApiKey();
+    const fanartKey = await getFanartApiKey().catch(markIncomplete);
     if (fanartKey) imageUrl = await fetchFanartTvImageByMbid(resolvedMbid, fanartKey).catch(markIncomplete);
   }
 
