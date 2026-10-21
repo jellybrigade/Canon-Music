@@ -1,9 +1,13 @@
+// @vitest-environment jsdom
+vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
+vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
 import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
-import { readSettingsBackup, restoreSettingsBackup } from "./settingsBackup";
+import { usePlayerStore } from "../../playback/store/player";
+import { importSettingsFile, readSettingsBackup, restoreSettingsBackup } from "./settingsBackup";
 
 let db: FakeDatabase;
 
@@ -56,5 +60,16 @@ describe("settings backup", () => {
     await expect(restoreSettingsBackup(JSON.stringify(["player.gapless"]))).rejects.toThrow(/settings/);
     await expect(restoreSettingsBackup("null")).rejects.toThrow(/settings/);
     expect(setting("0")).toBeUndefined();
+  });
+
+  it("an imported file reaches playback without a restart", async () => {
+    usePlayerStore.setState({ gapless: true, replayGainMode: "off" });
+
+    await importSettingsFile(
+      new File([JSON.stringify({ "player.gapless": "false", "player.replay_gain_mode": "album" })], "backup.json"),
+    );
+
+    expect(usePlayerStore.getState().gapless).toBe(false);
+    expect(usePlayerStore.getState().replayGainMode).toBe("album");
   });
 });

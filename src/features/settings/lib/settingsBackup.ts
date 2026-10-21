@@ -1,5 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
+import { refreshAllSettings } from "../../../hooks/useSetting";
+import { usePlayerStore } from "../../playback/store/player";
 
 // Session state and per-server caches, not preferences: restoring them from an older file
 // would bring back a stale queue or radio, or rerun the genre tree carry.
@@ -48,6 +50,9 @@ export async function exportSettingsFile(): Promise<string | null> {
   });
 }
 
+// The player read its settings once at startup, so it needs the imported ones handed over too.
 export async function importSettingsFile(file: File): Promise<void> {
   await restoreSettingsBackup(await file.text());
+  await refreshAllSettings();
+  await usePlayerStore.getState().loadSettings();
 }
