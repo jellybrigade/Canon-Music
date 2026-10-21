@@ -152,7 +152,7 @@ Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids
 | `recent_albums` / `recent_artists` / `recent_tracks` | Ctrl+K recents (v56): same keys as pins plus `recent_tracks` (track_id PK, on the track-id registry so it is pruned, purged and carried by `remap_track_ids`); server_id, opened_at (ms). `recordRecent` upserts then trims each table to `RECENTS_LIMIT` (5) per server; `readRecents` merges the three newest first. Pruned and purged like pins. |
 | `playlists` | id, server_id, name, comment, track_count, cover_art_url, custom_cover_data, is_smart, rules_json. |
 | `playlist_tracks` | playlist_id, track_id, position; PK (playlist_id, position). |
-| `playlist_resume` | playlist_id PK, last_track_id, track_position. |
+| `playlist_resume` | playlist_id PK, last_track_id, track_position. Track id decides the scroll target; position only picks among duplicates. |
 | `scrobble_queue` | Pending scrobbles: track_id, title, artist, album, timestamp. |
 | `scrobble_history` | Sent scrobbles: track_id, timestamp; UNIQUE pair. |
 | `lyrics` | Cache: track_id PK, plain, synced, source, offset_ms. |
