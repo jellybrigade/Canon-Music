@@ -28,4 +28,13 @@ describe("fetchRemoteNotice", () => {
     respondWith({ id: "n2", message: "Hello", url: "file:///etc/passwd" });
     await expect(fetchRemoteNotice()).resolves.toEqual({ id: "n2", message: "Hello" });
   });
+
+  it("ignores a notice whose fields are not text", async () => {
+    respondWith({ id: "n1", message: { text: "Hello" } });
+    await expect(fetchRemoteNotice()).resolves.toBeNull();
+    respondWith({ id: 7, message: "Hello" });
+    await expect(fetchRemoteNotice()).resolves.toBeNull();
+    respondWith(null);
+    await expect(fetchRemoteNotice()).resolves.toBeNull();
+  });
 });

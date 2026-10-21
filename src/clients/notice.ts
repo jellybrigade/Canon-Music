@@ -24,10 +24,12 @@ export async function fetchRemoteNotice(): Promise<RemoteNotice | null> {
   try {
     const resp = await boundedFetch(NOTICE_URL, { cache: "no-store" });
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { id?: string; message?: string; url?: unknown };
-    if (!data.id || !data.message) return null;
-    const link = parseNoticeLink(data.url);
-    return link ? { id: data.id, message: data.message, link } : { id: data.id, message: data.message };
+    const data: unknown = await resp.json();
+    if (typeof data !== "object" || data === null) return null;
+    const { id, message, url } = data as Record<string, unknown>;
+    if (typeof id !== "string" || typeof message !== "string" || !id || !message) return null;
+    const link = parseNoticeLink(url);
+    return link ? { id, message, link } : { id, message };
   } catch {
     return null;
   }
