@@ -4,6 +4,13 @@ all-features = true
 [advisories]
 # Unmaintained crates only reached through tauri/gtk can't be replaced from here; flag direct deps only.
 unmaintained = "workspace"
+ignore = [
+  # zip 4.x extraction: only tauri-plugin-updater 2.x pulls it (Windows, pinned ^4), and it unpacks
+  # signature-verified archives only. Drop once a 2.x updater moves to zip >= 9.
+  { id = "RUSTSEC-2026-0367", reason = "zip via tauri-plugin-updater 2.x; signed archives only" },
+  { id = "RUSTSEC-2026-0368", reason = "zip via tauri-plugin-updater 2.x; signed archives only" },
+  { id = "RUSTSEC-2026-0369", reason = "zip via tauri-plugin-updater 2.x; signed archives only" },
+]
 
 [licenses]
 allow = [
