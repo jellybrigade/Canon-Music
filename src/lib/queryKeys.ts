@@ -78,7 +78,6 @@ export const QK = {
 
   artistIdentity: (artistName: string) => ["artist-identity", artistName] as const,
   confirmedArtistMbid: (artistName: string) => ["confirmed-artist-mbid", artistName] as const,
-  taggedReleaseMbid: (albumId: string) => ["tagged-release-mbid", albumId] as const,
   artistEnrichment: (artistName: string) => ["artist-enrichment", artistName] as const,
   lastfmArtistTopTracks: (artistName: string) => ["lastfm-artist-top-tracks", artistName] as const,
   lastfmTrackMatch: (artistName: string, trackIds: string[]) => ["lastfm-track-match", artistName, trackIds] as const,
@@ -87,35 +86,10 @@ export const QK = {
 
   albumIdentity: (albumId: string) => ["album-identity", albumId] as const,
   albumEnrichment: (albumId: string) => ["album-enrichment", albumId] as const,
-  identifyAlbum: (
-    albumId: string,
-    mbRgId?: string | null,
-    mbReleaseId?: string | null,
-    artist?: string,
-    album?: string,
-    trackCount?: number,
-    durationSeconds?: number,
-    year?: number | null,
-    confirmedArtistMbid?: string | null,
-  ) => [
-    "identify-album",
-    albumId,
-    mbRgId,
-    mbReleaseId,
-    artist,
-    album,
-    trackCount,
-    durationSeconds,
-    year,
-    confirmedArtistMbid,
-  ],
-  autoIdentifyAlbum: (
-    albumId: string,
-    trackCount: number,
-    durationSeconds: number,
-    confirmedArtistMbid?: string | null,
-    taggedReleaseMbid?: string | null,
-  ) => ["auto-identify-album", albumId, trackCount, durationSeconds, confirmedArtistMbid, taggedReleaseMbid] as const,
+  identifyAlbum: <Lookup extends { albumId: string }>(lookup: Lookup) =>
+    ["identify-album", lookup.albumId, lookup] as const,
+  autoIdentifyAlbum: <Lookup extends { albumId: string }>(lookup: Lookup) =>
+    ["auto-identify-album", lookup.albumId, lookup] as const,
   failedLookupAlbumIds: () => ["failed-lookup-album-ids"] as const,
   failedLookupAlbumIdsFor: (serverId: string) => ["failed-lookup-album-ids", serverId] as const,
   failedLookupAlbums: () => ["failed-lookup-albums"] as const,

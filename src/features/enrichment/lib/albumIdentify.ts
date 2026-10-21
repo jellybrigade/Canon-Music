@@ -6,10 +6,17 @@ import {
   type MbReleaseDetail,
   type MbReleaseGroupCandidate,
   type MbReleaseGroupDetail,
+  MusicBrainzError,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { errorMessage } from "../../../lib/errorMessage";
-import { type LocalAlbum, pickClearWinner, rankCandidates, stripTrailingBrackets } from "./fuzzyMatch";
+import {
+  type LocalAlbum,
+  pickClearWinner,
+  type RankedCandidate,
+  rankCandidates,
+  stripTrailingBrackets,
+} from "./fuzzyMatch";
 
 export type AutoDecision = "auto_confirmed" | "not_found" | "ambiguous" | "needs_review" | "error";
 
@@ -38,26 +45,54 @@ export function needsAutoIdentify(
   return nowSeconds - (identity.looked_up_at ?? 0) >= AUTO_IDENTIFY_RETRY_SECONDS;
 }
 
-/** The release the files are tagged with, confirmed outright; `null` when MusicBrainz can't resolve it. */
-async function identifyTaggedRelease(releaseMbid: string): Promise<AutoIdentifyResult | null> {
+// MusicBrainz doesn't know the id (stale, merged or malformed tag); anything else is a failed lookup, not an answer.
+function isUnknownId(e: unknown): boolean {
+  return e instanceof MusicBrainzError && (e.status === 404 || e.status === 400);
+}
+
+export interface TaggedRelease {
+  release: MbReleaseDetail;
+  detail: MbReleaseGroupDetail;
+}
+
+/** The release the files are tagged with and its group; `null` when MusicBrainz doesn't know it. */
+export async function lookupTaggedRelease(releaseMbid: string): Promise<TaggedRelease | null> {
   try {
     const release = await lookupRelease(releaseMbid);
     if (!release.releaseGroupId) return null;
-    const detail = await lookupReleaseGroup(release.releaseGroupId);
-    return {
-      decision: "auto_confirmed",
-      score: 1,
-      top: null,
-      detail,
-      release,
-      combinedGenres: combineGenres(detail.genres, release.genres),
-      combinedTags: combineGenres(detail.tags, release.tags),
-      error: null,
-    };
-  } catch {
-    // A stale or merged id: the search below still has a chance.
-    return null;
+    return { release, detail: await lookupReleaseGroup(release.releaseGroupId) };
+  } catch (e) {
+    if (isUnknownId(e)) return null;
+    throw e;
   }
+}
+
+/**
+ * MusicBrainz search ranked against the local album, shared by album open and Identify. Mix/edition
+ * suffixes ("BRAT (Dolby Atmos Mix)") can hide the plain release, so a top score under `confidentScore`
+ * searches without them too.
+ */
+export async function searchRankedReleaseGroups(local: LocalAlbum, confidentScore: number): Promise<RankedCandidate[]> {
+  const candidates = await searchReleaseGroups(local.artist, local.title);
+  const ranked = rankCandidates(candidates, local);
+  const stripped = stripTrailingBrackets(local.title);
+  if (!stripped || (ranked[0]?.score ?? 0) >= confidentScore) return ranked;
+  const seen = new Set(candidates.map((c) => c.id));
+  const strippedCandidates = await searchReleaseGroups(local.artist, stripped);
+  return rankCandidates(candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id))), local);
+}
+
+export function autoIdentifyFailure(e: unknown): AutoIdentifyResult {
+  return {
+    decision: "error",
+    score: 0,
+    top: null,
+    detail: null,
+    release: null,
+    combinedGenres: [],
+    combinedTags: [],
+    error: errorMessage(e),
+  };
 }
 
 export async function autoIdentifyAlbum({
@@ -81,24 +116,23 @@ export async function autoIdentifyAlbum({
   /** MusicBrainz release from the files' tags (Picard), taken over any search. */
   taggedReleaseMbid?: string | null;
 }): Promise<AutoIdentifyResult> {
-  if (taggedReleaseMbid) {
-    const tagged = await identifyTaggedRelease(taggedReleaseMbid);
-    if (tagged) return tagged;
-  }
   try {
-    let candidates = await searchReleaseGroups(artist, album);
-    const local: LocalAlbum = { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds };
-    let ranked = rankCandidates(candidates, local);
-
-    // Mix/edition suffixes ("BRAT (Dolby Atmos Mix)") can hide the plain release from MB's
-    // search; search without them too when the first pass found nothing confident.
-    const stripped = stripTrailingBrackets(album);
-    if (stripped && (ranked[0]?.score ?? 0) < AUTO_CONFIRM_THRESHOLD) {
-      const seen = new Set(candidates.map((c) => c.id));
-      const strippedCandidates = await searchReleaseGroups(artist, stripped);
-      candidates = candidates.concat(strippedCandidates.filter((c) => !seen.has(c.id)));
-      ranked = rankCandidates(candidates, local);
+    const tagged = taggedReleaseMbid ? await lookupTaggedRelease(taggedReleaseMbid) : null;
+    if (tagged) {
+      return {
+        decision: "auto_confirmed",
+        score: 1,
+        top: null,
+        detail: tagged.detail,
+        release: tagged.release,
+        combinedGenres: combineGenres(tagged.detail.genres, tagged.release.genres),
+        combinedTags: combineGenres(tagged.detail.tags, tagged.release.tags),
+        error: null,
+      };
     }
+
+    const local: LocalAlbum = { artist, title: album, year, confirmedArtistMbid, trackCount, durationSeconds };
+    const ranked = await searchRankedReleaseGroups(local, AUTO_CONFIRM_THRESHOLD);
 
     const top = ranked[0];
     if (!top) {
@@ -177,15 +211,6 @@ export async function autoIdentifyAlbum({
       error: null,
     };
   } catch (e) {
-    return {
-      decision: "error",
-      score: 0,
-      top: null,
-      detail: null,
-      release: null,
-      combinedGenres: [],
-      combinedTags: [],
-      error: errorMessage(e),
-    };
+    return autoIdentifyFailure(e);
   }
 }

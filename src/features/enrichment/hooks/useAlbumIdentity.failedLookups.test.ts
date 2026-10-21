@@ -73,13 +73,14 @@ describe("readFailedLookupAlbums", () => {
 });
 
 describe("readTaggedReleaseMbid", () => {
-  it("reads the album's tagged release, null when untagged or unknown", async () => {
+  it("reads the album's tagged release on its own server, null when untagged or unknown", async () => {
     const db = await seedTwoServers();
     await db.execute("UPDATE albums SET mb_release_id = 'release-1' WHERE id = 'srv-a:al-1'");
 
-    expect(await readTaggedReleaseMbid(db as never, "srv-a:al-1")).toBe("release-1");
-    expect(await readTaggedReleaseMbid(db as never, "srv-b:al-1")).toBeNull();
-    expect(await readTaggedReleaseMbid(db as never, "missing")).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-a:al-1", serverId: "srv-a" })).toBe("release-1");
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-a:al-1", serverId: "srv-b" })).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "srv-b:al-1", serverId: "srv-b" })).toBeNull();
+    expect(await readTaggedReleaseMbid(db as never, { albumId: "missing", serverId: "srv-a" })).toBeNull();
   });
 });
 

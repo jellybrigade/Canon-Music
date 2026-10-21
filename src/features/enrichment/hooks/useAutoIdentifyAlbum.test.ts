@@ -1,26 +1,31 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../clients/musicbrainz", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../clients/musicbrainz")>()),
   searchReleaseGroups: vi.fn().mockResolvedValue([]),
+  lookupRelease: vi.fn(),
+  lookupReleaseGroup: vi.fn(),
 }));
+
+const taggedReleaseRead = vi.fn<() => Promise<{ mb_release_id: string | null }[]>>();
+vi.mock("../../../db", () => ({ getDb: async () => ({ select: taggedReleaseRead }) }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { searchReleaseGroups } from "../../../clients/musicbrainz";
+import { lookupRelease, lookupReleaseGroup, searchReleaseGroups } from "../../../clients/musicbrainz";
 import { useAutoIdentifyAlbum } from "./useAutoIdentifyAlbum";
 
 type Props = Parameters<typeof useAutoIdentifyAlbum>[0];
 
 const ready: Props = {
   albumId: "srv:al-1",
+  serverId: "srv",
   artist: "Some Artist",
   album: "Fresh Album",
   trackCount: 10,
   durationSeconds: 2400,
-  taggedReleaseMbid: null,
   year: 2026,
   confirmedArtistMbid: null,
   mbAutoIdentify: true,
@@ -33,12 +38,16 @@ function renderAutoIdentify(initialProps: Props) {
   return renderHook((props: Props) => useAutoIdentifyAlbum(props), { initialProps, wrapper });
 }
 
+beforeEach(() => {
+  taggedReleaseRead.mockResolvedValue([{ mb_release_id: null }]);
+});
+
 afterEach(() => {
-  vi.mocked(searchReleaseGroups).mockClear();
+  vi.clearAllMocks();
 });
 
 describe("useAutoIdentifyAlbum", () => {
-  it("waits for the album's tracks, the artist's known MBID and the files' tagged release before searching, then searches once", async () => {
+  it("waits for the album's tracks and the artist's known MBID before searching, then searches once", async () => {
     const { result, rerender } = renderAutoIdentify({
       ...ready,
       trackCount: 0,
@@ -49,7 +58,6 @@ describe("useAutoIdentifyAlbum", () => {
     rerender({ ...ready, trackCount: 0, confirmedArtistMbid: undefined });
     rerender({ ...ready, confirmedArtistMbid: undefined });
     rerender({ ...ready, trackCount: 0 });
-    rerender({ ...ready, taggedReleaseMbid: undefined });
     expect(searchReleaseGroups).not.toHaveBeenCalled();
 
     rerender(ready);
@@ -73,6 +81,50 @@ describe("useAutoIdentifyAlbum", () => {
       existingIdentity: { mb_release_group_id: null, confirmed_at: null, looked_up_at: Math.floor(Date.now() / 1000) },
     });
 
+    expect(searchReleaseGroups).not.toHaveBeenCalled();
+  });
+
+  it("takes the release the files are tagged with, read when the lookup runs, over a search", async () => {
+    taggedReleaseRead.mockResolvedValue([{ mb_release_id: "tagged-release" }]);
+    vi.mocked(lookupRelease).mockResolvedValue({
+      id: "tagged-release",
+      releaseGroupId: "tagged-group",
+      title: "Fresh Album",
+      date: null,
+      country: null,
+      label: null,
+      catalogNumber: null,
+      barcode: null,
+      genres: [],
+      tags: [],
+      trackCount: 10,
+    });
+    vi.mocked(lookupReleaseGroup).mockResolvedValue({
+      id: "tagged-group",
+      title: "Fresh Album",
+      firstReleaseDate: null,
+      primaryType: "Album",
+      artistName: "Some Artist",
+      artistMbid: null,
+      genres: [],
+      tags: [],
+      releases: [],
+    });
+    const { result } = renderAutoIdentify(ready);
+
+    await waitFor(() => expect(result.current.data?.decision).toBe("auto_confirmed"));
+    expect(taggedReleaseRead).toHaveBeenCalledExactlyOnceWith(expect.stringContaining("server_id = ?"), [
+      "srv:al-1",
+      "srv",
+    ]);
+    expect(searchReleaseGroups).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed read of the tagged release instead of searching by name", async () => {
+    taggedReleaseRead.mockRejectedValue(new Error("database is locked"));
+    const { result } = renderAutoIdentify(ready);
+
+    await waitFor(() => expect(result.current.data?.decision).toBe("error"));
     expect(searchReleaseGroups).not.toHaveBeenCalled();
   });
 });

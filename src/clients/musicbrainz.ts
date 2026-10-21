@@ -82,6 +82,17 @@ export interface MbArtistDetail {
   genres: MbGenre[];
 }
 
+/** A MusicBrainz answer other than 2xx; `status` tells an id MusicBrainz doesn't know (404) from a busy server. */
+export class MusicBrainzError extends Error {
+  constructor(
+    path: string,
+    readonly status: number,
+  ) {
+    super(`MusicBrainz ${path} returned ${status}`);
+    this.name = "MusicBrainzError";
+  }
+}
+
 async function mbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   await rateLimit();
   const url = new URL(path, MB_BASE);
@@ -94,7 +105,7 @@ async function mbGet<T>(path: string, params: Record<string, string> = {}): Prom
   });
 
   if (!res.ok) {
-    throw new Error(`MusicBrainz ${path} returned ${res.status}`);
+    throw new MusicBrainzError(path, res.status);
   }
   return res.json() as Promise<T>;
 }

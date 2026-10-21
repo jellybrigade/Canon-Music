@@ -12,6 +12,7 @@ import {
   lookupReleaseGroup,
   type MbReleaseDetail,
   type MbReleaseGroupCandidate,
+  MusicBrainzError,
   searchReleaseGroups,
 } from "../../../clients/musicbrainz";
 import { AUTO_IDENTIFY_RETRY_SECONDS, autoIdentifyAlbum, needsAutoIdentify } from "./albumIdentify";
@@ -94,7 +95,7 @@ describe("autoIdentifyAlbum", () => {
   });
 
   it("falls back to searching when the tagged release can't be looked up", async () => {
-    vi.mocked(lookupRelease).mockRejectedValueOnce(new Error("MusicBrainz release/gone returned 404"));
+    vi.mocked(lookupRelease).mockRejectedValueOnce(new MusicBrainzError("release/gone", 404));
     vi.mocked(searchReleaseGroups).mockResolvedValue([releaseGroup("album", "Album")]);
     vi.mocked(lookupReleaseGroup).mockResolvedValue({
       ...releaseGroup("album", "Album"),
@@ -115,6 +116,23 @@ describe("autoIdentifyAlbum", () => {
     expect(searchReleaseGroups).toHaveBeenCalled();
     expect(result.decision).toBe("auto_confirmed");
     expect(result.detail?.id).toBe("album");
+  });
+
+  it("reports a failed tagged lookup instead of guessing by name", async () => {
+    for (const failure of [new MusicBrainzError("release/tagged", 503), new TypeError("Load failed")]) {
+      vi.mocked(lookupRelease).mockRejectedValueOnce(failure);
+      vi.mocked(searchReleaseGroups).mockResolvedValue([releaseGroup("album", "Album")]);
+
+      const result = await autoIdentifyAlbum({
+        artist: "Some Artist",
+        album: "Fresh Album",
+        trackCount: 2,
+        taggedReleaseMbid: "tagged",
+      });
+
+      expect(result.decision, failure.message).toBe("error");
+      expect(searchReleaseGroups, failure.message).not.toHaveBeenCalled();
+    }
   });
 });
 

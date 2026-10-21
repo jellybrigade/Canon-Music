@@ -532,6 +532,7 @@ export function SearchResults({
       {identifyAlbum && (
         <AlbumIdentifyDialog
           albumId={identifyAlbum.id}
+          serverId={identifyAlbum.server_id}
           artist={identifyAlbum.artist ?? ""}
           album={identifyAlbum.name}
           onClose={() => setIdentifyAlbum(null)}

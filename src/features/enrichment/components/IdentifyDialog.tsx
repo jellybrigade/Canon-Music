@@ -4,25 +4,27 @@ import { AlertCircle, CheckCircle, ExternalLink, Loader, Search, XCircle } from 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { MbArtistCandidate, MbReleaseGroupCandidate } from "../../../clients/musicbrainz";
-import { searchArtists, searchReleaseGroups } from "../../../clients/musicbrainz";
+import { searchArtists } from "../../../clients/musicbrainz";
 import { useSetting } from "../../../hooks/useSetting";
 import { useTracks } from "../../../hooks/useTracks";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import {
+  DIALOG_AUTO_PICK_THRESHOLD,
   useAlbumIdentity,
   useConfirmedArtistMbid,
   useIdentifyAlbum,
   useSaveAlbumIdentity,
 } from "../hooks/useAlbumIdentity";
 import { useArtistIdentity, useIdentifyArtist, useSaveArtistIdentity } from "../hooks/useArtistIdentity";
+import { searchRankedReleaseGroups } from "../lib/albumIdentify";
 import {
   ARTIST_AUTO_SELECT_SETTING,
   DEFAULT_ARTIST_AUTO_SELECT_SCORE,
   parseArtistAutoSelectScore,
   pickConfidentArtist,
 } from "../lib/artistAutoSelect";
-import { albumShapeOf, rankCandidates, stripTrailingBrackets } from "../lib/fuzzyMatch";
+import { albumShapeOf, rankCandidates } from "../lib/fuzzyMatch";
 import "./IdentifyDialog.css";
 
 function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist"; id: string }) {
@@ -55,6 +57,7 @@ function MusicBrainzBrowseLink({ kind, id }: { kind: "release-group" | "artist";
 
 interface AlbumIdentifyDialogProps {
   albumId: string;
+  serverId: string;
   artist: string;
   album: string;
   /** Known local release year, disambiguates same-titled releases from different years. */
@@ -66,14 +69,15 @@ interface AlbumIdentifyDialogProps {
 
 export function AlbumIdentifyDialog({
   albumId,
+  serverId,
   artist,
   album,
   year,
   confirmedArtistMbid,
   onClose,
 }: AlbumIdentifyDialogProps) {
-  const { data: tracks } = useTracks(albumId);
-  // Unknown until the tracks load; ranking then skips the shape and re-ranks once they arrive.
+  const { data: tracks, isLoading: isTracksLoading } = useTracks(albumId);
+  // The preview list ranks without the shape until the tracks load; Look up waits for them.
   const shape = tracks ? albumShapeOf(tracks) : undefined;
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
@@ -113,14 +117,8 @@ export function AlbumIdentifyDialog({
 
   const { data: rawSearchResults, isLoading: searchLoading } = useQuery({
     queryKey: ["mb-search-rg", artist, album],
-    queryFn: async () => {
-      const results = await searchReleaseGroups(artist, album);
-      if (results.length > 0) return results;
-      // Retry without a trailing bracket, "BRAT (Dolby Atmos Mix)" → "BRAT",
-      // mirrors the fallback in useIdentifyAlbum's "Look up" flow.
-      const stripped = stripTrailingBrackets(album);
-      return stripped ? searchReleaseGroups(artist, stripped) : results;
-    },
+    queryFn: async () =>
+      (await searchRankedReleaseGroups({ artist, title: album }, DIALOG_AUTO_PICK_THRESHOLD)).map((r) => r.candidate),
     staleTime: 10 * 60 * 1000,
     enabled: !!(artist.trim() || album.trim()),
   });
@@ -132,18 +130,21 @@ export function AlbumIdentifyDialog({
     : undefined;
   const searchResults = rankedSearchResults?.map((r) => r.candidate);
 
-  const { data: lookupResult, isFetching } = useIdentifyAlbum({
+  const { data: lookupResult, isFetching: isLookupFetching } = useIdentifyAlbum({
     albumId,
+    serverId,
     artist: lfmArtist.trim() || artist,
     album: lfmAlbum.trim() || album,
     overrideMbRgId: effectiveMbRgId,
     overrideMbReleaseId: mbReleaseId.trim() || null,
+    isTaggedReleasePreferred: !lfmArtist.trim() && !lfmAlbum.trim(),
     trackCount: shape?.trackCount,
     durationSeconds: shape?.durationSeconds,
     year,
     confirmedArtistMbid,
-    enabled: fetchEnabled,
+    enabled: fetchEnabled && !isTracksLoading,
   });
+  const isFetching = isLookupFetching || (fetchEnabled && isTracksLoading);
 
   function handleFetch() {
     setSelectedCandidate(null);

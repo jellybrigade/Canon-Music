@@ -7,7 +7,12 @@ import { getDb } from "../../../db";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
-import { ALBUM_SHAPE_COLUMNS, persistAlbumIdentity, recordFailedLookup } from "../../enrichment/hooks/useAlbumIdentity";
+import {
+  ALBUM_SHAPE_COLUMNS,
+  ALBUM_SHAPE_JOIN,
+  persistAlbumIdentity,
+  recordFailedLookup,
+} from "../../enrichment/hooks/useAlbumIdentity";
 import { autoIdentifyAlbum } from "../../enrichment/lib/albumIdentify";
 import { ARTIST_AUTO_SELECT_SETTING, DEFAULT_ARTIST_AUTO_SELECT_SCORE } from "../../enrichment/lib/artistAutoSelect";
 import { useRapToHipHop } from "../../tags/hooks/useTagMappings";
@@ -108,6 +113,7 @@ export function TagsTab({ searchQuery, hideTagBadge, setHideTagBadge }: Props) {
     const unmatched = await db.select<Row[]>(
       `SELECT a.id, a.artist, a.name, a.year, a.mb_release_id, ${ALBUM_SHAPE_COLUMNS}
        FROM albums a
+       ${ALBUM_SHAPE_JOIN}
        WHERE NOT EXISTS (
          SELECT 1 FROM album_identity ai
          WHERE ai.album_id = a.id AND ai.confirmed_at IS NOT NULL
