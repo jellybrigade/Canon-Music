@@ -196,17 +196,6 @@ describe("scoreReleaseGroup", () => {
     expect(scoreReleaseGroup(c, local({ artist: "Radiohead", title: "Kid A", confirmedArtistMbid: "mbid-1" }))).toBe(1);
   });
 
-  it("docks a live, compilation or other secondary release the local title doesn't ask for", () => {
-    const studio = candidate({ title: "Kid A", artistName: "Radiohead" });
-    const query = local({ artist: "Radiohead", title: "Kid A" });
-    for (const secondaryType of ["Live", "Compilation", "Remix", "Demo", "Soundtrack", "DJ-mix", "Interview"]) {
-      const other = candidate({ title: "Kid A", artistName: "Radiohead", secondaryTypes: [secondaryType] });
-      expect(scoreReleaseGroup(studio, query) - scoreReleaseGroup(other, query), secondaryType).toBeGreaterThanOrEqual(
-        0.1,
-      );
-    }
-  });
-
   it("does not dock a secondary type the local title names", () => {
     const live = candidate({ title: "Live at Wembley", artistName: "Queen", secondaryTypes: ["Live"] });
     expect(scoreReleaseGroup(live, local({ artist: "Queen", title: "Live at Wembley" }))).toBe(1);
@@ -217,6 +206,11 @@ describe("scoreReleaseGroup", () => {
   it("docks a studio release when the local title says it is live", () => {
     const studio = candidate({ title: "Kid A", artistName: "Radiohead" });
     expect(scoreReleaseGroup(studio, local({ artist: "Radiohead", title: "Kid A (Live)" }))).toBeLessThan(0.85);
+  });
+
+  it("does not dock a studio release whose own title has the word live in it", () => {
+    const studio = candidate({ title: "Live Through This", artistName: "Hole" });
+    expect(scoreReleaseGroup(studio, local({ artist: "Hole", title: "Live Through This" }))).toBe(1);
   });
 
   it("clamps into 0..1", () => {
@@ -334,6 +328,41 @@ describe("rankCandidates", () => {
       query,
     );
     expect(ranked.map((r) => r.candidate.id)).toEqual(["first", "second", "third"]);
+  });
+
+  it("ranks a live, compilation or other secondary release the local title doesn't ask for below its plain rival", () => {
+    const studio = candidate({ id: "studio", title: "Kid A", artistName: "Radiohead" });
+    for (const secondaryType of ["Live", "Compilation", "Remix", "Demo", "Soundtrack", "DJ-mix", "Interview"]) {
+      const other = candidate({
+        id: "other",
+        title: "Kid A",
+        artistName: "Radiohead",
+        secondaryTypes: [secondaryType],
+      });
+      const [top, second] = rankCandidates([other, studio], { artist: "Radiohead", title: "Kid A" });
+      expect(top?.candidate.id, secondaryType).toBe("studio");
+      expect(top!.score - second!.score, secondaryType).toBeGreaterThanOrEqual(0.1);
+    }
+  });
+
+  it("does not dock a compilation or soundtrack with no plain rival", () => {
+    for (const secondaryType of ["Compilation", "Soundtrack", "Live"]) {
+      const only = candidate({ title: "Legend", artistName: "Bob Marley", secondaryTypes: [secondaryType] });
+      const [top] = rankCandidates([only], { artist: "Bob Marley", title: "Legend" });
+      expect(top?.score, secondaryType).toBe(1);
+    }
+  });
+
+  it("does not dock a secondary type because a weaker rival lacks it", () => {
+    const compilation = candidate({
+      id: "hits",
+      title: "Legend",
+      artistName: "Bob Marley",
+      secondaryTypes: ["Compilation"],
+    });
+    const unrelated = candidate({ id: "other", title: "Legend", artistName: "Someone Else" });
+    const [top] = rankCandidates([compilation, unrelated], { artist: "Bob Marley", title: "Legend" });
+    expect(top).toMatchObject({ candidate: { id: "hits" }, score: 1 });
   });
 
   it("returns an empty array for no candidates", () => {

@@ -136,8 +136,8 @@ export function albumShapeOf(tracks: ReadonlyArray<{ duration: number | null }>)
   };
 }
 
-// A secondary type the local title doesn't name is a different release of the same music
-// (a live recording, a best-of, a soundtrack). Types without a hint are never what a library holds.
+// A secondary type the local title doesn't name marks a different release of the same music (a live
+// recording, a best-of, a soundtrack); types without a hint are never named.
 const SECONDARY_TYPE_HINTS: Record<string, RegExp> = {
   Live: /\blive\b/,
   Compilation: /\b(greatest hits|best of|hits|collection|anthology|essentials?|singles|retrospective)\b/,
@@ -151,13 +151,26 @@ const SECONDARY_TYPE_HINTS: Record<string, RegExp> = {
 const DISTINCT_VERSION_TYPES = ["Live", "Remix", "Demo"];
 const SECONDARY_TYPE_PENALTY = 0.15;
 
-function secondaryTypePenalty(secondaryTypes: string[], localTitle: string): number {
-  const title = stripDiacritics(localTitle).toLowerCase();
-  const unasked = secondaryTypes.filter((type) => !SECONDARY_TYPE_HINTS[type]?.test(title));
-  const missing = DISTINCT_VERSION_TYPES.filter(
-    (type) => SECONDARY_TYPE_HINTS[type]?.test(title) === true && !secondaryTypes.includes(type),
-  );
-  return SECONDARY_TYPE_PENALTY * (unasked.length + missing.length);
+function foldCase(s: string): string {
+  return stripDiacritics(s).toLowerCase();
+}
+
+function unaskedTypeCount(secondaryTypes: string[], localTitle: string): number {
+  const title = foldCase(localTitle);
+  return secondaryTypes.filter((type) => !SECONDARY_TYPE_HINTS[type]?.test(title)).length;
+}
+
+// Only words the local title adds to the release's own count: "Kid A (Live)" asks for a live
+// recording, "Live Through This" is just the album's name.
+function missingVersionCount(c: MbReleaseGroupCandidate, localTitle: string): number {
+  const releaseWords = new Set(foldCase(c.title).split(/\W+/));
+  const addedWords = foldCase(localTitle)
+    .split(/\W+/)
+    .filter((word) => word !== "" && !releaseWords.has(word))
+    .join(" ");
+  return DISTINCT_VERSION_TYPES.filter(
+    (type) => SECONDARY_TYPE_HINTS[type]?.test(addedWords) === true && !c.secondaryTypes.includes(type),
+  ).length;
 }
 
 // Store conventions (Apple, Spotify): singles run 1-3 tracks and EPs up to 6, both under 30 minutes.
@@ -171,12 +184,13 @@ const SHAPE_PENALTY = 0.3;
 /** Whether a release type fits the local track count and length; unknown shapes and catch-all types always fit. */
 function fitsShape(primaryType: string | null, { trackCount = 0, durationSeconds = 0 }: LocalAlbum): boolean {
   if (trackCount <= 0) return true;
-  const isShortOrUnknown = durationSeconds <= 0 || durationSeconds < SHORT_RELEASE_MAX_SECONDS;
+  // An unknown length (0) passes as short.
+  const isShort = durationSeconds < SHORT_RELEASE_MAX_SECONDS;
   switch (primaryType) {
     case "Single":
-      return trackCount <= SINGLE_MAX_TRACKS && isShortOrUnknown;
+      return trackCount <= SINGLE_MAX_TRACKS && isShort;
     case "EP":
-      return trackCount <= EP_MAX_TRACKS && isShortOrUnknown;
+      return trackCount <= EP_MAX_TRACKS && isShort;
     case "Album":
       return !(trackCount <= SINGLE_MAX_TRACKS && durationSeconds > 0 && durationSeconds < SINGLE_SHAPED_MAX_SECONDS);
     default:
@@ -186,8 +200,8 @@ function fitsShape(primaryType: string | null, { trackCount = 0, durationSeconds
 
 /**
  * Title 60%, artist 40%, then evidence about the release: `year` nudges up on a match and down on a
- * mismatch, a secondary type the title doesn't ask for and a type that doesn't fit the local track
- * count and length each dock it, so same-titled releases can't tie.
+ * mismatch, a live/remix/demo version the title asks for but the release isn't and a type that doesn't
+ * fit the local track count and length each dock it. Unasked secondary types are docked by `rankCandidates`.
  */
 export function scoreReleaseGroup(c: MbReleaseGroupCandidate, local: LocalAlbum): number {
   const artistScore =
@@ -208,7 +222,7 @@ export function scoreReleaseGroup(c: MbReleaseGroupCandidate, local: LocalAlbum)
     else if (diff > 1 && titleScore < 0.9) score -= 0.15;
   }
 
-  score -= secondaryTypePenalty(c.secondaryTypes, local.title);
+  score -= SECONDARY_TYPE_PENALTY * missingVersionCount(c, local.title);
   if (!fitsShape(c.primaryType, local)) score -= SHAPE_PENALTY;
 
   return Math.max(0, Math.min(1, score));
@@ -220,13 +234,29 @@ export interface RankedCandidate {
 }
 
 const TYPE_RANK: Record<string, number> = { Album: 3, Other: 2, Broadcast: 2, EP: 1, Single: 0 };
+const SCORE_TIE = 0.001;
 
-/** Sort candidates descending by fuzzy score; prefer Album type and MB score as tiebreakers. */
+/**
+ * Sort candidates descending by fuzzy score; prefer Album type and MB score as tiebreakers. A secondary type
+ * the local title doesn't name is docked only below a rival scoring as well without it: a lone
+ * compilation or soundtrack may be exactly what the library holds.
+ */
 export function rankCandidates(cands: MbReleaseGroupCandidate[], local: LocalAlbum): RankedCandidate[] {
-  return cands
-    .map((c) => ({ candidate: c, score: scoreReleaseGroup(c, local) }))
+  const scored = cands.map((c) => ({
+    candidate: c,
+    base: scoreReleaseGroup(c, local),
+    unasked: unaskedTypeCount(c.secondaryTypes, local.title),
+  }));
+  return scored
+    .map(({ candidate, base, unasked }) => {
+      const fewestUnasked = Math.min(
+        unasked,
+        ...scored.filter((rival) => rival.base >= base - SCORE_TIE).map((rival) => rival.unasked),
+      );
+      return { candidate, score: Math.max(0, base - SECONDARY_TYPE_PENALTY * (unasked - fewestUnasked)) };
+    })
     .sort((a, b) => {
-      if (Math.abs(b.score - a.score) > 0.001) return b.score - a.score;
+      if (Math.abs(b.score - a.score) > SCORE_TIE) return b.score - a.score;
       // Same fuzzy score, prefer Album over Single, then MB's own relevance score
       const typeA = TYPE_RANK[a.candidate.primaryType ?? ""] ?? 1;
       const typeB = TYPE_RANK[b.candidate.primaryType ?? ""] ?? 1;
