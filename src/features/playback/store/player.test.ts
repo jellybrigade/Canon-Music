@@ -1465,6 +1465,17 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
     });
   }
 
+  it("restores the radio similarity scale it saved", async () => {
+    mockDb({
+      select: (sql: string) =>
+        Promise.resolve(settingsRows({ "radio.similarity_scale": "0.25" }).filter((r) => sql.includes(`'${r.key}'`))),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().radioSimilarityScale).toBe(0.25);
+  });
+
   it("restores queue_state when restore_on_startup is 'true' and no track is current", async () => {
     mockSettingsDb({
       "queue.restore_on_startup": "true",
