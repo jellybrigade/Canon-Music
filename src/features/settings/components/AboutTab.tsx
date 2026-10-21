@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useEffect, useState } from "react";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
+import { errorMessage } from "../../../lib/errorMessage";
 import { checkForUpdate, installAndRestart } from "../../../lib/updater";
 import { SettingRow } from "./SettingRow";
 
@@ -17,6 +18,7 @@ export function AboutTab({ searchQuery }: Props) {
   );
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
   const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
   const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
 
@@ -118,11 +120,20 @@ export function AboutTab({ searchQuery }: Props) {
               disabled={updateInstalling}
               onClick={() => {
                 setUpdateInstalling(true);
-                void installAndRestart(pendingUpdate, () => {}).catch(() => setUpdateInstalling(false));
+                setInstallError(null);
+                void installAndRestart(pendingUpdate, () => {}).catch((e: unknown) => {
+                  setUpdateInstalling(false);
+                  setInstallError(errorMessage(e));
+                });
               }}
             >
               {updateInstalling ? "Installing…" : "Install & Restart"}
             </button>
+            {installError && (
+              <span className="settings-hint" style={{ color: "var(--danger)" }}>
+                Couldn't install the update: {installError}
+              </span>
+            )}
           </>
         )}
       </div>
