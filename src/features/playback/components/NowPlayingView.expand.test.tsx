@@ -24,6 +24,7 @@ vi.mock("../hooks/useNowPlayingArtist", () => ({
   useNowPlayingTopTracks: () => ({ data: [], isPending: false }),
   useSuggestedTracks: () => ({ data: [] }),
 }));
+vi.mock("../../enrichment/hooks/useTourEvents", () => ({ useTourEvents: () => ({ events: [], isLoading: false }) }));
 vi.mock("./UpNextList", () => ({ UpNextList: () => <div data-panel="up-next" /> }));
 vi.mock("./NowPlayingAbout", () => ({ NowPlayingAbout: () => <div data-panel="about" /> }));
 vi.mock("./LyricsTabPanel", () => ({ LyricsTabPanel: () => <div data-panel="lyrics" /> }));

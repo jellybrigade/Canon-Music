@@ -69,6 +69,7 @@ export const QK = {
   albumsLastComputedAt: () => ["albums", "last-computed-at"] as const,
   albumIdentityAll: () => ["album-identity"] as const,
 
+  tourEvents: (artistName: string) => ["tour-events", artistName] as const,
   lyrics: (trackId: string | null, overrideArtist: string | null, overrideTitle: string | null) =>
     ["lyrics", trackId, overrideArtist, overrideTitle] as const,
   lyricsTrack: (trackId: string) => ["lyrics", trackId] as const,

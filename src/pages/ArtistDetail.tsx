@@ -1,7 +1,6 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronDown, Disc, ExternalLink, GitMerge, Mic2, MoreHorizontal, Play, Radio, Shuffle } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { type BandsintownEvent, fetchBandsintownEvents } from "../clients/bandsintown";
 import { normalizeTrackTitle, resolvePortraitUrl } from "../clients/lastfm";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { TourCard } from "../components/TourCard";
@@ -14,6 +13,7 @@ import {
 } from "../features/enrichment/hooks/useArtistAliases";
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import { useSimilarInLibrary } from "../features/enrichment/hooks/useSimilarInLibrary";
+import { useTourEvents } from "../features/enrichment/hooks/useTourEvents";
 import { usePlayerStore } from "../features/playback/store/player";
 import { StartRadioSubmenu } from "../features/radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
@@ -86,30 +86,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const [similarTab, setSimilarTab] = useState<"in" | "out">("in");
 
   const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
-  const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
-  const [tourLoading, setTourLoading] = useState(false);
-  useEffect(() => {
-    if (!bandsintownEnabled) {
-      setTourEvents([]);
-      setTourLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setTourLoading(true);
-    fetchBandsintownEvents(artist.name)
-      .then((events) => {
-        if (!cancelled) {
-          setTourEvents(events);
-          setTourLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setTourLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [bandsintownEnabled, artist.name]);
+  const { events: tourEvents, isLoading: tourLoading } = useTourEvents(artist.name, bandsintownEnabled);
 
   const { data: canonicalOf, isPending: canonicalOfPending } = useArtistCanonicalOf(artist.name);
   const { data: aliases = [] } = useAliasesOfCanonical(artist.name);
