@@ -832,6 +832,19 @@ describe("player store - gapless hand-off", () => {
       expect(state.currentTrack?.id).toBe(state.queue[state.shuffleOrder[0]!]!.id);
     });
 
+    it("repeat turned off after the wrap was handed over: the opening track that plays is shown", async () => {
+      await setupPlayingQueue(3, { queueIndex: 2 });
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+
+      usePlayerStore.setState({ repeat: "off" });
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("0");
+      expect(state.queueIndex).toBe(0);
+    });
+
     it("wrapOrder invalidated by a queue-length change during the lead window: rebuilds anchored on the enqueued track", async () => {
       // Math.random pinned so buildShuffleOrder(3, -1) deterministically enqueues track "1"
       // (see the hand-derivation in the comment above the assertions below).

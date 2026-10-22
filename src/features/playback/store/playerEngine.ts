@@ -83,7 +83,8 @@ export function createPlayerEngine(
     if (!streamUrlFor) return;
     const nextPosition = queueIndex + 1;
     const wrapped = enqueued ? enqueued.wraps : nextPosition >= queue.length;
-    if (wrapped && repeat !== "repeat-all") return;
+    // An enqueued wrap is already audible even if repeat was turned off since, so it is still followed.
+    if (wrapped && repeat !== "repeat-all" && !enqueued) return;
 
     let newQueueIndex: number;
     let newShuffleOrder = shuffleOrder;
