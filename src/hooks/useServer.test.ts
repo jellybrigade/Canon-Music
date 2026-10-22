@@ -173,6 +173,24 @@ describe("useServerWithCredential", () => {
     );
   });
 
+  it.each([
+    ["null", null],
+    ["a bare string", "secret"],
+    ["an apikey entry without its key", { type: "apikey" }],
+    ["an md5 entry without its salt", { type: "md5", token: "abc" }],
+    ["an unknown type", { type: "password", password: "x" }],
+  ])("throws a corrupt-credentials error on %s", async (_label, payload) => {
+    mockDbSelect([SERVER]);
+    onInvoke("get_credential", () => JSON.stringify(payload));
+    const { result } = renderHook(() => useServerWithCredential(SERVER.id), {
+      wrapper: wrapperFor(makeClient()),
+    });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toEqual(
+      new Error(`Corrupt credentials for server ${SERVER.id}. Re-enter in Settings.`),
+    );
+  });
+
   it("migrates a legacy token/salt credential with no type field to md5", async () => {
     mockDbSelect([SERVER]);
     onInvoke("get_credential", () => JSON.stringify({ token: "abc", salt: "xyz" }));

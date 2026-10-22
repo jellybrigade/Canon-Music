@@ -75,19 +75,23 @@ export function useServerWithCredential(serverId: string | undefined) {
       if (!credJson) {
         throw new Error(`No credentials found for server ${server.id}. Re-enter in Settings.`);
       }
-      let credential: NavidromeCredential;
+      let credential: NavidromeCredential | null;
       try {
-        const parsed = JSON.parse(credJson) as Record<string, unknown>;
-        // Migrate legacy credentials stored without a type field
-        if (!parsed.type && typeof parsed.token === "string" && typeof parsed.salt === "string") {
-          credential = { type: "md5", token: parsed.token, salt: parsed.salt };
-        } else {
-          credential = parsed as NavidromeCredential;
-        }
+        credential = parseStoredCredential(JSON.parse(credJson));
       } catch {
-        throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
+        credential = null;
       }
+      if (!credential) throw new Error(`Corrupt credentials for server ${server.id}. Re-enter in Settings.`);
       return { server, credential };
     },
   });
+}
+
+function parseStoredCredential(parsed: unknown): NavidromeCredential | null {
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const { type, token, salt, apiKey } = parsed as Record<string, unknown>;
+  if (type === "apikey") return typeof apiKey === "string" ? { type, apiKey } : null;
+  // Credentials stored before the type field existed are token/salt pairs.
+  if (type !== "md5" && type !== undefined) return null;
+  return typeof token === "string" && typeof salt === "string" ? { type: "md5", token, salt } : null;
 }

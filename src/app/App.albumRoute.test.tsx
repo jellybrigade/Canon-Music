@@ -19,7 +19,7 @@ vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedVal
 vi.mock("../lib/keychain", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../lib/keychain")>()),
   keychain: {
-    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "md5", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },

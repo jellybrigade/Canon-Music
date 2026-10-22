@@ -54,7 +54,7 @@ let testDb: FakeDatabase;
 const CRED_LOADING_COPY = /connecting to your server/i;
 const CRED_ERROR_COPY = /could not read the saved credential/i;
 
-const GOOD_CRED = JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" });
+const GOOD_CRED = JSON.stringify({ type: "md5", token: "t", salt: "s" });
 
 /** Every route is exercised against the same gate, so they are driven table-wise. */
 const ROUTES = [

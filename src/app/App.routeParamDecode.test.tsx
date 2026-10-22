@@ -27,7 +27,7 @@ vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(nul
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
 vi.mock("../lib/keychain", () => ({
   keychain: {
-    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "md5", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },
