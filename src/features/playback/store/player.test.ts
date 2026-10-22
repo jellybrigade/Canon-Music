@@ -754,6 +754,22 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
     });
 
+    it("shuffle turned on after the hand-off: the handed-over track opens the order, nothing is skipped", async () => {
+      // Without the fix, this seed puts track "1" last, so every other track would be skipped.
+      const random = vi.spyOn(Math, "random").mockReturnValue(0);
+      await setupPlayingQueue(6); // enqueues track "1"
+      await driveTickerToEnqueue();
+
+      usePlayerStore.getState().toggleShuffle();
+      random.mockRestore();
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("1");
+      expect(state.queueIndex).toBe(1);
+      expect(state.shuffleOrder.slice(0, 2)).toEqual([0, 1]);
+    });
+
     it("remove the enqueued track itself: still shown as current, index parked forward", async () => {
       await setupPlayingQueue(3); // queue 0,1,2 ; queueIndex 0 ; enqueues track "1" at position 1
       await driveTickerToEnqueue();

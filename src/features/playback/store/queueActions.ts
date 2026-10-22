@@ -1,5 +1,6 @@
 import type { PlayerEngine } from "./playerEngine";
 import type { PlayerPersistence } from "./playerPersistence";
+import { runtime } from "./playerRuntime";
 import type { CurrentTrack, PlayerGet, PlayerSet, PlayerState } from "./playerTypes";
 import {
   adjustIndexAfterMove,
@@ -86,7 +87,12 @@ export function createQueueActions(
           void persistQueueState();
           return;
         }
-        const newOrder = buildShuffleOrder(queue.length, queueIndex);
+        // A track already handed to the engine plays next either way; left where the shuffle put it,
+        // the advance would jump there and skip every position before it.
+        const enqueued = runtime.gaplessEnqueued;
+        const handedOver =
+          enqueued && !enqueued.wraps && queue[enqueued.position]?.id === enqueued.track.id ? enqueued.position : -1;
+        const newOrder = buildShuffleOrder(queue.length, queueIndex, handedOver);
         set({ isShuffled: true, shuffleOrder: newOrder, queueIndex: 0 });
       }
       void persistQueueState();
