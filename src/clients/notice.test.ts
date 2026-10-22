@@ -29,6 +29,22 @@ describe("fetchRemoteNotice", () => {
     await expect(fetchRemoteNotice()).resolves.toEqual({ id: "n2", message: "Hello" });
   });
 
+  // URL.canParse is newer than the WebKitGTK some distros ship.
+  it("still shows a linked notice where URL.canParse does not exist", async () => {
+    const canParse = Object.getOwnPropertyDescriptor(URL, "canParse");
+    Reflect.deleteProperty(URL, "canParse");
+    try {
+      respondWith({ id: "n1", message: "Hello", url: "https://example.org/a" });
+      await expect(fetchRemoteNotice()).resolves.toEqual({
+        id: "n1",
+        message: "Hello",
+        link: { href: "https://example.org/a", host: "example.org" },
+      });
+    } finally {
+      if (canParse) Object.defineProperty(URL, "canParse", canParse);
+    }
+  });
+
   it("ignores a notice whose fields are not text", async () => {
     respondWith({ id: "n1", message: { text: "Hello" } });
     await expect(fetchRemoteNotice()).resolves.toBeNull();

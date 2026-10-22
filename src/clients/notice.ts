@@ -11,10 +11,18 @@ export interface NoticeLink {
   host: string;
 }
 
+function parseUrl(url: string): URL | undefined {
+  try {
+    return new URL(url);
+  } catch {
+    return undefined;
+  }
+}
+
+// Not URL.canParse: older WebKitGTK lacks it, and the throw dropped the whole notice.
 function parseNoticeLink(url: unknown): NoticeLink | undefined {
-  if (typeof url !== "string" || !URL.canParse(url)) return undefined;
-  const parsed = new URL(url);
-  if (parsed.protocol !== "https:") return undefined;
+  const parsed = typeof url === "string" ? parseUrl(url) : undefined;
+  if (!parsed || parsed.protocol !== "https:") return undefined;
   return { href: parsed.href, host: parsed.hostname.replace(/^www\./, "") };
 }
 
