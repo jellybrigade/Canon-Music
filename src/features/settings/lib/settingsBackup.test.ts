@@ -56,6 +56,18 @@ describe("settings backup", () => {
     expect(setting("player.gapless")).toBe("false");
   });
 
+  // Older builds kept the Last.fm key in settings; a backup is a file on disk, and keys belong in the keychain.
+  it("never exports or imports a key stored by an older build", async () => {
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('lastfm.api_key', 'secret')").run();
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('player.gapless', 'false')").run();
+
+    expect(JSON.parse(await readSettingsBackup())).toEqual({ "player.gapless": "false" });
+
+    db.raw.prepare("DELETE FROM settings WHERE key = 'lastfm.api_key'").run();
+    await restoreSettingsBackup(JSON.stringify({ "lastfm.api_key": "from-file" }));
+    expect(setting("lastfm.api_key")).toBeUndefined();
+  });
+
   it("rejects a file that is not a settings object, writing nothing", async () => {
     await expect(restoreSettingsBackup(JSON.stringify(["player.gapless"]))).rejects.toThrow(/settings/);
     await expect(restoreSettingsBackup("null")).rejects.toThrow(/settings/);

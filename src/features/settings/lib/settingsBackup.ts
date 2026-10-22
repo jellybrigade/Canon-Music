@@ -14,9 +14,13 @@ const STATE_KEYS = new Set([
   "genre_tree_version",
 ]);
 const STATE_KEY_PREFIXES = ["server."];
+// Left behind by builds that kept the key here; a backup is a plain file, and keys live in the keychain.
+const LEGACY_SECRET_KEYS = new Set(["lastfm.api_key"]);
 
 function isPreference(key: string): boolean {
-  return !STATE_KEYS.has(key) && !STATE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix));
+  return (
+    !STATE_KEYS.has(key) && !LEGACY_SECRET_KEYS.has(key) && !STATE_KEY_PREFIXES.some((prefix) => key.startsWith(prefix))
+  );
 }
 
 export async function readSettingsBackup(): Promise<string> {
@@ -50,7 +54,8 @@ export async function exportSettingsFile(): Promise<string | null> {
   });
 }
 
-// The player read its settings once at startup, so it needs the imported ones handed over too.
+// For a screen that stays open: the player read its settings once at startup, so it needs the
+// imported ones handed over too. A caller that reloads the window wants restoreSettingsBackup.
 export async function importSettingsFile(file: File): Promise<void> {
   await restoreSettingsBackup(await file.text());
   await refreshAllSettings();
