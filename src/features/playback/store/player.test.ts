@@ -812,6 +812,43 @@ describe("player store - gapless hand-off", () => {
       expect(runtime.gaplessActive).toBe(false);
     });
 
+    it("repeat-one turned on after the hand-off: the current track is warmed for its repeat", async () => {
+      const tracks = await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      const prefetchCall = invoke.mock.calls.find((c) => c[0] === "audio_prefetch");
+      expect(prefetchCall?.[1]).toEqual({ url: streamUrlFor(tracks[0]!) });
+    });
+
+    it("repeat-one turned off late in the track: the next track is still handed off", async () => {
+      const tracks = await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-one" });
+      await driveTickerToEnqueue();
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_enqueue_next")).toBe(false);
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      const enqueueCall = invoke.mock.calls.find((c) => c[0] === "audio_enqueue_next");
+      expect(enqueueCall?.[1]).toEqual({ url: streamUrlFor(tracks[1]!) });
+    });
+
+    it("repeat changed late without changing the successor: the next track is fetched once", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ gapless: false });
+      await driveTickerToEnqueue();
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_prefetch")).toHaveLength(1);
+    });
+
     it("hand-off already playing when withdrawn: state kept so track-advanced still follows it", async () => {
       await setupPlayingQueue(3);
       usePlayerStore.setState({ repeat: "repeat-all" });

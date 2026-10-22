@@ -171,9 +171,9 @@ export function createPlayerEngine(
 
   function startElapsedTimer() {
     if (runtime.elapsedInterval) clearInterval(runtime.elapsedInterval);
-    // Keyed on index *and* queue revision: a reorder or removal changes which track follows
-    // without changing queueIndex, and an index-only guard would lock out the corrected
-    // hand-off for the rest of the track.
+    // Keyed on everything that decides the hand-off: a reorder or removal changes which track
+    // follows without changing queueIndex, and repeat-one or gapless toggled late changes what
+    // to hand over; a narrower key locks out the corrected hand-off for the rest of the track.
     let prefetchedFor: string | null = null;
     let stallPos: number | null = null;
     let stallSince: number | null = null;
@@ -244,22 +244,23 @@ export function createPlayerEngine(
           const nextPosition = queueIndex + 1;
           const wrapping = nextPosition >= queue.length;
           const hasNext = !wrapping || repeat === "repeat-all";
+          // Disabled for DLNA (handles its own gapless), repeat-one (would enqueue wrong track),
+          // and consume mode (index shifts after removal would desync the gapless queue).
+          const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
+          const handOffKey = `${queueIndex}:${runtime.queueRevision}:${repeat === "repeat-one"}:${canGapless}`;
           if (
             duration &&
             pos / duration >= 0.8 &&
             hasNext &&
             streamUrlFor &&
-            prefetchedFor !== `${queueIndex}:${runtime.queueRevision}` &&
+            prefetchedFor !== handOffKey &&
             // An end-of-track sleep timer means there is no next track to hand off to. Queuing one
             // anyway makes the engine (or the renderer) advance on its own, past the point where
             // next() would have stopped playback, so the timer never takes effect at all.
             !sleepTimerEndOfTrack
           ) {
-            prefetchedFor = `${queueIndex}:${runtime.queueRevision}`;
+            prefetchedFor = handOffKey;
             // Gapless: enqueue directly into the audio engine so the transition is seamless.
-            // Disabled for DLNA (handles its own gapless), repeat-one (would enqueue wrong track),
-            // and consume mode (index shifts after removal would desync the gapless queue).
-            const canGapless = !castDevice && gapless && repeat !== "repeat-one" && !consumeMode;
             if (repeat === "repeat-one") {
               // This same track plays again, so warming the successor downloads a whole file that
               // will never be heard, once per repetition. Warm the current URL instead: audio_play
