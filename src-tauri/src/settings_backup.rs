@@ -20,8 +20,11 @@ pub async fn save_settings_backup(
         else {
             return Ok(None);
         };
-        let path = with_json_extension(picked.into_path().map_err(|e| e.to_string())?);
-        write_backup(&path, &contents)?;
+        let picked = picked.into_path().map_err(|e| e.to_string())?;
+        let path = with_json_extension(picked.clone());
+        // The dialog only confirmed replacing the name it was given, not the one with ".json" added.
+        let may_replace = path == picked;
+        write_backup(&path, &contents, may_replace)?;
         Ok(Some(path.display().to_string()))
     })
     .await
@@ -43,8 +46,26 @@ fn with_json_extension(path: PathBuf) -> PathBuf {
     }
 }
 
-fn write_backup(path: &Path, contents: &str) -> Result<(), String> {
-    std::fs::write(path, contents).map_err(|e| format!("Could not write {}: {e}", path.display()))
+fn write_backup(path: &Path, contents: &str, may_replace: bool) -> Result<(), String> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if may_replace {
+        options.create(true).truncate(true);
+    } else {
+        options.create_new(true);
+    }
+    let mut file = options.open(path).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            format!(
+                "{} already exists. Pick it by its full name to replace it.",
+                path.display()
+            )
+        } else {
+            format!("Could not write {}: {e}", path.display())
+        }
+    })?;
+    std::io::Write::write_all(&mut file, contents.as_bytes())
+        .map_err(|e| format!("Could not write {}: {e}", path.display()))
 }
 
 #[cfg(test)]
@@ -70,15 +91,30 @@ mod tests {
     #[test]
     fn write_failure_names_the_path() {
         let missing = std::env::temp_dir().join("canon-no-such-dir/backup.json");
-        let error = write_backup(&missing, "{}").unwrap_err();
+        let error = write_backup(&missing, "{}", true).unwrap_err();
         assert!(error.contains("canon-no-such-dir"), "{error}");
     }
 
     #[test]
     fn writes_contents() {
         let path = std::env::temp_dir().join(format!("canon-backup-{}.json", std::process::id()));
-        write_backup(&path, "{\"a\":\"1\"}").unwrap();
+        write_backup(&path, "{\"a\":\"1\"}", true).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"a\":\"1\"}");
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn replaces_an_existing_file_only_when_the_dialog_confirmed_it() {
+        let path =
+            std::env::temp_dir().join(format!("canon-backup-existing-{}.json", std::process::id()));
+        std::fs::write(&path, "old contents").unwrap();
+
+        let error = write_backup(&path, "{}", false).unwrap_err();
+        assert!(error.contains("already exists"), "{error}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "old contents");
+
+        write_backup(&path, "{}", true).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}");
         std::fs::remove_file(&path).unwrap();
     }
 }
