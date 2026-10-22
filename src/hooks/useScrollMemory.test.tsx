@@ -106,6 +106,22 @@ describe("useScrollMemory", () => {
     expect(restored).toEqual([310]);
   });
 
+  it("moves to the new key's offset, or the top, when the key changes while mounted", async () => {
+    const atTop = render(<LateScroller memKey="switch-top" ready={true} />);
+    atTop.unmount();
+
+    const writes: number[] = [];
+    const view = render(<LateScroller memKey="switch-a" ready={true} scrollTop={500} writes={writes} />);
+    await act(async () => {
+      scroller().dispatchEvent(new Event("scroll"));
+    });
+    writes.length = 0;
+    view.rerender(<LateScroller memKey="switch-top" ready={true} scrollTop={500} writes={writes} />);
+    view.rerender(<LateScroller memKey="switch-never" ready={true} scrollTop={500} writes={writes} />);
+    view.rerender(<LateScroller memKey="switch-a" ready={true} scrollTop={500} writes={writes} />);
+    expect(writes).toEqual([0, 0, 500]);
+  });
+
   it("attaches exactly one scroll listener across a ready flip", async () => {
     const view = render(<LateScroller memKey="late-2" ready={false} />);
     view.rerender(<LateScroller memKey="late-2" ready={true} />);

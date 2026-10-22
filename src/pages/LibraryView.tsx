@@ -138,6 +138,7 @@ export function LibraryView({
         playlists={playlists}
         emptyMessage={emptyMessage}
         sort={sort}
+        scrollMemoryKey="library"
         isLoading={albumsLoading || albums === undefined}
         error={albumsError}
         onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}
