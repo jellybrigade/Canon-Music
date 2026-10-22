@@ -923,6 +923,24 @@ describe("player store - gapless hand-off", () => {
       expect(state.currentTrack?.id).toBe(state.queue[state.shuffleOrder[0]!]!.id);
     });
 
+    it("shuffle turned off after a shuffled wrap was handed over: the carried order is not adopted", async () => {
+      await setupPlayingQueue(3, { queueIndex: 2, isShuffled: true, shuffleOrder: [2, 0, 1] });
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      // The wrap handed over the track that also opens the unshuffled queue, so it stays queued.
+      const { queue } = usePlayerStore.getState();
+      runtime.gaplessEnqueued = { track: queue[0]!, position: 0, wraps: true, wrapOrder: [0, 2, 1] };
+
+      usePlayerStore.getState().toggleShuffle();
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.isShuffled).toBe(false);
+      expect(state.shuffleOrder).toEqual([]);
+      expect(state.queueIndex).toBe(0);
+      expect(state.currentTrack?.id).toBe("0");
+    });
+
     it("repeat turned off after the wrap was handed over: the opening track that plays is shown", async () => {
       await setupPlayingQueue(3, { queueIndex: 2 });
       usePlayerStore.setState({ repeat: "repeat-all" });

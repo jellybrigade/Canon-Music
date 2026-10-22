@@ -93,7 +93,8 @@ export function createPlayerEngine(
     if (wrapped) {
       // Adopt the order the enqueue already built and resolved against the handed-over source;
       // rebuilding would put some other track at position 0. Fall back if a queue edit inside the lead window invalidated it.
-      const carried = enqueued?.wrapOrder;
+      // Shuffle turned off since leaves the hand-off in place when it is also the queue's first track; the order is moot then.
+      const carried = isShuffled ? enqueued?.wrapOrder : undefined;
       if (carried && carried.length === queue.length) {
         newShuffleOrder = carried;
       } else {
