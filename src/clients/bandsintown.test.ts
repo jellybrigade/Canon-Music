@@ -44,4 +44,15 @@ describe("fetchBandsintownEvents", () => {
     await expect(fetchBandsintownEvents("Artist C")).rejects.toThrow();
     expect(boundedFetch).toHaveBeenCalledTimes(2);
   });
+
+  it("drops an event link that isn't a web address", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, [
+        { ...EVENT, url: "file:///etc/passwd" },
+        { ...EVENT, url: "https://www.bandsintown.com/e/1" },
+      ]),
+    );
+    const events = await fetchBandsintownEvents("Artist E");
+    expect(events.map((event) => event.url)).toEqual(["", "https://www.bandsintown.com/e/1"]);
+  });
 });

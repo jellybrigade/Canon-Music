@@ -25,7 +25,9 @@ describe("fetchItunesCoverArt", () => {
     vi.mocked(boundedFetch).mockRejectedValueOnce(new DOMException("aborted", "AbortError"));
     await expect(fetchItunesCoverArt("Artist B", "Album")).rejects.toThrow("aborted");
     vi.mocked(boundedFetch).mockImplementation(async () =>
-      jsonResponse(200, { results: [{ artworkUrl100: "https://img/100x100bb.jpg" }] }),
+      jsonResponse(200, {
+        results: [{ artistName: "Artist B", collectionName: "Album", artworkUrl100: "https://img/100x100bb.jpg" }],
+      }),
     );
     await expect(fetchItunesCoverArt("Artist B", "Album")).resolves.toBe("https://img/600x600bb.jpg");
   });
@@ -35,5 +37,42 @@ describe("fetchItunesCoverArt", () => {
     await expect(fetchItunesCoverArt("Artist C", "Album")).rejects.toThrow();
     await expect(fetchItunesCoverArt("Artist C", "Album")).rejects.toThrow();
     expect(boundedFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("takes the first hit that is the same album, not just the first hit", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        results: [
+          { artistName: "Someone Else", collectionName: "Album", artworkUrl100: "https://img/other/100x100bb.jpg" },
+          { artistName: "Artist D", collectionName: "Album Two", artworkUrl100: "https://img/two/100x100bb.jpg" },
+          {
+            artistName: "Artist D",
+            collectionName: "Album (Deluxe Edition)",
+            artworkUrl100: "https://img/right/100x100bb.jpg",
+          },
+        ],
+      }),
+    );
+    await expect(fetchItunesCoverArt("Artist D", "Album")).resolves.toBe("https://img/right/600x600bb.jpg");
+  });
+
+  it("finds no cover when no hit is the same album", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        results: [
+          { artistName: "Artist E", collectionName: "Greatest Hits", artworkUrl100: "https://img/100x100bb.jpg" },
+        ],
+      }),
+    );
+    await expect(fetchItunesCoverArt("Artist E", "Rarities")).resolves.toBeNull();
+  });
+
+  it("ignores artwork that isn't a web address", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        results: [{ artistName: "Artist F", collectionName: "Album", artworkUrl100: "file:///100x100bb.jpg" }],
+      }),
+    );
+    await expect(fetchItunesCoverArt("Artist F", "Album")).resolves.toBeNull();
   });
 });

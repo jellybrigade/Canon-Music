@@ -1,7 +1,6 @@
 import { AlertCircle, ChevronLeft, ListX, RefreshCw, X } from "lucide-react";
 import type React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type BandsintownEvent, fetchBandsintownEvents } from "../../../clients/bandsintown";
 import { parseLrc } from "../../../clients/lrclib";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { AlbumArt } from "../../../components/AlbumArt";
@@ -13,6 +12,7 @@ import { useBoolSetting } from "../../../hooks/useSetting";
 import { isTextEntryTarget } from "../../../lib/keyboard";
 import type { AlbumRow } from "../../../types/library";
 import { useAnyModalOpen } from "../../../ui/useModalChrome";
+import { useTourEvents } from "../../enrichment/hooks/useTourEvents";
 import { type LyricsOverride, useLyrics } from "../hooks/useLyrics";
 import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
 import { primaryArtistOf } from "../lib/nowPlayingQueries";
@@ -101,30 +101,7 @@ export function NowPlayingView({
   const waveformPeaks = usePlayerStore((s) => s.waveformPeaks);
   const [showWaveform] = useBoolSetting("player.show_waveform", true);
   const [bandsintownEnabled, setBandsintownEnabled] = useBoolSetting("enrichment.bandsintown_enabled", false);
-  const [tourEvents, setTourEvents] = useState<BandsintownEvent[]>([]);
-  const [tourLoading, setTourLoading] = useState(false);
-  useEffect(() => {
-    if (!bandsintownEnabled || !primaryArtist) {
-      setTourEvents([]);
-      setTourLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setTourLoading(true);
-    fetchBandsintownEvents(primaryArtist)
-      .then((events) => {
-        if (!cancelled) {
-          setTourEvents(events);
-          setTourLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setTourLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [bandsintownEnabled, primaryArtist]);
+  const { events: tourEvents, isLoading: tourLoading } = useTourEvents(primaryArtist, bandsintownEnabled);
 
   const overlayPeaks = displayedWaveformPeaks(showWaveform, waveformPeaks);
 

@@ -36,7 +36,7 @@ async function enrichAlbum(albumId: string, artist: string, album: string): Prom
 
 export function useEnrichAlbum(albumId: string, artist: string, albumName: string) {
   const queryClient = useQueryClient();
-  const [staleDaysStr] = useSetting("tags.staleness_days", "30");
+  const [staleDaysStr, , isStaleDaysLoaded] = useSetting("tags.staleness_days", "30");
   const staleDays = parseStalenessDays(staleDaysStr);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -63,7 +63,7 @@ export function useEnrichAlbum(albumId: string, artist: string, albumName: strin
   });
 
   useEffect(() => {
-    if (query.isLoading || !albumId || !artist || !albumName) return;
+    if (!isStaleDaysLoaded || query.isLoading || !albumId || !artist || !albumName) return;
     if (!isEnrichmentStale(query.data ?? null, staleDays)) return;
     if (ranRef.current) return;
     ranRef.current = true;
@@ -76,7 +76,7 @@ export function useEnrichAlbum(albumId: string, artist: string, albumName: strin
       })
       .finally(() => inFlight.delete(albumId));
     inFlight.set(albumId, promise);
-  }, [query.isLoading, query.data, albumId, artist, albumName, staleDays, queryClient]);
+  }, [query.isLoading, query.data, albumId, artist, albumName, staleDays, isStaleDaysLoaded, queryClient]);
 
   const refresh = useCallback(async () => {
     if (isRefreshing || !albumId) return;

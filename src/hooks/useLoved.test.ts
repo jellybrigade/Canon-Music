@@ -11,18 +11,33 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../db", () => ({ getDb: vi.fn() }));
+vi.mock("../clients/navidrome", () => ({
+  starTrack: vi.fn(),
+  unstarTrack: vi.fn(),
+  starAlbum: vi.fn(),
+  unstarAlbum: vi.fn(),
+}));
 
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { starAlbum, starTrack, unstarTrack } from "../clients/navidrome";
 import { getDb } from "../db";
 import { useLovedSessionStore } from "../store/lovedSessionStore";
 import { onInvoke, resetTauriMocks } from "../test/mocks/tauri";
+import { CRED, SRV, server } from "../test/navidromeFixtures";
 import { invokeCount } from "../test/perf";
 import { createMigratedTestDb } from "../test/sqlite";
 import { useLoved } from "./useLoved";
 
+let db: Awaited<ReturnType<typeof createMigratedTestDb>>;
+
 beforeEach(async () => {
   resetTauriMocks();
-  vi.mocked(getDb).mockResolvedValue((await createMigratedTestDb()) as never);
+  vi.clearAllMocks();
+  db = await createMigratedTestDb();
+  vi.mocked(getDb).mockResolvedValue(db as never);
+  vi.mocked(starTrack).mockResolvedValue();
+  vi.mocked(unstarTrack).mockResolvedValue();
+  vi.mocked(starAlbum).mockResolvedValue();
   useLovedSessionStore.setState({ refreshTick: 0, sets: undefined, cachedTick: -1 });
 });
 
@@ -76,5 +91,61 @@ describe("useLoved read path", () => {
     const last = mounts[mounts.length - 1]!;
     await waitFor(() => expect(last.result.current.lovedTrackIds.size).toBe(1));
     expect(invokeCount("get_loved")).toBe(1);
+  });
+});
+
+describe("useLoved toggles", () => {
+  const serverWithCred = { server: server(), credential: CRED };
+  const trackId = `${SRV}:t1`;
+
+  it("takes the love back when the server refuses it, so the heart doesn't flip on the next sync", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(starTrack).mockRejectedValue(new Error("server down"));
+    const { result } = renderHook(() => useLoved());
+
+    await act(() => result.current.toggleTrackLove(trackId, serverWithCred));
+
+    expect(await db.select("SELECT track_id FROM loved_tracks")).toEqual([]);
+  });
+
+  it("takes an album love back when the server refuses it", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(starAlbum).mockRejectedValue(new Error("server down"));
+    const { result } = renderHook(() => useLoved());
+
+    await act(() => result.current.toggleAlbumLove(`${SRV}:al1`, serverWithCred));
+
+    expect(await db.select("SELECT album_id FROM loved_albums")).toEqual([]);
+  });
+
+  it("keeps the love once the server accepts it", async () => {
+    const { result } = renderHook(() => useLoved());
+
+    await act(() => result.current.toggleTrackLove(trackId, serverWithCred));
+
+    expect(await db.select("SELECT track_id FROM loved_tracks")).toEqual([{ track_id: trackId }]);
+    expect(starTrack).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends an unlove only after the love before it landed, so the server ends where the heart does", async () => {
+    let releaseStar = () => {};
+    vi.mocked(starTrack).mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseStar = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useLoved());
+
+    const love = result.current.toggleTrackLove(trackId, serverWithCred);
+    const unlove = result.current.toggleTrackLove(trackId, serverWithCred);
+    await waitFor(() => expect(starTrack).toHaveBeenCalledTimes(1));
+    expect(unstarTrack).not.toHaveBeenCalled();
+
+    releaseStar();
+    await act(() => Promise.all([love, unlove]));
+
+    expect(unstarTrack).toHaveBeenCalledTimes(1);
+    expect(await db.select("SELECT track_id FROM loved_tracks")).toEqual([]);
   });
 });

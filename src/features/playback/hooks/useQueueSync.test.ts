@@ -311,6 +311,7 @@ describe("useQueueSync debounced save", () => {
   it("saves the queue after 10s idle, with native ids, current id and elapsed ms", async () => {
     const track = makeTrack("srv-a:t1");
     usePlayerStore.setState({
+      isPlaying: true,
       currentTrack: track,
       queue: [track, makeTrack("srv-a:t2")],
       elapsed: 12.5,
@@ -332,7 +333,7 @@ describe("useQueueSync debounced save", () => {
   });
 
   it("does not save before the 10s debounce elapses", async () => {
-    usePlayerStore.setState({ currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
 
     renderSync(swc());
     await tick(9_999);
@@ -342,7 +343,7 @@ describe("useQueueSync debounced save", () => {
 
   it("resets the debounce window on a queue change, sending only the final queue once", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     const { rerender } = renderSync(swc());
     await tick(6_000);
@@ -359,7 +360,7 @@ describe("useQueueSync debounced save", () => {
   });
 
   it("clears the pending debounce on unmount", async () => {
-    usePlayerStore.setState({ currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: makeTrack("srv-a:t1"), queue: [makeTrack("srv-a:t1")] });
 
     const { unmount } = renderSync(swc());
     unmount();
@@ -371,7 +372,7 @@ describe("useQueueSync debounced save", () => {
   it("filters out queue entries not owned by the current server", async () => {
     const own = makeTrack("srv-a:t1");
     const foreign = makeTrack("srv-b:t9");
-    usePlayerStore.setState({ currentTrack: own, queue: [own, foreign] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: own, queue: [own, foreign] });
 
     renderSync(swc());
     await tick(10_000);
@@ -381,7 +382,7 @@ describe("useQueueSync debounced save", () => {
 
   it("passes the server's alt_url through when it has one", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     renderSync(swc({ ...SRV, alt_url: "https://alt.example" }));
     await tick(10_000);
@@ -390,10 +391,58 @@ describe("useQueueSync debounced save", () => {
   });
 });
 
+describe("useQueueSync restored session", () => {
+  // Another client may have saved its own queue and position since this one was written.
+  it("does not push a restored queue the user never played to the server", async () => {
+    const track = makeTrack("srv-a:t1");
+    usePlayerStore.setState({ currentTrack: track, queue: [track, makeTrack("srv-a:t2")] });
+
+    renderSync(swc());
+    await tick(10_000);
+    Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    expect(savePlayQueue).not.toHaveBeenCalled();
+  });
+
+  it("saves once the restored queue has played", async () => {
+    const track = makeTrack("srv-a:t1");
+    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+
+    renderSync(swc());
+    await act(async () => {
+      usePlayerStore.setState({ isPlaying: true, elapsed: 3 });
+    });
+    await act(async () => {
+      window.dispatchEvent(new Event("beforeunload"));
+    });
+
+    expect(savePlayQueue).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(savePlayQueue).mock.calls[0]![5]).toBe(3000);
+  });
+
+  it("arms the debounced save when the restored track starts playing", async () => {
+    const track = makeTrack("srv-a:t1");
+    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+
+    renderSync(swc());
+    await act(async () => {
+      usePlayerStore.setState({ isPlaying: true, elapsed: 4 });
+    });
+    await tick(10_000);
+
+    expect(savePlayQueue).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(savePlayQueue).mock.calls[0]![5]).toBe(4000);
+  });
+});
+
 describe("useQueueSync immediate save on visibility change / unload", () => {
   it("saves immediately when the tab becomes hidden, without waiting for the debounce", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track], elapsed: 5 });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track], elapsed: 5 });
 
     renderSync(swc());
     Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
@@ -406,7 +455,7 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
 
   it("does nothing when visibility changes to visible", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     renderSync(swc());
     Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
@@ -419,7 +468,7 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
 
   it("saves immediately on beforeunload", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     renderSync(swc());
     await act(async () => {
@@ -442,7 +491,7 @@ describe("useQueueSync immediate save on visibility change / unload", () => {
 
   it("removes its listeners on unmount", async () => {
     const track = makeTrack("srv-a:t1");
-    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+    usePlayerStore.setState({ isPlaying: true, currentTrack: track, queue: [track] });
 
     const { unmount } = renderSync(swc());
     unmount();

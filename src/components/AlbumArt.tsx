@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { fetchItunesCoverArt } from "../clients/itunes";
 
 interface Props {
@@ -12,19 +12,17 @@ interface Props {
 }
 
 export function AlbumArt({ src, artist, album, alt = "", className, loading, decoding }: Props) {
-  const [currentSrc, setCurrentSrc] = useState(src);
-  const triedFallback = useRef(false);
-
-  useEffect(() => {
-    setCurrentSrc(src);
-    triedFallback.current = false;
-  }, [src]);
+  // Keyed by the cover that failed, so a late answer for an earlier cover never replaces the current one.
+  const [fallback, setFallback] = useState<{ forSrc: string | null; url: string | null } | null>(null);
+  const hasTriedFallback = fallback?.forSrc === src;
+  const currentSrc = hasTriedFallback ? fallback.url : src;
 
   async function handleError() {
-    if (triedFallback.current) return;
-    triedFallback.current = true;
-    const fallback = await fetchItunesCoverArt(artist, album).catch(() => null);
-    setCurrentSrc(fallback);
+    if (hasTriedFallback) return;
+    const failedSrc = src;
+    setFallback({ forSrc: failedSrc, url: null });
+    const url = await fetchItunesCoverArt(artist, album).catch(() => null);
+    setFallback((previous) => (previous?.forSrc === failedSrc ? { forSrc: failedSrc, url } : previous));
   }
 
   if (!currentSrc) return null;

@@ -49,6 +49,9 @@ interface Props {
       one does instead of degrading to a single unexplained line. */
   emptyMessage?: { title: string; hint: string };
   sort?: AlbumSort;
+  /** Names the view that owns this scroller, so two views sharing a sort don't share an
+      offset. Omit for a grid that doesn't scroll on its own: it remembers nothing. */
+  scrollMemoryKey?: string;
   /** True only while there is nothing to show yet - a refresh over existing rows keeps them. */
   isLoading?: boolean;
   /** Set when the read failed. Without it a failure renders as an empty library. */
@@ -145,6 +148,7 @@ export function AlbumGrid({
   playlists,
   emptyMessage,
   sort,
+  scrollMemoryKey,
   isLoading = false,
   error = null,
   onRetry,
@@ -291,7 +295,11 @@ export function AlbumGrid({
 
   // Keyed by sort because each sort is a different ordering of the same rows,
   // so an offset taken under one is meaningless under another.
-  useScrollMemory(containerRef, `albums:${sort ?? "default"}`, rows.length > 0);
+  useScrollMemory(
+    containerRef,
+    `${scrollMemoryKey}:${sort ?? "default"}`,
+    scrollMemoryKey !== undefined && rows.length > 0,
+  );
 
   const prevLayoutKey = useRef(`${cols}-${rowHeight}-${rows.length}`);
   useLayoutEffect(() => {

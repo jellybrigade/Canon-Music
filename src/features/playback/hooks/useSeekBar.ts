@@ -42,12 +42,14 @@ export interface SeekBarState {
 
 /** Seek-bar click, keyboard and ARIA shared by the player bar and now-playing overlay. */
 export function useSeekBar(duration: number): SeekBarState {
-  const elapsed = usePlayerStore((s) => s.elapsed);
+  const rawElapsed = usePlayerStore((s) => s.elapsed);
   const seek = usePlayerStore((s) => s.seek);
   const barRef = useRef<HTMLDivElement>(null);
 
   const seekable = duration > 0;
-  const progress = seekable ? Math.min(elapsed / duration, 1) : 0;
+  // Tagged durations are rounded and DLNA positions interpolated, so the clock can pass the end.
+  const elapsed = seekable ? Math.min(rawElapsed, duration) : rawElapsed;
+  const progress = seekable ? elapsed / duration : 0;
 
   const [lastProgress, setLastProgress] = useState({ progress, isJump: false });
   if (lastProgress.progress !== progress) {

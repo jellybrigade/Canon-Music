@@ -23,8 +23,9 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { fetchTrackTags } from "../../../clients/lastfm";
 import { getDb } from "../../../db";
+import { __resetSettingCache } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { createMigratedTestDb, type FakeDatabase, holdSettingReads } from "../../../test/sqlite";
 import { useEnrichAlbumTracks } from "./useEnrichAlbumTracks";
 
 const ALBUM_ID = "srv-a:alb";
@@ -91,6 +92,7 @@ async function reidentifyAlbum() {
 }
 
 beforeEach(async () => {
+  __resetSettingCache();
   db = await createMigratedTestDb();
   vi.mocked(getDb).mockResolvedValue(db as unknown as Awaited<ReturnType<typeof getDb>>);
   vi.mocked(fetchTrackTags).mockResolvedValue({ genres: ["shoegaze"], moods: [] });
@@ -130,6 +132,17 @@ describe("useEnrichAlbumTracks", () => {
 
     await waitFor(() => expect(trackTagRows()).toHaveLength(1));
     expect(trackTagRows()[0]).toMatchObject({ track_id: "srv-a:t1", raw_value: "shoegaze" });
+  });
+
+  it("leaves tracks alone when track enrichment is off, even before the setting is read back", async () => {
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('tags.enrich_tracks', 'false')").run();
+    const releaseSettings = holdSettingReads(db);
+    renderHook(() => useEnrichAlbumTracks(ALBUM_ID, "my bloody valentine", "Loveless"), { wrapper });
+
+    await waitFor(() => expect(queryClient.getQueryState(QK.albumIdentity(ALBUM_ID))?.status).toBe("success"));
+    await act(async () => releaseSettings());
+    await act(async () => {});
+    expect(fetchTrackTags).not.toHaveBeenCalled();
   });
 
   it("enriches on a later run after a failed one, without leaving the album unenriched", async () => {

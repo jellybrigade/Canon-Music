@@ -11,6 +11,11 @@ vi.mock("../../../clients/musicbrainz", async (importOriginal) => ({
 const taggedReleaseRead = vi.fn<() => Promise<{ mb_release_id: string | null }[]>>();
 vi.mock("../../../db", () => ({ getDb: async () => ({ select: taggedReleaseRead }) }));
 
+const autoIdentifySetting = vi.hoisted(() => ({ value: true, isLoaded: true }));
+vi.mock("../../../hooks/useSetting", () => ({
+  useBoolSetting: () => [autoIdentifySetting.value, async () => {}, autoIdentifySetting.isLoaded],
+}));
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
@@ -28,7 +33,6 @@ const ready: Props = {
   durationSeconds: 2400,
   year: 2026,
   confirmedArtistMbid: null,
-  mbAutoIdentify: true,
   existingIdentity: null,
 };
 
@@ -39,6 +43,8 @@ function renderAutoIdentify(initialProps: Props) {
 }
 
 beforeEach(() => {
+  autoIdentifySetting.value = true;
+  autoIdentifySetting.isLoaded = true;
   taggedReleaseRead.mockResolvedValue([{ mb_release_id: null }]);
 });
 
@@ -63,6 +69,24 @@ describe("useAutoIdentifyAlbum", () => {
     rerender(ready);
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(searchReleaseGroups).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the auto-identify setting to be read back before searching", async () => {
+    autoIdentifySetting.isLoaded = false;
+    const { result, rerender } = renderAutoIdentify(ready);
+    expect(searchReleaseGroups).not.toHaveBeenCalled();
+
+    autoIdentifySetting.isLoaded = true;
+    rerender(ready);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(searchReleaseGroups).toHaveBeenCalledTimes(1);
+  });
+
+  it("never searches with auto-identify turned off", () => {
+    autoIdentifySetting.value = false;
+    renderAutoIdentify(ready);
+
+    expect(searchReleaseGroups).not.toHaveBeenCalled();
   });
 
   it("retries an automatic lookup that failed long ago", async () => {

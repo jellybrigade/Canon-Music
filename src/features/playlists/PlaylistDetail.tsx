@@ -26,8 +26,10 @@ import { usePlayerStore } from "../playback/store/player";
 import type { CurrentTrack } from "../playback/store/playerTypes";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../radio/hooks/useStartRadio";
+import { resolveResumeIndex } from "./playlistResume";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
+import { usePlaylistResumePoint } from "./usePlaylistResumePoint";
 import type { PlaylistRow } from "./usePlaylists";
 import { usePlaylistTracks } from "./usePlaylistTracks";
 import "../../pages/AlbumDetail.css";
@@ -152,27 +154,7 @@ export function PlaylistDetail({
   const smartRules = useMemo(() => parseSmartFilters(playlist.rules_json), [playlist.rules_json]);
   const [refreshingSmart, setRefreshingSmart] = useState(false);
   const [showEditSmartModal, setShowEditSmartModal] = useState(false);
-  const [resumeIndex, setResumeIndex] = useState<number | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    // The route does not remount this component when the playlist changes, so a playlist
-    // with no stored resume row would otherwise keep the previous playlist's index and
-    // scroll the new track list to an unrelated position.
-    setResumeIndex(null);
-    getDb()
-      .then(async (db) => {
-        type Row = { last_track_id: string; track_position: number };
-        const rows = await db.select<Row[]>(
-          "SELECT last_track_id, track_position FROM playlist_resume WHERE playlist_id = ?",
-          [playlist.id],
-        );
-        if (!cancelled && rows[0]) setResumeIndex(rows[0].track_position);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [playlist.id]);
+  const resumePoint = usePlaylistResumePoint(playlist.id);
 
   const virtualizer = useVirtualizer({
     count: tracks?.length ?? 0,
@@ -185,11 +167,12 @@ export function PlaylistDetail({
   // and re-running on it yanked the list back to the resume row, undoing the user's scroll.
   const resumeScrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (resumeIndex === null || !tracks || resumeIndex >= tracks.length) return;
+    if (resumePoint === null || !tracks) return;
     if (resumeScrolledFor.current === playlist.id) return;
     resumeScrolledFor.current = playlist.id;
-    virtualizer.scrollToIndex(resumeIndex, { align: "start" });
-  }, [resumeIndex, tracks, playlist.id, virtualizer]);
+    const resumeIndex = resolveResumeIndex(tracks, resumePoint);
+    if (resumeIndex !== null) virtualizer.scrollToIndex(resumeIndex, { align: "start" });
+  }, [resumePoint, tracks, playlist.id, virtualizer]);
 
   const gridTemplate = [
     trackNumberColumn(tracks?.length ?? 0),

@@ -44,4 +44,24 @@ describe("AboutTab update check", () => {
 
     expect(await screen.findByText("You're up to date.")).toBeInTheDocument();
   });
+
+  it("says why the install failed instead of silently offering it again", async () => {
+    const downloadAndInstall = vi.fn().mockRejectedValue(new Error("signature verification failed"));
+    check.mockResolvedValue({ available: true, version: "0.99.0", downloadAndInstall });
+    render(<AboutTab searchQuery="" />);
+
+    await userEvent.click(screen.getByRole("button", { name: "Check for updates" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Install & Restart" }));
+
+    expect(await screen.findByText("Couldn't install the update: signature verification failed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Install & Restart" })).toBeEnabled();
+  });
+
+  it("says the startup check runs whatever the background toggle says", async () => {
+    render(<AboutTab searchQuery="" />);
+
+    expect(await screen.findByText("Check in the background")).toBeInTheDocument();
+    expect(screen.getByText("Canon always checks once at startup.")).toBeInTheDocument();
+    expect(screen.queryByText("Auto check for updates")).not.toBeInTheDocument();
+  });
 });

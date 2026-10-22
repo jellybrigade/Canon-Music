@@ -8,6 +8,7 @@ import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { executeBatched, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
+import { isMbid } from "../../lib/mbid";
 import { TransportStalledError } from "../../lib/transportHealth";
 import type { Server } from "../../types/server";
 import { scanForIssues } from "../tags/lib/tagIssues";
@@ -17,6 +18,7 @@ import { syncPlaylists } from "./syncPlaylists";
 import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
 import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
 import {
+  clearSyncWatermark,
   mirroredTrackIdsStillResolve,
   type ServerWatermark,
   sameValue,
@@ -25,7 +27,6 @@ import {
 } from "./syncWatermark";
 
 // Navidrome passes the files' tag through; anything else would end up in a MusicBrainz URL path.
-const MBID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const BATCH_NOTIFY_INTERVAL = 25;
 
@@ -94,6 +95,10 @@ export async function syncLibrary(
   ]);
 
   const db = await getDb();
+  // Inside the run, not before it: a clear made while another sync ran was written back by
+  // that sync's own watermark, losing the resync. Cleared up front so an interrupted resync
+  // leaves the next sync to finish it.
+  if (options?.forceTrackPass === true) await clearSyncWatermark(db, server.id);
 
   // Decide once, before the album loop, whether anything may be skipped at all. A server
   // version bump is exactly when a migration rewrites ids, and a scan stamp or song count
@@ -175,7 +180,7 @@ export async function syncLibrary(
     const skipTracks = albumUnchanged && (!forceTrackPass || readInThisPass);
 
     const releaseType = album.releaseTypes?.[0] ?? album.releaseType ?? null;
-    const mbReleaseId = album.musicBrainzId && MBID_PATTERN.test(album.musicBrainzId) ? album.musicBrainzId : null;
+    const mbReleaseId = isMbid(album.musicBrainzId) ? album.musicBrainzId : null;
     const row = [
       albumDbId,
       server.id,

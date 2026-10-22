@@ -2,18 +2,16 @@
 vi.mock("@tauri-apps/api/core", async () => (await import("../../../test/mocks/tauri")).coreModule);
 vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/tauri")).eventModule);
 vi.mock("../../../db", () => ({ getDb: vi.fn() }));
-vi.mock("../../sync/syncWatermark", () => ({ clearSyncWatermark: vi.fn() }));
 vi.mock("../../sync/syncPrune", () => ({ purgeServerData: vi.fn() }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import type { Server as ServerRow } from "../../../types/server";
 import type { SyncOptions } from "../../sync/sync";
-import { clearSyncWatermark } from "../../sync/syncWatermark";
 import { ServerTab } from "./ServerTab";
 
 const SERVER = {
@@ -46,8 +44,6 @@ function renderTab(overrides: { syncStatus?: "idle" | "syncing"; withCredential?
 
 beforeEach(() => {
   runSync = vi.fn<(s: ServerWithCredential, options?: SyncOptions) => boolean>(() => true);
-  vi.mocked(clearSyncWatermark).mockReset();
-  vi.mocked(clearSyncWatermark).mockResolvedValue(undefined);
   vi.mocked(getDb).mockResolvedValue({ execute: vi.fn(), select: vi.fn() } as never);
 });
 
@@ -63,12 +59,11 @@ describe("ServerTab resync", () => {
 
     await user.click(screen.getByRole("button", { name: "Resync library" }));
 
-    expect(clearSyncWatermark).not.toHaveBeenCalled();
     expect(runSync).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "Resync" })).toBeTruthy();
   });
 
-  it("forgets the watermark and starts a sync once confirmed", async () => {
+  it("starts a forced sync once confirmed", async () => {
     const user = userEvent.setup();
     renderTab();
 
@@ -77,13 +72,9 @@ describe("ServerTab resync", () => {
 
     // The flag, not the cleared watermark, is what forces the pass: a deployment that
     // restricts the scan status to admins gives the sync nothing to compare against.
-    await waitFor(() => expect(runSync).toHaveBeenCalledWith(WITH_CRED, { forceTrackPass: true }));
-    expect(clearSyncWatermark).toHaveBeenCalledTimes(1);
-    // The watermark has to be gone before the sync reads it, or the pass it is asking for is
-    // the one the skip would have made anyway.
-    expect(vi.mocked(clearSyncWatermark).mock.invocationCallOrder[0]!).toBeLessThan(
-      runSync.mock.invocationCallOrder[0]!,
-    );
+    expect(runSync).toHaveBeenCalledTimes(1);
+    expect(runSync).toHaveBeenCalledWith(WITH_CRED, { forceTrackPass: true });
+    expect(screen.getByRole("button", { name: "Resync library" })).toBeTruthy();
   });
 
   it("backs out without touching anything", async () => {
@@ -94,7 +85,7 @@ describe("ServerTab resync", () => {
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
     expect(screen.getByRole("button", { name: "Resync library" })).toBeTruthy();
-    expect(clearSyncWatermark).not.toHaveBeenCalled();
+    expect(runSync).not.toHaveBeenCalled();
   });
 
   it("cannot be started while a sync is already running", () => {
@@ -109,15 +100,15 @@ describe("ServerTab resync", () => {
     expect(screen.queryByRole("button", { name: "Resync library" })).toBeNull();
   });
 
-  it("says why the resync failed rather than looking like it worked", async () => {
+  it("says a sync that began while confirming kept the resync from starting", async () => {
     const user = userEvent.setup();
-    vi.mocked(clearSyncWatermark).mockRejectedValue(new Error("db locked"));
+    runSync.mockReturnValue(false);
     renderTab();
 
     await user.click(screen.getByRole("button", { name: "Resync library" }));
     await user.click(screen.getByRole("button", { name: "Resync" }));
 
-    await waitFor(() => expect(screen.getByText(/db locked/)).toBeTruthy());
-    expect(runSync).not.toHaveBeenCalled();
+    expect(screen.getByText(/a sync is already running/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Resync" })).toBeTruthy();
   });
 });

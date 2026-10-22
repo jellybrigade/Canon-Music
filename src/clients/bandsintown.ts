@@ -22,6 +22,11 @@ function setCached(key: string, events: BandsintownEvent[]): void {
   cappedSet(cache, key, events, MAX_CACHE_ENTRIES);
 }
 
+// The link is handed to the system opener, so anything but a web address is dropped.
+function isWebUrl(value: unknown): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
 function cacheKey(name: string): string {
   return name.trim().toLowerCase();
 }
@@ -60,7 +65,7 @@ export async function fetchBandsintownEvents(artistName: string): Promise<Bandsi
           venueCity: typeof venue.city === "string" ? venue.city : "",
           venueRegion: typeof venue.region === "string" ? venue.region : "",
           venueCountry: typeof venue.country === "string" ? venue.country : "",
-          url: typeof item.url === "string" ? item.url : "",
+          url: isWebUrl(item.url) ? item.url : "",
           lineup,
         };
       });

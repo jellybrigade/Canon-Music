@@ -115,4 +115,4 @@ cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml
 
 ## Status
 
-v0.55.x (`package.json`), schema v57 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.
+v0.56.x (`package.json`), schema v58 (max `version` in `src/db/migrations.ts`). Not in scope: writing tags to files, AcoustID, sample-accurate gapless, HTTP seek, package managers, MusicBrainz submission, light theme.

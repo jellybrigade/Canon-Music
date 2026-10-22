@@ -5,7 +5,7 @@ import { setApiKey as setLastfmApiKey } from "../../clients/lastfm";
 import { authenticate, authenticateWithApiKey } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
-import { refreshAllSettings, useBoolSetting, useSetting } from "../../hooks/useSetting";
+import { useBoolSetting, useSetting } from "../../hooks/useSetting";
 import { keychain } from "../../lib/keychain";
 import type { Server } from "../../types/server";
 import { CanonIcon } from "../../ui/CanonIcon";
@@ -86,7 +86,6 @@ export function Wizard({ onSuccess }: Props) {
   async function handleImportSettings(file: File) {
     try {
       await importSettingsFile(file);
-      await refreshAllSettings();
       setImportState("done");
     } catch {
       setImportState("error");
@@ -397,7 +396,7 @@ export function Wizard({ onSuccess }: Props) {
 
             <section className="settings-section">
               <h3 className="settings-section-title">Updates</h3>
-              <SettingRow title="Auto check for updates">
+              <SettingRow title="Check in the background" description="Canon always checks once at startup.">
                 <input
                   type="checkbox"
                   checked={autoCheck}

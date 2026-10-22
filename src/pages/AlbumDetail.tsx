@@ -126,7 +126,7 @@ export function AlbumDetail({
   const trackTagGenresMap = useTrackTagGenres(album.id, genreMappings);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
-  const [mbAutoIdentify] = useBoolSetting("mb.auto_identify", true);
+  const [mbAutoIdentify, , isMbAutoIdentifyLoaded] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
   const [tagRefreshError, setTagRefreshError] = useState<string | null>(null);
@@ -200,7 +200,6 @@ export function AlbumDetail({
     ...albumShapeOf(tracks ?? []),
     year: album.year,
     confirmedArtistMbid,
-    mbAutoIdentify,
     existingIdentity: albumIdentity,
   });
 
@@ -296,7 +295,7 @@ export function AlbumDetail({
         album={album}
         coverArtUrl={coverArtUrl}
         albumIdentity={albumIdentity}
-        showUnidentified={mbAutoIdentify && identityLoaded && !autoIdentifyFetching}
+        showUnidentified={isMbAutoIdentifyLoaded && mbAutoIdentify && identityLoaded && !autoIdentifyFetching}
         tagsComputedAt={normalizedTags?.computed_at ?? null}
         tagRefresh={{
           isRefreshing: isTagRefreshing,

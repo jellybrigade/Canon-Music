@@ -3,6 +3,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { useEffect, useState } from "react";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
+import { errorMessage } from "../../../lib/errorMessage";
 import { checkForUpdate, installAndRestart } from "../../../lib/updater";
 import { SettingRow } from "./SettingRow";
 
@@ -17,6 +18,7 @@ export function AboutTab({ searchQuery }: Props) {
   );
   const [pendingUpdate, setPendingUpdate] = useState<Update | null>(null);
   const [updateInstalling, setUpdateInstalling] = useState(false);
+  const [installError, setInstallError] = useState<string | null>(null);
   const [autoCheck, setAutoCheck] = useBoolSetting("updates.auto_check", false);
   const [intervalMin, setIntervalMin] = useSetting("updates.auto_check_interval_min", "60");
 
@@ -63,7 +65,7 @@ export function AboutTab({ searchQuery }: Props) {
         <span className="settings-diag-label">Version</span>
         <span className="settings-diag-value">{appVersion ?? "…"}</span>
       </div>
-      <SettingRow title="Auto check for updates">
+      <SettingRow title="Check in the background" description="Canon always checks once at startup.">
         <label className="toggle-switch">
           <input type="checkbox" checked={autoCheck} onChange={(e) => void setAutoCheck(e.target.checked)} />
           <span className="toggle-track" />
@@ -106,9 +108,7 @@ export function AboutTab({ searchQuery }: Props) {
         ) : null}
         {updateCheckState === "up-to-date" && <span className="settings-hint">You're up to date.</span>}
         {updateCheckState === "error" && (
-          <span className="settings-hint" style={{ color: "var(--danger)" }}>
-            Couldn't check for updates.
-          </span>
+          <span className="settings-hint settings-hint-error">Couldn't check for updates.</span>
         )}
         {updateCheckState === "available" && pendingUpdate && (
           <>
@@ -118,11 +118,18 @@ export function AboutTab({ searchQuery }: Props) {
               disabled={updateInstalling}
               onClick={() => {
                 setUpdateInstalling(true);
-                void installAndRestart(pendingUpdate, () => {}).catch(() => setUpdateInstalling(false));
+                setInstallError(null);
+                void installAndRestart(pendingUpdate, () => {}).catch((e: unknown) => {
+                  setUpdateInstalling(false);
+                  setInstallError(errorMessage(e));
+                });
               }}
             >
               {updateInstalling ? "Installing…" : "Install & Restart"}
             </button>
+            {installError && (
+              <span className="settings-hint settings-hint-error">Couldn't install the update: {installError}</span>
+            )}
           </>
         )}
       </div>

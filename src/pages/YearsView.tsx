@@ -31,6 +31,7 @@ export function YearsView({ serverWithCredential, onSelect, onStartRadio, server
           hint: "Sync your library from Settings and this view groups every album by release year.",
         }}
         sort="year"
+        scrollMemoryKey="years"
         isLoading={isLoading}
         error={error}
         onRetry={() => useAlbumBrowseSessionStore.getState().bumpRefresh()}

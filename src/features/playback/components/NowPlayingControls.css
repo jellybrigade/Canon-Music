@@ -44,8 +44,7 @@
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(20, 20, 20, 0.95);
-  backdrop-filter: blur(var(--blur-sm));
+  background: var(--bg-elevated);
   border: 1px solid var(--tint-4);
   border-radius: var(--radius-2xl);
   padding: var(--space-xs) var(--space-md);

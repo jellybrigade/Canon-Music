@@ -195,6 +195,47 @@ describe("runMigrations", () => {
     expect(mappings[0]?.norm_value).toBe("hip hop");
   });
 
+  it("points every chained artist alias at the end of its chain", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 57);
+    await db.execute(
+      `INSERT INTO artist_aliases (alias_name, canonical_name) VALUES
+         ('Yeezy', 'Ye'), ('Ye', 'Kanye'), ('Kanye', 'Kanye West'), ('Bey', 'Beyonce')`,
+    );
+    await runMigrations(db);
+
+    const rows = await db.select<{ alias_name: string; canonical_name: string }[]>(
+      "SELECT alias_name, canonical_name FROM artist_aliases ORDER BY alias_name",
+    );
+    expect(rows).toEqual([
+      { alias_name: "Bey", canonical_name: "Beyonce" },
+      { alias_name: "Kanye", canonical_name: "Kanye West" },
+      { alias_name: "Ye", canonical_name: "Kanye West" },
+      { alias_name: "Yeezy", canonical_name: "Kanye West" },
+    ]);
+  });
+
+  // Older builds let A merge into B and then B into A; every member of such a loop was hidden.
+  it("breaks alias cycles at their first name and points the rest of the loop at it", async () => {
+    const db = createTestDb();
+    await migrateThrough(db, 57);
+    await db.execute(
+      `INSERT INTO artist_aliases (alias_name, canonical_name) VALUES
+         ('B', 'A'), ('A', 'B'), ('Z', 'X'), ('X', 'Y'), ('Y', 'Z'), ('Fan', 'Y')`,
+    );
+    await runMigrations(db);
+
+    const rows = await db.select<{ alias_name: string; canonical_name: string }[]>(
+      "SELECT alias_name, canonical_name FROM artist_aliases ORDER BY alias_name",
+    );
+    expect(rows).toEqual([
+      { alias_name: "B", canonical_name: "A" },
+      { alias_name: "Fan", canonical_name: "X" },
+      { alias_name: "Y", canonical_name: "X" },
+      { alias_name: "Z", canonical_name: "X" },
+    ]);
+  });
+
   it("refuses a database written by a newer build instead of running against it", async () => {
     // No downgrade path exists, so the honest outcome is one accurate message at startup rather
     // than a scattering of unrelated-looking failures deep in sync or tag normalization.

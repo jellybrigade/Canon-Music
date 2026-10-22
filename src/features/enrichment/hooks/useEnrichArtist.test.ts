@@ -38,15 +38,16 @@ vi.mock("../../../clients/theaudiodb", () => ({
 vi.mock("../../../clients/navidrome", () => ({ getArtistImageFromServer: vi.fn().mockResolvedValue(null) }));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
+import { getFanartApiKey } from "../../../clients/fanart";
 import { fetchArtistInfo } from "../../../clients/lastfm";
 import { fetchWikidataImageByMbid, searchArtists } from "../../../clients/musicbrainz";
 import { fetchTheAudioDbArtist } from "../../../clients/theaudiodb";
 import { getDb } from "../../../db";
 import { __resetSettingCache } from "../../../hooks/useSetting";
 import { QK } from "../../../lib/queryKeys";
-import { createMigratedTestDb, type FakeDatabase } from "../../../test/sqlite";
+import { createMigratedTestDb, type FakeDatabase, holdSettingReads } from "../../../test/sqlite";
 import { __resetIdentifyAttempts, useEnrichArtist } from "./useEnrichArtist";
 
 let db: FakeDatabase;
@@ -93,6 +94,22 @@ describe("useEnrichArtist", () => {
     renderHook(() => useEnrichArtist("slowdive"), { wrapper });
 
     await waitFor(() => expect(enrichedArtists()).toEqual(["slowdive"]));
+  });
+
+  it("leaves an artist enriched within the stored staleness window alone, even before it is read back", async () => {
+    const sixtyDaysAgo = Math.floor(Date.now() / 1000) - 60 * 24 * 60 * 60;
+    db.raw
+      .prepare("INSERT INTO artist_identity (artist_name, lastfm_artist_name, enriched_at) VALUES (?, ?, ?)")
+      .run("slowdive", "slowdive", sixtyDaysAgo);
+    db.raw.prepare("INSERT INTO settings (key, value) VALUES ('tags.staleness_days', '365')").run();
+    const releaseSettings = holdSettingReads(db, "tags.staleness_days");
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(queryClient.getQueryState(QK.artistEnrichment("slowdive"))?.status).toBe("success"));
+    await act(async () => {});
+    await act(async () => releaseSettings());
+    await act(async () => {});
+    expect(fetchArtistInfo).not.toHaveBeenCalled();
   });
 
   it("enriches the second artist when the view swaps artists without remounting", async () => {
@@ -147,6 +164,16 @@ describe("useEnrichArtist", () => {
   it("keeps the artist retryable when the Wikidata portrait lookup fails", async () => {
     vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
     vi.mocked(fetchWikidataImageByMbid).mockRejectedValueOnce(new Error("wikidata timed out"));
+
+    renderHook(() => useEnrichArtist("slowdive"), { wrapper });
+
+    await waitFor(() => expect(storedIdentity("slowdive")?.bio).toBe("bio"));
+    expect(storedIdentity("slowdive")).toMatchObject({ mb_artist_id: "mbid-1", enriched_at: null });
+  });
+
+  it("keeps the artist retryable when the fanart.tv key can't be read", async () => {
+    vi.mocked(searchArtists).mockResolvedValueOnce(SINGLE_MATCH);
+    vi.mocked(getFanartApiKey).mockRejectedValueOnce(new Error("keyring is locked"));
 
     renderHook(() => useEnrichArtist("slowdive"), { wrapper });
 

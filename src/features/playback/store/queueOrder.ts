@@ -70,7 +70,8 @@ export function resolveTrack(
 
 // anchorQueueIndex pins that index to position 0 so the playing track stays playing when
 // shuffle turns on mid-track. Pass -1 on a repeat-all wrap, where nothing is playing yet.
-export function buildShuffleOrder(length: number, anchorQueueIndex: number): number[] {
+// nextQueueIndex pins position 1: a track already handed to the engine plays next regardless.
+export function buildShuffleOrder(length: number, anchorQueueIndex: number, nextQueueIndex = -1): number[] {
   const indices = Array.from({ length }, (_, i) => i);
   for (let i = indices.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -80,6 +81,10 @@ export function buildShuffleOrder(length: number, anchorQueueIndex: number): num
   const anchorPos = indices.indexOf(anchorQueueIndex);
   if (anchorPos > 0) {
     [indices[0], indices[anchorPos]] = [indices[anchorPos]!, indices[0]!];
+  }
+  const nextPos = indices.indexOf(nextQueueIndex);
+  if (nextPos > 1) {
+    [indices[1], indices[nextPos]] = [indices[nextPos]!, indices[1]!];
   }
   return indices;
 }

@@ -1,3 +1,4 @@
+import type Database from "@tauri-apps/plugin-sql";
 import { fetchAlbumTags, fetchArtistGenreTags } from "../../../clients/lastfm";
 import type { MbGenre } from "../../../clients/musicbrainz";
 import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
@@ -72,6 +73,25 @@ export async function readNormalizedTags(albumId: string): Promise<NormalizedTag
   const countRows = await db.select<CountRow[]>("SELECT COUNT(*) AS n FROM album_genres WHERE album_id = ?", [albumId]);
   if ((countRows[0]?.n ?? 0) === 0) return null;
   return JSON.parse(json) as NormalizedTags;
+}
+
+async function readStoredLastfmTags(db: Database, albumId: string): Promise<string[]> {
+  const rows = await db.select<{ raw_value: string }[]>(
+    `SELECT DISTINCT tt.raw_value
+     FROM track_tags tt
+     JOIN tracks t ON t.id = tt.track_id
+     WHERE t.album_id = ? AND tt.kind = 'genre' AND tt.source = 'lastfm'
+     ORDER BY tt.raw_value`,
+    [albumId],
+  );
+  return rows.map((r) => r.raw_value);
+}
+
+async function readComputedAt(db: Database, albumId: string): Promise<number | null> {
+  const rows = await db.select<{ computed_at: number | null }[]>("SELECT computed_at FROM albums WHERE id = ?", [
+    albumId,
+  ]);
+  return rows[0]?.computed_at ?? null;
 }
 
 export function isStale(tags: NormalizedTags | null, staleDays = STALE_DAYS_DEFAULT): boolean {
@@ -188,6 +208,8 @@ async function _doNormalizeAlbum(
   const lfmAlbum = identity?.lastfmAlbumName ?? album;
 
   let lastfmRaw: string[] = [];
+  // A Last.fm outage is not "no tags": keep the album's earlier Last.fm tags and leave it due.
+  let isLastfmUnanswered = false;
   try {
     const result = await fetchAlbumTags(lfmArtist, lfmAlbum);
     lastfmRaw = result.genres;
@@ -200,6 +222,8 @@ async function _doNormalizeAlbum(
     }
   } catch (e) {
     console.warn(`normalizeAlbum: Last.fm fetch failed for "${lfmArtist} - ${lfmAlbum}":`, e);
+    isLastfmUnanswered = true;
+    lastfmRaw = await readStoredLastfmTags(db, albumId);
   }
 
   const mbRaw: string[] = [];
@@ -218,12 +242,19 @@ async function _doNormalizeAlbum(
   }
 
   // Artist tags as last resort: only when no file tags AND no album/MB tags exist
-  if (fileTagRows.length === 0 && lastfmRaw.length === 0 && mbRaw.length === 0 && mbFolkRaw.length === 0) {
+  if (
+    !isLastfmUnanswered &&
+    fileTagRows.length === 0 &&
+    lastfmRaw.length === 0 &&
+    mbRaw.length === 0 &&
+    mbFolkRaw.length === 0
+  ) {
     try {
       const artistTags = await fetchArtistGenreTags(lfmArtist);
       lastfmRaw.push(...artistTags);
     } catch (e) {
       console.warn(`normalizeAlbum: artist tag fallback failed for "${lfmArtist}":`, e);
+      isLastfmUnanswered = true;
     }
   }
 
@@ -369,11 +400,13 @@ async function _doNormalizeAlbum(
     .sort((a, b) => (a.source === b.source ? 0 : a.source === "file" ? -1 : 1))
     .slice(0, Math.max(0, CAPS.genres - genreTags.length));
 
+  // Left as it was when Last.fm didn't answer, so the album stays due; 0 in the JSON reads as stale.
+  const computedAt = isLastfmUnanswered ? await readComputedAt(db, albumId) : Math.floor(Date.now() / 1000);
   const normalizedTags: NormalizedTags = {
     genres: [...genreTags, ...unmappedFill],
     descriptors: fromIds(buckets.descriptors, CAPS.descriptors),
     scenes: fromIds(buckets.scenes, CAPS.scenes),
-    computed_at: Math.floor(Date.now() / 1000),
+    computed_at: computedAt ?? 0,
   };
 
   // Build the resolved rows: direct leaves first
@@ -435,7 +468,7 @@ async function _doNormalizeAlbum(
 
   await db.execute("UPDATE albums SET normalized_tags_json = ?, computed_at = ? WHERE id = ?", [
     JSON.stringify(normalizedTags),
-    normalizedTags.computed_at,
+    computedAt,
     albumId,
   ]);
 

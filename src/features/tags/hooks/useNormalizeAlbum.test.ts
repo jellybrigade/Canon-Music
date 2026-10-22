@@ -15,11 +15,15 @@ vi.mock("../lib/tagNormalize", () => ({
   isStale: vi.fn().mockReturnValue(true),
 }));
 vi.mock("../../enrichment/hooks/useAlbumIdentity", () => ({ useAlbumIdentity: vi.fn(() => ({ data: null })) }));
-vi.mock("../../../hooks/useSetting", () => ({ useSetting: vi.fn(() => ["30"]) }));
+const stalenessSetting = vi.hoisted(() => ({ isLoaded: true }));
+vi.mock("../../../hooks/useSetting", () => ({
+  useSetting: () => ["30", async () => {}, stalenessSetting.isLoaded],
+}));
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
+import { QK } from "../../../lib/queryKeys";
 import { normalizeAlbum } from "../lib/tagNormalize";
 import { useTagsStore } from "../store/tags";
 import { useNormalizeAlbum } from "./useNormalizeAlbum";
@@ -32,6 +36,7 @@ function wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  stalenessSetting.isLoaded = true;
   useTagsStore.setState({ enrichmentPending: 10 });
 });
 
@@ -47,6 +52,18 @@ describe("useNormalizeAlbum", () => {
 
     await waitFor(() => expect(useTagsStore.getState().enrichmentPending).toBe(9));
     expect(vi.mocked(normalizeAlbum)).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for the staleness setting to be read back before normalizing", async () => {
+    stalenessSetting.isLoaded = false;
+    const { rerender } = renderHook(() => useNormalizeAlbum("srv-a:alb-1", "slowdive", "Souvlaki"), { wrapper });
+    await waitFor(() => expect(queryClient.getQueryState(QK.normalizedTags("srv-a:alb-1"))?.status).toBe("success"));
+    rerender();
+    expect(vi.mocked(normalizeAlbum)).not.toHaveBeenCalled();
+
+    stalenessSetting.isLoaded = true;
+    rerender();
+    await waitFor(() => expect(vi.mocked(normalizeAlbum)).toHaveBeenCalledTimes(1));
   });
 
   it("counts each album once when the view returns to an album it already normalized", async () => {

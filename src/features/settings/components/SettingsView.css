@@ -356,6 +356,10 @@
   color: var(--text-tertiary);
 }
 
+.settings-hint-error {
+  color: var(--danger);
+}
+
 .settings-alpha-notice {
   background: var(--surface-2);
   border: 1px solid var(--border);

@@ -16,9 +16,10 @@ vi.mock("@tauri-apps/api/core", async () => (await import("../test/mocks/tauri")
 vi.mock("@tauri-apps/api/event", async () => (await import("../test/mocks/tauri")).eventModule);
 vi.mock("../lib/updater", () => ({ checkForUpdate: vi.fn().mockResolvedValue(null) }));
 vi.mock("../clients/notice", () => ({ fetchRemoteNotice: vi.fn().mockResolvedValue(null) }));
-vi.mock("../lib/keychain", () => ({
+vi.mock("../lib/keychain", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/keychain")>()),
   keychain: {
-    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "token", username: "u", token: "t", salt: "s" })),
+    get: vi.fn().mockResolvedValue(JSON.stringify({ type: "md5", token: "t", salt: "s" })),
     set: vi.fn().mockResolvedValue(undefined),
     remove: vi.fn().mockResolvedValue(undefined),
   },

@@ -5,8 +5,8 @@ import { resolvePortraitUrl } from "../clients/lastfm";
 import { getArtistImageUrl, isCoverServerReady } from "../clients/navidromeUrls";
 import { getDb } from "../db";
 import { runPool } from "../lib/asyncPool";
+import { awaitHostBudget, type HostBudget, makeHostBudget } from "../lib/hostBudget";
 import { QK } from "../lib/queryKeys";
-import { makeRateLimiter } from "../lib/rateLimiter";
 
 // Wikimedia 429s on bursts: a per-host token bucket owns the rate, a worker pool owns
 // concurrency, and 429s retry with backoff.
@@ -14,13 +14,6 @@ const PORTRAIT_HOST_INTERVAL_MS = 250; // <= 4 req/s per host
 const POOL_CONCURRENCY = 4;
 const MAX_RETRIES_429 = 4;
 const RETRY_BASE_DELAY_MS = 1000;
-
-interface HostBudget {
-  /** Token bucket: spaces this host's requests PORTRAIT_HOST_INTERVAL_MS apart. */
-  limit: () => Promise<void>;
-  /** Epoch ms until which every worker must hold off this host, set on a 429. */
-  cooldownUntil: number;
-}
 
 const hostBudgets = new Map<string, HostBudget>();
 
@@ -35,16 +28,10 @@ function hostBudgetFor(sourceUrl: string): HostBudget {
   }
   let budget = hostBudgets.get(host);
   if (!budget) {
-    budget = { limit: makeRateLimiter(PORTRAIT_HOST_INTERVAL_MS), cooldownUntil: 0 };
+    budget = makeHostBudget(PORTRAIT_HOST_INTERVAL_MS);
     hostBudgets.set(host, budget);
   }
   return budget;
-}
-
-async function awaitHostBudget(budget: HostBudget): Promise<void> {
-  const cooldown = budget.cooldownUntil - Date.now();
-  if (cooldown > 0) await new Promise((r) => setTimeout(r, cooldown));
-  await budget.limit();
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {

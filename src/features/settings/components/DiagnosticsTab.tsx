@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { getMissingArtistImageCount, useCacheAllArtistImages } from "../../../hooks/useArtistImageCache";
 import { getMissingCoverCount, useCacheAllCovers } from "../../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../../hooks/useServer";
@@ -7,7 +7,7 @@ import { errorMessage } from "../../../lib/errorMessage";
 import { plural } from "../../../lib/plural";
 import { QK } from "../../../lib/queryKeys";
 import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
-import { exportSettingsFile, importSettingsFile } from "../lib/settingsBackup";
+import { exportSettingsFile, restoreSettingsBackup } from "../lib/settingsBackup";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -69,6 +69,7 @@ export function DiagnosticsTab({
 }: Props) {
   const queryClient = useQueryClient();
   const importInputRef = useRef<HTMLInputElement>(null);
+  const [exportResult, setExportResult] = useState<{ savedTo: string } | { error: string } | null>(null);
   const { data: scrobbleCount, refetch: refetchScrobbleCount } = useScrobbleQueueCount(serverId);
   const { data: missingCoverCount, refetch: refetchMissingCoverCount } = useMissingCoverCount();
   const { run: cacheAllCovers, progress: coverProgress, lastFailedCount } = useCacheAllCovers(serverWithCredential);
@@ -97,9 +98,19 @@ export function DiagnosticsTab({
     }
   }
 
+  async function handleExportSettings() {
+    setExportResult(null);
+    try {
+      const savedTo = await exportSettingsFile();
+      if (savedTo) setExportResult({ savedTo });
+    } catch (e) {
+      setExportResult({ error: errorMessage(e) });
+    }
+  }
+
   async function handleImportSettings(file: File) {
     try {
-      await importSettingsFile(file);
+      await restoreSettingsBackup(await file.text());
       await queryClient.invalidateQueries({ queryKey: QK.settingsAll() });
       window.location.reload();
     } catch (e) {
@@ -221,7 +232,7 @@ export function DiagnosticsTab({
             <button
               className="settings-btn"
               onClick={() => {
-                void exportSettingsFile();
+                void handleExportSettings();
               }}
             >
               Export settings
@@ -240,6 +251,12 @@ export function DiagnosticsTab({
                 e.target.value = "";
               }}
             />
+            {exportResult && "savedTo" in exportResult && (
+              <span className="settings-hint">Saved to {exportResult.savedTo}</span>
+            )}
+            {exportResult && "error" in exportResult && (
+              <span className="settings-hint settings-hint-error">Export failed: {exportResult.error}</span>
+            )}
           </div>
         </section>
       )}

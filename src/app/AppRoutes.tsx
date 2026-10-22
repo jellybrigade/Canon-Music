@@ -155,8 +155,7 @@ export interface AppViewProps {
   pendingUpdate: Update | null;
   setPendingUpdate: React.Dispatch<React.SetStateAction<Update | null>>;
   remoteNotice: RemoteNotice | null;
-  setRemoteNotice: React.Dispatch<React.SetStateAction<RemoteNotice | null>>;
-  setLastSeenNoticeId: (v: string) => Promise<void>;
+  dismissRemoteNotice: () => Promise<void>;
 
   // Sidebar
   sidebarExpanded: boolean;

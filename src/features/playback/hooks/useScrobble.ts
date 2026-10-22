@@ -13,11 +13,15 @@ import type { CurrentTrack } from "../store/playerTypes";
 // statements a second for the rest of the track.
 const MAX_QUEUE_WRITE_ATTEMPTS = 3;
 
+// A playhead step longer than the wall time since the last poll is a seek, not listening.
+const POLL_JITTER_SECONDS = 0.5;
+
 export function useScrobble(track: CurrentTrack | null, serverWithCred: ServerWithCredential | undefined) {
   const scrobbedRef = useRef(false);
   const writeAttemptsRef = useRef(0);
   // One timestamp per play, so a retry can ask whether the row it failed to confirm is there.
   const timestampRef = useRef<number | null>(null);
+  const listenedRef = useRef({ seconds: 0, lastElapsed: 0, lastPolledAt: Date.now() });
   const playStartedAt = usePlayerStore((s) => s.playStartedAt);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const elapsed = usePlayerStore((s) => s.elapsed);
@@ -30,6 +34,7 @@ export function useScrobble(track: CurrentTrack | null, serverWithCred: ServerWi
     scrobbedRef.current = false;
     writeAttemptsRef.current = 0;
     timestampRef.current = null;
+    listenedRef.current = { seconds: 0, lastElapsed: 0, lastPolledAt: Date.now() };
   }, [playStartedAt]);
 
   // Navidrome expires now-playing on a timer, so a resume after a long pause must re-report.
@@ -55,11 +60,18 @@ export function useScrobble(track: CurrentTrack | null, serverWithCred: ServerWi
   }, [playStartedAt, trackId, serverWithCred, isPlaying]);
 
   useEffect(() => {
+    const listened = listenedRef.current;
+    const now = Date.now();
+    const step = elapsed - listened.lastElapsed;
+    if (step > 0 && step <= (now - listened.lastPolledAt) / 1000 + POLL_JITTER_SECONDS) listened.seconds += step;
+    listened.lastElapsed = elapsed;
+    listened.lastPolledAt = now;
+
     if (!track || scrobbedRef.current) return;
 
     const duration = track.duration ?? null;
     const thresholdMet =
-      elapsed >= minElapsedS || (duration !== null && duration > 0 && elapsed / duration >= fraction);
+      listened.seconds >= minElapsedS || (duration !== null && duration > 0 && listened.seconds / duration >= fraction);
 
     if (!thresholdMet) return;
 

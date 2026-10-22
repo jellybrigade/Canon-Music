@@ -26,7 +26,7 @@
   gap: var(--space-2xs);
   padding: var(--space-2xs) var(--space-sm);
   border-radius: var(--radius-2xl);
-  background: color-mix(in srgb, var(--accent) 25%, rgba(20, 20, 20, 0.85));
+  background: color-mix(in srgb, var(--accent) 25%, var(--bg-elevated));
   color: #fff;
   font-size: var(--text-base);
   font-weight: 600;
@@ -34,11 +34,10 @@
   cursor: pointer;
   z-index: 3;
   white-space: nowrap;
-  backdrop-filter: blur(var(--blur-xs));
 }
 
 .lyrics-resync-pill:hover {
-  background: color-mix(in srgb, var(--accent) 40%, rgba(20, 20, 20, 0.85));
+  background: color-mix(in srgb, var(--accent) 40%, var(--bg-elevated));
 }
 
 /* Every line seeks to its own timestamp, so the whole block is a click target. */

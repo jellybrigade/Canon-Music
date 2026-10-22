@@ -4,6 +4,7 @@ mod keychain;
 mod library_read;
 mod library_write;
 mod net_probe;
+mod settings_backup;
 mod stream_classify;
 mod streaming;
 mod tray;
@@ -135,6 +136,7 @@ pub fn run() {
         .plugin(tauri_plugin_sql::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(AudioState {
             mixer,
             output_lost,
@@ -148,6 +150,7 @@ pub fn run() {
             pause_pending: Arc::new(AtomicBool::new(false)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
             gapless_started: Arc::new(AtomicU64::new(0)),
+            gapless_handoff: Arc::new(Mutex::new(None)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
@@ -265,6 +268,7 @@ pub fn run() {
             keychain::delete_credential,
             audio::playback::audio_play,
             audio::playback::audio_enqueue_next,
+            audio::playback::audio_withdraw_next,
             audio::playback::audio_prefetch,
             audio::control::audio_pause,
             audio::control::audio_resume,
@@ -282,6 +286,7 @@ pub fn run() {
             cover::set_cover_proxy_config,
             net_probe::probe_server,
             take_crash_report,
+            settings_backup::save_settings_backup,
             library_read::albums::get_albums,
             library_read::artists::get_artists,
             library_read::tracks::get_tracks,
@@ -291,6 +296,7 @@ pub fn run() {
             library_read::loved::get_loved,
             library_read::playlists::get_playlists,
             library_read::tags::get_unmapped_tag_count,
+            library_write::artist_aliases::merge_artist,
             library_write::genre_carry::carry_genre_renames,
             library_write::genre_carry::repair_dangling_genre_id,
             library_write::playlists::playlist_remove_track,

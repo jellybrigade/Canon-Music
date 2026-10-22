@@ -667,3 +667,37 @@ describe("AlbumGrid pagination", () => {
     expect(document.querySelector(".album-grid-scrubber")).not.toBeNull();
   });
 });
+
+describe("AlbumGrid scroll memory", () => {
+  function scrollGridTo(top: number) {
+    const scroller = document.querySelector<HTMLElement>(".album-grid-scroller")!;
+    act(() => {
+      Object.defineProperty(scroller, "scrollTop", { configurable: true, value: top });
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+  }
+
+  it("does not carry one view's offset into another grid with the same sort", () => {
+    const albums = lettered(ALPHABET, COLS * 2);
+    const years = renderGrid({ albums, sort: "year", scrollMemoryKey: "memory-years" });
+    scrollGridTo(PADDING + 10 * ROW_H);
+    years.unmount();
+
+    const writes = vi.spyOn(Element.prototype, "scrollTop", "set");
+    renderGrid({ albums, sort: "year", scrollMemoryKey: "memory-library" });
+    expect(writes.mock.calls.map(([top]) => top).filter((top) => top > 0)).toEqual([]);
+    writes.mockRestore();
+  });
+
+  it("restores the offset of the same view", () => {
+    const albums = lettered(ALPHABET, COLS * 2);
+    const first = renderGrid({ albums, sort: "year", scrollMemoryKey: "memory-same" });
+    scrollGridTo(PADDING + 10 * ROW_H);
+    first.unmount();
+
+    const writes = vi.spyOn(Element.prototype, "scrollTop", "set");
+    renderGrid({ albums, sort: "year", scrollMemoryKey: "memory-same" });
+    expect(writes.mock.calls.map(([top]) => top)).toContain(PADDING + 10 * ROW_H);
+    writes.mockRestore();
+  });
+});

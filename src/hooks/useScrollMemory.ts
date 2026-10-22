@@ -27,9 +27,12 @@ export function useScrollMemory(ref: RefObject<HTMLElement | null>, key: string,
     const el = ref.current;
     if (!el) return;
     if (restoredFor.current === key) return;
+    const isKeyChange = restoredFor.current !== null;
     restoredFor.current = key;
     const saved = offsets.get(key);
-    if (saved) el.scrollTop = saved;
+    // A key change while mounted (a new sort) would otherwise keep the previous
+    // ordering's offset, so an unvisited key goes to the top.
+    if (saved !== undefined || isKeyChange) el.scrollTop = saved ?? 0;
   }, [ref, key, ready]);
 
   // `ready` gates the save too: a skeleton/empty-state render has no element on the first

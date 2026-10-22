@@ -4,7 +4,6 @@ import { usePlayerStore } from "../features/playback/store/player";
 import { isNextDisabled } from "../features/playback/store/playerTypes";
 import { useStartRadio } from "../features/radio/hooks/useStartRadio";
 import { loadRandomLibraryTrack } from "../features/radio/lib/librarySeed";
-import { resyncLibrary } from "../features/sync/resyncLibrary";
 import type { useLibrarySync } from "../features/sync/useLibrarySync";
 import { plural } from "../lib/plural";
 import { currentTrackFromRow, makeStreamUrlBuilder } from "../lib/track";
@@ -15,6 +14,7 @@ const SLEEP_TIMER_PRESET_MINUTES = 30;
 export function usePaletteActions(
   serverWithCredential: ServerWithCredential | undefined,
   runSync: ReturnType<typeof useLibrarySync>["runSync"],
+  isSyncing: boolean,
 ): PaletteAction[] {
   const hasTrack = usePlayerStore((s) => s.currentTrack !== null && s.streamUrlFor !== null);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -63,20 +63,21 @@ export function usePaletteActions(
     });
   }
   if (serverWithCredential) {
-    actions.push(
-      {
-        id: "shuffle-library",
-        label: "Shuffle library",
-        icon: <Shuffle size={16} />,
-        run: () => void shuffleLibrary(serverWithCredential, startRadio),
-      },
-      {
+    actions.push({
+      id: "shuffle-library",
+      label: "Shuffle library",
+      icon: <Shuffle size={16} />,
+      run: () => void shuffleLibrary(serverWithCredential, startRadio),
+    });
+    // A resync asked for during a sync would not start, so it is not offered.
+    if (!isSyncing) {
+      actions.push({
         id: "resync-library",
         label: "Resync library",
         icon: <RefreshCw size={16} />,
-        run: () => void resyncLibrary(serverWithCredential, runSync),
-      },
-    );
+        run: () => runSync(serverWithCredential, { forceTrackPass: true }),
+      });
+    }
   }
   return actions;
 }

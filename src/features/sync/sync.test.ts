@@ -228,10 +228,7 @@ describe("purgeServerData", () => {
     expect(keys.map((r) => r.key)).toEqual(["server.opensub_extensions.srv-b", "theme"]);
   });
 
-  it("leaves no track-keyed orphans behind, so DELETE FROM tracks must stay last", async () => {
-    // The track-keyed statements are subselects over `tracks`. If the tracks delete ever
-    // moves above them the subselects match nothing and every dependent row survives
-    // silently, which no total-row-count assertion would catch.
+  it("leaves no track-keyed orphans behind", async () => {
     seedServerRows(db(), SRV);
     await purgeServerData(asDb(db()), SRV);
     const trackKeyed: [string, string][] = [
@@ -248,6 +245,19 @@ describe("purgeServerData", () => {
     for (const [table, column] of trackKeyed) {
       expect({ table, rows: await count(table, `WHERE ${column} LIKE '${SRV}:%'`) }).toEqual({ table, rows: 0 });
     }
+  });
+
+  it("removes play history of tracks the server had already dropped", async () => {
+    // Scrobbles outlive a track prune, so by removal time their track row can be long gone.
+    db().raw.exec(`
+      INSERT INTO scrobble_queue (track_id, title, artist, timestamp) VALUES ('${SRV}:gone', 'T', 'Artist', 1);
+      INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${SRV}:gone', 1);
+      INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${OTHER}:gone', 1);
+    `);
+    await purgeServerData(asDb(db()), SRV);
+    expect(await count("scrobble_queue")).toBe(0);
+    const history = await db().select<{ track_id: string }[]>("SELECT track_id FROM scrobble_history");
+    expect(history.map((row) => row.track_id)).toEqual([`${OTHER}:gone`]);
   });
 
   it("runs clean against a server with no rows at all", async () => {
@@ -1415,7 +1425,8 @@ describe("syncLibrary skip evidence", () => {
       await interruptedPass();
       await syncLibrary(server(), CRED);
 
-      await clearSyncWatermark(asDb(db()), SRV);
+      // The forced sync forgets the watermark itself: a separate clear before it could land
+      // while another sync ran, which then wrote the watermark back and lost the resync.
       let call = 0;
       mAlbumTracks.mockReset();
       mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {

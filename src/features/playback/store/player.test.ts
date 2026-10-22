@@ -754,6 +754,113 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
     });
 
+    it("shuffle turned on after the hand-off: the handed-over track opens the order, nothing is skipped", async () => {
+      // Without the fix, this seed puts track "1" last, so every other track would be skipped.
+      const random = vi.spyOn(Math, "random").mockReturnValue(0);
+      await setupPlayingQueue(6); // enqueues track "1"
+      await driveTickerToEnqueue();
+
+      usePlayerStore.getState().toggleShuffle();
+      random.mockRestore();
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("1");
+      expect(state.queueIndex).toBe(1);
+      expect(state.shuffleOrder.slice(0, 2)).toEqual([0, 1]);
+    });
+
+    it("shuffle turned off after the hand-off: the queued track is withdrawn and the next in order plays", async () => {
+      // queue 0..5, playing "0" at shuffled position 0; the shuffle hands over track "4".
+      await setupPlayingQueue(6, { isShuffled: true, shuffleOrder: [0, 4, 1, 2, 3, 5] });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      usePlayerStore.getState().toggleShuffle();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(true);
+      expect(runtime.gaplessEnqueued).toBeNull();
+      emitTauriEvent("track-ended", undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
+      expect(usePlayerStore.getState().queueIndex).toBe(1);
+    });
+
+    it("shuffle turned off when the queued track is next in order anyway: nothing is withdrawn", async () => {
+      await setupPlayingQueue(4, { isShuffled: true, shuffleOrder: [0, 1, 3, 2] });
+      await driveTickerToEnqueue();
+
+      usePlayerStore.getState().toggleShuffle();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(false);
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
+    it("repeat-one turned on after the hand-off: the queued track is withdrawn", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(true);
+      expect(runtime.gaplessEnqueued).toBeNull();
+      expect(runtime.gaplessActive).toBe(false);
+    });
+
+    it("repeat-one turned on after the hand-off: the current track is warmed for its repeat", async () => {
+      const tracks = await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      const prefetchCall = invoke.mock.calls.find((c) => c[0] === "audio_prefetch");
+      expect(prefetchCall?.[1]).toEqual({ url: streamUrlFor(tracks[0]!) });
+    });
+
+    it("repeat-one turned off late in the track: the next track is still handed off", async () => {
+      const tracks = await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-one" });
+      await driveTickerToEnqueue();
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_enqueue_next")).toBe(false);
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      const enqueueCall = invoke.mock.calls.find((c) => c[0] === "audio_enqueue_next");
+      expect(enqueueCall?.[1]).toEqual({ url: streamUrlFor(tracks[1]!) });
+    });
+
+    it("repeat changed late without changing the successor: the next track is fetched once", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ gapless: false });
+      await driveTickerToEnqueue();
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(200);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_prefetch")).toHaveLength(1);
+    });
+
+    it("hand-off already playing when withdrawn: state kept so track-advanced still follows it", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(false));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
     it("remove the enqueued track itself: still shown as current, index parked forward", async () => {
       await setupPlayingQueue(3); // queue 0,1,2 ; queueIndex 0 ; enqueues track "1" at position 1
       await driveTickerToEnqueue();
@@ -814,6 +921,37 @@ describe("player store - gapless hand-off", () => {
       expect(state.queueIndex).toBe(0);
       // The adopted order must be exactly what the ticker recorded, not a fresh rebuild.
       expect(state.currentTrack?.id).toBe(state.queue[state.shuffleOrder[0]!]!.id);
+    });
+
+    it("shuffle turned off after a shuffled wrap was handed over: the carried order is not adopted", async () => {
+      await setupPlayingQueue(3, { queueIndex: 2, isShuffled: true, shuffleOrder: [2, 0, 1] });
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      // The wrap handed over the track that also opens the unshuffled queue, so it stays queued.
+      const { queue } = usePlayerStore.getState();
+      runtime.gaplessEnqueued = { track: queue[0]!, position: 0, wraps: true, wrapOrder: [0, 2, 1] };
+
+      usePlayerStore.getState().toggleShuffle();
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.isShuffled).toBe(false);
+      expect(state.shuffleOrder).toEqual([]);
+      expect(state.queueIndex).toBe(0);
+      expect(state.currentTrack?.id).toBe("0");
+    });
+
+    it("repeat turned off after the wrap was handed over: the opening track that plays is shown", async () => {
+      await setupPlayingQueue(3, { queueIndex: 2 });
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+
+      usePlayerStore.setState({ repeat: "off" });
+      emitTauriEvent("track-advanced", undefined);
+
+      const state = usePlayerStore.getState();
+      expect(state.currentTrack?.id).toBe("0");
+      expect(state.queueIndex).toBe(0);
     });
 
     it("wrapOrder invalidated by a queue-length change during the lead window: rebuilds anchored on the enqueued track", async () => {
@@ -1464,6 +1602,17 @@ describe("player store - loadSettings restore_on_startup (SQLite path)", () => {
         Promise.resolve(sql.includes("FROM servers") ? serverIds.map((id) => ({ id })) : settingsRows(rows)),
     });
   }
+
+  it("restores the radio similarity scale it saved", async () => {
+    mockDb({
+      select: (sql: string) =>
+        Promise.resolve(settingsRows({ "radio.similarity_scale": "0.25" }).filter((r) => sql.includes(`'${r.key}'`))),
+    });
+
+    await usePlayerStore.getState().loadSettings();
+
+    expect(usePlayerStore.getState().radioSimilarityScale).toBe(0.25);
+  });
 
   it("restores queue_state when restore_on_startup is 'true' and no track is current", async () => {
     mockSettingsDb({
