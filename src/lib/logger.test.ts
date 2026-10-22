@@ -93,4 +93,17 @@ describe("logger writes", () => {
     expect(text).toContain("getCoverArt?u=me&apiKey=[redacted]");
     expect(text).not.toMatch(/abc123|salt9|k3y/);
   });
+
+  it("stores each line once when a flush starts while another is still writing", async () => {
+    initLogger();
+    console.error("first");
+    console.error("second");
+    const running = logger.flush();
+    console.error("third");
+    await Promise.all([running, logger.flush()]);
+
+    const rows = await holder.db!.select<{ message: string }[]>("SELECT message FROM app_logs ORDER BY id", []);
+
+    expect(rows.map((row) => row.message)).toEqual(["first", "second", "third"]);
+  });
 });
