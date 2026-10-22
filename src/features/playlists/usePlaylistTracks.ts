@@ -28,11 +28,11 @@ export function usePlaylistTracks(playlistId: string | null) {
       return;
     }
     let cancelled = false;
-    setResult((prev) => ({
-      playlistId,
-      rows: prev?.playlistId === playlistId ? prev.rows : undefined,
-      isLoading: true,
-    }));
+    setResult((prev) => {
+      const rows = prev?.playlistId === playlistId ? prev.rows : undefined;
+      // A refresh with rows on screen is not loading: the list would swap them for a skeleton.
+      return { playlistId, rows, isLoading: rows === undefined };
+    });
     (async () => {
       try {
         const db = await getDb();

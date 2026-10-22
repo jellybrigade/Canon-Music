@@ -28,12 +28,11 @@ export function useTracks(albumId: string | null) {
   useEffect(() => {
     if (albumId === null) return;
     let cancelled = false;
-    setResult((prev) => ({
-      albumId,
-      rows: prev?.albumId === albumId ? prev.rows : undefined,
-      error: null,
-      isLoading: true,
-    }));
+    setResult((prev) => {
+      const rows = prev?.albumId === albumId ? prev.rows : undefined;
+      // A refresh with rows on screen is not loading: the track list would swap them for a skeleton.
+      return { albumId, rows, error: null, isLoading: rows === undefined };
+    });
     (async () => {
       try {
         // Wait for tauri-plugin-sql's migrations before reading via rusqlite - both

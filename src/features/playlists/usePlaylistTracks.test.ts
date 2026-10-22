@@ -337,15 +337,17 @@ describe("usePlaylistTracks load effect", () => {
     expect(seen[0]).toEqual({ id: plB, firstRow: undefined, isLoading: true });
   });
 
-  it("does not blank the list when only the refresh tick changes", async () => {
+  it("does not blank the list or show it loading when only the refresh tick changes", async () => {
     const pl = seedPlaylist("pl1");
     seedTrack("a");
     seedPlaylistTracks(pl, ["a"]);
 
     const seen: (number | undefined)[] = [];
+    const loadingWithRows: boolean[] = [];
     const { result } = renderHook(() => {
       const r = usePlaylistTracks(pl);
       seen.push(r.data?.length);
+      if (r.data?.length) loadingWithRows.push(r.isLoading);
       return r;
     });
     await waitFor(() => expect(result.current.data).toHaveLength(1));
@@ -358,6 +360,7 @@ describe("usePlaylistTracks load effect", () => {
 
     // Every render after the first successful load still had rows.
     expect(seen.slice(seen.indexOf(1))).not.toContain(undefined);
+    expect(loadingWithRows).not.toContain(true);
   });
 
   it("re-reads on the track tick but not on the playlists tick", async () => {

@@ -124,6 +124,20 @@ describe("useTracks", () => {
     await waitFor(() => expect(handler).toHaveBeenCalledTimes(2));
   });
 
+  it("keeps the rows on screen, not loading, while a refresh rereads them", async () => {
+    onInvoke("get_tracks", () => [track("t1", "a1")]);
+    const { result } = renderHook(() => useTracks("a1"));
+    await waitFor(() => expect(result.current.data).toEqual([track("t1", "a1")]));
+
+    onInvoke("get_tracks", () => new Promise(() => {}));
+    act(() => {
+      useTrackListSessionStore.getState().bumpRefresh();
+    });
+    await waitFor(() => expect(invoke).toHaveBeenCalledTimes(2));
+    expect(result.current.data).toEqual([track("t1", "a1")]);
+    expect(result.current.isLoading).toBe(false);
+  });
+
   it("sets error and leaves data undefined on a failed read", async () => {
     onInvoke("get_tracks", () => {
       throw new Error("db locked");
