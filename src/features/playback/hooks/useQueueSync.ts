@@ -18,6 +18,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
   // overwrite the queue and position another client saved since.
   const hasPlayedRef = useRef(false);
   if (isPlaying) hasPlayedRef.current = true;
+  const hasPlayed = hasPlayedRef.current;
 
   // Restore queue from server on first connect (only if nothing is already playing)
   useEffect(() => {
@@ -100,7 +101,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
   // Save queue to server (debounced 10s)
   useEffect(() => {
-    if (!serverWithCred || !currentTrack || queue.length === 0 || !hasPlayedRef.current) return;
+    if (!serverWithCred || !currentTrack || queue.length === 0 || !hasPlayed) return;
     const { server, credential } = serverWithCred;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -134,7 +135,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
     // Depends on the queue array itself, not its length: a reorder, or a removal paired with
     // an addition, changes the queue without changing how long it is, and keying on length
     // meant the server kept the stale order.
-  }, [serverWithCred, currentTrack?.id, queue]);
+  }, [serverWithCred, currentTrack?.id, queue, hasPlayed]);
 
   // Save immediately on visibility change (tab loses focus) or page unload
   useEffect(() => {

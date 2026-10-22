@@ -423,6 +423,20 @@ describe("useQueueSync restored session", () => {
     expect(savePlayQueue).toHaveBeenCalledTimes(1);
     expect(vi.mocked(savePlayQueue).mock.calls[0]![5]).toBe(3000);
   });
+
+  it("arms the debounced save when the restored track starts playing", async () => {
+    const track = makeTrack("srv-a:t1");
+    usePlayerStore.setState({ currentTrack: track, queue: [track] });
+
+    renderSync(swc());
+    await act(async () => {
+      usePlayerStore.setState({ isPlaying: true, elapsed: 4 });
+    });
+    await tick(10_000);
+
+    expect(savePlayQueue).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(savePlayQueue).mock.calls[0]![5]).toBe(4000);
+  });
 });
 
 describe("useQueueSync immediate save on visibility change / unload", () => {
