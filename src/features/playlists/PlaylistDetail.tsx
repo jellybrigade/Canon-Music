@@ -26,9 +26,10 @@ import { usePlayerStore } from "../playback/store/player";
 import type { CurrentTrack } from "../playback/store/playerTypes";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../radio/hooks/useStartRadio";
-import { type ResumePoint, resolveResumeIndex } from "./playlistResume";
+import { resolveResumeIndex } from "./playlistResume";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
+import { usePlaylistResumePoint } from "./usePlaylistResumePoint";
 import type { PlaylistRow } from "./usePlaylists";
 import { usePlaylistTracks } from "./usePlaylistTracks";
 import "../../pages/AlbumDetail.css";
@@ -153,28 +154,7 @@ export function PlaylistDetail({
   const smartRules = useMemo(() => parseSmartFilters(playlist.rules_json), [playlist.rules_json]);
   const [refreshingSmart, setRefreshingSmart] = useState(false);
   const [showEditSmartModal, setShowEditSmartModal] = useState(false);
-  const [resumePoint, setResumePoint] = useState<ResumePoint | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    // The route does not remount this component when the playlist changes, so a playlist
-    // with no stored resume row would otherwise keep the previous playlist's index and
-    // scroll the new track list to an unrelated position.
-    setResumePoint(null);
-    getDb()
-      .then(async (db) => {
-        type Row = { last_track_id: string; track_position: number };
-        const rows = await db.select<Row[]>(
-          "SELECT last_track_id, track_position FROM playlist_resume WHERE playlist_id = ?",
-          [playlist.id],
-        );
-        const row = rows[0];
-        if (!cancelled && row) setResumePoint({ lastTrackId: row.last_track_id, trackPosition: row.track_position });
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [playlist.id]);
+  const resumePoint = usePlaylistResumePoint(playlist.id);
 
   const virtualizer = useVirtualizer({
     count: tracks?.length ?? 0,
