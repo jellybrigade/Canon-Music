@@ -7,7 +7,7 @@ import { errorMessage } from "../../../lib/errorMessage";
 import { plural } from "../../../lib/plural";
 import { QK } from "../../../lib/queryKeys";
 import { getScrobbleQueueCount } from "../../playback/hooks/useScrobbleFlush";
-import { exportSettingsFile, importSettingsFile } from "../lib/settingsBackup";
+import { exportSettingsFile, restoreSettingsBackup } from "../lib/settingsBackup";
 
 type SyncStatus = "idle" | "syncing" | "done" | "partial" | "error";
 
@@ -110,7 +110,7 @@ export function DiagnosticsTab({
 
   async function handleImportSettings(file: File) {
     try {
-      await importSettingsFile(file);
+      await restoreSettingsBackup(await file.text());
       await queryClient.invalidateQueries({ queryKey: QK.settingsAll() });
       window.location.reload();
     } catch (e) {
