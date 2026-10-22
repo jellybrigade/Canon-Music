@@ -1,7 +1,8 @@
 import { getDb } from "../db";
 import type { TagKind } from "../features/tags/lib/canonicalize";
 import { canonicalKey } from "../features/tags/lib/canonicalize";
-import { keychain } from "../lib/keychain";
+import { errorMessage } from "../lib/errorMessage";
+import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
 import { parseNumberOr } from "../lib/numberSetting";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { boundedFetch } from "./boundedFetch";
@@ -22,12 +23,14 @@ const LASTFM_ERROR_NOT_FOUND = 6;
 // ≤ 4 req/s to stay well within Last.fm rate limit
 const rateLimit = makeRateLimiter(250);
 
+/** Resolves null when no key is stored; rejects when the secret store is locked or not up yet. */
 async function getApiKey(): Promise<string | null> {
   try {
     const key = await keychain.get(LASTFM_KEYCHAIN_SERVICE, LASTFM_KEYCHAIN_ACCOUNT);
     if (key) return key;
-  } catch {
-    /* not in keychain yet */
+  } catch (err) {
+    const detail = errorMessage(err);
+    if (detail.startsWith(SECRET_STORE_UNAVAILABLE)) throw new Error(detail.slice(SECRET_STORE_UNAVAILABLE.length));
   }
   // Migration: move legacy SQLite key to keychain on first access
   try {
@@ -98,6 +101,7 @@ async function fetchTags(
     message?: string;
   };
 
+  if (data.error === LASTFM_ERROR_NOT_FOUND) return [];
   if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
   return (data.toptags?.tag ?? [])
     .filter((t) => (t.count ?? 0) >= minCount)
@@ -105,9 +109,10 @@ async function fetchTags(
     .slice(0, MAX_TAGS);
 }
 
+/** Resolves no tags without a key or for an album Last.fm doesn't know; rejects when it didn't answer. */
 export async function fetchAlbumTags(artist: string, album: string): Promise<LastfmTagResult> {
   const apiKey = await getApiKey();
-  if (!apiKey) throw new Error("Last.fm API key not configured");
+  if (!apiKey) return { genres: [], moods: [] };
   const minCount = await getMinTagCount();
   const tags = await fetchTags("album.getTopTags", { artist, album }, apiKey, minCount);
   return { genres: tags, moods: [] };
@@ -132,11 +137,7 @@ export async function fetchArtistGenreTags(artist: string): Promise<string[]> {
   const apiKey = await getApiKey();
   if (!apiKey) return [];
   const minCount = await getMinTagCount();
-  try {
-    return await fetchTags("artist.getTopTags", { artist }, apiKey, minCount);
-  } catch {
-    return [];
-  }
+  return fetchTags("artist.getTopTags", { artist }, apiKey, minCount);
 }
 
 export interface LastfmArtistInfo {
@@ -188,11 +189,20 @@ export function similarArtistsAboveMatch(entries: SimilarArtistEntry[]): string[
   return entries.filter((entry) => entry.match >= SIMILAR_ARTIST_MIN_MATCH).map((entry) => entry.name);
 }
 
+const EMPTY_ARTIST_INFO: LastfmArtistInfo = {
+  bio: null,
+  listeners: null,
+  playcount: null,
+  similar: [],
+  topTags: [],
+  imageUrl: null,
+};
+
+/** Resolves empty info without a key or for an artist Last.fm doesn't know; rejects when it didn't
+ * answer, so a caller never overwrites stored info with a timeout. */
 export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo> {
   const apiKey = await getApiKey();
-  if (!apiKey) {
-    return { bio: null, listeners: null, playcount: null, similar: [], topTags: [], imageUrl: null };
-  }
+  if (!apiKey) return EMPTY_ARTIST_INFO;
   await rateLimit();
   const url = new URL(LASTFM_BASE);
   url.searchParams.set("method", "artist.getInfo");
@@ -200,39 +210,36 @@ export async function fetchArtistInfo(artist: string): Promise<LastfmArtistInfo>
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("format", "json");
 
-  try {
-    const res = await boundedFetch(url.toString());
-    if (!res.ok) throw new Error(`Last.fm artist.getInfo returned ${res.status}`);
-    const data = (await res.json()) as {
-      artist?: {
-        bio?: { content?: string };
-        stats?: { listeners?: string; playcount?: string };
-        similar?: { artist?: Array<{ name: string }> };
-        tags?: { tag?: Array<{ name: string }> };
-        image?: Array<{ "#text": string; size: string }>;
-      };
-      error?: number;
-      message?: string;
+  const res = await boundedFetch(url.toString());
+  if (!res.ok) throw new Error(`Last.fm artist.getInfo returned ${res.status}`);
+  const data = (await res.json()) as {
+    artist?: {
+      bio?: { content?: string };
+      stats?: { listeners?: string; playcount?: string };
+      similar?: { artist?: Array<{ name: string }> };
+      tags?: { tag?: Array<{ name: string }> };
+      image?: Array<{ "#text": string; size: string }>;
     };
-    if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
-    const a = data.artist;
-    if (!a) throw new Error("No artist data");
-    const similarEntries = await fetchSimilarArtistsFull(artist, apiKey);
-    return {
-      bio: a.bio?.content ? stripBioBoilerplate(a.bio.content) || null : null,
-      listeners: parseNumberOr(a.stats?.listeners, null),
-      playcount: parseNumberOr(a.stats?.playcount, null),
-      // getSimilar answers [] on failure too, so an empty list falls back to getInfo's five.
-      similar:
-        similarEntries.length > 0
-          ? similarArtistsAboveMatch(similarEntries)
-          : (a.similar?.artist ?? []).map((x) => x.name),
-      topTags: (a.tags?.tag ?? []).map((t) => t.name).slice(0, 10),
-      imageUrl: a.image ? pickImage(a.image) : null,
-    };
-  } catch {
-    return { bio: null, listeners: null, playcount: null, similar: [], topTags: [], imageUrl: null };
-  }
+    error?: number;
+    message?: string;
+  };
+  if (data.error === LASTFM_ERROR_NOT_FOUND) return EMPTY_ARTIST_INFO;
+  if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
+  const a = data.artist;
+  if (!a) throw new Error("Last.fm artist.getInfo answered without an artist");
+  const similarEntries = await fetchSimilarArtistsFull(artist, apiKey);
+  return {
+    bio: a.bio?.content ? stripBioBoilerplate(a.bio.content) || null : null,
+    listeners: parseNumberOr(a.stats?.listeners, null),
+    playcount: parseNumberOr(a.stats?.playcount, null),
+    // getSimilar answers [] on failure too, so an empty list falls back to getInfo's five.
+    similar:
+      similarEntries.length > 0
+        ? similarArtistsAboveMatch(similarEntries)
+        : (a.similar?.artist ?? []).map((x) => x.name),
+    topTags: (a.tags?.tag ?? []).map((t) => t.name).slice(0, 10),
+    imageUrl: a.image ? pickImage(a.image) : null,
+  };
 }
 
 const SIGNAL_CACHE_TTL_S = 7 * 24 * 3600;
@@ -423,22 +430,20 @@ export async function fetchArtistTopAlbums(artist: string): Promise<LastfmTopAlb
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("format", "json");
 
-  try {
-    const res = await boundedFetch(url.toString());
-    if (!res.ok) return [];
-    const data = (await res.json()) as {
-      topalbums?: { album?: Array<{ name: string; playcount?: string; listeners?: string }> };
-      error?: number;
-    };
-    if (data.error) return [];
-    return (data.topalbums?.album ?? []).map((a) => ({
-      name: a.name,
-      playcount: parseNumberOr(a.playcount, 0),
-      listeners: parseNumberOr(a.listeners, 0),
-    }));
-  } catch {
-    return [];
-  }
+  const res = await boundedFetch(url.toString());
+  if (!res.ok) throw new Error(`Last.fm artist.getTopAlbums returned ${res.status}`);
+  const data = (await res.json()) as {
+    topalbums?: { album?: Array<{ name: string; playcount?: string; listeners?: string }> };
+    error?: number;
+    message?: string;
+  };
+  if (data.error === LASTFM_ERROR_NOT_FOUND) return [];
+  if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
+  return (data.topalbums?.album ?? []).map((a) => ({
+    name: a.name,
+    playcount: parseNumberOr(a.playcount, 0),
+    listeners: parseNumberOr(a.listeners, 0),
+  }));
 }
 
 export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTrack[]> {
@@ -452,21 +457,19 @@ export async function fetchArtistTopTracks(artist: string): Promise<LastfmTopTra
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("format", "json");
 
-  try {
-    const res = await boundedFetch(url.toString());
-    if (!res.ok) return [];
-    const data = (await res.json()) as {
-      toptracks?: { track?: Array<{ name: string; playcount?: string }> };
-      error?: number;
-    };
-    if (data.error) return [];
-    return (data.toptracks?.track ?? []).map((t) => ({
-      name: t.name,
-      playcount: parseNumberOr(t.playcount, 0),
-    }));
-  } catch {
-    return [];
-  }
+  const res = await boundedFetch(url.toString());
+  if (!res.ok) throw new Error(`Last.fm artist.getTopTracks returned ${res.status}`);
+  const data = (await res.json()) as {
+    toptracks?: { track?: Array<{ name: string; playcount?: string }> };
+    error?: number;
+    message?: string;
+  };
+  if (data.error === LASTFM_ERROR_NOT_FOUND) return [];
+  if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
+  return (data.toptracks?.track ?? []).map((t) => ({
+    name: t.name,
+    playcount: parseNumberOr(t.playcount, 0),
+  }));
 }
 
 // Last.fm has no per-album track lookup; same-titled tracks across releases share one
