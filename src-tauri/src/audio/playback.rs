@@ -4,7 +4,7 @@ use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
 use rodio::source::EmptyCallback;
 use rodio::{Player, Source};
 use std::io::{Cursor, Read};
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
@@ -390,10 +390,12 @@ pub async fn audio_enqueue_next(
         // Releases the gapless slot and tells the frontend to stop suppressing its
         // position-based fallback advance, which is otherwise disabled for the rest of the
         // session on any bail-out path below.
-        let cancel = |gq: &std::sync::atomic::AtomicBool, app: &tauri::AppHandle| {
-            gq.store(false, Ordering::Release);
-            app.emit("gapless-cancelled", ()).ok();
+        let cancel = |gq: &AtomicBool, app: &tauri::AppHandle| {
+            if release_gapless_slot(&handoff, gq) {
+                app.emit("gapless-cancelled", ()).ok();
+            }
         };
+        let is_withdrawn = || handoff.load(Ordering::Acquire) == HANDOFF_WITHDRAWN;
 
         let cached = {
             cache_arc
@@ -412,6 +414,9 @@ pub async fn audio_enqueue_next(
                     return;
                 }
             };
+            if is_withdrawn() {
+                return;
+            }
             let status = response.status().as_u16();
             let ct = response
                 .headers()
@@ -439,7 +444,7 @@ pub async fn audio_enqueue_next(
         };
 
         // Abort if a newer explicit play started while we were downloading.
-        if play_id_arc.load(Ordering::Relaxed) != snap_id {
+        if play_id_arc.load(Ordering::Relaxed) != snap_id || is_withdrawn() {
             cancel(&gapless_queued, &app);
             return;
         }
@@ -456,7 +461,7 @@ pub async fn audio_enqueue_next(
 
         // Final play_id check before appending — guards against the decode
         // completing just as the user skips to a different track.
-        if play_id_arc.load(Ordering::Relaxed) != snap_id {
+        if play_id_arc.load(Ordering::Relaxed) != snap_id || is_withdrawn() {
             cancel(&gapless_queued, &app);
             return;
         }
@@ -559,6 +564,16 @@ fn withdraw_handoff(handoff: &AtomicU8) -> bool {
             Ordering::Acquire,
         )
         .is_ok()
+}
+
+/// A withdrawn enqueue already gave the slot up, and the next enqueue may hold it now; claiming
+/// the hand-off first means a late bail-out can never release someone else's slot.
+fn release_gapless_slot(handoff: &AtomicU8, queued: &AtomicBool) -> bool {
+    if !withdraw_handoff(handoff) {
+        return false;
+    }
+    queued.store(false, Ordering::Release);
+    true
 }
 
 fn take_gapless_start(started: &AtomicU64, play_id: u64) -> bool {
@@ -750,6 +765,26 @@ mod tests {
 
         assert!(!take_gapless_start(&started, 7));
         assert!(sink.empty());
+    }
+
+    #[test]
+    fn a_withdrawn_enqueue_leaves_the_slot_to_whoever_claimed_it_next() {
+        let handoff = AtomicU8::new(HANDOFF_PENDING);
+        let queued = AtomicBool::new(true);
+        assert!(withdraw_handoff(&handoff));
+
+        assert!(!release_gapless_slot(&handoff, &queued));
+        assert!(queued.load(Ordering::Acquire));
+    }
+
+    #[test]
+    fn a_failed_enqueue_releases_its_slot_and_can_no_longer_be_withdrawn() {
+        let handoff = AtomicU8::new(HANDOFF_PENDING);
+        let queued = AtomicBool::new(true);
+
+        assert!(release_gapless_slot(&handoff, &queued));
+        assert!(!queued.load(Ordering::Acquire));
+        assert!(!withdraw_handoff(&handoff));
     }
 
     #[test]
