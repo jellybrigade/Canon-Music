@@ -11,7 +11,6 @@ import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
 import type { Server as ServerRow } from "../../../types/server";
 import { loginFailureMessage } from "../../setup/loginFailureMessage";
-import { resyncLibrary } from "../../sync/resyncLibrary";
 import type { SyncOptions } from "../../sync/sync";
 import { purgeServerData } from "../../sync/syncPrune";
 
@@ -191,15 +190,15 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
     }
   }
 
-  async function handleResync() {
+  function handleResync() {
     if (!serverWithCredential) return;
-    setResyncError("");
-    try {
-      await resyncLibrary(serverWithCredential, runSync);
-      setResyncConfirm(false);
-    } catch (err) {
-      setResyncError(errorMessage(err));
+    // An automatic sync can start while the confirmation is open.
+    if (!runSync(serverWithCredential, { forceTrackPass: true })) {
+      setResyncError("a sync is already running. Try again once it finishes.");
+      return;
     }
+    setResyncError("");
+    setResyncConfirm(false);
   }
 
   async function handleRemoveServer() {
@@ -393,12 +392,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
               <button className="settings-btn" onClick={() => setResyncConfirm(false)}>
                 Cancel
               </button>
-              <button
-                className="settings-btn primary"
-                onClick={() => {
-                  void handleResync();
-                }}
-              >
+              <button className="settings-btn primary" onClick={handleResync}>
                 Resync
               </button>
             </div>

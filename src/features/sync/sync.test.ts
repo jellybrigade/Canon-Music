@@ -1425,7 +1425,8 @@ describe("syncLibrary skip evidence", () => {
       await interruptedPass();
       await syncLibrary(server(), CRED);
 
-      await clearSyncWatermark(asDb(db()), SRV);
+      // The forced sync forgets the watermark itself: a separate clear before it could land
+      // while another sync ran, which then wrote the watermark back and lost the resync.
       let call = 0;
       mAlbumTracks.mockReset();
       mAlbumTracks.mockImplementation(async (_u, _n, _c, albumId) => {

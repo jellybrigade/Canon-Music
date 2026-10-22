@@ -20,11 +20,13 @@ const CommandPalette = lazy(() => import("../components/CommandPalette").then((m
 // Its own component so the player state the actions read re-renders only the palette, not every view.
 function CommandPaletteWithActions({
   runSync,
+  syncStatus,
   ...paletteProps
 }: Omit<ComponentProps<typeof CommandPalette>, "actions" | "onPlayAlbum" | "onUnpin"> & {
   runSync: AppViewProps["runSync"];
+  syncStatus: AppViewProps["syncStatus"];
 }) {
-  const actions = usePaletteActions(paletteProps.serverWithCredential, runSync);
+  const actions = usePaletteActions(paletteProps.serverWithCredential, runSync, syncStatus === "syncing");
   const playAlbum = usePlayAlbum(paletteProps.serverWithCredential);
   const setPinned = useSetPinned();
   const { serverId } = paletteProps;
@@ -87,6 +89,7 @@ export function AppShell(props: AppViewProps) {
     remoteNotice,
     dismissRemoteNotice,
     runSync,
+    syncStatus,
   } = props;
 
   const { data: pins } = usePins(server?.id);
@@ -196,6 +199,7 @@ export function AppShell(props: AppViewProps) {
         pins={pins}
         recents={recents}
         runSync={runSync}
+        syncStatus={syncStatus}
       />
       {pendingUpdate && <UpdatePrompt update={pendingUpdate} onDismiss={() => setPendingUpdate(null)} />}
       {remoteNotice && <RemoteNoticeBanner notice={remoteNotice} onDismiss={() => void dismissRemoteNotice()} />}

@@ -18,6 +18,7 @@ import { syncPlaylists } from "./syncPlaylists";
 import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
 import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
 import {
+  clearSyncWatermark,
   mirroredTrackIdsStillResolve,
   type ServerWatermark,
   sameValue,
@@ -94,6 +95,10 @@ export async function syncLibrary(
   ]);
 
   const db = await getDb();
+  // Inside the run, not before it: a clear made while another sync ran was written back by
+  // that sync's own watermark, losing the resync. Cleared up front so an interrupted resync
+  // leaves the next sync to finish it.
+  if (options?.forceTrackPass === true) await clearSyncWatermark(db, server.id);
 
   // Decide once, before the album loop, whether anything may be skipped at all. A server
   // version bump is exactly when a migration rewrites ids, and a scan stamp or song count

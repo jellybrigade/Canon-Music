@@ -32,11 +32,16 @@ function labels(actions: { label: string }[]) {
   return actions.map((action) => action.label);
 }
 
-async function mountLoaded({ server }: { server: ServerWithCredential | undefined } = { server: SRV }) {
+async function mountLoaded(
+  { server, isSyncing }: { server: ServerWithCredential | undefined; isSyncing: boolean } = {
+    server: SRV,
+    isSyncing: false,
+  },
+) {
   let renders = 0;
   const hook = renderHook(() => {
     renders++;
-    return usePaletteActions(server, runSync);
+    return usePaletteActions(server, runSync, isSyncing);
   });
   // The radio start setting is read once; let it land before the case acts.
   await waitFor(() => expect(db.selectCount).toBe(1));
@@ -95,7 +100,7 @@ describe("usePaletteActions", () => {
     const { result } = await mountLoaded();
     expect(labels(result.current)).toEqual(["Shuffle library", "Resync library"]);
     cleanup();
-    const withoutServer = await mountLoaded({ server: undefined });
+    const withoutServer = await mountLoaded({ server: undefined, isSyncing: false });
     expect(labels(withoutServer.result.current)).toEqual([]);
   });
 
@@ -147,8 +152,14 @@ describe("usePaletteActions", () => {
     run(result.current, "Sleep timer: 30 minutes");
     expect(setSleepTimer).toHaveBeenCalledWith(30);
     run(result.current, "Resync library");
-    await waitFor(() => expect(runSync).toHaveBeenCalledTimes(1));
+    expect(runSync).toHaveBeenCalledTimes(1);
     expect(runSync).toHaveBeenCalledWith(SRV, { forceTrackPass: true });
+  });
+
+  it("does not offer a resync that a running sync would refuse", async () => {
+    const { result } = await mountLoaded({ server: SRV, isSyncing: true });
+    expect(labels(result.current)).toContain("Shuffle library");
+    expect(labels(result.current)).not.toContain("Resync library");
   });
 
   it("does not re-render as the elapsed time ticks", async () => {
