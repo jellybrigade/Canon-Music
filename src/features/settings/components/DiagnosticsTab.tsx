@@ -255,9 +255,7 @@ export function DiagnosticsTab({
               <span className="settings-hint">Saved to {exportResult.savedTo}</span>
             )}
             {exportResult && "error" in exportResult && (
-              <span className="settings-hint" style={{ color: "var(--danger)" }}>
-                Export failed: {exportResult.error}
-              </span>
+              <span className="settings-hint settings-hint-error">Export failed: {exportResult.error}</span>
             )}
           </div>
         </section>

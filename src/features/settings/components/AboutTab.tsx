@@ -108,9 +108,7 @@ export function AboutTab({ searchQuery }: Props) {
         ) : null}
         {updateCheckState === "up-to-date" && <span className="settings-hint">You're up to date.</span>}
         {updateCheckState === "error" && (
-          <span className="settings-hint" style={{ color: "var(--danger)" }}>
-            Couldn't check for updates.
-          </span>
+          <span className="settings-hint settings-hint-error">Couldn't check for updates.</span>
         )}
         {updateCheckState === "available" && pendingUpdate && (
           <>
@@ -130,9 +128,7 @@ export function AboutTab({ searchQuery }: Props) {
               {updateInstalling ? "Installing…" : "Install & Restart"}
             </button>
             {installError && (
-              <span className="settings-hint" style={{ color: "var(--danger)" }}>
-                Couldn't install the update: {installError}
-              </span>
+              <span className="settings-hint settings-hint-error">Couldn't install the update: {installError}</span>
             )}
           </>
         )}
