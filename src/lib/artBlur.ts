@@ -99,7 +99,8 @@ async function renderViaProxyFetch(imageUrl: string): Promise<string | null> {
 }
 
 export async function getBlurredBackdrop(imageUrl: string): Promise<string | null> {
-  if (blurCache.has(imageUrl)) return blurCache.get(imageUrl)!;
+  const cached = blurCache.get(imageUrl);
+  if (cached !== undefined) return cached;
 
   let result: string | null = null;
   const img = await loadImageAnonymous(imageUrl);
