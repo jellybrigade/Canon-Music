@@ -770,6 +770,60 @@ describe("player store - gapless hand-off", () => {
       expect(state.shuffleOrder.slice(0, 2)).toEqual([0, 1]);
     });
 
+    it("shuffle turned off after the hand-off: the queued track is withdrawn and the next in order plays", async () => {
+      // queue 0..5, playing "0" at shuffled position 0; the shuffle hands over track "4".
+      await setupPlayingQueue(6, { isShuffled: true, shuffleOrder: [0, 4, 1, 2, 3, 5] });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      usePlayerStore.getState().toggleShuffle();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(true);
+      expect(runtime.gaplessEnqueued).toBeNull();
+      emitTauriEvent("track-ended", undefined);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(usePlayerStore.getState().currentTrack?.id).toBe("1");
+      expect(usePlayerStore.getState().queueIndex).toBe(1);
+    });
+
+    it("shuffle turned off when the queued track is next in order anyway: nothing is withdrawn", async () => {
+      await setupPlayingQueue(4, { isShuffled: true, shuffleOrder: [0, 1, 3, 2] });
+      await driveTickerToEnqueue();
+
+      usePlayerStore.getState().toggleShuffle();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(false);
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
+    it("repeat-one turned on after the hand-off: the queued track is withdrawn", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.some((c) => c[0] === "audio_withdraw_next")).toBe(true);
+      expect(runtime.gaplessEnqueued).toBeNull();
+      expect(runtime.gaplessActive).toBe(false);
+    });
+
+    it("hand-off already playing when withdrawn: state kept so track-advanced still follows it", async () => {
+      await setupPlayingQueue(3);
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(false));
+
+      await usePlayerStore.getState().toggleRepeat();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
     it("remove the enqueued track itself: still shown as current, index parked forward", async () => {
       await setupPlayingQueue(3); // queue 0,1,2 ; queueIndex 0 ; enqueues track "1" at position 1
       await driveTickerToEnqueue();

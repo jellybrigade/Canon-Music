@@ -150,6 +150,7 @@ pub fn run() {
             pause_pending: Arc::new(AtomicBool::new(false)),
             gapless_queued: Arc::new(AtomicBool::new(false)),
             gapless_started: Arc::new(AtomicU64::new(0)),
+            gapless_handoff: Arc::new(Mutex::new(None)),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
@@ -267,6 +268,7 @@ pub fn run() {
             keychain::delete_credential,
             audio::playback::audio_play,
             audio::playback::audio_enqueue_next,
+            audio::playback::audio_withdraw_next,
             audio::playback::audio_prefetch,
             audio::control::audio_pause,
             audio::control::audio_resume,

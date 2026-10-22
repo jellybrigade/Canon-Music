@@ -4,7 +4,7 @@ use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
 use rodio::source::EmptyCallback;
 use rodio::{Player, Source};
 use std::io::{Cursor, Read};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager};
@@ -51,6 +51,10 @@ pub async fn audio_play(
 
     // Reset gapless state — any pending enqueue is now stale.
     state.gapless_queued.store(false, Ordering::Relaxed);
+    *state
+        .gapless_handoff
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
 
     let cached_bytes = {
         let mut cache = state
@@ -372,8 +376,17 @@ pub async fn audio_enqueue_next(
     let play_id_arc = Arc::clone(&state.play_id);
     let snap_id = play_id_arc.load(Ordering::Relaxed);
     let cache_arc = Arc::clone(&state.prefetch_cache);
+    let handoff = Arc::new(AtomicU8::new(HANDOFF_PENDING));
+    *state
+        .gapless_handoff
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(Arc::clone(&handoff));
 
     std::thread::spawn(move || {
+        // Released by audio_withdraw_next already; the frontend knows from its answer.
+        if handoff.load(Ordering::Acquire) == HANDOFF_WITHDRAWN {
+            return;
+        }
         // Releases the gapless slot and tells the frontend to stop suppressing its
         // position-based fallback advance, which is otherwise disabled for the rest of the
         // session on any bail-out path below.
@@ -457,7 +470,7 @@ pub async fn audio_enqueue_next(
                 cancel(&gapless_queued, &app);
                 return;
             }
-            append_gapless(&sink, source, gapless_started, snap_id);
+            append_gapless(&sink, source, gapless_started, snap_id, handoff);
             // Flag stays true — set in compare_exchange above; watcher clears it on transition.
         } else {
             cancel(&gapless_queued, &app);
@@ -465,6 +478,22 @@ pub async fn audio_enqueue_next(
     });
 
     Ok(())
+}
+
+/// Called by JS when a setting changed after the hand-off (repeat-one, shuffle off) makes the
+/// queued source the wrong next track. True if playback had not reached it, so it never plays.
+#[tauri::command]
+pub fn audio_withdraw_next(state: tauri::State<'_, AudioState>) -> bool {
+    let handoff = state
+        .gapless_handoff
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take();
+    let withdrawn = handoff.is_some_and(|h| withdraw_handoff(&h));
+    if withdrawn {
+        state.gapless_queued.store(false, Ordering::Release);
+    }
+    withdrawn
 }
 
 fn emit_output_lost(app: &tauri::AppHandle, url: &str) {
@@ -479,16 +508,57 @@ fn emit_output_lost(app: &tauri::AppHandle, url: &str) {
     .ok();
 }
 
+const HANDOFF_PENDING: u8 = 0;
+const HANDOFF_STARTED: u8 = 1;
+const HANDOFF_WITHDRAWN: u8 = 2;
+
 /// Appends `source` behind a zero-length marker that records `play_id` in `started` at the
 /// sample where playback reaches it, so the watcher cannot miss a hand-off between polls.
-fn append_gapless<S>(sink: &Player, source: S, started: Arc<AtomicU64>, play_id: u64)
-where
+/// rodio can't remove an appended source, so a withdrawn `handoff` makes it end at its first sample.
+fn append_gapless<S>(
+    sink: &Player,
+    source: S,
+    started: Arc<AtomicU64>,
+    play_id: u64,
+    handoff: Arc<AtomicU8>,
+) where
     S: Source + Send + 'static,
 {
+    let marker_handoff = Arc::clone(&handoff);
     sink.append(EmptyCallback::new(Box::new(move || {
-        started.store(play_id, Ordering::Release);
+        let reached = marker_handoff
+            .compare_exchange(
+                HANDOFF_PENDING,
+                HANDOFF_STARTED,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok();
+        if reached {
+            started.store(play_id, Ordering::Release);
+        }
     })));
-    sink.append(source);
+    // Only the first sample's check can see a withdrawal; afterwards the marker has claimed it.
+    sink.append(
+        source
+            .skippable()
+            .periodic_access(Duration::from_secs(1), move |source| {
+                if handoff.load(Ordering::Acquire) == HANDOFF_WITHDRAWN {
+                    source.skip();
+                }
+            }),
+    );
+}
+
+fn withdraw_handoff(handoff: &AtomicU8) -> bool {
+    handoff
+        .compare_exchange(
+            HANDOFF_PENDING,
+            HANDOFF_WITHDRAWN,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        )
+        .is_ok()
 }
 
 fn take_gapless_start(started: &AtomicU64, play_id: u64) -> bool {
@@ -559,6 +629,10 @@ mod tests {
         SamplesBuffer::new(nz!(1), nz!(44_100), vec![0.5; samples])
     }
 
+    fn pending() -> Arc<AtomicU8> {
+        Arc::new(AtomicU8::new(HANDOFF_PENDING))
+    }
+
     fn pull(output: &mut impl Iterator<Item = f32>, samples: usize) {
         for _ in 0..samples {
             output.next();
@@ -610,7 +684,7 @@ mod tests {
         sink.append(tone(4));
         let len_before = sink.len();
 
-        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7, pending());
         pull(&mut output, 5);
 
         assert_eq!(sink.len(), len_before);
@@ -622,7 +696,7 @@ mod tests {
         let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(4));
-        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7, pending());
         pull(&mut output, 5);
 
         assert!(take_gapless_start(&started, 7));
@@ -634,7 +708,7 @@ mod tests {
         let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(4));
-        append_gapless(&sink, tone(4), Arc::clone(&started), 7);
+        append_gapless(&sink, tone(4), Arc::clone(&started), 7, pending());
 
         pull(&mut output, 3);
         assert!(!take_gapless_start(&started, 7));
@@ -648,13 +722,56 @@ mod tests {
         let (sink, mut output) = Player::new();
         let started = Arc::new(AtomicU64::new(0));
         sink.append(tone(2_000));
-        append_gapless(&sink, tone(2_000), Arc::clone(&started), 5);
+        append_gapless(&sink, tone(2_000), Arc::clone(&started), 5, pending());
         pull(&mut output, 500);
 
         sink.stop();
         pull(&mut output, 4_000);
 
         assert_eq!(started.load(Ordering::Acquire), 0);
+    }
+
+    #[test]
+    fn withdrawn_hand_off_is_skipped_and_never_reported() {
+        let (sink, mut output) = Player::new();
+        let started = Arc::new(AtomicU64::new(0));
+        let handoff = Arc::new(AtomicU8::new(HANDOFF_PENDING));
+        sink.append(tone(4));
+        append_gapless(
+            &sink,
+            tone(4_000),
+            Arc::clone(&started),
+            7,
+            Arc::clone(&handoff),
+        );
+
+        assert!(withdraw_handoff(&handoff));
+        pull(&mut output, 10);
+
+        assert!(!take_gapless_start(&started, 7));
+        assert!(sink.empty());
+    }
+
+    #[test]
+    fn hand_off_already_playing_cannot_be_withdrawn() {
+        let (sink, mut output) = Player::new();
+        let started = Arc::new(AtomicU64::new(0));
+        let handoff = Arc::new(AtomicU8::new(HANDOFF_PENDING));
+        sink.append(tone(4));
+        append_gapless(
+            &sink,
+            tone(4_000),
+            Arc::clone(&started),
+            7,
+            Arc::clone(&handoff),
+        );
+        pull(&mut output, 5);
+
+        assert!(!withdraw_handoff(&handoff));
+        pull(&mut output, 10);
+
+        assert!(take_gapless_start(&started, 7));
+        assert!(!sink.empty());
     }
 
     #[test]

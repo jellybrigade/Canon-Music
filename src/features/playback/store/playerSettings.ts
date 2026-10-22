@@ -18,6 +18,7 @@ import {
   type ReplayGainMode,
 } from "./playerTypes";
 import { computeReplayGainLinear } from "./replayGain";
+import { withdrawGaplessHandOff } from "./withdrawGaplessHandOff";
 
 type SettingsActions = Pick<
   PlayerState,
@@ -187,6 +188,7 @@ export function createSettingsActions(
       const { repeat } = get();
       const next: RepeatMode = repeat === "off" ? "repeat-all" : repeat === "repeat-all" ? "repeat-one" : "off";
       set({ repeat: next });
+      if (next === "repeat-one") void withdrawGaplessHandOff();
       try {
         const db = await getDb();
         await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('repeat', ?)", [next]);

@@ -197,6 +197,10 @@ pub fn audio_stop(state: tauri::State<'_, AudioState>) {
     state.play_id.fetch_add(1, Ordering::Relaxed);
     state.fade_gen.fetch_add(1, Ordering::Relaxed);
     state.gapless_queued.store(false, Ordering::Relaxed);
+    *state
+        .gapless_handoff
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = None;
     state.pause_pending.store(false, Ordering::Relaxed);
     let old_sink = state.sink.lock().unwrap_or_else(|e| e.into_inner()).take();
     if let Some(sink) = old_sink {

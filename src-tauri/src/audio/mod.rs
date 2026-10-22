@@ -9,7 +9,7 @@ use rodio::mixer::Mixer;
 use rodio::{Decoder, DeviceSinkBuilder, DeviceSinkError, MixerDeviceSink, Player};
 use std::collections::HashMap;
 use std::io::{Read, Seek};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -133,6 +133,8 @@ pub(crate) struct AudioState {
     pub(crate) gapless_queued: Arc<AtomicBool>,
     // play_id under which playback reached the queued gapless source; 0 once the watcher reports it.
     pub(crate) gapless_started: Arc<AtomicU64>,
+    // State of the latest queued gapless source, so audio_withdraw_next can skip it before it plays.
+    pub(crate) gapless_handoff: Arc<Mutex<Option<Arc<AtomicU8>>>>,
 }
 
 #[cfg(test)]

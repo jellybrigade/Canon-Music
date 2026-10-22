@@ -9,6 +9,7 @@ import {
   resolveTrack,
   trimQueueToCap,
 } from "./queueOrder";
+import { withdrawGaplessHandOff } from "./withdrawGaplessHandOff";
 
 type QueueActions = Pick<
   PlayerState,
@@ -81,6 +82,9 @@ export function createQueueActions(
         // Restore: resolve current position back to its actual queue index
         const actualIndex = shuffleOrder.length > 0 ? (shuffleOrder[queueIndex] ?? queueIndex) : queueIndex;
         set({ isShuffled: false, shuffleOrder: [], queueIndex: actualIndex });
+        const enqueued = runtime.gaplessEnqueued;
+        const nextInOrder = queue[enqueued?.wraps ? 0 : actualIndex + 1];
+        if (enqueued && nextInOrder?.id !== enqueued.track.id) void withdrawGaplessHandOff();
       } else {
         if (queue.length <= 1) {
           set({ isShuffled: true, shuffleOrder: queue.length === 1 ? [0] : [] });
