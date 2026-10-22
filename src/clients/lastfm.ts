@@ -17,6 +17,8 @@ export interface LastfmTagResult {
 const LASTFM_BASE = "https://ws.audioscrobbler.com/2.0/";
 const MAX_TAGS = 10;
 const MIN_TAG_COUNT_DEFAULT = 5;
+// Last.fm answers "Invalid parameters" for an artist, album or track it doesn't know.
+const LASTFM_ERROR_NOT_FOUND = 6;
 // ≤ 4 req/s to stay well within Last.fm rate limit
 const rateLimit = makeRateLimiter(250);
 
@@ -368,25 +370,24 @@ export async function fetchAlbumInfo(artist: string, album: string): Promise<Las
   url.searchParams.set("api_key", apiKey);
   url.searchParams.set("format", "json");
 
-  try {
-    const res = await boundedFetch(url.toString());
-    if (!res.ok) return { bio: null, url: null };
-    const data = (await res.json()) as {
-      album?: {
-        wiki?: { summary?: string; content?: string };
-        url?: string;
-      };
-      error?: number;
+  const res = await boundedFetch(url.toString());
+  if (!res.ok) throw new Error(`Last.fm album.getInfo returned ${res.status}`);
+  const data = (await res.json()) as {
+    album?: {
+      wiki?: { summary?: string; content?: string };
+      url?: string;
     };
-    if (data.error || !data.album) return { bio: null, url: null };
-    const raw = data.album.wiki?.content ?? data.album.wiki?.summary ?? null;
-    return {
-      bio: raw ? stripBioBoilerplate(raw) || null : null,
-      url: data.album.url ?? null,
-    };
-  } catch {
-    return { bio: null, url: null };
-  }
+    error?: number;
+    message?: string;
+  };
+  if (data.error === LASTFM_ERROR_NOT_FOUND) return { bio: null, url: null };
+  if (data.error) throw new Error(data.message ?? `Last.fm error ${data.error}`);
+  if (!data.album) return { bio: null, url: null };
+  const raw = data.album.wiki?.content ?? data.album.wiki?.summary ?? null;
+  return {
+    bio: raw ? stripBioBoilerplate(raw) || null : null,
+    url: data.album.url ?? null,
+  };
 }
 
 export interface LastfmTopTrack {
