@@ -14,6 +14,10 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
   const isPlaying = usePlayerStore((s) => s.isPlaying);
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A restored queue nobody has played yet tells the server nothing new, and pushing it would
+  // overwrite the queue and position another client saved since.
+  const hasPlayedRef = useRef(false);
+  if (isPlaying) hasPlayedRef.current = true;
 
   // Restore queue from server on first connect (only if nothing is already playing)
   useEffect(() => {
@@ -96,7 +100,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
   // Save queue to server (debounced 10s)
   useEffect(() => {
-    if (!serverWithCred || !currentTrack || queue.length === 0) return;
+    if (!serverWithCred || !currentTrack || queue.length === 0 || !hasPlayedRef.current) return;
     const { server, credential } = serverWithCred;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -139,7 +143,7 @@ export function useQueueSync(serverWithCred: ServerWithCredential | null | undef
 
     function saveNow() {
       const { queue: q, currentTrack: ct, elapsed: el } = usePlayerStore.getState();
-      if (!ct || q.length === 0) return;
+      if (!ct || q.length === 0 || !hasPlayedRef.current) return;
       const prefix = `${server.id}:`;
       const nativeIds = q
         .map((t) => (t.id.startsWith(prefix) ? t.id.slice(prefix.length) : null))

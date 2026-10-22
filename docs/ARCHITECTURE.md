@@ -100,7 +100,7 @@ Rust (`src-tauri/src/`):
 | Cast / DLNA | `dlna.ts`, `upnp.rs`, `playbackTarget.ts` | `scanRenderers`/`setCastDevice` in `player.ts`; `cast.device` + `cast.max_bitrate` settings restore a `DlnaTarget` on load. SSDP lives in Rust because JS has no UDP multicast. |
 | Scrobbling | `useScrobble.ts`, `useScrobbleFlush.ts` | Queue once time listened (seeks excluded) reaches `scrobble.threshold_percent` (50) or `scrobble.min_seconds` (240); now-playing sent separately. |
 | Scrobbling | same | Flush every 60 s + on `online`, scoped to current server; code 70 drops the row, other errors stop the batch; success writes `scrobble_history` and bumps local play counts. |
-| Queue sync | `useQueueSync.ts` | `savePlayQueue` debounced 10 s + on visibilitychange; restore only when nothing is playing. |
+| Queue sync | `useQueueSync.ts` | `savePlayQueue` debounced 10 s + on visibilitychange, only once this session has played; restore only when nothing is playing. |
 | Lyrics | `useLyrics.ts` | Order: SQLite `lyrics` cache -> OpenSubsonic `getLyricsBySongId` (if advertised) -> LRClib -> lyrics.ovh. A miss is cached only when every source answered; a failed one leaves `source = 'cleared'`. |
 | Tag normalization | `tagNormalize.ts`, `useNormalizeAlbum.ts`, `useBackgroundNormalizer.ts` | Runs on: album open when stale (`computed_at` NULL or > 30 days), background pass (asks above 300), identify, genre editor, TagDrawer, Settings refresh-all, track enrichment. |
 | Tag normalization | `tagNormalize.ts` | Match order in `resolveGenreTags`: `album_user_genres` first, then manual mapping (`__ignored__` drops, `__accepted__` falls through), then `findCanonicalSync`; `album_genre_exclusions` always win. |
