@@ -151,6 +151,7 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
             gapless_started: Arc::new(AtomicU64::new(0)),
             gapless_handoff: Arc::new(Mutex::new(None)),
+            visualizer: Arc::default(),
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
@@ -247,7 +248,13 @@ pub fn run() {
 
             Ok(())
         })
-        .on_page_load(|window, _payload| {
+        .on_page_load(|window, payload| {
+            // A reloaded page never ran the old one's cleanup, so its visualizer would keep the tap copying.
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                if let Some(state) = window.app_handle().try_state::<AudioState>() {
+                    state.visualizer.set_active(false);
+                }
+            }
             // Fires on every reload, not just the first (window is created hidden); show() on an
             // already-visible window is a no-op, and nothing hides it, so a reload can't unmap it.
             let _ = window.show();
@@ -278,6 +285,8 @@ pub fn run() {
             audio::control::audio_set_speed,
             audio::control::audio_seek,
             audio::waveform::audio_extract_waveform,
+            audio::visualizer::audio_visualizer_set_active,
+            audio::visualizer::audio_visualizer_levels,
             upnp::discover_upnp_renderers,
             upnp::upnp_soap,
             tray::tray_update,

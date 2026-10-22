@@ -1,5 +1,6 @@
 pub mod control;
 pub mod playback;
+pub mod visualizer;
 pub mod waveform;
 
 use rodio::cpal::traits::{DeviceTrait, HostTrait};
@@ -135,6 +136,7 @@ pub(crate) struct AudioState {
     pub(crate) gapless_started: Arc<AtomicU64>,
     // State of the latest queued gapless source, so audio_withdraw_next can skip it before it plays.
     pub(crate) gapless_handoff: Arc<Mutex<Option<Arc<AtomicU8>>>>,
+    pub(crate) visualizer: Arc<visualizer::VisualizerTap>,
 }
 
 #[cfg(test)]

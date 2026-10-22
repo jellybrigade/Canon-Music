@@ -22,6 +22,7 @@ import { usePlayerStore } from "../store/player";
 import { isNextDisabled, type RadioMode } from "../store/playerTypes";
 import { LyricsTabPanel } from "./LyricsTabPanel";
 import { NowPlayingAbout } from "./NowPlayingAbout";
+import { NowPlayingArt } from "./NowPlayingArt";
 import { NowPlayingControls } from "./NowPlayingControls";
 import { NowPlayingProgress } from "./NowPlayingProgress";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
@@ -219,17 +220,12 @@ export function NowPlayingView({
         {/* ── Left: art + chrome ── */}
         <div className="now-playing-left">
           <div className="now-playing-art-frame">
-            {largeArtUrl ? (
-              <AlbumArt
-                src={largeArtUrl}
-                artist={currentTrack.artist}
-                album={currentTrack.album ?? null}
-                alt={currentTrack.title}
-                className="now-playing-art"
-              />
-            ) : (
-              <div className="now-playing-art now-playing-art--placeholder" />
-            )}
+            <NowPlayingArt
+              artUrl={largeArtUrl}
+              artist={currentTrack.artist}
+              album={currentTrack.album ?? null}
+              title={currentTrack.title}
+            />
           </div>
 
           <div className="now-playing-hero-body">
