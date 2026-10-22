@@ -2,6 +2,7 @@ import type Database from "@tauri-apps/plugin-sql";
 import { prunedTrackIdTables, purgedTrackIdTables } from "../../db/trackIdTables";
 import { executeIdChunks, SQLITE_MAX_VARIABLES } from "../../lib/dbBatch";
 import { artistInLibrarySql } from "../../lib/libraryArtists";
+import { escapeLike } from "../../lib/sql";
 
 // Which tables carry track-keyed rows, and why the user's own rows are spared, is
 // db/trackIdTables.ts. album_identity/album_user_genres are spared for the same reason.
@@ -82,13 +83,14 @@ export async function pruneAlbums(db: Database, albumIds: readonly string[]): Pr
 
 // Subselects on server_id, dependents first. Global/artist-name-keyed user tables
 // (artist_identity/covers/aliases, radio_signal_cache, tag_mappings, user_tree_nodes) are spared.
+// Track-keyed rows go by id prefix: scrobbles outlive a track prune, so their track row may be gone.
 export async function purgeServerData(db: Database, serverId: string): Promise<void> {
-  const viaTracks = ({ table, column }: { table: string; column: string }) =>
-    `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM tracks WHERE server_id = ?)`;
+  for (const { table, column } of purgedTrackIdTables()) {
+    await db.execute(`DELETE FROM ${table} WHERE ${column} LIKE ? ESCAPE '\\'`, [`${escapeLike(serverId)}:%`]);
+  }
   const viaAlbums = (table: string, column: string) =>
     `DELETE FROM ${table} WHERE ${column} IN (SELECT id FROM albums WHERE server_id = ?)`;
   const statements = [
-    ...purgedTrackIdTables().map(viaTracks),
     "DELETE FROM tracks WHERE server_id = ?",
     viaAlbums("loved_albums", "album_id"),
     viaAlbums("album_genres", "album_id"),
