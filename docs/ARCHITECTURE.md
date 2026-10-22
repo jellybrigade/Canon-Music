@@ -172,7 +172,7 @@ Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids
 | `user_tree_changelog` | Audit of user node create/update/delete with before/after JSON. |
 | `album_identity` | MB/Last.fm identity per album: MB ids, lastfm names, combined_genres_json, combined_tags_json, auto_matched, confirmed_at, album_bio. |
 | `artist_identity` | Per artist name: mb_artist_id (auto-resolved ids kept, `confirmed_at` NULL), bio, similar_json (Last.fm getSimilar with `match` >= `SIMILAR_ARTIST_MIN_MATCH` 0.3, no count cap; getInfo's five if getSimilar is empty), top_tags_json, image URLs, enriched_at (left NULL while a portrait source failed and none was found). |
-| `artist_aliases` | alias_name PK -> canonical_name (artist merge). Always one hop: `merge_artist` resolves the target and moves the merged artist's own aliases; v58 flattened older chains. |
+| `artist_aliases` | alias_name PK -> canonical_name (artist merge). Always one hop: `merge_artist` resolves the target and moves the merged artist's own aliases; v58 flattened older chains and broke merge loops at their first name. |
 | `album_covers` / `artist_covers` | Data-URL art caches keyed by album_id / artist_name. |
 | `radio_signal_cache` | Last.fm similarity cache: cache_key PK, value, fetched_at. |
 | `app_logs` | Persisted log ring: ts, level, message. |

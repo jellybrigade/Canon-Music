@@ -840,9 +840,21 @@ export const migrations: Migration[] = [
   },
   {
     // Alias reads follow one hop; merging an artist that had aliases of its own left chains whose
-    // far end showed under no artist. Depth-capped so a cycle can't recurse forever.
+    // far end showed under no artist. Depth-capped so a cycle can't recurse forever. A cycle
+    // (A merged into B, then B into A) hid every member, so its first name becomes the artist.
     version: 58,
     sql: `
+      WITH RECURSIVE walk(alias_name, canonical_name, depth) AS (
+        SELECT alias_name, canonical_name, 0 FROM artist_aliases
+        UNION ALL
+        SELECT walk.alias_name, next.canonical_name, walk.depth + 1
+        FROM walk JOIN artist_aliases next ON next.alias_name = walk.canonical_name
+        WHERE walk.depth < 32
+      )
+      DELETE FROM artist_aliases WHERE alias_name IN (
+        SELECT alias_name FROM walk GROUP BY alias_name
+        HAVING SUM(canonical_name = alias_name) > 0 AND MIN(canonical_name) = alias_name
+      );
       WITH RECURSIVE walk(alias_name, canonical_name, depth) AS (
         SELECT alias_name, canonical_name, 0 FROM artist_aliases
         UNION ALL
