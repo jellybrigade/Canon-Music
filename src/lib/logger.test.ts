@@ -77,4 +77,20 @@ describe("logger writes", () => {
     );
     expect(rows[0]!.message).toContain("could not reach the server");
   });
+
+  it("keeps server credentials in a logged request URL out of the stored logs", async () => {
+    initLogger();
+    console.error(
+      "Failed to fetch waveform:",
+      "error sending request for url (https://music.example/rest/stream?u=me&t=abc123&s=salt9&v=1.16.1&id=7)",
+    );
+    console.error("Cover cache: 500 fetching album 1 from https://music.example/rest/getCoverArt?u=me&apiKey=k3y");
+    await logger.flush();
+
+    const text = await logger.getRecent();
+
+    expect(text).toContain("rest/stream?u=me&t=[redacted]&s=[redacted]&v=1.16.1&id=7)");
+    expect(text).toContain("getCoverArt?u=me&apiKey=[redacted]");
+    expect(text).not.toMatch(/abc123|salt9|k3y/);
+  });
 });

@@ -16,8 +16,16 @@ const buffer: LogEntry[] = [];
 let dirty = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
+// Logs ride along with feedback reports, and request errors (reqwest's especially) quote the
+// whole Subsonic URL. Rows written before this existed are scrubbed again on read.
+const CREDENTIAL_PARAM = /([?&](?:t|s|p|apiKey)=)[^&\s)"']+/g;
+
+function redactCredentials(text: string): string {
+  return text.replace(CREDENTIAL_PARAM, "$1[redacted]");
+}
+
 function push(level: string, args: unknown[]): void {
-  const message = args.map(formatLogValue).join(" ");
+  const message = redactCredentials(args.map(formatLogValue).join(" "));
   buffer.push({ ts: Date.now(), level, message });
   if (buffer.length > MAX_LINES) buffer.splice(0, buffer.length - MAX_LINES);
   dirty = true;
@@ -112,7 +120,7 @@ export const logger = {
       );
       return rows
         .reverse()
-        .map((r) => `[${new Date(r.ts).toISOString()}] ${r.level.toUpperCase()} ${r.message}`)
+        .map((r) => `[${new Date(r.ts).toISOString()}] ${r.level.toUpperCase()} ${redactCredentials(r.message)}`)
         .join("\n");
     } catch {
       return "(logs unavailable)";
