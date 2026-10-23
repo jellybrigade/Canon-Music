@@ -11,6 +11,8 @@ const CANVAS_SIZE = 32;
 // Rust-side cover/prefetch caches.
 const MAX_ACCENT_CACHE_ENTRIES = 500;
 const accentCache = new Map<string, string | null>();
+// A failed read isn't cached, so without this every caller of a timing-out cover held its own fetch.
+const accentsInFlight = new Map<string, Promise<string | null>>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
@@ -140,7 +142,10 @@ function loadImageAnonymous(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
-async function extractViaProxyFetch(imageUrl: string): Promise<string | null> {
+// `null` means the cover was never read, so there is nothing to remember about it.
+type Scored = { color: string | null };
+
+async function extractViaProxyFetch(imageUrl: string): Promise<Scored | null> {
   let objectUrl: string | null = null;
   try {
     const res = await boundedNativeFetch(imageUrl);
@@ -151,7 +156,7 @@ async function extractViaProxyFetch(imageUrl: string): Promise<string | null> {
     const img = await loadImage(objectUrl);
     if (!img) return null;
 
-    return scoreFromImage(img);
+    return { color: scoreFromImage(img) };
   } catch {
     return null;
   } finally {
@@ -160,23 +165,33 @@ async function extractViaProxyFetch(imageUrl: string): Promise<string | null> {
 }
 
 export async function extractAccent(imageUrl: string): Promise<string | null> {
-  if (accentCache.has(imageUrl)) return accentCache.get(imageUrl)!;
+  const cached = accentCache.get(imageUrl);
+  if (cached !== undefined) return cached;
+  const inFlight = accentsInFlight.get(imageUrl);
+  if (inFlight) return inFlight;
 
-  let color: string | null = null;
+  const read = readAccent(imageUrl).finally(() => accentsInFlight.delete(imageUrl));
+  accentsInFlight.set(imageUrl, read);
+  return read;
+}
+
+async function readAccent(imageUrl: string): Promise<string | null> {
+  let scored: Scored | null;
   const img = await loadImageAnonymous(imageUrl);
   if (img) {
     try {
-      color = scoreFromImage(img);
+      scored = { color: scoreFromImage(img) };
     } catch {
       // Canvas tainted by a CORS-less host (e.g. Wikidata/Fanart/TheAudioDB
       // portraits), fall back to fetching bytes through Tauri's Rust-backed
       // fetch and reading from a same-origin blob: URL.
-      color = await extractViaProxyFetch(imageUrl);
+      scored = await extractViaProxyFetch(imageUrl);
     }
   } else {
-    color = await extractViaProxyFetch(imageUrl);
+    scored = await extractViaProxyFetch(imageUrl);
   }
 
-  cappedSet(accentCache, imageUrl, color, MAX_ACCENT_CACHE_ENTRIES);
-  return color;
+  if (!scored) return null;
+  cappedSet(accentCache, imageUrl, scored.color, MAX_ACCENT_CACHE_ENTRIES);
+  return scored.color;
 }

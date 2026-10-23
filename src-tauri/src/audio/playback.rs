@@ -1,3 +1,4 @@
+use super::visualizer::Tapped;
 use super::{http_client, http_client_long, open_decoder, AudioReader, AudioState};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
 use crate::streaming::{AnyWriter, FileBackedStreamingBuffer, StreamingBuffer};
@@ -48,6 +49,7 @@ pub async fn audio_play(
     let gapless_queued_arc = Arc::clone(&state.gapless_queued);
     let gapless_started_arc = Arc::clone(&state.gapless_started);
     let output_lost_arc = Arc::clone(&state.output_lost);
+    let visualizer_arc = Arc::clone(&state.visualizer);
 
     // Reset gapless state — any pending enqueue is now stale.
     state.gapless_queued.store(false, Ordering::Relaxed);
@@ -292,7 +294,7 @@ pub async fn audio_play(
         sink.set_volume(current_volume);
         sink.set_speed(current_speed);
 
-        sink.append(source);
+        sink.append(Tapped::new(source, visualizer_arc));
 
         {
             let mut pos = pos_arc.lock().unwrap_or_else(|e| e.into_inner());
@@ -376,6 +378,7 @@ pub async fn audio_enqueue_next(
     let play_id_arc = Arc::clone(&state.play_id);
     let snap_id = play_id_arc.load(Ordering::Relaxed);
     let cache_arc = Arc::clone(&state.prefetch_cache);
+    let visualizer_arc = Arc::clone(&state.visualizer);
     let handoff = Arc::new(AtomicU8::new(HANDOFF_PENDING));
     *state
         .gapless_handoff
@@ -475,7 +478,13 @@ pub async fn audio_enqueue_next(
                 cancel(&gapless_queued, &app);
                 return;
             }
-            append_gapless(&sink, source, gapless_started, snap_id, handoff);
+            append_gapless(
+                &sink,
+                Tapped::new(source, visualizer_arc),
+                gapless_started,
+                snap_id,
+                handoff,
+            );
             // Flag stays true — set in compare_exchange above; watcher clears it on transition.
         } else {
             cancel(&gapless_queued, &app);

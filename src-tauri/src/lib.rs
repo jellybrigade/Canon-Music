@@ -75,7 +75,9 @@ pub fn run() {
         .name("audio-output".into())
         .spawn(move || match audio::open_output(output_lost_writer) {
             Ok(output) => {
-                let _ = tx.send(Some(output.mixer().clone()));
+                let config = output.config();
+                let lead = audio::output_lead(config.buffer_size(), config.sample_rate().get());
+                let _ = tx.send(Some((output.mixer().clone(), lead)));
                 loop {
                     std::thread::park();
                 }
@@ -86,7 +88,11 @@ pub fn run() {
             }
         })
         .expect("Failed to spawn audio thread");
-    let mixer = rx.recv().unwrap_or(None);
+    let (mixer, output_lead) = rx.recv().unwrap_or(None).unzip();
+    let visualizer = Arc::new(audio::visualizer::VisualizerTap::default());
+    if let Some(lead) = output_lead {
+        visualizer.set_output_lead(lead);
+    }
 
     // Served via a registered `cover://` scheme handler instead of a loopback TCP server,
     // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
@@ -151,6 +157,7 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
             gapless_started: Arc::new(AtomicU64::new(0)),
             gapless_handoff: Arc::new(Mutex::new(None)),
+            visualizer,
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
@@ -247,7 +254,13 @@ pub fn run() {
 
             Ok(())
         })
-        .on_page_load(|window, _payload| {
+        .on_page_load(|window, payload| {
+            // A reloaded page never ran the old one's cleanup, so its visualizer would keep the tap copying.
+            if payload.event() == tauri::webview::PageLoadEvent::Started {
+                if let Some(state) = window.app_handle().try_state::<AudioState>() {
+                    state.visualizer.set_active(false);
+                }
+            }
             // Fires on every reload, not just the first (window is created hidden); show() on an
             // already-visible window is a no-op, and nothing hides it, so a reload can't unmap it.
             let _ = window.show();
@@ -278,6 +291,8 @@ pub fn run() {
             audio::control::audio_set_speed,
             audio::control::audio_seek,
             audio::waveform::audio_extract_waveform,
+            audio::visualizer::audio_visualizer_set_active,
+            audio::visualizer::audio_visualizer_levels,
             upnp::discover_upnp_renderers,
             upnp::upnp_soap,
             tray::tray_update,

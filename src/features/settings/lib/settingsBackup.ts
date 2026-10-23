@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getDb } from "../../../db";
-import { refreshAllSettings } from "../../../hooks/useSetting";
+import { refreshAllSettings, storeSetting } from "../../../hooks/useSetting";
 import { usePlayerStore } from "../../playback/store/player";
 
 // Session state and per-server caches, not preferences: restoring them from an older file
@@ -38,10 +38,9 @@ export async function restoreSettingsBackup(text: string): Promise<void> {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     throw new Error("This file is not a Canon settings backup.");
   }
-  const db = await getDb();
   for (const [key, value] of Object.entries(parsed)) {
     if (typeof value === "string" && isPreference(key)) {
-      await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", [key, value]);
+      await storeSetting(key, value);
     }
   }
 }

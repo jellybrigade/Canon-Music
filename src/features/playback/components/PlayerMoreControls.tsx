@@ -1,7 +1,7 @@
 import { Cast, Headphones, MoreHorizontal, Timer } from "lucide-react";
 import { type RefObject, useEffect, useRef, useState } from "react";
+import { useOverlayAbove } from "../../../ui/keyboardOwners";
 import { useClickOutside } from "../../../ui/useClickOutside";
-import { useAnyModalOpen } from "../../../ui/useModalChrome";
 import { popoverAbove } from "../lib/popoverAbove";
 import { usePlayerStore } from "../store/player";
 import { VolumeControl } from "./VolumeControl";
@@ -24,7 +24,7 @@ export function PlayerMoreControls({
   isTimerActive,
   castDeviceName,
 }: Props) {
-  const isAnyModalOpen = useAnyModalOpen();
+  const isOverlayAbove = useOverlayAbove();
   const [menuPosition, setMenuPosition] = useState<{ right: number; bottom: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -33,15 +33,15 @@ export function PlayerMoreControls({
 
   useClickOutside([menuRef, buttonRef], close, isOpen);
 
-  // A modal painted over the menu owns Escape.
+  // An overlay painted over the menu owns Escape.
   useEffect(() => {
-    if (!isOpen || isAnyModalOpen) return;
+    if (!isOpen || isOverlayAbove) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setMenuPosition(null);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [isOpen, isAnyModalOpen]);
+  }, [isOpen, isOverlayAbove]);
 
   // The position is measured once at open, and widening past the breakpoint hides the menu
   // in CSS while it would still count as open, so any resize closes it.

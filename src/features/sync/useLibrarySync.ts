@@ -26,6 +26,15 @@ export interface SyncOutcome {
 export interface RunSyncOptions extends SyncOptions {
   /** Called once when the run this call started ends, after its album refresh was requested. */
   onSettled?: (outcome: SyncOutcome) => void;
+  /** While a run is in flight, start another once it settles instead of refusing: the run in
+   *  flight read the server before this request, so it can't answer it. */
+  queueIfBusy?: boolean;
+}
+
+interface QueuedSync {
+  target: ServerWithCredential;
+  syncOptions: SyncOptions;
+  settleCallbacks: ((outcome: SyncOutcome) => void)[];
 }
 
 // Clearing the claim immediately on failure would hammer an unreachable server, so retry is
@@ -60,6 +69,7 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
   // the hook is gone. Everything the handler does then is either dead or wrong.
   const mountedRef = useRef(true);
   const fanoutTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const queuedRef = useRef<QueuedSync | null>(null);
 
   function clearRetryTimer() {
     if (retryTimerRef.current === null) return;
@@ -101,10 +111,25 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
     }, delay);
   }
 
-  /** Returns whether a run actually started. */
+  // Requests made during one run share the run after it.
+  function queueSync(s: ServerWithCredential, { onSettled, queueIfBusy: _, ...syncOptions }: RunSyncOptions) {
+    const queued = queuedRef.current?.target.server.id === s.server.id ? queuedRef.current : null;
+    const isForced = queued?.syncOptions.forceTrackPass === true || syncOptions.forceTrackPass === true;
+    queuedRef.current = {
+      target: s,
+      syncOptions: isForced ? { ...syncOptions, forceTrackPass: true } : syncOptions,
+      settleCallbacks: [...(queued?.settleCallbacks ?? []), ...(onSettled ? [onSettled] : [])],
+    };
+  }
+
+  /** Returns whether the request was taken: a run started, or one queued behind the run in flight. */
   function runSync(s: ServerWithCredential, options?: RunSyncOptions): boolean {
-    if (syncingRef.current) return false;
-    const { onSettled, ...syncOptions } = options ?? {};
+    if (syncingRef.current) {
+      if (options?.queueIfBusy !== true) return false;
+      queueSync(s, options);
+      return true;
+    }
+    const { onSettled, queueIfBusy: _, ...syncOptions } = options ?? {};
     syncingRef.current = true;
     clearRetryTimer();
     let failed = false;
@@ -203,7 +228,19 @@ export function useLibrarySync(target: ServerWithCredential | undefined) {
         // The user may have switched servers while this run was in flight, in
         // which case the effect below could not start one for the new server.
         const latest = serverRef.current;
+        const queued = queuedRef.current;
+        queuedRef.current = null;
         if (!latest) return;
+        // Asked for by the user after this run read the server, so it outranks the backoff.
+        if (queued && queued.target.server.id === latest.server.id) {
+          runSync(latest, {
+            ...queued.syncOptions,
+            onSettled: (queuedOutcome) => {
+              for (const settleCallback of queued.settleCallbacks) settleCallback(queuedOutcome);
+            },
+          });
+          return;
+        }
         // A failure leaves the server claimed, so syncIfNeeded would do nothing
         // here; the backoff is what gets it retried. A server switched to while
         // this run was failing is a different server and syncs straight away.

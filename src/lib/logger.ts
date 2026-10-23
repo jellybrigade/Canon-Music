@@ -16,8 +16,16 @@ const buffer: LogEntry[] = [];
 let dirty = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
 
+// Logs ride along with feedback reports, and request errors (reqwest's especially) quote the
+// whole Subsonic URL. Rows written before this existed are scrubbed again on read.
+const CREDENTIAL_PARAM = /([?&](?:t|s|p|apiKey)=)[^&\s)"']+/g;
+
+function redactCredentials(text: string): string {
+  return text.replace(CREDENTIAL_PARAM, "$1[redacted]");
+}
+
 function push(level: string, args: unknown[]): void {
-  const message = args.map(formatLogValue).join(" ");
+  const message = redactCredentials(args.map(formatLogValue).join(" "));
   buffer.push({ ts: Date.now(), level, message });
   if (buffer.length > MAX_LINES) buffer.splice(0, buffer.length - MAX_LINES);
   dirty = true;
@@ -40,7 +48,16 @@ export function formatLogValue(v: unknown): string {
   }
 }
 
-async function flush(): Promise<void> {
+// A flush started mid-write would snapshot lines the running one hasn't removed yet and
+// store them twice, so flushes queue behind each other.
+let flushChain: Promise<void> = Promise.resolve();
+
+function flush(): Promise<void> {
+  flushChain = flushChain.then(writeBuffered);
+  return flushChain;
+}
+
+async function writeBuffered(): Promise<void> {
   if (!dirty) return;
   const toWrite = buffer.slice();
   dirty = false;
@@ -52,13 +69,16 @@ async function flush(): Promise<void> {
         entry.level,
         entry.message,
       ]);
+      // By identity, not count: `push` may have trimmed the front of the buffer meanwhile.
+      const index = buffer.indexOf(entry);
+      if (index >= 0) buffer.splice(0, index + 1);
     }
-    buffer.splice(0, toWrite.length);
     await db.execute("DELETE FROM app_logs WHERE id NOT IN (SELECT id FROM app_logs ORDER BY id DESC LIMIT ?)", [
       MAX_LINES,
     ]);
   } catch {
-    // Logging must never itself throw / break the app.
+    // Logging must never itself throw / break the app. Unwritten lines stay buffered.
+    if (buffer.length > 0) dirty = true;
   }
 }
 
@@ -112,7 +132,7 @@ export const logger = {
       );
       return rows
         .reverse()
-        .map((r) => `[${new Date(r.ts).toISOString()}] ${r.level.toUpperCase()} ${r.message}`)
+        .map((r) => `[${new Date(r.ts).toISOString()}] ${r.level.toUpperCase()} ${redactCredentials(r.message)}`)
         .join("\n");
     } catch {
       return "(logs unavailable)";

@@ -180,3 +180,117 @@ describe("useLyrics", () => {
     expect(second.result.current.plain).toBe("loveless");
   });
 });
+
+function storedOffset(): number | undefined {
+  const row = db.raw.prepare("SELECT offset_ms FROM lyrics WHERE track_id = ?").get(TRACK.id) as
+    | { offset_ms: number }
+    | undefined;
+  return row?.offset_ms;
+}
+
+/** Holds every offset write until released, in the order they reached the database. */
+function holdOffsetWrites() {
+  const held: { ms: unknown; release: () => Promise<void> }[] = [];
+  const execute = db.execute.bind(db);
+  db.execute = (query, bindValues = []) => {
+    if (!query.includes("offset_ms")) return execute(query, bindValues);
+    return new Promise((resolve, reject) => {
+      held.push({
+        ms: bindValues[2],
+        release: () => execute(query, bindValues).then(resolve, reject),
+      });
+    });
+  };
+  return held;
+}
+
+describe("useLyrics timing offset", () => {
+  it("stores quick offset changes in the order they were made", async () => {
+    const view = await mountSettled();
+    const held = holdOffsetWrites();
+
+    act(() => void view.result.current.setOffsetMs(500));
+    act(() => void view.result.current.setOffsetMs(1000));
+    expect(view.result.current.offsetMs).toBe(1000);
+    await waitFor(() => expect(held.map((w) => w.ms)).toEqual([500]));
+
+    await act(async () => held[0]!.release());
+    await waitFor(() => expect(held.map((w) => w.ms)).toEqual([500, 1000]));
+    await act(async () => held[1]!.release());
+    expect(storedOffset()).toBe(1000);
+  });
+
+  it("goes back to the stored offset when saving fails", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = await mountSettled();
+    await act(async () => view.result.current.setOffsetMs(500));
+    db.execute = async () => {
+      throw new Error("disk full");
+    };
+
+    await act(async () => view.result.current.setOffsetMs(1000));
+
+    expect(view.result.current.offsetMs).toBe(500);
+  });
+
+  it("shows an offset still on its way to the database when coming back to its track", async () => {
+    const otherTrack: CurrentTrack = { ...TRACK, id: "srv-a:t2" };
+    const view = renderHook(({ track }) => useLyrics(track, null, null), { wrapper, initialProps: { track: TRACK } });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    const held = holdOffsetWrites();
+
+    act(() => void view.result.current.setOffsetMs(500));
+    const offsetReads = () => db.queryLog.filter((q) => q.sql.startsWith("SELECT offset_ms")).length;
+    const readsBefore = offsetReads();
+    view.rerender({ track: otherTrack });
+    await waitFor(() => expect(offsetReads()).toBe(readsBefore + 1));
+    await act(async () => {});
+    view.rerender({ track: TRACK });
+    await waitFor(() => expect(held).toHaveLength(1));
+    await act(async () => held[0]!.release());
+
+    await waitFor(() => expect(view.result.current.offsetMs).toBe(500));
+  });
+
+  it("keeps the offset from before a failed change when the stored one can't be read back", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = await mountSettled();
+    await act(async () => view.result.current.setOffsetMs(500));
+    db.execute = async () => {
+      throw new Error("disk full");
+    };
+    db.select = async () => {
+      throw new Error("disk full");
+    };
+
+    await act(async () => view.result.current.setOffsetMs(1000));
+
+    expect(view.result.current.offsetMs).toBe(500);
+  });
+
+  it("keeps an offset change made while the stored offset was still loading", async () => {
+    db.raw
+      .prepare(
+        "INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms) VALUES (?, 'x', NULL, 'lrclib', datetime('now'), 200)",
+      )
+      .run(TRACK.id);
+    let finishRead: () => void = () => {};
+    const select = db.select.bind(db);
+    db.select = <T>(query: string, bindValues?: unknown[]): Promise<T> =>
+      query.includes("SELECT offset_ms")
+        ? select<T>(query, bindValues).then(
+            (rows) =>
+              new Promise<T>((resolve) => {
+                finishRead = () => resolve(rows);
+              }),
+          )
+        : select<T>(query, bindValues);
+    const view = renderHook(() => useLyrics(TRACK, null, null), { wrapper });
+    await waitFor(() => expect(db.queryLog.some((q) => q.sql.startsWith("SELECT offset_ms"))).toBe(true));
+
+    await act(async () => view.result.current.setOffsetMs(700));
+    await act(async () => finishRead());
+
+    expect(view.result.current.offsetMs).toBe(700);
+  });
+});

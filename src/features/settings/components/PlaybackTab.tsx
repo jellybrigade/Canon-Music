@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
+import { VISUALIZER_ENABLED_KEY } from "../../playback/lib/visualizerSettings";
 import { usePlayerStore } from "../../playback/store/player";
 import { RADIO_START_ACTION_SETTING } from "../../radio/hooks/useStartRadio";
 import { SegToggle } from "../../tags/components/TagsViewHelpers";
@@ -24,6 +25,7 @@ interface Props {
 
 export function PlaybackTab({ searchQuery, serverId }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", true);
+  const [isVisualizerEnabled, setIsVisualizerEnabled] = useBoolSetting(VISUALIZER_ENABLED_KEY, true);
   const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
   const [restoreQueue, setRestoreQueue] = useBoolSetting("queue.restore_on_startup", false);
   const [playAction, setPlayAction] = useSetting("album.play_action", "replace");
@@ -452,7 +454,17 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
         </section>
       )}
 
-      {show("waveform", "display", "progress bar", "album", "suffix", "bracket", "edition") && (
+      {show(
+        "waveform",
+        "visualizer",
+        "spectrum",
+        "display",
+        "progress bar",
+        "album",
+        "suffix",
+        "bracket",
+        "edition",
+      ) && (
         <section className="settings-section">
           <h3 className="settings-section-title">Display</h3>
           <SettingRow
@@ -460,6 +472,16 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
             description="Displays audio amplitude envelope in the progress bar. Extracted on first play and cached locally."
           >
             <input type="checkbox" checked={showWaveform} onChange={(e) => void setShowWaveform(e.target.checked)} />
+          </SettingRow>
+          <SettingRow
+            title="Visualizer"
+            description="Offers a button on the Now Playing album art (or the V key) that swaps the art for a live spectrum of what's playing."
+          >
+            <input
+              type="checkbox"
+              checked={isVisualizerEnabled}
+              onChange={(e) => void setIsVisualizerEnabled(e.target.checked)}
+            />
           </SettingRow>
           <SettingRow
             title="Show album edition suffixes"

@@ -57,6 +57,15 @@ describe("useNewAlbumsCheck sync", () => {
     expect(runSync).toHaveBeenCalledTimes(1);
     expect(runSync.mock.calls[0]?.[0]).toBe(SERVER);
   });
+
+  it("asks a sync already running to check again after it, since it read the server before the click", () => {
+    const { hook, runSync } = setup();
+    hook.rerender({ items: albums("old-1"), syncStatus: "syncing" });
+
+    act(() => hook.result.current.checkForNewAlbums());
+
+    expect(runSync.mock.calls[0]?.[1]?.queueIfBusy).toBe(true);
+  });
 });
 
 describe("useNewAlbumsCheck scroll to start", () => {
@@ -181,6 +190,16 @@ describe("useNewAlbumsCheck failure note", () => {
     act(() => hook.result.current.checkForNewAlbums());
     expect(hook.result.current.isChecking).toBe(true);
     settle(false);
+
+    expect(hook.result.current.isChecking).toBe(false);
+  });
+
+  it("stops reporting busy for a run left behind on another server", () => {
+    const { hook } = setup();
+    act(() => hook.result.current.checkForNewAlbums());
+
+    hook.rerender({ items: albums("other-1"), syncStatus: "idle", serverWithCred: OTHER_SERVER });
+    hook.rerender({ items: albums("old-1"), syncStatus: "idle", serverWithCred: SERVER });
 
     expect(hook.result.current.isChecking).toBe(false);
   });

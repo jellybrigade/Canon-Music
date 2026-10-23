@@ -13,6 +13,37 @@ import type { CurrentTrack } from "../store/playerTypes";
 // both lyric columns are NOT NULL so the distinction must live in a value.
 const NO_LOOKUP_SOURCE = "cleared";
 
+// Per track, so two quick offset changes can't reach the database's connection pool in the wrong order.
+const pendingOffsetWrites = new Map<string, Promise<void>>();
+
+// Waits for the track's queued writes, so coming back to a track mid-save reads the new offset.
+async function readStoredOffset(trackId: string): Promise<number> {
+  await pendingOffsetWrites.get(trackId)?.catch(() => {});
+  const db = await getDb();
+  const rows = await db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [trackId]);
+  return rows[0]?.offset_ms ?? 0;
+}
+
+function storeOffset(trackId: string, ms: number): Promise<void> {
+  const write = (pendingOffsetWrites.get(trackId) ?? Promise.resolve())
+    .catch(() => {})
+    .then(async () => {
+      const db = await getDb();
+      await db.execute(
+        `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
+       VALUES (?, NULL, NULL, ?, datetime('now'), ?)
+       ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
+        [trackId, NO_LOOKUP_SOURCE, ms],
+      );
+    });
+  pendingOffsetWrites.set(trackId, write);
+  const forget = () => {
+    if (pendingOffsetWrites.get(trackId) === write) pendingOffsetWrites.delete(trackId);
+  };
+  void write.then(forget, forget);
+  return write;
+}
+
 export interface LyricsOverride {
   artist: string;
   title: string;
@@ -168,18 +199,20 @@ export function useLyrics(
     await queryClient.invalidateQueries({ queryKey: QK.lyricsTrack(track.id) });
   }, [track, queryClient]);
 
-  const [offsetMs, setOffsetMsState] = useState(0);
+  // Keyed by track so a late read or failed save for the previous track can't land on this one.
+  const [offset, setOffset] = useState<{ trackId: string; ms: number; isUserChange: boolean } | null>(null);
+  const offsetMs = track && offset?.trackId === track.id ? offset.ms : 0;
 
   useEffect(() => {
-    if (!track) {
-      setOffsetMsState(0);
-      return;
-    }
+    if (!track) return;
+    const trackId = track.id;
     let cancelled = false;
-    getDb()
-      .then((db) => db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [track.id]))
-      .then((rows) => {
-        if (!cancelled) setOffsetMsState(rows[0]?.offset_ms ?? 0);
+    readStoredOffset(trackId)
+      .then((ms) => {
+        if (cancelled) return;
+        setOffset((previous) =>
+          previous?.trackId === trackId && previous.isUserChange ? previous : { trackId, ms, isUserChange: false },
+        );
       })
       .catch(() => {});
     return () => {
@@ -190,16 +223,23 @@ export function useLyrics(
   const setOffsetMs = useCallback(
     async (ms: number) => {
       if (!track) return;
-      setOffsetMsState(ms);
-      const db = await getDb();
-      await db.execute(
-        `INSERT INTO lyrics (track_id, plain, synced, source, fetched_at, offset_ms)
-       VALUES (?, NULL, NULL, ?, datetime('now'), ?)
-       ON CONFLICT(track_id) DO UPDATE SET offset_ms = excluded.offset_ms`,
-        [track.id, NO_LOOKUP_SOURCE, ms],
-      );
+      const trackId = track.id;
+      const msBeforeChange = offsetMs;
+      setOffset({ trackId, ms, isUserChange: true });
+      const write = storeOffset(trackId, ms);
+      try {
+        await write;
+      } catch (e) {
+        console.error("Failed to save lyrics offset:", trackId, e);
+        const latestWrite = pendingOffsetWrites.get(trackId);
+        if (latestWrite !== undefined && latestWrite !== write) return;
+        const stored = await readStoredOffset(trackId).catch(() => msBeforeChange);
+        setOffset((previous) =>
+          previous?.trackId === trackId ? { trackId, ms: stored, isUserChange: true } : previous,
+        );
+      }
     },
-    [track?.id],
+    [track?.id, offsetMs],
   );
 
   return {

@@ -41,6 +41,9 @@ export function useNewAlbumsCheck({ serverWithCred, runSync, items, syncStatus }
     committedItemsRef.current = items;
   }, [items]);
 
+  // A run left behind on another server may never settle here, so its busy state can't follow back.
+  if (checkRun && checkRun.serverId !== serverId) setCheckRun(null);
+
   // Albums can land mid-sync through progress refreshes, or after it in the read the settle
   // requested; the first read after settle is the last one this check is owed. A later sync
   // starting means that read never came, and anything it brings is not this check's.
@@ -60,6 +63,7 @@ export function useNewAlbumsCheck({ serverWithCred, runSync, items, syncStatus }
   function checkForNewAlbums() {
     const idsAtClick = new Set(items?.map((album) => album.id));
     const isStarted = runSync(serverWithCred, {
+      queueIfBusy: true,
       onSettled: (outcome) => {
         setCheckRun({ serverId, phase: "settled", outcome });
         setWatch((current) =>

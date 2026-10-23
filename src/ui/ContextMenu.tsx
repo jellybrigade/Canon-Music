@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useOwnKeyboard } from "./keyboardOwners";
 import { useClickOutside } from "./useClickOutside";
 import "./ContextMenu.css";
 
@@ -72,6 +73,7 @@ export function ContextMenu({ x, y, onClose, children }: Props) {
   }, [x, y]);
 
   useClickOutside(menuRef, onClose);
+  useOwnKeyboard(true);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
