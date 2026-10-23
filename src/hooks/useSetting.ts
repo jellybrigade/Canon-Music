@@ -81,15 +81,24 @@ export function useSetting(key: string, defaultValue: string): [string, (v: stri
   }, [key]);
 
   // The screen changes at once: awaiting the write first left toggles dead for seconds while a
-  // new queue kept the database busy.
+  // new queue kept the database busy. A failure is reported and undone here, so callers can drop the promise.
   const update = useCallback(
     (newValue: string) => {
       publish(key, newValue);
       const write = storeSetting(key, newValue);
       return write.catch((e: unknown) => {
         console.error("Failed to save setting:", key, e);
-        if (pendingWrites.get(key) === write) publish(key, storedValues.get(key) ?? defaultValue);
-        throw e;
+        if (pendingWrites.get(key) !== write) return;
+        const stored = storedValues.get(key);
+        if (stored !== undefined) {
+          publish(key, stored);
+          return;
+        }
+        // Nothing read back yet: show the default without caching it, so the read still lands.
+        settingCache.delete(key);
+        settingListeners.get(key)?.forEach((fn) => {
+          fn(defaultValue);
+        });
       });
     },
     [key, defaultValue],

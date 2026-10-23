@@ -72,7 +72,8 @@ describe("useSetting updates", () => {
     await waitFor(() => expect(writes).toHaveLength(1));
     await act(async () => {
       writes[0]!.fail(new Error("disk full"));
-      await expect(update).rejects.toThrow("disk full");
+      // Reported and undone here, so a caller that drops the promise leaves no unhandled rejection.
+      await expect(update).resolves.toBeUndefined();
     });
     expect(result.current[0]).toBe(false);
   });
@@ -85,11 +86,11 @@ describe("useSetting updates", () => {
     act(() => {
       first = result.current[1](true);
     });
-    act(() => void result.current[1](false).catch(() => {}));
+    act(() => void result.current[1](false));
     await waitFor(() => expect(writes).toHaveLength(1));
     await act(async () => {
       writes[0]!.fail(new Error("disk full"));
-      await expect(first).rejects.toThrow();
+      await first;
     });
     expect(result.current[0]).toBe(false);
   });
@@ -112,6 +113,26 @@ describe("useSetting reads racing writes", () => {
 
     expect(result.current[0]).toBe(true);
     expect(result.current[2]).toBe(true);
+  });
+
+  it("shows the stored value, not the default, when a change fails before the first read lands", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    let finishRead: (rows: { value: string }[]) => void = () => {};
+    db.select.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishRead = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useBoolSetting("test.flag", false));
+
+    await waitFor(() => expect(db.select).toHaveBeenCalledTimes(1));
+    act(() => void result.current[1](false));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    await act(async () => writes[0]!.fail(new Error("disk full")));
+    await act(async () => finishRead([{ value: "true" }]));
+
+    expect(result.current[0]).toBe(true);
   });
 
   it("stores a bulk value after a change still on its way to the database", async () => {
