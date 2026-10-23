@@ -85,4 +85,47 @@ describe("FeedbackModal", () => {
     await waitFor(() => expect(boundedFetch).toHaveBeenCalledTimes(1));
     expect(vi.mocked(boundedFetch).mock.calls[0]?.[2]).toEqual({ headersTimeoutMs: UPLOAD_TIMEOUT_MS });
   });
+
+  it("does not close a later report once this one was closed by hand", async () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const { unmount } = render(<FeedbackModal onClose={onClose} />);
+      fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: "Love it" } });
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      await vi.waitFor(() => expect(screen.getByText("Sent! Thanks.")).toBeInTheDocument());
+
+      unmount();
+      vi.advanceTimersByTime(5000);
+
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("names the server host it will send beside the system info box", () => {
+    render(<FeedbackModal serverUrl="https://music.example.org:4533" onClose={vi.fn()} />);
+
+    expect(document.querySelector(".feedback-sysinfo-detail")).toHaveTextContent("music.example.org");
+  });
+
+  it("attaches a report longer than Discord takes in a message instead of failing", async () => {
+    vi.mocked(boundedFetch).mockClear();
+    render(<FeedbackModal onClose={vi.fn()} />);
+    const longText = "a".repeat(5000);
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include recent logs" }));
+    fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: longText } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(boundedFetch).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(boundedFetch).mock.calls[0]?.[1]?.body;
+    if (!(body instanceof FormData)) throw new Error("expected a multipart upload");
+    const payload = JSON.parse(String(body.get("payload_json")));
+    expect(payload.embeds[0].description.length).toBeLessThanOrEqual(4096);
+    const attached = body.get("files[0]");
+    if (!(attached instanceof Blob)) throw new Error("expected the full text attached");
+    expect(await attached.text()).toContain(longText);
+  });
 });
