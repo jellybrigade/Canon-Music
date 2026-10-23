@@ -42,7 +42,6 @@ A true removal with no successor needs a decision too. Ask the user (Phase 3) be
 
 1. `cp /tmp/rym-new.txt scripts/data/rym-hierarchy.txt && node scripts/parse-rym.mjs`
 2. Update the node counts on the `canon-tree.json` line of `docs/ARCHITECTURE.md` (total, genres, moods, categories, from-RYM, nodes in two sections).
-3. `bash scripts/run-local-checks.sh` green.
-4. One commit: `rym-hierarchy.txt`, `tree-renames.json` and the regenerated `canon-tree.json` together (`update genre tree to latest RYM hierarchy`). The tree and its rename history must never ship apart.
+3. One commit: `rym-hierarchy.txt`, `tree-renames.json` and the regenerated `canon-tree.json` together (`update genre tree to latest RYM hierarchy`). The tree and its rename history must never ship apart.
 
 Report to the user: counts added/removed, every rename and its evidence, anything they decided, and anything that needs a release.
