@@ -16,7 +16,13 @@ import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
 import { syncLoved } from "./syncLoved";
 import { syncPlaylists } from "./syncPlaylists";
 import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
-import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
+import {
+  carryRenamedTracks,
+  healTracksFts,
+  insertTracksBatch,
+  planRenamedTracks,
+  rebuildTracksFts,
+} from "./syncTracks";
 import {
   clearSyncWatermark,
   mirroredTrackIdsStillResolve,
@@ -164,6 +170,7 @@ export async function syncLibrary(
   // rebuilt per album rather than per server, so collect which albums moved.
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
+  const renamedAlbumIds: string[] = [];
   const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
@@ -217,7 +224,7 @@ export async function syncLibrary(
         if (!sameValue(existing.artist, album.artist)) artistsDirty = true;
         // The FTS row carries the album name, so a rename dirties it even when
         // no track was fetched.
-        if (!sameValue(existing.name, album.name)) ftsDirtyAlbumIds.add(albumDbId);
+        if (!sameValue(existing.name, album.name)) renamedAlbumIds.push(albumDbId);
       }
     }
 
@@ -252,6 +259,9 @@ export async function syncLibrary(
          release_type = excluded.release_type,
          mb_release_id = excluded.mb_release_id`,
   );
+  // Right after the rename lands: a later failure would leave the old name indexed, and the
+  // next sync sees no rename to rebuild for.
+  await rebuildTracksFts(db, renamedAlbumIds, []);
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
   // album is a real deletion. An empty list against a non-empty stored library still prunes nothing regardless.
@@ -377,6 +387,7 @@ export async function syncLibrary(
   // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row
   // for a single changed album. Album ids are server-prefixed, so this is already scoped by server.
   await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
+  await healTracksFts(db, server.id);
 
   const stage = { db, server, credential, altUrl, skippedStages };
   const lovedChanged = await syncLoved(stage);

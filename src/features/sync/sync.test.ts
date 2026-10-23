@@ -501,6 +501,47 @@ describe("syncLibrary idempotence", () => {
     expect(fts[0]?.album).toBe("Renamed");
   });
 
+  it("indexes tracks an interrupted sync stored without their FTS rows", async () => {
+    serveLibrary([album("al-1"), album("al-2", { songCount: 1 })], {
+      "al-1": [track("t1", "al-1"), track("t2", "al-1")],
+      "al-2": [track("t3", "al-2")],
+    });
+    await syncLibrary(server(), CRED);
+    // What quitting mid-pass leaves: tracks stored, the FTS rebuild at the end never reached.
+    await db().execute("DELETE FROM tracks_fts WHERE id IN (?, ?)", [`${SRV}:t1`, `${SRV}:t2`]);
+    mAlbumTracks.mockClear();
+
+    await syncLibrary(server(), CRED);
+
+    expect(mAlbumTracks).not.toHaveBeenCalled();
+    expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1`, `${SRV}:t2`, `${SRV}:t3`]);
+  });
+
+  it("indexes a renamed album's new name before the track pass starts", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    mAllAlbums.mockResolvedValue([album("al-1", { name: "Renamed" }), album("al-2")]);
+    // The new album's fetch never returns, as if the app quit during the track pass.
+    mAlbumTracks.mockImplementation(() => new Promise(() => {}));
+    mAlbumTracks.mockClear();
+
+    void syncLibrary(server(), CRED);
+
+    await vi.waitFor(() => expect(mAlbumTracks).toHaveBeenCalled());
+    const fts = await db().select<{ album: string }[]>("SELECT album FROM tracks_fts");
+    expect(fts.map((row) => row.album)).toEqual(["Renamed"]);
+  });
+
+  it("does not read the FTS index for missing rows when its count matches the tracks", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    const select = vi.spyOn(db(), "select");
+
+    await syncLibrary(server(), CRED);
+
+    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+  });
+
   it("does not rebuild the artists table when only a non-artist column changed", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     await syncLibrary(server(), CRED);

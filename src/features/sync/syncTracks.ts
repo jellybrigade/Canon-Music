@@ -5,6 +5,7 @@ import { fetchAlbumTracks } from "../../clients/navidrome";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
+import { escapeLike } from "../../lib/sql";
 import type { Server } from "../../types/server";
 import { pruneAlbumTracks } from "./syncPrune";
 import type { TrackIdRemap } from "./trackRemap";
@@ -36,6 +37,35 @@ export async function rebuildTracksFts(
        SELECT t.id, t.title, COALESCE(t.artist, ''), a.name, COALESCE(t.genre, '')
        FROM tracks t JOIN albums a ON t.album_id = a.id
        WHERE t.album_id IN (${ph})`,
+  );
+}
+
+/**
+ * Index tracks a sync stored but never reached the rebuild for (the app quit mid-pass), which
+ * the skip heuristic would otherwise pass over for good. Only a count mismatch pays for the scan.
+ */
+export async function healTracksFts(db: Database, serverId: string): Promise<void> {
+  const idPrefix = `${escapeLike(serverId)}:%`;
+  const [counts] = await db.select<{ stored: number; indexed: number }[]>(
+    `SELECT (SELECT COUNT(*) FROM tracks WHERE server_id = ?) AS stored,
+            (SELECT COUNT(*) FROM tracks_fts WHERE id LIKE ? ESCAPE '\\') AS indexed`,
+    [serverId, idPrefix],
+  );
+  if (counts === undefined || counts.stored === counts.indexed) return;
+  await db.execute(
+    `DELETE FROM tracks_fts WHERE id LIKE ? ESCAPE '\\' AND id NOT IN (SELECT id FROM tracks WHERE server_id = ?)`,
+    [idPrefix, serverId],
+  );
+  const unindexed = await db.select<{ album_id: string }[]>(
+    `SELECT DISTINCT album_id FROM tracks
+     WHERE server_id = ? AND album_id IS NOT NULL AND id NOT IN (SELECT id FROM tracks_fts)
+     ORDER BY album_id`,
+    [serverId],
+  );
+  await rebuildTracksFts(
+    db,
+    unindexed.map((row) => row.album_id),
+    [],
   );
 }
 
