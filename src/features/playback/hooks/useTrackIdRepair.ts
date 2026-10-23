@@ -3,6 +3,10 @@ import { useEffect, useRef } from "react";
 
 import { SUBSONIC_NOT_FOUND } from "../../../clients/navidrome";
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { useAllTracksSessionStore } from "../../../store/allTracksSessionStore";
+import { useLovedSessionStore } from "../../../store/lovedSessionStore";
+import { usePlaylistSessionStore } from "../../../store/playlistSessionStore";
+import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
 
@@ -30,6 +34,7 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
       void repairAlbumTrackIds(target.server, target.credential, albumId)
         .then((remaps) => {
           if (cancelled) return;
+          if (remaps.length > 0) refreshTrackLists();
           const currentMoved = usePlayerStore.getState().applyTrackIdRemap(remaps);
           if (currentMoved) usePlayerStore.getState().retryCurrent();
         })
@@ -43,4 +48,12 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
       void pending.then((unlisten) => unlisten());
     };
   }, []);
+}
+
+// A list still holding an old id plays into the same error, and the album is not repaired twice.
+function refreshTrackLists(): void {
+  useTrackListSessionStore.getState().bumpRefresh();
+  useAllTracksSessionStore.getState().bumpRefresh();
+  useLovedSessionStore.getState().bumpRefresh();
+  usePlaylistSessionStore.getState().bumpPlaylistTracks();
 }

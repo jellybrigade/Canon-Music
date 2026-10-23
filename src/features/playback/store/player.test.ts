@@ -1873,6 +1873,16 @@ describe("applyTrackIdRemap", () => {
     });
   });
 
+  it("saves the renamed queue, so a restart does not restore the ids the server dropped", () => {
+    const queue = [makeTrack("srv:a"), makeTrack("srv:b")];
+    usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
+    const revision = runtime.queueRevision;
+
+    usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:b", newId: "srv:b2" }]);
+
+    expect(runtime.queueRevision).toBe(revision + 1);
+  });
+
   it("carries the radio seed too, which outlives the queue it started", () => {
     usePlayerStore.setState({ queue: [], currentTrack: null, radioSeed: makeTrack("srv:seed") });
 
@@ -1885,9 +1895,11 @@ describe("applyTrackIdRemap", () => {
     const queue = [makeTrack("srv:a")];
     usePlayerStore.setState({ queue, currentTrack: queue[0]!, queueIndex: 0 });
 
+    const revision = runtime.queueRevision;
     const moved = usePlayerStore.getState().applyTrackIdRemap([{ oldId: "srv:zzz", newId: "srv:zzz2" }]);
 
     expect(moved).toBe(false);
+    expect(runtime.queueRevision).toBe(revision);
     // Reference equality, not contents: a new array here re-renders every queue consumer for
     // a repair that changed nothing.
     expect(usePlayerStore.getState().queue).toBe(queue);

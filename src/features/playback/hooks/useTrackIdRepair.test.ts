@@ -7,6 +7,10 @@ vi.mock("@tauri-apps/api/event", async () => (await import("../../../test/mocks/
 vi.mock("../../sync/syncTracks", () => ({ repairAlbumTrackIds: vi.fn() }));
 
 import type { ServerWithCredential } from "../../../hooks/useServer";
+import { useAllTracksSessionStore } from "../../../store/allTracksSessionStore";
+import { useLovedSessionStore } from "../../../store/lovedSessionStore";
+import { usePlaylistSessionStore } from "../../../store/playlistSessionStore";
+import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
 import { emitTauriEvent, listenerCount, resetTauriMocks } from "../../../test/mocks/tauri";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
 import { usePlayerStore } from "../store/player";
@@ -64,6 +68,31 @@ describe("useTrackIdRepair", () => {
     expect(repairAlbumTrackIds).toHaveBeenCalledWith(SERVER.server, SERVER.credential, "srv:al-1");
     expect(usePlayerStore.getState().currentTrack?.id).toBe("srv:t1-new");
     expect(retryCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-reads every track list on screen, so a click there plays the new id", async () => {
+    vi.mocked(repairAlbumTrackIds).mockResolvedValue([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
+    const ticks = () => [
+      useTrackListSessionStore.getState().refreshTick,
+      useAllTracksSessionStore.getState().refreshTick,
+      useLovedSessionStore.getState().refreshTick,
+      usePlaylistSessionStore.getState().playlistTracksTick,
+    ];
+    const before = ticks();
+    renderHook(() => useTrackIdRepair(SERVER));
+
+    await emitError({ subsonicCode: 70 });
+
+    expect(ticks()).toEqual(before.map((tick) => tick + 1));
+  });
+
+  it("re-reads nothing when no id moved", async () => {
+    const before = useTrackListSessionStore.getState().refreshTick;
+    renderHook(() => useTrackIdRepair(SERVER));
+
+    await emitError({ subsonicCode: 70 });
+
+    expect(useTrackListSessionStore.getState().refreshTick).toBe(before);
   });
 
   it("leaves playback alone when the album came back with the same ids", async () => {

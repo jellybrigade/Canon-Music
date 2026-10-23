@@ -187,6 +187,13 @@ export async function syncAlbumTracks(
   const altUrl = server.alt_url ?? undefined;
   const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
   const db = await getDb();
+  // Without the carry, a renamed track upserts beside its old row and the album lists it twice.
+  const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
+  await carryRenamedTracks(dbAlbumId, remaps);
   await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
-  await rebuildTracksFts(db, [dbAlbumId], []);
+  await rebuildTracksFts(
+    db,
+    [dbAlbumId],
+    remaps.map((remap) => remap.oldId),
+  );
 }

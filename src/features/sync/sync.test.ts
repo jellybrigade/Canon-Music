@@ -1898,6 +1898,28 @@ describe("syncAlbumTracks", () => {
     expect(await count("tracks")).toBe(2);
   });
 
+  it("carries a track the server renamed instead of listing it twice", async () => {
+    serveLibrary([album("al-1", { songCount: 2 })], {
+      "al-1": [track("t1", "al-1", { path: "/m/1.flac" }), track("t2", "al-1", { path: "/m/2.flac" })],
+    });
+    await syncLibrary(server(), CRED);
+    onInvoke("remap_track_ids", (args) => {
+      for (const { oldId, newId } of (args as { remaps: { oldId: string; newId: string }[] }).remaps) {
+        db().raw.prepare("UPDATE OR IGNORE tracks SET id = ? WHERE id = ?").run(newId, oldId);
+      }
+      return 1;
+    });
+    mAlbumTracks.mockResolvedValue([
+      track("t1-new", "al-1", { path: "/m/1.flac" }),
+      track("t2", "al-1", { path: "/m/2.flac" }),
+    ]);
+
+    await syncAlbumTracks(server(), CRED, `${SRV}:al-1`);
+
+    expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
+    expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
+  });
+
   it("stores replay gain sub-fields individually and defaults play_count to zero", async () => {
     mAlbumTracks.mockResolvedValue([track("t1", "al-1", { replayGain: { trackGain: -3 } }), track("t2", "al-1", {})]);
     await syncAlbumTracks(server(), { type: "apikey", apiKey: "k" }, `${SRV}:al-1`);
