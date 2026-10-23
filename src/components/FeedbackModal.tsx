@@ -7,8 +7,6 @@ import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 import "./FeedbackModal.css";
 
-const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
-
 function detectOS(): string {
   const ua = navigator.userAgent;
   if (ua.includes("Windows")) return "Windows";
@@ -56,6 +54,12 @@ const PLACEHOLDERS: Record<Category, string> = {
 const DISCORD_DESCRIPTION_LIMIT = 4096;
 const OVERFLOW_NOTE = "\n\n*(full text attached)*";
 
+// Lead surrogate whose trail a cut would drop: sending it alone renders as a broken glyph.
+function sliceWithoutSplitPair(value: string, end: number): string {
+  const code = value.charCodeAt(end - 1);
+  return value.slice(0, code >= 0xd800 && code <= 0xdbff ? end - 1 : end);
+}
+
 const SENT_CLOSE_DELAY_MS = 1400;
 
 const STEPS_PLACEHOLDER = "1. Open the app\n2. …\n3. …";
@@ -76,9 +80,12 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
   const [includeLogs, setIncludeLogs] = useState(true);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [appVersion, setAppVersion] = useState("…");
+  const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK;
 
   useEffect(() => {
-    void getVersion().then(setAppVersion);
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion("unknown"));
   }, []);
 
   // The parent passes a fresh onClose each render; depending on it would restart the delay.
@@ -94,7 +101,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
   const dismiss = useOverlayDismiss(onClose);
 
   async function submit() {
-    if (status === "sending") return;
+    if (status === "sending" || !webhookUrl) return;
     if (category === "bug") {
       if (!steps.trim()) {
         setStepsError(true);
@@ -123,7 +130,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
     const embed = {
       title: `${CATEGORY_EMOJI[category]} ${CATEGORY_LABELS[category]}`,
       description: isOverLimit
-        ? `${fullText.slice(0, DISCORD_DESCRIPTION_LIMIT - OVERFLOW_NOTE.length)}${OVERFLOW_NOTE}`
+        ? `${sliceWithoutSplitPair(fullText, DISCORD_DESCRIPTION_LIMIT - OVERFLOW_NOTE.length)}${OVERFLOW_NOTE}`
         : fullText,
       color: CATEGORY_COLOR[category],
       timestamp: new Date().toISOString(),
@@ -141,9 +148,9 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
         attachments.forEach(({ name, text: content }, index) => {
           form.append(`files[${index}]`, new Blob([content], { type: "text/plain" }), name);
         });
-        res = await boundedFetch(WEBHOOK_URL, { method: "POST", body: form }, { headersTimeoutMs: UPLOAD_TIMEOUT_MS });
+        res = await boundedFetch(webhookUrl, { method: "POST", body: form }, { headersTimeoutMs: UPLOAD_TIMEOUT_MS });
       } else {
-        res = await boundedFetch(WEBHOOK_URL, {
+        res = await boundedFetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -235,6 +242,9 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
             </label>
           </div>
           <div className="feedback-footer-right">
+            {!webhookUrl && (
+              <span className="feedback-status feedback-status--error">This build can't send feedback</span>
+            )}
             {status === "error" && (
               <span className="feedback-status feedback-status--error">Send failed, try again</span>
             )}
@@ -244,7 +254,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
               <button
                 className="feedback-submit"
                 onClick={() => void submit()}
-                disabled={(category === "bug" ? !steps.trim() : !text.trim()) || status === "sending"}
+                disabled={(category === "bug" ? !steps.trim() : !text.trim()) || status === "sending" || !webhookUrl}
               >
                 {status === "sending" ? "Sending…" : "Send"}
               </button>

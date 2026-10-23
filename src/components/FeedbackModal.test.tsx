@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { getVersion } from "@tauri-apps/api/app";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
@@ -7,7 +8,7 @@ import { logger } from "../lib/logger";
 import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
 import { FeedbackModal } from "./FeedbackModal";
 
-vi.mock("@tauri-apps/api/app", () => ({ getVersion: () => Promise.resolve("0.48.3") }));
+vi.mock("@tauri-apps/api/app", () => ({ getVersion: vi.fn(() => Promise.resolve("0.48.3")) }));
 vi.mock("../clients/boundedFetch", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../clients/boundedFetch")>()),
   boundedFetch: vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
@@ -17,8 +18,14 @@ vi.mock("../lib/logger", async (importOriginal) => ({
   logger: { getRecent: () => Promise.resolve(""), error: vi.fn() },
 }));
 
-beforeEach(() => __resetModalRegistry());
-afterEach(cleanup);
+beforeEach(() => {
+  __resetModalRegistry();
+  vi.stubEnv("VITE_DISCORD_WEBHOOK", "https://discord.example/webhook");
+});
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 function Probe() {
   return <span data-testid="any-modal">{String(useAnyModalOpen())}</span>;
@@ -142,5 +149,38 @@ describe("FeedbackModal", () => {
 
     await waitFor(() => expect(screen.getByText("Send failed, try again")).toBeInTheDocument());
     expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("HTTP 429"));
+  });
+
+  it("says feedback can't be sent from a build without a destination instead of failing every send", () => {
+    vi.stubEnv("VITE_DISCORD_WEBHOOK", "");
+    render(<FeedbackModal onClose={vi.fn()} />);
+
+    fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: "Love it" } });
+
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByText(/can't send feedback/i)).toBeInTheDocument();
+  });
+
+  it("reports an unknown version when the version read fails", async () => {
+    vi.mocked(getVersion).mockImplementationOnce(() => Promise.reject(new Error("ipc down")));
+    render(<FeedbackModal onClose={vi.fn()} />);
+
+    await waitFor(() => expect(document.querySelector(".feedback-sysinfo-detail")).toHaveTextContent("vunknown"));
+  });
+
+  it("does not cut an emoji in half where an overlong report is shortened", async () => {
+    vi.mocked(boundedFetch).mockClear();
+    render(<FeedbackModal onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include system info/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Include recent logs" }));
+    fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: `a${"🎵".repeat(3000)}` } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(boundedFetch).toHaveBeenCalledTimes(1));
+    const body = vi.mocked(boundedFetch).mock.calls[0]?.[1]?.body;
+    if (!(body instanceof FormData)) throw new Error("expected a multipart upload");
+    const description: string = JSON.parse(String(body.get("payload_json"))).embeds[0].description;
+    expect(description.length).toBeLessThanOrEqual(4096);
+    expect(description).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
   });
 });
