@@ -44,6 +44,15 @@ describe("extractAccent", () => {
     expect(boundedNativeFetch).toHaveBeenCalledTimes(2);
   });
 
+  it("shares one fetch between callers asking for the same cover at once", async () => {
+    isImageLoadable = false;
+    vi.mocked(boundedNativeFetch).mockRejectedValue(new Error("timed out"));
+
+    await Promise.all([extractAccent("cover://srv/shared"), extractAccent("cover://srv/shared")]);
+
+    expect(boundedNativeFetch).toHaveBeenCalledTimes(1);
+  });
+
   it("remembers a decoded cover that has no usable color", async () => {
     isImageLoadable = true;
     const getContext = vi.mocked(HTMLCanvasElement.prototype.getContext);

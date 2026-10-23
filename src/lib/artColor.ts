@@ -11,6 +11,8 @@ const CANVAS_SIZE = 32;
 // Rust-side cover/prefetch caches.
 const MAX_ACCENT_CACHE_ENTRIES = 500;
 const accentCache = new Map<string, string | null>();
+// A failed read isn't cached, so without this every caller of a timing-out cover held its own fetch.
+const accentsInFlight = new Map<string, Promise<string | null>>();
 const MIN_SATURATION = 0.25;
 const MIN_BRIGHTNESS = 0.15;
 const MAX_BRIGHTNESS = 0.92;
@@ -165,7 +167,15 @@ async function extractViaProxyFetch(imageUrl: string): Promise<Scored | null> {
 export async function extractAccent(imageUrl: string): Promise<string | null> {
   const cached = accentCache.get(imageUrl);
   if (cached !== undefined) return cached;
+  const inFlight = accentsInFlight.get(imageUrl);
+  if (inFlight) return inFlight;
 
+  const read = readAccent(imageUrl).finally(() => accentsInFlight.delete(imageUrl));
+  accentsInFlight.set(imageUrl, read);
+  return read;
+}
+
+async function readAccent(imageUrl: string): Promise<string | null> {
   let scored: Scored | null;
   const img = await loadImageAnonymous(imageUrl);
   if (img) {
