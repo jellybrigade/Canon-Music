@@ -20,7 +20,7 @@ let flushTimer: ReturnType<typeof setInterval> | null = null;
 // whole Subsonic URL. Rows written before this existed are scrubbed again on read.
 const CREDENTIAL_PARAM = /([?&](?:t|s|p|apiKey)=)[^&\s)"']+/g;
 
-function redactCredentials(text: string): string {
+export function redactCredentials(text: string): string {
   return text.replace(CREDENTIAL_PARAM, "$1[redacted]");
 }
 

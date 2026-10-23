@@ -12,6 +12,7 @@ import { RadioStartDialogHost } from "../features/radio/components/RadioStartDia
 import { useRecents, useRecordRecent } from "../features/recents/useRecents";
 import { usePaletteActions } from "../hooks/usePaletteActions";
 import { usePlayAlbum } from "../hooks/usePlayAlbum";
+import { crashReportText } from "../lib/crashReport";
 import type { ArtistRow } from "../types/library";
 import { AppRoutes, type AppViewProps } from "./AppRoutes";
 
@@ -211,7 +212,7 @@ export function AppShell(props: AppViewProps) {
             setCrashReport(null);
           }}
           initialCategory={crashReport ? "bug" : undefined}
-          initialText={crashReport ? `Canon crashed last session:\n\n${crashReport}` : undefined}
+          initialText={crashReport ? crashReportText(crashReport) : undefined}
         />
       )}
       <RadioStartDialogHost />
