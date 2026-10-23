@@ -4,8 +4,25 @@ use std::sync::{Arc, Mutex};
 
 #[derive(Clone)]
 pub(crate) struct CoverProxyConfig {
-    pub(crate) base_url: String,
+    /// The server's addresses, the one that last answered first.
+    pub(crate) routes: Vec<String>,
     pub(crate) auth_params: String,
+}
+
+pub(crate) fn cover_routes(base_url: String, alt_url: Option<String>) -> Vec<String> {
+    let mut routes = vec![base_url];
+    if let Some(alt) = alt_url.filter(|alt| !alt.is_empty() && !routes.contains(alt)) {
+        routes.push(alt);
+    }
+    routes
+}
+
+/// Later covers go straight to the route that answered instead of waiting out the
+/// request timeout on one that is unreachable.
+pub(crate) fn promote_route(routes: &mut [String], route: &str) {
+    if let Some(index) = routes.iter().position(|r| r == route) {
+        routes[..=index].rotate_right(1);
+    }
 }
 
 // Bounds concurrent cover-art requests; without it a burst of grid requests (rapid
@@ -141,10 +158,11 @@ pub(crate) fn percent_decode(s: &str) -> String {
 pub fn set_cover_proxy_config(
     state: tauri::State<'_, CoverState>,
     base_url: String,
+    alt_url: Option<String>,
     auth_params: String,
 ) {
     *state.proxy_config.lock().unwrap_or_else(|e| e.into_inner()) = Some(CoverProxyConfig {
-        base_url,
+        routes: cover_routes(base_url, alt_url),
         auth_params,
     });
 }
@@ -296,12 +314,26 @@ pub(crate) fn handle_cover_request(
         match cfg {
             None => return cover_error_response(503),
             Some(cfg) => {
-                let fetch_url = format!(
-                    "{}/rest/getCoverArt?{}&id={}&size={}",
-                    cfg.base_url, cfg.auth_params, id, size
-                );
-                match state.http_client.get(&fetch_url).send() {
-                    Ok(resp) if resp.status().is_success() => {
+                // Only a transport failure moves on to the next route: an HTTP answer
+                // means the server was reached and would say the same on the other one.
+                let answered = cfg.routes.iter().find_map(|route| {
+                    let fetch_url = format!(
+                        "{}/rest/getCoverArt?{}&id={}&size={}",
+                        route, cfg.auth_params, id, size
+                    );
+                    let resp = state.http_client.get(&fetch_url).send().ok()?;
+                    Some((route, resp))
+                });
+                if let Some((route, _)) = &answered {
+                    if cfg.routes.first() != Some(*route) {
+                        let mut live = state.proxy_config.lock().unwrap_or_else(|e| e.into_inner());
+                        if let Some(live) = live.as_mut() {
+                            promote_route(&mut live.routes, route);
+                        }
+                    }
+                }
+                match answered.map(|(_, resp)| resp) {
+                    Some(resp) if resp.status().is_success() => {
                         let declared_ct = resp
                             .headers()
                             .get(reqwest::header::CONTENT_TYPE)
@@ -346,8 +378,8 @@ pub(crate) fn handle_cover_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        disk_cache_read, disk_cache_write, evict_disk_cache_if_needed, percent_decode,
-        sanitize_cache_key, MAX_DISK_CACHE_ENTRIES,
+        cover_routes, disk_cache_read, disk_cache_write, evict_disk_cache_if_needed,
+        percent_decode, promote_route, sanitize_cache_key, MAX_DISK_CACHE_ENTRIES,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -381,6 +413,37 @@ mod tests {
     }
 
     // ── sanitize_cache_key ────────────────────────────────────────────────────
+
+    #[test]
+    fn cover_routes_try_the_primary_first_then_the_alternate() {
+        assert_eq!(
+            cover_routes("http://a".into(), Some("http://b".into())),
+            vec!["http://a".to_string(), "http://b".to_string()]
+        );
+    }
+
+    #[test]
+    fn cover_routes_skip_a_missing_empty_or_duplicate_alternate() {
+        let only_primary = vec!["http://a".to_string()];
+        assert_eq!(cover_routes("http://a".into(), None), only_primary);
+        assert_eq!(
+            cover_routes("http://a".into(), Some(String::new())),
+            only_primary
+        );
+        assert_eq!(
+            cover_routes("http://a".into(), Some("http://a".into())),
+            only_primary
+        );
+    }
+
+    #[test]
+    fn promote_route_moves_the_route_that_answered_to_the_front() {
+        let mut routes = vec!["http://a".to_string(), "http://b".to_string()];
+        promote_route(&mut routes, "http://b");
+        assert_eq!(routes, vec!["http://b".to_string(), "http://a".to_string()]);
+        promote_route(&mut routes, "http://zzz");
+        assert_eq!(routes, vec!["http://b".to_string(), "http://a".to_string()]);
+    }
 
     #[test]
     fn sanitize_cache_key_prefixes_the_kind_so_the_two_caches_cannot_collide() {

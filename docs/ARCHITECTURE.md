@@ -43,7 +43,7 @@ Rust (`src-tauri/src/`):
 | `audio/` | `mod.rs` output open (fixed 100ms buffer, device config fallback, fatal stream error sets `output_lost`), `open_decoder` (seekable + byte length, shared by playback and waveform), `AudioState` (player, `play_id` race guard, `PosTracker`, prefetch cache, fade generation, gapless flags, `output_lost`); `playback.rs` play/enqueue/prefetch, reports a lost output as a non-retryable `audio-error`; `control.rs` transport + position; `waveform.rs`; `visualizer.rs` wraps every played and gapless source in `Tapped`, which copies a mono mix into `VisualizerTap` only while the Now Playing visualizer is active (skipping a block rather than waiting when a read holds the history), and `audio_visualizer_levels` (async, off the main thread) FFTs the window the speakers are playing (newest samples less the output buffer the stream actually opened with, `output_lead`, both scaled by playback speed) into log-spaced 0..1 bands, zero once samples stop for 300ms; every page load turns the copy off, since a reloaded page never ran its visualizer's cleanup. |
 | `streaming.rs` | `StreamingBuffer` (RAM) and `FileBackedStreamingBuffer` (spills to `stream-spill/` when length > 64 MiB or unknown); spill dir cleared at startup. |
 | `stream_classify.rs` | `classify_stream_response`: sniffs the first 8 KiB so a Subsonic error envelope on HTTP 200 never reaches the decoder. |
-| `cover.rs` | `cover://` handler: memory cache (500), disk cache (2000, `cover-cache/`), request semaphore (16), `set_cover_proxy_config`. |
+| `cover.rs` | `cover://` handler: memory cache (500), disk cache (2000, `cover-cache/`), request semaphore (16), `set_cover_proxy_config` (primary + alt URL; a transport failure tries the next, the route that answered goes first). |
 | `keychain.rs` | `set_credential`/`get_credential`/`delete_credential`; `SECRET_STORE_UNAVAILABLE` marker = retriable failure. |
 | `upnp.rs` | `discover_upnp_renderers` (SSDP M-SEARCH), `upnp_soap`. |
 | `net_probe.rs` | `probe_server`: reqwest reachability check to tell webview proxy (PAC) hangs from real outages. |
@@ -144,7 +144,7 @@ Version = highest entry in `src/db/migrations.ts` (`LATEST_SCHEMA_VERSION`). Ids
 
 | Table | Purpose: key columns |
 |---|---|
-| `servers` | Navidrome servers: id, url, alt_url, display_name, username, watermark (last_scan_at, server_version, song_count). |
+| `servers` | Navidrome servers: id, url, alt_url (API calls, streams via `lastAnsweringRoute`, covers via the Rust proxy), display_name, username, watermark (last_scan_at, server_version, song_count). |
 | `settings` | Key/value app settings (`key` PK). |
 | `albums` | Mirror: id, server_id, name, artist, year, artwork_url, play_count, played_at, release_type, accent_color, normalized_tags_json, computed_at, tracks_read_scan, mb_release_id (v57: MusicBrainz release from the files' tags via Navidrome `musicBrainzId`, UUID-checked, else NULL). |
 | `tracks` | Mirror: id, server_id, album_id, title, artist, file_path, play_count, played_at, replay_gain_*, bit_rate, suffix, tags_enriched_at. |

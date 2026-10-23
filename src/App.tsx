@@ -290,6 +290,7 @@ export default function App() {
       try {
         await updateCoverProxyConfig(
           serverWithCred.server.url,
+          serverWithCred.server.alt_url,
           serverWithCred.server.username,
           serverWithCred.credential,
         );
