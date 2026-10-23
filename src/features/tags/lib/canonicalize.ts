@@ -29,14 +29,17 @@ export interface FindResult {
 }
 
 let cachedTree: CanonTree | null = null;
+let treeGeneration = 0;
 
 export function bustCanonTreeCache(): void {
   cachedTree = null;
+  treeGeneration++;
 }
 
 export async function getCanonTree(): Promise<CanonTree> {
   if (cachedTree) return cachedTree;
 
+  const startGeneration = treeGeneration;
   const db = await getDb();
   type UserNode = { id: string; name: string; type: string; canonical_key: string; parent_ids: string };
   const userRows = await db.select<UserNode[]>("SELECT * FROM user_tree_nodes");
@@ -86,8 +89,10 @@ export async function getCanonTree(): Promise<CanonTree> {
     if (!kindKeyMap.has(n.canonical_key)) kindKeyMap.set(n.canonical_key, n);
   }
 
-  cachedTree = { nodes, byKey, byId, nodesByKind, byKindAndKey };
-  return cachedTree;
+  const tree = { nodes, byKey, byId, nodesByKind, byKindAndKey };
+  // A user tree edit during the read busted the cache; this tree may predate it, so don't keep it.
+  if (treeGeneration === startGeneration) cachedTree = tree;
+  return tree;
 }
 
 const RAW_ALIASES: Record<string, string> = {

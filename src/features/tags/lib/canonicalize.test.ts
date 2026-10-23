@@ -337,6 +337,26 @@ describe("bustCanonTreeCache", () => {
     await freshGetCanonTree();
     expect(select).toHaveBeenCalledTimes(2);
   });
+
+  it("does not keep a tree read that was in flight when the cache was busted", async () => {
+    const userNode = { id: "u1", name: "Brand New Genre", type: "genre", canonical_key: "", parent_ids: "[]" };
+    let releaseFirstRead: (rows: unknown[]) => void = () => {};
+    const select = vi
+      .fn<() => Promise<unknown[]>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (releaseFirstRead = resolve)))
+      .mockImplementation(async () => [userNode]);
+    vi.doMock("../../../db", () => ({ getDb: async () => ({ select }) }));
+    const { getCanonTree: freshGetCanonTree, bustCanonTreeCache: freshBust } = await import("./canonicalize");
+
+    const staleRead = freshGetCanonTree();
+    await vi.waitFor(() => expect(select).toHaveBeenCalledTimes(1));
+    freshBust();
+    releaseFirstRead([]);
+    await staleRead;
+
+    const tree = await freshGetCanonTree();
+    expect(tree.byId.get("u1")?.name).toBe("Brand New Genre");
+  });
 });
 
 describe("getCanonTree (bundled data smoke)", () => {
