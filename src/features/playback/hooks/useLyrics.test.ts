@@ -233,6 +233,41 @@ describe("useLyrics timing offset", () => {
     expect(view.result.current.offsetMs).toBe(500);
   });
 
+  it("shows an offset still on its way to the database when coming back to its track", async () => {
+    const otherTrack: CurrentTrack = { ...TRACK, id: "srv-a:t2" };
+    const view = renderHook(({ track }) => useLyrics(track, null, null), { wrapper, initialProps: { track: TRACK } });
+    await waitFor(() => expect(view.result.current.loading).toBe(false));
+    const held = holdOffsetWrites();
+
+    act(() => void view.result.current.setOffsetMs(500));
+    const offsetReads = () => db.queryLog.filter((q) => q.sql.startsWith("SELECT offset_ms")).length;
+    const readsBefore = offsetReads();
+    view.rerender({ track: otherTrack });
+    await waitFor(() => expect(offsetReads()).toBe(readsBefore + 1));
+    await act(async () => {});
+    view.rerender({ track: TRACK });
+    await waitFor(() => expect(held).toHaveLength(1));
+    await act(async () => held[0]!.release());
+
+    await waitFor(() => expect(view.result.current.offsetMs).toBe(500));
+  });
+
+  it("keeps the offset from before a failed change when the stored one can't be read back", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = await mountSettled();
+    await act(async () => view.result.current.setOffsetMs(500));
+    db.execute = async () => {
+      throw new Error("disk full");
+    };
+    db.select = async () => {
+      throw new Error("disk full");
+    };
+
+    await act(async () => view.result.current.setOffsetMs(1000));
+
+    expect(view.result.current.offsetMs).toBe(500);
+  });
+
   it("keeps an offset change made while the stored offset was still loading", async () => {
     db.raw
       .prepare(

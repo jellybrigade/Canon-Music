@@ -16,7 +16,9 @@ const NO_LOOKUP_SOURCE = "cleared";
 // Per track, so two quick offset changes can't reach the database's connection pool in the wrong order.
 const pendingOffsetWrites = new Map<string, Promise<void>>();
 
+// Waits for the track's queued writes, so coming back to a track mid-save reads the new offset.
 async function readStoredOffset(trackId: string): Promise<number> {
+  await pendingOffsetWrites.get(trackId)?.catch(() => {});
   const db = await getDb();
   const rows = await db.select<{ offset_ms: number }[]>("SELECT offset_ms FROM lyrics WHERE track_id = ?", [trackId]);
   return rows[0]?.offset_ms ?? 0;
@@ -35,6 +37,10 @@ function storeOffset(trackId: string, ms: number): Promise<void> {
       );
     });
   pendingOffsetWrites.set(trackId, write);
+  const forget = () => {
+    if (pendingOffsetWrites.get(trackId) === write) pendingOffsetWrites.delete(trackId);
+  };
+  void write.then(forget, forget);
   return write;
 }
 
@@ -218,20 +224,22 @@ export function useLyrics(
     async (ms: number) => {
       if (!track) return;
       const trackId = track.id;
+      const msBeforeChange = offsetMs;
       setOffset({ trackId, ms, isUserChange: true });
       const write = storeOffset(trackId, ms);
       try {
         await write;
       } catch (e) {
         console.error("Failed to save lyrics offset:", trackId, e);
-        if (pendingOffsetWrites.get(trackId) !== write) return;
-        const stored = await readStoredOffset(trackId).catch(() => 0);
+        const latestWrite = pendingOffsetWrites.get(trackId);
+        if (latestWrite !== undefined && latestWrite !== write) return;
+        const stored = await readStoredOffset(trackId).catch(() => msBeforeChange);
         setOffset((previous) =>
           previous?.trackId === trackId ? { trackId, ms: stored, isUserChange: true } : previous,
         );
       }
     },
-    [track?.id],
+    [track?.id, offsetMs],
   );
 
   return {
