@@ -5,7 +5,7 @@ use rodio::source::SeekError;
 use rodio::{ChannelCount, Sample, SampleRate, Source};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, TryLockError};
 use std::time::{Duration, Instant};
 
 const WINDOW_LEN: usize = 2048;
@@ -107,8 +107,13 @@ impl VisualizerTap {
         self.output_lead_micros.store(micros, Ordering::Relaxed);
     }
 
+    // Runs on the audio thread, which must never wait on a reader: a busy history drops this block.
     fn push(&self, frames: &[f32], sample_rate: u32, now: Instant) {
-        let mut history = self.history.lock().unwrap_or_else(|e| e.into_inner());
+        let mut history = match self.history.try_lock() {
+            Ok(history) => history,
+            Err(TryLockError::Poisoned(e)) => e.into_inner(),
+            Err(TryLockError::WouldBlock) => return,
+        };
         if history.sample_rate != sample_rate {
             history.samples.clear();
             history.sample_rate = sample_rate;
@@ -290,7 +295,8 @@ pub fn audio_visualizer_set_active(state: tauri::State<'_, AudioState>, active: 
     state.visualizer.set_active(active);
 }
 
-#[tauri::command]
+// Off the main thread: called every animation frame, and each call runs an FFT.
+#[tauri::command(async)]
 pub fn audio_visualizer_levels(state: tauri::State<'_, AudioState>, band_count: usize) -> Vec<f32> {
     let speed = *state.speed.lock().unwrap_or_else(|e| e.into_inner());
     state.visualizer.levels(band_count, speed, Instant::now())
