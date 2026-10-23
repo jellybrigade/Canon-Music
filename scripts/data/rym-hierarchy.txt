@@ -9,7 +9,9 @@ Descriptors
         Dark
             Dark::mood
             Funereal::mood
-            Gothic::mood
+            Gothic
+                Gothic::mood
+                Southern Gothic::mood
             Infernal::mood
             Ominous::mood
         Daytime::mood
@@ -215,16 +217,15 @@ Descriptors
                 Jamming::mood
             Mixed meter::mood
             Polyrhythm::mood
+            Swing rhythm::mood
             Through-composed::mood
-            Triple metre::mood
+            Triple meter::mood
             Uncommon time signatures::mood
         Interpolation::mood
         Leitmotif::mood
         Production
             Lobit::mood
-            Sampling
-                Sampling::mood
-                Vocal chops::mood
+            Sampling::mood
             Wall of Sound::mood
         Rubato::mood
         Tone clusters::mood
@@ -248,9 +249,11 @@ Descriptors
         Birthday::mood
         Boredom::mood
         Callback::mood
+        Card games::mood
         Childhood::mood
         Circus::mood
         Community::mood
+        Confusion::mood
         Conscious
             Conscious::mood
             Antidiscrimination
@@ -268,6 +271,7 @@ Descriptors
             Homicide::mood
             Suicide::mood
         Decay::mood
+        Disappointment::mood
         Disaster
             Disaster::mood
             Drought::mood
@@ -296,6 +300,7 @@ Descriptors
         Family
             Family::mood
             Parenthood::mood
+            Siblings::mood
         Fans::mood
         Fantasy::mood
         Farewell::mood
@@ -309,6 +314,7 @@ Descriptors
         Flirting::mood
         Folklore::mood
         Food::mood
+        Freedom::mood
         Friendship::mood
         Gender
             Gender::mood
@@ -385,7 +391,9 @@ Descriptors
         Law
             Law::mood
             Police::mood
-        Leisure::mood
+        Leisure
+            Leisure::mood
+            Vacation::mood
         LGBTQ
             LGBTQ::mood
             Bisexual::mood
@@ -483,6 +491,7 @@ Descriptors
             Boxing::mood
             Racing::mood
             Skateboarding::mood
+            Surfing::mood
             Wrestling::mood
         Suburban::mood
         Success::mood
@@ -531,6 +540,7 @@ Descriptors
                 Gurgling vocals::mood
             Pig squealing::mood
             Shrieking::mood
+            Tunnel screaming::mood
         Male vocalist::mood
         Murmuring::mood
         Nonbinary vocalist::mood
@@ -545,6 +555,7 @@ Descriptors
         Talk-singing::mood
         Throat singing::mood
         Toasting::mood
+        Vocal chops::mood
         Whispering::mood
         Whistle register::mood
         Whistling::mood
@@ -701,6 +712,7 @@ Genres
                 Khrueang sai::genre
                 Piphat::genre
         Tibetan Buddhist Chant::genre
+        Ufie Music::genre
         Western Classical Music
             Western Classical Music::genre
             Art Song
@@ -926,7 +938,6 @@ Genres
         Dance::genre
         Alternative Dance
             Alternative Dance::genre
-            Grebo::genre
             New Rave::genre
         Dance-Pop
             Dance-Pop::genre
@@ -1133,7 +1144,9 @@ Genres
                 Hardtek
                     Hardtek::genre
                     Raggatek::genre
-                Jumpstyle::genre
+                Jumpstyle
+                    Jumpstyle::genre
+                    Frenchtek::genre
                 Lento violento::genre
                 Neo Rave::genre
                 NRG::genre
@@ -1335,6 +1348,7 @@ Genres
                 Minimal Techno
                     Minimal Techno::genre
                     Dub Techno::genre
+                    Neo-Trance::genre
                 Peak Time Techno::genre
                 TBM::genre
                 Wonky Techno::genre
@@ -1346,6 +1360,7 @@ Genres
             Trance
                 Trance::genre
                 Acid Trance::genre
+                Balearic Trance::genre
                 Big Room Trance::genre
                 Dream Trance::genre
                 Electro Trance::genre
@@ -1356,7 +1371,6 @@ Genres
                         Buchiage Trance::genre
                 Hard Trance::genre
                 Hi-Tech Full-On::genre
-                Ibiza Trance::genre
                 NRG::genre
                 Progressive Trance::genre
                 Psytrance
@@ -1653,7 +1667,9 @@ Genres
                 Hardtek
                     Hardtek::genre
                     Raggatek::genre
-                Jumpstyle::genre
+                Jumpstyle
+                    Jumpstyle::genre
+                    Frenchtek::genre
                 Lento violento::genre
                 Neo Rave::genre
                 NRG::genre
@@ -1855,6 +1871,7 @@ Genres
                 Minimal Techno
                     Minimal Techno::genre
                     Dub Techno::genre
+                    Neo-Trance::genre
                 Peak Time Techno::genre
                 TBM::genre
                 Wonky Techno::genre
@@ -1866,6 +1883,7 @@ Genres
             Trance
                 Trance::genre
                 Acid Trance::genre
+                Balearic Trance::genre
                 Big Room Trance::genre
                 Dream Trance::genre
                 Electro Trance::genre
@@ -1876,7 +1894,6 @@ Genres
                         Buchiage Trance::genre
                 Hard Trance::genre
                 Hi-Tech Full-On::genre
-                Ibiza Trance::genre
                 NRG::genre
                 Progressive Trance::genre
                 Psytrance
@@ -2225,18 +2242,6 @@ Genres
                 Trinidadian Cariso::genre
                 Tumba::genre
                 Virgin Islander Cariso::genre
-            Caucasian Folk Music
-                Caucasian Folk Music::genre
-                Abkhazian Folk Music::genre
-                Chechen Folk Music::genre
-                Circassian Folk Music::genre
-                Dagestani Folk Music
-                    Dagestani Folk Music::genre
-                    Avar Folk Music::genre
-                Georgian Folk Music
-                    Georgian Folk Music::genre
-                    Batonebi Songs::genre
-                Ossetian Folk Music::genre
             Chukchi Folk Music::genre
             Drinking Song::genre
             East Asian Folk Music
@@ -2340,6 +2345,18 @@ Genres
                 Catalan Folk Music
                     Catalan Folk Music::genre
                     Sardana::genre
+                Caucasian Folk Music
+                    Caucasian Folk Music::genre
+                    Abkhazian Folk Music::genre
+                    Chechen Folk Music::genre
+                    Circassian Folk Music::genre
+                    Dagestani Folk Music
+                        Dagestani Folk Music::genre
+                        Avar Folk Music::genre
+                    Georgian Folk Music
+                        Georgian Folk Music::genre
+                        Batonebi Song::genre
+                    Ossetian Folk Music::genre
                 Celtic Folk Music
                     Celtic Folk Music::genre
                     Breton Celtic Folk Music
@@ -2631,7 +2648,9 @@ Genres
                     Marathi Folk Music::genre
                     Lavani::genre
                 Nepali lok geet::genre
-                Odia Folk Music::genre
+                Odia Folk Music
+                    Odia Folk Music::genre
+                    Pala::genre
                 Pashto Folk Music::genre
                 Punjabi Folk Music::genre
                 Rajasthani Folk Music::genre
@@ -2674,6 +2693,18 @@ Genres
                     Kef Music::genre
                 Assyrian Folk Music::genre
                 Ayyalah::genre
+                Caucasian Folk Music
+                    Caucasian Folk Music::genre
+                    Abkhazian Folk Music::genre
+                    Chechen Folk Music::genre
+                    Circassian Folk Music::genre
+                    Dagestani Folk Music
+                        Dagestani Folk Music::genre
+                        Avar Folk Music::genre
+                    Georgian Folk Music
+                        Georgian Folk Music::genre
+                        Batonebi Song::genre
+                    Ossetian Folk Music::genre
                 Fijiri::genre
                 Israeli Folk Music::genre
                 Luri Folk Music::genre
@@ -2682,7 +2713,9 @@ Genres
                 Turkish Folk Music
                     Turkish Folk Music::genre
                     Turkish Black Sea Region Folk Music::genre
-                    Uzun Hava::genre
+                    Uzun Hava
+                        Uzun Hava::genre
+                        Bozlak::genre
                     Zeybek::genre
             Work Song
                 Work Song::genre
@@ -2839,8 +2872,8 @@ Genres
             Tread::genre
         Trap shaabi::genre
         Turntablism::genre
-    Industrial & Noise
-        Industrial & Noise::genre
+    Industrial / Noise
+        Industrial / Noise::genre
         Industrial
             Industrial::genre
             Power Electronics
@@ -2985,6 +3018,7 @@ Genres
             Pagan Black Metal::genre
             Symphonic Black Metal::genre
             War Metal::genre
+        Christian Metal::genre
         Death Metal
             Death Metal::genre
             Brutal Death Metal
@@ -3233,6 +3267,7 @@ Genres
         Persian Pop::genre
         Pop Batak::genre
         Pop Ghazal::genre
+        Pop Kreatif::genre
         Pop Minang
             Pop Minang::genre
             Talempong goyang::genre
@@ -3490,8 +3525,8 @@ Genres
             Surf Punk::genre
             Vikingarock::genre
         Synth Punk::genre
-    R&B
-        R&B::genre
+    R&B / Soul / Funk
+        R&B / Soul / Funk::genre
         Acid Jazz::genre
         Beach Music::genre
         Blue-Eyed Soul::genre
@@ -3674,6 +3709,7 @@ Genres
                     Gengetone::genre
                 Gogo Music::genre
                 Inkiranya::genre
+                Kadodi::genre
                 Kapuka::genre
                 Kidandali::genre
                 Kidumbak::genre
@@ -3845,6 +3881,7 @@ Genres
                 Igbo Music
                     Igbo Music::genre
                     Ogene Music::genre
+                    Ufie Music::genre
                 Kabye Folk Music::genre
                 Kru Music
                     Kru Music::genre
@@ -4289,7 +4326,9 @@ Genres
                         Marathi Folk Music::genre
                         Lavani::genre
                     Nepali lok geet::genre
-                    Odia Folk Music::genre
+                    Odia Folk Music
+                        Odia Folk Music::genre
+                        Pala::genre
                     Pashto Folk Music::genre
                     Punjabi Folk Music::genre
                     Rajasthani Folk Music::genre
@@ -4302,6 +4341,7 @@ Genres
                     Telugu Folk Music
                         Telugu Folk Music::genre
                         Burrakatha::genre
+                Stotra::genre
                 Sufi Rock::genre
                 Sufiana kalam::genre
                 Tarz::genre
@@ -4533,7 +4573,7 @@ Genres
                             Avar Folk Music::genre
                         Georgian Folk Music
                             Georgian Folk Music::genre
-                            Batonebi Songs::genre
+                            Batonebi Song::genre
                         Ossetian Folk Music::genre
                     Karachay-Balkarian Music::genre
                     Rabiz::genre
@@ -4582,7 +4622,9 @@ Genres
                     Turkish Folk Music
                         Turkish Folk Music::genre
                         Turkish Black Sea Region Folk Music::genre
-                        Uzun Hava::genre
+                        Uzun Hava
+                            Uzun Hava::genre
+                            Bozlak::genre
                         Zeybek::genre
                     Turkish Pop::genre
                 West Asian Folk Music
@@ -4593,6 +4635,18 @@ Genres
                         Kef Music::genre
                     Assyrian Folk Music::genre
                     Ayyalah::genre
+                    Caucasian Folk Music
+                        Caucasian Folk Music::genre
+                        Abkhazian Folk Music::genre
+                        Chechen Folk Music::genre
+                        Circassian Folk Music::genre
+                        Dagestani Folk Music
+                            Dagestani Folk Music::genre
+                            Avar Folk Music::genre
+                        Georgian Folk Music
+                            Georgian Folk Music::genre
+                            Batonebi Song::genre
+                        Ossetian Folk Music::genre
                     Fijiri::genre
                     Israeli Folk Music::genre
                     Luri Folk Music::genre
@@ -4601,7 +4655,9 @@ Genres
                     Turkish Folk Music
                         Turkish Folk Music::genre
                         Turkish Black Sea Region Folk Music::genre
-                        Uzun Hava::genre
+                        Uzun Hava
+                            Uzun Hava::genre
+                            Bozlak::genre
                         Zeybek::genre
                 Yemenite Jewish Diwan::genre
         Austronesian Music
@@ -4622,6 +4678,25 @@ Genres
                 Batak Music::genre
                 Gondang::genre
                 Pop Batak::genre
+            Gamelan
+                Gamelan::genre
+                Balinese Gamelan
+                    Balinese Gamelan::genre
+                    Gamelan angklung::genre
+                    Gamelan gambang::genre
+                    Gamelan gender wayang::genre
+                    Gamelan gong gede::genre
+                    Gamelan gong kebyar::genre
+                    Gamelan jegog::genre
+                    Gamelan semar pegulingan::genre
+                Gamelan beleganjur::genre
+                Gamelan degung::genre
+                Gamelan selonding::genre
+                Javanese Gamelan
+                    Javanese Gamelan::genre
+                    Gamelan sekaten::genre
+                    Solonese Gamelan::genre
+                Malay Gamelan::genre
             Igorot Music::genre
             Indigenous Taiwanese Music::genre
             Javanese Music
@@ -4875,6 +4950,7 @@ Genres
                 Old Roman Chant::genre
             Seinn nan salm::genre
             Syriac Chant::genre
+            Taizé Chant::genre
         European Music
             European Music::genre
             Alpenrock::genre
@@ -4996,7 +5072,7 @@ Genres
                         Avar Folk Music::genre
                     Georgian Folk Music
                         Georgian Folk Music::genre
-                        Batonebi Songs::genre
+                        Batonebi Song::genre
                     Ossetian Folk Music::genre
                 Karachay-Balkarian Music::genre
                 Rabiz::genre
@@ -5091,6 +5167,18 @@ Genres
                 Catalan Folk Music
                     Catalan Folk Music::genre
                     Sardana::genre
+                Caucasian Folk Music
+                    Caucasian Folk Music::genre
+                    Abkhazian Folk Music::genre
+                    Chechen Folk Music::genre
+                    Circassian Folk Music::genre
+                    Dagestani Folk Music
+                        Dagestani Folk Music::genre
+                        Avar Folk Music::genre
+                    Georgian Folk Music
+                        Georgian Folk Music::genre
+                        Batonebi Song::genre
+                    Ossetian Folk Music::genre
                 Celtic Folk Music
                     Celtic Folk Music::genre
                     Breton Celtic Folk Music
@@ -5542,6 +5630,7 @@ Genres
                 Schottische::genre
                 Chotis madrileño::genre
             Singspiel::genre
+            Taizé Chant::genre
             Tragédie en musique::genre
             Trampská hudba::genre
             Verismo::genre
@@ -5672,6 +5761,7 @@ Genres
                         Cumbia sureña peruana::genre
                     Cumbia pop::genre
                     Cumbia salvadoreña::genre
+                    Cumbia tejana::genre
                     Digital Cumbia::genre
                     Merecumbé::genre
                     Tecnocumbia::genre
@@ -5789,7 +5879,9 @@ Genres
                             Sierreño::genre
                             Corrido tumbado::genre
                     Ranchera::genre
-                    Tejano Music::genre
+                    Tejano Music
+                        Tejano Music::genre
+                        Cumbia tejana::genre
                 New Mexico Music::genre
                 Nueva canción latinoamericana
                     Nueva canción latinoamericana::genre
@@ -5980,6 +6072,7 @@ Genres
                 Pirekua::genre
         Islamic Religious Music & Recitation
             Islamic Religious Music & Recitation::genre
+            Adhan::genre
             Ginan::genre
             Jilala Music::genre
             Maddahi
@@ -6223,7 +6316,9 @@ Genres
                 Texan Music::genre
                 Acoustic Texas Blues::genre
                 Electric Texas Blues::genre
-                Tejano Music::genre
+                Tejano Music
+                    Tejano Music::genre
+                    Cumbia tejana::genre
                 Tex-Mex::genre
             Tin Pan Alley::genre
             Vaudeville
@@ -6267,6 +6362,7 @@ Genres
                 Tahitian Music
                     Tahitian Music::genre
                     'Ote'a::genre
+                Tongan Music::genre
         Polyphonic Chant
             Polyphonic Chant::genre
             Ars nova::genre
@@ -6776,18 +6872,6 @@ Genres
                 Trinidadian Cariso::genre
                 Tumba::genre
                 Virgin Islander Cariso::genre
-            Caucasian Folk Music
-                Caucasian Folk Music::genre
-                Abkhazian Folk Music::genre
-                Chechen Folk Music::genre
-                Circassian Folk Music::genre
-                Dagestani Folk Music
-                    Dagestani Folk Music::genre
-                    Avar Folk Music::genre
-                Georgian Folk Music
-                    Georgian Folk Music::genre
-                    Batonebi Songs::genre
-                Ossetian Folk Music::genre
             Chukchi Folk Music::genre
             Drinking Song::genre
             East Asian Folk Music
@@ -6891,6 +6975,18 @@ Genres
                 Catalan Folk Music
                     Catalan Folk Music::genre
                     Sardana::genre
+                Caucasian Folk Music
+                    Caucasian Folk Music::genre
+                    Abkhazian Folk Music::genre
+                    Chechen Folk Music::genre
+                    Circassian Folk Music::genre
+                    Dagestani Folk Music
+                        Dagestani Folk Music::genre
+                        Avar Folk Music::genre
+                    Georgian Folk Music
+                        Georgian Folk Music::genre
+                        Batonebi Song::genre
+                    Ossetian Folk Music::genre
                 Celtic Folk Music
                     Celtic Folk Music::genre
                     Breton Celtic Folk Music
@@ -7182,7 +7278,9 @@ Genres
                     Marathi Folk Music::genre
                     Lavani::genre
                 Nepali lok geet::genre
-                Odia Folk Music::genre
+                Odia Folk Music
+                    Odia Folk Music::genre
+                    Pala::genre
                 Pashto Folk Music::genre
                 Punjabi Folk Music::genre
                 Rajasthani Folk Music::genre
@@ -7225,6 +7323,18 @@ Genres
                     Kef Music::genre
                 Assyrian Folk Music::genre
                 Ayyalah::genre
+                Caucasian Folk Music
+                    Caucasian Folk Music::genre
+                    Abkhazian Folk Music::genre
+                    Chechen Folk Music::genre
+                    Circassian Folk Music::genre
+                    Dagestani Folk Music
+                        Dagestani Folk Music::genre
+                        Avar Folk Music::genre
+                    Georgian Folk Music
+                        Georgian Folk Music::genre
+                        Batonebi Song::genre
+                    Ossetian Folk Music::genre
                 Fijiri::genre
                 Israeli Folk Music::genre
                 Luri Folk Music::genre
@@ -7233,7 +7343,9 @@ Genres
                 Turkish Folk Music
                     Turkish Folk Music::genre
                     Turkish Black Sea Region Folk Music::genre
-                    Uzun Hava::genre
+                    Uzun Hava
+                        Uzun Hava::genre
+                        Bozlak::genre
                     Zeybek::genre
             Work Song
                 Work Song::genre
@@ -7279,7 +7391,6 @@ Genres
             Alternative Rock::genre
             Alternative Dance
                 Alternative Dance::genre
-                Grebo::genre
                 New Rave::genre
             Britpop::genre
             Dream Pop::genre
@@ -7293,6 +7404,7 @@ Genres
                 Dolewave::genre
                 Dunedin Sound::genre
                 Garage Rock Revival::genre
+                Grebo::genre
                 Indie Surf::genre
                 Math Pop::genre
                 Midwest Emo::genre
@@ -7477,6 +7589,7 @@ Genres
                 Pagan Black Metal::genre
                 Symphonic Black Metal::genre
                 War Metal::genre
+            Christian Metal::genre
             Death Metal
                 Death Metal::genre
                 Brutal Death Metal
@@ -7772,14 +7885,16 @@ Genres
         Uncategorised::genre
         Ambient Pop::genre
         ASMR::genre
-        Audio Documentary::genre
+        Audio Documentary
+            Audio Documentary::genre
+            Sound Map::genre
         Beatboxing::genre
         Bugle Call::genre
         Children's Music
             Children's Music::genre
             Lullabies
                 Lullabies::genre
-                Batonebi Songs::genre
+                Batonebi Song::genre
             Nursery Rhymes::genre
         Comedy
             Comedy::genre
@@ -7883,6 +7998,7 @@ Genres
                     Whale Song::genre
                 Rain Sounds::genre
             Radio Broadcast Recordings::genre
+            Sound Map::genre
         Hanmai::genre
         Hauntology::genre
         Hymn
@@ -7892,6 +8008,7 @@ Genres
             Lauda::genre
             Purísima::genre
             Shape Note Singing::genre
+            Stotra::genre
         Jingles::genre
         Krautrock
             Krautrock::genre
@@ -7929,14 +8046,17 @@ Genres
         Toypop::genre
         Worldbeat::genre
 Scenes & Movements
+    ABC No Rio Scene::genre
     Afrofuturism::genre
     Akron Sound::genre
     Alté::genre
     Anarcho-Punk::genre
+    Anison::genre
     Asian Underground::genre
     Aussie Pub Rock::genre
     Austin New Sincerity::genre
     Authenticité::genre
+    Ballroom::genre
     Bay Area Thrash Metal::genre
     Beach Music::genre
     Beijing New Sound::genre
@@ -8061,6 +8181,7 @@ Scenes & Movements
         Japanese Idol::genre
         Alternative Idol::genre
     Jersey Shore Sound::genre
+    Joseon Punk::genre
     Jovem Guarda::genre
     K-Pop
         K-Pop::genre
@@ -8120,6 +8241,7 @@ Scenes & Movements
     New York School::genre
     No Wave::genre
     NOLA Sludge::genre
+    Non-Music Beijing Scene::genre
     Northern Gothic::genre
     Northern Soul::genre
     Nouvelle chanson française::genre
@@ -8171,6 +8293,7 @@ Scenes & Movements
     Rock triste::genre
     Rock urbano español::genre
     Rock urbano mexicano::genre
+    Rockabilly Revival::genre
     Roman School::genre
     Romanticism
         Romanticism::genre
@@ -8178,6 +8301,7 @@ Scenes & Movements
         New German School::genre
         Romantische Oper::genre
         Saint Petersburg School::genre
+    Romo::genre
     Russemusikk::genre
     San Diego Sound::genre
     San Francisco Sound

@@ -1,5 +1,5 @@
 {
-  "version": "258fb5f17e23b222",
+  "version": "a5bc037a9fd3fbb8",
   "renames": [
     {
       "from": "punk",
@@ -25,6 +25,26 @@
       "from": "sacred-harp-singing",
       "fromName": "Sacred Harp Singing",
       "to": "shape-note-singing"
+    },
+    {
+      "from": "triple-metre",
+      "fromName": "Triple metre",
+      "to": "triple-meter"
+    },
+    {
+      "from": "ibiza-trance",
+      "fromName": "Ibiza Trance",
+      "to": "balearic-trance"
+    },
+    {
+      "from": "batonebi-songs",
+      "fromName": "Batonebi Songs",
+      "to": "batonebi-song"
+    },
+    {
+      "from": "r-b",
+      "fromName": "R&B",
+      "to": "r-b-soul-funk"
     }
   ],
   "nodes": [
@@ -141,6 +161,18 @@
       "canonical_key": "gothic",
       "parents": [
         "dark"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "southern-gothic",
+      "name": "Southern Gothic",
+      "type": "mood",
+      "canonical_key": "southern gothic",
+      "parents": [
+        "gothic"
       ],
       "sections": [
         "descriptors"
@@ -2465,6 +2497,18 @@
       ]
     },
     {
+      "id": "swing-rhythm",
+      "name": "Swing rhythm",
+      "type": "mood",
+      "canonical_key": "swing rhythm",
+      "parents": [
+        "composition"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "through-composed",
       "name": "Through-composed",
       "type": "mood",
@@ -2477,10 +2521,10 @@
       ]
     },
     {
-      "id": "triple-metre",
-      "name": "Triple metre",
+      "id": "triple-meter",
+      "name": "Triple meter",
       "type": "mood",
-      "canonical_key": "triple metre",
+      "canonical_key": "triple meter",
       "parents": [
         "composition"
       ],
@@ -2555,18 +2599,6 @@
       "canonical_key": "sampling",
       "parents": [
         "production"
-      ],
-      "sections": [
-        "descriptors"
-      ]
-    },
-    {
-      "id": "vocal-chops",
-      "name": "Vocal chops",
-      "type": "mood",
-      "canonical_key": "vocal chops",
-      "parents": [
-        "sampling"
       ],
       "sections": [
         "descriptors"
@@ -2825,6 +2857,18 @@
       ]
     },
     {
+      "id": "card-games",
+      "name": "Card games",
+      "type": "mood",
+      "canonical_key": "card games",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "childhood",
       "name": "Childhood",
       "type": "mood",
@@ -2853,6 +2897,18 @@
       "name": "Community",
       "type": "mood",
       "canonical_key": "community",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "confusion",
+      "name": "Confusion",
+      "type": "mood",
+      "canonical_key": "confusion",
       "parents": [
         "theme"
       ],
@@ -3010,6 +3066,18 @@
       "name": "Decay",
       "type": "mood",
       "canonical_key": "decay",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "disappointment",
+      "name": "Disappointment",
+      "type": "mood",
+      "canonical_key": "disappointment",
       "parents": [
         "theme"
       ],
@@ -3309,6 +3377,18 @@
       ]
     },
     {
+      "id": "siblings",
+      "name": "Siblings",
+      "type": "mood",
+      "canonical_key": "siblings",
+      "parents": [
+        "family"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "fans",
       "name": "Fans",
       "type": "mood",
@@ -3445,6 +3525,18 @@
       "name": "Food",
       "type": "mood",
       "canonical_key": "food",
+      "parents": [
+        "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "freedom",
+      "name": "Freedom",
+      "type": "mood",
+      "canonical_key": "freedom",
       "parents": [
         "theme"
       ],
@@ -4232,6 +4324,18 @@
       "canonical_key": "leisure",
       "parents": [
         "theme"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "vacation",
+      "name": "Vacation",
+      "type": "mood",
+      "canonical_key": "vacation",
+      "parents": [
+        "leisure"
       ],
       "sections": [
         "descriptors"
@@ -5128,6 +5232,18 @@
       ]
     },
     {
+      "id": "surfing",
+      "name": "Surfing",
+      "type": "mood",
+      "canonical_key": "surfing",
+      "parents": [
+        "sports"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "wrestling",
       "name": "Wrestling",
       "type": "mood",
@@ -5582,6 +5698,18 @@
       ]
     },
     {
+      "id": "tunnel-screaming",
+      "name": "Tunnel screaming",
+      "type": "mood",
+      "canonical_key": "tunnel screaming",
+      "parents": [
+        "harsh-vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
       "id": "male-vocalist",
       "name": "Male vocalist",
       "type": "mood",
@@ -5730,6 +5858,18 @@
       "name": "Toasting",
       "type": "mood",
       "canonical_key": "toasting",
+      "parents": [
+        "vocals"
+      ],
+      "sections": [
+        "descriptors"
+      ]
+    },
+    {
+      "id": "vocal-chops",
+      "name": "Vocal chops",
+      "type": "mood",
+      "canonical_key": "vocal chops",
       "parents": [
         "vocals"
       ],
@@ -6112,7 +6252,7 @@
       "canonical_key": "soul blues",
       "parents": [
         "blues",
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -6929,7 +7069,8 @@
       "type": "genre",
       "canonical_key": "gamelan",
       "parents": [
-        "southeast-asian-classical-music"
+        "southeast-asian-classical-music",
+        "austronesian-music"
       ],
       "sections": [
         "genres"
@@ -7294,6 +7435,19 @@
         "buddhist-music",
         "tibetan-music",
         "mantra"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "ufie-music",
+      "name": "Ufie Music",
+      "type": "genre",
+      "canonical_key": "ufie music",
+      "parents": [
+        "classical-music",
+        "igbo-music"
       ],
       "sections": [
         "genres"
@@ -9272,19 +9426,6 @@
       ]
     },
     {
-      "id": "grebo",
-      "name": "Grebo",
-      "type": "genre",
-      "canonical_key": "grebo",
-      "parents": [
-        "alternative-dance"
-      ],
-      "sections": [
-        "genres",
-        "scenes-and-movements"
-      ]
-    },
-    {
       "id": "new-rave",
       "name": "New Rave",
       "type": "genre",
@@ -9420,7 +9561,7 @@
       "canonical_key": "boogie",
       "parents": [
         "disco",
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -11124,6 +11265,18 @@
       ]
     },
     {
+      "id": "frenchtek",
+      "name": "Frenchtek",
+      "type": "genre",
+      "canonical_key": "frenchtek",
+      "parents": [
+        "jumpstyle"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "lento-violento",
       "name": "Lento violento",
       "type": "genre",
@@ -11699,7 +11852,8 @@
         "house"
       ],
       "sections": [
-        "genres"
+        "genres",
+        "scenes-and-movements"
       ]
     },
     {
@@ -12838,6 +12992,18 @@
       ]
     },
     {
+      "id": "neo-trance",
+      "name": "Neo-Trance",
+      "type": "genre",
+      "canonical_key": "neotrance",
+      "parents": [
+        "minimal-techno"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "peak-time-techno",
       "name": "Peak Time Techno",
       "type": "genre",
@@ -12923,6 +13089,18 @@
       ]
     },
     {
+      "id": "balearic-trance",
+      "name": "Balearic Trance",
+      "type": "genre",
+      "canonical_key": "balearic trance",
+      "parents": [
+        "trance"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "big-room-trance",
       "name": "Big Room Trance",
       "type": "genre",
@@ -12999,18 +13177,6 @@
       "name": "Hi-Tech Full-On",
       "type": "genre",
       "canonical_key": "hitech fullon",
-      "parents": [
-        "trance"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "ibiza-trance",
-      "name": "Ibiza Trance",
-      "type": "genre",
-      "canonical_key": "ibiza trance",
       "parents": [
         "trance"
       ],
@@ -16443,116 +16609,6 @@
       ]
     },
     {
-      "id": "caucasian-folk-music",
-      "name": "Caucasian Folk Music",
-      "type": "genre",
-      "canonical_key": "caucasian folk music",
-      "parents": [
-        "traditional-folk-music",
-        "caucasian-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "abkhazian-folk-music",
-      "name": "Abkhazian Folk Music",
-      "type": "genre",
-      "canonical_key": "abkhazian folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "chechen-folk-music",
-      "name": "Chechen Folk Music",
-      "type": "genre",
-      "canonical_key": "chechen folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "circassian-folk-music",
-      "name": "Circassian Folk Music",
-      "type": "genre",
-      "canonical_key": "circassian folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "dagestani-folk-music",
-      "name": "Dagestani Folk Music",
-      "type": "genre",
-      "canonical_key": "dagestani folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "avar-folk-music",
-      "name": "Avar Folk Music",
-      "type": "genre",
-      "canonical_key": "avar folk music",
-      "parents": [
-        "dagestani-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "georgian-folk-music",
-      "name": "Georgian Folk Music",
-      "type": "genre",
-      "canonical_key": "georgian folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "batonebi-songs",
-      "name": "Batonebi Songs",
-      "type": "genre",
-      "canonical_key": "batonebi songs",
-      "parents": [
-        "georgian-folk-music",
-        "lullabies"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
-      "id": "ossetian-folk-music",
-      "name": "Ossetian Folk Music",
-      "type": "genre",
-      "canonical_key": "ossetian folk music",
-      "parents": [
-        "caucasian-folk-music"
-      ],
-      "sections": [
-        "genres"
-      ]
-    },
-    {
       "id": "chukchi-folk-music",
       "name": "Chukchi Folk Music",
       "type": "genre",
@@ -17537,6 +17593,117 @@
       "canonical_key": "sardana",
       "parents": [
         "catalan-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "caucasian-folk-music",
+      "name": "Caucasian Folk Music",
+      "type": "genre",
+      "canonical_key": "caucasian folk music",
+      "parents": [
+        "european-folk-music",
+        "west-asian-folk-music",
+        "caucasian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "abkhazian-folk-music",
+      "name": "Abkhazian Folk Music",
+      "type": "genre",
+      "canonical_key": "abkhazian folk music",
+      "parents": [
+        "caucasian-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "chechen-folk-music",
+      "name": "Chechen Folk Music",
+      "type": "genre",
+      "canonical_key": "chechen folk music",
+      "parents": [
+        "caucasian-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "circassian-folk-music",
+      "name": "Circassian Folk Music",
+      "type": "genre",
+      "canonical_key": "circassian folk music",
+      "parents": [
+        "caucasian-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "dagestani-folk-music",
+      "name": "Dagestani Folk Music",
+      "type": "genre",
+      "canonical_key": "dagestani folk music",
+      "parents": [
+        "caucasian-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "avar-folk-music",
+      "name": "Avar Folk Music",
+      "type": "genre",
+      "canonical_key": "avar folk music",
+      "parents": [
+        "dagestani-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "georgian-folk-music",
+      "name": "Georgian Folk Music",
+      "type": "genre",
+      "canonical_key": "georgian folk music",
+      "parents": [
+        "caucasian-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "batonebi-song",
+      "name": "Batonebi Song",
+      "type": "genre",
+      "canonical_key": "batonebi song",
+      "parents": [
+        "georgian-folk-music",
+        "lullabies"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "ossetian-folk-music",
+      "name": "Ossetian Folk Music",
+      "type": "genre",
+      "canonical_key": "ossetian folk music",
+      "parents": [
+        "caucasian-folk-music"
       ],
       "sections": [
         "genres"
@@ -20127,6 +20294,18 @@
       ]
     },
     {
+      "id": "pala",
+      "name": "Pala",
+      "type": "genre",
+      "canonical_key": "pala",
+      "parents": [
+        "odia-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "pashto-folk-music",
       "name": "Pashto Folk Music",
       "type": "genre",
@@ -20561,6 +20740,18 @@
       "canonical_key": "uzun hava",
       "parents": [
         "turkish-folk-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "bozlak",
+      "name": "Bozlak",
+      "type": "genre",
+      "canonical_key": "bozlak",
+      "parents": [
+        "uzun-hava"
       ],
       "sections": [
         "genres"
@@ -21884,7 +22075,7 @@
     },
     {
       "id": "industrial-noise",
-      "name": "Industrial & Noise",
+      "name": "Industrial / Noise",
       "type": "genre",
       "canonical_key": "industrial noise",
       "parents": [],
@@ -22850,6 +23041,18 @@
       "canonical_key": "war metal",
       "parents": [
         "black-metal"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "christian-metal",
+      "name": "Christian Metal",
+      "type": "genre",
+      "canonical_key": "christian metal",
+      "parents": [
+        "metal"
       ],
       "sections": [
         "genres"
@@ -24006,7 +24209,7 @@
       "canonical_key": "blueeyed soul",
       "parents": [
         "pop",
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -24862,6 +25065,19 @@
       ],
       "sections": [
         "genres"
+      ]
+    },
+    {
+      "id": "pop-kreatif",
+      "name": "Pop Kreatif",
+      "type": "genre",
+      "canonical_key": "pop kreatif",
+      "parents": [
+        "pop"
+      ],
+      "sections": [
+        "genres",
+        "scenes-and-movements"
       ]
     },
     {
@@ -26658,10 +26874,10 @@
       ]
     },
     {
-      "id": "r-b",
-      "name": "R&B",
+      "id": "r-b-soul-funk",
+      "name": "R&B / Soul / Funk",
       "type": "genre",
-      "canonical_key": "rb",
+      "canonical_key": "rb soul funk",
       "parents": [],
       "sections": [
         "genres"
@@ -26673,7 +26889,7 @@
       "type": "genre",
       "canonical_key": "acid jazz",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -26685,7 +26901,7 @@
       "type": "genre",
       "canonical_key": "beach music",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres",
@@ -26698,7 +26914,7 @@
       "type": "genre",
       "canonical_key": "contemporary rb",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -26758,7 +26974,7 @@
       "type": "genre",
       "canonical_key": "funk",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -26893,7 +27109,7 @@
       "type": "genre",
       "canonical_key": "new orleans rb",
       "parents": [
-        "r-b",
+        "r-b-soul-funk",
         "louisiana-music"
       ],
       "sections": [
@@ -26906,7 +27122,7 @@
       "type": "genre",
       "canonical_key": "rhythm blues",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -26984,7 +27200,7 @@
       "type": "genre",
       "canonical_key": "soul",
       "parents": [
-        "r-b"
+        "r-b-soul-funk"
       ],
       "sections": [
         "genres"
@@ -27824,6 +28040,18 @@
       "name": "Gogo Music",
       "type": "genre",
       "canonical_key": "gogo music",
+      "parents": [
+        "east-african-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "kadodi",
+      "name": "Kadodi",
+      "type": "genre",
+      "canonical_key": "kadodi",
       "parents": [
         "east-african-music"
       ],
@@ -30573,6 +30801,19 @@
       ]
     },
     {
+      "id": "stotra",
+      "name": "Stotra",
+      "type": "genre",
+      "canonical_key": "stotra",
+      "parents": [
+        "south-asian-music",
+        "hymn"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "sufi-rock",
       "name": "Sufi Rock",
       "type": "genre",
@@ -32710,6 +32951,19 @@
       ]
     },
     {
+      "id": "taize-chant",
+      "name": "Taizé Chant",
+      "type": "genre",
+      "canonical_key": "taize chant",
+      "parents": [
+        "christian-liturgical-music",
+        "european-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "european-music",
       "name": "European Music",
       "type": "genre",
@@ -34274,6 +34528,19 @@
       ]
     },
     {
+      "id": "cumbia-tejana",
+      "name": "Cumbia tejana",
+      "type": "genre",
+      "canonical_key": "cumbia tejana",
+      "parents": [
+        "cumbia",
+        "tejano-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "tecnocumbia",
       "name": "Tecnocumbia",
       "type": "genre",
@@ -35162,6 +35429,18 @@
       ]
     },
     {
+      "id": "adhan",
+      "name": "Adhan",
+      "type": "genre",
+      "canonical_key": "adhan",
+      "parents": [
+        "islamic-religious-music-recitation"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "maddahi",
       "name": "Maddahi",
       "type": "genre",
@@ -35840,6 +36119,18 @@
       "canonical_key": "otea",
       "parents": [
         "tahitian-music"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
+      "id": "tongan-music",
+      "name": "Tongan Music",
+      "type": "genre",
+      "canonical_key": "tongan music",
+      "parents": [
+        "polynesian-music"
       ],
       "sections": [
         "genres"
@@ -36873,6 +37164,19 @@
       ]
     },
     {
+      "id": "grebo",
+      "name": "Grebo",
+      "type": "genre",
+      "canonical_key": "grebo",
+      "parents": [
+        "indie-rock"
+      ],
+      "sections": [
+        "genres",
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "indie-surf",
       "name": "Indie Surf",
       "type": "genre",
@@ -37742,6 +38046,19 @@
       ]
     },
     {
+      "id": "sound-map",
+      "name": "Sound Map",
+      "type": "genre",
+      "canonical_key": "sound map",
+      "parents": [
+        "audio-documentary",
+        "field-recording"
+      ],
+      "sections": [
+        "genres"
+      ]
+    },
+    {
       "id": "beatboxing",
       "name": "Beatboxing",
       "type": "genre",
@@ -38498,6 +38815,16 @@
       ]
     },
     {
+      "id": "abc-no-rio-scene",
+      "name": "ABC No Rio Scene",
+      "type": "genre",
+      "canonical_key": "abc no rio scene",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "afrofuturism",
       "name": "Afrofuturism",
       "type": "genre",
@@ -38512,6 +38839,16 @@
       "name": "Akron Sound",
       "type": "genre",
       "canonical_key": "akron sound",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "anison",
+      "name": "Anison",
+      "type": "genre",
+      "canonical_key": "anison",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -39314,6 +39651,16 @@
       ]
     },
     {
+      "id": "joseon-punk",
+      "name": "Joseon Punk",
+      "type": "genre",
+      "canonical_key": "joseon punk",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "kansai-no-wave",
       "name": "Kansai No Wave",
       "type": "genre",
@@ -39734,6 +40081,16 @@
       ]
     },
     {
+      "id": "non-music-beijing-scene",
+      "name": "Non-Music Beijing Scene",
+      "type": "genre",
+      "canonical_key": "nonmusic beijing scene",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
       "id": "northern-gothic",
       "name": "Northern Gothic",
       "type": "genre",
@@ -39868,16 +40225,6 @@
       "name": "Pop de guitarras",
       "type": "genre",
       "canonical_key": "pop de guitarras",
-      "parents": [],
-      "sections": [
-        "scenes-and-movements"
-      ]
-    },
-    {
-      "id": "pop-kreatif",
-      "name": "Pop Kreatif",
-      "type": "genre",
-      "canonical_key": "pop kreatif",
       "parents": [],
       "sections": [
         "scenes-and-movements"
@@ -40038,6 +40385,26 @@
       "name": "Rock urbano mexicano",
       "type": "genre",
       "canonical_key": "rock urbano mexicano",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "rockabilly-revival",
+      "name": "Rockabilly Revival",
+      "type": "genre",
+      "canonical_key": "rockabilly revival",
+      "parents": [],
+      "sections": [
+        "scenes-and-movements"
+      ]
+    },
+    {
+      "id": "romo",
+      "name": "Romo",
+      "type": "genre",
+      "canonical_key": "romo",
       "parents": [],
       "sections": [
         "scenes-and-movements"

@@ -3,5 +3,9 @@
   { "from": "pyschedelic", "fromName": "Pyschedelic", "to": "psychedelic" },
   { "from": "field-recordings", "fromName": "Field Recordings", "to": "field-recording" },
   { "from": "newa-folk-music", "fromName": "Newa Folk Music", "to": "newa-music" },
-  { "from": "sacred-harp-singing", "fromName": "Sacred Harp Singing", "to": "shape-note-singing" }
+  { "from": "sacred-harp-singing", "fromName": "Sacred Harp Singing", "to": "shape-note-singing" },
+  { "from": "triple-metre", "fromName": "Triple metre", "to": "triple-meter" },
+  { "from": "ibiza-trance", "fromName": "Ibiza Trance", "to": "balearic-trance" },
+  { "from": "batonebi-songs", "fromName": "Batonebi Songs", "to": "batonebi-song" },
+  { "from": "r-b", "fromName": "R&B", "to": "r-b-soul-funk" }
 ]
