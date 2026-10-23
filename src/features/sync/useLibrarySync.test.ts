@@ -202,6 +202,76 @@ describe("useLibrarySync in-flight guard", () => {
   });
 });
 
+describe("useLibrarySync queued request", () => {
+  it("runs a request made during a run once that run settles, and settles it with its own run", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    const onSettled = vi.fn();
+
+    let accepted = false;
+    act(() => {
+      accepted = result.current.runSync(SRV_A, { queueIfBusy: true, onSettled });
+    });
+    expect(accepted).toBe(true);
+    expect(syncLibrary).toHaveBeenCalledTimes(1);
+
+    await settle(0, { changed: { albums: true } });
+    expect(syncLibrary).toHaveBeenCalledTimes(2);
+    expect(onSettled).not.toHaveBeenCalled();
+
+    await settle(1);
+    expect(onSettled.mock.calls).toEqual([[{ status: "done", albumsChanged: false, error: "" }]]);
+  });
+
+  it("folds every request made during one run into a single follow-up run", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+    const first = vi.fn();
+    const second = vi.fn();
+
+    act(() => {
+      result.current.runSync(SRV_A, { queueIfBusy: true, onSettled: first });
+      result.current.runSync(SRV_A, { queueIfBusy: true, forceTrackPass: true, onSettled: second });
+    });
+    await settle(0);
+    await settle(1);
+
+    expect(syncLibrary).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(syncLibrary).mock.calls[1]?.[3]).toEqual({ forceTrackPass: true });
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs the request after a failed run instead of waiting out the backoff", async () => {
+    const { result } = renderSync(SRV_A);
+    await tick();
+
+    act(() => {
+      result.current.runSync(SRV_A, { queueIfBusy: true });
+    });
+    await failRun(0, new Error("down"));
+
+    expect(syncLibrary).toHaveBeenCalledTimes(2);
+    expect(result.current.nextRetryAt).toBeNull();
+  });
+
+  it("drops a request for a server no longer selected", async () => {
+    const { result, rerender } = renderSync(SRV_A);
+    await tick();
+    const onSettled = vi.fn();
+
+    act(() => {
+      result.current.runSync(SRV_A, { queueIfBusy: true, onSettled });
+    });
+    rerender({ server: SRV_B });
+    await settle(0);
+
+    expect(calledServerIds()).toEqual(["a", "b"]);
+    await settle(1);
+    expect(onSettled).not.toHaveBeenCalled();
+  });
+});
+
 describe("useLibrarySync options", () => {
   it("hands the caller's forced pass to the sync", async () => {
     const { result } = renderSync(undefined);
