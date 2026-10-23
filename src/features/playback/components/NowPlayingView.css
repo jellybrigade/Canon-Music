@@ -97,7 +97,11 @@
   margin-block-end: auto;
 }
 
+/* The art frame's size containment makes it a stacking context painted above unpositioned
+   siblings, so without this the art's shadow darkens the title's top. */
 .now-playing-hero-body {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
