@@ -4,7 +4,7 @@ use realfft::{RealFftPlanner, RealToComplex};
 use rodio::source::SeekError;
 use rodio::{ChannelCount, Sample, SampleRate, Source};
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -72,6 +72,7 @@ impl Analyzer {
 /// Copies nothing while no visualizer is on screen.
 pub(crate) struct VisualizerTap {
     is_active: AtomicBool,
+    output_lead_micros: AtomicU64,
     history: Mutex<History>,
     analyzer: Mutex<Option<Analyzer>>,
 }
@@ -80,6 +81,7 @@ impl Default for VisualizerTap {
     fn default() -> Self {
         Self {
             is_active: AtomicBool::new(false),
+            output_lead_micros: AtomicU64::new(u64::from(OUTPUT_BUFFER_MS) * 1_000),
             history: Mutex::new(History {
                 samples: VecDeque::with_capacity(HISTORY_LEN),
                 sample_rate: 44_100,
@@ -98,6 +100,11 @@ impl VisualizerTap {
             history.samples.clear();
             history.last_push = None;
         }
+    }
+
+    pub(crate) fn set_output_lead(&self, lead: Duration) {
+        let micros = u64::try_from(lead.as_micros()).unwrap_or(u64::MAX);
+        self.output_lead_micros.store(micros, Ordering::Relaxed);
     }
 
     fn push(&self, frames: &[f32], sample_rate: u32, now: Instant) {
@@ -122,7 +129,8 @@ impl VisualizerTap {
             return None;
         }
         let heard_rate = history.sample_rate as f32 * speed;
-        let end = heard_end(history.samples.len(), heard_rate as f64, since_push);
+        let lead = Duration::from_micros(self.output_lead_micros.load(Ordering::Relaxed));
+        let end = heard_end(history.samples.len(), heard_rate as f64, since_push, lead);
         let start = end.saturating_sub(WINDOW_LEN);
         let mut window = vec![0.0; WINDOW_LEN - (end - start)];
         window.extend(history.samples.range(start..end));
@@ -142,10 +150,10 @@ impl VisualizerTap {
     }
 }
 
-/// Index one past the sample reaching the speakers, given `len` samples pulled so far
-/// and the source samples the speakers consume per second.
-fn heard_end(len: usize, heard_rate: f64, since_push: Duration) -> usize {
-    let lead = heard_rate * OUTPUT_BUFFER_MS as f64 / 1000.0;
+/// Index one past the sample reaching the speakers, given `len` samples pulled so far,
+/// the source samples the speakers consume per second and how far the output buffer trails.
+fn heard_end(len: usize, heard_rate: f64, since_push: Duration, output_lead: Duration) -> usize {
+    let lead = heard_rate * output_lead.as_secs_f64();
     let played_since = heard_rate * since_push.as_secs_f64();
     let behind = (lead - played_since).max(0.0) as usize;
     len.saturating_sub(behind)
@@ -295,6 +303,7 @@ mod tests {
     use rodio::nz;
 
     const RATE: u32 = 44_100;
+    const LEAD: Duration = Duration::from_millis(OUTPUT_BUFFER_MS as u64);
 
     fn sine(hz: f32, amplitude: f32, len: usize) -> Vec<f32> {
         (0..len)
@@ -390,23 +399,65 @@ mod tests {
     #[test]
     fn the_heard_sample_trails_the_newest_by_the_output_buffer() {
         let rate = RATE as f64;
-        assert_eq!(heard_end(10_000, rate, Duration::ZERO), 10_000 - 4_410);
         assert_eq!(
-            heard_end(10_000, rate, Duration::from_millis(50)),
+            heard_end(10_000, rate, Duration::ZERO, LEAD),
+            10_000 - 4_410
+        );
+        assert_eq!(
+            heard_end(10_000, rate, Duration::from_millis(50), LEAD),
             10_000 - 2_205
         );
-        assert_eq!(heard_end(10_000, rate, Duration::from_millis(200)), 10_000);
-        assert_eq!(heard_end(100, rate, Duration::ZERO), 0);
+        assert_eq!(
+            heard_end(10_000, rate, Duration::from_millis(200), LEAD),
+            10_000
+        );
+        assert_eq!(heard_end(100, rate, Duration::ZERO, LEAD), 0);
+    }
+
+    #[test]
+    fn the_heard_sample_trails_by_the_buffer_the_stream_got() {
+        let rate = RATE as f64;
+        assert_eq!(
+            heard_end(10_000, rate, Duration::ZERO, Duration::from_millis(50)),
+            10_000 - 2_205
+        );
+    }
+
+    #[test]
+    fn a_tap_trails_by_the_lead_it_was_given() {
+        let samples = sine(1_000.0, 0.5, 20_000);
+        let pushed_at = Instant::now();
+        let shorter = VisualizerTap::default();
+        shorter.set_active(true);
+        shorter.set_output_lead(Duration::from_millis(50));
+        shorter.push(&samples, RATE, pushed_at);
+        let default_lead = VisualizerTap::default();
+        default_lead.set_active(true);
+        default_lead.push(&samples, RATE, pushed_at);
+
+        let (shorter_window, _) = shorter.heard_window(pushed_at, 1.0).expect("fresh push");
+        let (default_window, _) = default_lead
+            .heard_window(pushed_at, 1.0)
+            .expect("fresh push");
+
+        assert_eq!(
+            shorter_window.last(),
+            samples.get(samples.len() - 2_205 - 1)
+        );
+        assert_eq!(
+            default_window.last(),
+            samples.get(samples.len() - 4_410 - 1)
+        );
     }
 
     #[test]
     fn faster_playback_drains_the_output_buffer_faster() {
         assert_eq!(
-            heard_end(20_000, RATE as f64 * 2.0, Duration::ZERO),
+            heard_end(20_000, RATE as f64 * 2.0, Duration::ZERO, LEAD),
             20_000 - 8_820
         );
         assert_eq!(
-            heard_end(20_000, RATE as f64 * 2.0, Duration::from_millis(50)),
+            heard_end(20_000, RATE as f64 * 2.0, Duration::from_millis(50), LEAD),
             20_000 - 4_410
         );
     }

@@ -41,6 +41,17 @@ fn output_buffer_frames(sample_rate: u32) -> u32 {
     (sample_rate * OUTPUT_BUFFER_MS / 1000).max(1)
 }
 
+/// How far the speakers trail what the player has pulled: the buffer the stream actually got,
+/// which differs from `OUTPUT_BUFFER_MS` when the explicit-buffer open fell back.
+pub(crate) fn output_lead(buffer_size: &BufferSize, sample_rate: u32) -> Duration {
+    match buffer_size {
+        BufferSize::Fixed(frames) if sample_rate > 0 => {
+            Duration::from_secs_f64(f64::from(*frames) / f64::from(sample_rate))
+        }
+        _ => Duration::from_millis(u64::from(OUTPUT_BUFFER_MS)),
+    }
+}
+
 /// Errors after which the output stream produces no more sound; the rest are glitches it survives.
 fn output_error_is_fatal(kind: ErrorKind) -> bool {
     !matches!(
@@ -158,6 +169,26 @@ mod tests {
         assert!(!output_error_is_fatal(ErrorKind::Xrun));
         assert!(!output_error_is_fatal(ErrorKind::DeviceChanged));
         assert!(!output_error_is_fatal(ErrorKind::RealtimeDenied));
+    }
+
+    #[test]
+    fn the_lead_is_the_buffer_the_stream_got() {
+        assert_eq!(
+            output_lead(&BufferSize::Fixed(2_205), 44_100),
+            Duration::from_millis(50)
+        );
+        assert_eq!(
+            output_lead(&BufferSize::Fixed(4_800), 48_000),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            output_lead(&BufferSize::Default, 44_100),
+            Duration::from_millis(100)
+        );
+        assert_eq!(
+            output_lead(&BufferSize::Fixed(2_205), 0),
+            Duration::from_millis(100)
+        );
     }
 
     #[test]

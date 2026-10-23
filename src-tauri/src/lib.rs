@@ -75,7 +75,9 @@ pub fn run() {
         .name("audio-output".into())
         .spawn(move || match audio::open_output(output_lost_writer) {
             Ok(output) => {
-                let _ = tx.send(Some(output.mixer().clone()));
+                let config = output.config();
+                let lead = audio::output_lead(config.buffer_size(), config.sample_rate().get());
+                let _ = tx.send(Some((output.mixer().clone(), lead)));
                 loop {
                     std::thread::park();
                 }
@@ -86,7 +88,11 @@ pub fn run() {
             }
         })
         .expect("Failed to spawn audio thread");
-    let mixer = rx.recv().unwrap_or(None);
+    let (mixer, output_lead) = rx.recv().unwrap_or(None).unzip();
+    let visualizer = Arc::new(audio::visualizer::VisualizerTap::default());
+    if let Some(lead) = output_lead {
+        visualizer.set_output_lead(lead);
+    }
 
     // Served via a registered `cover://` scheme handler instead of a loopback TCP server,
     // so the thread-storm/SIGKILL bug class in known-issues.md is structurally impossible here.
@@ -151,7 +157,7 @@ pub fn run() {
             gapless_queued: Arc::new(AtomicBool::new(false)),
             gapless_started: Arc::new(AtomicU64::new(0)),
             gapless_handoff: Arc::new(Mutex::new(None)),
-            visualizer: Arc::default(),
+            visualizer,
         })
         .manage(TrayState { close_to_tray: AtomicBool::new(false) })
         .manage(library_read::LibraryReadStore::default())
