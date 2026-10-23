@@ -25,6 +25,7 @@ import type { AlbumTrackTarget } from "../lib/routes";
 import type { AlbumRow } from "../types/library";
 import "./CommandPalette.css";
 import { ContextMenu } from "../ui/ContextMenu";
+import { useOwnKeyboard } from "../ui/keyboardOwners";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
@@ -518,6 +519,8 @@ export function CommandPalette({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
+
+  useOwnKeyboard(open);
 
   if (!open) return null;
 

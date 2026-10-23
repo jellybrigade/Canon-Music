@@ -24,6 +24,8 @@ vi.mock("../../../hooks/useSetting", async () => {
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DlnaRenderer } from "../../../clients/dlna";
+import { ContextMenu } from "../../../ui/ContextMenu";
+import { __resetKeyboardOwners } from "../../../ui/keyboardOwners";
 import { __resetModalRegistry } from "../../../ui/useModalChrome";
 import { SHOW_VISUALIZER_KEY, VISUALIZER_ENABLED_KEY } from "../lib/visualizerSettings";
 import { usePlayerStore } from "../store/player";
@@ -48,6 +50,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   __resetModalRegistry();
+  __resetKeyboardOwners();
   vi.unstubAllGlobals();
 });
 
@@ -85,6 +88,25 @@ describe("NowPlayingArt", () => {
 
     pressV();
     expect(visualizer()).toBeNull();
+  });
+
+  it("leaves V to a menu open above it", () => {
+    const { rerender } = renderArt();
+    const art = <NowPlayingArt artUrl="http://a/cover" artist="Artist" album="Album" title="One" />;
+    rerender(
+      <>
+        {art}
+        <ContextMenu x={0} y={0} onClose={() => {}}>
+          <button type="button">Play next</button>
+        </ContextMenu>
+      </>,
+    );
+    pressV();
+    expect(visualizer()).toBeNull();
+
+    rerender(art);
+    pressV();
+    expect(visualizer()).not.toBeNull();
   });
 
   it("arms its key listener once however often it toggles", () => {

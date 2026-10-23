@@ -113,7 +113,7 @@ Enforced by sweep tests, so no entry here: `src/lib/cappedCacheGuard.test.ts` (p
 
 ## UI / overlays / navigation
 
-- **Window `keydown` shortcuts need per-branch focus guards.** Suspension comes from one shared `overlayAbove`; Alt+Arrow is exempt in text fields. grep: `grep -rn 'addEventListener("keydown"' src --include='*.ts*' | grep -v '\.test\.'`
+- **Window `keydown` shortcuts need per-branch focus guards.** Suspension comes from one shared `useOverlayAbove()` (modals, plus the palette and menus via `useOwnKeyboard`); Now Playing's V asked only about modals, so it toggled the visualizer behind Ctrl+K and open menus. Alt+Arrow is exempt in text fields. grep: `grep -rn 'addEventListener("keydown"' src --include='*.ts*' | grep -v '\.test\.'; grep -rn "useAnyModalOpen()" src --include='*.tsx' | grep -v '\.test\.'`
 - **An overlay's Escape must ask "am I on top", not "am I open".** Modals use `useModalChrome`'s registry (`useAnyModalOpen()`); menus/dropdowns must not register. grep: `grep -rln "createPortal" src --include='*.tsx' | grep -v '\.test\.' | xargs grep -Ln "useModalChrome"`
 - **Backdrop `click` fires on a drag that only ended there.** `useOverlayDismiss` requires `mousedown` and release on the backdrop; never `stopPropagation`. grep: `grep -rn "onClick={(e) => e.stopPropagation()}" src --include='*.tsx' | grep -v '\.test\.'`
 - **Non-URL overlay state is dismissed by navigation intent, urgently.** `useAppNavigation` runs `dismissOverlays` on every nav call, outside `startTransition`. grep: `grep -rn "useNavigate()\|useSearchParams()\|startTransition" src --include='*.ts*' | grep -v '\.test\.' | grep -v useAppNavigation`

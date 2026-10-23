@@ -4,7 +4,7 @@ import { AlbumArt } from "../../../components/AlbumArt";
 import { usePrefersReducedMotion } from "../../../hooks/usePrefersReducedMotion";
 import { useBoolSetting } from "../../../hooks/useSetting";
 import { isTextEntryTarget } from "../../../lib/keyboard";
-import { useAnyModalOpen } from "../../../ui/useModalChrome";
+import { useOverlayAbove } from "../../../ui/keyboardOwners";
 import { SHOW_VISUALIZER_KEY, VISUALIZER_ENABLED_KEY } from "../lib/visualizerSettings";
 import { usePlayerStore } from "../store/player";
 import { Visualizer } from "./Visualizer";
@@ -30,7 +30,7 @@ export function NowPlayingArt({ artUrl, artist, album, title }: Props) {
   const isCasting = usePlayerStore((s) => s.castDevice !== null);
   const hasError = usePlayerStore((s) => s.error !== null);
   const prefersReducedMotion = usePrefersReducedMotion();
-  const isAnyModalOpen = useAnyModalOpen();
+  const isOverlayAbove = useOverlayAbove();
 
   const reason = unavailableReason(isCasting, prefersReducedMotion, hasError);
   const canToggle = isVisualizerEnabled && reason === null;
@@ -40,7 +40,7 @@ export function NowPlayingArt({ artUrl, artist, album, title }: Props) {
   wantsVisualizerRef.current = wantsVisualizer;
 
   useEffect(() => {
-    if (!canToggle || isAnyModalOpen) return;
+    if (!canToggle || isOverlayAbove) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== "v" && e.key !== "V") return;
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTextEntryTarget(e)) return;
@@ -48,7 +48,7 @@ export function NowPlayingArt({ artUrl, artist, album, title }: Props) {
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [canToggle, isAnyModalOpen, setWantsVisualizer]);
+  }, [canToggle, isOverlayAbove, setWantsVisualizer]);
 
   const toggleLabel = reason ?? (isShowingVisualizer ? "Show album art (V)" : "Show visualizer (V)");
 

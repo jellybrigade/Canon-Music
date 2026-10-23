@@ -11,7 +11,7 @@ import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useBoolSetting } from "../../../hooks/useSetting";
 import { isTextEntryTarget } from "../../../lib/keyboard";
 import type { AlbumRow } from "../../../types/library";
-import { useAnyModalOpen } from "../../../ui/useModalChrome";
+import { useOverlayAbove } from "../../../ui/keyboardOwners";
 import { useTourEvents } from "../../enrichment/hooks/useTourEvents";
 import { type LyricsOverride, useLyrics } from "../hooks/useLyrics";
 import { useNowPlayingAlbums, useNowPlayingTopTracks, useSuggestedTracks } from "../hooks/useNowPlayingArtist";
@@ -69,7 +69,7 @@ export function NowPlayingView({
   // Only the narrow layout reads this: there the tab panel replaces the hero instead of sitting
   // under it, so neither state needs a scrollbar.
   const [isExpanded, setIsExpanded] = useState(false);
-  const isAnyModalOpen = useAnyModalOpen();
+  const isOverlayAbove = useOverlayAbove();
   const [lyricsSearchOpen, setLyricsSearchOpen] = useState(false);
   const [lyricsSearchArtist, setLyricsSearchArtist] = useState("");
   const [lyricsSearchTitle, setLyricsSearchTitle] = useState("");
@@ -137,14 +137,14 @@ export function NowPlayingView({
   }, [tab, queueIndex]);
 
   useEffect(() => {
-    if (!isExpanded || isAnyModalOpen) return;
+    if (!isExpanded || isOverlayAbove) return;
     const onKeyDown = (e: KeyboardEvent) => {
       // A context menu above handles its own Escape and marks it handled.
       if (e.key === "Escape" && !e.defaultPrevented && !isTextEntryTarget(e)) setIsExpanded(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [isExpanded, isAnyModalOpen]);
+  }, [isExpanded, isOverlayAbove]);
 
   // Only the narrow layout shows the expanded state, and CSS alone knows whether a resize left it.
   useEffect(() => {

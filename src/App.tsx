@@ -70,7 +70,7 @@ import { currentTrackFromRow, makeStreamUrlBuilder, type PlayableTrackRow } from
 import { checkForUpdate } from "./lib/updater";
 import { useLibraryFiltersStore } from "./store/libraryFilters";
 import type { AlbumRow, AlbumSort, ArtistRow } from "./types/library";
-import { useAnyModalOpen } from "./ui/useModalChrome";
+import { useOverlayAbove } from "./ui/keyboardOwners";
 import "./styles/tokens.css";
 import "./app/library.css";
 import "./styles/base.css";
@@ -167,11 +167,9 @@ export default function App() {
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
-  // One signal for "an overlay above the app owns the keyboard", read by both the search
-  // shortcuts and the transport keys. `feedbackOpen` used to be a third term here; the
-  // feedback modal registers itself now, which is the point of the registry.
-  const anyModalOpen = useAnyModalOpen();
-  const overlayAbove = commandPaletteOpen || anyModalOpen;
+  // One signal for "an overlay above the app owns the keyboard", read by the search shortcuts,
+  // the transport keys and Now Playing's V; modals, the palette and menus register themselves.
+  const overlayAbove = useOverlayAbove();
 
   useGlobalShortcuts(serverWithCred, overlayAbove);
   useQueueSync(serverWithCred);
