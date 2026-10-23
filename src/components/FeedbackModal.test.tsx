@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
+import { logger } from "../lib/logger";
 import { __resetModalRegistry, useAnyModalOpen } from "../ui/useModalChrome";
 import { FeedbackModal } from "./FeedbackModal";
 
@@ -11,7 +12,10 @@ vi.mock("../clients/boundedFetch", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../clients/boundedFetch")>()),
   boundedFetch: vi.fn(() => Promise.resolve(new Response(null, { status: 204 }))),
 }));
-vi.mock("../lib/logger", () => ({ logger: { getRecent: () => Promise.resolve(""), error: vi.fn() } }));
+vi.mock("../lib/logger", async (importOriginal) => ({
+  formatLogValue: (await importOriginal<typeof import("../lib/logger")>()).formatLogValue,
+  logger: { getRecent: () => Promise.resolve(""), error: vi.fn() },
+}));
 
 beforeEach(() => __resetModalRegistry());
 afterEach(cleanup);
@@ -127,5 +131,16 @@ describe("FeedbackModal", () => {
     const attached = body.get("files[0]");
     if (!(attached instanceof Blob)) throw new Error("expected the full text attached");
     expect(await attached.text()).toContain(longText);
+  });
+
+  it("logs why a send failed", async () => {
+    vi.mocked(boundedFetch).mockImplementationOnce(() => Promise.resolve(new Response(null, { status: 429 })));
+    render(<FeedbackModal onClose={vi.fn()} />);
+
+    fireEvent.change(document.querySelector(".feedback-textarea")!, { target: { value: "Love it" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+
+    await waitFor(() => expect(screen.getByText("Send failed, try again")).toBeInTheDocument());
+    expect(logger.error).toHaveBeenCalledWith(expect.stringContaining("HTTP 429"));
   });
 });

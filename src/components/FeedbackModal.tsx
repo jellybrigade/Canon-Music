@@ -2,7 +2,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { X } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
-import { logger } from "../lib/logger";
+import { formatLogValue, logger } from "../lib/logger";
 import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 import "./FeedbackModal.css";
@@ -151,7 +151,8 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus("sent");
-    } catch {
+    } catch (err) {
+      logger.error(`Feedback send failed: ${formatLogValue(err)}`);
       setStatus("error");
     }
   }
