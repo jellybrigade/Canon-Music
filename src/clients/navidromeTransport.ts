@@ -1,5 +1,6 @@
 import { noteEnvelope, type SubsonicEnvelope } from "../lib/credentialRejections";
 import {
+  lastAnsweringRoute,
   noteTransportTimeout,
   recordTransportSuccess,
   TransportStalledError,
@@ -64,10 +65,15 @@ export async function apiPost(
 ): Promise<Response> {
   const body = params.toString();
   const server = normalizeUrl(baseUrl);
-  const urls = [`${server}/rest/${endpoint}`];
+  const routes = [server];
   // The alt URL (typically a LAN address for the same server) is tried within every
   // attempt, not only on the first, since either route can be the one that is stalling.
-  if (altUrl) urls.push(`${normalizeUrl(altUrl)}/rest/${endpoint}`);
+  // The route that last answered goes first: a single-shot write gets no second route.
+  if (altUrl) {
+    const alt = normalizeUrl(altUrl);
+    if (lastAnsweringRoute(server) === alt) routes.unshift(alt);
+    else routes.push(alt);
+  }
 
   // Health is tracked per server so a stalled one can't speak for another or name an
   // address the caller never asked about.
@@ -83,18 +89,18 @@ export async function apiPost(
   const maxAttempts = retriable ? MAX_ATTEMPTS : 1;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    for (const url of urls) {
+    for (const route of routes) {
       // A withdrawn request is neither a failure nor a timeout, so it feeds nothing.
       // Not `throwIfAborted`, which older WebKitGTK builds lack.
       if (signal?.aborted) throw new DOMException(`${endpoint} withdrawn`, "AbortError");
       try {
-        const res = await boundedFetch(url, {
+        const res = await boundedFetch(`${route}/rest/${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
           body,
           signal,
         });
-        recordTransportSuccess(server);
+        recordTransportSuccess(server, route);
         if (retriable && isRetriableStatus(res.status) && attempt < maxAttempts) {
           lastFailure = `HTTP ${res.status}`;
           continue;
