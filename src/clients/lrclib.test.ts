@@ -20,6 +20,14 @@ describe("parseLrc", () => {
     expect(parseLrc("[03:07.00]late")[0]!.timeSec).toBe(187);
   });
 
+  it("reads a timestamp with no fraction", () => {
+    expect(parseLrc("[05:30]whole second")).toEqual([{ timeSec: 330, text: "whole second" }]);
+  });
+
+  it("reads three-digit minutes past the 99th", () => {
+    expect(parseLrc("[100:00.00]long set")[0]!.timeSec).toBe(6000);
+  });
+
   it("trims the line text", () => {
     expect(parseLrc("[00:01.00]   spaced   ")[0]!.text).toBe("spaced");
   });
