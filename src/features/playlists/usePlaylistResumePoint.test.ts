@@ -59,4 +59,14 @@ describe("usePlaylistResumePoint", () => {
     await waitFor(() => expect(select).toHaveBeenCalledTimes(1));
     expect(result.current).toBeNull();
   });
+
+  it("logs a failed read instead of dropping it", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(getDb).mockRejectedValue(new Error("db locked"));
+
+    renderHook(() => usePlaylistResumePoint("pl-a"));
+
+    await waitFor(() => expect(consoleError).toHaveBeenCalledWith(expect.any(String), expect.any(Error)));
+    consoleError.mockRestore();
+  });
 });

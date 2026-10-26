@@ -21,7 +21,7 @@ export function usePlaylistResumePoint(playlistId: string): ResumePoint | null {
           setLoaded({ playlistId, point: { lastTrackId: row.last_track_id, trackPosition: row.track_position } });
         }
       })
-      .catch(() => {});
+      .catch((e) => console.error("Failed to read playlist resume position:", e));
     return () => {
       cancelled = true;
     };

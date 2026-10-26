@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
 import { AlbumGrid } from "../components/AlbumGrid";
@@ -27,6 +27,7 @@ import { useNormalizeAlbum } from "../features/tags/hooks/useNormalizeAlbum";
 import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
 import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
+import { useBitRateBackfill } from "../hooks/useBitRateBackfill";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { useLoved } from "../hooks/useLoved";
 import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
@@ -136,17 +137,7 @@ export function AlbumDetail({
     useTrackListSessionStore.getState().bumpRefresh();
   }, [album.id, serverWithCredential]);
 
-  // Auto-sync when all tracks are missing bit_rate (v32 migration leftover). Guarded to one
-  // attempt per album, or the refetch it triggers would re-satisfy the condition and loop.
-  const bitRateSyncedRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!tracks || tracks.length === 0) return;
-    if (bitRateSyncedRef.current === album.id) return;
-    if (tracks.every((t) => t.bit_rate === null)) {
-      bitRateSyncedRef.current = album.id;
-      void doSyncTracks();
-    }
-  }, [tracks, doSyncTracks, album.id]);
+  useBitRateBackfill(album.id, tracks, doSyncTracks);
 
   const fetchMissingTracks = useCallback(async () => {
     await fetchAlbumTracks(serverWithCredential.server, serverWithCredential.credential, album.id);

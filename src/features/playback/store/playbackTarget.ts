@@ -72,7 +72,8 @@ export class LocalTarget implements PlaybackTarget {
 
   async setNext(url: string | null): Promise<void> {
     if (!url) return;
-    void invoke("audio_prefetch", { url });
+    // A missed prefetch only costs the warm start; the live path fetches the track itself.
+    void invoke("audio_prefetch", { url }).catch(() => {});
   }
 
   teardown(): void {
