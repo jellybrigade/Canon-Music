@@ -64,6 +64,11 @@ export function recordTransportSuccess(baseUrl: string, route = baseUrl): void {
   cappedSet(answeringRoutes, baseUrl, route, MAX_TRACKED_SERVERS);
 }
 
+/** An edited server's addresses may no longer include the one that last answered. */
+export function forgetAnsweringRoute(baseUrl: string): void {
+  answeringRoutes.delete(baseUrl);
+}
+
 export function lastAnsweringRoute(baseUrl: string): string | undefined {
   return answeringRoutes.get(baseUrl);
 }
