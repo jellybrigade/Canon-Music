@@ -194,25 +194,37 @@ function withoutSpaces(key: string): string {
   return key.replace(/ /g, "");
 }
 
+const joinedKeyIndexes = new WeakMap<TreeNode[], Map<string, TreeNode>>();
+
+/** Lowest id wins a shared joined key; built once per node list, not per lookup. */
+function joinedKeyIndex(kindNodes: TreeNode[]): Map<string, TreeNode> {
+  let index = joinedKeyIndexes.get(kindNodes);
+  if (index) return index;
+  index = new Map();
+  for (const node of kindNodes) {
+    const joined = withoutSpaces(node.canonical_key);
+    const existing = index.get(joined);
+    if (!existing || node.id < existing.id) index.set(joined, node);
+  }
+  joinedKeyIndexes.set(kindNodes, index);
+  return index;
+}
+
 /**
  * Ties are broken by id, so tree order never decides which genre a tag lands on.
  * Keys that differ only in spacing count as distance 0: "lo fi" and "Lo-fi" ("lofi") are too short to fuzzy match.
  */
 function findFuzzy(key: string, kindNodes: TreeNode[]): TreeNode | null {
-  const joinedKey = withoutSpaces(key);
+  const spacingMatch = joinedKeyIndex(kindNodes).get(withoutSpaces(key));
+  if (spacingMatch) return spacingMatch;
+  if (key.length < FUZZY_MIN_KEY_LENGTH) return null;
   let bestNode: TreeNode | null = null;
   let bestDist = FUZZY_MAX_DISTANCE + 1;
   for (const node of kindNodes) {
-    let dist: number;
-    if (withoutSpaces(node.canonical_key) === joinedKey) {
-      dist = 0;
-    } else {
-      if (key.length < FUZZY_MIN_KEY_LENGTH) continue;
-      const allowed = allowedFuzzyDistance(key, node.canonical_key);
-      if (allowed === 0) continue;
-      dist = levenshtein(key, node.canonical_key, allowed);
-      if (dist > allowed) continue;
-    }
+    const allowed = allowedFuzzyDistance(key, node.canonical_key);
+    if (allowed === 0) continue;
+    const dist = levenshtein(key, node.canonical_key, allowed);
+    if (dist > allowed) continue;
     if (dist < bestDist || (dist === bestDist && bestNode !== null && node.id < bestNode.id)) {
       bestDist = dist;
       bestNode = node;
