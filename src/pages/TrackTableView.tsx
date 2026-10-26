@@ -1,5 +1,5 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronUp, Heart, Play, SlidersHorizontal } from "lucide-react";
+import { Heart, Play, SlidersHorizontal } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { usePlayerStore } from "../features/playback/store/player";
@@ -18,31 +18,35 @@ import "./TrackTableView.css";
 import "../components/AlbumGrid.css";
 import { plural } from "../lib/plural";
 import { replayGainFromRow } from "../lib/replayGainRow";
-import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../lib/trackCells";
+import {
+  BITRATE_COLUMN,
+  bitrateCell,
+  DURATION_COLUMN,
+  durationCell,
+  FORMAT_COLUMN,
+  PLAYS_COLUMN,
+  trackNumberColumn,
+  YEAR_COLUMN,
+} from "../lib/trackCells";
+import { type SortDirection, type SortValue, sortRows } from "../lib/trackSort";
+import { SortIndicator } from "../ui/SortIndicator";
 import { useClickOutside } from "../ui/useClickOutside";
 
 const ROW_HEIGHT = 40;
 const SKELETON_ROWS = 14;
 
-// One reused collator instead of String.prototype.localeCompare, which constructs a fresh
-// collator on every call. The sort runs over the whole library, so on a large one that is
-// hundreds of thousands of constructions per sort change.
-const collator = new Intl.Collator(undefined, { sensitivity: "base" });
+const VALUE_OF = {
+  title: (track) => track.title,
+  artist: (track) => track.artist,
+  album: (track) => track.album_name,
+  year: (track) => track.year,
+  duration: (track) => track.duration,
+  play_count: (track) => track.play_count,
+  bit_rate: (track) => track.bit_rate,
+  suffix: (track) => track.suffix,
+} satisfies Record<string, (track: AllTrackRow) => SortValue>;
 
-type SortField = "title" | "artist" | "album" | "year" | "duration" | "play_count" | "bit_rate" | "suffix";
-type SortDir = "asc" | "desc";
-
-// Declared at module scope: a component defined inside the render body is a new component
-// type on every render, so React would tear the chevron down and remount it each pass
-// instead of updating it.
-function SortIndicator({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (sortField !== field) return null;
-  return sortDir === "asc" ? (
-    <ChevronUp size={11} style={{ verticalAlign: "middle", marginLeft: 2 }} />
-  ) : (
-    <ChevronDown size={11} style={{ verticalAlign: "middle", marginLeft: 2 }} />
-  );
-}
+type SortField = keyof typeof VALUE_OF;
 
 interface TrackCols {
   artist: boolean;
@@ -194,7 +198,7 @@ export function TrackTableView({
   const streamUrlFor = useMemo(() => makeStreamUrlBuilder(server, credential), [server, credential]);
 
   const [sortField, setSortField] = useState<SortField>("artist");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortDir, setSortDir] = useState<SortDirection>("asc");
 
   const [cols, setCols] = useState<TrackCols>(() => {
     try {
@@ -222,57 +226,10 @@ export function TrackTableView({
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: AllTrackRow } | null>(null);
 
-  const sorted = useMemo(() => {
-    if (!tracks) return [];
-    return [...tracks].sort((a, b) => {
-      let av: string | number | null = null;
-      let bv: string | number | null = null;
-      switch (sortField) {
-        case "title":
-          av = a.title;
-          bv = b.title;
-          break;
-        case "artist":
-          av = a.artist;
-          bv = b.artist;
-          break;
-        case "album":
-          av = a.album_name;
-          bv = b.album_name;
-          break;
-        case "year":
-          av = a.year;
-          bv = b.year;
-          break;
-        case "duration":
-          av = a.duration;
-          bv = b.duration;
-          break;
-        case "play_count":
-          av = a.play_count;
-          bv = b.play_count;
-          break;
-        case "bit_rate":
-          av = a.bit_rate;
-          bv = b.bit_rate;
-          break;
-        case "suffix":
-          av = a.suffix;
-          bv = b.suffix;
-          break;
-      }
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
-      let cmp: number;
-      if (typeof av === "string" && typeof bv === "string") {
-        cmp = collator.compare(av, bv);
-      } else {
-        cmp = (av as number) < (bv as number) ? -1 : (av as number) > (bv as number) ? 1 : 0;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-  }, [tracks, sortField, sortDir]);
+  const sorted = useMemo(
+    () => (tracks ? sortRows(tracks, VALUE_OF[sortField], sortDir) : []),
+    [tracks, sortField, sortDir],
+  );
 
   function handleSortHeader(field: SortField) {
     setSelectedIds(new Set());
@@ -416,11 +373,11 @@ export function TrackTableView({
     "minmax(0, 2fr)",
     cols.artist ? "minmax(0, 1.25fr)" : null,
     cols.album ? "minmax(0, 1.25fr)" : null,
-    cols.year ? "3.5rem" : null,
+    cols.year ? YEAR_COLUMN : null,
     cols.genre ? "minmax(0, 1fr)" : null,
-    cols.format ? "3.5rem" : null,
-    cols.bitrate ? "4.5rem" : null,
-    cols.plays ? "3.5rem" : null,
+    cols.format ? FORMAT_COLUMN : null,
+    cols.bitrate ? BITRATE_COLUMN : null,
+    cols.plays ? PLAYS_COLUMN : null,
     cols.duration ? DURATION_COLUMN : null,
     "2rem",
   ]
@@ -445,37 +402,37 @@ export function TrackTableView({
           <span className="playlist-col-header-cell">#</span>
           <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("title")}>
             Title
-            <SortIndicator field="title" sortField={sortField} sortDir={sortDir} />
+            <SortIndicator direction={sortField === "title" ? sortDir : null} />
           </button>
           {cols.artist && (
             <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("artist")}>
               Artist
-              <SortIndicator field="artist" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "artist" ? sortDir : null} />
             </button>
           )}
           {cols.album && (
             <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("album")}>
               Album
-              <SortIndicator field="album" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "album" ? sortDir : null} />
             </button>
           )}
           {cols.year && (
             <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("year")}>
               Year
-              <SortIndicator field="year" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "year" ? sortDir : null} />
             </button>
           )}
           {cols.genre && <span className="playlist-col-header-cell">Genre</span>}
           {cols.format && (
             <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("suffix")}>
               Format
-              <SortIndicator field="suffix" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "suffix" ? sortDir : null} />
             </button>
           )}
           {cols.bitrate && (
             <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("bit_rate")}>
               Bitrate
-              <SortIndicator field="bit_rate" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "bit_rate" ? sortDir : null} />
             </button>
           )}
           {cols.plays && (
@@ -484,7 +441,7 @@ export function TrackTableView({
               onClick={() => handleSortHeader("play_count")}
             >
               Plays
-              <SortIndicator field="play_count" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "play_count" ? sortDir : null} />
             </button>
           )}
           {cols.duration && (
@@ -493,7 +450,7 @@ export function TrackTableView({
               onClick={() => handleSortHeader("duration")}
             >
               Duration
-              <SortIndicator field="duration" sortField={sortField} sortDir={sortDir} />
+              <SortIndicator direction={sortField === "duration" ? sortDir : null} />
             </button>
           )}
           <span className="playlist-col-header-cell" />

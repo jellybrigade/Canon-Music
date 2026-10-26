@@ -17,27 +17,7 @@
   animation-delay: 0.24s;
 }
 
-/* ── Track table: selected row + sortable header buttons ── */
+/* ── Track table: selected row ── */
 .track-table-row--selected {
   background-color: var(--tint-3);
-}
-
-.track-sort-btn {
-  background: none;
-  border: none;
-  box-shadow: none;
-  cursor: pointer;
-  text-align: left;
-  padding: var(--space-2xs) var(--space-xs);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-  overflow: visible;
-}
-
-.track-sort-btn:hover {
-  color: var(--text-primary);
 }
