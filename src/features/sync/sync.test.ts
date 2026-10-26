@@ -54,6 +54,8 @@ import { syncLibrary } from "./sync";
 import { purgeServerData, purgeStrandedServers } from "./syncPrune";
 import { repairAlbumTrackIds, syncAlbumTracks } from "./syncTracks";
 import { clearSyncWatermark } from "./syncWatermark";
+import { subscribeTrackIdRemaps } from "./trackIdRemapEvents";
+import type { TrackIdRemap } from "./trackRemap";
 
 const mAllAlbums = vi.mocked(fetchAllAlbums);
 const mAlbumTracks = vi.mocked(fetchAlbumTracks);
@@ -542,8 +544,6 @@ describe("syncLibrary idempotence", () => {
     expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
   });
 
-  it("does not rebuild the artists table when only a non-artist column changed", async () => {
-    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
   it("does not rescan the index every sync for a track with no album row to index it under", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
     await syncLibrary(server(), CRED);
@@ -558,6 +558,8 @@ describe("syncLibrary idempotence", () => {
     expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
   });
 
+  it("does not rebuild the artists table when only a non-artist column changed", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { name: "Renamed" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     const second = await syncLibrary(server(), CRED);
@@ -908,16 +910,33 @@ describe("syncLibrary track id remap", () => {
     ]);
   });
 
+  it("tells the player which tracks moved, so a queue holding the old ids still plays", async () => {
+    await seedOneTrack();
+    armRemap();
+    const heard: (readonly TrackIdRemap[])[] = [];
+    const unsubscribe = subscribeTrackIdRemaps((remaps) => heard.push(remaps));
+
+    serveRenamed("t1-rewritten");
+    await syncLibrary(server(), CRED);
+    unsubscribe();
+
+    expect(heard).toEqual([[{ oldId: `${SRV}:t1`, newId: `${SRV}:t1-rewritten` }]]);
+  });
+
   it("never asks when every mirrored id still resolves", async () => {
     await seedOneTrack();
     const { calls } = armRemap();
+    const heard: (readonly TrackIdRemap[])[] = [];
+    const unsubscribe = subscribeTrackIdRemaps((remaps) => heard.push(remaps));
 
     serveLibrary([album("al-1", { songCount: 1, created: "2026-02-02T00:00:00Z" })], {
       "al-1": [track("t1", "al-1", { path: "/m/1.flac" })],
     });
     await syncLibrary(server(), CRED);
+    unsubscribe();
 
     expect(calls).toHaveLength(0);
+    expect(heard).toEqual([]);
     expect(invokeCount("remap_track_ids")).toBe(0);
   });
 
@@ -1969,10 +1988,16 @@ describe("syncAlbumTracks", () => {
       track("t2", "al-1", { path: "/m/2.flac" }),
     ]);
 
+    const heard: (readonly TrackIdRemap[])[] = [];
+    const unsubscribe = subscribeTrackIdRemaps((remaps) => heard.push(remaps));
+
     await syncAlbumTracks(server(), CRED, `${SRV}:al-1`);
+    unsubscribe();
 
     expect(await ids("SELECT id FROM tracks ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
     expect(await ids("SELECT id FROM tracks_fts ORDER BY id")).toEqual([`${SRV}:t1-new`, `${SRV}:t2`]);
+    // The old row is gone now, so a queue still holding its id could never be repaired later.
+    expect(heard).toEqual([[{ oldId: `${SRV}:t1`, newId: `${SRV}:t1-new` }]]);
   });
 
   it("stores replay gain sub-fields individually and defaults play_count to zero", async () => {

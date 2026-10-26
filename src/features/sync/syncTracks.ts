@@ -8,6 +8,7 @@ import { executeBatched, executeIdChunks } from "../../lib/dbBatch";
 import { escapeLike } from "../../lib/sql";
 import type { Server } from "../../types/server";
 import { pruneAlbumTracks } from "./syncPrune";
+import { publishTrackIdRemaps } from "./trackIdRemapEvents";
 import type { TrackIdRemap } from "./trackRemap";
 import { planTrackIdRemap } from "./trackRemap";
 
@@ -71,7 +72,7 @@ export async function healTracksFts(db: Database, serverId: string): Promise<voi
 }
 
 // Must run before the upsert; afterwards a rename is indistinguishable from an add.
-export async function planRenamedTracks(
+async function planRenamedTracks(
   db: Database,
   serverId: string,
   albumDbId: string,
@@ -89,7 +90,7 @@ export async function planRenamedTracks(
 
 // Move the local-only rows onto the new ids, before the prune deletes everything still
 // under the old ones. One `invoke` per album that has renamed tracks, none otherwise.
-export async function carryRenamedTracks(albumDbId: string, remaps: readonly TrackIdRemap[]): Promise<number> {
+async function carryRenamedTracks(albumDbId: string, remaps: readonly TrackIdRemap[]): Promise<number> {
   if (remaps.length === 0) return 0;
   // Non-fatal: a failed carry costs the local-only rows of these tracks, which the prune
   // was going to take anyway. Failing the whole sync over it would cost the library.
@@ -99,7 +100,27 @@ export async function carryRenamedTracks(albumDbId: string, remaps: readonly Tra
   });
 }
 
-export async function insertTracksBatch(
+interface AlbumTracksWrite {
+  server: Server;
+  albumDbId: string;
+  tracks: NavidromeTrack[];
+  /** False skips the rename lookup for an album with nothing stored yet. */
+  hasStoredTracks?: boolean;
+}
+
+/** Every write of a fetched album's tracks: a rename is planned before the upsert and announced after it. */
+export async function writeAlbumTracks(
+  db: Database,
+  { server, albumDbId, tracks, hasStoredTracks = true }: AlbumTracksWrite,
+): Promise<{ remaps: TrackIdRemap[]; carried: number }> {
+  const remaps = hasStoredTracks ? await planRenamedTracks(db, server.id, albumDbId, tracks) : [];
+  const carried = await carryRenamedTracks(albumDbId, remaps);
+  await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
+  publishTrackIdRemaps(remaps);
+  return { remaps, carried };
+}
+
+async function insertTracksBatch(
   db: Database,
   serverId: string,
   serverType: string,
@@ -193,9 +214,7 @@ export async function repairAlbumTrackIds(
   // more often than an emptied album, and acting on it would delete the rows being repaired.
   if (tracks.length === 0) return [];
   const db = await getDb();
-  const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
-  await carryRenamedTracks(dbAlbumId, remaps);
-  await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  const { remaps } = await writeAlbumTracks(db, { server, albumDbId: dbAlbumId, tracks });
   await pruneAlbumTracks(
     db,
     dbAlbumId,
@@ -219,9 +238,7 @@ export async function syncAlbumTracks(
   const tracks = await fetchAlbumTracks(server.url, server.username, credential, navidromeAlbumId, altUrl);
   const db = await getDb();
   // Without the carry, a renamed track upserts beside its old row and the album lists it twice.
-  const remaps = await planRenamedTracks(db, server.id, dbAlbumId, tracks);
-  await carryRenamedTracks(dbAlbumId, remaps);
-  await insertTracksBatch(db, server.id, server.type, dbAlbumId, tracks);
+  const { remaps } = await writeAlbumTracks(db, { server, albumDbId: dbAlbumId, tracks });
   await rebuildTracksFts(
     db,
     [dbAlbumId],

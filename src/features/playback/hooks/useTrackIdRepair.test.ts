@@ -13,6 +13,8 @@ import { usePlaylistSessionStore } from "../../../store/playlistSessionStore";
 import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
 import { emitTauriEvent, listenerCount, resetTauriMocks } from "../../../test/mocks/tauri";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
+import { publishTrackIdRemaps } from "../../sync/trackIdRemapEvents";
+import type { TrackIdRemap } from "../../sync/trackRemap";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
 import { useTrackIdRepair } from "./useTrackIdRepair";
@@ -43,6 +45,14 @@ async function emitError(payload: Record<string, unknown>): Promise<void> {
   });
 }
 
+/** The real repair announces what it moved before it resolves, as every album track write does. */
+function repairMoves(remaps: TrackIdRemap[]): void {
+  vi.mocked(repairAlbumTrackIds).mockImplementation(async () => {
+    publishTrackIdRemaps(remaps);
+    return remaps;
+  });
+}
+
 let retryCurrent: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -60,7 +70,7 @@ afterEach(() => {
 
 describe("useTrackIdRepair", () => {
   it("re-resolves the album and replays when the server no longer knows the track id", async () => {
-    vi.mocked(repairAlbumTrackIds).mockResolvedValue([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
+    repairMoves([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
     renderHook(() => useTrackIdRepair(SERVER));
 
     await emitError({ subsonicCode: 70 });
@@ -71,7 +81,7 @@ describe("useTrackIdRepair", () => {
   });
 
   it("re-reads every track list on screen, so a click there plays the new id", async () => {
-    vi.mocked(repairAlbumTrackIds).mockResolvedValue([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
+    repairMoves([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
     const ticks = () => [
       useTrackListSessionStore.getState().refreshTick,
       useAllTracksSessionStore.getState().refreshTick,
@@ -168,6 +178,34 @@ describe("useTrackIdRepair", () => {
     await emitError({ subsonicCode: 70 });
 
     expect(retryCurrent).not.toHaveBeenCalled();
+  });
+
+  it("moves the queue onto ids a sync renamed, without restarting what is playing", async () => {
+    const next = track("srv:t2");
+    usePlayerStore.setState({ queue: [usePlayerStore.getState().currentTrack as CurrentTrack, next] });
+    const before = useTrackListSessionStore.getState().refreshTick;
+    renderHook(() => useTrackIdRepair(SERVER));
+
+    act(() => {
+      publishTrackIdRemaps([
+        { oldId: "srv:t1", newId: "srv:t1-new" },
+        { oldId: "srv:t2", newId: "srv:t2-new" },
+      ]);
+    });
+
+    expect(usePlayerStore.getState().queue.map((queued) => queued.id)).toEqual(["srv:t1-new", "srv:t2-new"]);
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("srv:t1-new");
+    expect(useTrackListSessionStore.getState().refreshTick).toBe(before + 1);
+    expect(retryCurrent).not.toHaveBeenCalled();
+  });
+
+  it("stops following renamed ids once unmounted", () => {
+    const { unmount } = renderHook(() => useTrackIdRepair(SERVER));
+    unmount();
+
+    publishTrackIdRemaps([{ oldId: "srv:t1", newId: "srv:t1-new" }]);
+
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("srv:t1");
   });
 
   it("arms exactly one listener and tears it down on unmount", async () => {

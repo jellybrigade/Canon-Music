@@ -16,13 +16,7 @@ import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
 import { syncLoved } from "./syncLoved";
 import { syncPlaylists } from "./syncPlaylists";
 import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
-import {
-  carryRenamedTracks,
-  healTracksFts,
-  insertTracksBatch,
-  planRenamedTracks,
-  rebuildTracksFts,
-} from "./syncTracks";
+import { healTracksFts, rebuildTracksFts, writeAlbumTracks } from "./syncTracks";
 import {
   clearSyncWatermark,
   mirroredTrackIdsStillResolve,
@@ -322,15 +316,17 @@ export async function syncLibrary(
     }
     // Only worth a query for an album that already had rows: on a first sync
     // there is nothing to carry or prune and this would be wasted round trips per album.
-    if (existingTrackCount > 0) {
-      const remaps = await planRenamedTracks(db, server.id, albumDbId, tracks);
-      // Collected whatever the carry reported: an id the carry declined keeps its own track
-      // row, which the prune then takes along with its FTS row, so clearing it here early is
-      // at worst a no-op and never leaves one behind.
-      for (const remap of remaps) renamedTrackIds.push(remap.oldId);
-      remappedTracks += await carryRenamedTracks(albumDbId, remaps);
-    }
-    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
+    const written = await writeAlbumTracks(db, {
+      server,
+      albumDbId,
+      tracks,
+      hasStoredTracks: existingTrackCount > 0,
+    });
+    // Collected whatever the carry reported: an id the carry declined keeps its own track
+    // row, which the prune then takes along with its FTS row, so clearing it here early is
+    // at worst a no-op and never leaves one behind.
+    for (const remap of written.remaps) renamedTrackIds.push(remap.oldId);
+    remappedTracks += written.carried;
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
         db,

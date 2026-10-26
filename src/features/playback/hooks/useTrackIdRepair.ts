@@ -8,9 +8,13 @@ import { useLovedSessionStore } from "../../../store/lovedSessionStore";
 import { usePlaylistSessionStore } from "../../../store/playlistSessionStore";
 import { useTrackListSessionStore } from "../../../store/trackListSessionStore";
 import { repairAlbumTrackIds } from "../../sync/syncTracks";
+import { subscribeTrackIdRemaps } from "../../sync/trackIdRemapEvents";
 import { usePlayerStore } from "../store/player";
 
-/** On Subsonic 70 at play time, re-resolves the album's track ids and retries, once per album per session. */
+/**
+ * Keeps the queue and track lists on the ids a sync moved tracks to. On Subsonic 70 at
+ * play time, re-resolves the album's track ids and retries, once per album per session.
+ */
 export function useTrackIdRepair(serverWithCredential: ServerWithCredential | undefined): void {
   // Read through a ref so a credential arriving does not tear down and re-arm the listener.
   const serverRef = useRef(serverWithCredential);
@@ -19,6 +23,10 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
 
   useEffect(() => {
     let cancelled = false;
+    const unsubscribe = subscribeTrackIdRemaps((remaps) => {
+      refreshTrackLists();
+      usePlayerStore.getState().applyTrackIdRemap(remaps);
+    });
     const pending = listen<{ url: string; subsonicCode?: number | null }>("audio-error", (event) => {
       if (event.payload.subsonicCode !== SUBSONIC_NOT_FOUND) return;
       const target = serverRef.current;
@@ -27,6 +35,7 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
       // The error names the stream it happened on. Anything else is a track the user has
       // already moved off, and repairing its album would fight whatever is playing now.
       if (!currentTrack || streamUrl !== event.payload.url) return;
+      const failedTrackId = currentTrack.id;
       const albumId = currentTrack.albumId;
       if (!albumId || repairedAlbumIds.current.has(albumId)) return;
       repairedAlbumIds.current.add(albumId);
@@ -34,9 +43,11 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
       void repairAlbumTrackIds(target.server, target.credential, albumId)
         .then((remaps) => {
           if (cancelled) return;
-          if (remaps.length > 0) refreshTrackLists();
-          const currentMoved = usePlayerStore.getState().applyTrackIdRemap(remaps);
-          if (currentMoved) usePlayerStore.getState().retryCurrent();
+          // The repair's own announcement has already moved the queue onto the new id.
+          const moved = remaps.find((remap) => remap.oldId === failedTrackId);
+          if (moved && usePlayerStore.getState().currentTrack?.id === moved.newId) {
+            usePlayerStore.getState().retryCurrent();
+          }
         })
         .catch((err: unknown) => {
           console.error(`playback: failed to re-resolve album ${albumId}:`, err);
@@ -45,6 +56,7 @@ export function useTrackIdRepair(serverWithCredential: ServerWithCredential | un
 
     return () => {
       cancelled = true;
+      unsubscribe();
       void pending.then((unlisten) => unlisten());
     };
   }, []);
