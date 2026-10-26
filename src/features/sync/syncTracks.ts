@@ -47,13 +47,14 @@ export async function rebuildTracksFts(
 export async function healTracksFts(db: Database, serverId: string): Promise<void> {
   const idPrefix = `${escapeLike(serverId)}:%`;
   const [counts] = await db.select<{ stored: number; indexed: number }[]>(
-    `SELECT (SELECT COUNT(*) FROM tracks WHERE server_id = ?) AS stored,
+    // Counts only tracks the rebuild can index (it joins albums), or one orphan rescans every sync.
+    `SELECT (SELECT COUNT(*) FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.server_id = ?) AS stored,
             (SELECT COUNT(*) FROM tracks_fts WHERE id LIKE ? ESCAPE '\\') AS indexed`,
     [serverId, idPrefix],
   );
   if (counts === undefined || counts.stored === counts.indexed) return;
   await db.execute(
-    `DELETE FROM tracks_fts WHERE id LIKE ? ESCAPE '\\' AND id NOT IN (SELECT id FROM tracks WHERE server_id = ?)`,
+    `DELETE FROM tracks_fts WHERE id LIKE ? ESCAPE '\\' AND id NOT IN (SELECT t.id FROM tracks t JOIN albums a ON a.id = t.album_id WHERE t.server_id = ?)`,
     [idPrefix, serverId],
   );
   const unindexed = await db.select<{ album_id: string }[]>(

@@ -544,6 +544,20 @@ describe("syncLibrary idempotence", () => {
 
   it("does not rebuild the artists table when only a non-artist column changed", async () => {
     serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
+  it("does not rescan the index every sync for a track with no album row to index it under", async () => {
+    serveLibrary([album("al-1")], { "al-1": [track("t1", "al-1")] });
+    await syncLibrary(server(), CRED);
+    db().raw.exec("PRAGMA foreign_keys = OFF");
+    db()
+      .raw.prepare("INSERT INTO tracks (id, server_id, server_type, album_id, title) VALUES (?, ?, ?, ?, ?)")
+      .run(`${SRV}:orphan`, SRV, "navidrome", `${SRV}:gone`, "Orphan");
+    const select = vi.spyOn(db(), "select");
+
+    await syncLibrary(server(), CRED);
+
+    expect(select.mock.calls.filter(([sql]) => /NOT IN \(SELECT id FROM tracks_fts/.test(sql))).toHaveLength(0);
+  });
+
     await syncLibrary(server(), CRED);
     serveLibrary([album("al-1", { name: "Renamed" })], { "al-1": [track("t1", "al-1"), track("t2", "al-1")] });
     const second = await syncLibrary(server(), CRED);
