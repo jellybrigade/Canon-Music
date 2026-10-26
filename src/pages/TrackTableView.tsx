@@ -29,7 +29,7 @@ import {
   YEAR_COLUMN,
 } from "../lib/trackCells";
 import { type SortDirection, type SortValue, sortRows } from "../lib/trackSort";
-import { SortIndicator } from "../ui/SortIndicator";
+import { SortHeaderButton } from "../ui/SortIndicator";
 import { useClickOutside } from "../ui/useClickOutside";
 
 const ROW_HEIGHT = 40;
@@ -231,6 +231,10 @@ export function TrackTableView({
     [tracks, sortField, sortDir],
   );
 
+  function directionOf(field: SortField): SortDirection | null {
+    return sortField === field ? sortDir : null;
+  }
+
   function handleSortHeader(field: SortField) {
     setSelectedIds(new Set());
     lastClickedIdRef.current = null;
@@ -400,58 +404,54 @@ export function TrackTableView({
       <div className="playlist-list-controls">
         <div className="playlist-col-header" style={{ gridTemplateColumns: gridTemplate }}>
           <span className="playlist-col-header-cell">#</span>
-          <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("title")}>
-            Title
-            <SortIndicator direction={sortField === "title" ? sortDir : null} />
-          </button>
+          <SortHeaderButton label="Title" direction={directionOf("title")} onClick={() => handleSortHeader("title")} />
           {cols.artist && (
-            <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("artist")}>
-              Artist
-              <SortIndicator direction={sortField === "artist" ? sortDir : null} />
-            </button>
+            <SortHeaderButton
+              label="Artist"
+              direction={directionOf("artist")}
+              onClick={() => handleSortHeader("artist")}
+            />
           )}
           {cols.album && (
-            <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("album")}>
-              Album
-              <SortIndicator direction={sortField === "album" ? sortDir : null} />
-            </button>
+            <SortHeaderButton
+              label="Album"
+              direction={directionOf("album")}
+              onClick={() => handleSortHeader("album")}
+            />
           )}
           {cols.year && (
-            <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("year")}>
-              Year
-              <SortIndicator direction={sortField === "year" ? sortDir : null} />
-            </button>
+            <SortHeaderButton label="Year" direction={directionOf("year")} onClick={() => handleSortHeader("year")} />
           )}
           {cols.genre && <span className="playlist-col-header-cell">Genre</span>}
           {cols.format && (
-            <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("suffix")}>
-              Format
-              <SortIndicator direction={sortField === "suffix" ? sortDir : null} />
-            </button>
+            <SortHeaderButton
+              label="Format"
+              direction={directionOf("suffix")}
+              onClick={() => handleSortHeader("suffix")}
+            />
           )}
           {cols.bitrate && (
-            <button className="playlist-col-header-cell track-sort-btn" onClick={() => handleSortHeader("bit_rate")}>
-              Bitrate
-              <SortIndicator direction={sortField === "bit_rate" ? sortDir : null} />
-            </button>
+            <SortHeaderButton
+              label="Bitrate"
+              direction={directionOf("bit_rate")}
+              onClick={() => handleSortHeader("bit_rate")}
+            />
           )}
           {cols.plays && (
-            <button
-              className="playlist-col-header-cell track-sort-btn playlist-col-header-cell--right"
+            <SortHeaderButton
+              label="Plays"
+              direction={directionOf("play_count")}
               onClick={() => handleSortHeader("play_count")}
-            >
-              Plays
-              <SortIndicator direction={sortField === "play_count" ? sortDir : null} />
-            </button>
+              alignRight
+            />
           )}
           {cols.duration && (
-            <button
-              className="playlist-col-header-cell track-sort-btn playlist-col-header-cell--right"
+            <SortHeaderButton
+              label="Duration"
+              direction={directionOf("duration")}
               onClick={() => handleSortHeader("duration")}
-            >
-              Duration
-              <SortIndicator direction={sortField === "duration" ? sortDir : null} />
-            </button>
+              alignRight
+            />
           )}
           <span className="playlist-col-header-cell" />
         </div>

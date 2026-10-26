@@ -420,6 +420,11 @@
   color: var(--text-secondary);
 }
 
+.track-sort-indicator {
+  vertical-align: middle;
+  margin-left: var(--space-3xs);
+}
+
 .playlist-col-header-cell--right {
   text-align: right;
 }

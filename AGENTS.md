@@ -100,7 +100,7 @@ cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml
 
 ## Design (UI/CSS)
 
-- Tokens only, from `src/styles/tokens.css`: `--space-2xs`..`--space-4xl` (4pt scale), `--text-2xs`..`--text-4xl` (rem over root `font-size: 20px`), `--radius-*`, `--duration-*`/`--motion-*`/`--ease-*`, `--opacity-*`, `--tint-*`/`--overlay-*`/`--scrim-*`, `--shadow-*`, `--z-panel|dropdown|overlay|modal`. Nothing fits → add to the scale next to its siblings, never a one-off literal.
+- Tokens only, from `src/styles/tokens.css`: `--space-3xs`..`--space-4xl` (4pt scale, plus a 2px hairline step), `--text-2xs`..`--text-4xl` (rem over root `font-size: 20px`), `--radius-*`, `--duration-*`/`--motion-*`/`--ease-*`, `--opacity-*`, `--tint-*`/`--overlay-*`/`--scrim-*`, `--shadow-*`, `--z-panel|dropdown|overlay|modal`. Nothing fits → add to the scale next to its siblings, never a one-off literal.
 - Hardcoded `z-index` numbers exist in older CSS: migrate to `--z-*` when touched, never add more.
 - Surfaces: `--bg-elevated` for sidebar/toolbar panels, `--bg-card` for content; no third layer. Text `--text-primary|secondary|tertiary`.
 - `--accent` only for primary actions, current selection, state; never decoration, never a second accent hue.

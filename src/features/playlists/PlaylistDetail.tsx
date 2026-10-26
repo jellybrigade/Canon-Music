@@ -20,6 +20,7 @@ import { useLoved } from "../../hooks/useLoved";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { fileToScaledDataUri } from "../../lib/imageDataUri";
 import { makeStreamUrlBuilder } from "../../lib/track";
+import type { SortDirection } from "../../lib/trackSort";
 import type { PlaylistTrackRow } from "../../types/library";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { usePlayerStore } from "../playback/store/player";
@@ -54,7 +55,7 @@ import {
   trackNumberColumn,
   YEAR_COLUMN,
 } from "../../lib/trackCells";
-import { SortIndicator } from "../../ui/SortIndicator";
+import { SortHeaderButton } from "../../ui/SortIndicator";
 import { useClickOutside } from "../../ui/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
@@ -80,27 +81,6 @@ interface Props {
   onSetCustomCover?: (playlistId: string, dataUri: string | null) => Promise<void>;
   onSelectAlbum?: (albumId: string) => void;
   onSelectArtist?: (artistName: string) => void;
-}
-
-interface SortHeaderCellProps {
-  field: PlaylistSortField;
-  label: string;
-  sort: PlaylistSort | null;
-  onSort: (field: PlaylistSortField) => void;
-  alignRight?: boolean;
-}
-
-function SortHeaderCell({ field, label, sort, onSort, alignRight = false }: SortHeaderCellProps) {
-  const direction = sort?.field === field ? sort.direction : null;
-  return (
-    <button
-      className={`playlist-col-header-cell track-sort-btn${alignRight ? " playlist-col-header-cell--right" : ""}`}
-      onClick={() => onSort(field)}
-    >
-      {label}
-      <SortIndicator direction={direction} />
-    </button>
-  );
 }
 
 export function PlaylistDetail({
@@ -307,6 +287,10 @@ export function PlaylistDetail({
         // as an error over a track that is already playing fine.
         console.error("Failed to record playlist resume position:", e);
       });
+  }
+
+  function directionOf(field: PlaylistSortField): SortDirection | null {
+    return sort?.field === field ? sort.direction : null;
   }
 
   function handleSort(field: PlaylistSortField) {
@@ -572,15 +556,36 @@ export function PlaylistDetail({
       <div className="playlist-list-controls">
         <div className="playlist-col-header" style={{ gridTemplateColumns: gridTemplate }}>
           <span className="playlist-col-header-cell">#</span>
-          <SortHeaderCell field="title" label="Title" sort={sort} onSort={handleSort} />
-          {playlistCols.artist && <SortHeaderCell field="artist" label="Artist" sort={sort} onSort={handleSort} />}
-          {playlistCols.genre && <SortHeaderCell field="genre" label="Genre" sort={sort} onSort={handleSort} />}
-          {playlistCols.album && <SortHeaderCell field="album" label="Album" sort={sort} onSort={handleSort} />}
-          {playlistCols.year && <SortHeaderCell field="year" label="Year" sort={sort} onSort={handleSort} />}
-          {playlistCols.format && <SortHeaderCell field="format" label="Format" sort={sort} onSort={handleSort} />}
-          {playlistCols.bitrate && <SortHeaderCell field="bitrate" label="Bitrate" sort={sort} onSort={handleSort} />}
+          <SortHeaderButton label="Title" direction={directionOf("title")} onClick={() => handleSort("title")} />
+          {playlistCols.artist && (
+            <SortHeaderButton label="Artist" direction={directionOf("artist")} onClick={() => handleSort("artist")} />
+          )}
+          {playlistCols.genre && (
+            <SortHeaderButton label="Genre" direction={directionOf("genre")} onClick={() => handleSort("genre")} />
+          )}
+          {playlistCols.album && (
+            <SortHeaderButton label="Album" direction={directionOf("album")} onClick={() => handleSort("album")} />
+          )}
+          {playlistCols.year && (
+            <SortHeaderButton label="Year" direction={directionOf("year")} onClick={() => handleSort("year")} />
+          )}
+          {playlistCols.format && (
+            <SortHeaderButton label="Format" direction={directionOf("format")} onClick={() => handleSort("format")} />
+          )}
+          {playlistCols.bitrate && (
+            <SortHeaderButton
+              label="Bitrate"
+              direction={directionOf("bitrate")}
+              onClick={() => handleSort("bitrate")}
+            />
+          )}
           {playlistCols.duration && (
-            <SortHeaderCell field="duration" label="Duration" sort={sort} onSort={handleSort} alignRight />
+            <SortHeaderButton
+              label="Duration"
+              direction={directionOf("duration")}
+              onClick={() => handleSort("duration")}
+              alignRight
+            />
           )}
           <span className="playlist-col-header-cell" />
         </div>
