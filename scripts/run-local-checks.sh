@@ -59,7 +59,8 @@ wait_task() {
 print_status() {
   local name="$1"
   local code; code=$(cat "$TMP_DIR/$name.status")
-  local seconds; seconds=$(cat "$TMP_DIR/$name.seconds")
+  # A task killed outright (the OOM cap) never writes its time.
+  local seconds; seconds=$(cat "$TMP_DIR/$name.seconds" 2>/dev/null || echo "?")
   if [ "$code" -eq 0 ]; then
     echo -e "${GREEN}ok${NC}   $name (${seconds}s)"
   else
