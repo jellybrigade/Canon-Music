@@ -20,6 +20,7 @@ import { useLoved } from "../../hooks/useLoved";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { fileToScaledDataUri } from "../../lib/imageDataUri";
 import { makeStreamUrlBuilder } from "../../lib/track";
+import type { SortDirection } from "../../lib/trackSort";
 import type { PlaylistTrackRow } from "../../types/library";
 import { ContextMenu } from "../../ui/ContextMenu";
 import { usePlayerStore } from "../playback/store/player";
@@ -27,6 +28,13 @@ import type { CurrentTrack } from "../playback/store/playerTypes";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../radio/hooks/useStartRadio";
 import { resolveResumeIndex } from "./playlistResume";
+import {
+  activePlaylistSort,
+  nextPlaylistSort,
+  type PlaylistSort,
+  type PlaylistSortField,
+  sortPlaylistTracks,
+} from "./playlistSort";
 import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 import { usePlaylistResumePoint } from "./usePlaylistResumePoint";
@@ -38,7 +46,16 @@ import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
 import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
-import { bitrateCell, DURATION_COLUMN, durationCell, trackNumberColumn } from "../../lib/trackCells";
+import {
+  BITRATE_COLUMN,
+  bitrateCell,
+  DURATION_COLUMN,
+  durationCell,
+  FORMAT_COLUMN,
+  trackNumberColumn,
+  YEAR_COLUMN,
+} from "../../lib/trackCells";
+import { SortHeaderButton } from "../../ui/SortIndicator";
 import { useClickOutside } from "../../ui/useClickOutside";
 
 const SECONDS_PER_MINUTE = 60;
@@ -79,7 +96,10 @@ export function PlaylistDetail({
   onSelectArtist,
 }: Props) {
   const { server, credential } = serverWithCredential;
-  const { data: tracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
+  const { data: playlistTracks, isLoading, removeTrack } = usePlaylistTracks(playlist.id);
+  const [chosenSort, setChosenSort] = useState<PlaylistSort | null>(null);
+  const sort = activePlaylistSort(chosenSort, playlist.id);
+  const tracks = useMemo(() => playlistTracks && sortPlaylistTracks(playlistTracks, sort), [playlistTracks, sort]);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const playNext = usePlayerStore((s) => s.playNext);
@@ -167,12 +187,14 @@ export function PlaylistDetail({
   // and re-running on it yanked the list back to the resume row, undoing the user's scroll.
   const resumeScrolledFor = useRef<string | null>(null);
   useEffect(() => {
-    if (resumePoint === null || !tracks) return;
+    if (resumePoint === null || !playlistTracks || !tracks) return;
     if (resumeScrolledFor.current === playlist.id) return;
     resumeScrolledFor.current = playlist.id;
-    const resumeIndex = resolveResumeIndex(tracks, resumePoint);
-    if (resumeIndex !== null) virtualizer.scrollToIndex(resumeIndex, { align: "start" });
-  }, [resumePoint, tracks, playlist.id, virtualizer]);
+    const resumeIndex = resolveResumeIndex(playlistTracks, resumePoint);
+    const resumeRow = resumeIndex === null ? undefined : playlistTracks[resumeIndex];
+    const displayIndex = resumeRow ? tracks.indexOf(resumeRow) : -1;
+    if (displayIndex >= 0) virtualizer.scrollToIndex(displayIndex, { align: "start" });
+  }, [resumePoint, playlistTracks, tracks, playlist.id, virtualizer]);
 
   const gridTemplate = [
     trackNumberColumn(tracks?.length ?? 0),
@@ -180,9 +202,9 @@ export function PlaylistDetail({
     playlistCols.artist ? "minmax(0, 1.25fr)" : null,
     playlistCols.genre ? "minmax(0, 1fr)" : null,
     playlistCols.album ? "minmax(0, 1fr)" : null,
-    playlistCols.year ? "3.5rem" : null,
-    playlistCols.format ? "3.5rem" : null,
-    playlistCols.bitrate ? "4.5rem" : null,
+    playlistCols.year ? YEAR_COLUMN : null,
+    playlistCols.format ? FORMAT_COLUMN : null,
+    playlistCols.bitrate ? BITRATE_COLUMN : null,
     playlistCols.duration ? DURATION_COLUMN : null,
     "2rem",
   ]
@@ -257,7 +279,7 @@ export function PlaylistDetail({
           `INSERT INTO playlist_resume (playlist_id, last_track_id, track_position, updated_at)
          VALUES (?, ?, ?, datetime('now'))
          ON CONFLICT(playlist_id) DO UPDATE SET last_track_id=excluded.last_track_id, track_position=excluded.track_position, updated_at=excluded.updated_at`,
-          [playlist.id, track.id, idx],
+          [playlist.id, track.id, track.position],
         );
       })
       .catch((e) => {
@@ -265,6 +287,14 @@ export function PlaylistDetail({
         // as an error over a track that is already playing fine.
         console.error("Failed to record playlist resume position:", e);
       });
+  }
+
+  function directionOf(field: PlaylistSortField): SortDirection | null {
+    return sort?.field === field ? sort.direction : null;
+  }
+
+  function handleSort(field: PlaylistSortField) {
+    setChosenSort((current) => nextPlaylistSort(current, playlist.id, field));
   }
 
   function handlePlayAll() {
@@ -526,15 +556,36 @@ export function PlaylistDetail({
       <div className="playlist-list-controls">
         <div className="playlist-col-header" style={{ gridTemplateColumns: gridTemplate }}>
           <span className="playlist-col-header-cell">#</span>
-          <span className="playlist-col-header-cell">Title</span>
-          {playlistCols.artist && <span className="playlist-col-header-cell">Artist</span>}
-          {playlistCols.genre && <span className="playlist-col-header-cell">Genre</span>}
-          {playlistCols.album && <span className="playlist-col-header-cell">Album</span>}
-          {playlistCols.year && <span className="playlist-col-header-cell">Year</span>}
-          {playlistCols.format && <span className="playlist-col-header-cell">Format</span>}
-          {playlistCols.bitrate && <span className="playlist-col-header-cell">Bitrate</span>}
+          <SortHeaderButton label="Title" direction={directionOf("title")} onClick={() => handleSort("title")} />
+          {playlistCols.artist && (
+            <SortHeaderButton label="Artist" direction={directionOf("artist")} onClick={() => handleSort("artist")} />
+          )}
+          {playlistCols.genre && (
+            <SortHeaderButton label="Genre" direction={directionOf("genre")} onClick={() => handleSort("genre")} />
+          )}
+          {playlistCols.album && (
+            <SortHeaderButton label="Album" direction={directionOf("album")} onClick={() => handleSort("album")} />
+          )}
+          {playlistCols.year && (
+            <SortHeaderButton label="Year" direction={directionOf("year")} onClick={() => handleSort("year")} />
+          )}
+          {playlistCols.format && (
+            <SortHeaderButton label="Format" direction={directionOf("format")} onClick={() => handleSort("format")} />
+          )}
+          {playlistCols.bitrate && (
+            <SortHeaderButton
+              label="Bitrate"
+              direction={directionOf("bitrate")}
+              onClick={() => handleSort("bitrate")}
+            />
+          )}
           {playlistCols.duration && (
-            <span className="playlist-col-header-cell playlist-col-header-cell--right">Duration</span>
+            <SortHeaderButton
+              label="Duration"
+              direction={directionOf("duration")}
+              onClick={() => handleSort("duration")}
+              alignRight
+            />
           )}
           <span className="playlist-col-header-cell" />
         </div>
@@ -547,7 +598,7 @@ export function PlaylistDetail({
             <SlidersHorizontal size={13} />
           </button>
           {showColPicker && (
-            <div className="tracklist-col-picker-popup tracklist-col-picker-popup--left">
+            <div className="tracklist-col-picker-popup">
               {(
                 [
                   ["artist", "Artist"],

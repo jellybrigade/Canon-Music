@@ -23,9 +23,9 @@ function sourceFiles(dir: string): string[] {
 
 // `{n} albums` in JSX, `${n} albums` in a template, and `n === 1 ? "" : "s"` either way round.
 // Any word ending in s after an interpolation, not a list of nouns: a list missed "1 scrobbles".
-// An attribute (`xmlns:u=`, `tokens={...}`) is not a count.
+// An attribute (`xmlns:u=`, `tokens={...}`) and a `} satisfies` type check are not counts.
 const PLURAL_SHAPES = [
-  /\}\s+[a-z]{2,}s\b(?![=:])/,
+  /\}\s+(?!satisfies\b)[a-z]{2,}s\b(?![=:])/,
   /=== 1 \? ["'](\w*)["'] : ["']\1e?s["']/,
   /!== 1 \? ["'](\w*)e?s["'] : ["']\1["']/,
 ];

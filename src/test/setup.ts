@@ -1,7 +1,8 @@
-// jest-dom's matchers are only meaningful in jsdom, but registering them in node too is
-// harmless and keeps a single setup file for every test environment.
-import "@testing-library/jest-dom/vitest";
 import { afterEach } from "vitest";
+
+// jest-dom's matchers only mean something with a DOM; loading them into every node-only file
+// cost about a second per file.
+if (typeof document !== "undefined") await import("@testing-library/jest-dom/vitest");
 
 // RTL registers its own afterEach(cleanup) only under `globals: true`, which this config does
 // not set. Without this, every render/renderHook stays mounted for the rest of its file and its

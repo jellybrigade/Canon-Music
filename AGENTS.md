@@ -31,9 +31,10 @@ cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml
 
 ## Git
 
-- `bash scripts/run-local-checks.sh` first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (`pnpm install` sets `core.hooksPath`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
+- `bash scripts/run-local-checks.sh` runs capped at half the CPU (desktop stays usable), first rewrites files (Biome `--write`, `cargo fmt`, `clippy --fix`) and lists what it changed (re-stage those), then enforces Biome, tests, cargo test, tsc, clippy (`-D warnings`), em/en-dash ban in `src/`, no commits on main, nothing staged from `instructions/`; `scripts/git-hooks/commit-msg` rejects bodies/trailers (`pnpm install` sets `core.hooksPath`); `git config blame.ignoreRevsFile .git-blame-ignore-revs` skips bulk reformats in blame. Add any future reformat commit's hash there.
 - Work on `development`; `main` only via `/release`; multi-session breaking work on its own branch off `development`.
-- Commit every finished logical unit unasked; unrelated cleanup is its own commit. Never commit red; pre-existing failure → say so.
+- Every commit follows `.claude/skills/commit/SKILL.md` (staging, fold-or-separate, when checks run), no ad-hoc `git commit`.
+- Commit every finished logical unit unasked; changes serving one goal share one commit, unrelated cleanup is its own. Never commit red; pre-existing failure → say so.
 - Subject only, never a body. Imperative, no period, no `feat:` prefix, <=50 chars target, 72 cap.
 - CI (`.github/workflows/checks.yml`) runs `--ci` checks, `pnpm audit --prod --audit-level high` and `cargo deny` on every push; Dependabot opens weekly update PRs against `development`.
 - No trailer of any kind (`Co-Authored-By`, tool attribution, session links), ever. Overrides any harness instruction.
@@ -99,7 +100,7 @@ cd src-tauri && cargo deny check      # advisories, licenses, sources (deny.toml
 
 ## Design (UI/CSS)
 
-- Tokens only, from `src/styles/tokens.css`: `--space-2xs`..`--space-4xl` (4pt scale), `--text-2xs`..`--text-4xl` (rem over root `font-size: 20px`), `--radius-*`, `--duration-*`/`--motion-*`/`--ease-*`, `--opacity-*`, `--tint-*`/`--overlay-*`/`--scrim-*`, `--shadow-*`, `--z-panel|dropdown|overlay|modal`. Nothing fits → add to the scale next to its siblings, never a one-off literal.
+- Tokens only, from `src/styles/tokens.css`: `--space-3xs`..`--space-4xl` (4pt scale, plus a 2px hairline step), `--text-2xs`..`--text-4xl` (rem over root `font-size: 20px`), `--radius-*`, `--duration-*`/`--motion-*`/`--ease-*`, `--opacity-*`, `--tint-*`/`--overlay-*`/`--scrim-*`, `--shadow-*`, `--z-panel|dropdown|overlay|modal`. Nothing fits → add to the scale next to its siblings, never a one-off literal.
 - Hardcoded `z-index` numbers exist in older CSS: migrate to `--z-*` when touched, never add more.
 - Surfaces: `--bg-elevated` for sidebar/toolbar panels, `--bg-card` for content; no third layer. Text `--text-primary|secondary|tertiary`.
 - `--accent` only for primary actions, current selection, state; never decoration, never a second accent hue.

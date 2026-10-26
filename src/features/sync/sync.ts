@@ -16,7 +16,7 @@ import { rebuildTagVocabCache } from "../tags/lib/tagNormalize";
 import { syncLoved } from "./syncLoved";
 import { syncPlaylists } from "./syncPlaylists";
 import { carryPinnedArtistCase, pruneAlbums, pruneAlbumTracks } from "./syncPrune";
-import { carryRenamedTracks, insertTracksBatch, planRenamedTracks, rebuildTracksFts } from "./syncTracks";
+import { healTracksFts, rebuildTracksFts, writeAlbumTracks } from "./syncTracks";
 import {
   clearSyncWatermark,
   mirroredTrackIdsStillResolve,
@@ -164,6 +164,7 @@ export async function syncLibrary(
   // rebuilt per album rather than per server, so collect which albums moved.
   let artistsDirty = false;
   const ftsDirtyAlbumIds = new Set<string>();
+  const renamedAlbumIds: string[] = [];
   const renamedTrackIds: string[] = [];
 
   for (const album of albums) {
@@ -217,7 +218,7 @@ export async function syncLibrary(
         if (!sameValue(existing.artist, album.artist)) artistsDirty = true;
         // The FTS row carries the album name, so a rename dirties it even when
         // no track was fetched.
-        if (!sameValue(existing.name, album.name)) ftsDirtyAlbumIds.add(albumDbId);
+        if (!sameValue(existing.name, album.name)) renamedAlbumIds.push(albumDbId);
       }
     }
 
@@ -252,6 +253,9 @@ export async function syncLibrary(
          release_type = excluded.release_type,
          mb_release_id = excluded.mb_release_id`,
   );
+  // Right after the rename lands: a later failure would leave the old name indexed, and the
+  // next sync sees no rename to rebuild for.
+  await rebuildTracksFts(db, renamedAlbumIds, []);
 
   // `fetchAllAlbums` throws on any failed page, so a returned list is complete and a missing
   // album is a real deletion. An empty list against a non-empty stored library still prunes nothing regardless.
@@ -312,15 +316,17 @@ export async function syncLibrary(
     }
     // Only worth a query for an album that already had rows: on a first sync
     // there is nothing to carry or prune and this would be wasted round trips per album.
-    if (existingTrackCount > 0) {
-      const remaps = await planRenamedTracks(db, server.id, albumDbId, tracks);
-      // Collected whatever the carry reported: an id the carry declined keeps its own track
-      // row, which the prune then takes along with its FTS row, so clearing it here early is
-      // at worst a no-op and never leaves one behind.
-      for (const remap of remaps) renamedTrackIds.push(remap.oldId);
-      remappedTracks += await carryRenamedTracks(albumDbId, remaps);
-    }
-    await insertTracksBatch(db, server.id, server.type, albumDbId, tracks);
+    const written = await writeAlbumTracks(db, {
+      server,
+      albumDbId,
+      tracks,
+      hasStoredTracks: existingTrackCount > 0,
+    });
+    // Collected whatever the carry reported: an id the carry declined keeps its own track
+    // row, which the prune then takes along with its FTS row, so clearing it here early is
+    // at worst a no-op and never leaves one behind.
+    for (const remap of written.remaps) renamedTrackIds.push(remap.oldId);
+    remappedTracks += written.carried;
     if (existingTrackCount > 0) {
       prunedTracks += await pruneAlbumTracks(
         db,
@@ -377,6 +383,7 @@ export async function syncLibrary(
   // Scoped to only the albums that moved; sweeping the whole server rewrote every FTS row
   // for a single changed album. Album ids are server-prefixed, so this is already scoped by server.
   await rebuildTracksFts(db, [...ftsDirtyAlbumIds], renamedTrackIds);
+  await healTracksFts(db, server.id);
 
   const stage = { db, server, credential, altUrl, skippedStages };
   const lovedChanged = await syncLoved(stage);

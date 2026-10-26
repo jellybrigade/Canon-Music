@@ -10,7 +10,8 @@ IS_CI=0
 [ "${1:-}" = "--ci" ] && IS_CI=1
 
 # On a desktop, every check at once starved the session and ran it out of memory. A user scope
-# gives the desktop CPU priority across cgroups (nice can't) and confines an OOM kill to the checks.
+# caps the checks at half the CPU (a weight alone still let them fill every idle core and the
+# desktop stuttered), gives the desktop disk priority and confines an OOM kill to the checks.
 VITEST_ARGS=()
 if [ -z "${CI:-}" ]; then
   HALF_CORES=$(( $(nproc) / 2 > 1 ? $(nproc) / 2 : 1 ))
@@ -23,6 +24,8 @@ if [ -z "${CI:-}" ]; then
     export CANON_CHECKS_SCOPED=1
     exec systemd-run --user --scope --quiet --same-dir \
       -p CPUWeight=20 \
+      -p CPUQuota="$(( HALF_CORES * 100 ))%" \
+      -p IOWeight=10 \
       -p MemoryHigh="$(( TOTAL_MEMORY_KB / 2 ))K" \
       -p MemoryMax="$(( TOTAL_MEMORY_KB * 6 / 10 ))K" \
       bash "$SCRIPT_DIR/$(basename -- "${BASH_SOURCE[0]}")" "$@"
@@ -36,7 +39,14 @@ GREEN="\033[0;32m"; RED="\033[0;31m"; YELLOW="\033[0;33m"; NC="\033[0m"
 
 run_task() {
   local name="$1"; shift
-  ("$@") >"$TMP_DIR/$name.log" 2>&1 &
+  # Timed inside the task: tasks are waited in list order, so the wait would time the slowest one before.
+  (
+    started=$SECONDS
+    "$@"
+    code=$?
+    echo $(( SECONDS - started )) >"$TMP_DIR/$name.seconds"
+    exit "$code"
+  ) >"$TMP_DIR/$name.log" 2>&1 &
   echo $! >"$TMP_DIR/$name.pid"
 }
 
@@ -49,10 +59,12 @@ wait_task() {
 print_status() {
   local name="$1"
   local code; code=$(cat "$TMP_DIR/$name.status")
+  # A task killed outright (the OOM cap) never writes its time.
+  local seconds; seconds=$(cat "$TMP_DIR/$name.seconds" 2>/dev/null || echo "?")
   if [ "$code" -eq 0 ]; then
-    echo -e "${GREEN}ok${NC}   $name"
+    echo -e "${GREEN}ok${NC}   $name (${seconds}s)"
   else
-    echo -e "${RED}FAIL${NC} $name"
+    echo -e "${RED}FAIL${NC} $name (${seconds}s)"
     echo -e "${YELLOW}--- $name log (tail) ---${NC}"
     sed -e 's/^/  /' "$TMP_DIR/$name.log" | tail -n 120
   fi
@@ -142,9 +154,11 @@ fix_phase() {
   local before after changed restage failed=0
   before=$(dirty_fingerprint)
   echo "Fixing formatting and lint..."
+  local started=$SECONDS
   pnpm biome check --write . >"$TMP_DIR/fix-biome.log" 2>&1 || true
   (cd src-tauri && cargo fmt) >"$TMP_DIR/fix-rustfmt.log" 2>&1 || failed=1
   (cd src-tauri && cargo clippy --fix --allow-dirty --allow-staged --all-targets) >"$TMP_DIR/fix-clippy.log" 2>&1 || true
+  echo "Fixers took $(( SECONDS - started ))s."
   after=$(dirty_fingerprint)
   changed=$(LC_ALL=C comm -13 <(echo "$before") <(echo "$after") | awk '{print $2}')
   if [ -n "$changed" ]; then

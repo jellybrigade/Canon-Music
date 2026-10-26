@@ -47,12 +47,14 @@ function toFtsQuery(tokens: string[]): string {
 
 // FTS pool ranked by weighted bm25 (title > artist > album > genre) inside the CTE, so the
 // cap keeps the best hits. MATERIALIZED is required: flattened, SQLite rejects bm25 here.
+// Scoped by server before the cap, or another server's hits fill the pool.
 const RANKED_POOL = 2000;
 const RANKED_CTE = `
   WITH ranked AS MATERIALIZED (
     SELECT fts.id AS id, bm25(tracks_fts, 0.0, 10.0, 8.0, 4.0, 1.0) AS rank
     FROM tracks_fts fts
-    WHERE tracks_fts MATCH ?
+    JOIN tracks pooled ON pooled.id = fts.id
+    WHERE tracks_fts MATCH ? AND pooled.server_id = ?
     ORDER BY rank
     LIMIT ${RANKED_POOL}
   )`;
@@ -76,7 +78,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        GROUP BY a.id
        ORDER BY rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId],
+      [fts, serverId, serverId],
     ),
     db.select<SearchTrack[]>(
       `${RANKED_CTE}
@@ -89,7 +91,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        WHERE t.server_id = ?
        ORDER BY r.rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId],
+      [fts, serverId, serverId],
     ),
     db.select<
       {
@@ -111,7 +113,7 @@ async function runSearch(rawQuery: string, serverId: string): Promise<SearchResu
        GROUP BY t.artist
        ORDER BY rank
        LIMIT ${SECTION_LIMIT}`,
-      [fts, serverId],
+      [fts, serverId, serverId],
     ),
   ]);
 

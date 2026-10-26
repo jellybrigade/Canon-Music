@@ -73,6 +73,7 @@ export function createQueueActions(
       if (queueChanged) set({ queue: newQueue });
       if (newCurrent !== currentTrack) set({ currentTrack: newCurrent });
       if (newSeed !== radioSeed) set({ radioSeed: newSeed });
+      if (queueChanged || newCurrent !== currentTrack) void persistQueueState();
       return newCurrent !== currentTrack;
     },
 

@@ -136,6 +136,14 @@ describe("getStreamUrl", () => {
     expect(params(after).get("maxBitRate")).toBe("320");
   });
 
+  it("streams from the alternate URL once only it answers API calls", async () => {
+    const health = await import("../lib/transportHealth");
+    health.recordTransportSuccess(BASE, "http://192.168.1.5:4533");
+    expect(nav.getStreamUrl(`${BASE}/`, "alice", cred, "tr-1").startsWith("http://192.168.1.5:4533/rest/stream?")).toBe(
+      true,
+    );
+  });
+
   it("omits maxBitRate for a negative bitrate", () => {
     nav.setStreamMaxBitrate(-1);
     expect(nav.getStreamUrl(BASE, "alice", cred, "tr-1")).not.toContain("maxBitRate");
@@ -341,27 +349,33 @@ describe("getArtistImageUrl", () => {
 
 describe("updateCoverProxyConfig", () => {
   /** The single argument object handed to the nth `set_cover_proxy_config` invoke. */
-  function proxyArgs(n = 0): { baseUrl: string; authParams: string } {
+  function proxyArgs(n = 0): { baseUrl: string; altUrl: string | null; authParams: string } {
     const calls = vi.mocked(invoke).mock.calls.filter(([cmd]) => cmd === "set_cover_proxy_config");
-    return calls[n]![1] as { baseUrl: string; authParams: string };
+    return calls[n]![1] as { baseUrl: string; altUrl: string | null; authParams: string };
   }
 
   it("normalizes the base URL and flattens the auth params to a query string", async () => {
-    await nav.updateCoverProxyConfig(`${BASE}/rest/`, "alice", cred);
+    await nav.updateCoverProxyConfig(`${BASE}/rest/`, null, "alice", cred);
     expect(proxyArgs()).toEqual({
       baseUrl: "http://music.example",
+      altUrl: null,
       authParams: "u=alice&t=tok&s=slt&v=1.16.1&c=canon&f=json",
     });
   });
 
+  it("hands Rust the normalized alternate URL so covers can fall back to it", async () => {
+    await nav.updateCoverProxyConfig(BASE, "http://192.168.1.5:4533/", "alice", cred);
+    expect(proxyArgs().altUrl).toBe("http://192.168.1.5:4533");
+  });
+
   it("encodes a space in the username as + inside the flat param string", async () => {
     // Rust concatenates authParams into an upstream query verbatim, where + means space.
-    await nav.updateCoverProxyConfig(BASE, "al ice", cred);
+    await nav.updateCoverProxyConfig(BASE, null, "al ice", cred);
     expect(proxyArgs().authParams).toContain("u=al+ice");
   });
 
   it("carries apiKey and no t/s for an api key credential", async () => {
-    await nav.updateCoverProxyConfig(BASE, "alice", apiKeyCred);
+    await nav.updateCoverProxyConfig(BASE, null, "alice", apiKeyCred);
     const p = new URLSearchParams(proxyArgs().authParams);
     expect(p.get("apiKey")).toBe("key-123");
     expect(p.has("t")).toBe(false);
@@ -369,7 +383,7 @@ describe("updateCoverProxyConfig", () => {
 
   it("propagates an invoke failure instead of swallowing it", async () => {
     vi.mocked(invoke).mockRejectedValueOnce(new Error("no such command"));
-    await expect(nav.updateCoverProxyConfig(BASE, "alice", cred)).rejects.toThrow("no such command");
+    await expect(nav.updateCoverProxyConfig(BASE, null, "alice", cred)).rejects.toThrow("no such command");
   });
 });
 

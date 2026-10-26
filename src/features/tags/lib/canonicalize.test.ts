@@ -285,6 +285,31 @@ describe("findCanonicalSync", () => {
     });
   });
 
+  it("matches a tag that is itself a genre before rewriting it as an alias", () => {
+    const rhythmAndBlues = node({ id: "rhythm-blues", name: "Rhythm & Blues" });
+    const british = node({ id: "british-rhythm-blues", name: "British Rhythm & Blues" });
+    const tree = buildTree([rhythmAndBlues, british, node({ id: "contemporary-r-b", name: "Contemporary R&B" })]);
+    expect(findCanonicalSync("Rhythm and Blues", "genre", tree)).toEqual({ node: rhythmAndBlues, matchType: "exact" });
+    expect(findCanonicalSync("British Rhythm & Blues", "genre", tree)).toEqual({ node: british, matchType: "exact" });
+  });
+
+  it.each([
+    ["K Pop", "K-Pop"],
+    ["Lo Fi", "Lo-fi"],
+    ["hip-hop", "Hip Hop"],
+  ])("matches %s to %s although only hyphens and spaces differ", (raw, name) => {
+    const genre = node({ id: "genre", name });
+    const tree = buildTree([genre, node({ id: "pop", name: "Pop" })]);
+    expect(findCanonicalSync(raw, "genre", tree).node).toBe(genre);
+  });
+
+  it("breaks a spacing tie by id rather than by tree order", () => {
+    const spaced = node({ id: "hyper-techno", name: "Hyper Techno" });
+    const joined = node({ id: "hypertechno", name: "Hypertechno" });
+    expect(findCanonicalSync("Hy Pertechno", "genre", buildTree([joined, spaced])).node).toBe(spaced);
+    expect(findCanonicalSync("Hy Pertechno", "genre", buildTree([spaced, joined])).node).toBe(spaced);
+  });
+
   it("resolves a mapping to null when the mapped id no longer exists in the tree", () => {
     const tree = buildTree([node({ id: "hh", name: "Hip Hop" })]);
     const mappings = new Map([["Old Tag:genre", "deleted-id"]]);
@@ -311,6 +336,26 @@ describe("bustCanonTreeCache", () => {
     freshBust();
     await freshGetCanonTree();
     expect(select).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not keep a tree read that was in flight when the cache was busted", async () => {
+    const userNode = { id: "u1", name: "Brand New Genre", type: "genre", canonical_key: "", parent_ids: "[]" };
+    let releaseFirstRead: (rows: unknown[]) => void = () => {};
+    const select = vi
+      .fn<() => Promise<unknown[]>>()
+      .mockImplementationOnce(() => new Promise((resolve) => (releaseFirstRead = resolve)))
+      .mockImplementation(async () => [userNode]);
+    vi.doMock("../../../db", () => ({ getDb: async () => ({ select }) }));
+    const { getCanonTree: freshGetCanonTree, bustCanonTreeCache: freshBust } = await import("./canonicalize");
+
+    const staleRead = freshGetCanonTree();
+    await vi.waitFor(() => expect(select).toHaveBeenCalledTimes(1));
+    freshBust();
+    releaseFirstRead([]);
+    await staleRead;
+
+    const tree = await freshGetCanonTree();
+    expect(tree.byId.get("u1")?.name).toBe("Brand New Genre");
   });
 });
 

@@ -2,6 +2,7 @@ import { GitMerge, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useArtists } from "../../../hooks/useArtists";
+import { errorMessage } from "../../../lib/errorMessage";
 import { useModalChrome } from "../../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../../ui/useOverlayDismiss";
 import { useSetArtistAlias } from "../hooks/useArtistAliases";
@@ -31,8 +32,12 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
 
   async function handleConfirm() {
     if (!selected) return;
-    await setAlias.mutateAsync({ aliasName: aliasArtistName, canonicalName: selected });
-    onClose();
+    try {
+      await setAlias.mutateAsync({ aliasName: aliasArtistName, canonicalName: selected });
+      onClose();
+    } catch {
+      // Shown from setAlias.error below.
+    }
   }
 
   return createPortal(
@@ -87,6 +92,11 @@ export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
         </div>
 
         <div className="merge-footer">
+          {setAlias.error && (
+            <p className="merge-error" role="alert">
+              Couldn't merge: {errorMessage(setAlias.error)}
+            </p>
+          )}
           <button className="merge-btn" onClick={onClose}>
             Cancel
           </button>

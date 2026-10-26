@@ -1,13 +1,11 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useEffectEvent, useState } from "react";
 import { boundedFetch, UPLOAD_TIMEOUT_MS } from "../clients/boundedFetch";
-import { logger } from "../lib/logger";
+import { formatLogValue, logger } from "../lib/logger";
 import { useModalChrome } from "../ui/useModalChrome";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
 import "./FeedbackModal.css";
-
-const WEBHOOK_URL = import.meta.env.VITE_DISCORD_WEBHOOK as string;
 
 function detectOS(): string {
   const ua = navigator.userAgent;
@@ -15,6 +13,15 @@ function detectOS(): string {
   if (ua.includes("Mac")) return "macOS";
   if (ua.includes("Linux")) return "Linux";
   return "Unknown";
+}
+
+function hostOf(serverUrl: string | undefined): string {
+  if (!serverUrl) return "(none)";
+  try {
+    return new URL(serverUrl).hostname;
+  } catch {
+    return "(unknown)";
+  }
 }
 
 type Category = "bug" | "suggestion" | "general";
@@ -43,6 +50,18 @@ const PLACEHOLDERS: Record<Category, string> = {
   general: "What's on your mind?",
 };
 
+// Discord refuses an embed whose description runs past this, so a longer report rides as a file.
+const DISCORD_DESCRIPTION_LIMIT = 4096;
+const OVERFLOW_NOTE = "\n\n*(full text attached)*";
+
+// Lead surrogate whose trail a cut would drop: sending it alone renders as a broken glyph.
+function sliceWithoutSplitPair(value: string, end: number): string {
+  const code = value.charCodeAt(end - 1);
+  return value.slice(0, code >= 0xd800 && code <= 0xdbff ? end - 1 : end);
+}
+
+const SENT_CLOSE_DELAY_MS = 1400;
+
 const STEPS_PLACEHOLDER = "1. Open the app\n2. …\n3. …";
 
 interface Props {
@@ -61,16 +80,28 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
   const [includeLogs, setIncludeLogs] = useState(true);
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [appVersion, setAppVersion] = useState("…");
+  const webhookUrl = import.meta.env.VITE_DISCORD_WEBHOOK;
 
   useEffect(() => {
-    void getVersion().then(setAppVersion);
+    getVersion()
+      .then(setAppVersion)
+      .catch(() => setAppVersion("unknown"));
   }, []);
 
+  // The parent passes a fresh onClose each render; depending on it would restart the delay.
+  const closeAfterSent = useEffectEvent(() => onClose());
+  useEffect(() => {
+    if (status !== "sent") return;
+    const timer = setTimeout(closeAfterSent, SENT_CLOSE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  const serverHost = hostOf(serverUrl);
   const chrome = useModalChrome(onClose);
   const dismiss = useOverlayDismiss(onClose);
 
   async function submit() {
-    if (status === "sending") return;
+    if (status === "sending" || !webhookUrl) return;
     if (category === "bug") {
       if (!steps.trim()) {
         setStepsError(true);
@@ -81,16 +112,6 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
     }
     setStepsError(false);
     setStatus("sending");
-
-    const serverHost = serverUrl
-      ? (() => {
-          try {
-            return new URL(serverUrl).hostname;
-          } catch {
-            return "(unknown)";
-          }
-        })()
-      : "(none)";
 
     const sysLine = includeSysInfo ? `\n\n*Canon v${appVersion} · ${detectOS()} · ${serverHost}*` : "";
 
@@ -104,24 +125,32 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
       bodyText = text.trim();
     }
 
+    const fullText = bodyText + sysLine;
+    const isOverLimit = fullText.length > DISCORD_DESCRIPTION_LIMIT;
     const embed = {
       title: `${CATEGORY_EMOJI[category]} ${CATEGORY_LABELS[category]}`,
-      description: bodyText + sysLine,
+      description: isOverLimit
+        ? `${sliceWithoutSplitPair(fullText, DISCORD_DESCRIPTION_LIMIT - OVERFLOW_NOTE.length)}${OVERFLOW_NOTE}`
+        : fullText,
       color: CATEGORY_COLOR[category],
       timestamp: new Date().toISOString(),
     };
 
     try {
       const payload = { embeds: [embed] };
+      const attachments: { name: string; text: string }[] = [];
+      if (isOverLimit) attachments.push({ name: "canon-feedback.txt", text: fullText });
+      if (includeLogs) attachments.push({ name: "canon-logs.txt", text: await logger.getRecent(500) });
       let res: Response;
-      if (includeLogs) {
-        const logText = await logger.getRecent(500);
+      if (attachments.length > 0) {
         const form = new FormData();
         form.append("payload_json", JSON.stringify(payload));
-        form.append("files[0]", new Blob([logText], { type: "text/plain" }), "canon-logs.txt");
-        res = await boundedFetch(WEBHOOK_URL, { method: "POST", body: form }, { headersTimeoutMs: UPLOAD_TIMEOUT_MS });
+        attachments.forEach(({ name, text: content }, index) => {
+          form.append(`files[${index}]`, new Blob([content], { type: "text/plain" }), name);
+        });
+        res = await boundedFetch(webhookUrl, { method: "POST", body: form }, { headersTimeoutMs: UPLOAD_TIMEOUT_MS });
       } else {
-        res = await boundedFetch(WEBHOOK_URL, {
+        res = await boundedFetch(webhookUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -129,8 +158,8 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
       }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setStatus("sent");
-      setTimeout(onClose, 1400);
-    } catch {
+    } catch (err) {
+      logger.error(`Feedback send failed: ${formatLogValue(err)}`);
       setStatus("error");
     }
   }
@@ -203,7 +232,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
               <span>Include system info</span>
               {includeSysInfo && (
                 <span className="feedback-sysinfo-detail">
-                  v{appVersion} · {detectOS()}
+                  v{appVersion} · {detectOS()} · {serverHost}
                 </span>
               )}
             </label>
@@ -213,6 +242,9 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
             </label>
           </div>
           <div className="feedback-footer-right">
+            {!webhookUrl && (
+              <span className="feedback-status feedback-status--error">This build can't send feedback</span>
+            )}
             {status === "error" && (
               <span className="feedback-status feedback-status--error">Send failed, try again</span>
             )}
@@ -222,7 +254,7 @@ export function FeedbackModal({ serverUrl, onClose, initialCategory, initialText
               <button
                 className="feedback-submit"
                 onClick={() => void submit()}
-                disabled={(category === "bug" ? !steps.trim() : !text.trim()) || status === "sending"}
+                disabled={(category === "bug" ? !steps.trim() : !text.trim()) || status === "sending" || !webhookUrl}
               >
                 {status === "sending" ? "Sending…" : "Send"}
               </button>

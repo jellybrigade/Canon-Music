@@ -37,6 +37,7 @@ interface ServerHealth {
 }
 
 const health = new Map<string, ServerHealth>();
+const answeringRoutes = new Map<string, string>();
 
 function healthFor(baseUrl: string): ServerHealth {
   const existing = health.get(baseUrl);
@@ -54,10 +55,22 @@ function healthFor(baseUrl: string): ServerHealth {
 
 export function resetTransportHealth(): void {
   health.clear();
+  answeringRoutes.clear();
 }
 
-export function recordTransportSuccess(baseUrl: string): void {
+/** `route` is the address that answered for `baseUrl`, which is the alt URL when the primary is unreachable. */
+export function recordTransportSuccess(baseUrl: string, route = baseUrl): void {
   health.delete(baseUrl);
+  cappedSet(answeringRoutes, baseUrl, route, MAX_TRACKED_SERVERS);
+}
+
+/** An edited server's addresses may no longer include the one that last answered. */
+export function forgetAnsweringRoute(baseUrl: string): void {
+  answeringRoutes.delete(baseUrl);
+}
+
+export function lastAnsweringRoute(baseUrl: string): string | undefined {
+  return answeringRoutes.get(baseUrl);
 }
 
 /** A request refused without being sent because the breaker is open. It says nothing about

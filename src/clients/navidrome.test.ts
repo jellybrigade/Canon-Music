@@ -428,6 +428,38 @@ describe("non-idempotent endpoints", () => {
     expect(urls()).toEqual(["http://music.example/rest/updatePlaylist"]);
   });
 
+  it("sends a scrobble to the alt url once only the alt url has answered", async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve().then(() => {
+        if (url.startsWith(BASE)) throw new TypeError("Load failed");
+        return ok();
+      }),
+    );
+
+    await settle(starTrack(BASE, "alice", cred, "tr-1", ALT));
+    fetchMock.mockClear();
+    await settle(scrobbleTrack(BASE, "alice", cred, "tr-1", 1000, ALT));
+
+    expect(urls()).toEqual(["http://192.168.1.5:4533/rest/scrobble.view"]);
+  });
+
+  it("tries the route that last answered first", async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve().then(() => {
+        if (url.startsWith(BASE)) throw new TypeError("Load failed");
+        return ok({ status: "ok", starred2: {} });
+      }),
+    );
+
+    await settle(fetchStarred2(BASE, "alice", cred, ALT));
+    fetchMock.mockClear();
+    fetchMock.mockImplementation(() => Promise.resolve(ok({ status: "ok", starred2: {} })));
+    await settle(fetchStarred2(BASE, "alice", cred, ALT));
+    await settle(fetchStarred2(BASE, "alice", cred));
+
+    expect(urls()).toEqual(["http://192.168.1.5:4533/rest/getStarred2", "http://music.example/rest/getStarred2"]);
+  });
+
   it("still tries the alt url for an idempotent endpoint that rejects", async () => {
     fetchMock.mockRejectedValue(new TypeError("Load failed"));
 
@@ -789,7 +821,6 @@ describe("fetchAllAlbums", () => {
     fetchMock
       .mockRejectedValueOnce(new TypeError("Load failed"))
       .mockResolvedValueOnce(albumPage(PAGE_SIZE))
-      .mockRejectedValueOnce(new TypeError("Load failed"))
       .mockResolvedValueOnce(albumPage(0));
 
     await settle(fetchAllAlbums(BASE, "alice", cred, ALT));
@@ -797,7 +828,6 @@ describe("fetchAllAlbums", () => {
     expect(urls()).toEqual([
       "http://music.example/rest/getAlbumList2",
       "http://192.168.1.5:4533/rest/getAlbumList2",
-      "http://music.example/rest/getAlbumList2",
       "http://192.168.1.5:4533/rest/getAlbumList2",
     ]);
   });

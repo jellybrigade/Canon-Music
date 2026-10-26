@@ -85,7 +85,9 @@ fn parse_subsonic_error(head: &[u8]) -> Option<(i64, String)> {
     }
 
     let code = xml_attribute(&text, "code")?.parse::<i64>().ok()?;
-    let message = xml_attribute(&text, "message").unwrap_or_default();
+    let message = xml_attribute(&text, "message")
+        .map(|raw| decode_xml_entities(&raw))
+        .unwrap_or_default();
     Some((code, message))
 }
 
@@ -95,6 +97,50 @@ fn xml_attribute(text: &str, name: &str) -> Option<String> {
     let rest = &text[start..];
     let end = rest.find('"')?;
     Some(rest[..end].to_string())
+}
+
+// One pass, so `&amp;quot;` comes out as `&quot;`, not `"`. Numeric references matter:
+// Navidrome is Go, whose XML encoder writes `'` and `"` as `&#39;` and `&#34;`.
+fn decode_xml_entities(raw: &str) -> String {
+    let mut decoded = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(start) = rest.find('&') {
+        decoded.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let entity = rest
+            .find(';')
+            .and_then(|end| decode_xml_entity(&rest[1..end]).map(|ch| (ch, end)));
+        match entity {
+            Some((ch, end)) => {
+                decoded.push(ch);
+                rest = &rest[end + 1..];
+            }
+            None => {
+                decoded.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    decoded.push_str(rest);
+    decoded
+}
+
+fn decode_xml_entity(name: &str) -> Option<char> {
+    match name {
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "amp" => Some('&'),
+        _ => {
+            let number = name.strip_prefix('#')?;
+            let code = match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => number.parse::<u32>().ok()?,
+            };
+            char::from_u32(code)
+        }
+    }
 }
 
 fn subsonic_failure(code: i64, message: String) -> StreamFailure {
@@ -137,8 +183,14 @@ fn snippet(head: &[u8]) -> Option<String> {
 /// passed to the decoder, which knows more formats than this function does.
 pub fn classify_stream_response(status: u16, content_type: &str, head: &[u8]) -> StreamVerdict {
     if !(200..300).contains(&status) {
+        if let Some((code, message)) = parse_subsonic_error(head) {
+            return StreamVerdict::Failure(subsonic_failure(code, message));
+        }
         let message = match status {
-            404 => "This track is not on the server anymore".to_string(),
+            // A bare 404 with no Subsonic answer means the address missed the server (a wrong
+            // URL or proxy path), not that the track is gone: that one comes back as error 70.
+            404 => "The server address did not lead to this track (HTTP 404). Check the server URL in Settings"
+                .to_string(),
             401 | 403 => {
                 "The server rejected the request. Check the server credentials in Settings"
                     .to_string()
@@ -405,7 +457,8 @@ mod tests {
     #[test]
     fn keeps_the_http_status_messages_it_took_over() {
         let f = failure(classify_stream_response(404, "text/html", b""));
-        assert_eq!(f.message, "This track is not on the server anymore");
+        assert!(f.message.contains("server address"), "{}", f.message);
+        assert!(!f.message.contains("not on the server"), "{}", f.message);
         assert!(!f.retryable);
 
         let f = failure(classify_stream_response(401, "", b""));
@@ -466,5 +519,30 @@ mod tests {
             None,
             b"<html><body>Proxy error</body></html>"
         ));
+    }
+
+    #[test]
+    fn reads_a_subsonic_envelope_behind_a_404() {
+        let body = br#"{"subsonic-response":{"status":"failed","error":{"code":70,"message":"Song not found"}}}"#;
+        let f = failure(classify_stream_response(404, "application/json", body));
+        assert_eq!(f.subsonic_code, Some(70));
+        assert!(f.message.contains("Resync"), "{}", f.message);
+    }
+
+    #[test]
+    fn decodes_xml_entities_in_an_error_message() {
+        let body = br#"<subsonic-response status="failed"><error code="0" message="Can&apos;t open &quot;a &amp; b&quot; &lt;x&gt;"/></subsonic-response>"#;
+        let f = failure(classify_stream_response(200, "text/xml", body));
+        assert_eq!(f.detail.as_deref(), Some(r#"Can't open "a & b" <x>"#));
+    }
+
+    #[test]
+    fn decodes_the_numeric_references_go_writes() {
+        let body = br#"<subsonic-response status="failed"><error code="0" message="Can&#39;t open &#34;x&#34; &#x26;amp; &amp;quot; &bogus;"/></subsonic-response>"#;
+        let f = failure(classify_stream_response(200, "text/xml", body));
+        assert_eq!(
+            f.detail.as_deref(),
+            Some(r#"Can't open "x" &amp; &quot; &bogus;"#)
+        );
     }
 }

@@ -1,7 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { authenticate, authenticateWithApiKey, fetchAndStoreOpenSubsonicExtensions } from "../../../clients/navidrome";
-import type { NavidromeCredential } from "../../../clients/navidromeUrls";
+import { type NavidromeCredential, normalizeUrl } from "../../../clients/navidromeUrls";
 import { getDb } from "../../../db";
 import { useCredentialRejected } from "../../../hooks/useCredentialRejected";
 import type { ServerWithCredential } from "../../../hooks/useServer";
@@ -9,6 +9,7 @@ import { clearCredentialRejection } from "../../../lib/credentialRejections";
 import { errorMessage } from "../../../lib/errorMessage";
 import { keychain } from "../../../lib/keychain";
 import { QK } from "../../../lib/queryKeys";
+import { forgetAnsweringRoute } from "../../../lib/transportHealth";
 import type { Server as ServerRow } from "../../../types/server";
 import { loginFailureMessage } from "../../setup/loginFailureMessage";
 import type { SyncOptions } from "../../sync/sync";
@@ -178,8 +179,12 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
         id,
         cleanAltUrl ?? undefined,
       );
-      if (server) clearCredentialRejection(server.url);
+      if (server) {
+        clearCredentialRejection(server.url);
+        forgetAnsweringRoute(normalizeUrl(server.url));
+      }
       clearCredentialRejection(cleanUrl);
+      forgetAnsweringRoute(normalizeUrl(cleanUrl));
       await queryClient.invalidateQueries({ queryKey: QK.servers() });
       await queryClient.invalidateQueries({ queryKey: QK.serverCredential(id) });
       setServerEditing(false);
@@ -213,6 +218,7 @@ export function ServerTab({ server, serverWithCredential, onRemoveServer, search
       const db = await getDb();
       await purgeServerData(db, server.id);
       await db.execute("DELETE FROM servers WHERE id=?", [server.id]);
+      forgetAnsweringRoute(normalizeUrl(server.url));
       onRemoveServer();
     } catch (err) {
       setRemoveError(errorMessage(err));

@@ -29,14 +29,17 @@ export interface FindResult {
 }
 
 let cachedTree: CanonTree | null = null;
+let treeGeneration = 0;
 
 export function bustCanonTreeCache(): void {
   cachedTree = null;
+  treeGeneration++;
 }
 
 export async function getCanonTree(): Promise<CanonTree> {
   if (cachedTree) return cachedTree;
 
+  const startGeneration = treeGeneration;
   const db = await getDb();
   type UserNode = { id: string; name: string; type: string; canonical_key: string; parent_ids: string };
   const userRows = await db.select<UserNode[]>("SELECT * FROM user_tree_nodes");
@@ -86,8 +89,10 @@ export async function getCanonTree(): Promise<CanonTree> {
     if (!kindKeyMap.has(n.canonical_key)) kindKeyMap.set(n.canonical_key, n);
   }
 
-  cachedTree = { nodes, byKey, byId, nodesByKind, byKindAndKey };
-  return cachedTree;
+  const tree = { nodes, byKey, byId, nodesByKind, byKindAndKey };
+  // A user tree edit during the read busted the cache; this tree may predate it, so don't keep it.
+  if (treeGeneration === startGeneration) cachedTree = tree;
+  return tree;
 }
 
 const RAW_ALIASES: Record<string, string> = {
@@ -185,8 +190,33 @@ function allowedFuzzyDistance(key: string, candidateKey: string): number {
   return Math.min(FUZZY_MAX_DISTANCE, Math.floor(Math.min(key.length, candidateKey.length) / 5));
 }
 
-/** Ties are broken by id, so tree order never decides which genre a tag lands on. */
+function withoutSpaces(key: string): string {
+  return key.replace(/ /g, "");
+}
+
+const joinedKeyIndexes = new WeakMap<TreeNode[], Map<string, TreeNode>>();
+
+/** Lowest id wins a shared joined key; built once per node list, not per lookup. */
+function joinedKeyIndex(kindNodes: TreeNode[]): Map<string, TreeNode> {
+  let index = joinedKeyIndexes.get(kindNodes);
+  if (index) return index;
+  index = new Map();
+  for (const node of kindNodes) {
+    const joined = withoutSpaces(node.canonical_key);
+    const existing = index.get(joined);
+    if (!existing || node.id < existing.id) index.set(joined, node);
+  }
+  joinedKeyIndexes.set(kindNodes, index);
+  return index;
+}
+
+/**
+ * Ties are broken by id, so tree order never decides which genre a tag lands on.
+ * Keys that differ only in spacing count as distance 0: "lo fi" and "Lo-fi" ("lofi") are too short to fuzzy match.
+ */
 function findFuzzy(key: string, kindNodes: TreeNode[]): TreeNode | null {
+  const spacingMatch = joinedKeyIndex(kindNodes).get(withoutSpaces(key));
+  if (spacingMatch) return spacingMatch;
   if (key.length < FUZZY_MIN_KEY_LENGTH) return null;
   let bestNode: TreeNode | null = null;
   let bestDist = FUZZY_MAX_DISTANCE + 1;
@@ -242,51 +272,6 @@ export function getAncestorIds(node: TreeNode, byId: Map<string, TreeNode>): str
   return result;
 }
 
-export async function findCanonical(
-  rawValue: string,
-  kind: TagKind,
-  existingMappings?: Map<string, string>,
-): Promise<FindResult> {
-  const tree = await getCanonTree();
-  const key = canonicalKey(applyAliases(rawValue));
-
-  if (existingMappings) {
-    const mappedId = existingMappings.get(`${rawValue}:${kind}`);
-    if (mappedId) {
-      const node = tree.byId.get(mappedId) ?? null;
-      return { node, matchType: "mapping" };
-    }
-  }
-
-  const kindKeyMap = tree.byKindAndKey.get(kind);
-  const kindNodes = tree.nodesByKind.get(kind) ?? [];
-
-  const exact = kindKeyMap?.get(key);
-  if (exact) return { node: exact, matchType: "exact" };
-
-  // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
-  const crossType = tree.byKey.get(key);
-  if (crossType) return { node: crossType, matchType: "cross-type" };
-
-  // Fallback aliases (e.g. "rap" → "hip hop"): only tried when primary key fails,
-  // so "gangsta rap" still matches its tree node before trying "gangsta hip hop".
-  const fallbackRaw = applyFallbackAliases(rawValue);
-  if (fallbackRaw !== rawValue) {
-    const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
-    if (fallbackKey !== key) {
-      const fallbackExact = kindKeyMap?.get(fallbackKey);
-      if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
-      const fallbackCross = tree.byKey.get(fallbackKey);
-      if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
-    }
-  }
-
-  const fuzzy = findFuzzy(key, kindNodes);
-  if (fuzzy) return { node: fuzzy, matchType: "fuzzy" };
-
-  return { node: null, matchType: "none" };
-}
-
 export function findCanonicalSync(
   rawValue: string,
   kind: TagKind,
@@ -306,22 +291,15 @@ export function findCanonicalSync(
   const kindKeyMap = tree.byKindAndKey.get(kind);
   const kindNodes = tree.nodesByKind.get(kind) ?? [];
 
-  const exact = kindKeyMap?.get(key);
-  if (exact) return { node: exact, matchType: "exact" };
-
-  // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
-  const crossType = tree.byKey.get(key);
-  if (crossType) return { node: crossType, matchType: "cross-type" };
-
-  const fallbackRaw = applyFallbackAliases(rawValue);
-  if (fallbackRaw !== rawValue) {
-    const fallbackKey = canonicalKey(applyAliases(fallbackRaw));
-    if (fallbackKey !== key) {
-      const fallbackExact = kindKeyMap?.get(fallbackKey);
-      if (fallbackExact) return { node: fallbackExact, matchType: "exact" };
-      const fallbackCross = tree.byKey.get(fallbackKey);
-      if (fallbackCross) return { node: fallbackCross, matchType: "cross-type" };
-    }
+  // The raw key goes first so a tag that is itself a genre ("Rhythm & Blues") isn't aliased away from it.
+  // Fallback aliases (e.g. "rap" → "hip hop") go last, so "gangsta rap" matches its own node first.
+  const lookupKeys = new Set([canonicalKey(rawValue), key, canonicalKey(applyAliases(applyFallbackAliases(rawValue)))]);
+  for (const lookupKey of lookupKeys) {
+    const exact = kindKeyMap?.get(lookupKey);
+    if (exact) return { node: exact, matchType: "exact" };
+    // Cross-type exact match (e.g. server genre "Lo-Fi" matching mood-typed descriptor node)
+    const crossType = tree.byKey.get(lookupKey);
+    if (crossType) return { node: crossType, matchType: "cross-type" };
   }
 
   const fuzzy = findFuzzy(key, kindNodes);

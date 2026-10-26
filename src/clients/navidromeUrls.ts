@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { lastAnsweringRoute } from "../lib/transportHealth";
 
 let _streamMaxBitrate = 0;
 let _coverServerReady = false;
@@ -14,12 +15,14 @@ export function isCoverServerReady(): boolean {
 
 export async function updateCoverProxyConfig(
   baseUrl: string,
+  altUrl: string | null,
   username: string,
   credential: NavidromeCredential,
 ): Promise<void> {
   const params = buildAuthParams(username, credential);
   await invoke("set_cover_proxy_config", {
     baseUrl: normalizeUrl(baseUrl),
+    altUrl: altUrl ? normalizeUrl(altUrl) : null,
     authParams: params.toString(),
   });
 }
@@ -66,7 +69,8 @@ export function getCoverArtUrl(
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);
   params.set("size", String(px));
-  return `${normalizeUrl(baseUrl)}/rest/getCoverArt?${params.toString()}`;
+  const server = normalizeUrl(baseUrl);
+  return `${lastAnsweringRoute(server) ?? server}/rest/getCoverArt?${params.toString()}`;
 }
 
 /** Routes an external artist portrait URL (Last.fm/Wikidata) through the Rust
@@ -90,5 +94,8 @@ export function getStreamUrl(
   if (_streamMaxBitrate > 0) {
     params.set("maxBitRate", String(_streamMaxBitrate));
   }
-  return `${normalizeUrl(baseUrl)}/rest/stream?${params.toString()}`;
+  // Built at play time, so a stream follows whichever of the server's addresses last
+  // answered an API call; with only the alternate URL reachable, the primary would never play.
+  const server = normalizeUrl(baseUrl);
+  return `${lastAnsweringRoute(server) ?? server}/rest/stream?${params.toString()}`;
 }

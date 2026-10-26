@@ -164,6 +164,28 @@ describe("useSearch FTS pool ranking and caps", () => {
     expect(res.tracks[0]!.id).toBe("exact");
   });
 
+  it("fills the ranked pool from this server only, so another server's better hits can't crowd it out", async () => {
+    seedAlbum({ id: "other-alb", serverId: OTHER, name: "Other Album" });
+    const insertTrack = db.raw.prepare(
+      `INSERT INTO tracks (id, server_id, server_type, title, artist, album_id, genre)
+       VALUES (?, ?, 'navidrome', 'Love', 'Filler', 'other-alb', NULL)`,
+    );
+    const insertFts = db.raw.prepare(
+      `INSERT INTO tracks_fts (id, title, artist, album, genre) VALUES (?, 'Love', 'Filler', 'Other Album', '')`,
+    );
+    db.raw.transaction(() => {
+      for (let i = 0; i < 2100; i++) {
+        insertTrack.run(`o${i}`, OTHER);
+        insertFts.run(`o${i}`);
+      }
+    })();
+    seedPair({ key: "mine", albumName: "Mine", trackTitle: "Love Is a Long Song Title Here", artist: "Me" });
+
+    const res = await search("love");
+
+    expect(res.tracks.map((t) => t.id)).toEqual(["mine-trk"]);
+  });
+
   it("ranks a title hit above a hit that only matched the genre column", async () => {
     seedPair({ key: "t", albumName: "A", trackTitle: "Jazz Hands", artist: "X" });
     seedPair({ key: "g", albumName: "B", trackTitle: "Jazz Standard", artist: "Y", genre: "jazz" });
@@ -239,6 +261,7 @@ describe("useSearch server scoping", () => {
     seedAlbum({ id: "odd-alb", serverId: OTHER, name: "Odd Album" });
     // The album belongs to OTHER, so the album section (filtered on a.server_id) drops it.
     seedTrack({ id: "odd-trk", serverId: SRV, title: "Odd Song", artist: "Odd", albumId: "odd-alb" });
+    seedTrack({ id: "odd-own-trk", serverId: OTHER, title: "Odd Tune", artist: "Odd", albumId: "odd-alb" });
     seedPair({ key: "same", albumName: "Odd Sibling", trackTitle: "Odd Sibling Song", artist: "Odd" });
 
     const mine = await search("odd", SRV);

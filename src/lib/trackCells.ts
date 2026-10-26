@@ -25,4 +25,9 @@ export function trackNumberColumn(trackCount: number): string {
   return `calc(${digits}ch + var(--track-number-padding-start) + var(--track-number-padding-end))`;
 }
 
-export const DURATION_COLUMN = "4.5rem";
+// Fixed columns are as wide as their uppercase header label plus its sort arrow; the cells under them are narrower.
+export const YEAR_COLUMN = "3.75rem";
+export const FORMAT_COLUMN = "4.5rem";
+export const BITRATE_COLUMN = "5rem";
+export const PLAYS_COLUMN = "4rem";
+export const DURATION_COLUMN = "5.5rem";

@@ -18,6 +18,7 @@ import { authenticate } from "../../../clients/navidrome";
 import { getDb } from "../../../db";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { isCredentialRejected, noteEnvelope, resetCredentialRejections } from "../../../lib/credentialRejections";
+import { lastAnsweringRoute, recordTransportSuccess, resetTransportHealth } from "../../../lib/transportHealth";
 import { onInvoke, resetTauriMocks } from "../../../test/mocks/tauri";
 import type { Server as ServerRow } from "../../../types/server";
 import { ServerTab } from "./ServerTab";
@@ -63,6 +64,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   resetCredentialRejections();
+  resetTransportHealth();
   vi.restoreAllMocks();
 });
 
@@ -106,5 +108,23 @@ describe("ServerTab refused credential", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy());
     expect(isCredentialRejected(SERVER.url)).toBe(false);
     expect(screen.queryByText(REFUSED)).toBeNull();
+  });
+
+  it("forgets which address last answered once the server is saved", async () => {
+    const user = userEvent.setup();
+    vi.mocked(authenticate).mockResolvedValue({ type: "md5", token: "t", salt: "s" } as never);
+    recordTransportSuccess(SERVER.url, "http://192.168.1.5:4533");
+    refuse();
+    renderTab();
+
+    await user.click(screen.getByRole("button", { name: "Reconnect" }));
+    await user.type(screen.getByPlaceholderText("Enter password to re-test"), "new-password");
+    await user.click(screen.getByRole("button", { name: "Test connection" }));
+    await waitFor(() => expect(screen.getByText("Connection successful.")).toBeTruthy());
+    expect(lastAnsweringRoute(SERVER.url)).toBe("http://192.168.1.5:4533");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy());
+    expect(lastAnsweringRoute(SERVER.url)).toBeUndefined();
   });
 });
