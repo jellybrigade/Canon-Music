@@ -99,13 +99,48 @@ fn xml_attribute(text: &str, name: &str) -> Option<String> {
     Some(rest[..end].to_string())
 }
 
-// `&amp;` last, so an escaped entity like `&amp;quot;` comes out as `&quot;`, not `"`.
+// One pass, so `&amp;quot;` comes out as `&quot;`, not `"`. Numeric references matter:
+// Navidrome is Go, whose XML encoder writes `'` and `"` as `&#39;` and `&#34;`.
 fn decode_xml_entities(raw: &str) -> String {
-    raw.replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&amp;", "&")
+    let mut decoded = String::with_capacity(raw.len());
+    let mut rest = raw;
+    while let Some(start) = rest.find('&') {
+        decoded.push_str(&rest[..start]);
+        rest = &rest[start..];
+        let entity = rest
+            .find(';')
+            .and_then(|end| decode_xml_entity(&rest[1..end]).map(|ch| (ch, end)));
+        match entity {
+            Some((ch, end)) => {
+                decoded.push(ch);
+                rest = &rest[end + 1..];
+            }
+            None => {
+                decoded.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    decoded.push_str(rest);
+    decoded
+}
+
+fn decode_xml_entity(name: &str) -> Option<char> {
+    match name {
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "amp" => Some('&'),
+        _ => {
+            let number = name.strip_prefix('#')?;
+            let code = match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => number.parse::<u32>().ok()?,
+            };
+            char::from_u32(code)
+        }
+    }
 }
 
 fn subsonic_failure(code: i64, message: String) -> StreamFailure {
@@ -499,5 +534,15 @@ mod tests {
         let body = br#"<subsonic-response status="failed"><error code="0" message="Can&apos;t open &quot;a &amp; b&quot; &lt;x&gt;"/></subsonic-response>"#;
         let f = failure(classify_stream_response(200, "text/xml", body));
         assert_eq!(f.detail.as_deref(), Some(r#"Can't open "a & b" <x>"#));
+    }
+
+    #[test]
+    fn decodes_the_numeric_references_go_writes() {
+        let body = br#"<subsonic-response status="failed"><error code="0" message="Can&#39;t open &#34;x&#34; &#x26;amp; &amp;quot; &bogus;"/></subsonic-response>"#;
+        let f = failure(classify_stream_response(200, "text/xml", body));
+        assert_eq!(
+            f.detail.as_deref(),
+            Some(r#"Can't open "x" &amp; &quot; &bogus;"#)
+        );
     }
 }
