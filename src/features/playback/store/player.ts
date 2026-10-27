@@ -12,6 +12,7 @@ import { createPlayerWaveform } from "./playerWaveform";
 import { createQueueActions } from "./queueActions";
 import { buildShuffleOrder, resolveTrack } from "./queueOrder";
 import { computeReplayGainLinear } from "./replayGain";
+import { withdrawGaplessHandOffIfNotNext } from "./withdrawGaplessHandOff";
 
 const PREV_RESTART_THRESHOLD_S = 3;
 // Timers stop during suspend while the deadline is wall-clock, so the sleep timer re-checks
@@ -480,6 +481,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         const { currentTrack, isShuffled } = get();
         if (action === "replace" && currentTrack) {
           set({ queue: [currentTrack], queueIndex: 0, shuffleOrder: isShuffled ? [0] : [] });
+          withdrawGaplessHandOffIfNotNext(get());
           void persistQueueState();
         }
       } else if (action === "replace") {
