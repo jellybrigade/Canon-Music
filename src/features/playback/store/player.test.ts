@@ -2078,6 +2078,16 @@ describe("player store - startRadioFrom", () => {
     expect(audioPlayCount()).toBe(1);
   });
 
+  it("queue_last with nothing loaded plays the first appended track when the queue cap trims the head", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    usePlayerStore.setState({ queue: makeTracks(5), queueIndex: 3, currentTrack: null, maxQueueSize: 5 });
+    const tracks = [makeTrack("r1"), makeTrack("r2"), makeTrack("r3")];
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, streamUrlFor });
+
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("r1");
+  });
+
   it("queue_last seeds radio from the explicit seed, not the first of several tracks", async () => {
     onInvoke("audio_play", () => Promise.resolve(undefined));
     usePlayerStore.setState({ queue: makeTracks(2), queueIndex: 0, currentTrack: makeTrack("0"), isPlaying: true });

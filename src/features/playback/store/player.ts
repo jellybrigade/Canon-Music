@@ -488,9 +488,9 @@ export const usePlayerStore = create<PlayerState>((set, get) => {
         await get().playQueue(tracks, streamUrlFor, 0);
       } else {
         const hadTrack = get().currentTrack !== null;
-        const firstAppended = get().queue.length;
         get().addManyToQueue(tracks, streamUrlFor);
-        if (!hadTrack) await get().playFromQueueIndex(Math.min(firstAppended, get().queue.length - 1));
+        // The queue cap trims only from the head, so the appended tracks are always its tail.
+        if (!hadTrack) await get().playFromQueueIndex(Math.max(0, get().queue.length - tracks.length));
       }
       get().startRadio(radioSeed, mode, label);
     },
