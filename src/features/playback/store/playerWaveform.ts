@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getDb } from "../../../db";
-import { WAVEFORM_BAR_COUNT, WAVEFORM_STUB_PEAK } from "../lib/waveformDisplay";
+import { WAVEFORM_BAR_COUNT, WAVEFORM_STUB_PEAK, waveformStreamUrl } from "../lib/waveformDisplay";
 import { runtime, waveformInFlight } from "./playerRuntime";
 import type { PlayerGet, PlayerSet } from "./playerTypes";
 import { resolveTrack } from "./queueOrder";
@@ -49,17 +49,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
         const rows = await db.select<Row[]>("SELECT peaks_json FROM waveform_cache WHERE track_id = ?", [track.id]);
         if (rows[0]) continue;
 
-        const rawUrl = streamUrlFor(track);
-        const waveformUrl = (() => {
-          try {
-            const u = new URL(rawUrl);
-            u.searchParams.set("maxBitRate", "32");
-            u.searchParams.set("format", "mp3");
-            return u.toString();
-          } catch {
-            return rawUrl;
-          }
-        })();
+        const waveformUrl = waveformStreamUrl(streamUrlFor(track));
 
         // Result is cached by the global waveform_complete listener registered above.
         waveformInFlight.add(track.id);
@@ -150,18 +140,7 @@ export function createPlayerWaveform(set: PlayerSet, get: PlayerGet) {
         unlistenComplete();
       };
 
-      // Request low-bitrate audio for analysis, Navidrome transcodes to ~64kbps mono,
-      // 4-8x less data to download and decode vs full-quality stream.
-      const waveformUrl = (() => {
-        try {
-          const u = new URL(url);
-          u.searchParams.set("maxBitRate", "32");
-          u.searchParams.set("format", "mp3");
-          return u.toString();
-        } catch {
-          return url;
-        }
-      })();
+      const waveformUrl = waveformStreamUrl(url);
       // A preload pass may already be extracting this track; its events are broadcast, so the
       // listeners above still receive them. Invoking again would corrupt the shared temp file.
       if (!waveformInFlight.has(trackId)) {

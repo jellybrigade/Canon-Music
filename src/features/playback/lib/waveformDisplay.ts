@@ -25,3 +25,16 @@ export function fitWaveformPeaks(peaks: readonly number[], width: number, barPit
     return loudest;
   });
 }
+
+// Navidrome transcodes to low-bitrate mp3 for analysis: several times less to download and
+// decode than the full-quality stream, and the 200 peaks can't tell the difference.
+export function waveformStreamUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.set("maxBitRate", "32");
+    u.searchParams.set("format", "mp3");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}

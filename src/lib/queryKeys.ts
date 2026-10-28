@@ -113,6 +113,7 @@ export const QK = {
   settingsAll: () => ["settings"] as const,
   scrobbleQueueCount: (serverId?: string) => ["scrobble_queue", "count", serverId] as const,
   replayGainCoverage: (serverId: string | undefined) => ["replay-gain-coverage", serverId] as const,
+  waveformsMissingCount: (serverId: string | undefined) => ["waveforms", "missing-count", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,

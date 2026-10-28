@@ -26,7 +26,7 @@ function renderTab(serverId: string | undefined) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <PlaybackTab searchQuery="" serverId={serverId} />
+      <PlaybackTab searchQuery="" serverId={serverId} serverWithCredential={undefined} />
     </QueryClientProvider>,
   );
 }

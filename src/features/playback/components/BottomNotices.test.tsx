@@ -8,6 +8,10 @@ vi.mock("../../../hooks/useSetting", () => ({
   useSetting: (_key: string, def: string) => [def, async () => {}, true],
 }));
 vi.mock("../../tags/hooks/useBackgroundNormalizer", () => ({ runEnrichment: vi.fn() }));
+vi.mock("../store/waveformBackfill", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../store/waveformBackfill")>()),
+  stopWaveformBackfill: vi.fn(),
+}));
 
 import { act, fireEvent, render } from "@testing-library/react";
 import { Profiler } from "react";
@@ -16,6 +20,7 @@ import { useAlbumTracksNoticeStore } from "../../../store/albumTracksNotice";
 import { useTagsStore } from "../../tags/store/tags";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
+import { stopWaveformBackfill, useWaveformBackfillStore } from "../store/waveformBackfill";
 import { BottomNotices } from "./BottomNotices";
 
 const track: CurrentTrack = { id: "t", title: "Track", artist: null, duration: 100 };
@@ -30,6 +35,7 @@ beforeEach(() => {
   usePlayerStore.setState({ currentTrack: track, error: null, elapsed: 0 });
   useTagsStore.setState({ pullProgress: null, enrichmentPending: null });
   useAlbumTracksNoticeStore.setState({ notice: null });
+  useWaveformBackfillStore.setState({ progress: null });
 });
 
 afterEach(() => {
@@ -123,6 +129,26 @@ describe("BottomNotices", () => {
       useTagsStore.setState({ pullProgress: null });
     });
     expect(rows()[0]?.textContent).toContain("Metadata not fetched for 5 albums");
+  });
+
+  it("shows waveform extraction progress with a Stop that stops it", () => {
+    useWaveformBackfillStore.setState({ progress: { done: 3, total: 40 } });
+    render(<BottomNotices onOpenResync={() => {}} />);
+    const [row] = rows();
+    expect(row?.textContent).toContain("Extracting waveforms… 3 / 40");
+    fireEvent.click(row!.querySelector("button")!);
+    expect(stopWaveformBackfill).toHaveBeenCalledTimes(1);
+  });
+
+  it("ranks waveform extraction below metadata progress and above the metadata reminder", () => {
+    useTagsStore.setState({ pullProgress: { done: 1, total: 2 }, enrichmentPending: 5 });
+    useWaveformBackfillStore.setState({ progress: { done: 3, total: 40 } });
+    render(<BottomNotices onOpenResync={() => {}} />);
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]?.textContent).toContain("Fetching metadata");
+
+    act(() => useTagsStore.setState({ pullProgress: null }));
+    expect(rows()[0]?.textContent).toContain("Extracting waveforms");
   });
 
   it("sits above the player bar only while a track is loaded", () => {

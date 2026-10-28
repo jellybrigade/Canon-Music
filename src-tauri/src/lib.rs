@@ -291,6 +291,7 @@ pub fn run() {
             audio::control::audio_set_speed,
             audio::control::audio_seek,
             audio::waveform::audio_extract_waveform,
+            audio::waveform::audio_stop_waveform_batch,
             audio::visualizer::audio_visualizer_set_active,
             audio::visualizer::audio_visualizer_levels,
             upnp::discover_upnp_renderers,

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useBoolSetting, useSetting } from "../../../hooks/useSetting";
 import { VISUALIZER_ENABLED_KEY } from "../../playback/lib/visualizerSettings";
 import { usePlayerStore } from "../../playback/store/player";
@@ -7,6 +8,7 @@ import { SegToggle } from "../../tags/components/TagsViewHelpers";
 import { useReplayGainCoverage } from "../hooks/useReplayGainCoverage";
 import { describeReplayGainCoverage } from "../lib/replaygainCoverage";
 import { SettingRow } from "./SettingRow";
+import { WaveformBackfillRow } from "./WaveformBackfillRow";
 import "../../tags/components/TagsView.css";
 import { plural } from "../../../lib/plural";
 
@@ -21,9 +23,10 @@ const RADIO_SIMILARITY_STEPS = [
 interface Props {
   searchQuery: string;
   serverId: string | undefined;
+  serverWithCredential: ServerWithCredential | undefined;
 }
 
-export function PlaybackTab({ searchQuery, serverId }: Props) {
+export function PlaybackTab({ searchQuery, serverId, serverWithCredential }: Props) {
   const [showWaveform, setShowWaveform] = useBoolSetting("player.show_waveform", true);
   const [isVisualizerEnabled, setIsVisualizerEnabled] = useBoolSetting(VISUALIZER_ENABLED_KEY, true);
   const [showAlbumSuffixes, setShowAlbumSuffixes] = useBoolSetting("display.show_album_suffixes", false);
@@ -473,6 +476,7 @@ export function PlaybackTab({ searchQuery, serverId }: Props) {
           >
             <input type="checkbox" checked={showWaveform} onChange={(e) => void setShowWaveform(e.target.checked)} />
           </SettingRow>
+          {showWaveform && <WaveformBackfillRow serverWithCredential={serverWithCredential} />}
           <SettingRow
             title="Visualizer"
             description="Offers a button on the Now Playing album art (or the V key) that swaps the art for a live spectrum of what's playing."

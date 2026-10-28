@@ -62,7 +62,7 @@ export function SettingsView({
       case "metadata":
         return <TagsTab searchQuery={query} hideTagBadge={hideTagBadge} setHideTagBadge={setHideTagBadge} />;
       case "playback":
-        return <PlaybackTab searchQuery={query} serverId={server?.id} />;
+        return <PlaybackTab searchQuery={query} serverId={server?.id} serverWithCredential={serverWithCredential} />;
       case "advanced":
         return (
           <>
