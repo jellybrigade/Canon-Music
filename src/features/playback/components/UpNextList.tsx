@@ -13,6 +13,7 @@ import { albumRowOfTrack } from "../lib/trackAlbum";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack } from "../store/playerTypes";
 import "./UpNextList.css";
+import { CoverImg } from "../../../components/CoverImg";
 
 interface Props {
   serverWithCredential: ServerWithCredential;
@@ -71,7 +72,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
           >
             <span className="now-playing-up-next-indicator">{position === queueIndex ? <Play size={12} /> : null}</span>
             {track.artworkRef ? (
-              <img
+              <CoverImg
                 className="now-playing-up-next-thumb"
                 src={getCoverArtUrl(server.url, server.username, credential, track.artworkRef, 64)}
                 alt=""
@@ -79,7 +80,7 @@ export function UpNextList({ serverWithCredential, lovedTrackIds, onSelectAlbum,
                 decoding="async"
               />
             ) : track.coverArtUrl ? (
-              <img
+              <CoverImg
                 className="now-playing-up-next-thumb"
                 src={track.coverArtUrl}
                 alt=""

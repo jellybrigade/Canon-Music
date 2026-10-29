@@ -2,6 +2,7 @@ import { Mic2 } from "lucide-react";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { resolvePortraitUrl } from "../../clients/lastfm";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
+import { CoverImg } from "../../components/CoverImg";
 import { useEnrichArtist } from "../../features/enrichment/hooks/useEnrichArtist";
 import { StartRadioSubmenu } from "../../features/radio/components/StartRadioSubmenu";
 import { useStartRadio } from "../../features/radio/hooks/useStartRadio";
@@ -72,7 +73,7 @@ export const SimilarArtistCard = memo(function SimilarArtistCard({
         onContextMenu={handleContextMenu}
       >
         {portraitUrl ? (
-          <img className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" decoding="async" />
+          <CoverImg className="artist-similar-avatar" src={portraitUrl} alt="" loading="lazy" decoding="async" />
         ) : (
           <span className="artist-similar-avatar artist-similar-avatar--fallback">
             <Mic2 size={28} strokeWidth={1.5} />

@@ -1,4 +1,4 @@
-use crate::cover::{sanitize_cache_key, CoverState};
+use crate::cover::{sanitize_cache_key, CoverState, ImageCache, MAX_COVER_CACHE_ENTRIES};
 use crate::stream_classify::is_image_response;
 use std::collections::HashMap;
 use std::io::Read;
@@ -6,9 +6,24 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Navidrome album id (the part after `{server_id}:`) -> file holding the chosen cover,
-/// for the active server only. Read by the `cover://` handler before any cache or fetch.
-pub(crate) type CoverOverrides = Arc<Mutex<HashMap<String, PathBuf>>>;
+/// A chosen cover is served only to a URL naming its revision (when it was chosen). A URL
+/// without one keeps meaning the server's cover, so the webview never caches the chosen image
+/// under it, whatever order the file, the database row and the URL change land in.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct StoredOverride {
+    path: PathBuf,
+    revision: i64,
+}
+
+#[derive(Default)]
+pub(crate) struct ActiveOverrides {
+    server_id: Option<String>,
+    /// Navidrome album id (the part after `{server_id}:`) -> its chosen cover.
+    by_album: HashMap<String, StoredOverride>,
+}
+
+/// Read by the `cover://` handler before any cache or fetch.
+pub(crate) type CoverOverrides = Arc<Mutex<ActiveOverrides>>;
 
 pub(crate) static COVER_OVERRIDE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
@@ -22,6 +37,7 @@ const MAX_COVER_BYTES: u64 = 20 * 1024 * 1024;
 pub struct CoverOverrideRow {
     server_id: String,
     album_id: String,
+    revision: i64,
 }
 
 /// `al-{id}_{hex}` (or a bare `al-{id}`) -> `{id}`; anything else (a per-file `mf-` id) has no album.
@@ -44,9 +60,19 @@ pub(crate) fn album_key_of_album_id<'a>(server_id: &str, album_id: &'a str) -> &
         .unwrap_or(album_id)
 }
 
-pub(crate) fn override_path(root: &Path, server_id: &str, album_id: &str) -> PathBuf {
+fn album_dir(root: &Path, server_id: &str, album_id: &str) -> PathBuf {
     root.join(sanitize_cache_key("server", server_id))
         .join(sanitize_cache_key("album", album_id))
+}
+
+/// One file per choice, so a new choice never overwrites the file a stored row still names.
+pub(crate) fn override_path(
+    root: &Path,
+    server_id: &str,
+    album_id: &str,
+    revision: i64,
+) -> PathBuf {
+    album_dir(root, server_id, album_id).join(revision.to_string())
 }
 
 pub(crate) fn image_content_type(bytes: &[u8]) -> &'static str {
@@ -63,24 +89,32 @@ pub(crate) fn image_content_type(bytes: &[u8]) -> &'static str {
     }
 }
 
-/// Deletes every stored cover no row names, including whole servers that are gone.
+/// Deletes every stored cover no row names, including whole albums and servers that are gone.
 pub(crate) fn sweep_override_files(root: &Path, rows: &[CoverOverrideRow]) {
     let keep: std::collections::HashSet<PathBuf> = rows
         .iter()
-        .map(|row| override_path(root, &row.server_id, &row.album_id))
+        .map(|row| override_path(root, &row.server_id, &row.album_id, row.revision))
         .collect();
     let Ok(servers) = std::fs::read_dir(root) else {
         return;
     };
     for server in servers.flatten() {
         let server_dir = server.path();
-        let Ok(files) = std::fs::read_dir(&server_dir) else {
+        let Ok(albums) = std::fs::read_dir(&server_dir) else {
             continue;
         };
-        for file in files.flatten() {
-            if !keep.contains(&file.path()) {
-                let _ = std::fs::remove_file(file.path());
+        for album in albums.flatten() {
+            let album_dir = album.path();
+            let Ok(files) = std::fs::read_dir(&album_dir) else {
+                let _ = std::fs::remove_file(&album_dir);
+                continue;
+            };
+            for file in files.flatten() {
+                if !keep.contains(&file.path()) {
+                    let _ = std::fs::remove_file(file.path());
+                }
             }
+            let _ = std::fs::remove_dir(&album_dir);
         }
         let _ = std::fs::remove_dir(&server_dir);
     }
@@ -90,35 +124,98 @@ pub(crate) fn active_overrides(
     root: &Path,
     active_server_id: Option<&str>,
     rows: &[CoverOverrideRow],
-) -> HashMap<String, PathBuf> {
+) -> ActiveOverrides {
     let Some(active) = active_server_id else {
-        return HashMap::new();
+        return ActiveOverrides::default();
     };
-    rows.iter()
+    let by_album = rows
+        .iter()
         .filter(|row| row.server_id == active)
         .map(|row| {
             (
                 album_key_of_album_id(active, &row.album_id).to_string(),
-                override_path(root, active, &row.album_id),
+                StoredOverride {
+                    path: override_path(root, active, &row.album_id, row.revision),
+                    revision: row.revision,
+                },
             )
         })
-        .collect()
+        .collect();
+    ActiveOverrides {
+        server_id: Some(active.to_string()),
+        by_album,
+    }
 }
 
-/// The chosen cover for this cover id, if the active server has one stored.
+/// The chosen cover for this cover id, scaled to fit `size` (0 = as stored), if the URL names
+/// the revision the active server has stored. Scaled copies are kept in `cache`.
 pub(crate) fn read_override(
     overrides: &CoverOverrides,
+    cache: &ImageCache,
     cover_id: &str,
-) -> Option<(Vec<u8>, &'static str)> {
+    size: u32,
+    revision: Option<i64>,
+) -> Option<(Vec<u8>, String)> {
     let key = album_key_of_cover_id(cover_id)?;
-    let path = overrides
+    let stored = overrides
         .lock()
         .unwrap_or_else(|e| e.into_inner())
+        .by_album
         .get(key)
         .cloned()?;
-    let bytes = std::fs::read(path).ok()?;
+    if revision != Some(stored.revision) {
+        return None;
+    }
+    let cache_key = format!("override:{key}:{}:{size}", stored.revision);
+    if let Some(entry) = cache
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&cache_key)
+    {
+        return Some(entry.clone());
+    }
+    let bytes = std::fs::read(&stored.path).ok()?;
+    let (bytes, content_type) = scaled_to_fit(bytes, size);
+    let entry = (bytes, content_type.to_string());
+    let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
+    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+        cache.clear();
+    }
+    cache.insert(cache_key, entry.clone());
+    Some(entry)
+}
+
+// Re-encoded thumbnails stay close to what Navidrome sends for the server's covers.
+const SCALED_JPEG_QUALITY: u8 = 90;
+
+/// A chosen cover is stored at full size (up to 1200px from the picker); a 64px queue row
+/// should not decode that. An image that can't be decoded or is already small enough passes as is.
+pub(crate) fn scaled_to_fit(bytes: Vec<u8>, size: u32) -> (Vec<u8>, &'static str) {
     let content_type = image_content_type(&bytes);
-    Some((bytes, content_type))
+    if size == 0 {
+        return (bytes, content_type);
+    }
+    let Ok(decoded) = image::load_from_memory(&bytes) else {
+        return (bytes, content_type);
+    };
+    if decoded.width() <= size && decoded.height() <= size {
+        return (bytes, content_type);
+    }
+    let scaled = decoded.thumbnail(size, size);
+    let mut out = std::io::Cursor::new(Vec::new());
+    let encoded = if scaled.color().has_alpha() {
+        scaled
+            .write_to(&mut out, image::ImageFormat::Png)
+            .map(|()| "image/png")
+    } else {
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, SCALED_JPEG_QUALITY)
+            .encode_image(&scaled.to_rgb8())
+            .map(|()| "image/jpeg")
+    };
+    match encoded {
+        Ok(scaled_type) => (out.into_inner(), scaled_type),
+        Err(_) => (bytes, content_type),
+    }
 }
 
 fn write_atomically(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -168,6 +265,7 @@ pub(crate) fn validate_cover_bytes(declared: Option<&str>, bytes: &[u8]) -> Resu
 }
 
 /// Replaces which covers exist with what the database lists, and which the active server serves.
+/// The caller must not run this while a choice is being saved, or the sweep deletes its file.
 #[tauri::command]
 pub fn sync_cover_overrides(
     state: tauri::State<'_, CoverState>,
@@ -182,12 +280,14 @@ pub fn sync_cover_overrides(
         active_overrides(root, active_server_id.as_deref(), &rows);
 }
 
-/// Downloads `url`, keeps it as the album's cover and serves it from now on. Returns its type.
+/// Downloads `url` and keeps it as this revision's file. Nothing serves it until
+/// `use_album_cover_override`, once the database row is written. Returns its type.
 #[tauri::command]
 pub async fn save_album_cover_override(
     state: tauri::State<'_, CoverState>,
     server_id: String,
     album_id: String,
+    revision: i64,
     url: String,
 ) -> Result<String, String> {
     let root = COVER_OVERRIDE_DIR
@@ -195,19 +295,59 @@ pub async fn save_album_cover_override(
         .cloned()
         .ok_or("Canon has no data folder to keep covers in")?;
     let client = state.http_client.clone();
-    let overrides = state.overrides.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bytes = download_image(&client, &url)?;
-        let path = override_path(&root, &server_id, &album_id);
-        write_atomically(&path, &bytes)?;
-        overrides.lock().unwrap_or_else(|e| e.into_inner()).insert(
-            album_key_of_album_id(&server_id, &album_id).to_string(),
-            path,
-        );
+        write_atomically(
+            &override_path(&root, &server_id, &album_id, revision),
+            &bytes,
+        )?;
         Ok(image_content_type(&bytes).to_string())
     })
     .await
     .map_err(|e| format!("Saving the cover stopped: {e}"))?
+}
+
+/// Serves the saved revision from now on and deletes the album's earlier choices.
+pub(crate) fn use_override(
+    overrides: &CoverOverrides,
+    root: &Path,
+    server_id: &str,
+    album_id: &str,
+    revision: i64,
+) {
+    let path = override_path(root, server_id, album_id, revision);
+    if let Ok(files) = std::fs::read_dir(album_dir(root, server_id, album_id)) {
+        for file in files.flatten().filter(|file| file.path() != path) {
+            let _ = std::fs::remove_file(file.path());
+        }
+    }
+    let mut active = overrides.lock().unwrap_or_else(|e| e.into_inner());
+    if active.server_id.as_deref() == Some(server_id) {
+        active.by_album.insert(
+            album_key_of_album_id(server_id, album_id).to_string(),
+            StoredOverride { path, revision },
+        );
+    }
+}
+
+#[tauri::command]
+pub fn use_album_cover_override(
+    state: tauri::State<'_, CoverState>,
+    server_id: String,
+    album_id: String,
+    revision: i64,
+) {
+    if let Some(root) = COVER_OVERRIDE_DIR.get() {
+        use_override(&state.overrides, root, &server_id, &album_id, revision);
+    }
+}
+
+/// Drops a saved revision whose database row could not be written; earlier choices stay.
+#[tauri::command]
+pub fn discard_album_cover_file(server_id: String, album_id: String, revision: i64) {
+    if let Some(root) = COVER_OVERRIDE_DIR.get() {
+        let _ = std::fs::remove_file(override_path(root, &server_id, &album_id, revision));
+    }
 }
 
 #[tauri::command]
@@ -216,13 +356,15 @@ pub fn clear_album_cover_override(
     server_id: String,
     album_id: String,
 ) {
-    state
-        .overrides
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .remove(album_key_of_album_id(&server_id, &album_id));
+    let mut active = state.overrides.lock().unwrap_or_else(|e| e.into_inner());
+    if active.server_id.as_deref() == Some(server_id.as_str()) {
+        active
+            .by_album
+            .remove(album_key_of_album_id(&server_id, &album_id));
+    }
+    drop(active);
     if let Some(root) = COVER_OVERRIDE_DIR.get() {
-        let _ = std::fs::remove_file(override_path(root, &server_id, &album_id));
+        let _ = std::fs::remove_dir_all(album_dir(root, &server_id, &album_id));
     }
 }
 
@@ -253,17 +395,34 @@ mod tests {
         }
     }
 
-    fn row(server_id: &str, album_id: &str) -> CoverOverrideRow {
+    fn row(server_id: &str, album_id: &str, revision: i64) -> CoverOverrideRow {
         CoverOverrideRow {
             server_id: server_id.into(),
             album_id: album_id.into(),
+            revision,
         }
     }
 
-    fn store(root: &Path, server_id: &str, album_id: &str, bytes: &[u8]) -> PathBuf {
-        let path = override_path(root, server_id, album_id);
+    fn store(root: &Path, server_id: &str, album_id: &str, revision: i64, bytes: &[u8]) -> PathBuf {
+        let path = override_path(root, server_id, album_id, revision);
         write_atomically(&path, bytes).unwrap();
         path
+    }
+
+    fn overrides_for(root: &Path, active: &str, rows: &[CoverOverrideRow]) -> CoverOverrides {
+        Arc::new(Mutex::new(active_overrides(root, Some(active), rows)))
+    }
+
+    fn empty_cache() -> ImageCache {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    fn png(width: u32, height: u32) -> Vec<u8> {
+        let mut out = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(width, height)
+            .write_to(&mut out, image::ImageFormat::Png)
+            .unwrap();
+        out.into_inner()
     }
 
     #[test]
@@ -289,58 +448,123 @@ mod tests {
     }
 
     #[test]
-    fn a_chosen_cover_is_served_for_every_size_and_stamp_of_its_album() {
+    fn a_chosen_cover_is_served_for_every_stamp_of_its_album_at_its_revision() {
         let scratch = ScratchDir::new("serve");
-        store(&scratch.0, "srv", "srv:abc", b"\x89PNG-bytes");
-        let overrides: CoverOverrides = Arc::new(Mutex::new(active_overrides(
-            &scratch.0,
-            Some("srv"),
-            &[row("srv", "srv:abc")],
-        )));
+        store(&scratch.0, "srv", "srv:abc", 7, b"\x89PNG-bytes");
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        let cache = empty_cache();
 
-        let (bytes, content_type) = read_override(&overrides, "al-abc_0fcc").unwrap();
+        let (bytes, content_type) =
+            read_override(&overrides, &cache, "al-abc_0fcc", 0, Some(7)).unwrap();
         assert_eq!(bytes, b"\x89PNG-bytes");
         assert_eq!(content_type, "image/png");
-        assert!(read_override(&overrides, "al-abc_ffff").is_some());
-        assert!(read_override(&overrides, "al-other_0fcc").is_none());
+        assert!(read_override(&overrides, &cache, "al-abc_ffff", 0, Some(7)).is_some());
+        assert!(read_override(&overrides, &cache, "al-other_0fcc", 0, Some(7)).is_none());
+    }
+
+    #[test]
+    fn a_url_without_the_chosen_revision_gets_the_servers_cover() {
+        let scratch = ScratchDir::new("revision");
+        store(&scratch.0, "srv", "srv:abc", 7, b"\x89PNG-bytes");
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        let cache = empty_cache();
+
+        assert!(read_override(&overrides, &cache, "al-abc_00", 0, None).is_none());
+        assert!(read_override(&overrides, &cache, "al-abc_00", 0, Some(6)).is_none());
+    }
+
+    #[test]
+    fn a_large_chosen_cover_is_scaled_to_the_requested_size_once() {
+        let scratch = ScratchDir::new("scale");
+        let path = store(&scratch.0, "srv", "srv:abc", 7, &png(1200, 1000));
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        let cache = empty_cache();
+
+        let (bytes, content_type) =
+            read_override(&overrides, &cache, "al-abc", 64, Some(7)).unwrap();
+        let scaled = image::load_from_memory(&bytes).unwrap();
+        assert_eq!((scaled.width(), scaled.height()), (64, 53));
+        assert_eq!(content_type, "image/jpeg");
+
+        std::fs::remove_file(path).unwrap();
+        assert!(read_override(&overrides, &cache, "al-abc", 64, Some(7)).is_some());
+        assert!(read_override(&overrides, &cache, "al-abc", 0, Some(7)).is_none());
+    }
+
+    #[test]
+    fn a_chosen_cover_smaller_than_the_request_is_served_as_stored() {
+        let original = png(100, 100);
+        assert_eq!(
+            scaled_to_fit(original.clone(), 300),
+            (original.clone(), "image/png")
+        );
+        assert_eq!(
+            scaled_to_fit(b"not an image".to_vec(), 64).0,
+            b"not an image"
+        );
     }
 
     #[test]
     fn another_servers_choice_is_not_served_for_the_active_one() {
         let scratch = ScratchDir::new("other-server");
-        store(&scratch.0, "srv-b", "srv-b:abc", b"\xFF\xD8\xFFb");
-        let overrides: CoverOverrides = Arc::new(Mutex::new(active_overrides(
-            &scratch.0,
-            Some("srv-a"),
-            &[row("srv-b", "srv-b:abc")],
-        )));
-        assert!(read_override(&overrides, "al-abc_00").is_none());
+        store(&scratch.0, "srv-b", "srv-b:abc", 7, b"\xFF\xD8\xFFb");
+        let overrides = overrides_for(&scratch.0, "srv-a", &[row("srv-b", "srv-b:abc", 7)]);
+        assert!(read_override(&overrides, &empty_cache(), "al-abc_00", 0, Some(7)).is_none());
     }
 
     #[test]
     fn a_cover_whose_file_is_gone_falls_through_to_the_server() {
         let scratch = ScratchDir::new("missing-file");
-        let overrides: CoverOverrides = Arc::new(Mutex::new(active_overrides(
-            &scratch.0,
-            Some("srv"),
-            &[row("srv", "srv:abc")],
-        )));
-        assert!(read_override(&overrides, "al-abc_00").is_none());
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        assert!(read_override(&overrides, &empty_cache(), "al-abc_00", 0, Some(7)).is_none());
+    }
+
+    #[test]
+    fn a_saved_choice_is_served_only_once_used_and_then_replaces_the_earlier_one() {
+        let scratch = ScratchDir::new("use");
+        let earlier = store(&scratch.0, "srv", "srv:abc", 7, b"\xFF\xD8\xFFold");
+        let overrides = overrides_for(&scratch.0, "srv", &[row("srv", "srv:abc", 7)]);
+        let saved = store(&scratch.0, "srv", "srv:abc", 9, b"\xFF\xD8\xFFnew");
+        let cache = empty_cache();
+        assert!(read_override(&overrides, &cache, "al-abc", 0, Some(9)).is_none());
+
+        use_override(&overrides, &scratch.0, "srv", "srv:abc", 9);
+
+        assert_eq!(
+            read_override(&overrides, &cache, "al-abc", 0, Some(9))
+                .unwrap()
+                .0,
+            b"\xFF\xD8\xFFnew"
+        );
+        assert!(saved.exists());
+        assert!(!earlier.exists());
+    }
+
+    #[test]
+    fn using_another_servers_choice_leaves_the_active_servers_covers_alone() {
+        let scratch = ScratchDir::new("use-other");
+        let overrides = overrides_for(&scratch.0, "srv-a", &[]);
+        store(&scratch.0, "srv-b", "srv-b:abc", 9, b"\xFF\xD8\xFF");
+        use_override(&overrides, &scratch.0, "srv-b", "srv-b:abc", 9);
+        assert!(read_override(&overrides, &empty_cache(), "al-abc", 0, Some(9)).is_none());
     }
 
     #[test]
     fn the_sweep_keeps_listed_covers_and_deletes_the_rest_and_gone_servers() {
         let scratch = ScratchDir::new("sweep");
-        let kept = store(&scratch.0, "srv", "srv:keep", b"x");
-        let dropped = store(&scratch.0, "srv", "srv:drop", b"x");
-        let gone_server = store(&scratch.0, "gone", "gone:abc", b"x");
+        let kept = store(&scratch.0, "srv", "srv:keep", 1, b"x");
+        let older = store(&scratch.0, "srv", "srv:keep", 0, b"x");
+        let dropped = store(&scratch.0, "srv", "srv:drop", 1, b"x");
+        let gone_server = store(&scratch.0, "gone", "gone:abc", 1, b"x");
 
-        sweep_override_files(&scratch.0, &[row("srv", "srv:keep")]);
+        sweep_override_files(&scratch.0, &[row("srv", "srv:keep", 1)]);
 
         assert!(kept.exists());
+        assert!(!older.exists());
         assert!(!dropped.exists());
+        assert!(!dropped.parent().unwrap().exists());
         assert!(!gone_server.exists());
-        assert!(!gone_server.parent().unwrap().exists());
+        assert!(!gone_server.parent().unwrap().parent().unwrap().exists());
     }
 
     #[test]

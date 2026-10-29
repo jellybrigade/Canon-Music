@@ -105,4 +105,9 @@ describe("fetchFanartAlbumCovers", () => {
     vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(500, {}));
     await expect(fetchFanartAlbumCovers("rg-1", "key")).rejects.toThrow("500");
   });
+
+  it.each([401, 403])("fails, naming the key, when fanart.tv refuses it with %i", async (status) => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(status, {}));
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).rejects.toThrow("fanart.tv refused the key in Settings");
+  });
 });

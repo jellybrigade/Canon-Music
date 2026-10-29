@@ -1,6 +1,6 @@
 /* Shell, header, body, footer and buttons come from IdentifyDialog.css. */
 .cover-picker-dialog {
-  width: 640px;
+  width: var(--dialog-width-lg);
 }
 
 .cover-picker-current {
@@ -18,8 +18,8 @@
 }
 
 .cover-picker-preview-art {
-  width: 64px;
-  height: 64px;
+  width: var(--art-thumb);
+  height: var(--art-thumb);
   object-fit: cover;
   border-radius: var(--radius-sm);
   background: var(--tint-2);
@@ -40,7 +40,7 @@
 
 .cover-picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(var(--art-tile-min), 1fr));
   gap: var(--space-sm);
 }
 

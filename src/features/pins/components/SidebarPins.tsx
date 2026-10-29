@@ -8,6 +8,7 @@ import { type PinnedItem, pinsNewestFirst, pinTargetOf } from "../pins";
 import { usePinArt } from "../usePinArt";
 import { usePins, useSetPinned } from "../usePins";
 import "./SidebarPins.css";
+import { CoverImg } from "../../../components/CoverImg";
 
 const THUMB_SIZE = 64;
 // The rest are listed in Ctrl+K.
@@ -66,7 +67,7 @@ function SidebarPinList({ items, serverWithCredential, isExpanded, onSelectAlbum
       >
         <span className={`sidebar-pin__thumb sidebar-pin__thumb--${item.kind}`}>
           {thumbUrl ? (
-            <img src={thumbUrl} alt="" decoding="async" loading="lazy" />
+            <CoverImg src={thumbUrl} alt="" decoding="async" loading="lazy" />
           ) : item.kind === "artist" ? (
             <User size={14} />
           ) : (

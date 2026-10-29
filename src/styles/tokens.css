@@ -125,6 +125,13 @@
   --player-bar-height: 92px;
   --notice-bar-height: 24px;
 
+  /* Art and dialog sizes shared across views. */
+  --art-thumb: 64px;
+  --art-tile-min: 132px;
+  --dialog-width-sm: 420px;
+  --dialog-width-md: 520px;
+  --dialog-width-lg: 640px;
+
   --z-panel: 50;
   --z-dropdown: 100;
   --z-overlay: 200;

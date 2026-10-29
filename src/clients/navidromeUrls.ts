@@ -102,6 +102,22 @@ function coverSizeParam(size: number): number {
   return Math.max(1, Math.round(size));
 }
 
+const COVER_URL_PREFIX = "cover://localhost/cover/";
+
+/** Sets a `cover://` album URL's revision to the current one; URLs kept in queues and query data predate later choices. */
+export function withCoverRevision(url: string): string {
+  if (!url.startsWith(COVER_URL_PREFIX)) return url;
+  const queryStart = url.indexOf("?");
+  const path = queryStart >= 0 ? url.slice(0, queryStart) : url;
+  const params = new URLSearchParams(queryStart >= 0 ? url.slice(queryStart + 1) : "");
+  const albumKey = albumKeyOfCoverId(decodeURIComponent(path.slice(COVER_URL_PREFIX.length)));
+  const revision = albumKey === null ? undefined : coverRevisions.get(albumKey);
+  params.delete("v");
+  if (revision !== undefined) params.set("v", String(revision));
+  const query = params.toString();
+  return query === "" ? path : `${path}?${query}`;
+}
+
 export function getCoverArtUrl(
   baseUrl: string,
   username: string,
@@ -114,10 +130,7 @@ export function getCoverArtUrl(
   // cache and every memo key built from the URL. Callers compute sizes (`size * 2`).
   const px = coverSizeParam(size);
   if (_coverServerReady) {
-    const albumKey = albumKeyOfCoverId(coverArtId);
-    const revision = albumKey === null ? undefined : coverRevisions.get(albumKey);
-    const version = revision === undefined ? "" : `&v=${revision}`;
-    return `cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${px}${version}`;
+    return withCoverRevision(`cover://localhost/cover/${encodeURIComponent(coverArtId)}?size=${px}`);
   }
   const params = buildAuthParams(username, credential);
   params.set("id", coverArtId);

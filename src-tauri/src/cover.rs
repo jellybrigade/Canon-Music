@@ -180,6 +180,13 @@ pub(crate) fn cover_error_response(status: u16) -> tauri::http::Response<Vec<u8>
         .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
 }
 
+fn query_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
+    query.split('&').find_map(|kv| {
+        let mut parts = kv.splitn(2, '=');
+        (parts.next() == Some(name)).then(|| parts.next()).flatten()
+    })
+}
+
 pub(crate) fn cover_image_response(
     bytes: Vec<u8>,
     content_type: &str,
@@ -277,21 +284,16 @@ pub(crate) fn handle_cover_request(
         Some(s) => s.to_string(),
         None => return cover_error_response(404),
     };
-    // Ahead of both caches, which keep the server's cover so going back to it needs no refetch.
-    if let Some((bytes, content_type)) = read_override(&state.overrides, &id) {
-        return cover_image_response(bytes, content_type);
-    }
-    let size = query
-        .split('&')
-        .find_map(|kv| {
-            let mut parts = kv.splitn(2, '=');
-            if parts.next() == Some("size") {
-                parts.next().and_then(|v| v.parse::<u32>().ok())
-            } else {
-                None
-            }
-        })
+    let size = query_param(query, "size")
+        .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(300);
+    // Ahead of both caches, which keep the server's cover so going back to it needs no refetch.
+    let revision = query_param(query, "v").and_then(|v| v.parse::<i64>().ok());
+    if let Some((bytes, content_type)) =
+        read_override(&state.overrides, &state.cache, &id, size, revision)
+    {
+        return cover_image_response(bytes, &content_type);
+    }
     let cache_key = format!("{id}:{size}");
     let cached = state
         .cache

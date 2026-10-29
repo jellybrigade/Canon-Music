@@ -18,7 +18,6 @@ import { fetchTrackRating, setRating } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { AlbumArt } from "../../../components/AlbumArt";
 import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
-import { useCoverRevisions } from "../../../hooks/useCoverRevisions";
 import { useLoved } from "../../../hooks/useLoved";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { stripServerPrefix } from "../../../lib/ids";
@@ -36,6 +35,7 @@ import { PlayPauseButton } from "./PlayPauseButton";
 import { SleepTimerPopover } from "./SleepTimerPopover";
 import { VolumeControl } from "./VolumeControl";
 import "./PlayerBar.css";
+import { CoverImg } from "../../../components/CoverImg";
 import { plural } from "../../../lib/plural";
 
 interface LoveButtonProps {
@@ -67,7 +67,6 @@ interface Props {
 export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
-  useCoverRevisions();
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
@@ -454,7 +453,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               : currentTrack.coverArtUrl;
           return popoverUrl ? (
             <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>
-              <img src={popoverUrl} alt={currentTrack.title} />
+              <CoverImg src={popoverUrl} alt={currentTrack.title} />
             </div>
           ) : null;
         })()}

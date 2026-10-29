@@ -42,7 +42,13 @@ describe("chooseAlbumCover", () => {
     expect(invoke).toHaveBeenCalledWith("save_album_cover_override", {
       serverId: "srv",
       albumId: "srv:abc",
+      revision: 1700,
       url: choice.fullUrl,
+    });
+    expect(invoke).toHaveBeenCalledWith("use_album_cover_override", {
+      serverId: "srv",
+      albumId: "srv:abc",
+      revision: 1700,
     });
     expect(await rows()).toEqual([{ server_id: "srv", album_id: "srv:abc", mime: "image/png" }]);
     expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).toContain("&v=1700");
@@ -59,13 +65,42 @@ describe("chooseAlbumCover", () => {
     expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).not.toContain("&v=");
   });
 
-  it("takes the stored image back when the row cannot be written", async () => {
+  it("drops only the new image when the row cannot be written, keeping an earlier choice", async () => {
     onInvoke("save_album_cover_override", () => "image/jpeg");
     vi.mocked(getDb).mockResolvedValue({
       execute: vi.fn().mockRejectedValue(new Error("database is locked")),
     } as never);
     await expect(chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 1 })).rejects.toThrow("locked");
-    expect(invoke).toHaveBeenCalledWith("clear_album_cover_override", { serverId: "srv", albumId: "srv:abc" });
+    expect(invoke).toHaveBeenCalledWith("discard_album_cover_file", {
+      serverId: "srv",
+      albumId: "srv:abc",
+      revision: 1,
+    });
+    expect(vi.mocked(invoke).mock.calls.map((call) => call[0])).not.toContain("clear_album_cover_override");
+    expect(vi.mocked(invoke).mock.calls.map((call) => call[0])).not.toContain("use_album_cover_override");
+  });
+
+  it("a reload asked for mid-save waits for the save, so the sweep sees its row", async () => {
+    let finishDownload = () => {};
+    onInvoke(
+      "save_album_cover_override",
+      () => new Promise<string>((resolve) => (finishDownload = () => resolve("image/jpeg"))),
+    );
+    const choosing = chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 3 });
+    const loading = loadCoverOverrides("srv");
+    await vi.waitFor(() => expect(invoke).toHaveBeenCalledWith("save_album_cover_override", expect.anything()));
+    finishDownload();
+    await Promise.all([choosing, loading]);
+
+    expect(vi.mocked(invoke).mock.calls.map((call) => call[0])).toEqual([
+      "save_album_cover_override",
+      "use_album_cover_override",
+      "sync_cover_overrides",
+    ]);
+    expect(invoke).toHaveBeenLastCalledWith("sync_cover_overrides", {
+      activeServerId: "srv",
+      rows: [{ serverId: "srv", albumId: "srv:abc", revision: 3 }],
+    });
   });
 });
 
@@ -94,8 +129,8 @@ describe("loadCoverOverrides", () => {
     expect(invoke).toHaveBeenCalledWith("sync_cover_overrides", {
       activeServerId: "srv",
       rows: [
-        { serverId: "other", albumId: "other:abc" },
-        { serverId: "srv", albumId: "srv:abc" },
+        { serverId: "other", albumId: "other:abc", revision: 20 },
+        { serverId: "srv", albumId: "srv:abc", revision: 10 },
       ],
     });
     expect(nav.getCoverArtUrl("http://x", "u", { type: "apikey", apiKey: "k" }, "al-abc_ff")).toContain("&v=10");

@@ -12,6 +12,7 @@ import {
 import { useBoolSetting } from "../../hooks/useSetting";
 import type { AlbumRow } from "../../types/library";
 import "./AlbumHero.css";
+import { CoverImg } from "../../components/CoverImg";
 
 interface Props {
   album: AlbumRow;
@@ -139,7 +140,7 @@ export function AlbumHero({
       </button>
       <div className="album-detail-hero">
         {coverArtUrl ? (
-          <img className="album-detail-art" src={coverArtUrl} alt={album.name} />
+          <CoverImg className="album-detail-art" src={coverArtUrl} alt={album.name} />
         ) : (
           <div className="album-detail-art album-art--placeholder" />
         )}

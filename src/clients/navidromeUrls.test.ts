@@ -260,6 +260,22 @@ describe("getCoverArtUrl for an album with a chosen cover", () => {
     expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-xyz")).toBe("cover://localhost/cover/al-xyz?size=300&v=5");
   });
 
+  it("brings a URL built before the choice up to date, and leaves other URLs alone", () => {
+    const stored = nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff", 64);
+    nav.setCoverRevision("abc", 1700);
+    expect(nav.withCoverRevision(stored)).toBe("cover://localhost/cover/al-abc_ff?size=64&v=1700");
+    nav.setCoverRevision("abc", 1800);
+    expect(nav.withCoverRevision("cover://localhost/cover/al-abc_ff?size=64&v=1700")).toBe(
+      "cover://localhost/cover/al-abc_ff?size=64&v=1800",
+    );
+    nav.setCoverRevision("abc", null);
+    expect(nav.withCoverRevision("cover://localhost/cover/al-abc_ff?size=64&v=1800")).toBe(
+      "cover://localhost/cover/al-abc_ff?size=64",
+    );
+    expect(nav.withCoverRevision("cover://localhost/artist-image/x")).toBe("cover://localhost/artist-image/x");
+    expect(nav.withCoverRevision("data:image/png;base64,AAAA")).toBe("data:image/png;base64,AAAA");
+  });
+
   it("tells subscribers once per change", () => {
     const listener = vi.fn();
     const unsubscribe = nav.subscribeCoverRevisions(listener);

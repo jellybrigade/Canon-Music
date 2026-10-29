@@ -2,6 +2,7 @@ import { Play } from "lucide-react";
 import { memo } from "react";
 import type { NavidromeCredential } from "../../clients/navidromeUrls";
 import { getCoverArtUrl } from "../../clients/navidromeUrls";
+import { CoverImg } from "../../components/CoverImg";
 import type { CurrentTrack } from "../../features/playback/store/playerTypes";
 import { plural } from "../../lib/plural";
 import type { Server } from "../../types/server";
@@ -80,7 +81,7 @@ export const TrackRow = memo(function TrackRow({
         )}
       </span>
       {artUrl ? (
-        <img className="artist-track-art" src={artUrl} alt="" loading="lazy" decoding="async" />
+        <CoverImg className="artist-track-art" src={artUrl} alt="" loading="lazy" decoding="async" />
       ) : (
         <div className="artist-track-art artist-track-art--placeholder" />
       )}

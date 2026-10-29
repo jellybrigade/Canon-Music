@@ -5,6 +5,7 @@ import { CarouselTrack } from "../../../pages/home/CarouselTrack";
 import type { PinnedItem } from "../pins";
 import { usePinArt } from "../usePinArt";
 import "./PinShelf.css";
+import { CoverImg } from "../../../components/CoverImg";
 
 const THUMB_SIZE = 128;
 // Ctrl+K is a launcher: one scrolling row of tiles per kind, and past that the rest wait behind a count tile.
@@ -95,7 +96,7 @@ export function PinShelf({
       >
         <span className={`cp-shelf-art${entry.kind === "pin" ? ` cp-shelf-art--${entry.pin.kind}` : ""}`}>
           {thumbUrl ? (
-            <img src={thumbUrl} alt="" decoding="async" />
+            <CoverImg src={thumbUrl} alt="" decoding="async" />
           ) : entry.kind === "more" ? (
             `+${entry.hiddenCount}`
           ) : entry.pin.kind === "artist" ? (

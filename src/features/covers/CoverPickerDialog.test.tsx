@@ -84,6 +84,7 @@ describe("CoverPickerDialog", () => {
     expect(invoke).toHaveBeenCalledWith("save_album_cover_override", {
       serverId: "srv",
       albumId: "srv:abc",
+      revision: expect.any(Number),
       url: "https://caa/1200.jpg",
     });
     expect(db.raw.prepare("SELECT source, full_url FROM album_cover_overrides").all()).toEqual([

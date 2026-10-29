@@ -11,6 +11,7 @@ import { COVER_SOURCE_LABELS, type CoverCandidate, rankCoverCandidates } from ".
 import { useAlbumCoverOverride, useCoverCandidates, useSetAlbumCover } from "./useAlbumCover";
 import "../enrichment/components/IdentifyDialog.css";
 import "./CoverPickerDialog.css";
+import { CoverImg } from "../../components/CoverImg";
 
 const SKELETON_TILES = 6;
 
@@ -53,7 +54,7 @@ function CoverPreview({
 }) {
   return (
     <figure className="cover-picker-preview">
-      <img
+      <CoverImg
         className="cover-picker-preview-art"
         src={src}
         alt=""
@@ -90,7 +91,7 @@ function CandidateTile({
       aria-pressed={isSelected}
       onClick={onSelect}
     >
-      <img className="cover-picker-tile-art" src={candidate.thumbUrl} alt="" loading="lazy" decoding="async" />
+      <CoverImg className="cover-picker-tile-art" src={candidate.thumbUrl} alt="" loading="lazy" decoding="async" />
       <span className="cover-picker-tile-caption">
         <span>{COVER_SOURCE_LABELS[candidate.source]}</span>
         {isCurrent ? (

@@ -169,7 +169,7 @@ pub fn run() {
             proxy_config: cover_proxy_config,
             request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
             http_client: cover_http_client,
-            overrides: Arc::new(Mutex::new(HashMap::new())),
+            overrides: Arc::default(),
         })
         .setup(|app| {
             if let Ok(data_dir) = app.path().app_data_dir() {
@@ -305,6 +305,8 @@ pub fn run() {
             cover::set_cover_proxy_config,
             cover_override::sync_cover_overrides,
             cover_override::save_album_cover_override,
+            cover_override::use_album_cover_override,
+            cover_override::discard_album_cover_file,
             cover_override::clear_album_cover_override,
             net_probe::probe_server,
             take_crash_report,
