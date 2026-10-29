@@ -165,4 +165,24 @@ describe("boundedNativeFetch", () => {
     expect(tauriFetch).toHaveBeenCalledTimes(1);
     expect(vi.mocked(tauriFetch).mock.calls[0]?.[1]?.headers).toEqual({ "User-Agent": "Canon" });
   });
+
+  it("keeps an API key in the failed request's URL out of the error it rejects with", async () => {
+    // The native client rejects with reqwest's text, which quotes the whole URL.
+    vi.mocked(tauriFetch).mockRejectedValue(
+      "error sending request for url (https://webservice.fanart.tv/v3/music/albums/rg?api_key=s3cret)",
+    );
+    const failure = await boundedNativeFetch("https://webservice.fanart.tv/v3/music/albums/rg?api_key=s3cret").catch(
+      (err: unknown) => err,
+    );
+    expect(String(failure)).toBe(
+      "error sending request for url (https://webservice.fanart.tv/v3/music/albums/rg?api_key=[redacted])",
+    );
+  });
+
+  it("keeps the error's type when it hides a key, so callers can still tell a network failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Load failed: https://ws.example/?api_key=s3cret")));
+    const failure = await boundedFetch("https://ws.example/?api_key=s3cret").catch((err: unknown) => err);
+    expect(failure).toBeInstanceOf(TypeError);
+    expect((failure as TypeError).message).toBe("Load failed: https://ws.example/?api_key=[redacted]");
+  });
 });
