@@ -108,7 +108,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
   const candidates = useCoverCandidates(album);
   const override = useAlbumCoverOverride(album);
   const setCover = useSetAlbumCover(album, serverWithCredential);
-  const dismiss = useOverlayDismiss(onClose);
+  const dismiss = useOverlayDismiss(onClose, { closable: !setCover.isPending });
   const chrome = useModalChrome(onClose, { closable: !setCover.isPending });
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null);
   // Keyed by image URL, so a size never outlives the image it was read from.

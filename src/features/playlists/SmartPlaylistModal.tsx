@@ -24,7 +24,7 @@ export function SmartPlaylistModal({ initialFilters, onSave, onClose, title = "N
   // Keyed to the filters it failed on, so any edit retires the message.
   const [failedSave, setFailedSave] = useState<{ filters: SmartFilters; message: string } | null>(null);
   const [genreSearch, setGenreSearch] = useState("");
-  const dismiss = useOverlayDismiss(onClose);
+  const dismiss = useOverlayDismiss(onClose, { closable: !saving });
   // Escape stands down while a save is in flight, matching the Cancel button that is already
   // disabled for the same reason - otherwise Escape is a second route around the same gate.
   const chrome = useModalChrome(onClose, { closable: !saving });
