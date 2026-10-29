@@ -18,6 +18,7 @@ import { fetchTrackRating, setRating } from "../../../clients/navidrome";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { AlbumArt } from "../../../components/AlbumArt";
 import { useAlbumCoverMap } from "../../../hooks/useCoverCache";
+import { useCoverRevisions } from "../../../hooks/useCoverRevisions";
 import { useLoved } from "../../../hooks/useLoved";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { stripServerPrefix } from "../../../lib/ids";
@@ -66,6 +67,7 @@ interface Props {
 export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelectAlbumById, serverWithCred }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
   const coverMap = useAlbumCoverMap();
+  useCoverRevisions();
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);

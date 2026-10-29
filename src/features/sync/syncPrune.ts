@@ -5,7 +5,7 @@ import { artistInLibrarySql } from "../../lib/libraryArtists";
 import { escapeLike } from "../../lib/sql";
 
 // Which tables carry track-keyed rows, and why the user's own rows are spared, is
-// db/trackIdTables.ts. album_identity/album_user_genres are spared for the same reason.
+// db/trackIdTables.ts. album_identity/album_user_genres/album_cover_overrides are spared for the same reason.
 async function deleteTracksByIds(db: Database, trackIds: readonly string[]): Promise<void> {
   if (trackIds.length === 0) return;
   const statements = [
@@ -99,6 +99,7 @@ export async function purgeServerData(db: Database, serverId: string): Promise<v
     viaAlbums("album_user_genres", "album_id"),
     viaAlbums("album_identity", "album_id"),
     viaAlbums("album_covers", "album_id"),
+    "DELETE FROM album_cover_overrides WHERE server_id = ?",
     "DELETE FROM albums WHERE server_id = ?",
     "DELETE FROM playlist_resume WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",
     "DELETE FROM playlist_tracks WHERE playlist_id IN (SELECT id FROM playlists WHERE server_id = ?)",

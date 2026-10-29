@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { boundedFetch } from "../clients/boundedFetch";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
@@ -18,14 +18,18 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function fetchAndStoreCover(albumId: string, artworkUrl: string, swc: ServerWithCredential): Promise<boolean> {
+async function fetchAndStoreCover(
+  albumId: string,
+  artworkUrl: string,
+  swc: ServerWithCredential,
+): Promise<string | null> {
   let url = "";
   try {
     url = getCoverArtUrl(swc.server.url, swc.server.username, swc.credential, artworkUrl, 300);
     const res = await boundedFetch(url);
     if (!res.ok) {
       console.error(`Cover cache: ${res.status} ${res.statusText} fetching album ${albumId} from ${url}`);
-      return false;
+      return null;
     }
     const blob = await res.blob();
     const dataUrl = await blobToDataUrl(blob);
@@ -35,12 +39,36 @@ async function fetchAndStoreCover(albumId: string, artworkUrl: string, swc: Serv
       dataUrl,
       Date.now(),
     ]);
-    return true;
+    return dataUrl;
   } catch (err) {
     // Network/parse/DB failure for this one album; retry on next session.
     console.error(`Cover cache: failed to cache album ${albumId} from ${url}`, err);
-    return false;
+    return null;
   }
+}
+
+/** Re-reads one album's cached cover after the image served for it changed. On failure the row is
+ * dropped, so views fall back to the live URL and the next background pass caches it again. */
+export async function refreshAlbumCover(
+  queryClient: QueryClient,
+  { albumId, artworkUrl, swc }: { albumId: string; artworkUrl: string; swc: ServerWithCredential },
+): Promise<boolean> {
+  const dataUrl = await fetchAndStoreCover(albumId, artworkUrl, swc);
+  if (dataUrl === null) {
+    dataUrlByAlbum.delete(albumId);
+    try {
+      const db = await getDb();
+      await db.execute("DELETE FROM album_covers WHERE album_id = ?", [albumId]);
+    } catch (err) {
+      console.error(`Cover cache: failed to drop the old cover of album ${albumId}`, err);
+    }
+  } else {
+    rememberAlbumDataUrl(albumId, dataUrl);
+  }
+  bumpCoverStore();
+  void queryClient.invalidateQueries({ queryKey: QK.albumCovers() });
+  void queryClient.invalidateQueries({ queryKey: QK.albumCoversMissingCount() });
+  return dataUrl !== null;
 }
 
 async function getMissingCoverRows(): Promise<{ id: string; artwork_url: string }[]> {
@@ -72,7 +100,7 @@ async function populateMissingCovers(
     if (signal.aborted) return;
     const batch = rows.slice(i, i + BATCH_SIZE);
     const results = await Promise.all(batch.map((r) => fetchAndStoreCover(r.id, r.artwork_url, swc)));
-    failed += results.filter((ok) => !ok).length;
+    failed += results.filter((dataUrl) => dataUrl === null).length;
     onProgress?.(Math.min(i + BATCH_SIZE, rows.length), rows.length);
     if (i + BATCH_SIZE < rows.length) {
       await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
@@ -270,8 +298,8 @@ export function useAlbumCoverMap(): Pick<Map<string, string>, "get"> {
       const db = await getDb();
       const rows = await db.select<{ album_id: string }[]>(`SELECT album_id FROM album_covers`);
       const ids = rows.map((r) => r.album_id);
-      // A cover row is only ever inserted for a missing album or pruned, never rewritten, so
-      // loaded bytes stay valid across invalidation. Clearing them all made every visible
+      // A cover row is rewritten only by `refreshAlbumCover`, which updates the loaded bytes itself,
+      // so loaded bytes stay valid across invalidation. Clearing them all made every visible
       // cover fall back to the server URL and swap back in: only forget pruned ones.
       const keyset = new Set(ids);
       for (const albumId of [...dataUrlByAlbum.keys()]) {

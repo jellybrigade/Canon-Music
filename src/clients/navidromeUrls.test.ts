@@ -194,9 +194,10 @@ describe("getCoverArtUrl before the cover server is ready", () => {
     expect(p.has("t")).toBe(false);
   });
 
-  it("emits size unconditionally, unlike maxBitRate, but never below 1", () => {
+  it("emits size unconditionally, unlike maxBitRate, but never below 1 short of the original", () => {
     // size is set unconditionally; maxBitRate is guarded by > 0. The asymmetry is the point.
-    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 0)).get("size")).toBe("1");
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", 0.4)).get("size")).toBe("1");
+    expect(params(nav.getCoverArtUrl(BASE, "alice", cred, "al-1", nav.ORIGINAL_COVER_SIZE)).get("size")).toBe("0");
   });
 
   it("clamps the direct URL branch by the same rule as the cover:// one", () => {
@@ -224,6 +225,51 @@ describe("getCoverArtUrl before the cover server is ready", () => {
   it("round-trips a unicode cover art id", () => {
     const url = nav.getCoverArtUrl(BASE, "alice", cred, "アルバム");
     expect(params(url).get("id")).toBe("アルバム");
+  });
+});
+
+describe("getCoverArtUrl for an album with a chosen cover", () => {
+  beforeEach(() => {
+    nav.initCoverServer();
+  });
+
+  it("names the album a cover id belongs to, with or without its change stamp", () => {
+    expect(nav.albumKeyOfCoverId("al-4S5lrPg_1214c1cb")).toBe("4S5lrPg");
+    expect(nav.albumKeyOfCoverId("al-4S5lrPg")).toBe("4S5lrPg");
+    expect(nav.albumKeyOfCoverId("mf-abc_12")).toBeNull();
+    expect(nav.albumKeyOfCoverId("al-")).toBeNull();
+  });
+
+  it("adds the choice's revision so the webview cannot reuse the server's image", () => {
+    nav.setCoverRevision("abc", 1700);
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff", 64)).toBe(
+      "cover://localhost/cover/al-abc_ff?size=64&v=1700",
+    );
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-other_ff", 64)).toBe(
+      "cover://localhost/cover/al-other_ff?size=64",
+    );
+  });
+
+  it("drops the revision when the choice is cleared, and replaces all of them on a reload", () => {
+    nav.setCoverRevision("abc", 1700);
+    nav.setCoverRevision("abc", null);
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff")).toBe("cover://localhost/cover/al-abc_ff?size=300");
+    nav.setCoverRevision("abc", 1700);
+    nav.replaceCoverRevisions(new Map([["xyz", 5]]));
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-abc_ff")).toBe("cover://localhost/cover/al-abc_ff?size=300");
+    expect(nav.getCoverArtUrl(BASE, "alice", cred, "al-xyz")).toBe("cover://localhost/cover/al-xyz?size=300&v=5");
+  });
+
+  it("tells subscribers once per change", () => {
+    const listener = vi.fn();
+    const unsubscribe = nav.subscribeCoverRevisions(listener);
+    const before = nav.getCoverRevisionsVersion();
+    nav.setCoverRevision("abc", 1);
+    nav.replaceCoverRevisions(new Map());
+    unsubscribe();
+    nav.setCoverRevision("abc", 2);
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(nav.getCoverRevisionsVersion()).toBe(before + 3);
   });
 });
 

@@ -1,3 +1,4 @@
+use crate::cover_override::{read_override, CoverOverrides};
 use crate::stream_classify::is_image_response;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -45,6 +46,7 @@ pub(crate) struct CoverState {
     pub(crate) proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
     pub(crate) request_sem: Arc<tokio::sync::Semaphore>,
     pub(crate) http_client: reqwest::blocking::Client,
+    pub(crate) overrides: CoverOverrides,
 }
 
 // App-data-relative dir for the on-disk cover/artist-image cache tier. Set once in
@@ -275,6 +277,10 @@ pub(crate) fn handle_cover_request(
         Some(s) => s.to_string(),
         None => return cover_error_response(404),
     };
+    // Ahead of both caches, which keep the server's cover so going back to it needs no refetch.
+    if let Some((bytes, content_type)) = read_override(&state.overrides, &id) {
+        return cover_image_response(bytes, content_type);
+    }
     let size = query
         .split('&')
         .find_map(|kv| {

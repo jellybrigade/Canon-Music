@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { CircleHelp, Heart } from "lucide-react";
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
 import { PinMenuItem } from "../features/pins/components/PinMenuItem";
@@ -162,6 +163,7 @@ export function AlbumGrid({
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
   const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
+  const [coverPickerAlbum, setCoverPickerAlbum] = useState<AlbumRow | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -489,6 +491,14 @@ export function AlbumGrid({
           >
             Identify on MusicBrainz…
           </button>
+          <button
+            onClick={() => {
+              setCoverPickerAlbum(contextMenu.album);
+              setContextMenu(null);
+            }}
+          >
+            Choose cover…
+          </button>
         </ContextMenu>
       )}
       {identifyAlbum && (
@@ -498,6 +508,17 @@ export function AlbumGrid({
           artist={identifyAlbum.artist ?? ""}
           album={identifyAlbum.name}
           onClose={() => setIdentifyAlbum(null)}
+        />
+      )}
+      {coverPickerAlbum && (
+        <CoverPickerDialog
+          album={coverPickerAlbum}
+          serverWithCredential={serverWithCredential}
+          onClose={() => setCoverPickerAlbum(null)}
+          onIdentify={() => {
+            setIdentifyAlbum(coverPickerAlbum);
+            setCoverPickerAlbum(null);
+          }}
         />
       )}
     </div>

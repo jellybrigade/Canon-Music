@@ -329,6 +329,7 @@ describe("post-migration schema", () => {
   it("declares exactly the expected tables", async () => {
     const db = await createMigratedTestDb();
     expect(userTables(db)).toEqual([
+      "album_cover_overrides",
       "album_covers",
       "album_genre_exclusions",
       "album_genres",

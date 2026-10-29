@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Disc, ExternalLink, Heart, HelpCircle, ListEnd, ListPlus, Play, Shuffle } from "lucide-react";
+import { Disc, ExternalLink, Heart, HelpCircle, ImageIcon, ListEnd, ListPlus, Play, Shuffle } from "lucide-react";
 import { useState } from "react";
 import { ArtBackdrop } from "../../components/ArtBackdrop";
 import type { AlbumIdentityRow } from "../../features/enrichment/hooks/useAlbumIdentity";
@@ -26,6 +26,7 @@ interface Props {
   isLoved: boolean;
   onToggleLove: () => void;
   onIdentify: () => void;
+  onChooseCover: () => void;
   onClose: () => void;
   onSelectArtist?: (artistName: string) => void;
 }
@@ -107,6 +108,7 @@ export function AlbumHero({
   isLoved,
   onToggleLove,
   onIdentify,
+  onChooseCover,
   onClose,
   onSelectArtist,
 }: Props) {
@@ -221,6 +223,14 @@ export function AlbumHero({
               title="Identify on MusicBrainz"
             >
               <Disc size={14} />
+            </button>
+            <button
+              className="album-identify-btn"
+              onClick={onChooseCover}
+              aria-label="Choose cover"
+              title="Choose cover"
+            >
+              <ImageIcon size={14} />
             </button>
             {albumIdentity?.confirmed_at && albumIdentity.mb_release_id && (
               <button

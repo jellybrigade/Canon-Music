@@ -1,5 +1,6 @@
 mod audio;
 mod cover;
+mod cover_override;
 mod keychain;
 mod library_read;
 mod library_write;
@@ -168,6 +169,7 @@ pub fn run() {
             proxy_config: cover_proxy_config,
             request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
             http_client: cover_http_client,
+            overrides: Arc::new(Mutex::new(HashMap::new())),
         })
         .setup(|app| {
             if let Ok(data_dir) = app.path().app_data_dir() {
@@ -176,6 +178,7 @@ pub fn run() {
                 let cover_cache_dir = data_dir.join("cover-cache");
                 let _ = std::fs::create_dir_all(&cover_cache_dir);
                 let _ = COVER_CACHE_DIR.set(cover_cache_dir);
+                let _ = cover_override::COVER_OVERRIDE_DIR.set(data_dir.join("cover-overrides"));
             }
 
             // Clean up orphaned spill files from prior crashes.
@@ -300,6 +303,9 @@ pub fn run() {
             tray::tray_set_visible,
             tray::tray_set_close_to_tray,
             cover::set_cover_proxy_config,
+            cover_override::sync_cover_overrides,
+            cover_override::save_album_cover_override,
+            cover_override::clear_album_cover_override,
             net_probe::probe_server,
             take_crash_report,
             settings_backup::save_settings_backup,

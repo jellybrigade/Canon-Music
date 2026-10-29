@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("./boundedFetch", () => ({ boundedFetch: vi.fn() }));
 
 import { boundedFetch } from "./boundedFetch";
-import { fetchItunesCoverArt } from "./itunes";
+import { fetchItunesAlbumCovers, fetchItunesCoverArt } from "./itunes";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -74,5 +74,30 @@ describe("fetchItunesCoverArt", () => {
       }),
     );
     await expect(fetchItunesCoverArt("Artist F", "Album")).resolves.toBeNull();
+  });
+});
+
+describe("fetchItunesAlbumCovers", () => {
+  it("lists every hit naming the same artist and album, never another album's top hit", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        results: [
+          { artistName: "Someone Else", collectionName: "Album", artworkUrl100: "https://img/a/100x100bb.jpg" },
+          { artistName: "Artist L", collectionName: "Album (Deluxe)", artworkUrl100: "https://img/b/100x100bb.jpg" },
+          { artistName: "Artist L", collectionName: "Album - Single", artworkUrl100: "https://img/c/100x100bb.jpg" },
+          { artistName: "Artist L", collectionName: "Album", artworkUrl100: "http://img/insecure/100x100bb.jpg" },
+          { artistName: "Artist L", collectionName: "Other Album", artworkUrl100: "https://img/d/100x100bb.jpg" },
+        ],
+      }),
+    );
+    await expect(fetchItunesAlbumCovers("Artist L", "Album")).resolves.toEqual([
+      { thumbUrl: "https://img/b/600x600bb.jpg", fullUrl: "https://img/b/1200x1200bb.jpg" },
+      { thumbUrl: "https://img/c/600x600bb.jpg", fullUrl: "https://img/c/1200x1200bb.jpg" },
+    ]);
+  });
+
+  it("fails when iTunes did not answer", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () => jsonResponse(503, {}));
+    await expect(fetchItunesAlbumCovers("Artist M", "Album")).rejects.toThrow("503");
   });
 });

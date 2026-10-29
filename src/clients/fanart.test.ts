@@ -8,7 +8,7 @@ vi.mock("../lib/keychain", async (importOriginal) => ({
 
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
 import { keychain, SECRET_STORE_UNAVAILABLE } from "../lib/keychain";
-import { fetchFanartTvImageByMbid, getFanartApiKey } from "./fanart";
+import { fetchFanartAlbumCovers, fetchFanartTvImageByMbid, getFanartApiKey } from "./fanart";
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status });
@@ -57,5 +57,52 @@ describe("getFanartApiKey", () => {
     vi.mocked(keychain.get).mockRejectedValueOnce(`${SECRET_STORE_UNAVAILABLE}keyring is locked`);
 
     await expect(getFanartApiKey()).rejects.toThrow("keyring is locked");
+  });
+});
+
+describe("fetchFanartAlbumCovers", () => {
+  it("lists the release group's covers, most liked first, with fanart.tv's preview as the tile", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        albums: {
+          "rg-1": {
+            albumcover: [
+              { id: "1", url: "https://assets.fanart.tv/fanart/music/a/albumcover/one.jpg", likes: "2" },
+              { id: "2", url: "https://assets.fanart.tv/fanart/music/a/albumcover/two.jpg", likes: "9" },
+            ],
+          },
+        },
+      }),
+    );
+    const covers = await fetchFanartAlbumCovers("rg-1", "key");
+    expect(covers).toEqual([
+      {
+        id: "2",
+        fullUrl: "https://assets.fanart.tv/fanart/music/a/albumcover/two.jpg",
+        thumbUrl: "https://assets.fanart.tv/preview/music/a/albumcover/two.jpg",
+        likes: 9,
+      },
+      {
+        id: "1",
+        fullUrl: "https://assets.fanart.tv/fanart/music/a/albumcover/one.jpg",
+        thumbUrl: "https://assets.fanart.tv/preview/music/a/albumcover/one.jpg",
+        likes: 2,
+      },
+    ]);
+    expect(String(vi.mocked(tauriFetch).mock.calls[0]?.[0])).toBe(
+      "https://webservice.fanart.tv/v3/music/albums/rg-1?api_key=key",
+    );
+  });
+
+  it("answers no covers when fanart.tv has none or another album's", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(200, { albums: { other: { albumcover: [] } } }));
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).resolves.toEqual([]);
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(404, {}));
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).resolves.toEqual([]);
+  });
+
+  it("fails when fanart.tv did not answer", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(500, {}));
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).rejects.toThrow("500");
   });
 });

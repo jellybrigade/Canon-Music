@@ -6,6 +6,7 @@ import { getCoverArtUrl } from "../../../clients/navidromeUrls";
 import { AlbumArt } from "../../../components/AlbumArt";
 import { ArtBackdrop } from "../../../components/ArtBackdrop";
 import { useAlbumDisplayName } from "../../../hooks/useAlbumDisplayName";
+import { useCoverRevisions } from "../../../hooks/useCoverRevisions";
 import { useLoved } from "../../../hooks/useLoved";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { useBoolSetting } from "../../../hooks/useSetting";
@@ -52,6 +53,7 @@ export function NowPlayingView({
   onBack,
 }: Props) {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  useCoverRevisions();
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const repeat = usePlayerStore((s) => s.repeat);
