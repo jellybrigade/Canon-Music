@@ -217,6 +217,26 @@ describe("CoverPickerDialog", () => {
     expect(previewImage("Current").getAttribute("src")).toContain("size=0");
   });
 
+  it("offers no save for the cover already in use", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1)",
+    );
+    renderDialog();
+    expect(await screen.findByText("In use")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Cover Art Archive/ }));
+    expect((screen.getByRole("button", { name: "Use this cover" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("drops a tile whose image won't load", async () => {
+    renderDialog();
+    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
+    const image = tile.querySelector("img");
+    if (!image) throw new Error("tile has no image");
+    fireEvent.error(image);
+    expect(screen.queryByRole("button", { name: /Cover Art Archive/ })).toBeNull();
+    expect(screen.getByText("The covers found online could not be loaded.")).toBeTruthy();
+  });
+
   it("says how large a cover can be before its image is measured", async () => {
     renderDialog();
     const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });

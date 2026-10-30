@@ -40,6 +40,12 @@ function describeChoice(choice: CoverChoice): string {
   return `${source}${size}`;
 }
 
+function noCoversMessage(wereAllBroken: boolean, didAnySourceFail: boolean): string {
+  if (wereAllBroken) return "The covers found online could not be loaded.";
+  if (didAnySourceFail) return "No covers came back from the sources that answered.";
+  return "No covers found online for this album.";
+}
+
 /** What the full image measured once loaded, else the size its source claims. */
 function knownSize(candidate: CoverCandidate, measured: Dimensions | undefined): Dimensions | null {
   if (measured) return measured;
@@ -94,6 +100,7 @@ function CandidateTile({
   isCurrent,
   isDisabled,
   onSelect,
+  onBroken,
 }: {
   candidate: CoverCandidate;
   size: Dimensions | null;
@@ -101,6 +108,7 @@ function CandidateTile({
   isCurrent: boolean;
   isDisabled: boolean;
   onSelect: () => void;
+  onBroken: () => void;
 }) {
   return (
     <button
@@ -110,7 +118,14 @@ function CandidateTile({
       disabled={isDisabled}
       onClick={onSelect}
     >
-      <CoverImg className="cover-picker-tile-art" src={candidate.thumbUrl} alt="" loading="lazy" decoding="async" />
+      <CoverImg
+        className="cover-picker-tile-art"
+        src={candidate.thumbUrl}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={onBroken}
+      />
       <span className="cover-picker-tile-caption">
         <span className="cover-picker-tile-source">{COVER_SOURCE_LABELS[candidate.source]}</span>
         {isCurrent ? (
@@ -133,10 +148,14 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
   // Keyed by image URL, so a size never outlives the image it was read from.
   const [measuredSizes, setMeasuredSizes] = useState<Partial<Record<string, Dimensions>>>({});
   const measure = (src: string, size: Dimensions) => setMeasuredSizes((sizes) => ({ ...sizes, [src]: size }));
+  // A tile whose image never loads can't be judged, so it isn't offered.
+  const [brokenThumbs, setBrokenThumbs] = useState<Partial<Record<string, true>>>({});
 
   const results = candidates.data ?? [];
-  const ranked = rankCoverCandidates(results);
+  const found = rankCoverCandidates(results);
+  const ranked = found.filter((candidate) => !brokenThumbs[candidate.thumbUrl]);
   const selected = ranked.find((candidate) => candidate.fullUrl === selectedUrl) ?? null;
+  const isSelectedInUse = selected !== null && selected.fullUrl === override.data?.fullUrl;
   const unanswered = results.filter((result) => result.status !== "found");
   const needsIdentity = results.some(
     (result) =>
@@ -220,14 +239,16 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
                   isCurrent={candidate.fullUrl === override.data?.fullUrl}
                   isDisabled={setCover.isPending}
                   onSelect={() => setSelectedUrl(candidate.fullUrl)}
+                  onBroken={() => setBrokenThumbs((broken) => ({ ...broken, [candidate.thumbUrl]: true }))}
                 />
               ))}
             </div>
           ) : (
             <p className="identify-hint">
-              {unanswered.some((result) => result.status === "failed")
-                ? "No covers came back from the sources that answered."
-                : "No covers found online for this album."}
+              {noCoversMessage(
+                found.length > 0,
+                unanswered.some((result) => result.status === "failed"),
+              )}
             </p>
           )}
 
@@ -281,7 +302,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
             onClick={() => {
               if (selected) choose(selected);
             }}
-            disabled={selected === null || setCover.isPending}
+            disabled={selected === null || isSelectedInUse || setCover.isPending}
           >
             {setCover.isPending ? "Saving…" : "Use this cover"}
           </button>
