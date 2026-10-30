@@ -7,7 +7,8 @@ import type { AlbumRow } from "../../types/library";
 import { SkeletonBar } from "../../ui/Skeleton";
 import { useModalChrome } from "../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../ui/useOverlayDismiss";
-import { COVER_SOURCE_LABELS, type CoverCandidate, rankCoverCandidates } from "./coverCandidates";
+import type { CoverChoice } from "./albumCoverOverrides";
+import { COVER_SOURCE_LABELS, type CoverCandidate, isCoverSource, rankCoverCandidates } from "./coverCandidates";
 import { useAlbumCoverOverride, useCoverCandidates, useSetAlbumCover } from "./useAlbumCover";
 import "../enrichment/components/IdentifyDialog.css";
 import "./CoverPickerDialog.css";
@@ -22,6 +23,21 @@ interface Dimensions {
 
 function formatSize({ width, height }: Dimensions): string {
   return `${width} × ${height}`;
+}
+
+function formatCaption(candidate: CoverCandidate, size: Dimensions | null): string {
+  if (size) return formatSize(size);
+  return candidate.maxEdge === null ? "\u00a0" : `up to ${candidate.maxEdge} px`;
+}
+
+/** "from Cover Art Archive (1200 × 1200)", as much of it as the stored choice knows. */
+function describeChoice(choice: CoverChoice): string {
+  const source = isCoverSource(choice.source) ? ` from ${COVER_SOURCE_LABELS[choice.source]}` : "";
+  const size =
+    choice.width !== null && choice.height !== null
+      ? ` (${formatSize({ width: choice.width, height: choice.height })})`
+      : "";
+  return `${source}${size}`;
 }
 
 /** What the full image measured once loaded, else the size its source claims. */
@@ -100,7 +116,7 @@ function CandidateTile({
         {isCurrent ? (
           <span className="cover-picker-tile-current">In use</span>
         ) : (
-          <span className="cover-picker-tile-size">{size ? formatSize(size) : "\u00a0"}</span>
+          <span className="cover-picker-tile-size">{formatCaption(candidate, size)}</span>
         )}
       </span>
     </button>
@@ -172,8 +188,8 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
             ) : (
               override.isSuccess && (
                 <p className="identify-hint">
-                  {hasOverride
-                    ? "Showing a cover you picked. Canon keeps it to itself; the server and your files still have their own."
+                  {override.data
+                    ? `Showing a cover you picked${describeChoice(override.data)}. Canon keeps it to itself; the server and your files still have their own.`
                     : "Showing the server's cover. A cover you pick stays in Canon; the server and your files keep theirs."}
                 </p>
               )

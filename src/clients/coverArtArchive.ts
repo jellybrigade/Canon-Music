@@ -9,6 +9,8 @@ export interface CaaCover {
   originalUrl: string;
   thumbUrl: string;
   fullUrl: string;
+  /** The longest edge `fullUrl` can have: renditions are capped, the original isn't. */
+  fullMaxEdge: number | null;
   isApproved: boolean;
 }
 
@@ -36,11 +38,14 @@ function toCover(entry: CaaImage): CaaCover | null {
   const original = firstString(entry.image);
   if (original === null) return null;
   const thumbs = entry.thumbnails ?? {};
+  // The 1200 rendition, not the original: originals reach thousands of pixels and tens of megabytes.
+  const rendition1200 = firstString(thumbs["1200"]);
+  const rendition500 = firstString(thumbs["500"], thumbs.large);
   return {
     originalUrl: original,
     thumbUrl: firstString(thumbs["250"], thumbs.small, thumbs["500"], thumbs.large) ?? original,
-    // The 1200 rendition, not the original: originals reach thousands of pixels and tens of megabytes.
-    fullUrl: firstString(thumbs["1200"], thumbs["500"], thumbs.large) ?? original,
+    fullUrl: rendition1200 ?? rendition500 ?? original,
+    fullMaxEdge: rendition1200 ? 1200 : rendition500 ? 500 : null,
     isApproved: entry.approved === true,
   };
 }

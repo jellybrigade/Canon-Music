@@ -17,9 +17,10 @@
   margin: 0;
 }
 
+/* At least a tile's size, so the current and new covers can be compared by eye. */
 .cover-picker-preview-art {
-  width: var(--art-thumb);
-  height: var(--art-thumb);
+  width: var(--art-compare);
+  height: var(--art-compare);
   object-fit: cover;
   border-radius: var(--radius-sm);
   background: var(--tint-2);

@@ -65,6 +65,7 @@ beforeEach(async () => {
               originalUrl: "https://caa/o.jpg",
               thumbUrl: "https://caa/250.jpg",
               fullUrl: "https://caa/1200.jpg",
+              fullMaxEdge: 1200,
               isApproved: true,
             },
           ]
@@ -214,6 +215,20 @@ describe("CoverPickerDialog", () => {
   it("asks the server for the current cover unscaled, so its size is the real one", () => {
     renderDialog();
     expect(previewImage("Current").getAttribute("src")).toContain("size=0");
+  });
+
+  it("says how large a cover can be before its image is measured", async () => {
+    renderDialog();
+    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
+    expect(tile.textContent).toContain("up to 1200 px");
+  });
+
+  it("names where the picked cover came from and its size", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, width, height, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1200, 1180, 1)",
+    );
+    renderDialog();
+    expect(await screen.findByText(/Showing a cover you picked from Cover Art Archive \(1200 × 1180\)/)).toBeTruthy();
   });
 
   it("keeps the measured size with the cover it saves", async () => {

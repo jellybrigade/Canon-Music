@@ -41,6 +41,7 @@ describe("fetchCaaFrontCovers", () => {
         originalUrl: "https://coverartarchive.org/release/r/1.jpg",
         thumbUrl: "https://coverartarchive.org/release/r/1-250.jpg",
         fullUrl: "https://coverartarchive.org/release/r/1-1200.jpg",
+        fullMaxEdge: 1200,
         isApproved: true,
       },
     ]);
@@ -86,10 +87,10 @@ describe("fetchCaaFrontCovers", () => {
       }),
     );
     const covers = await fetchCaaFrontCovers("release", "rel-1");
-    expect(covers.map(({ thumbUrl, fullUrl }) => ({ thumbUrl, fullUrl }))).toEqual([
-      { thumbUrl: "https://caa/250.jpg", fullUrl: "https://caa/1200.jpg" },
-      { thumbUrl: "https://caa/s.jpg", fullUrl: "https://caa/l.jpg" },
-      { thumbUrl: "https://caa/bare.jpg", fullUrl: "https://caa/bare.jpg" },
+    expect(covers.map(({ thumbUrl, fullUrl, fullMaxEdge }) => ({ thumbUrl, fullUrl, fullMaxEdge }))).toEqual([
+      { thumbUrl: "https://caa/250.jpg", fullUrl: "https://caa/1200.jpg", fullMaxEdge: 1200 },
+      { thumbUrl: "https://caa/s.jpg", fullUrl: "https://caa/l.jpg", fullMaxEdge: 500 },
+      { thumbUrl: "https://caa/bare.jpg", fullUrl: "https://caa/bare.jpg", fullMaxEdge: null },
     ]);
   });
 

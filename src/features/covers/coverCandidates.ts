@@ -16,12 +16,20 @@ export const COVER_SOURCE_LABELS: Record<CoverSource, string> = {
 };
 
 const FANART_COVER_EDGE = 1000;
+// iTunes scales to the edge asked for in the URL, never past its own image.
+const ITUNES_MAX_EDGE = 1200;
 const NEEDS_IDENTITY = "Identify the album on MusicBrainz to search here";
 
 export interface CoverCandidate extends CoverChoice {
   source: CoverSource;
   thumbUrl: string;
+  /** The longest edge the source can deliver, shown until the image itself is measured. */
+  maxEdge: number | null;
   isApproved: boolean;
+}
+
+export function isCoverSource(source: string): source is CoverSource {
+  return COVER_SOURCES.some((known) => known === source);
 }
 
 export type SourceResult =
@@ -76,6 +84,7 @@ async function caaCandidates(kind: "release" | "release-group", mbid: string): P
     thumbUrl: cover.thumbUrl,
     width: null,
     height: null,
+    maxEdge: cover.fullMaxEdge,
     isApproved: cover.isApproved,
   }));
 }
@@ -98,6 +107,7 @@ function fanartCandidates(releaseGroupMbid: string, apiKey: string): Promise<Sou
       thumbUrl: cover.thumbUrl,
       width: FANART_COVER_EDGE,
       height: FANART_COVER_EDGE,
+      maxEdge: FANART_COVER_EDGE,
       isApproved: true,
     })),
   );
@@ -146,6 +156,7 @@ export async function findCoverCandidates(lookup: CoverLookup): Promise<SourceRe
         thumbUrl: cover.thumbUrl,
         width: null,
         height: null,
+        maxEdge: ITUNES_MAX_EDGE,
         isApproved: true,
       })),
     ),

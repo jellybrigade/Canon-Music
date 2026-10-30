@@ -19,6 +19,7 @@ function candidate(overrides: Partial<CoverCandidate>): CoverCandidate {
     thumbUrl: "https://x/thumb.jpg",
     width: null,
     height: null,
+    maxEdge: null,
     isApproved: true,
     ...overrides,
   };
@@ -81,7 +82,15 @@ describe("findCoverCandidates", () => {
   it("asks every source and reports each one's outcome", async () => {
     vi.mocked(fetchCaaFrontCovers).mockImplementation(async (kind) =>
       kind === "release"
-        ? [{ originalUrl: "https://o", thumbUrl: "https://t", fullUrl: "https://r1200", isApproved: true }]
+        ? [
+            {
+              originalUrl: "https://o",
+              thumbUrl: "https://t",
+              fullUrl: "https://r1200",
+              fullMaxEdge: 1200,
+              isApproved: true,
+            },
+          ]
         : [],
     );
     vi.mocked(fetchItunesAlbumCovers).mockRejectedValue(new Error("iTunes returned 503"));
