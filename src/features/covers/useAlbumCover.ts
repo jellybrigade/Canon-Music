@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getFanartApiKey } from "../../clients/fanart";
 import { getDb } from "../../db";
 import { refreshAlbumCover } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
@@ -15,8 +16,13 @@ const CANDIDATES_STALE_MS = 10 * 60 * 1000;
 
 type AlbumCoverTarget = Pick<AlbumRow, "id" | "server_id" | "name" | "artist" | "artwork_url">;
 
-/** MBIDs as of now: a confirmed identity first, then the release the files are tagged with. */
-async function readCoverMbids(album: AlbumCoverTarget) {
+/** What decides which sources can be asked, as of now: a confirmed identity first, then the release
+ * the files are tagged with; and whether a fanart.tv key is stored (null when the store can't be read). */
+async function readCoverInputs(album: AlbumCoverTarget) {
+  const hasFanartKey = getFanartApiKey().then(
+    (key) => key !== null,
+    () => null,
+  );
   const db = await getDb();
   const rows = await db.select<{ mb_release_id: string | null; mb_release_group_id: string | null }[]>(
     "SELECT mb_release_id, mb_release_group_id FROM album_identity WHERE album_id = ?",
@@ -25,29 +31,42 @@ async function readCoverMbids(album: AlbumCoverTarget) {
   const identity = rows[0];
   const releaseMbid =
     identity?.mb_release_id ?? (await readTaggedReleaseMbid(db, { albumId: album.id, serverId: album.server_id }));
-  return { releaseMbid, releaseGroupMbid: identity?.mb_release_group_id ?? null };
+  return {
+    releaseMbid,
+    releaseGroupMbid: identity?.mb_release_group_id ?? null,
+    hasFanartKey: await hasFanartKey,
+  };
 }
 
-/** Searches keyed by the MBIDs they were made with, so identifying the album searches again. */
+/** Searches keyed by the inputs they were made with, so identifying the album or adding a fanart.tv
+ * key searches again. */
 export function useCoverCandidates(album: AlbumCoverTarget) {
-  const mbids = useQuery({
-    queryKey: QK.albumCoverMbids(album.server_id, album.id),
-    queryFn: () => readCoverMbids(album),
+  const inputs = useQuery({
+    queryKey: QK.albumCoverInputs(album.server_id, album.id),
+    queryFn: () => readCoverInputs(album),
+    // Read again on every open: Identify, offered from the picker, changes them between two opens.
+    staleTime: 0,
+    gcTime: 0,
   });
-  const releaseMbid = mbids.data?.releaseMbid ?? null;
-  const releaseGroupMbid = mbids.data?.releaseGroupMbid ?? null;
+  const releaseMbid = inputs.data?.releaseMbid ?? null;
+  const releaseGroupMbid = inputs.data?.releaseGroupMbid ?? null;
+  const hasFanartKey = inputs.data?.hasFanartKey ?? null;
   const candidates = useQuery({
-    queryKey: QK.albumCoverCandidates(album.server_id, album.id, releaseMbid, releaseGroupMbid),
+    queryKey: QK.albumCoverCandidates(album.server_id, album.id, {
+      releaseMbid,
+      releaseGroupMbid,
+      hasFanartKey,
+    }),
     queryFn: () =>
       findCoverCandidates({ artist: album.artist ?? "", album: album.name, releaseMbid, releaseGroupMbid }),
-    enabled: mbids.isSuccess,
+    enabled: inputs.isSuccess,
     staleTime: CANDIDATES_STALE_MS,
   });
   return {
     data: candidates.data,
-    isPending: mbids.isPending || (mbids.isSuccess && candidates.isPending),
-    error: mbids.error ?? candidates.error,
-    refetch: () => (mbids.error ? mbids.refetch() : candidates.refetch()),
+    isPending: inputs.isPending || (inputs.isSuccess && candidates.isPending),
+    error: inputs.error ?? candidates.error,
+    refetch: () => (inputs.error ? inputs.refetch() : candidates.refetch()),
   };
 }
 

@@ -14,7 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { boundedFetch } from "../../clients/boundedFetch";
 import { fetchCaaFrontCovers } from "../../clients/coverArtArchive";
-import { getFanartApiKey } from "../../clients/fanart";
+import { fetchFanartAlbumCovers, getFanartApiKey } from "../../clients/fanart";
 import { fetchItunesAlbumCovers } from "../../clients/itunes";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
@@ -36,10 +36,12 @@ const swc = {
   credential: { type: "apikey", apiKey: "k" },
 } as ServerWithCredential;
 
-function renderDialog(
-  onClose = vi.fn(),
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-) {
+// The app's defaults (src/main.tsx), so a reopened dialog sees what the app's cache would hand it.
+function appQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 60_000 } } });
+}
+
+function renderDialog(onClose = vi.fn(), queryClient = appQueryClient()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <CoverPickerDialog album={album} serverWithCredential={swc} onClose={onClose} />
@@ -134,7 +136,7 @@ describe("CoverPickerDialog", () => {
 
   it("searches again once the album is identified, instead of reusing the search made without it", async () => {
     db.raw.exec("DELETE FROM album_identity");
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = appQueryClient();
     const first = renderDialog(vi.fn(), queryClient);
     expect(await screen.findByText(/Cover Art Archive: /)).toBeTruthy();
     first.unmount();
@@ -146,6 +148,22 @@ describe("CoverPickerDialog", () => {
 
     expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
     expect(fetchCaaFrontCovers).toHaveBeenCalledWith("release", "rel-1");
+  });
+
+  it("searches fanart.tv once a key was added since the last search", async () => {
+    vi.mocked(fetchFanartAlbumCovers)
+      .mockReset()
+      .mockResolvedValue([{ id: "f1", fullUrl: "https://fanart/1.jpg", thumbUrl: "https://fanart/p1.jpg", likes: 1 }]);
+    const queryClient = appQueryClient();
+    const first = renderDialog(vi.fn(), queryClient);
+    expect(await screen.findByText(/fanart.tv: Add a fanart.tv key/)).toBeTruthy();
+    first.unmount();
+
+    vi.mocked(getFanartApiKey).mockResolvedValue("key");
+    renderDialog(vi.fn(), queryClient);
+
+    expect(await screen.findByRole("button", { name: /fanart.tv/ })).toBeTruthy();
+    expect(fetchFanartAlbumCovers).toHaveBeenCalledWith("rg-1", "key");
   });
 
   it("says nothing about which cover shows until it has read whether one was picked", async () => {
