@@ -2,6 +2,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { CircleHelp, Heart } from "lucide-react";
 import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
+import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
@@ -491,14 +492,16 @@ export function AlbumGrid({
           >
             Identify on MusicBrainz…
           </button>
-          <button
-            onClick={() => {
-              setCoverPickerAlbum(contextMenu.album);
-              setContextMenu(null);
-            }}
-          >
-            Choose cover…
-          </button>
+          {canChooseCover(contextMenu.album) && (
+            <button
+              onClick={() => {
+                setCoverPickerAlbum(contextMenu.album);
+                setContextMenu(null);
+              }}
+            >
+              Choose cover…
+            </button>
+          )}
         </ContextMenu>
       )}
       {identifyAlbum && (

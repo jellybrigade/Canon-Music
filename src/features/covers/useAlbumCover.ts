@@ -3,6 +3,7 @@ import { getDb } from "../../db";
 import { refreshAlbumCover } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import { QK } from "../../lib/queryKeys";
+import { useAlbumBrowseSessionStore } from "../../store/albumBrowseSessionStore";
 import type { AlbumRow } from "../../types/library";
 import { readTaggedReleaseMbid } from "../enrichment/hooks/useAlbumIdentity";
 import { type CoverChoice, chooseAlbumCover, clearAlbumCover, getAlbumCoverOverride } from "./albumCoverOverrides";
@@ -27,13 +28,27 @@ async function readCoverMbids(album: AlbumCoverTarget) {
   return { releaseMbid, releaseGroupMbid: identity?.mb_release_group_id ?? null };
 }
 
+/** Searches keyed by the MBIDs they were made with, so identifying the album searches again. */
 export function useCoverCandidates(album: AlbumCoverTarget) {
-  return useQuery({
-    queryKey: QK.albumCoverCandidates(album.server_id, album.id),
-    queryFn: async () =>
-      findCoverCandidates({ artist: album.artist ?? "", album: album.name, ...(await readCoverMbids(album)) }),
+  const mbids = useQuery({
+    queryKey: QK.albumCoverMbids(album.server_id, album.id),
+    queryFn: () => readCoverMbids(album),
+  });
+  const releaseMbid = mbids.data?.releaseMbid ?? null;
+  const releaseGroupMbid = mbids.data?.releaseGroupMbid ?? null;
+  const candidates = useQuery({
+    queryKey: QK.albumCoverCandidates(album.server_id, album.id, releaseMbid, releaseGroupMbid),
+    queryFn: () =>
+      findCoverCandidates({ artist: album.artist ?? "", album: album.name, releaseMbid, releaseGroupMbid }),
+    enabled: mbids.isSuccess,
     staleTime: CANDIDATES_STALE_MS,
   });
+  return {
+    data: candidates.data,
+    isPending: mbids.isPending || (mbids.isSuccess && candidates.isPending),
+    error: mbids.error ?? candidates.error,
+    refetch: () => (mbids.error ? mbids.refetch() : candidates.refetch()),
+  };
 }
 
 export function useAlbumCoverOverride(album: AlbumCoverTarget) {
@@ -58,6 +73,10 @@ export function useSetAlbumCover(album: AlbumCoverTarget, serverWithCredential: 
           swc: serverWithCredential,
         });
       }
+    },
+    onSuccess: () => {
+      useAlbumBrowseSessionStore.getState().setAccent(album.id, null);
+      void queryClient.invalidateQueries({ queryKey: QK.albumById(album.id, album.server_id) });
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: QK.albumCoverOverride(album.server_id, album.id) });

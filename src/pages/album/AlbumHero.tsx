@@ -27,7 +27,8 @@ interface Props {
   isLoved: boolean;
   onToggleLove: () => void;
   onIdentify: () => void;
-  onChooseCover: () => void;
+  /** Absent for an album whose cover can't be replaced. */
+  onChooseCover?: () => void;
   onClose: () => void;
   onSelectArtist?: (artistName: string) => void;
 }
@@ -225,14 +226,16 @@ export function AlbumHero({
             >
               <Disc size={14} />
             </button>
-            <button
-              className="album-identify-btn"
-              onClick={onChooseCover}
-              aria-label="Choose cover"
-              title="Choose cover"
-            >
-              <ImageIcon size={14} />
-            </button>
+            {onChooseCover && (
+              <button
+                className="album-identify-btn"
+                onClick={onChooseCover}
+                aria-label="Choose cover"
+                title="Choose cover"
+              >
+                <ImageIcon size={14} />
+              </button>
+            )}
             {albumIdentity?.confirmed_at && albumIdentity.mb_release_id && (
               <button
                 className="album-identify-btn"

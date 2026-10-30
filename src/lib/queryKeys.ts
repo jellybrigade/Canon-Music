@@ -116,7 +116,13 @@ export const QK = {
   waveformsMissingCount: (serverId: string | undefined) => ["waveforms", "missing-count", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
-  albumCoverCandidates: (serverId: string, albumId: string) => ["album-cover-candidates", serverId, albumId] as const,
+  albumCoverMbids: (serverId: string, albumId: string) => ["album-cover-mbids", serverId, albumId] as const,
+  albumCoverCandidates: (
+    serverId: string,
+    albumId: string,
+    releaseMbid: string | null,
+    releaseGroupMbid: string | null,
+  ) => ["album-cover-candidates", serverId, albumId, releaseMbid, releaseGroupMbid] as const,
   albumCoverOverride: (serverId: string, albumId: string) => ["album-cover-override", serverId, albumId] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
 

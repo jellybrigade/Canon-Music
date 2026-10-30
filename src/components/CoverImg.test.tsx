@@ -2,6 +2,8 @@
 import { act, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { initCoverServer, replaceCoverRevisions, setCoverRevision } from "../clients/navidromeUrls";
+import { useCoverUrl } from "../hooks/useCoverRevisions";
+import { trackRenders } from "../test/perf";
 import { CoverImg } from "./CoverImg";
 
 afterEach(() => {
@@ -21,5 +23,18 @@ describe("CoverImg", () => {
 
     act(() => setCoverRevision("abc", null));
     expect(image()).toBe(stored);
+  });
+
+  it("re-renders only for a choice about its own album", () => {
+    initCoverServer();
+    const probe = trackRenders(() => useCoverUrl("cover://localhost/cover/al-abc_ff?size=64"));
+
+    act(() => setCoverRevision("other", 1));
+    act(() => setCoverRevision("another", 2));
+    expect(probe.renders).toBe(1);
+
+    act(() => setCoverRevision("abc", 3));
+    expect(probe.renders).toBe(2);
+    expect(probe.value).toContain("v=3");
   });
 });

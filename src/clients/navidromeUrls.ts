@@ -16,11 +16,9 @@ export function isCoverServerReady(): boolean {
 // Album key -> when its chosen cover was picked. The webview keeps an image by URL for the life
 // of the process, so a cover served in place of the server's must also change the URL.
 let coverRevisions = new Map<string, number>();
-let coverRevisionsVersion = 0;
 const coverRevisionListeners = new Set<() => void>();
 
 function announceCoverRevisions(): void {
-  coverRevisionsVersion += 1;
   for (const listener of coverRevisionListeners) listener();
 }
 
@@ -48,10 +46,6 @@ export function replaceCoverRevisions(revisions: ReadonlyMap<string, number>): v
 export function subscribeCoverRevisions(listener: () => void): () => void {
   coverRevisionListeners.add(listener);
   return () => coverRevisionListeners.delete(listener);
-}
-
-export function getCoverRevisionsVersion(): number {
-  return coverRevisionsVersion;
 }
 
 export async function updateCoverProxyConfig(
@@ -106,7 +100,7 @@ const COVER_URL_PREFIX = "cover://localhost/cover/";
 
 /** Sets a `cover://` album URL's revision to the current one; URLs kept in queues and query data predate later choices. */
 export function withCoverRevision(url: string): string {
-  if (!url.startsWith(COVER_URL_PREFIX)) return url;
+  if (!url.startsWith(COVER_URL_PREFIX) || (coverRevisions.size === 0 && !url.includes("v="))) return url;
   const queryStart = url.indexOf("?");
   const path = queryStart >= 0 ? url.slice(0, queryStart) : url;
   const params = new URLSearchParams(queryStart >= 0 ? url.slice(queryStart + 1) : "");

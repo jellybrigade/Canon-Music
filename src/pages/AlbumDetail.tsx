@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
 import { AlbumGrid } from "../components/AlbumGrid";
+import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import {
@@ -29,7 +30,7 @@ import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
 import { useAlbumAccent } from "../hooks/useAlbumAccent";
 import { useArtistAlbums } from "../hooks/useArtistAlbums";
 import { useBitRateBackfill } from "../hooks/useBitRateBackfill";
-import { useCoverRevisions } from "../hooks/useCoverRevisions";
+import { useCoverUrl } from "../hooks/useCoverRevisions";
 import { useGenreMappings } from "../hooks/useGenreDisplay";
 import { useLoved } from "../hooks/useLoved";
 import { useMissingTracksRepair } from "../hooks/useMissingTracksRepair";
@@ -86,7 +87,6 @@ export function AlbumDetail({
   onTagFilter,
 }: Props) {
   const { server, credential } = serverWithCredential;
-  useCoverRevisions();
   const { data: tracks, isLoading, error: tracksError } = useTracks(album.id);
   const { lovedTrackIds, toggleTrackLove, lovedAlbumIds, toggleAlbumLove } = useLoved();
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -233,9 +233,9 @@ export function AlbumDetail({
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const albumBio = albumEnrichment?.album_bio ?? null;
 
-  const coverArtUrl = album.artwork_url
-    ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500)
-    : null;
+  const coverArtUrl = useCoverUrl(
+    album.artwork_url ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 500) : null,
+  );
 
   const accentColor = useAlbumAccent(album.id, album.accent_color, coverArtUrl, server.id);
 
@@ -305,7 +305,7 @@ export function AlbumDetail({
         isLoved={isAlbumLoved}
         onToggleLove={() => toggleAlbumLove(album.id, serverWithCredential)}
         onIdentify={() => setShowIdentify(true)}
-        onChooseCover={() => setShowCoverPicker(true)}
+        onChooseCover={canChooseCover(album) ? () => setShowCoverPicker(true) : undefined}
         onClose={onClose}
         onSelectArtist={onSelectArtist}
       />

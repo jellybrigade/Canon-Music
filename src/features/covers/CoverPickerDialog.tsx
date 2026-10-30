@@ -127,7 +127,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
   const currentUrl = album.artwork_url
     ? getCoverArtUrl(server.url, server.username, credential, album.artwork_url, ORIGINAL_COVER_SIZE)
     : null;
-  const hasOverride = Boolean(override.data);
+  const hasOverride = override.isSuccess && override.data !== null;
 
   const choose = (choice: CoverCandidate | null) => {
     const size = choice && knownSize(choice, measuredSizes[choice.fullUrl]);
@@ -162,11 +162,19 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
                 onMeasure={measure}
               />
             )}
-            <p className="identify-hint">
-              {hasOverride
-                ? "Showing a cover you picked. Canon keeps it to itself; the server and your files still have their own."
-                : "Showing the server's cover. A cover you pick stays in Canon; the server and your files keep theirs."}
-            </p>
+            {override.error ? (
+              <p className="identify-hint identify-hint--error">
+                Could not read which cover is in use: {errorMessage(override.error)}
+              </p>
+            ) : (
+              override.isSuccess && (
+                <p className="identify-hint">
+                  {hasOverride
+                    ? "Showing a cover you picked. Canon keeps it to itself; the server and your files still have their own."
+                    : "Showing the server's cover. A cover you pick stays in Canon; the server and your files keep theirs."}
+                </p>
+              )
+            )}
           </div>
 
           {candidates.isPending ? (

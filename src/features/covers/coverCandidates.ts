@@ -16,8 +16,6 @@ export const COVER_SOURCE_LABELS: Record<CoverSource, string> = {
 };
 
 const FANART_COVER_EDGE = 1000;
-const MIN_COVER_EDGE = 300;
-const MAX_SQUARE_DEVIATION = 0.02;
 
 export interface CoverCandidate extends CoverChoice {
   source: CoverSource;
@@ -36,12 +34,6 @@ export interface CoverLookup {
   releaseGroupMbid: string | null;
 }
 
-function isUsableShape({ width, height }: CoverCandidate): boolean {
-  if (width === null || height === null) return true;
-  const shortEdge = Math.min(width, height);
-  return shortEdge >= MIN_COVER_EDGE && Math.max(width, height) / shortEdge - 1 <= MAX_SQUARE_DEVIATION;
-}
-
 /** Every found candidate, best source first, approved archive images first within a source, each image once. */
 export function rankCoverCandidates(results: readonly SourceResult[]): CoverCandidate[] {
   const seen = new Set<string>();
@@ -50,7 +42,7 @@ export function rankCoverCandidates(results: readonly SourceResult[]): CoverCand
     const candidates = results.filter((result) => result.source === source).flatMap((result) => result.candidates);
     const ordered = [...candidates.filter((c) => c.isApproved), ...candidates.filter((c) => !c.isApproved)];
     for (const candidate of ordered) {
-      if (seen.has(candidate.fullUrl) || !isUsableShape(candidate)) continue;
+      if (seen.has(candidate.fullUrl)) continue;
       seen.add(candidate.fullUrl);
       ranked.push(candidate);
     }

@@ -36,8 +36,10 @@ const swc = {
   credential: { type: "apikey", apiKey: "k" },
 } as ServerWithCredential;
 
-function renderDialog(onClose = vi.fn()) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderDialog(
+  onClose = vi.fn(),
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return render(
     <QueryClientProvider client={queryClient}>
       <CoverPickerDialog album={album} serverWithCredential={swc} onClose={onClose} />
@@ -128,6 +130,39 @@ describe("CoverPickerDialog", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(invoke).toHaveBeenCalledWith("clear_album_cover_override", { serverId: "srv", albumId: "srv:abc" });
     expect(db.raw.prepare("SELECT COUNT(*) AS n FROM album_cover_overrides").get()).toEqual({ n: 0 });
+  });
+
+  it("searches again once the album is identified, instead of reusing the search made without it", async () => {
+    db.raw.exec("DELETE FROM album_identity");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const first = renderDialog(vi.fn(), queryClient);
+    expect(await screen.findByText(/Cover Art Archive: /)).toBeTruthy();
+    first.unmount();
+
+    db.raw.exec(
+      "INSERT INTO album_identity (album_id, mb_release_id, mb_release_group_id) VALUES ('srv:abc', 'rel-1', 'rg-1')",
+    );
+    renderDialog(vi.fn(), queryClient);
+
+    expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
+    expect(fetchCaaFrontCovers).toHaveBeenCalledWith("release", "rel-1");
+  });
+
+  it("says nothing about which cover shows until it has read whether one was picked", async () => {
+    vi.mocked(getDb).mockImplementation(() => new Promise(() => {}));
+    renderDialog();
+
+    expect(screen.queryByText(/Showing/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use server cover" })).toBeNull();
+    expect(previewImage("Current")).toBeTruthy();
+  });
+
+  it("says when it could not read whether a cover was picked", async () => {
+    vi.mocked(getDb).mockRejectedValue(new Error("database is locked"));
+    renderDialog();
+
+    expect(await screen.findByText(/Could not read which cover is in use: database is locked/)).toBeTruthy();
+    expect(screen.queryByText(/Showing the server's cover/)).toBeNull();
   });
 
   it("shows the current cover's size and the size of the one picked, measured from the images", async () => {

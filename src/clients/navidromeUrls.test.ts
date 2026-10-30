@@ -279,13 +279,11 @@ describe("getCoverArtUrl for an album with a chosen cover", () => {
   it("tells subscribers once per change", () => {
     const listener = vi.fn();
     const unsubscribe = nav.subscribeCoverRevisions(listener);
-    const before = nav.getCoverRevisionsVersion();
     nav.setCoverRevision("abc", 1);
     nav.replaceCoverRevisions(new Map());
     unsubscribe();
     nav.setCoverRevision("abc", 2);
     expect(listener).toHaveBeenCalledTimes(2);
-    expect(nav.getCoverRevisionsVersion()).toBe(before + 3);
   });
 });
 

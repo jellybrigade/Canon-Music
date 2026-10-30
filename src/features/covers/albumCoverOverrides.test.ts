@@ -8,7 +8,7 @@ import * as nav from "../../clients/navidromeUrls";
 import { getDb } from "../../db";
 import { onInvoke, resetTauriMocks } from "../../test/mocks/tauri";
 import { createMigratedTestDb, type FakeDatabase } from "../../test/sqlite";
-import { chooseAlbumCover, clearAlbumCover, loadCoverOverrides } from "./albumCoverOverrides";
+import { canChooseCover, chooseAlbumCover, clearAlbumCover, loadCoverOverrides } from "./albumCoverOverrides";
 
 let db: FakeDatabase;
 
@@ -101,6 +101,50 @@ describe("chooseAlbumCover", () => {
       activeServerId: "srv",
       rows: [{ serverId: "srv", albumId: "srv:abc", revision: 3 }],
     });
+  });
+});
+
+function seedAlbumAccent() {
+  db.raw.exec(
+    `INSERT INTO albums (id, server_id, server_type, name, artwork_url, accent_color) VALUES
+     ('srv:abc', 'srv', 'navidrome', 'Album', 'al-abc_ff', '#ff0000'),
+     ('other:abc', 'other', 'navidrome', 'Album', 'al-abc_ff', '#00ff00')`,
+  );
+}
+
+function accents() {
+  return db.raw.prepare("SELECT id, accent_color FROM albums ORDER BY id").all();
+}
+
+describe("album accent", () => {
+  it("is read again from a newly chosen cover, on this server only", async () => {
+    seedAlbumAccent();
+    onInvoke("save_album_cover_override", () => "image/jpeg");
+    await chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 7 });
+
+    expect(accents()).toEqual([
+      { id: "other:abc", accent_color: "#00ff00" },
+      { id: "srv:abc", accent_color: null },
+    ]);
+  });
+
+  it("is read again from the server's cover once a choice is cleared", async () => {
+    seedAlbumAccent();
+    await clearAlbumCover({ serverId: "srv", albumId: "srv:abc" });
+
+    expect(accents()).toContainEqual({ id: "srv:abc", accent_color: null });
+  });
+});
+
+describe("canChooseCover", () => {
+  it("allows an album whose cover id names it", () => {
+    expect(canChooseCover({ id: "srv:abc", server_id: "srv", artwork_url: "al-abc_ff" })).toBe(true);
+  });
+
+  it("refuses an album with no cover, or a cover id that names no album or another one", () => {
+    expect(canChooseCover({ id: "srv:abc", server_id: "srv", artwork_url: null })).toBe(false);
+    expect(canChooseCover({ id: "srv:abc", server_id: "srv", artwork_url: "mf-123" })).toBe(false);
+    expect(canChooseCover({ id: "srv:abc", server_id: "srv", artwork_url: "al-xyz_ff" })).toBe(false);
   });
 });
 

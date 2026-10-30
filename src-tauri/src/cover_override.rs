@@ -1,4 +1,7 @@
-use crate::cover::{sanitize_cache_key, CoverState, ImageCache, MAX_COVER_CACHE_ENTRIES};
+use crate::cover::{
+    is_cached_cover_size, sanitize_cache_key, CoverState, ImageCache, MAX_COVER_CACHE_ENTRIES,
+    ORIGINAL_COVER_SIZE,
+};
 use crate::stream_classify::is_image_response;
 use std::collections::HashMap;
 use std::io::Read;
@@ -177,11 +180,13 @@ pub(crate) fn read_override(
     let bytes = std::fs::read(&stored.path).ok()?;
     let (bytes, content_type) = scaled_to_fit(bytes, size);
     let entry = (bytes, content_type.to_string());
-    let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
-    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
-        cache.clear();
+    if is_cached_cover_size(size) {
+        let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
+        if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+            cache.clear();
+        }
+        cache.insert(cache_key, entry.clone());
     }
-    cache.insert(cache_key, entry.clone());
     Some(entry)
 }
 
@@ -192,7 +197,7 @@ const SCALED_JPEG_QUALITY: u8 = 90;
 /// should not decode that. An image that can't be decoded or is already small enough passes as is.
 pub(crate) fn scaled_to_fit(bytes: Vec<u8>, size: u32) -> (Vec<u8>, &'static str) {
     let content_type = image_content_type(&bytes);
-    if size == 0 {
+    if size == ORIGINAL_COVER_SIZE {
         return (bytes, content_type);
     }
     let Ok(decoded) = image::load_from_memory(&bytes) else {
@@ -264,20 +269,33 @@ pub(crate) fn validate_cover_bytes(declared: Option<&str>, bytes: &[u8]) -> Resu
     Ok(())
 }
 
+/// Disk work stays off the main thread, where Tauri runs synchronous commands.
+async fn off_main_thread<T: Send + 'static>(
+    work: impl FnOnce() -> T + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
+        .await
+        .map_err(|e| format!("Cover work stopped: {e}"))
+}
+
 /// Replaces which covers exist with what the database lists, and which the active server serves.
 /// The caller must not run this while a choice is being saved, or the sweep deletes its file.
 #[tauri::command]
-pub fn sync_cover_overrides(
+pub async fn sync_cover_overrides(
     state: tauri::State<'_, CoverState>,
     active_server_id: Option<String>,
     rows: Vec<CoverOverrideRow>,
-) {
-    let Some(root) = COVER_OVERRIDE_DIR.get() else {
-        return;
+) -> Result<(), String> {
+    let Some(root) = COVER_OVERRIDE_DIR.get().cloned() else {
+        return Ok(());
     };
-    sweep_override_files(root, &rows);
-    *state.overrides.lock().unwrap_or_else(|e| e.into_inner()) =
-        active_overrides(root, active_server_id.as_deref(), &rows);
+    let overrides = state.overrides.clone();
+    off_main_thread(move || {
+        sweep_override_files(&root, &rows);
+        *overrides.lock().unwrap_or_else(|e| e.into_inner()) =
+            active_overrides(&root, active_server_id.as_deref(), &rows);
+    })
+    .await
 }
 
 /// Downloads `url` and keeps it as this revision's file. Nothing serves it until
@@ -295,7 +313,7 @@ pub async fn save_album_cover_override(
         .cloned()
         .ok_or("Canon has no data folder to keep covers in")?;
     let client = state.http_client.clone();
-    tauri::async_runtime::spawn_blocking(move || {
+    off_main_thread(move || {
         let bytes = download_image(&client, &url)?;
         write_atomically(
             &override_path(&root, &server_id, &album_id, revision),
@@ -303,8 +321,7 @@ pub async fn save_album_cover_override(
         )?;
         Ok(image_content_type(&bytes).to_string())
     })
-    .await
-    .map_err(|e| format!("Saving the cover stopped: {e}"))?
+    .await?
 }
 
 /// Serves the saved revision from now on and deletes the album's earlier choices.
@@ -331,41 +348,56 @@ pub(crate) fn use_override(
 }
 
 #[tauri::command]
-pub fn use_album_cover_override(
+pub async fn use_album_cover_override(
     state: tauri::State<'_, CoverState>,
     server_id: String,
     album_id: String,
     revision: i64,
-) {
-    if let Some(root) = COVER_OVERRIDE_DIR.get() {
-        use_override(&state.overrides, root, &server_id, &album_id, revision);
-    }
+) -> Result<(), String> {
+    let Some(root) = COVER_OVERRIDE_DIR.get().cloned() else {
+        return Ok(());
+    };
+    let overrides = state.overrides.clone();
+    off_main_thread(move || use_override(&overrides, &root, &server_id, &album_id, revision)).await
 }
 
 /// Drops a saved revision whose database row could not be written; earlier choices stay.
 #[tauri::command]
-pub fn discard_album_cover_file(server_id: String, album_id: String, revision: i64) {
-    if let Some(root) = COVER_OVERRIDE_DIR.get() {
-        let _ = std::fs::remove_file(override_path(root, &server_id, &album_id, revision));
-    }
+pub async fn discard_album_cover_file(
+    server_id: String,
+    album_id: String,
+    revision: i64,
+) -> Result<(), String> {
+    let Some(root) = COVER_OVERRIDE_DIR.get().cloned() else {
+        return Ok(());
+    };
+    off_main_thread(move || {
+        let _ = std::fs::remove_file(override_path(&root, &server_id, &album_id, revision));
+    })
+    .await
 }
 
 #[tauri::command]
-pub fn clear_album_cover_override(
+pub async fn clear_album_cover_override(
     state: tauri::State<'_, CoverState>,
     server_id: String,
     album_id: String,
-) {
-    let mut active = state.overrides.lock().unwrap_or_else(|e| e.into_inner());
-    if active.server_id.as_deref() == Some(server_id.as_str()) {
-        active
-            .by_album
-            .remove(album_key_of_album_id(&server_id, &album_id));
+) -> Result<(), String> {
+    {
+        let mut active = state.overrides.lock().unwrap_or_else(|e| e.into_inner());
+        if active.server_id.as_deref() == Some(server_id.as_str()) {
+            active
+                .by_album
+                .remove(album_key_of_album_id(&server_id, &album_id));
+        }
     }
-    drop(active);
-    if let Some(root) = COVER_OVERRIDE_DIR.get() {
-        let _ = std::fs::remove_dir_all(album_dir(root, &server_id, &album_id));
-    }
+    let Some(root) = COVER_OVERRIDE_DIR.get().cloned() else {
+        return Ok(());
+    };
+    off_main_thread(move || {
+        let _ = std::fs::remove_dir_all(album_dir(&root, &server_id, &album_id));
+    })
+    .await
 }
 
 #[cfg(test)]

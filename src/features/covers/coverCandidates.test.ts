@@ -67,18 +67,6 @@ describe("rankCoverCandidates", () => {
     expect(ranked).toEqual([expect.objectContaining({ source: "caa-release" })]);
   });
 
-  it("drops images known to be too small or far from square, and keeps unmeasured ones", () => {
-    const ranked = rankCoverCandidates([
-      found("fanart", [
-        candidate({ source: "fanart", fullUrl: "https://small", width: 200, height: 200 }),
-        candidate({ source: "fanart", fullUrl: "https://wide", width: 1000, height: 800 }),
-        candidate({ source: "fanart", fullUrl: "https://near", width: 1000, height: 990 }),
-        candidate({ source: "fanart", fullUrl: "https://unknown" }),
-      ]),
-    ]);
-    expect(ranked.map((c) => c.fullUrl)).toEqual(["https://near", "https://unknown"]);
-  });
-
   it("ignores sources that failed or were skipped", () => {
     expect(
       rankCoverCandidates([

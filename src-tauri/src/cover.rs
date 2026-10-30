@@ -180,6 +180,14 @@ pub(crate) fn cover_error_response(status: u16) -> tauri::http::Response<Vec<u8>
         .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
 }
 
+/// Navidrome's size 0 is the stored original, asked for to measure it rather than show it, and
+/// often megabytes: kept in neither cache.
+pub(crate) const ORIGINAL_COVER_SIZE: u32 = 0;
+
+pub(crate) fn is_cached_cover_size(size: u32) -> bool {
+    size != ORIGINAL_COVER_SIZE
+}
+
 fn query_param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
     query.split('&').find_map(|kv| {
         let mut parts = kv.splitn(2, '=');
@@ -295,16 +303,22 @@ pub(crate) fn handle_cover_request(
         return cover_image_response(bytes, &content_type);
     }
     let cache_key = format!("{id}:{size}");
-    let cached = state
-        .cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(&cache_key)
-        .cloned();
+    let is_cached = is_cached_cover_size(size);
+    let cached = is_cached
+        .then(|| {
+            state
+                .cache
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&cache_key)
+                .cloned()
+        })
+        .flatten();
     let (bytes, content_type) = if let Some(entry) = cached {
         entry
     } else if let Some(entry) = COVER_CACHE_DIR
         .get()
+        .filter(|_| is_cached)
         .and_then(|dir| disk_cache_read(dir, "cover", &cache_key))
     {
         let mut cache = state.cache.lock().unwrap_or_else(|e| e.into_inner());
@@ -361,15 +375,17 @@ pub(crate) fn handle_cover_request(
                                 if !is_image_response(declared_ct.as_deref(), &b) {
                                     return cover_error_response(502);
                                 }
-                                if let Some(dir) = COVER_CACHE_DIR.get() {
-                                    disk_cache_write(dir, "cover", &cache_key, &b, &ct);
+                                if is_cached {
+                                    if let Some(dir) = COVER_CACHE_DIR.get() {
+                                        disk_cache_write(dir, "cover", &cache_key, &b, &ct);
+                                    }
+                                    let mut cache =
+                                        state.cache.lock().unwrap_or_else(|e| e.into_inner());
+                                    if cache.len() >= MAX_COVER_CACHE_ENTRIES {
+                                        cache.clear();
+                                    }
+                                    cache.insert(cache_key.clone(), (b.clone(), ct.clone()));
                                 }
-                                let mut cache =
-                                    state.cache.lock().unwrap_or_else(|e| e.into_inner());
-                                if cache.len() >= MAX_COVER_CACHE_ENTRIES {
-                                    cache.clear();
-                                }
-                                cache.insert(cache_key.clone(), (b.clone(), ct.clone()));
                                 (b, ct)
                             }
                             Err(_) => return cover_error_response(502),
@@ -387,7 +403,8 @@ pub(crate) fn handle_cover_request(
 mod tests {
     use super::{
         cover_routes, disk_cache_read, disk_cache_write, evict_disk_cache_if_needed,
-        percent_decode, promote_route, sanitize_cache_key, MAX_DISK_CACHE_ENTRIES,
+        is_cached_cover_size, percent_decode, promote_route, sanitize_cache_key,
+        MAX_DISK_CACHE_ENTRIES,
     };
     use std::path::{Path, PathBuf};
     use std::sync::atomic::{AtomicU32, Ordering};
@@ -421,6 +438,13 @@ mod tests {
     }
 
     // ── sanitize_cache_key ────────────────────────────────────────────────────
+
+    #[test]
+    fn only_a_scaled_cover_is_cached_never_the_unscaled_original() {
+        assert!(!is_cached_cover_size(0));
+        assert!(is_cached_cover_size(64));
+        assert!(is_cached_cover_size(300));
+    }
 
     #[test]
     fn cover_routes_try_the_primary_first_then_the_alternate() {
