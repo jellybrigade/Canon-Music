@@ -101,6 +101,33 @@ describe("fetchFanartAlbumCovers", () => {
     await expect(fetchFanartAlbumCovers("rg-1", "key")).resolves.toEqual([]);
   });
 
+  it("skips covers of the wrong shape instead of failing the search", async () => {
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        albums: {
+          "rg-1": {
+            albumcover: [
+              "https://assets.fanart.tv/fanart/string.jpg",
+              { id: 7, url: "https://assets.fanart.tv/fanart/numeric-id.jpg" },
+              null,
+            ],
+          },
+        },
+      }),
+    );
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).resolves.toEqual([
+      expect.objectContaining({
+        id: "https://assets.fanart.tv/fanart/numeric-id.jpg",
+        fullUrl: "https://assets.fanart.tv/fanart/numeric-id.jpg",
+        likes: 0,
+      }),
+    ]);
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, { albums: { "rg-1": { albumcover: { url: "https://assets.fanart.tv/fanart/a.jpg" } } } }),
+    );
+    await expect(fetchFanartAlbumCovers("rg-1", "key")).resolves.toEqual([]);
+  });
+
   it("fails when fanart.tv did not answer", async () => {
     vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(500, {}));
     await expect(fetchFanartAlbumCovers("rg-1", "key")).rejects.toThrow("500");

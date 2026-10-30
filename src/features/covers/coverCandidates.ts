@@ -16,6 +16,7 @@ export const COVER_SOURCE_LABELS: Record<CoverSource, string> = {
 };
 
 const FANART_COVER_EDGE = 1000;
+const NEEDS_IDENTITY = "Identify the album on MusicBrainz to search here";
 
 export interface CoverCandidate extends CoverChoice {
   source: CoverSource;
@@ -54,12 +55,16 @@ async function settle(source: CoverSource, load: () => Promise<CoverCandidate[]>
   try {
     return { source, status: "found", candidates: await load() };
   } catch (err) {
-    return { source, status: "failed", candidates: [], reason: errorMessage(err) };
+    return failed(source, errorMessage(err));
   }
 }
 
 function skipped(source: CoverSource, reason: string): SourceResult {
   return { source, status: "skipped", candidates: [], reason };
+}
+
+function failed(source: CoverSource, reason: string): SourceResult {
+  return { source, status: "failed", candidates: [], reason };
 }
 
 async function caaCandidates(kind: "release" | "release-group", mbid: string): Promise<CoverCandidate[]> {
@@ -75,17 +80,18 @@ async function caaCandidates(kind: "release" | "release-group", mbid: string): P
   }));
 }
 
-async function fanartCandidates(releaseGroupMbid: string): Promise<SourceResult> {
-  let apiKey: string | null;
+/** The stored key, or why fanart.tv can't be asked: without a key nothing else about it matters. */
+async function readFanartKey(): Promise<string | SourceResult> {
   try {
-    apiKey = await getFanartApiKey();
+    return (await getFanartApiKey()) ?? skipped("fanart", "Add a fanart.tv key in Settings to search it");
   } catch (err) {
-    return { source: "fanart", status: "failed", candidates: [], reason: errorMessage(err) };
+    return failed("fanart", errorMessage(err));
   }
-  if (apiKey === null) return skipped("fanart", "Add a fanart.tv key in Settings to search it");
-  const key = apiKey;
+}
+
+function fanartCandidates(releaseGroupMbid: string, apiKey: string): Promise<SourceResult> {
   return settle("fanart", async () =>
-    (await fetchFanartAlbumCovers(releaseGroupMbid, key)).map((cover) => ({
+    (await fetchFanartAlbumCovers(releaseGroupMbid, apiKey)).map((cover) => ({
       source: "fanart",
       sourceRef: `fanart:${cover.id}`,
       fullUrl: cover.fullUrl,
@@ -98,24 +104,30 @@ async function fanartCandidates(releaseGroupMbid: string): Promise<SourceResult>
 }
 
 async function releaseGroupSources(lookup: CoverLookup): Promise<[SourceResult, SourceResult]> {
+  const fanartKey = readFanartKey();
   let releaseGroupMbid = lookup.releaseGroupMbid;
   if (releaseGroupMbid === null && lookup.releaseMbid !== null) {
     try {
       releaseGroupMbid = (await lookupRelease(lookup.releaseMbid)).releaseGroupId;
     } catch (err) {
       const reason = errorMessage(err);
-      return [
-        { source: "caa-release-group", status: "failed", candidates: [], reason },
-        { source: "fanart", status: "failed", candidates: [], reason },
-      ];
+      const key = await fanartKey;
+      return [failed("caa-release-group", reason), typeof key === "string" ? failed("fanart", reason) : key];
     }
   }
   if (releaseGroupMbid === null) {
-    const reason = "Identify the album on MusicBrainz to search here";
-    return [skipped("caa-release-group", reason), skipped("fanart", reason)];
+    const key = await fanartKey;
+    return [
+      skipped("caa-release-group", NEEDS_IDENTITY),
+      typeof key === "string" ? skipped("fanart", NEEDS_IDENTITY) : key,
+    ];
   }
   const mbid = releaseGroupMbid;
-  return Promise.all([settle("caa-release-group", () => caaCandidates("release-group", mbid)), fanartCandidates(mbid)]);
+  const [releaseGroup, fanart] = await Promise.all([
+    settle("caa-release-group", () => caaCandidates("release-group", mbid)),
+    fanartKey.then((key) => (typeof key === "string" ? fanartCandidates(mbid, key) : key)),
+  ]);
+  return [releaseGroup, fanart];
 }
 
 /** Asks every cover source at once; one source failing never hides another's answer. */
@@ -123,7 +135,7 @@ export async function findCoverCandidates(lookup: CoverLookup): Promise<SourceRe
   const { releaseMbid } = lookup;
   const [release, [releaseGroup, fanart], itunes] = await Promise.all([
     releaseMbid === null
-      ? skipped("caa-release", "Identify the album on MusicBrainz to search here")
+      ? skipped("caa-release", NEEDS_IDENTITY)
       : settle("caa-release", () => caaCandidates("release", releaseMbid)),
     releaseGroupSources(lookup),
     settle("itunes", async () =>

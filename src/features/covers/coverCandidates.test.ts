@@ -126,6 +126,14 @@ describe("findCoverCandidates", () => {
     ]);
   });
 
+  it("asks for a fanart.tv key, not a failed search, when the release lookup fails without one", async () => {
+    vi.mocked(getFanartApiKey).mockResolvedValue(null);
+    vi.mocked(lookupRelease).mockRejectedValue(new Error("MusicBrainz release/rel-1 returned 503"));
+    const results = await findCoverCandidates({ ...lookup, releaseGroupMbid: null });
+    expect(results[1]).toMatchObject({ source: "caa-release-group", status: "failed" });
+    expect(results[2]).toMatchObject({ source: "fanart", status: "skipped", reason: expect.stringContaining("key") });
+  });
+
   it("asks only iTunes for an album never identified", async () => {
     const results = await findCoverCandidates({ ...lookup, releaseMbid: null, releaseGroupMbid: null });
     expect(results.map(({ source, status }) => ({ source, status }))).toEqual([
