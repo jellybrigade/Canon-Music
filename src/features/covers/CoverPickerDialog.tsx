@@ -76,12 +76,14 @@ function CandidateTile({
   size,
   isSelected,
   isCurrent,
+  isDisabled,
   onSelect,
 }: {
   candidate: CoverCandidate;
   size: Dimensions | null;
   isSelected: boolean;
   isCurrent: boolean;
+  isDisabled: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -89,15 +91,16 @@ function CandidateTile({
       type="button"
       className={`cover-picker-tile${isSelected ? " cover-picker-tile--selected" : ""}`}
       aria-pressed={isSelected}
+      disabled={isDisabled}
       onClick={onSelect}
     >
       <CoverImg className="cover-picker-tile-art" src={candidate.thumbUrl} alt="" loading="lazy" decoding="async" />
       <span className="cover-picker-tile-caption">
-        <span>{COVER_SOURCE_LABELS[candidate.source]}</span>
+        <span className="cover-picker-tile-source">{COVER_SOURCE_LABELS[candidate.source]}</span>
         {isCurrent ? (
           <span className="cover-picker-tile-current">In use</span>
         ) : (
-          size && <span>{formatSize(size)}</span>
+          <span className="cover-picker-tile-size">{size ? formatSize(size) : "\u00a0"}</span>
         )}
       </span>
     </button>
@@ -199,6 +202,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
                   size={knownSize(candidate, measuredSizes[candidate.fullUrl])}
                   isSelected={candidate.fullUrl === selectedUrl}
                   isCurrent={candidate.fullUrl === override.data?.fullUrl}
+                  isDisabled={setCover.isPending}
                   onSelect={() => setSelectedUrl(candidate.fullUrl)}
                 />
               ))}

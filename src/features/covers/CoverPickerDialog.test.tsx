@@ -166,6 +166,22 @@ describe("CoverPickerDialog", () => {
     expect(fetchFanartAlbumCovers).toHaveBeenCalledWith("rg-1", "key");
   });
 
+  it("holds the picked cover while it is being kept", async () => {
+    let finishSave = (_mime: string) => {};
+    onInvoke("save_album_cover_override", () => new Promise<string>((resolve) => (finishSave = resolve)));
+    const onClose = vi.fn();
+    renderDialog(onClose);
+
+    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
+    fireEvent.click(tile);
+    fireEvent.click(screen.getByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => expect((tile as HTMLButtonElement).disabled).toBe(true));
+    // Saves run one at a time across the app, so a save left hanging would hold up the next case's.
+    finishSave("image/jpeg");
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
   it("says nothing about which cover shows until it has read whether one was picked", async () => {
     vi.mocked(getDb).mockImplementation(() => new Promise(() => {}));
     renderDialog();

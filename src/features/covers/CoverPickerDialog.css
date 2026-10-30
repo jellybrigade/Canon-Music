@@ -70,6 +70,20 @@
   background: var(--tint-3);
 }
 
+/* While a pick is being kept, the others step back so it stays the one in view. */
+.cover-picker-tile:disabled {
+  cursor: default;
+}
+
+.cover-picker-tile:disabled:not(.cover-picker-tile--selected) {
+  opacity: var(--opacity-50);
+}
+
+.cover-picker-tile:disabled:hover {
+  background: var(--tint-1);
+  border-color: var(--tint-2);
+}
+
 .cover-picker-tile:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -90,14 +104,26 @@
   background: var(--tint-2);
 }
 
+/* Two lines: a source name ("Cover Art Archive, other editions") is wider than a tile on its own,
+   and on one line it pushed the size and "In use" out of sight. */
 .cover-picker-tile-caption {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-2xs);
+  flex-direction: column;
+  min-width: 0;
   font-size: var(--text-2xs);
+}
+
+.cover-picker-tile-source,
+.cover-picker-tile-size,
+.cover-picker-tile-current {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.cover-picker-tile-size {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
 
 .cover-picker-tile-current {
