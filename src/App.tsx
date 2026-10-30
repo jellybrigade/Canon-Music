@@ -32,6 +32,7 @@ import {
   updateCoverProxyConfig,
 } from "./clients/navidromeUrls";
 import { getDb } from "./db";
+import { loadCoverOverrides } from "./features/covers/albumCoverOverrides";
 import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
 import { useMediaSession } from "./features/playback/hooks/useMediaSession";
 import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
@@ -294,6 +295,10 @@ export default function App() {
           serverWithCred.server.username,
           serverWithCred.credential,
         );
+        // Before the switch to cover:// so no URL is built without its chosen-cover revision.
+        await loadCoverOverrides(serverWithCred.server.id).catch((err: unknown) => {
+          console.error("Chosen album covers could not be loaded", err);
+        });
         initCoverServer();
       } catch {
         // proxy unavailable; getCoverArtUrl falls back to direct Navidrome URL

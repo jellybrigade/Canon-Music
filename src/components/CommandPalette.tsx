@@ -27,6 +27,7 @@ import "./CommandPalette.css";
 import { ContextMenu } from "../ui/ContextMenu";
 import { useOwnKeyboard } from "../ui/keyboardOwners";
 import { useOverlayDismiss } from "../ui/useOverlayDismiss";
+import { CoverImg } from "./CoverImg";
 
 type View = "home" | "nowplaying" | "library" | "artists" | "playlists" | "tags" | "settings";
 
@@ -581,7 +582,7 @@ export function CommandPalette({
     return (
       <button key={itemKey(result)} {...optionProps(result, idx, `cp-result-row${isTop ? " cp-top-row" : ""}`)}>
         {art.url ? (
-          <img className={artClass} src={art.url} alt="" decoding="async" />
+          <CoverImg className={artClass} src={art.url} alt="" decoding="async" />
         ) : (
           <span className={`${artClass} cp-art--placeholder`}>{art.fallback}</span>
         )}

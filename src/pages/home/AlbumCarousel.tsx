@@ -5,6 +5,7 @@ import { useAlbumCoverMap } from "../../hooks/useCoverCache";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { AlbumRow } from "../../types/library";
 import "./AlbumCarousel.css";
+import { CoverImg } from "../../components/CoverImg";
 import { CarouselTrack } from "./CarouselTrack";
 
 interface CarouselRefresh {
@@ -111,7 +112,7 @@ export function AlbumCarousel({
                 >
                   <div className="carousel-card__art-wrap">
                     {artUrl ? (
-                      <img
+                      <CoverImg
                         className="carousel-card__art"
                         src={artUrl}
                         alt={item.name}

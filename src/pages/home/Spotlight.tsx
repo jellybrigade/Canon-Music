@@ -8,6 +8,7 @@ import type { AlbumStatRow } from "../../hooks/useListeningStats";
 import type { ServerWithCredential } from "../../hooks/useServer";
 import type { AlbumRow } from "../../types/library";
 import "./Spotlight.css";
+import { CoverImg } from "../../components/CoverImg";
 
 export interface SpotlightPick {
   kicker: string;
@@ -134,7 +135,7 @@ export function Spotlight({
         aria-label={`Play ${pick.album.name}`}
       >
         {artUrl ? (
-          <img className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
+          <CoverImg className="home-spotlight__art" src={artUrl} alt={pick.album.name} loading="lazy" />
         ) : (
           <div className="home-spotlight__art home-spotlight__art--placeholder" />
         )}

@@ -1,11 +1,107 @@
 use super::{http_client_long, open_decoder};
 use crate::stream_classify::{classify_stream_response, StreamVerdict, STREAM_HEAD_BYTES};
 use rodio::Source;
+use std::collections::HashMap;
 use std::io::{Read, Seek, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use tauri::Emitter;
+
+const CANCELLED: &str = "cancelled";
+
+struct RunningEntry {
+    cancelled: Arc<AtomicBool>,
+    batch: Option<String>,
+}
+
+#[derive(Default)]
+struct RegistryState {
+    running: HashMap<String, RunningEntry>,
+    /// Stopped batch -> the track it let finish. Kept for the process: an extraction of a
+    /// stopped batch can still be on its way here (IPC, a busy blocking pool).
+    stopped_batches: HashMap<String, Option<String>>,
+}
+
+/// Extractions running now, by track id. Cancelling flags only these, so an id cancelled after
+/// its run ended can't stop a later run of the same track; a stopped batch also stops its late arrivals.
+#[derive(Default)]
+struct ExtractionRegistry {
+    state: Mutex<RegistryState>,
+}
+
+impl ExtractionRegistry {
+    fn begin(&self, track_id: &str, batch: Option<&str>) -> Arc<AtomicBool> {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        let is_stopped = batch
+            .and_then(|batch| state.stopped_batches.get(batch))
+            .is_some_and(|kept| kept.as_deref() != Some(track_id));
+        let cancelled = Arc::new(AtomicBool::new(is_stopped));
+        state.running.insert(
+            track_id.to_string(),
+            RunningEntry {
+                cancelled: cancelled.clone(),
+                batch: batch.map(str::to_string),
+            },
+        );
+        cancelled
+    }
+
+    fn end(&self, track_id: &str, flag: &Arc<AtomicBool>) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if state
+            .running
+            .get(track_id)
+            .is_some_and(|entry| Arc::ptr_eq(&entry.cancelled, flag))
+        {
+            state.running.remove(track_id);
+        }
+    }
+
+    fn stop_batch(&self, batch: &str, keep_track_id: Option<&str>) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        state
+            .stopped_batches
+            .insert(batch.to_string(), keep_track_id.map(str::to_string));
+        for (id, entry) in &state.running {
+            if entry.batch.as_deref() == Some(batch) && Some(id.as_str()) != keep_track_id {
+                entry.cancelled.store(true, Ordering::Release);
+            }
+        }
+    }
+}
+
+static EXTRACTIONS: LazyLock<ExtractionRegistry> = LazyLock::new(ExtractionRegistry::default);
+
+/// Removes the run from the registry on every exit path.
+struct RunningExtraction<'a> {
+    registry: &'a ExtractionRegistry,
+    track_id: String,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl<'a> RunningExtraction<'a> {
+    fn start(registry: &'a ExtractionRegistry, track_id: &str, batch: Option<&str>) -> Self {
+        let cancelled = registry.begin(track_id, batch);
+        Self {
+            registry,
+            track_id: track_id.to_string(),
+            cancelled,
+        }
+    }
+}
+
+impl Drop for RunningExtraction<'_> {
+    fn drop(&mut self) {
+        self.registry.end(&self.track_id, &self.cancelled);
+    }
+}
+
+/// Stops every extraction started with `batch`, now or later, except `keep_track_id`'s.
+#[tauri::command]
+pub fn audio_stop_waveform_batch(batch: String, keep_track_id: Option<String>) {
+    EXTRACTIONS.stop_batch(&batch, keep_track_id.as_deref());
+}
 
 /// Wraps a growing temp file so the decoder blocks instead of getting premature EOF.
 /// When the download thread is still writing, checks available bytes before reading to
@@ -51,9 +147,14 @@ pub async fn audio_extract_waveform(
     track_id: String,
     url: String,
     duration_secs: f64,
+    batch: Option<String>,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || -> Result<(), String> {
         const BUCKET_COUNT: usize = 200;
+
+        let run = RunningExtraction::start(&EXTRACTIONS, &track_id, batch.as_deref());
+        let cancelled = run.cancelled.clone();
+        let cancelled_dl = cancelled.clone();
 
         // Sanitize track_id for use as a filename component
         let safe_id: String = track_id
@@ -108,8 +209,17 @@ pub async fn audio_extract_waveform(
                 }
                 let mut file = std::fs::File::create(&temp_path_dl).map_err(|e| e.to_string())?;
                 file.write_all(&head).map_err(|e| e.to_string())?;
-                std::io::copy(&mut response, &mut file).map_err(|e| e.to_string())?;
-                Ok(())
+                let mut chunk = vec![0u8; 64 * 1024];
+                loop {
+                    if cancelled_dl.load(Ordering::Acquire) {
+                        return Err(CANCELLED.to_string());
+                    }
+                    match response.read(&mut chunk) {
+                        Ok(0) => return Ok(()),
+                        Ok(n) => file.write_all(&chunk[..n]).map_err(|e| e.to_string())?,
+                        Err(e) => return Err(e.to_string()),
+                    }
+                }
             })();
             if let Err(e) = result {
                 *download_err_dl.lock().unwrap_or_else(|e| e.into_inner()) = Some(e);
@@ -121,7 +231,10 @@ pub async fn audio_extract_waveform(
         let deadline = Instant::now() + Duration::from_secs(15);
         loop {
             let size = std::fs::metadata(&temp_path).map(|m| m.len()).unwrap_or(0);
-            if size >= 65536 || download_done.load(Ordering::Acquire) {
+            if size >= 65536
+                || download_done.load(Ordering::Acquire)
+                || cancelled.load(Ordering::Acquire)
+            {
                 break;
             }
             if Instant::now() > deadline {
@@ -195,6 +308,9 @@ pub async fn audio_extract_waveform(
                 bucket_count += 1;
 
                 if bucket_count >= bucket_size {
+                    if cancelled.load(Ordering::Acquire) {
+                        break;
+                    }
                     let rms = (bucket_sum_sq / bucket_count as f32).sqrt();
                     raw_peaks.push(rms);
                     pending_batch.push(rms);
@@ -219,6 +335,13 @@ pub async fn audio_extract_waveform(
                     }
                 }
             }
+        }
+
+        // A cancelled download ends the decode early too; its partial peaks must not be cached.
+        if cancelled.load(Ordering::Acquire) {
+            let _ = dl_handle.join();
+            let _ = std::fs::remove_file(&temp_path);
+            return Err(CANCELLED.to_string());
         }
 
         // Flush remaining batch
@@ -272,4 +395,56 @@ pub async fn audio_extract_waveform(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn is_cancelled(flag: &Arc<AtomicBool>) -> bool {
+        flag.load(Ordering::Acquire)
+    }
+
+    #[test]
+    fn stopping_a_batch_flags_only_its_running_extractions_but_the_kept_one() {
+        let registry = ExtractionRegistry::default();
+        let a = RunningExtraction::start(&registry, "a", Some("run-1"));
+        let kept = RunningExtraction::start(&registry, "k", Some("run-1"));
+        let other = RunningExtraction::start(&registry, "b", Some("run-2"));
+        let player = RunningExtraction::start(&registry, "p", None);
+        registry.stop_batch("run-1", Some("k"));
+        assert!(is_cancelled(&a.cancelled));
+        assert!(!is_cancelled(&kept.cancelled));
+        assert!(!is_cancelled(&other.cancelled));
+        assert!(!is_cancelled(&player.cancelled));
+    }
+
+    #[test]
+    fn an_extraction_of_a_stopped_batch_that_arrives_late_starts_cancelled() {
+        let registry = ExtractionRegistry::default();
+        registry.stop_batch("run-1", Some("k"));
+        let late = RunningExtraction::start(&registry, "a", Some("run-1"));
+        let kept = RunningExtraction::start(&registry, "k", Some("run-1"));
+        assert!(is_cancelled(&late.cancelled));
+        assert!(!is_cancelled(&kept.cancelled));
+    }
+
+    #[test]
+    fn stopping_a_batch_does_not_stop_a_later_run_of_the_same_track_outside_it() {
+        let registry = ExtractionRegistry::default();
+        drop(RunningExtraction::start(&registry, "a", Some("run-1")));
+        registry.stop_batch("run-1", None);
+        let again = RunningExtraction::start(&registry, "a", None);
+        assert!(!is_cancelled(&again.cancelled));
+    }
+
+    #[test]
+    fn a_finished_run_leaves_a_newer_run_of_the_same_track_registered() {
+        let registry = ExtractionRegistry::default();
+        let first = RunningExtraction::start(&registry, "a", Some("run-1"));
+        let second = RunningExtraction::start(&registry, "a", Some("run-1"));
+        drop(first);
+        registry.stop_batch("run-1", None);
+        assert!(is_cancelled(&second.cancelled));
+    }
 }

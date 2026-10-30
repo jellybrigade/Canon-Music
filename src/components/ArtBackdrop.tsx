@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useCoverUrl } from "../hooks/useCoverRevisions";
 import { getBlurredBackdrop } from "../lib/artBlur";
 import "./ArtBackdrop.css";
 
@@ -14,7 +15,8 @@ interface ArtBackdropProps {
   className?: string;
 }
 
-export function ArtBackdrop({ imageUrl, className }: ArtBackdropProps) {
+export function ArtBackdrop({ imageUrl: storedUrl, className }: ArtBackdropProps) {
+  const imageUrl = useCoverUrl(storedUrl);
   const [layers, setLayers] = useState<Layer[]>([]);
   const nextKey = useRef(0);
 

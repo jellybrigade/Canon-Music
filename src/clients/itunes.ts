@@ -47,3 +47,32 @@ export async function fetchItunesCoverArt(artist: string | null, album: string |
   setCached(key, url);
   return url;
 }
+
+const LIST_SEARCH_LIMIT = 10;
+
+export interface ItunesAlbumCover {
+  thumbUrl: string;
+  fullUrl: string;
+}
+
+/** Every iTunes hit naming the same artist and album (editions included), as cover choices. */
+export async function fetchItunesAlbumCovers(artist: string, album: string): Promise<ItunesAlbumCover[]> {
+  const term = encodeURIComponent(`${artist} ${album}`);
+  const res = await boundedFetch(
+    `https://itunes.apple.com/search?term=${term}&entity=album&limit=${LIST_SEARCH_LIMIT}&media=music`,
+  );
+  if (!res.ok) throw new Error(`iTunes returned ${res.status}`);
+  const data: unknown = await res.json();
+  const results =
+    typeof data === "object" && data !== null && "results" in data && Array.isArray(data.results) ? data.results : [];
+  return results
+    .filter(
+      (result): result is Record<string, unknown> =>
+        typeof result === "object" && result !== null && isSameAlbum(result, artist, album),
+    )
+    .flatMap(({ artworkUrl100: raw }) =>
+      typeof raw === "string" && raw.startsWith("https://")
+        ? [{ thumbUrl: raw.replace("100x100bb", "600x600bb"), fullUrl: raw.replace("100x100bb", "1200x1200bb") }]
+        : [],
+    );
+}

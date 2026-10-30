@@ -886,6 +886,115 @@ describe("player store - gapless hand-off", () => {
       expect(usePlayerStore.getState().queueIndex).toBe(0);
     });
 
+    it("radio replace from the playing track takes back the handed-over track of the old queue", async () => {
+      await setupPlayingQueue(3); // enqueues track "1"
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().startRadioFrom("replace", { tracks: [], seed: makeTrack("0"), streamUrlFor });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("removing the handed-over track takes it back from the engine", async () => {
+      await setupPlayingQueue(3);
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().removeFromQueue(1);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("removing several tracks including the handed-over one takes it back from the engine", async () => {
+      await setupPlayingQueue(4);
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().removeManyFromQueue([1, 3]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("removing the handed-over track while a copy sits later in the queue takes it back", async () => {
+      await setupPlayingQueue(3); // enqueues track "1"
+      usePlayerStore.setState((s) => ({ queue: [...s.queue, makeTrack("1")] }));
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      await usePlayerStore.getState().removeFromQueue(1);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("play next after the hand-off takes it back so the new track plays next", async () => {
+      await setupPlayingQueue(3); // enqueues track "1"
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      usePlayerStore.getState().playNext(makeTrack("new"), streamUrlFor);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("moving the handed-over track later takes it back", async () => {
+      await setupPlayingQueue(4); // enqueues track "1"
+      await driveTickerToEnqueue();
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      usePlayerStore.getState().moveQueueItem(1, 3);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("appending after a handed-over wrap takes it back so the appended track plays next", async () => {
+      await setupPlayingQueue(3, { queueIndex: 2 });
+      usePlayerStore.setState({ repeat: "repeat-all" });
+      await driveTickerToEnqueue(); // enqueues track "0" as a wrap
+      expect(runtime.gaplessEnqueued?.wraps).toBe(true);
+      onInvoke("audio_withdraw_next", () => Promise.resolve(true));
+
+      usePlayerStore.getState().addToQueue(makeTrack("new"), streamUrlFor);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(1);
+      expect(runtime.gaplessEnqueued).toBeNull();
+    });
+
+    it("moving a track that isn't next leaves the hand-off alone", async () => {
+      await setupPlayingQueue(4);
+      await driveTickerToEnqueue();
+
+      usePlayerStore.getState().moveQueueItem(3, 2);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(0);
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
+    it("removing a track other than the handed-over one leaves the hand-off alone", async () => {
+      await setupPlayingQueue(4);
+      await driveTickerToEnqueue();
+
+      await usePlayerStore.getState().removeManyFromQueue([2, 3]);
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(invoke.mock.calls.filter((c) => c[0] === "audio_withdraw_next")).toHaveLength(0);
+      expect(runtime.gaplessEnqueued?.track.id).toBe("1");
+    });
+
     it("remove a different, unrelated track before it: id-scan relocates by shifted position", async () => {
       await setupPlayingQueue(4, { queueIndex: 1 }); // queue 0,1,2,3 ; queueIndex 1 (playing "1") ; enqueues "2"
       await driveTickerToEnqueue();
@@ -1967,6 +2076,16 @@ describe("player store - startRadioFrom", () => {
     expect(state.currentTrack?.id).toBe("seed");
     expect(state.radioActive).toBe(true);
     expect(audioPlayCount()).toBe(1);
+  });
+
+  it("queue_last with nothing loaded plays the first appended track when the queue cap trims the head", async () => {
+    onInvoke("audio_play", () => Promise.resolve(undefined));
+    usePlayerStore.setState({ queue: makeTracks(5), queueIndex: 3, currentTrack: null, maxQueueSize: 5 });
+    const tracks = [makeTrack("r1"), makeTrack("r2"), makeTrack("r3")];
+
+    await usePlayerStore.getState().startRadioFrom("queue_last", { tracks, streamUrlFor });
+
+    expect(usePlayerStore.getState().currentTrack?.id).toBe("r1");
   });
 
   it("queue_last seeds radio from the explicit seed, not the first of several tracks", async () => {

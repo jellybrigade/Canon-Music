@@ -81,7 +81,7 @@ export function AlbumIdentifyDialog({
   const shape = tracks ? albumShapeOf(tracks) : undefined;
   const { data: savedIdentity } = useAlbumIdentity(albumId);
   const saveIdentity = useSaveAlbumIdentity();
-  const dismiss = useOverlayDismiss(onClose);
+  const dismiss = useOverlayDismiss(onClose, { closable: !saveIdentity.isPending });
   const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
 
   const [mbRgId, setMbRgId] = useState("");
@@ -456,7 +456,7 @@ interface ArtistIdentifyDialogProps {
 export function ArtistIdentifyDialog({ artistName, onClose }: ArtistIdentifyDialogProps) {
   const { data: savedIdentity, isPending: isSavedIdentityPending } = useArtistIdentity(artistName);
   const saveIdentity = useSaveArtistIdentity();
-  const dismiss = useOverlayDismiss(onClose);
+  const dismiss = useOverlayDismiss(onClose, { closable: !saveIdentity.isPending });
   const chrome = useModalChrome(onClose, { closable: !saveIdentity.isPending });
 
   const [mbArtistId, setMbArtistId] = useState("");

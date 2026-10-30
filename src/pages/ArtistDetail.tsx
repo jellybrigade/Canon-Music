@@ -45,6 +45,7 @@ import { groupAlbums, type ReleaseGroup } from "./artist/releaseGroups";
 import { SimilarArtistCard } from "./artist/SimilarArtistCard";
 import { formatCount, TrackRow } from "./artist/TrackRow";
 import "./ArtistDetail.css";
+import { CoverImg } from "../components/CoverImg";
 
 interface Props {
   artist: ArtistRow;
@@ -251,7 +252,7 @@ export function ArtistDetail({ artist, serverWithCredential, onClose, onSelectAl
   const currentGroupItems = albumGroups.find((g) => g.group === currentGroup)?.items ?? [];
 
   const heroArt = portraitUrl ? (
-    <img className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" decoding="async" />
+    <CoverImg className="artist-hero-art" src={portraitUrl} alt={artist.name} loading="lazy" decoding="async" />
   ) : (
     <div className="artist-hero-art artist-hero-art--fallback">
       <Mic2 size={38} strokeWidth={1.5} />

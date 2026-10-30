@@ -85,13 +85,15 @@ describe("logger writes", () => {
       "error sending request for url (https://music.example/rest/stream?u=me&t=abc123&s=salt9&v=1.16.1&id=7)",
     );
     console.error("Cover cache: 500 fetching album 1 from https://music.example/rest/getCoverArt?u=me&apiKey=k3y");
+    console.error("fanart.tv: error sending request for url (https://webservice.fanart.tv/v3/music/x?api_key=fan4rt)");
     await logger.flush();
 
     const text = await logger.getRecent();
 
     expect(text).toContain("rest/stream?u=me&t=[redacted]&s=[redacted]&v=1.16.1&id=7)");
     expect(text).toContain("getCoverArt?u=me&apiKey=[redacted]");
-    expect(text).not.toMatch(/abc123|salt9|k3y/);
+    expect(text).toContain("music/x?api_key=[redacted])");
+    expect(text).not.toMatch(/abc123|salt9|k3y|fan4rt/);
   });
 
   it("stores each line once when a flush starts while another is still writing", async () => {

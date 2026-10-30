@@ -12,6 +12,7 @@ import {
 } from "../../lib/forYouGroups";
 import type { AlbumRow } from "../../types/library";
 import "./ForYouRail.css";
+import { CoverImg } from "../../components/CoverImg";
 
 const FOR_YOU_CATEGORIES: { key: string; kicker: string; desc: string }[] = [
   { key: "jump-back-in", kicker: "Jump back in", desc: "Recently played" },
@@ -414,7 +415,13 @@ export function ForYouRail({
             >
               <div className="foryou-v2-tile__art-wrap">
                 {artUrl ? (
-                  <img className="foryou-v2-tile__art" src={artUrl} alt={album.name} decoding="async" loading="lazy" />
+                  <CoverImg
+                    className="foryou-v2-tile__art"
+                    src={artUrl}
+                    alt={album.name}
+                    decoding="async"
+                    loading="lazy"
+                  />
                 ) : (
                   <div className="foryou-v2-tile__art" />
                 )}

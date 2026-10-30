@@ -45,3 +45,45 @@ export async function fetchFanartTvImageByMbid(mbid: string, apiKey: string): Pr
   const data = (await res.json()) as FanartArtistResponse;
   return data.artistthumb?.[0]?.url ?? data.artistbackground?.[0]?.url ?? null;
 }
+
+export interface FanartAlbumCover {
+  id: string;
+  fullUrl: string;
+  thumbUrl: string;
+  likes: number;
+}
+
+interface FanartAlbumResponse {
+  albums?: Record<string, { albumcover?: { id?: string; url?: string; likes?: string }[] }>;
+}
+
+/** Album covers fanart.tv holds for a release group, most liked first; empty when it has none,
+ * rejects when it didn't answer or refused the key, which the picker then names. */
+export async function fetchFanartAlbumCovers(releaseGroupMbid: string, apiKey: string): Promise<FanartAlbumCover[]> {
+  const res = await boundedNativeFetch(
+    `https://webservice.fanart.tv/v3/music/albums/${releaseGroupMbid}?api_key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "GET",
+      headers: { Accept: "application/json", "User-Agent": "Canon Music Player" },
+    },
+  );
+  if (res.status === 404) return [];
+  if (res.status === 401 || res.status === 403) throw new Error("fanart.tv refused the key in Settings");
+  if (!res.ok) throw new Error(`fanart.tv returned ${res.status}`);
+  const data = (await res.json()) as FanartAlbumResponse;
+  return (data.albums?.[releaseGroupMbid]?.albumcover ?? [])
+    .flatMap(({ id, url, likes }) => {
+      if (typeof url !== "string" || !url.startsWith("https://")) return [];
+      const likeCount = Number.parseInt(likes ?? "", 10);
+      return [
+        {
+          id: id ?? url,
+          fullUrl: url,
+          // fanart.tv serves a small copy of every asset under /preview/.
+          thumbUrl: url.replace("/fanart/", "/preview/"),
+          likes: Number.isFinite(likeCount) ? likeCount : 0,
+        },
+      ];
+    })
+    .sort((a, b) => b.likes - a.likes);
+}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { fetchItunesCoverArt } from "../clients/itunes";
+import { CoverImg } from "./CoverImg";
 
 interface Props {
   src: string | null;
@@ -28,7 +29,7 @@ export function AlbumArt({ src, artist, album, alt = "", className, loading, dec
   if (!currentSrc) return null;
 
   return (
-    <img
+    <CoverImg
       src={currentSrc}
       alt={alt}
       className={className}

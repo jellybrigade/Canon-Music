@@ -44,6 +44,7 @@ import "../../pages/AlbumDetail.css";
 import "../../components/AlbumGrid.css";
 import { RowListSkeleton } from "../../ui/Skeleton";
 import "./PlaylistList.css";
+import { CoverImg } from "../../components/CoverImg";
 import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 import {
@@ -359,7 +360,7 @@ export function PlaylistDetail({
         <div className="album-detail-hero">
           <div className="album-detail-art playlist-art-wrapper">
             {displayCoverUrl ? (
-              <img src={displayCoverUrl} alt={playlist.name} className="album-detail-art-img" draggable={false} />
+              <CoverImg src={displayCoverUrl} alt={playlist.name} className="album-detail-art-img" draggable={false} />
             ) : (
               <div className="album-detail-art album-art--placeholder playlist-art-placeholder">
                 <Music size={40} />

@@ -12,7 +12,7 @@ interface AlbumBrowseSessionState {
   entries: Map<string, AlbumRow[]>;
   getRows: (key: string, tick: number) => AlbumRow[] | undefined;
   setRows: (rows: AlbumRow[], tick: number, key: string) => void;
-  setAccent: (albumId: string, accentColor: string) => void;
+  setAccent: (albumId: string, accentColor: string | null) => void;
 }
 
 // Tick-driven SQLite reads for useAlbums, caching rows per sort + genre filter so toggling

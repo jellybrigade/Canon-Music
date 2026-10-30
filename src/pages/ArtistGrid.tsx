@@ -12,6 +12,7 @@ import {
 } from "react";
 import { resolvePortraitUrl } from "../clients/lastfm";
 import { getArtistImageUrl, getCoverArtUrl } from "../clients/navidromeUrls";
+import { CoverImg } from "../components/CoverImg";
 import { ArtistIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useEnrichArtist } from "../features/enrichment/hooks/useEnrichArtist";
 import { PinMenuItem } from "../features/pins/components/PinMenuItem";
@@ -311,7 +312,7 @@ const ArtistGridCard = memo(function ArtistGridCard({
         <LazyPortraitEnrich artistName={artist.name} serverWithCredential={serverWithCredential} elRef={cardRef} />
       )}
       {imgUrl ? (
-        <img
+        <CoverImg
           className="album-art"
           src={imgUrl}
           alt={artist.name}

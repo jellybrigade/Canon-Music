@@ -17,7 +17,7 @@ interface Props {
 export function ArtistMergeModal({ aliasArtistName, onClose }: Props) {
   const { data: allArtists = [] } = useArtists();
   const setAlias = useSetArtistAlias();
-  const dismiss = useOverlayDismiss(onClose);
+  const dismiss = useOverlayDismiss(onClose, { closable: !setAlias.isPending });
   const chrome = useModalChrome(onClose, { closable: !setAlias.isPending });
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<string | null>(null);

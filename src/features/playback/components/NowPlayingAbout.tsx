@@ -14,6 +14,7 @@ import type { SuggestedTrack, TopTrack } from "../hooks/useNowPlayingArtist";
 import { usePlayerStore } from "../store/player";
 import type { CurrentTrack, RadioMode } from "../store/playerTypes";
 import "./NowPlayingAbout.css";
+import { CoverImg } from "../../../components/CoverImg";
 import { replayGainFromRow } from "../../../lib/replayGainRow";
 
 type AboutTrack = TopTrack | SuggestedTrack;
@@ -110,7 +111,7 @@ export function NowPlayingAbout({
         }}
       >
         {track.artwork_url ? (
-          <img
+          <CoverImg
             className="now-playing-track-thumb"
             src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
             alt=""
@@ -200,7 +201,7 @@ export function NowPlayingAbout({
                   }}
                 >
                   {thumbUrl ? (
-                    <img src={thumbUrl} alt={album.name} className="now-playing-album-chip-art" />
+                    <CoverImg src={thumbUrl} alt={album.name} className="now-playing-album-chip-art" />
                   ) : (
                     <div className="now-playing-album-chip-art now-playing-album-chip-art--placeholder" />
                   )}

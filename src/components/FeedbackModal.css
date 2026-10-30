@@ -4,7 +4,7 @@
   /* border/radius/display/flex-direction: shared shell in styles/base.css */
   background: var(--surface-1, #1c1c1e);
   box-shadow: var(--shadow-xl) var(--scrim-3);
-  width: 420px;
+  width: var(--dialog-width-sm);
   max-width: calc(100vw - 2rem);
   gap: 0;
   overflow: hidden;

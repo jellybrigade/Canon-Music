@@ -9,6 +9,7 @@ import { runEnrichment } from "../../tags/hooks/useBackgroundNormalizer";
 import { useTagsStore } from "../../tags/store/tags";
 import { usePlayerStore } from "../store/player";
 import { isNextDisabled } from "../store/playerTypes";
+import { stopWaveformBackfill, useWaveformBackfillStore } from "../store/waveformBackfill";
 import { PlaybackErrorActions } from "./PlaybackErrorActions";
 import "./BottomNotices.css";
 
@@ -99,8 +100,10 @@ export function BottomNotices({ onOpenResync }: { onOpenResync: () => void }) {
   const albumTracksNotice = useAlbumTracksNoticeStore((s) => s.notice);
   const pullProgress = useTagsStore((s) => s.pullProgress);
   const enrichmentPending = useTagsStore((s) => s.enrichmentPending);
+  const waveformProgress = useWaveformBackfillStore((s) => s.progress);
 
-  const hasInfoRow = albumTracksNotice !== null || pullProgress !== null || Boolean(enrichmentPending);
+  const hasInfoRow =
+    albumTracksNotice !== null || pullProgress !== null || waveformProgress !== null || Boolean(enrichmentPending);
   const showsError = hasTrack && hasError;
   const rowCount = Number(hasInfoRow) + Number(showsError);
 
@@ -118,6 +121,13 @@ export function BottomNotices({ onOpenResync }: { onOpenResync: () => void }) {
       ) : pullProgress ? (
         <div className="normalizing-bar">
           Fetching metadata… {pullProgress.done} / {pullProgress.total}
+        </div>
+      ) : waveformProgress ? (
+        <div className="normalizing-bar">
+          Extracting waveforms… {waveformProgress.done} / {waveformProgress.total}
+          <button className="normalizing-bar__action" onClick={stopWaveformBackfill}>
+            Stop
+          </button>
         </div>
       ) : enrichmentPending ? (
         <EnrichmentPendingNotice count={enrichmentPending} />

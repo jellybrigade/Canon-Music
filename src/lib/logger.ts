@@ -1,4 +1,5 @@
 import { getDb } from "../db";
+import { redactCredentials } from "./redactCredentials";
 
 // Rolling window of recent log lines, kept for crash reports / feedback attachments.
 // Buffering in memory + batching writes means normal logging never does per-line
@@ -15,14 +16,6 @@ interface LogEntry {
 const buffer: LogEntry[] = [];
 let dirty = false;
 let flushTimer: ReturnType<typeof setInterval> | null = null;
-
-// Logs ride along with feedback reports, and request errors (reqwest's especially) quote the
-// whole Subsonic URL. Rows written before this existed are scrubbed again on read.
-const CREDENTIAL_PARAM = /([?&](?:t|s|p|apiKey)=)[^&\s)"']+/g;
-
-export function redactCredentials(text: string): string {
-  return text.replace(CREDENTIAL_PARAM, "$1[redacted]");
-}
 
 function push(level: string, args: unknown[]): void {
   const message = redactCredentials(args.map(formatLogValue).join(" "));
@@ -130,6 +123,7 @@ export const logger = {
         "SELECT ts, level, message FROM app_logs ORDER BY id DESC LIMIT ?",
         [n],
       );
+      // Rows written before redaction existed, or before it knew a parameter, are scrubbed again.
       return rows
         .reverse()
         .map((r) => `[${new Date(r.ts).toISOString()}] ${r.level.toUpperCase()} ${redactCredentials(r.message)}`)

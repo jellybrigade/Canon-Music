@@ -1,0 +1,151 @@
+/* Shell, header, body, footer and buttons come from IdentifyDialog.css. */
+.cover-picker-dialog {
+  width: var(--dialog-width-lg);
+}
+
+.cover-picker-current {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.cover-picker-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.cover-picker-preview-art {
+  width: var(--art-thumb);
+  height: var(--art-thumb);
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--tint-2);
+}
+
+.cover-picker-preview-caption {
+  display: flex;
+  flex-direction: column;
+  font-size: var(--text-2xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.cover-picker-preview-size {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.cover-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--art-tile-min), 1fr));
+  gap: var(--space-sm);
+}
+
+.cover-picker-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2xs);
+  padding: var(--space-2xs);
+  min-width: 0;
+  background: var(--tint-1);
+  border: 1px solid var(--tint-2);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--duration-moderate) var(--ease-standard),
+    border-color var(--duration-moderate) var(--ease-standard);
+}
+
+.cover-picker-tile:hover {
+  background: var(--tint-2);
+  border-color: var(--tint-4);
+}
+
+.cover-picker-tile:active {
+  background: var(--tint-3);
+}
+
+.cover-picker-tile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.cover-picker-tile--selected,
+.cover-picker-tile--selected:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.cover-picker-tile-art {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--tint-2);
+}
+
+.cover-picker-tile-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2xs);
+  font-size: var(--text-2xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cover-picker-tile-current {
+  color: var(--text-primary);
+}
+
+.cover-picker-tile-skeleton {
+  aspect-ratio: 1;
+  border-radius: var(--radius-md);
+}
+
+.cover-picker-sources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cover-picker-link {
+  align-self: flex-start;
+  padding: 0;
+  background: none;
+  border: none;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.cover-picker-link:hover {
+  color: var(--text-primary);
+}
+
+.cover-picker-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-2xs);
+}
+
+.cover-picker-revert {
+  margin-right: auto;
+}
+
+.cover-picker-footer-error {
+  align-self: center;
+  margin-right: auto;
+}

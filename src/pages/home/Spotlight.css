@@ -10,8 +10,8 @@
 .home-spotlight__art-wrap {
   position: relative;
   flex-shrink: 0;
-  width: 64px;
-  height: 64px;
+  width: var(--art-thumb);
+  height: var(--art-thumb);
   border-radius: var(--radius-md);
   overflow: hidden;
   border: none;

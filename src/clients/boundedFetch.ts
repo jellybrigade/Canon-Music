@@ -1,4 +1,5 @@
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { redactCredentials } from "../lib/redactCredentials";
 
 export const REQUEST_TIMEOUT_MS = 12_000;
 /** An upload's bytes all leave before its headers can come back, so its header deadline covers the transfer. */
@@ -75,10 +76,23 @@ async function boundedRequest(
       statusText: res.statusText,
       headers: res.headers,
     });
+  } catch (err) {
+    throw withoutCredentials(err);
   } finally {
     clearTimeout(timer);
     callerSignal?.removeEventListener("abort", abort);
   }
+}
+
+// Transport errors quote the URL, key included, and end up on screen and in logs. The type is kept:
+// callers branch on `TypeError` and `AbortError`, and the native client rejects with a bare string.
+function withoutCredentials(err: unknown): unknown {
+  if (typeof err === "string") return redactCredentials(err);
+  if (err instanceof Error) {
+    const message = redactCredentials(err.message);
+    if (message !== err.message) Object.defineProperty(err, "message", { value: message, configurable: true });
+  }
+  return err;
 }
 
 function concat(chunks: Uint8Array[]): Uint8Array<ArrayBuffer> {

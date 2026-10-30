@@ -1,4 +1,5 @@
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { CoverImg } from "../../../components/CoverImg";
 import { useServers, useServerWithCredential } from "../../../hooks/useServer";
 import { useTagAlbums } from "../hooks/useTagMappings";
 import type { TagKind } from "../lib/canonicalize";
@@ -64,7 +65,7 @@ export function AlbumArtStrip({
     <div className="tags-art-strip">
       {tiles.map((a) => (
         <div key={a.album_id} className="tags-art-thumb" title={a.album_name} style={{ width: size, height: size }}>
-          <img src={a.url!} alt="" width={size} height={size} loading="lazy" decoding="async" />
+          <CoverImg src={a.url!} alt="" width={size} height={size} loading="lazy" decoding="async" />
         </div>
       ))}
     </div>

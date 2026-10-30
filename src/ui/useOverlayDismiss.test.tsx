@@ -6,8 +6,8 @@ import { useOverlayDismiss } from "./useOverlayDismiss";
 
 afterEach(cleanup);
 
-function Harness({ onClose }: { onClose: () => void }) {
-  const dismiss = useOverlayDismiss(onClose);
+function Harness({ onClose, closable }: { onClose: () => void; closable?: boolean }) {
+  const dismiss = useOverlayDismiss(onClose, closable === undefined ? undefined : { closable });
   return (
     <div data-testid="backdrop" {...dismiss}>
       <div data-testid="dialog">
@@ -29,6 +29,20 @@ describe("useOverlayDismiss", () => {
     fireEvent.mouseDown(backdrop());
     fireEvent.click(backdrop());
 
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays open while the dialog is busy, and closes again once it is not", () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<Harness onClose={onClose} closable={false} />);
+
+    fireEvent.mouseDown(backdrop());
+    fireEvent.click(backdrop());
+    expect(onClose).not.toHaveBeenCalled();
+
+    rerender(<Harness onClose={onClose} closable />);
+    fireEvent.mouseDown(backdrop());
+    fireEvent.click(backdrop());
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 

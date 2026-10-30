@@ -188,8 +188,8 @@
 }
 
 .cp-art--large {
-  width: 64px;
-  height: 64px;
+  width: var(--art-thumb);
+  height: var(--art-thumb);
   border-radius: var(--radius-md);
 }
 

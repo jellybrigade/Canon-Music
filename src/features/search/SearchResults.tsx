@@ -17,6 +17,7 @@ import type { PlaylistRow } from "../playlists/usePlaylists";
 import { StartRadioSubmenu } from "../radio/components/StartRadioSubmenu";
 import type { SearchAlbum, SearchArtist, SearchTrack } from "./useSearch";
 import "./SearchResults.css";
+import { CoverImg } from "../../components/CoverImg";
 import { plural } from "../../lib/plural";
 import { replayGainFromRow } from "../../lib/replayGainRow";
 
@@ -278,7 +279,7 @@ export function SearchResults({
                   {(() => {
                     const portraitUrl = resolvePortraitUrl(artist);
                     const imgUrl = resolveArtistImageUrl(artistImageMap, artist.name, portraitUrl);
-                    return imgUrl ? <img src={imgUrl} alt={artist.name} loading="lazy" /> : <User size={16} />;
+                    return imgUrl ? <CoverImg src={imgUrl} alt={artist.name} loading="lazy" /> : <User size={16} />;
                   })()}
                 </div>
                 <div className="search-artist-info">
@@ -317,7 +318,7 @@ export function SearchResults({
               >
                 <div className="search-album-thumb">
                   {album.artwork_url ? (
-                    <img
+                    <CoverImg
                       src={getCoverArtUrl(server.url, server.username, credential, album.artwork_url, 64)}
                       alt={album.name}
                       loading="lazy"
@@ -360,7 +361,7 @@ export function SearchResults({
               >
                 <div className="search-track-thumb">
                   {track.artwork_url ? (
-                    <img
+                    <CoverImg
                       src={getCoverArtUrl(server.url, server.username, credential, track.artwork_url, 64)}
                       alt={track.album_name ?? track.title}
                       loading="lazy"

@@ -11,6 +11,7 @@ import { SmartPlaylistModal } from "./SmartPlaylistModal";
 import { parseSmartFilters, type SmartFilters } from "./smartPlaylist";
 import type { PlaylistRow } from "./usePlaylists";
 import "./PlaylistList.css";
+import { CoverImg } from "../../components/CoverImg";
 import { plural } from "../../lib/plural";
 
 // Grid geometry (mirrors .playlist-card-grid in PlaylistList.css)
@@ -304,7 +305,7 @@ export function PlaylistList({
                     >
                       <div className="playlist-card-art">
                         {artUrl ? (
-                          <img src={artUrl} alt={pl.name} draggable={false} />
+                          <CoverImg src={artUrl} alt={pl.name} draggable={false} />
                         ) : (
                           <div className="playlist-card-art-placeholder">
                             {pl.is_smart ? <ListMusic size={32} /> : <Music size={32} />}

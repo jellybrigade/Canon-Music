@@ -35,6 +35,7 @@ import { PlayPauseButton } from "./PlayPauseButton";
 import { SleepTimerPopover } from "./SleepTimerPopover";
 import { VolumeControl } from "./VolumeControl";
 import "./PlayerBar.css";
+import { CoverImg } from "../../../components/CoverImg";
 import { plural } from "../../../lib/plural";
 
 interface LoveButtonProps {
@@ -452,7 +453,7 @@ export function PlayerBar({ onNowPlaying, onOpenResync, onSelectArtist, onSelect
               : currentTrack.coverArtUrl;
           return popoverUrl ? (
             <div ref={artPopoverRef} className="art-popover" onClick={() => setArtOpen(false)}>
-              <img src={popoverUrl} alt={currentTrack.title} />
+              <CoverImg src={popoverUrl} alt={currentTrack.title} />
             </div>
           ) : null;
         })()}

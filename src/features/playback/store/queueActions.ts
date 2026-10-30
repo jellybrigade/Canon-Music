@@ -9,7 +9,7 @@ import {
   resolveTrack,
   trimQueueToCap,
 } from "./queueOrder";
-import { withdrawGaplessHandOff } from "./withdrawGaplessHandOff";
+import { withdrawGaplessHandOffIfNotNext } from "./withdrawGaplessHandOff";
 
 type QueueActions = Pick<
   PlayerState,
@@ -83,9 +83,7 @@ export function createQueueActions(
         // Restore: resolve current position back to its actual queue index
         const actualIndex = shuffleOrder.length > 0 ? (shuffleOrder[queueIndex] ?? queueIndex) : queueIndex;
         set({ isShuffled: false, shuffleOrder: [], queueIndex: actualIndex });
-        const enqueued = runtime.gaplessEnqueued;
-        const nextInOrder = queue[enqueued?.wraps ? 0 : actualIndex + 1];
-        if (enqueued && nextInOrder?.id !== enqueued.track.id) void withdrawGaplessHandOff();
+        withdrawGaplessHandOffIfNotNext(get());
       } else {
         if (queue.length <= 1) {
           set({ isShuffled: true, shuffleOrder: queue.length === 1 ? [0] : [] });
@@ -129,6 +127,7 @@ export function createQueueActions(
         ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
         streamUrlFor: streamUrlFn ?? streamUrlFor,
       });
+      withdrawGaplessHandOffIfNotNext(get());
       void persistQueueState();
     },
 
@@ -152,6 +151,7 @@ export function createQueueActions(
         ...(trimmed ? { queueIndex: trimmed.queueIndex } : {}),
         streamUrlFor: streamUrlFn ?? streamUrlFor,
       });
+      withdrawGaplessHandOffIfNotNext(get());
       void persistQueueState();
     },
 
@@ -188,6 +188,7 @@ export function createQueueActions(
         }
       } else {
         set({ queue: newQueue, shuffleOrder: newShuffleOrder, queueIndex: newQueueIndex });
+        withdrawGaplessHandOffIfNotNext(get());
         // If queue is now empty and repeat requires it, just stop cleanly
         if (newQueue.length === 0) get().stop();
       }
@@ -231,6 +232,8 @@ export function createQueueActions(
         } else {
           get().stop();
         }
+      } else {
+        withdrawGaplessHandOffIfNotNext(get());
       }
       void persistQueueState();
     },
@@ -274,6 +277,7 @@ export function createQueueActions(
         newQueue.splice(to, 0, item!);
         set({ queue: newQueue, queueIndex: newQueueIndex });
       }
+      withdrawGaplessHandOffIfNotNext(get());
       void persistQueueState();
     },
   };

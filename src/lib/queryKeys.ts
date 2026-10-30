@@ -113,8 +113,17 @@ export const QK = {
   settingsAll: () => ["settings"] as const,
   scrobbleQueueCount: (serverId?: string) => ["scrobble_queue", "count", serverId] as const,
   replayGainCoverage: (serverId: string | undefined) => ["replay-gain-coverage", serverId] as const,
+  waveformsMissingCount: (serverId: string | undefined) => ["waveforms", "missing-count", serverId] as const,
 
   albumCovers: () => ["album-covers"] as const,
+  albumCoverMbids: (serverId: string, albumId: string) => ["album-cover-mbids", serverId, albumId] as const,
+  albumCoverCandidates: (
+    serverId: string,
+    albumId: string,
+    releaseMbid: string | null,
+    releaseGroupMbid: string | null,
+  ) => ["album-cover-candidates", serverId, albumId, releaseMbid, releaseGroupMbid] as const,
+  albumCoverOverride: (serverId: string, albumId: string) => ["album-cover-override", serverId, albumId] as const,
   albumCoversMissingCount: () => ["album-covers", "missing-count"] as const,
 
   artistCovers: () => ["artist-covers"] as const,

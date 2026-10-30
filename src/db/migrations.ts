@@ -869,6 +869,25 @@ export const migrations: Migration[] = [
       DELETE FROM artist_aliases WHERE alias_name = canonical_name;
     `,
   },
+  {
+    // A cover the user picked online, kept beside the server's. The image file lives under app data,
+    // named by server and album; the URL is kept to fetch it again or a larger copy.
+    version: 59,
+    sql: `
+      CREATE TABLE IF NOT EXISTS album_cover_overrides (
+        server_id TEXT NOT NULL,
+        album_id TEXT NOT NULL,
+        source TEXT NOT NULL,
+        source_ref TEXT,
+        full_url TEXT NOT NULL,
+        width INTEGER,
+        height INTEGER,
+        mime TEXT,
+        chosen_at INTEGER NOT NULL,
+        PRIMARY KEY (server_id, album_id)
+      );
+    `,
+  },
 ];
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */

@@ -135,6 +135,7 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${tr}', 1);
     INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${al}', 'data:x', 1);
     INSERT INTO album_identity (album_id) VALUES ('${al}');
+    INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('${serverId}', '${al}', 'caa', 'https://x', 1);
     INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('${al}', 'rock', 'Rock');
     INSERT INTO album_genre_exclusions (album_id, canonical_id) VALUES ('${al}', 'pop');
     INSERT INTO album_genres (album_id, canonical_id, relation, name) VALUES ('${al}', 'rock', 'direct', 'Rock');
@@ -166,6 +167,7 @@ const OWNED_TABLES = [
   "scrobble_history",
   "album_covers",
   "album_identity",
+  "album_cover_overrides",
   "album_user_genres",
   "album_genre_exclusions",
   "album_genres",
