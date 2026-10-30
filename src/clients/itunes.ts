@@ -25,25 +25,31 @@ function isSameAlbum(hit: Record<string, unknown>, artist: string, album: string
   );
 }
 
-/** Resolves null when iTunes answered without a cover; rejects when it didn't answer, so nothing is cached. */
-export async function fetchItunesCoverArt(artist: string | null, album: string | null): Promise<string | null> {
-  if (!artist || !album) return null;
-  const key = `${artist}\x00${album}`;
-  if (cache.has(key)) return cache.get(key) ?? null;
+/** The https artwork of every hit naming the same artist and album, in iTunes' order. */
+async function searchSameAlbumArtwork(artist: string, album: string, limit: number): Promise<string[]> {
   const term = encodeURIComponent(`${artist} ${album}`);
   const res = await boundedFetch(
-    `https://itunes.apple.com/search?term=${term}&entity=album&limit=${SEARCH_LIMIT}&media=music`,
+    `https://itunes.apple.com/search?term=${term}&entity=album&limit=${limit}&media=music`,
   );
   if (!res.ok) throw new Error(`iTunes returned ${res.status}`);
   const data: unknown = await res.json();
   const results =
     typeof data === "object" && data !== null && "results" in data && Array.isArray(data.results) ? data.results : [];
-  const hit = results.find(
-    (result): result is Record<string, unknown> =>
-      typeof result === "object" && result !== null && isSameAlbum(result, artist, album),
-  );
-  const raw = hit?.artworkUrl100;
-  const url = typeof raw === "string" && raw.startsWith("https://") ? raw.replace("100x100bb", "600x600bb") : null;
+  return results
+    .filter(
+      (result): result is Record<string, unknown> =>
+        typeof result === "object" && result !== null && isSameAlbum(result, artist, album),
+    )
+    .flatMap(({ artworkUrl100: raw }) => (typeof raw === "string" && raw.startsWith("https://") ? [raw] : []));
+}
+
+/** Resolves null when iTunes answered without a cover; rejects when it didn't answer, so nothing is cached. */
+export async function fetchItunesCoverArt(artist: string | null, album: string | null): Promise<string | null> {
+  if (!artist || !album) return null;
+  const key = `${artist}\x00${album}`;
+  if (cache.has(key)) return cache.get(key) ?? null;
+  const [raw] = await searchSameAlbumArtwork(artist, album, SEARCH_LIMIT);
+  const url = raw === undefined ? null : raw.replace("100x100bb", "600x600bb");
   setCached(key, url);
   return url;
 }
@@ -55,24 +61,18 @@ export interface ItunesAlbumCover {
   fullUrl: string;
 }
 
-/** Every iTunes hit naming the same artist and album (editions included), as cover choices. */
+// Editions (clean, explicit, deluxe) often share one image, served from whichever image host answered.
+function artworkPath(url: string): string {
+  return url.replace(/^https:\/\/[^/]+/, "");
+}
+
+/** Every iTunes hit naming the same artist and album (editions included), as cover choices, each image once. */
 export async function fetchItunesAlbumCovers(artist: string, album: string): Promise<ItunesAlbumCover[]> {
-  const term = encodeURIComponent(`${artist} ${album}`);
-  const res = await boundedFetch(
-    `https://itunes.apple.com/search?term=${term}&entity=album&limit=${LIST_SEARCH_LIMIT}&media=music`,
-  );
-  if (!res.ok) throw new Error(`iTunes returned ${res.status}`);
-  const data: unknown = await res.json();
-  const results =
-    typeof data === "object" && data !== null && "results" in data && Array.isArray(data.results) ? data.results : [];
-  return results
-    .filter(
-      (result): result is Record<string, unknown> =>
-        typeof result === "object" && result !== null && isSameAlbum(result, artist, album),
-    )
-    .flatMap(({ artworkUrl100: raw }) =>
-      typeof raw === "string" && raw.startsWith("https://")
-        ? [{ thumbUrl: raw.replace("100x100bb", "600x600bb"), fullUrl: raw.replace("100x100bb", "1200x1200bb") }]
-        : [],
-    );
+  const seen = new Set<string>();
+  return (await searchSameAlbumArtwork(artist, album, LIST_SEARCH_LIMIT)).flatMap((raw) => {
+    const path = artworkPath(raw);
+    if (seen.has(path)) return [];
+    seen.add(path);
+    return [{ thumbUrl: raw.replace("100x100bb", "600x600bb"), fullUrl: raw.replace("100x100bb", "1200x1200bb") }];
+  });
 }
