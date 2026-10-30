@@ -19,8 +19,14 @@ interface CaaImage {
   thumbnails?: Record<string, unknown>;
 }
 
+// The archive lists its images as http; the same paths answer over https.
+function overHttps(url: string): string {
+  return url.replace(/^http:\/\//, "https://");
+}
+
 function firstString(...values: unknown[]): string | null {
-  return values.find((value): value is string => typeof value === "string" && value.length > 0) ?? null;
+  const found = values.find((value): value is string => typeof value === "string" && value.length > 0);
+  return found === undefined ? null : overHttps(found);
 }
 
 function toCover(entry: CaaImage): CaaCover | null {

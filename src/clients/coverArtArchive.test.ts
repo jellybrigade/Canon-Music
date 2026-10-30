@@ -22,6 +22,30 @@ afterEach(() => {
 });
 
 describe("fetchCaaFrontCovers", () => {
+  it("asks for every image over https, though the archive lists them as http", async () => {
+    vi.mocked(boundedNativeFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        images: [
+          image({
+            image: "http://coverartarchive.org/release/r/1.jpg",
+            thumbnails: {
+              "250": "http://coverartarchive.org/release/r/1-250.jpg",
+              "1200": "http://coverartarchive.org/release/r/1-1200.jpg",
+            },
+          }),
+        ],
+      }),
+    );
+    expect(await fetchCaaFrontCovers("release", "r")).toEqual([
+      {
+        originalUrl: "https://coverartarchive.org/release/r/1.jpg",
+        thumbUrl: "https://coverartarchive.org/release/r/1-250.jpg",
+        fullUrl: "https://coverartarchive.org/release/r/1-1200.jpg",
+        isApproved: true,
+      },
+    ]);
+  });
+
   it("asks the release endpoint or the release-group endpoint by kind", async () => {
     vi.mocked(boundedNativeFetch).mockImplementation(async () => jsonResponse(200, { images: [] }));
     await fetchCaaFrontCovers("release", "rel-1");
