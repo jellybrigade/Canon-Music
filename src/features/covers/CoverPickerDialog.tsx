@@ -93,8 +93,17 @@ function CoverPreview({
   );
 }
 
+/** "Cover Art Archive 2, up to 1200 px, in use": the tile's caption alone repeats across a source. */
+function tileLabel(candidate: CoverCandidate, position: number, size: Dimensions | null, isCurrent: boolean): string {
+  const caption = formatCaption(candidate, size).trim();
+  return [`${COVER_SOURCE_LABELS[candidate.source]} ${position}`, caption, isCurrent ? "in use" : ""]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function CandidateTile({
   candidate,
+  position,
   size,
   isSelected,
   isCurrent,
@@ -103,6 +112,8 @@ function CandidateTile({
   onBroken,
 }: {
   candidate: CoverCandidate;
+  /** 1-based, among the tiles of the same source. */
+  position: number;
   size: Dimensions | null;
   isSelected: boolean;
   isCurrent: boolean;
@@ -115,6 +126,7 @@ function CandidateTile({
       type="button"
       className={`cover-picker-tile${isSelected ? " cover-picker-tile--selected" : ""}`}
       aria-pressed={isSelected}
+      aria-label={tileLabel(candidate, position, size, isCurrent)}
       disabled={isDisabled}
       onClick={onSelect}
     >
@@ -216,7 +228,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
           </div>
 
           {candidates.isPending ? (
-            <div className="cover-picker-grid" aria-label="Searching for covers">
+            <div className="cover-picker-grid" role="status" aria-busy="true" aria-label="Searching for covers">
               {Array.from({ length: SKELETON_TILES }, (_, index) => (
                 <SkeletonBar key={index} className="cover-picker-tile-skeleton" height="auto" />
               ))}
@@ -229,11 +241,12 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
               </button>
             </p>
           ) : ranked.length > 0 ? (
-            <div className="cover-picker-grid">
-              {ranked.map((candidate) => (
+            <div className="cover-picker-grid" role="group" aria-label="Covers found">
+              {ranked.map((candidate, index) => (
                 <CandidateTile
                   key={candidate.fullUrl}
                   candidate={candidate}
+                  position={ranked.slice(0, index + 1).filter((other) => other.source === candidate.source).length}
                   size={knownSize(candidate, measuredSizes[candidate.fullUrl])}
                   isSelected={candidate.fullUrl === selectedUrl}
                   isCurrent={candidate.fullUrl === override.data?.fullUrl}

@@ -237,6 +237,46 @@ describe("CoverPickerDialog", () => {
     expect(screen.getByText("The covers found online could not be loaded.")).toBeTruthy();
   });
 
+  it("tells covers from one source apart by number, size and use", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1)",
+    );
+    vi.mocked(fetchCaaFrontCovers).mockImplementation(async (kind) =>
+      kind === "release"
+        ? [
+            {
+              originalUrl: "https://caa/o.jpg",
+              thumbUrl: "https://caa/250.jpg",
+              fullUrl: "https://caa/1200.jpg",
+              fullMaxEdge: 1200,
+              isApproved: true,
+            },
+            {
+              originalUrl: "https://caa/o2.jpg",
+              thumbUrl: "https://caa/2-250.jpg",
+              fullUrl: "https://caa/2-500.jpg",
+              fullMaxEdge: 500,
+              isApproved: true,
+            },
+          ]
+        : [],
+    );
+    renderDialog();
+
+    const group = await screen.findByRole("group", { name: "Covers found" });
+    expect(await screen.findByText("In use")).toBeTruthy();
+    expect([...group.querySelectorAll("button")].map((tile) => tile.getAttribute("aria-label"))).toEqual([
+      "Cover Art Archive 1, up to 1200 px, in use",
+      "Cover Art Archive 2, up to 500 px",
+    ]);
+  });
+
+  it("announces the search while it runs", () => {
+    vi.mocked(getDb).mockImplementation(() => new Promise(() => {}));
+    renderDialog();
+    expect(screen.getByRole("status", { name: "Searching for covers" }).getAttribute("aria-busy")).toBe("true");
+  });
+
   it("says how large a cover can be before its image is measured", async () => {
     renderDialog();
     const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });

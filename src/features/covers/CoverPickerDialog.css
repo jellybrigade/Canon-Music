@@ -158,8 +158,17 @@
   cursor: pointer;
 }
 
-.cover-picker-link:hover {
+.cover-picker-link:hover:not(:disabled) {
   color: var(--text-primary);
+}
+
+.cover-picker-link:active:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.cover-picker-link:disabled {
+  opacity: var(--opacity-50);
+  cursor: default;
 }
 
 .cover-picker-link:focus-visible {
