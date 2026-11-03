@@ -96,8 +96,22 @@ Release Canon to main. Run these steps in order — do not skip any.
    **Length** (hard limits):
    - Each bullet ≤ 10 words. Say what changed, not how or why. No "instead of ...", no "even when ...", no edge-case conditions.
    - At most 5 bullets per section, 8 in the whole note. Lead with what users notice most.
-   - Fold small or niche fixes into one closing bullet: "Smaller fixes to playback, sync and covers."
-   - Leave out what users never see (logging, internal speedups, test or build changes) unless it is a security fix.
+   - A change gets its own bullet only if most users would notice it in normal use. Anything that shows up only in a rare situation (a failed load, a busy database, returning to a page mid-save, a niche flow) goes into one closing bullet per section: "Smaller fixes to playback, sync and covers." When in doubt, fold it.
+   - Leave out what users never see (logging, internal speedups, accessibility labels, test or build changes).
+   - Security fixes always get their own bullet.
+
+   Example (v0.58.1, 15 bullets cut to 6):
+   ```
+   ### Fixed
+   - Cover picker marks your current cover "In use".
+   - Changing a cover updates the tint, icon and media controls.
+   - Smaller cover picker fixes.
+
+   ### Changed
+   - Cover picker shows each cover's size, with larger previews.
+   - Unusable covers (disc scans, watermarks) are no longer offered.
+   - Updated a networking library past a security advisory.
+   ```
 
    Good: "Lyrics Refresh returns to the original lyrics."
    Bad: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
