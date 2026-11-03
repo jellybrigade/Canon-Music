@@ -47,6 +47,17 @@ export interface CoverLookup {
   fanartKey: FanartKeyRead;
 }
 
+// iTunes serves one image from any of its numbered hosts, and choices saved before the archive's
+// URLs were rewritten to https still name http.
+function imageIdentity(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/^is\d+-ssl\.mzstatic\.com\//, "mzstatic/");
+}
+
+/** Whether two cover URLs name the same image, wherever and however it was served. */
+export function isSameCoverImage(a: string, b: string | null | undefined): boolean {
+  return b != null && imageIdentity(a) === imageIdentity(b);
+}
+
 /** Every found candidate, best source first, approved archive images first within a source, each image once. */
 export function rankCoverCandidates(results: readonly SourceResult[]): CoverCandidate[] {
   const seen = new Set<string>();

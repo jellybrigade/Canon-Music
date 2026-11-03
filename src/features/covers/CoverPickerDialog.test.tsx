@@ -175,9 +175,13 @@ describe("CoverPickerDialog", () => {
 
     const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
     fireEvent.click(tile);
+    tile.focus();
     fireEvent.click(screen.getByRole("button", { name: "Use this cover" }));
 
-    await waitFor(() => expect((tile as HTMLButtonElement).disabled).toBe(true));
+    await waitFor(() => expect(tile.getAttribute("aria-disabled")).toBe("true"));
+    // Still focusable, so a keyboard user isn't dropped to the top of the page mid-save.
+    expect(document.activeElement).toBe(tile);
+    expect(tile.getAttribute("aria-pressed")).toBe("true");
     // Saves run one at a time across the app, so a save left hanging would hold up the next case's.
     finishSave("image/jpeg");
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
@@ -227,14 +231,37 @@ describe("CoverPickerDialog", () => {
     expect((screen.getByRole("button", { name: "Use this cover" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("drops a tile whose image won't load", async () => {
+  it("shows the full image when a tile's thumbnail won't load, and drops the tile once neither will", async () => {
     renderDialog();
-    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
-    const image = tile.querySelector("img");
-    if (!image) throw new Error("tile has no image");
-    fireEvent.error(image);
+    const tileImage = async () => {
+      const image = (await screen.findByRole("button", { name: /Cover Art Archive/ })).querySelector("img");
+      if (!image) throw new Error("tile has no image");
+      return image;
+    };
+    fireEvent.error(await tileImage());
+    expect((await tileImage()).getAttribute("src")).toBe("https://caa/1200.jpg");
+
+    fireEvent.error(await tileImage());
     expect(screen.queryByRole("button", { name: /Cover Art Archive/ })).toBeNull();
-    expect(screen.getByText("The covers found online could not be loaded.")).toBeTruthy();
+    expect(screen.getByText(/The covers found online could not be loaded./)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await tileImage()).getAttribute("src")).toBe("https://caa/250.jpg");
+  });
+
+  it("marks the cover in use when iTunes serves it from another host or it was saved over http", async () => {
+    vi.mocked(fetchItunesAlbumCovers).mockResolvedValue([
+      {
+        thumbUrl: "https://is4-ssl.mzstatic.com/image/thumb/a/600x600bb.jpg",
+        fullUrl: "https://is4-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+      },
+    ]);
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'itunes', 'https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg', 1)",
+    );
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: /iTunes 1, .*in use/ }));
+    expect((screen.getByRole("button", { name: "Use this cover" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("reads the fanart.tv key once per open", async () => {

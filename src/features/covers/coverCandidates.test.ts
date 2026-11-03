@@ -12,6 +12,7 @@ import { lookupRelease } from "../../clients/musicbrainz";
 import {
   type CoverCandidate,
   findCoverCandidates,
+  isSameCoverImage,
   rankCoverCandidates,
   readFanartKey,
   type SourceResult,
@@ -81,6 +82,34 @@ describe("rankCoverCandidates", () => {
         { source: "itunes", status: "failed", candidates: [], reason: "iTunes returned 503" },
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("isSameCoverImage", () => {
+  it("matches one iTunes image served from different hosts, and an archive image saved as http", () => {
+    expect(
+      isSameCoverImage(
+        "https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+        "https://is4-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+      ),
+    ).toBe(true);
+    expect(
+      isSameCoverImage(
+        "https://coverartarchive.org/release/x/1-1200.jpg",
+        "http://coverartarchive.org/release/x/1-1200.jpg",
+      ),
+    ).toBe(true);
+  });
+
+  it("tells different images apart, and nothing matches no choice", () => {
+    expect(
+      isSameCoverImage(
+        "https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+        "https://is1-ssl.mzstatic.com/image/thumb/b/1200x1200bb.jpg",
+      ),
+    ).toBe(false);
+    expect(isSameCoverImage("https://a.example/x.jpg", "https://b.example/x.jpg")).toBe(false);
+    expect(isSameCoverImage("https://a.example/x.jpg", undefined)).toBe(false);
   });
 });
 

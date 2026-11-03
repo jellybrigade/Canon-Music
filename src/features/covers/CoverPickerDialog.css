@@ -72,15 +72,16 @@
 }
 
 /* While a pick is being kept, the others step back so it stays the one in view. */
-.cover-picker-tile:disabled {
+.cover-picker-tile[aria-disabled="true"] {
   cursor: default;
 }
 
-.cover-picker-tile:disabled:not(.cover-picker-tile--selected) {
+.cover-picker-tile[aria-disabled="true"]:not(.cover-picker-tile--selected) {
   opacity: var(--opacity-50);
 }
 
-.cover-picker-tile:disabled:hover {
+.cover-picker-tile[aria-disabled="true"]:hover,
+.cover-picker-tile[aria-disabled="true"]:active {
   background: var(--tint-1);
   border-color: var(--tint-2);
 }
