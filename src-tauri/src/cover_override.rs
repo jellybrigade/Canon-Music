@@ -240,6 +240,25 @@ pub(crate) fn require_https(url: &str) -> Result<(), String> {
     }
 }
 
+const MAX_REDIRECTS: usize = 10;
+
+/// Whether a chosen cover's download may follow a redirect to `url`: checked before the hop is
+/// sent, so a search answer can't send the request to a plain-http host.
+pub(crate) fn may_follow_redirect(url: &reqwest::Url, hops_so_far: usize) -> bool {
+    hops_so_far < MAX_REDIRECTS && require_https(url.as_str()).is_ok()
+}
+
+/// For the client that downloads chosen covers; the cover proxy's client follows any redirect.
+pub(crate) fn https_only_redirects() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        if may_follow_redirect(attempt.url(), attempt.previous().len()) {
+            attempt.follow()
+        } else {
+            attempt.error("Canon only follows a cover download to https")
+        }
+    })
+}
+
 fn download_image(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<u8>, String> {
     require_https(url)?;
     let resp = client
@@ -247,8 +266,6 @@ fn download_image(client: &reqwest::blocking::Client, url: &str) -> Result<Vec<u
         .timeout(DOWNLOAD_TIMEOUT)
         .send()
         .map_err(|e| format!("The image could not be downloaded: {}", e.without_url()))?;
-    // The shared client follows redirects, which may leave https.
-    require_https(resp.url().as_str())?;
     if !resp.status().is_success() {
         return Err(format!(
             "The image host answered {}",
@@ -323,7 +340,7 @@ pub async fn save_album_cover_override(
         .get()
         .cloned()
         .ok_or("Canon has no data folder to keep covers in")?;
-    let client = state.http_client.clone();
+    let client = state.override_http_client.clone();
     off_main_thread(move || {
         let bytes = download_image(&client, &url)?;
         write_atomically(
@@ -629,6 +646,18 @@ mod tests {
         assert!(require_https("http://coverartarchive.org/release/x/1-1200.jpg").is_err());
         assert!(require_https("file:///etc/passwd").is_err());
         assert!(require_https("not a url").is_err());
+    }
+
+    #[test]
+    fn a_cover_download_follows_only_https_redirects_and_only_so_many() {
+        let url = |s: &str| reqwest::Url::parse(s).unwrap();
+        assert!(may_follow_redirect(&url("https://archive.org/x.jpg"), 0));
+        assert!(!may_follow_redirect(&url("http://192.168.1.10/x.jpg"), 0));
+        assert!(!may_follow_redirect(&url("file:///etc/passwd"), 0));
+        assert!(!may_follow_redirect(
+            &url("https://archive.org/x.jpg"),
+            MAX_REDIRECTS
+        ));
     }
 
     #[test]

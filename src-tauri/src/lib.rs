@@ -100,15 +100,22 @@ pub fn run() {
     let cover_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let artist_image_cache: ImageCache = Arc::new(Mutex::new(HashMap::new()));
     let cover_proxy_config: Arc<Mutex<Option<CoverProxyConfig>>> = Arc::new(Mutex::new(None));
-    let cover_http_client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .user_agent(concat!(
-            "Canon/",
-            env!("CARGO_PKG_VERSION"),
-            " ( https://github.com/jellybrigade/canon )"
-        ))
+    let cover_client_builder = || {
+        reqwest::blocking::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .user_agent(concat!(
+                "Canon/",
+                env!("CARGO_PKG_VERSION"),
+                " ( https://github.com/jellybrigade/canon )"
+            ))
+    };
+    let cover_http_client = cover_client_builder()
         .build()
         .expect("cover proxy http client failed");
+    let cover_override_http_client = cover_client_builder()
+        .redirect(cover_override::https_only_redirects())
+        .build()
+        .expect("cover download http client failed");
 
     let builder = tauri::Builder::default();
 
@@ -169,6 +176,7 @@ pub fn run() {
             proxy_config: cover_proxy_config,
             request_sem: Arc::new(tokio::sync::Semaphore::new(MAX_COVER_REQUESTS)),
             http_client: cover_http_client,
+            override_http_client: cover_override_http_client,
             overrides: Arc::default(),
         })
         .setup(|app| {
