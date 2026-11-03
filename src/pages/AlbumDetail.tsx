@@ -229,7 +229,7 @@ export function AlbumDetail({
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TrackRow } | null>(null);
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
-  const coverDialogs = useCoverPickerDialogs<string>();
+  const coverDialogs = useCoverPickerDialogs<string>(album.id);
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const albumBio = albumEnrichment?.album_bio ?? null;
 

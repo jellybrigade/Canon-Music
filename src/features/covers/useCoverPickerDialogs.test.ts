@@ -20,4 +20,25 @@ describe("useCoverPickerDialogs", () => {
     act(() => result.current.closeIdentify());
     expect(result.current).toMatchObject({ pickerTarget: null, identifyTarget: null });
   });
+
+  it("closes both once the page moves to another album, so coming back doesn't reopen them", () => {
+    const { result, rerender } = renderHook(({ albumId }) => useCoverPickerDialogs<string>(albumId), {
+      initialProps: { albumId: "album-1" },
+    });
+    act(() => result.current.openPicker("album-1"));
+    act(() => result.current.identifyFromPicker());
+
+    rerender({ albumId: "album-2" });
+    rerender({ albumId: "album-1" });
+    expect(result.current).toMatchObject({ pickerTarget: null, identifyTarget: null });
+  });
+
+  it("keeps the picker open while the page stays on its album", () => {
+    const { result, rerender } = renderHook(({ albumId }) => useCoverPickerDialogs<string>(albumId), {
+      initialProps: { albumId: "album-1" },
+    });
+    act(() => result.current.openPicker("album-1"));
+    rerender({ albumId: "album-1" });
+    expect(result.current.pickerTarget).toBe("album-1");
+  });
 });
