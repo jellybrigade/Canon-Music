@@ -5,6 +5,7 @@ import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
 import { AlbumGrid } from "../components/AlbumGrid";
 import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
+import { useCoverPickerDialogs } from "../features/covers/useCoverPickerDialogs";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import {
   useAlbumIdentity,
@@ -228,8 +229,7 @@ export function AlbumDetail({
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; track: TrackRow } | null>(null);
   const [drawerState, setDrawerState] = useState<DrawerState | null>(null);
-  const [showIdentify, setShowIdentify] = useState(false);
-  const [showCoverPicker, setShowCoverPicker] = useState(false);
+  const coverDialogs = useCoverPickerDialogs<string>(album.id);
   const [showGenreEditor, setShowGenreEditor] = useState(false);
   const albumBio = albumEnrichment?.album_bio ?? null;
 
@@ -304,8 +304,8 @@ export function AlbumDetail({
         onPlayAlbum={handlePlayAlbum}
         isLoved={isAlbumLoved}
         onToggleLove={() => toggleAlbumLove(album.id, serverWithCredential)}
-        onIdentify={() => setShowIdentify(true)}
-        onChooseCover={canChooseCover(album) ? () => setShowCoverPicker(true) : undefined}
+        onIdentify={() => coverDialogs.openIdentify(album.id)}
+        onChooseCover={canChooseCover(album) ? () => coverDialogs.openPicker(album.id) : undefined}
         onClose={onClose}
         onSelectArtist={onSelectArtist}
       />
@@ -407,7 +407,7 @@ export function AlbumDetail({
         />
       )}
 
-      {showIdentify && (
+      {coverDialogs.identifyTarget === album.id && (
         <AlbumIdentifyDialog
           albumId={album.id}
           serverId={album.server_id}
@@ -415,18 +415,15 @@ export function AlbumDetail({
           album={album.name}
           year={album.year}
           confirmedArtistMbid={confirmedArtistMbid}
-          onClose={() => setShowIdentify(false)}
+          onClose={coverDialogs.closeIdentify}
         />
       )}
-      {showCoverPicker && (
+      {coverDialogs.pickerTarget === album.id && (
         <CoverPickerDialog
           album={album}
           serverWithCredential={serverWithCredential}
-          onClose={() => setShowCoverPicker(false)}
-          onIdentify={() => {
-            setShowCoverPicker(false);
-            setShowIdentify(true);
-          }}
+          onClose={coverDialogs.closePicker}
+          onIdentify={coverDialogs.identifyFromPicker}
         />
       )}
     </div>

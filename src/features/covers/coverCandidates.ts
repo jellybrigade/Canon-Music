@@ -16,22 +16,46 @@ export const COVER_SOURCE_LABELS: Record<CoverSource, string> = {
 };
 
 const FANART_COVER_EDGE = 1000;
+// iTunes scales to the edge asked for in the URL, never past its own image.
+const ITUNES_MAX_EDGE = 1200;
+const NEEDS_IDENTITY = "Identify the album on MusicBrainz to search here";
 
 export interface CoverCandidate extends CoverChoice {
   source: CoverSource;
   thumbUrl: string;
+  /** The longest edge the source can deliver, shown until the image itself is measured. */
+  maxEdge: number | null;
   isApproved: boolean;
+}
+
+export function isCoverSource(source: string): source is CoverSource {
+  return COVER_SOURCES.some((known) => known === source);
 }
 
 export type SourceResult =
   | { source: CoverSource; status: "found"; candidates: CoverCandidate[] }
   | { source: CoverSource; status: "skipped" | "failed"; candidates: []; reason: string };
 
+/** The stored fanart.tv key, or why fanart.tv can't be asked. */
+export type FanartKeyRead = string | SourceResult;
+
 export interface CoverLookup {
   artist: string;
   album: string;
   releaseMbid: string | null;
   releaseGroupMbid: string | null;
+  fanartKey: FanartKeyRead;
+}
+
+// iTunes serves one image from any of its numbered hosts, and choices saved before the archive's
+// URLs were rewritten to https still name http.
+function imageIdentity(url: string): string {
+  return url.replace(/^https?:\/\//, "").replace(/^is\d+-ssl\.mzstatic\.com\//, "mzstatic/");
+}
+
+/** Whether two cover URLs name the same image, wherever and however it was served. */
+export function isSameCoverImage(a: string, b: string | null | undefined): boolean {
+  return b != null && imageIdentity(a) === imageIdentity(b);
 }
 
 /** Every found candidate, best source first, approved archive images first within a source, each image once. */
@@ -54,12 +78,16 @@ async function settle(source: CoverSource, load: () => Promise<CoverCandidate[]>
   try {
     return { source, status: "found", candidates: await load() };
   } catch (err) {
-    return { source, status: "failed", candidates: [], reason: errorMessage(err) };
+    return failed(source, errorMessage(err));
   }
 }
 
 function skipped(source: CoverSource, reason: string): SourceResult {
   return { source, status: "skipped", candidates: [], reason };
+}
+
+function failed(source: CoverSource, reason: string): SourceResult {
+  return { source, status: "failed", candidates: [], reason };
 }
 
 async function caaCandidates(kind: "release" | "release-group", mbid: string): Promise<CoverCandidate[]> {
@@ -71,51 +99,58 @@ async function caaCandidates(kind: "release" | "release-group", mbid: string): P
     thumbUrl: cover.thumbUrl,
     width: null,
     height: null,
+    maxEdge: cover.fullMaxEdge,
     isApproved: cover.isApproved,
   }));
 }
 
-async function fanartCandidates(releaseGroupMbid: string): Promise<SourceResult> {
-  let apiKey: string | null;
+/** The stored key, or why fanart.tv can't be asked: without a key nothing else about it matters. */
+export async function readFanartKey(): Promise<FanartKeyRead> {
   try {
-    apiKey = await getFanartApiKey();
+    return (await getFanartApiKey()) ?? skipped("fanart", "Add a fanart.tv key in Settings to search it");
   } catch (err) {
-    return { source: "fanart", status: "failed", candidates: [], reason: errorMessage(err) };
+    return failed("fanart", errorMessage(err));
   }
-  if (apiKey === null) return skipped("fanart", "Add a fanart.tv key in Settings to search it");
-  const key = apiKey;
+}
+
+function fanartCandidates(releaseGroupMbid: string, apiKey: string): Promise<SourceResult> {
   return settle("fanart", async () =>
-    (await fetchFanartAlbumCovers(releaseGroupMbid, key)).map((cover) => ({
+    (await fetchFanartAlbumCovers(releaseGroupMbid, apiKey)).map((cover) => ({
       source: "fanart",
       sourceRef: `fanart:${cover.id}`,
       fullUrl: cover.fullUrl,
       thumbUrl: cover.thumbUrl,
       width: FANART_COVER_EDGE,
       height: FANART_COVER_EDGE,
+      maxEdge: FANART_COVER_EDGE,
       isApproved: true,
     })),
   );
 }
 
 async function releaseGroupSources(lookup: CoverLookup): Promise<[SourceResult, SourceResult]> {
+  const key = lookup.fanartKey;
   let releaseGroupMbid = lookup.releaseGroupMbid;
   if (releaseGroupMbid === null && lookup.releaseMbid !== null) {
     try {
       releaseGroupMbid = (await lookupRelease(lookup.releaseMbid)).releaseGroupId;
     } catch (err) {
       const reason = errorMessage(err);
-      return [
-        { source: "caa-release-group", status: "failed", candidates: [], reason },
-        { source: "fanart", status: "failed", candidates: [], reason },
-      ];
+      return [failed("caa-release-group", reason), typeof key === "string" ? failed("fanart", reason) : key];
     }
   }
   if (releaseGroupMbid === null) {
-    const reason = "Identify the album on MusicBrainz to search here";
-    return [skipped("caa-release-group", reason), skipped("fanart", reason)];
+    return [
+      skipped("caa-release-group", NEEDS_IDENTITY),
+      typeof key === "string" ? skipped("fanart", NEEDS_IDENTITY) : key,
+    ];
   }
   const mbid = releaseGroupMbid;
-  return Promise.all([settle("caa-release-group", () => caaCandidates("release-group", mbid)), fanartCandidates(mbid)]);
+  const [releaseGroup, fanart] = await Promise.all([
+    settle("caa-release-group", () => caaCandidates("release-group", mbid)),
+    typeof key === "string" ? fanartCandidates(mbid, key) : key,
+  ]);
+  return [releaseGroup, fanart];
 }
 
 /** Asks every cover source at once; one source failing never hides another's answer. */
@@ -123,7 +158,7 @@ export async function findCoverCandidates(lookup: CoverLookup): Promise<SourceRe
   const { releaseMbid } = lookup;
   const [release, [releaseGroup, fanart], itunes] = await Promise.all([
     releaseMbid === null
-      ? skipped("caa-release", "Identify the album on MusicBrainz to search here")
+      ? skipped("caa-release", NEEDS_IDENTITY)
       : settle("caa-release", () => caaCandidates("release", releaseMbid)),
     releaseGroupSources(lookup),
     settle("itunes", async () =>
@@ -134,6 +169,7 @@ export async function findCoverCandidates(lookup: CoverLookup): Promise<SourceRe
         thumbUrl: cover.thumbUrl,
         width: null,
         height: null,
+        maxEdge: ITUNES_MAX_EDGE,
         isApproved: true,
       })),
     ),

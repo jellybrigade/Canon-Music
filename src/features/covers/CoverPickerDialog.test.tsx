@@ -14,7 +14,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { boundedFetch } from "../../clients/boundedFetch";
 import { fetchCaaFrontCovers } from "../../clients/coverArtArchive";
-import { getFanartApiKey } from "../../clients/fanart";
+import { fetchFanartAlbumCovers, getFanartApiKey } from "../../clients/fanart";
 import { fetchItunesAlbumCovers } from "../../clients/itunes";
 import { getDb } from "../../db";
 import type { ServerWithCredential } from "../../hooks/useServer";
@@ -36,10 +36,12 @@ const swc = {
   credential: { type: "apikey", apiKey: "k" },
 } as ServerWithCredential;
 
-function renderDialog(
-  onClose = vi.fn(),
-  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-) {
+// The app's defaults (src/main.tsx), so a reopened dialog sees what the app's cache would hand it.
+function appQueryClient() {
+  return new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 60_000 } } });
+}
+
+function renderDialog(onClose = vi.fn(), queryClient = appQueryClient()) {
   return render(
     <QueryClientProvider client={queryClient}>
       <CoverPickerDialog album={album} serverWithCredential={swc} onClose={onClose} />
@@ -63,6 +65,7 @@ beforeEach(async () => {
               originalUrl: "https://caa/o.jpg",
               thumbUrl: "https://caa/250.jpg",
               fullUrl: "https://caa/1200.jpg",
+              fullMaxEdge: 1200,
               isApproved: true,
             },
           ]
@@ -134,7 +137,7 @@ describe("CoverPickerDialog", () => {
 
   it("searches again once the album is identified, instead of reusing the search made without it", async () => {
     db.raw.exec("DELETE FROM album_identity");
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryClient = appQueryClient();
     const first = renderDialog(vi.fn(), queryClient);
     expect(await screen.findByText(/Cover Art Archive: /)).toBeTruthy();
     first.unmount();
@@ -146,6 +149,42 @@ describe("CoverPickerDialog", () => {
 
     expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
     expect(fetchCaaFrontCovers).toHaveBeenCalledWith("release", "rel-1");
+  });
+
+  it("searches fanart.tv once a key was added since the last search", async () => {
+    vi.mocked(fetchFanartAlbumCovers)
+      .mockReset()
+      .mockResolvedValue([{ id: "f1", fullUrl: "https://fanart/1.jpg", thumbUrl: "https://fanart/p1.jpg", likes: 1 }]);
+    const queryClient = appQueryClient();
+    const first = renderDialog(vi.fn(), queryClient);
+    expect(await screen.findByText(/fanart.tv: Add a fanart.tv key/)).toBeTruthy();
+    first.unmount();
+
+    vi.mocked(getFanartApiKey).mockResolvedValue("key");
+    renderDialog(vi.fn(), queryClient);
+
+    expect(await screen.findByRole("button", { name: /fanart.tv/ })).toBeTruthy();
+    expect(fetchFanartAlbumCovers).toHaveBeenCalledWith("rg-1", "key");
+  });
+
+  it("holds the picked cover while it is being kept", async () => {
+    let finishSave = (_mime: string) => {};
+    onInvoke("save_album_cover_override", () => new Promise<string>((resolve) => (finishSave = resolve)));
+    const onClose = vi.fn();
+    renderDialog(onClose);
+
+    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
+    fireEvent.click(tile);
+    tile.focus();
+    fireEvent.click(screen.getByRole("button", { name: "Use this cover" }));
+
+    await waitFor(() => expect(tile.getAttribute("aria-disabled")).toBe("true"));
+    // Still focusable, so a keyboard user isn't dropped to the top of the page mid-save.
+    expect(document.activeElement).toBe(tile);
+    expect(tile.getAttribute("aria-pressed")).toBe("true");
+    // Saves run one at a time across the app, so a save left hanging would hold up the next case's.
+    finishSave("image/jpeg");
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
   it("says nothing about which cover shows until it has read whether one was picked", async () => {
@@ -180,6 +219,110 @@ describe("CoverPickerDialog", () => {
   it("asks the server for the current cover unscaled, so its size is the real one", () => {
     renderDialog();
     expect(previewImage("Current").getAttribute("src")).toContain("size=0");
+  });
+
+  it("offers no save for the cover already in use", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1)",
+    );
+    renderDialog();
+    expect(await screen.findByText("In use")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /Cover Art Archive/ }));
+    expect((screen.getByRole("button", { name: "Use this cover" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("shows the full image when a tile's thumbnail won't load, and drops the tile once neither will", async () => {
+    renderDialog();
+    const tileImage = async () => {
+      const image = (await screen.findByRole("button", { name: /Cover Art Archive/ })).querySelector("img");
+      if (!image) throw new Error("tile has no image");
+      return image;
+    };
+    fireEvent.error(await tileImage());
+    expect((await tileImage()).getAttribute("src")).toBe("https://caa/1200.jpg");
+
+    fireEvent.error(await tileImage());
+    expect(screen.queryByRole("button", { name: /Cover Art Archive/ })).toBeNull();
+    expect(screen.getByText(/The covers found online could not be loaded./)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect((await tileImage()).getAttribute("src")).toBe("https://caa/250.jpg");
+  });
+
+  it("marks the cover in use when iTunes serves it from another host or it was saved over http", async () => {
+    vi.mocked(fetchItunesAlbumCovers).mockResolvedValue([
+      {
+        thumbUrl: "https://is4-ssl.mzstatic.com/image/thumb/a/600x600bb.jpg",
+        fullUrl: "https://is4-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+      },
+    ]);
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'itunes', 'https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg', 1)",
+    );
+    renderDialog();
+    fireEvent.click(await screen.findByRole("button", { name: /iTunes 1, .*in use/ }));
+    expect((screen.getByRole("button", { name: "Use this cover" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("reads the fanart.tv key once per open", async () => {
+    vi.mocked(getFanartApiKey).mockResolvedValue("key");
+    renderDialog();
+    expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
+    expect(getFanartApiKey).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells covers from one source apart by number, size and use", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1)",
+    );
+    vi.mocked(fetchCaaFrontCovers).mockImplementation(async (kind) =>
+      kind === "release"
+        ? [
+            {
+              originalUrl: "https://caa/o.jpg",
+              thumbUrl: "https://caa/250.jpg",
+              fullUrl: "https://caa/1200.jpg",
+              fullMaxEdge: 1200,
+              isApproved: true,
+            },
+            {
+              originalUrl: "https://caa/o2.jpg",
+              thumbUrl: "https://caa/2-250.jpg",
+              fullUrl: "https://caa/2-500.jpg",
+              fullMaxEdge: 500,
+              isApproved: true,
+            },
+          ]
+        : [],
+    );
+    renderDialog();
+
+    const group = await screen.findByRole("group", { name: "Covers found" });
+    expect(await screen.findByText("In use")).toBeTruthy();
+    expect([...group.querySelectorAll("button")].map((tile) => tile.getAttribute("aria-label"))).toEqual([
+      "Cover Art Archive 1, up to 1200 px, in use",
+      "Cover Art Archive 2, up to 500 px",
+    ]);
+  });
+
+  it("announces the search while it runs", () => {
+    vi.mocked(getDb).mockImplementation(() => new Promise(() => {}));
+    renderDialog();
+    expect(screen.getByRole("status", { name: "Searching for covers" }).getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("says how large a cover can be before its image is measured", async () => {
+    renderDialog();
+    const tile = await screen.findByRole("button", { name: /Cover Art Archive/ });
+    expect(tile.textContent).toContain("up to 1200 px");
+  });
+
+  it("names where the picked cover came from and its size", async () => {
+    db.raw.exec(
+      "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, width, height, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1200, 1180, 1)",
+    );
+    renderDialog();
+    expect(await screen.findByText(/Showing a cover you picked from Cover Art Archive \(1200 × 1180\)/)).toBeTruthy();
   });
 
   it("keeps the measured size with the cover it saves", async () => {

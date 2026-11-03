@@ -46,6 +46,8 @@ pub(crate) struct CoverState {
     pub(crate) proxy_config: Arc<Mutex<Option<CoverProxyConfig>>>,
     pub(crate) request_sem: Arc<tokio::sync::Semaphore>,
     pub(crate) http_client: reqwest::blocking::Client,
+    /// Downloads chosen covers: same as `http_client`, but follows only https redirects.
+    pub(crate) override_http_client: reqwest::blocking::Client,
     pub(crate) overrides: CoverOverrides,
 }
 

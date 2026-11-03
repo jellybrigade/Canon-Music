@@ -108,12 +108,8 @@ export async function runMigrations(database: MigrationDb): Promise<void> {
 
   for (const migration of migrations) {
     if (migration.version > current) {
-      // tauri-plugin-sql only executes one statement per execute() call;
-      // split on ";" and run each non-empty statement individually.
-      const statements = migration.sql
-        .split(";")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
+      // tauri-plugin-sql only executes one statement per execute() call.
+      const statements = splitStatements(migration.sql);
 
       // All-or-nothing per block, version row included: several blocks rebuild tables in steps.
       // BEGIN holds only because the runner is sequential and getDb() gates every other caller.
@@ -888,7 +884,40 @@ export const migrations: Migration[] = [
       );
     `,
   },
+  {
+    // An album's stored tint was read from its cover, so it goes in the same write that changes which
+    // cover shows; a separate reset could fail and leave the replaced cover's tint for good.
+    version: 60,
+    sql: `
+      CREATE TRIGGER IF NOT EXISTS album_cover_chosen_resets_accent
+      AFTER INSERT ON album_cover_overrides
+      BEGIN
+        UPDATE albums SET accent_color = NULL WHERE id = NEW.album_id AND server_id = NEW.server_id;
+      END;
+      CREATE TRIGGER IF NOT EXISTS album_cover_cleared_resets_accent
+      AFTER DELETE ON album_cover_overrides
+      BEGIN
+        UPDATE albums SET accent_color = NULL WHERE id = OLD.album_id AND server_id = OLD.server_id;
+      END;
+    `,
+  },
 ];
+
+/** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */
+export function splitStatements(sql: string): string[] {
+  const statements: string[] = [];
+  let pending = "";
+  for (const part of sql.split(";")) {
+    pending = pending ? `${pending};${part}` : part;
+    const statement = pending.trim();
+    if (/^CREATE\s+TRIGGER\b/i.test(statement) && !/\bEND$/i.test(statement)) continue;
+    if (statement.length > 0) statements.push(statement);
+    pending = "";
+  }
+  const rest = pending.trim();
+  if (rest.length > 0) statements.push(rest);
+  return statements;
+}
 
 /** Highest schema version this build can produce, and the ceiling the too-new guard compares against. */
 export const LATEST_SCHEMA_VERSION = Math.max(...migrations.map((m) => m.version));

@@ -53,8 +53,15 @@ export interface FanartAlbumCover {
   likes: number;
 }
 
-interface FanartAlbumResponse {
-  albums?: Record<string, { albumcover?: { id?: string; url?: string; likes?: string }[] }>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function albumCoverEntries(data: unknown, releaseGroupMbid: string): Record<string, unknown>[] {
+  const albums = isRecord(data) ? data.albums : undefined;
+  const album = isRecord(albums) ? albums[releaseGroupMbid] : undefined;
+  const covers = isRecord(album) ? album.albumcover : undefined;
+  return Array.isArray(covers) ? covers.filter(isRecord) : [];
 }
 
 /** Album covers fanart.tv holds for a release group, most liked first; empty when it has none,
@@ -70,14 +77,14 @@ export async function fetchFanartAlbumCovers(releaseGroupMbid: string, apiKey: s
   if (res.status === 404) return [];
   if (res.status === 401 || res.status === 403) throw new Error("fanart.tv refused the key in Settings");
   if (!res.ok) throw new Error(`fanart.tv returned ${res.status}`);
-  const data = (await res.json()) as FanartAlbumResponse;
-  return (data.albums?.[releaseGroupMbid]?.albumcover ?? [])
+  const data: unknown = await res.json();
+  return albumCoverEntries(data, releaseGroupMbid)
     .flatMap(({ id, url, likes }) => {
       if (typeof url !== "string" || !url.startsWith("https://")) return [];
-      const likeCount = Number.parseInt(likes ?? "", 10);
+      const likeCount = typeof likes === "string" ? Number.parseInt(likes, 10) : Number.NaN;
       return [
         {
-          id: id ?? url,
+          id: typeof id === "string" ? id : url,
           fullUrl: url,
           // fanart.tv serves a small copy of every asset under /preview/.
           thumbUrl: url.replace("/fanart/", "/preview/"),

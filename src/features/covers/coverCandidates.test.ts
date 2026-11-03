@@ -9,7 +9,14 @@ import { fetchCaaFrontCovers } from "../../clients/coverArtArchive";
 import { fetchFanartAlbumCovers, getFanartApiKey } from "../../clients/fanart";
 import { fetchItunesAlbumCovers } from "../../clients/itunes";
 import { lookupRelease } from "../../clients/musicbrainz";
-import { type CoverCandidate, findCoverCandidates, rankCoverCandidates, type SourceResult } from "./coverCandidates";
+import {
+  type CoverCandidate,
+  findCoverCandidates,
+  isSameCoverImage,
+  rankCoverCandidates,
+  readFanartKey,
+  type SourceResult,
+} from "./coverCandidates";
 
 function candidate(overrides: Partial<CoverCandidate>): CoverCandidate {
   return {
@@ -19,6 +26,7 @@ function candidate(overrides: Partial<CoverCandidate>): CoverCandidate {
     thumbUrl: "https://x/thumb.jpg",
     width: null,
     height: null,
+    maxEdge: null,
     isApproved: true,
     ...overrides,
   };
@@ -28,7 +36,7 @@ function found(source: SourceResult["source"], candidates: CoverCandidate[]): So
   return { source, status: "found", candidates };
 }
 
-const lookup = { artist: "Artist", album: "Album", releaseMbid: "rel-1", releaseGroupMbid: "rg-1" };
+const lookup = { artist: "Artist", album: "Album", releaseMbid: "rel-1", releaseGroupMbid: "rg-1", fanartKey: "key" };
 
 beforeEach(() => {
   vi.mocked(fetchCaaFrontCovers).mockReset().mockResolvedValue([]);
@@ -77,11 +85,47 @@ describe("rankCoverCandidates", () => {
   });
 });
 
+describe("isSameCoverImage", () => {
+  it("matches one iTunes image served from different hosts, and an archive image saved as http", () => {
+    expect(
+      isSameCoverImage(
+        "https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+        "https://is4-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+      ),
+    ).toBe(true);
+    expect(
+      isSameCoverImage(
+        "https://coverartarchive.org/release/x/1-1200.jpg",
+        "http://coverartarchive.org/release/x/1-1200.jpg",
+      ),
+    ).toBe(true);
+  });
+
+  it("tells different images apart, and nothing matches no choice", () => {
+    expect(
+      isSameCoverImage(
+        "https://is1-ssl.mzstatic.com/image/thumb/a/1200x1200bb.jpg",
+        "https://is1-ssl.mzstatic.com/image/thumb/b/1200x1200bb.jpg",
+      ),
+    ).toBe(false);
+    expect(isSameCoverImage("https://a.example/x.jpg", "https://b.example/x.jpg")).toBe(false);
+    expect(isSameCoverImage("https://a.example/x.jpg", undefined)).toBe(false);
+  });
+});
+
 describe("findCoverCandidates", () => {
   it("asks every source and reports each one's outcome", async () => {
     vi.mocked(fetchCaaFrontCovers).mockImplementation(async (kind) =>
       kind === "release"
-        ? [{ originalUrl: "https://o", thumbUrl: "https://t", fullUrl: "https://r1200", isApproved: true }]
+        ? [
+            {
+              originalUrl: "https://o",
+              thumbUrl: "https://t",
+              fullUrl: "https://r1200",
+              fullMaxEdge: 1200,
+              isApproved: true,
+            },
+          ]
         : [],
     );
     vi.mocked(fetchItunesAlbumCovers).mockRejectedValue(new Error("iTunes returned 503"));
@@ -101,10 +145,16 @@ describe("findCoverCandidates", () => {
 
   it("skips fanart.tv without a key, and reports a locked secret store as a failure", async () => {
     vi.mocked(getFanartApiKey).mockResolvedValue(null);
-    expect((await findCoverCandidates(lookup))[2]).toMatchObject({ source: "fanart", status: "skipped" });
+    expect((await findCoverCandidates({ ...lookup, fanartKey: await readFanartKey() }))[2]).toMatchObject({
+      source: "fanart",
+      status: "skipped",
+    });
 
     vi.mocked(getFanartApiKey).mockRejectedValue(new Error("secret store locked"));
-    expect((await findCoverCandidates(lookup))[2]).toMatchObject({ source: "fanart", status: "failed" });
+    expect((await findCoverCandidates({ ...lookup, fanartKey: await readFanartKey() }))[2]).toMatchObject({
+      source: "fanart",
+      status: "failed",
+    });
     expect(fetchFanartAlbumCovers).not.toHaveBeenCalled();
   });
 
@@ -124,6 +174,14 @@ describe("findCoverCandidates", () => {
       { source: "fanart", status: "failed" },
       { source: "itunes", status: "found" },
     ]);
+  });
+
+  it("asks for a fanart.tv key, not a failed search, when the release lookup fails without one", async () => {
+    vi.mocked(getFanartApiKey).mockResolvedValue(null);
+    vi.mocked(lookupRelease).mockRejectedValue(new Error("MusicBrainz release/rel-1 returned 503"));
+    const results = await findCoverCandidates({ ...lookup, releaseGroupMbid: null, fanartKey: await readFanartKey() });
+    expect(results[1]).toMatchObject({ source: "caa-release-group", status: "failed" });
+    expect(results[2]).toMatchObject({ source: "fanart", status: "skipped", reason: expect.stringContaining("key") });
   });
 
   it("asks only iTunes for an album never identified", async () => {

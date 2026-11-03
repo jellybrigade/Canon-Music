@@ -128,6 +128,7 @@
   /* Art and dialog sizes shared across views. */
   --art-thumb: 64px;
   --art-tile-min: 132px;
+  --art-compare: 160px;
   --dialog-width-sm: 420px;
   --dialog-width-md: 520px;
   --dialog-width-lg: 640px;

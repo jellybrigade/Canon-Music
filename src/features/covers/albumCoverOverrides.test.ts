@@ -128,8 +128,26 @@ describe("album accent", () => {
     ]);
   });
 
+  it("keeps the old tint when the choice could not be recorded", async () => {
+    seedAlbumAccent();
+    onInvoke("save_album_cover_override", () => "image/jpeg");
+    const execute = db.execute.bind(db);
+    vi.mocked(getDb).mockResolvedValue({
+      ...db,
+      select: db.select.bind(db),
+      execute: (sql: string, params?: unknown[]) =>
+        sql.includes("INSERT OR REPLACE") ? Promise.reject(new Error("database is locked")) : execute(sql, params),
+    } as never);
+
+    await expect(chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 8 })).rejects.toThrow("locked");
+    expect(accents()).toContainEqual({ id: "srv:abc", accent_color: "#ff0000" });
+  });
+
   it("is read again from the server's cover once a choice is cleared", async () => {
     seedAlbumAccent();
+    onInvoke("save_album_cover_override", () => "image/jpeg");
+    await chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 9 });
+    db.raw.exec("UPDATE albums SET accent_color = '#0000ff' WHERE id = 'srv:abc'");
     await clearAlbumCover({ serverId: "srv", albumId: "srv:abc" });
 
     expect(accents()).toContainEqual({ id: "srv:abc", accent_color: null });

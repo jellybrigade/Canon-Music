@@ -96,6 +96,20 @@ describe("fetchItunesAlbumCovers", () => {
     ]);
   });
 
+  it("lists artwork that clean and explicit editions share once, whichever image host served it", async () => {
+    vi.mocked(boundedFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        results: [
+          { artistName: "Artist N", collectionName: "Album", artworkUrl100: "https://is1-ssl.img/v4/x/100x100bb.jpg" },
+          { artistName: "Artist N", collectionName: "Album", artworkUrl100: "https://is4-ssl.img/v4/x/100x100bb.jpg" },
+        ],
+      }),
+    );
+    await expect(fetchItunesAlbumCovers("Artist N", "Album")).resolves.toEqual([
+      { thumbUrl: "https://is1-ssl.img/v4/x/600x600bb.jpg", fullUrl: "https://is1-ssl.img/v4/x/1200x1200bb.jpg" },
+    ]);
+  });
+
   it("fails when iTunes did not answer", async () => {
     vi.mocked(boundedFetch).mockImplementation(async () => jsonResponse(503, {}));
     await expect(fetchItunesAlbumCovers("Artist M", "Album")).rejects.toThrow("503");

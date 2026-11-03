@@ -4,6 +4,7 @@ import { type CSSProperties, memo, useCallback, useEffect, useLayoutEffect, useM
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
+import { useCoverPickerDialogs } from "../features/covers/useCoverPickerDialogs";
 import { AlbumIdentifyDialog } from "../features/enrichment/components/IdentifyDialog";
 import { useFailedLookupAlbumIds } from "../features/enrichment/hooks/useAlbumIdentity";
 import { PinMenuItem } from "../features/pins/components/PinMenuItem";
@@ -163,8 +164,9 @@ export function AlbumGrid({
   const { data: failedLookupIds } = useFailedLookupAlbumIds(serverWithCredential.server.id);
   const failedLookupSet = useMemo(() => new Set(failedLookupIds ?? []), [failedLookupIds]);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; album: AlbumRow } | null>(null);
-  const [identifyAlbum, setIdentifyAlbum] = useState<AlbumRow | null>(null);
-  const [coverPickerAlbum, setCoverPickerAlbum] = useState<AlbumRow | null>(null);
+  const coverDialogs = useCoverPickerDialogs<AlbumRow>();
+  const identifyAlbum = coverDialogs.identifyTarget;
+  const coverPickerAlbum = coverDialogs.pickerTarget;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -486,7 +488,7 @@ export function AlbumGrid({
           )}
           <button
             onClick={() => {
-              setIdentifyAlbum(contextMenu.album);
+              coverDialogs.openIdentify(contextMenu.album);
               setContextMenu(null);
             }}
           >
@@ -495,7 +497,7 @@ export function AlbumGrid({
           {canChooseCover(contextMenu.album) && (
             <button
               onClick={() => {
-                setCoverPickerAlbum(contextMenu.album);
+                coverDialogs.openPicker(contextMenu.album);
                 setContextMenu(null);
               }}
             >
@@ -510,18 +512,15 @@ export function AlbumGrid({
           serverId={identifyAlbum.server_id}
           artist={identifyAlbum.artist ?? ""}
           album={identifyAlbum.name}
-          onClose={() => setIdentifyAlbum(null)}
+          onClose={coverDialogs.closeIdentify}
         />
       )}
       {coverPickerAlbum && (
         <CoverPickerDialog
           album={coverPickerAlbum}
           serverWithCredential={serverWithCredential}
-          onClose={() => setCoverPickerAlbum(null)}
-          onIdentify={() => {
-            setIdentifyAlbum(coverPickerAlbum);
-            setCoverPickerAlbum(null);
-          }}
+          onClose={coverDialogs.closePicker}
+          onIdentify={coverDialogs.identifyFromPicker}
         />
       )}
     </div>

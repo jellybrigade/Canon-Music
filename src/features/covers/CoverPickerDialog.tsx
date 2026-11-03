@@ -7,7 +7,14 @@ import type { AlbumRow } from "../../types/library";
 import { SkeletonBar } from "../../ui/Skeleton";
 import { useModalChrome } from "../../ui/useModalChrome";
 import { useOverlayDismiss } from "../../ui/useOverlayDismiss";
-import { COVER_SOURCE_LABELS, type CoverCandidate, rankCoverCandidates } from "./coverCandidates";
+import type { CoverChoice } from "./albumCoverOverrides";
+import {
+  COVER_SOURCE_LABELS,
+  type CoverCandidate,
+  isCoverSource,
+  isSameCoverImage,
+  rankCoverCandidates,
+} from "./coverCandidates";
 import { useAlbumCoverOverride, useCoverCandidates, useSetAlbumCover } from "./useAlbumCover";
 import "../enrichment/components/IdentifyDialog.css";
 import "./CoverPickerDialog.css";
@@ -22,6 +29,54 @@ interface Dimensions {
 
 function formatSize({ width, height }: Dimensions): string {
   return `${width} × ${height}`;
+}
+
+function formatCaption(candidate: CoverCandidate, size: Dimensions | null): string {
+  if (size) return formatSize(size);
+  return candidate.maxEdge === null ? "\u00a0" : `up to ${candidate.maxEdge} px`;
+}
+
+/** "from Cover Art Archive (1200 × 1200)", as much of it as the stored choice knows. */
+function describeChoice(choice: CoverChoice): string {
+  const source = isCoverSource(choice.source) ? ` from ${COVER_SOURCE_LABELS[choice.source]}` : "";
+  const size =
+    choice.width !== null && choice.height !== null
+      ? ` (${formatSize({ width: choice.width, height: choice.height })})`
+      : "";
+  return `${source}${size}`;
+}
+
+function noCoversMessage(wereAllBroken: boolean, didAnySourceFail: boolean): string {
+  if (wereAllBroken) return "The covers found online could not be loaded.";
+  if (didAnySourceFail) return "No covers came back from the sources that answered.";
+  return "No covers found online for this album.";
+}
+
+type FailedImages = Partial<Record<string, true>>;
+
+/** The tile shows its thumbnail, else the full image it would keep; null once both failed to load. */
+function tileImage(candidate: CoverCandidate, failed: FailedImages): string | null {
+  if (!failed[candidate.thumbUrl]) return candidate.thumbUrl;
+  return failed[candidate.fullUrl] ? null : candidate.fullUrl;
+}
+
+interface OfferedTile {
+  candidate: CoverCandidate;
+  image: string;
+  /** 1-based, among the tiles of the same source. */
+  position: number;
+}
+
+/** The candidates still worth showing, in order, each numbered within its source. */
+function offeredTiles(found: readonly CoverCandidate[], failed: FailedImages): OfferedTile[] {
+  const counts = new Map<string, number>();
+  return found.flatMap((candidate) => {
+    const image = tileImage(candidate, failed);
+    if (image === null) return [];
+    const position = (counts.get(candidate.source) ?? 0) + 1;
+    counts.set(candidate.source, position);
+    return [{ candidate, image, position }];
+  });
 }
 
 /** What the full image measured once loaded, else the size its source claims. */
@@ -71,33 +126,60 @@ function CoverPreview({
   );
 }
 
+/** "Cover Art Archive 2, up to 1200 px, in use": the tile's caption alone repeats across a source. */
+function tileLabel(candidate: CoverCandidate, position: number, size: Dimensions | null, isCurrent: boolean): string {
+  const caption = formatCaption(candidate, size).trim();
+  return [`${COVER_SOURCE_LABELS[candidate.source]} ${position}`, caption, isCurrent ? "in use" : ""]
+    .filter(Boolean)
+    .join(", ");
+}
+
 function CandidateTile({
   candidate,
+  image,
+  position,
   size,
   isSelected,
   isCurrent,
+  isDisabled,
   onSelect,
+  onBroken,
 }: {
   candidate: CoverCandidate;
+  image: string;
+  /** 1-based, among the tiles of the same source. */
+  position: number;
   size: Dimensions | null;
   isSelected: boolean;
   isCurrent: boolean;
+  isDisabled: boolean;
   onSelect: () => void;
+  onBroken: (src: string) => void;
 }) {
   return (
+    // aria-disabled, not disabled: a disabled button drops the keyboard focus it holds.
     <button
       type="button"
       className={`cover-picker-tile${isSelected ? " cover-picker-tile--selected" : ""}`}
       aria-pressed={isSelected}
-      onClick={onSelect}
+      aria-label={tileLabel(candidate, position, size, isCurrent)}
+      aria-disabled={isDisabled || undefined}
+      onClick={isDisabled ? undefined : onSelect}
     >
-      <CoverImg className="cover-picker-tile-art" src={candidate.thumbUrl} alt="" loading="lazy" decoding="async" />
+      <CoverImg
+        className="cover-picker-tile-art"
+        src={image}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        onError={() => onBroken(image)}
+      />
       <span className="cover-picker-tile-caption">
-        <span>{COVER_SOURCE_LABELS[candidate.source]}</span>
+        <span className="cover-picker-tile-source">{COVER_SOURCE_LABELS[candidate.source]}</span>
         {isCurrent ? (
           <span className="cover-picker-tile-current">In use</span>
         ) : (
-          size && <span>{formatSize(size)}</span>
+          <span className="cover-picker-tile-size">{formatCaption(candidate, size)}</span>
         )}
       </span>
     </button>
@@ -114,10 +196,16 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
   // Keyed by image URL, so a size never outlives the image it was read from.
   const [measuredSizes, setMeasuredSizes] = useState<Partial<Record<string, Dimensions>>>({});
   const measure = (src: string, size: Dimensions) => setMeasuredSizes((sizes) => ({ ...sizes, [src]: size }));
+  // A tile whose thumbnail and full image both never load can't be judged, so it isn't offered.
+  const [failedImages, setFailedImages] = useState<FailedImages>({});
+  const retryImages = () => setFailedImages({});
 
   const results = candidates.data ?? [];
-  const ranked = rankCoverCandidates(results);
-  const selected = ranked.find((candidate) => candidate.fullUrl === selectedUrl) ?? null;
+  const found = rankCoverCandidates(results);
+  const ranked = offeredTiles(found, failedImages);
+  const selected = ranked.find(({ candidate }) => candidate.fullUrl === selectedUrl)?.candidate ?? null;
+  const inUseUrl = override.data?.fullUrl;
+  const isSelectedInUse = selected !== null && isSameCoverImage(selected.fullUrl, inUseUrl);
   const unanswered = results.filter((result) => result.status !== "found");
   const needsIdentity = results.some(
     (result) =>
@@ -169,8 +257,8 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
             ) : (
               override.isSuccess && (
                 <p className="identify-hint">
-                  {hasOverride
-                    ? "Showing a cover you picked. Canon keeps it to itself; the server and your files still have their own."
+                  {override.data
+                    ? `Showing a cover you picked${describeChoice(override.data)}. Canon keeps it to itself; the server and your files still have their own.`
                     : "Showing the server's cover. A cover you pick stays in Canon; the server and your files keep theirs."}
                 </p>
               )
@@ -178,7 +266,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
           </div>
 
           {candidates.isPending ? (
-            <div className="cover-picker-grid" aria-label="Searching for covers">
+            <div className="cover-picker-grid" role="status" aria-busy="true" aria-label="Searching for covers">
               {Array.from({ length: SKELETON_TILES }, (_, index) => (
                 <SkeletonBar key={index} className="cover-picker-tile-skeleton" height="auto" />
               ))}
@@ -191,23 +279,36 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
               </button>
             </p>
           ) : ranked.length > 0 ? (
-            <div className="cover-picker-grid">
-              {ranked.map((candidate) => (
+            <div className="cover-picker-grid" role="group" aria-label="Covers found">
+              {ranked.map(({ candidate, image, position }) => (
                 <CandidateTile
                   key={candidate.fullUrl}
                   candidate={candidate}
+                  image={image}
+                  position={position}
                   size={knownSize(candidate, measuredSizes[candidate.fullUrl])}
                   isSelected={candidate.fullUrl === selectedUrl}
-                  isCurrent={candidate.fullUrl === override.data?.fullUrl}
+                  isCurrent={isSameCoverImage(candidate.fullUrl, inUseUrl)}
+                  isDisabled={setCover.isPending}
                   onSelect={() => setSelectedUrl(candidate.fullUrl)}
+                  onBroken={(src) => setFailedImages((failed) => ({ ...failed, [src]: true }))}
                 />
               ))}
             </div>
           ) : (
             <p className="identify-hint">
-              {unanswered.some((result) => result.status === "failed")
-                ? "No covers came back from the sources that answered."
-                : "No covers found online for this album."}
+              {noCoversMessage(
+                found.length > 0,
+                unanswered.some((result) => result.status === "failed"),
+              )}
+              {found.length > 0 && (
+                <>
+                  {" "}
+                  <button className="cover-picker-link" onClick={retryImages}>
+                    Try again
+                  </button>
+                </>
+              )}
             </p>
           )}
 
@@ -224,7 +325,13 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
               ))}
               {candidates.data && unanswered.some((result) => result.status === "failed") && (
                 <li>
-                  <button className="cover-picker-link" onClick={() => void candidates.refetch()}>
+                  <button
+                    className="cover-picker-link"
+                    onClick={() => {
+                      retryImages();
+                      void candidates.refetch();
+                    }}
+                  >
                     Search again
                   </button>
                 </li>
@@ -261,7 +368,7 @@ export function CoverPickerDialog({ album, serverWithCredential, onClose, onIden
             onClick={() => {
               if (selected) choose(selected);
             }}
-            disabled={selected === null || setCover.isPending}
+            disabled={selected === null || isSelectedInUse || setCover.isPending}
           >
             {setCover.isPending ? "Saving…" : "Use this cover"}
           </button>
