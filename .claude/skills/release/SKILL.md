@@ -91,12 +91,18 @@ Release Canon to main. Run these steps in order — do not skip any.
    ```
    Omit a subheading if it has zero items. Summarize all changes since the last release — run `git log main..development --oneline` before writing to make sure nothing is missed.
 
-   **Release note tone**: write for users, not developers. Describe what changed from the user's perspective — what they can now do, what no longer breaks, what behaves differently. No internal names (function names, SQL, hook names, variable names). No jargon. Each bullet should be one plain sentence a non-technical user can understand.
+   **Release note tone**: write for users, not developers, and keep it skimmable: the update prompt shows every release between the installed and new version, stacked. No internal names (function names, SQL, hook names, variable names), no jargon.
 
-   Good: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
-   Bad: "Refresh button clears lyricsOverride before calling lyricsRefresh()."
+   **Length** (hard limits):
+   - Each bullet ≤ 10 words. Say what changed, not how or why. No "instead of ...", no "even when ...", no edge-case conditions.
+   - At most 5 bullets per section, 8 in the whole note. Lead with what users notice most.
+   - Fold small or niche fixes into one closing bullet: "Smaller fixes to playback, sync and covers."
+   - Leave out what users never see (logging, internal speedups, test or build changes) unless it is a security fix.
 
-   Good: "Tags with multiple spellings (e.g. Post-Rock and Post Rock) are now fully removed when you undo a mapping."
+   Good: "Lyrics Refresh returns to the original lyrics."
+   Bad: "Clicking Refresh in the lyrics panel now returns to the track's original lyrics even when a manual search was active."
+
+   Good: "Undoing a genre mapping removes every spelling."
    Bad: "deleteMapping clears track_tags by norm_value instead of raw_value."
 
 7. **Push**: `git push` — CI reads the version from `tauri.conf.json`, creates the `vX.Y.Z` tag, and builds Windows / macOS / Linux artifacts automatically.
