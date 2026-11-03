@@ -8,6 +8,7 @@ import {
   RYM_ID_RENAMES,
   runMigrations,
   SchemaTooNewError,
+  splitStatements,
 } from "./migrations";
 
 const LATEST = Math.max(...migrations.map((m) => m.version));
@@ -54,10 +55,7 @@ async function createVersionTable(db: FakeDatabase): Promise<void> {
  * swallow, so a partially-migrated db can be handed back to `runMigrations` to finish the job.
  */
 async function applyBlock(db: FakeDatabase, migration: (typeof migrations)[number]): Promise<void> {
-  for (const statement of migration.sql
-    .split(";")
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)) {
+  for (const statement of splitStatements(migration.sql)) {
     try {
       await db.execute(statement);
     } catch (e) {
@@ -83,21 +81,31 @@ describe("migration declarations", () => {
     expect(versions).toEqual(Array.from({ length: versions.length }, (_, i) => i + 1));
   });
 
-  it("no block relies on a semicolon the naive split would cut in half", () => {
-    // The runner splits on ";" with no SQL awareness, so a semicolon inside a string literal or a
-    // trigger/view body would silently produce two invalid statements. An odd number of quotes in
-    // a split fragment is exactly that: a literal that got cut. Nothing does it today.
+  it("no block relies on a semicolon the split would cut in half", () => {
+    // The split knows trigger bodies only, so a semicolon inside a string literal or a view body
+    // would silently produce two invalid statements. An odd number of quotes in a split fragment is
+    // exactly that: a literal that got cut. Nothing does it today.
     for (const migration of migrations) {
-      const statements = migration.sql
-        .split(";")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-      for (const statement of statements) {
+      for (const statement of splitStatements(migration.sql)) {
         const quotes = (statement.match(/'/g) ?? []).length;
         expect(quotes % 2, `v${migration.version}: ${statement.slice(0, 40)}`).toBe(0);
       }
-      expect(migration.sql, `v${migration.version}`).not.toMatch(/CREATE\s+(TRIGGER|VIEW)/i);
+      expect(migration.sql, `v${migration.version}`).not.toMatch(/CREATE\s+VIEW/i);
     }
+  });
+
+  it("keeps a trigger's body, semicolons and all, as one statement", () => {
+    expect(
+      splitStatements(`
+        CREATE TABLE a (x);
+        CREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE a SET x = 1; UPDATE a SET x = 2; END;
+        DROP TABLE b;
+      `),
+    ).toEqual([
+      "CREATE TABLE a (x)",
+      "CREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE a SET x = 1; UPDATE a SET x = 2; END",
+      "DROP TABLE b",
+    ]);
   });
 });
 

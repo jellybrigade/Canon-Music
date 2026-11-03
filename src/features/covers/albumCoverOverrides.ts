@@ -30,17 +30,6 @@ export function canChooseCover(album: Pick<AlbumRow, "id" | "server_id" | "artwo
   );
 }
 
-// The stored accent was read from the cover just replaced; a null one is read again from the new.
-// Runs once the new cover shows, so a failure here can't undo what already changed.
-async function forgetAccent({ serverId, albumId }: AlbumRef): Promise<void> {
-  try {
-    const db = await getDb();
-    await db.execute("UPDATE albums SET accent_color = NULL WHERE id = ? AND server_id = ?", [albumId, serverId]);
-  } catch (err) {
-    console.error("Cover change: could not reset the album tint", err);
-  }
-}
-
 // Loading sweeps every image no row names, so it must never run between a save and its row.
 let overrideWork: Promise<unknown> = Promise.resolve();
 
@@ -94,7 +83,6 @@ export function chooseAlbumCover({
     }
     await invoke("use_album_cover_override", file);
     setCoverRevision(albumKey({ serverId, albumId }), now);
-    await forgetAccent({ serverId, albumId });
   });
 }
 
@@ -104,7 +92,6 @@ export function clearAlbumCover({ serverId, albumId }: AlbumRef): Promise<void> 
     await db.execute("DELETE FROM album_cover_overrides WHERE server_id = ? AND album_id = ?", [serverId, albumId]);
     await invoke("clear_album_cover_override", { serverId, albumId });
     setCoverRevision(albumKey({ serverId, albumId }), null);
-    await forgetAccent({ serverId, albumId });
   });
 }
 

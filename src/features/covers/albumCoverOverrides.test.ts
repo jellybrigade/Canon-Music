@@ -128,7 +128,7 @@ describe("album accent", () => {
     ]);
   });
 
-  it("never turns a kept cover into a failed save when its tint can't be reset", async () => {
+  it("keeps the old tint when the choice could not be recorded", async () => {
     seedAlbumAccent();
     onInvoke("save_album_cover_override", () => "image/jpeg");
     const execute = db.execute.bind(db);
@@ -136,17 +136,18 @@ describe("album accent", () => {
       ...db,
       select: db.select.bind(db),
       execute: (sql: string, params?: unknown[]) =>
-        sql.includes("accent_color") ? Promise.reject(new Error("database is locked")) : execute(sql, params),
+        sql.includes("INSERT OR REPLACE") ? Promise.reject(new Error("database is locked")) : execute(sql, params),
     } as never);
-    vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 8 })).resolves.toBeUndefined();
-    await expect(clearAlbumCover({ serverId: "srv", albumId: "srv:abc" })).resolves.toBeUndefined();
-    expect(console.error).toHaveBeenCalledTimes(2);
+    await expect(chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 8 })).rejects.toThrow("locked");
+    expect(accents()).toContainEqual({ id: "srv:abc", accent_color: "#ff0000" });
   });
 
   it("is read again from the server's cover once a choice is cleared", async () => {
     seedAlbumAccent();
+    onInvoke("save_album_cover_override", () => "image/jpeg");
+    await chooseAlbumCover({ serverId: "srv", albumId: "srv:abc", choice, now: 9 });
+    db.raw.exec("UPDATE albums SET accent_color = '#0000ff' WHERE id = 'srv:abc'");
     await clearAlbumCover({ serverId: "srv", albumId: "srv:abc" });
 
     expect(accents()).toContainEqual({ id: "srv:abc", accent_color: null });
