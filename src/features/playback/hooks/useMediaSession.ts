@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getCoverArtUrl } from "../../../clients/navidromeUrls";
+import { useCoverUrl } from "../../../hooks/useCoverRevisions";
 import type { ServerWithCredential } from "../../../hooks/useServer";
 import { usePlayerStore } from "../store/player";
 
@@ -42,7 +43,18 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
 
   const hasTrack = currentTrack != null;
   const artworkRef = currentTrack?.artworkRef ?? null;
-  const fallbackArt = currentTrack?.coverArtUrl ?? null;
+  const ownArt = useCoverUrl(
+    artworkRef && serverWithCred
+      ? getCoverArtUrl(
+          serverWithCred.server.url,
+          serverWithCred.server.username,
+          serverWithCred.credential,
+          artworkRef,
+          ART_SIZE,
+        )
+      : null,
+  );
+  const fallbackArt = useCoverUrl(currentTrack?.coverArtUrl ?? null);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -52,10 +64,8 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
     }
 
     let artwork: MediaImage[] | undefined;
-    if (artworkRef && serverWithCred) {
-      const { server, credential } = serverWithCred;
-      const src = getCoverArtUrl(server.url, server.username, credential, artworkRef, ART_SIZE);
-      artwork = [{ src, sizes: `${ART_SIZE}x${ART_SIZE}` }];
+    if (ownArt) {
+      artwork = [{ src: ownArt, sizes: `${ART_SIZE}x${ART_SIZE}` }];
     } else if (fallbackArt) {
       // Size and MIME type are unknown for this one, and claiming either would be a
       // lie the OS uses to pick between candidates. Omitting both is allowed.
@@ -70,15 +80,7 @@ export function useMediaSession(serverWithCred?: ServerWithCredential | null) {
     });
     // Keyed on the fields actually read, not the track object: an identity-only change
     // would otherwise rebuild the metadata and make the OS re-fetch the artwork.
-  }, [
-    currentTrack?.id,
-    currentTrack?.title,
-    currentTrack?.artist,
-    currentTrack?.album,
-    artworkRef,
-    fallbackArt,
-    serverWithCred,
-  ]);
+  }, [currentTrack?.id, currentTrack?.title, currentTrack?.artist, currentTrack?.album, ownArt, fallbackArt]);
 
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;

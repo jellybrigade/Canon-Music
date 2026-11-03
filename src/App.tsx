@@ -23,7 +23,6 @@ import type { Update } from "@tauri-apps/plugin-updater";
 import type { AppViewProps, NavItem } from "./app/AppRoutes";
 import { AppShell } from "./app/AppShell";
 import { DatabaseErrorScreen } from "./app/DatabaseErrorScreen";
-import canonFaviconUrl from "./assets/canon-logo-kit/canon-favicon.svg?url";
 import {
   getCoverArtUrl,
   getStreamUrl,
@@ -38,6 +37,8 @@ import { useMediaSession } from "./features/playback/hooks/useMediaSession";
 import { useNowPlayingPrefetch } from "./features/playback/hooks/useNowPlayingPrefetch";
 import { useQueueSync } from "./features/playback/hooks/useQueueSync";
 import { useScrobbleFlush } from "./features/playback/hooks/useScrobbleFlush";
+import { useTrackAccent } from "./features/playback/hooks/useTrackAccent";
+import { useTrackFavicon } from "./features/playback/hooks/useTrackFavicon";
 import { useTrackIdRepair } from "./features/playback/hooks/useTrackIdRepair";
 import { useWakeLock } from "./features/playback/hooks/useWakeLock";
 import { usePlayerStore } from "./features/playback/store/player";
@@ -65,7 +66,6 @@ import { useServers, useServerWithCredential } from "./hooks/useServer";
 import { useBoolSetting, useSetting } from "./hooks/useSetting";
 import { useSidebarResize } from "./hooks/useSidebarResize";
 import { loadAlbumTracksForPlay } from "./lib/albumTracks";
-import { extractAccent } from "./lib/artColor";
 import { ROUTES } from "./lib/routes";
 import { currentTrackFromRow, makeStreamUrlBuilder, type PlayableTrackRow } from "./lib/track";
 import { checkForUpdate } from "./lib/updater";
@@ -101,7 +101,6 @@ export default function App() {
   const startRadio = useStartRadio();
   const addToQueue = usePlayerStore((s) => s.addToQueue);
   const setStreamUrlFor = usePlayerStore((s) => s.setStreamUrlFor);
-  const setAccentColor = usePlayerStore((s) => s.setAccentColor);
 
   const canonicalIdFilters = useLibraryFiltersStore((s) => s.canonicalIdFilters);
   const lovedOnly = useLibraryFiltersStore((s) => s.lovedOnly);
@@ -348,43 +347,8 @@ export default function App() {
     });
   }, [serverWithCred, setStreamUrlFor]);
 
-  useEffect(() => {
-    const artUrl = currentTrack?.coverArtUrl ?? null;
-    if (!artUrl) {
-      setAccentColor(null);
-      document.documentElement.style.removeProperty("--accent");
-      document.documentElement.style.removeProperty("--accent-hover");
-      document.documentElement.style.removeProperty("--accent-subtle");
-      return;
-    }
-    let cancelled = false;
-    void extractAccent(artUrl).then((color) => {
-      if (cancelled) return;
-      setAccentColor(color);
-      if (color) {
-        document.documentElement.style.setProperty("--accent", color);
-        document.documentElement.style.setProperty("--accent-hover", `color-mix(in oklab, ${color} 85%, black)`);
-        // parse rgb(...) to build subtle
-        const m = color.match(/\d+/g);
-        if (m) {
-          document.documentElement.style.setProperty("--accent-subtle", `rgba(${m[0]}, ${m[1]}, ${m[2]}, 0.18)`);
-        }
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentTrack?.coverArtUrl, setAccentColor]);
-
-  useEffect(() => {
-    const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
-    if (!link) return;
-    if (currentTrack?.coverArtUrl) {
-      link.href = currentTrack.coverArtUrl;
-    } else {
-      link.href = canonFaviconUrl;
-    }
-  }, [currentTrack?.coverArtUrl]);
+  useTrackAccent();
+  useTrackFavicon();
 
   useEffect(() => {
     if (!currentTrack) {
