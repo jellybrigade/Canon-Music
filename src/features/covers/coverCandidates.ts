@@ -36,11 +36,15 @@ export type SourceResult =
   | { source: CoverSource; status: "found"; candidates: CoverCandidate[] }
   | { source: CoverSource; status: "skipped" | "failed"; candidates: []; reason: string };
 
+/** The stored fanart.tv key, or why fanart.tv can't be asked. */
+export type FanartKeyRead = string | SourceResult;
+
 export interface CoverLookup {
   artist: string;
   album: string;
   releaseMbid: string | null;
   releaseGroupMbid: string | null;
+  fanartKey: FanartKeyRead;
 }
 
 /** Every found candidate, best source first, approved archive images first within a source, each image once. */
@@ -90,7 +94,7 @@ async function caaCandidates(kind: "release" | "release-group", mbid: string): P
 }
 
 /** The stored key, or why fanart.tv can't be asked: without a key nothing else about it matters. */
-async function readFanartKey(): Promise<string | SourceResult> {
+export async function readFanartKey(): Promise<FanartKeyRead> {
   try {
     return (await getFanartApiKey()) ?? skipped("fanart", "Add a fanart.tv key in Settings to search it");
   } catch (err) {
@@ -114,19 +118,17 @@ function fanartCandidates(releaseGroupMbid: string, apiKey: string): Promise<Sou
 }
 
 async function releaseGroupSources(lookup: CoverLookup): Promise<[SourceResult, SourceResult]> {
-  const fanartKey = readFanartKey();
+  const key = lookup.fanartKey;
   let releaseGroupMbid = lookup.releaseGroupMbid;
   if (releaseGroupMbid === null && lookup.releaseMbid !== null) {
     try {
       releaseGroupMbid = (await lookupRelease(lookup.releaseMbid)).releaseGroupId;
     } catch (err) {
       const reason = errorMessage(err);
-      const key = await fanartKey;
       return [failed("caa-release-group", reason), typeof key === "string" ? failed("fanart", reason) : key];
     }
   }
   if (releaseGroupMbid === null) {
-    const key = await fanartKey;
     return [
       skipped("caa-release-group", NEEDS_IDENTITY),
       typeof key === "string" ? skipped("fanart", NEEDS_IDENTITY) : key,
@@ -135,7 +137,7 @@ async function releaseGroupSources(lookup: CoverLookup): Promise<[SourceResult, 
   const mbid = releaseGroupMbid;
   const [releaseGroup, fanart] = await Promise.all([
     settle("caa-release-group", () => caaCandidates("release-group", mbid)),
-    fanartKey.then((key) => (typeof key === "string" ? fanartCandidates(mbid, key) : key)),
+    typeof key === "string" ? fanartCandidates(mbid, key) : key,
   ]);
   return [releaseGroup, fanart];
 }

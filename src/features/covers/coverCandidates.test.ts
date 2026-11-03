@@ -9,7 +9,13 @@ import { fetchCaaFrontCovers } from "../../clients/coverArtArchive";
 import { fetchFanartAlbumCovers, getFanartApiKey } from "../../clients/fanart";
 import { fetchItunesAlbumCovers } from "../../clients/itunes";
 import { lookupRelease } from "../../clients/musicbrainz";
-import { type CoverCandidate, findCoverCandidates, rankCoverCandidates, type SourceResult } from "./coverCandidates";
+import {
+  type CoverCandidate,
+  findCoverCandidates,
+  rankCoverCandidates,
+  readFanartKey,
+  type SourceResult,
+} from "./coverCandidates";
 
 function candidate(overrides: Partial<CoverCandidate>): CoverCandidate {
   return {
@@ -29,7 +35,7 @@ function found(source: SourceResult["source"], candidates: CoverCandidate[]): So
   return { source, status: "found", candidates };
 }
 
-const lookup = { artist: "Artist", album: "Album", releaseMbid: "rel-1", releaseGroupMbid: "rg-1" };
+const lookup = { artist: "Artist", album: "Album", releaseMbid: "rel-1", releaseGroupMbid: "rg-1", fanartKey: "key" };
 
 beforeEach(() => {
   vi.mocked(fetchCaaFrontCovers).mockReset().mockResolvedValue([]);
@@ -110,10 +116,16 @@ describe("findCoverCandidates", () => {
 
   it("skips fanart.tv without a key, and reports a locked secret store as a failure", async () => {
     vi.mocked(getFanartApiKey).mockResolvedValue(null);
-    expect((await findCoverCandidates(lookup))[2]).toMatchObject({ source: "fanart", status: "skipped" });
+    expect((await findCoverCandidates({ ...lookup, fanartKey: await readFanartKey() }))[2]).toMatchObject({
+      source: "fanart",
+      status: "skipped",
+    });
 
     vi.mocked(getFanartApiKey).mockRejectedValue(new Error("secret store locked"));
-    expect((await findCoverCandidates(lookup))[2]).toMatchObject({ source: "fanart", status: "failed" });
+    expect((await findCoverCandidates({ ...lookup, fanartKey: await readFanartKey() }))[2]).toMatchObject({
+      source: "fanart",
+      status: "failed",
+    });
     expect(fetchFanartAlbumCovers).not.toHaveBeenCalled();
   });
 
@@ -138,7 +150,7 @@ describe("findCoverCandidates", () => {
   it("asks for a fanart.tv key, not a failed search, when the release lookup fails without one", async () => {
     vi.mocked(getFanartApiKey).mockResolvedValue(null);
     vi.mocked(lookupRelease).mockRejectedValue(new Error("MusicBrainz release/rel-1 returned 503"));
-    const results = await findCoverCandidates({ ...lookup, releaseGroupMbid: null });
+    const results = await findCoverCandidates({ ...lookup, releaseGroupMbid: null, fanartKey: await readFanartKey() });
     expect(results[1]).toMatchObject({ source: "caa-release-group", status: "failed" });
     expect(results[2]).toMatchObject({ source: "fanart", status: "skipped", reason: expect.stringContaining("key") });
   });

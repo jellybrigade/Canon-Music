@@ -237,6 +237,13 @@ describe("CoverPickerDialog", () => {
     expect(screen.getByText("The covers found online could not be loaded.")).toBeTruthy();
   });
 
+  it("reads the fanart.tv key once per open", async () => {
+    vi.mocked(getFanartApiKey).mockResolvedValue("key");
+    renderDialog();
+    expect(await screen.findByRole("button", { name: /Cover Art Archive/ })).toBeTruthy();
+    expect(getFanartApiKey).toHaveBeenCalledTimes(1);
+  });
+
   it("tells covers from one source apart by number, size and use", async () => {
     db.raw.exec(
       "INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('srv', 'srv:abc', 'caa-release', 'https://caa/1200.jpg', 1)",
