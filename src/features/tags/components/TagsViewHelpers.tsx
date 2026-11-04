@@ -78,6 +78,7 @@ export const SOURCE_META: Record<string, { cls: string; label: string }> = {
   lastfm: { cls: "src-lfm", label: "Last.fm" },
   musicbrainz: { cls: "src-mb", label: "MusicBrainz" },
   "musicbrainz-folksonomy": { cls: "src-mb-folk", label: "Folksonomy" },
+  discogs: { cls: "src-discogs", label: "Discogs" },
   file: { cls: "src-file", label: "File tags" },
 };
 

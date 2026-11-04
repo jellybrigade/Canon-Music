@@ -4,6 +4,7 @@ import {
   decideRelease,
   isMatchingRelease,
   isSameArtist,
+  isSameTitle,
   isValidReleaseDate,
   type LocalRelease,
   localReleaseKind,
@@ -49,6 +50,14 @@ describe("localReleaseKind", () => {
 
   it("knows nothing without a type or tracks", () => {
     expect(localReleaseKind(null, 0)).toBeNull();
+  });
+});
+
+describe("isSameTitle", () => {
+  it("ignores case and quote styles but keeps edition words", () => {
+    expect(isSameTitle("You Made Me / Skin On Linen", "you made me / skin on linen")).toBe(true);
+    expect(isSameTitle("Don’t", "Don't")).toBe(true);
+    expect(isSameTitle("Kind of Blue", "Kind of Blue (Remastered)")).toBe(false);
   });
 });
 

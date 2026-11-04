@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import type { DisplayGenre, GenreGroups } from "../../components/AlbumGenreEditor";
 import { getDb } from "../../db";
 import { rawGenreId } from "../../features/tags/lib/canonicalize";
-import { isYearLikeGenre, type NormalizedTags } from "../../features/tags/lib/tagNormalize";
+import { isYearLikeGenre, type NormalizedTags, type TagSource } from "../../features/tags/lib/tagNormalize";
 import { applyGenreMappings } from "../../hooks/useGenreDisplay";
 import { useBoolSetting } from "../../hooks/useSetting";
 import { QK } from "../../lib/queryKeys";
@@ -147,21 +147,31 @@ export function buildDisplayGenres(
   });
 }
 
+type GenreGroupKey = Exclude<keyof GenreGroups, "multiSource">;
+
+const GROUP_OF_SOURCE: Record<TagSource, GenreGroupKey> = {
+  manual: "manual",
+  file: "file",
+  lastfm: "lastfm",
+  "lastfm-track": "unsourced",
+  musicbrainz: "musicbrainz",
+  discogs: "discogs",
+  "musicbrainz-folksonomy": "folksonomy",
+};
+
 export function groupGenresBySource(displayGenres: DisplayGenre[]): GenreGroups {
-  const manual: DisplayGenre[] = [];
-  const file: DisplayGenre[] = [];
-  const lastfm: DisplayGenre[] = [];
-  const musicbrainz: DisplayGenre[] = [];
-  const folksonomy: DisplayGenre[] = [];
-  const unsourced: DisplayGenre[] = [];
-  for (const g of displayGenres) {
-    if (g.source === "manual") manual.push(g);
-    else if (g.source === "file") file.push(g);
-    else if (g.source === "lastfm") lastfm.push(g);
-    else if (g.source === "musicbrainz") musicbrainz.push(g);
-    else if (g.source === "musicbrainz-folksonomy") folksonomy.push(g);
-    else unsourced.push(g);
+  const groups: Record<GenreGroupKey, DisplayGenre[]> = {
+    manual: [],
+    file: [],
+    lastfm: [],
+    musicbrainz: [],
+    discogs: [],
+    folksonomy: [],
+    unsourced: [],
+  };
+  for (const genre of displayGenres) {
+    groups[genre.source === undefined ? "unsourced" : GROUP_OF_SOURCE[genre.source]].push(genre);
   }
-  const nonEmpty = [manual, file, lastfm, musicbrainz, folksonomy, unsourced].filter((g) => g.length > 0);
-  return { manual, file, lastfm, musicbrainz, folksonomy, unsourced, multiSource: nonEmpty.length > 1 };
+  const nonEmptyCount = Object.values(groups).filter((group) => group.length > 0).length;
+  return { ...groups, multiSource: nonEmptyCount > 1 };
 }

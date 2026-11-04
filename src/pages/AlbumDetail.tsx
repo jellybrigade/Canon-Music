@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getCoverArtUrl } from "../clients/navidromeUrls";
 import { AlbumGenreEditor } from "../components/AlbumGenreEditor";
 import { AlbumGrid } from "../components/AlbumGrid";
+import { NO_LOOKED_UP_FACTS, useLookedUpFacts } from "../features/albumFacts/lookedUpFacts";
 import { canChooseCover } from "../features/covers/albumCoverOverrides";
 import { CoverPickerDialog } from "../features/covers/CoverPickerDialog";
 import { useCoverPickerDialogs } from "../features/covers/useCoverPickerDialogs";
@@ -132,6 +133,10 @@ export function AlbumDetail({
   const trackTagGenresMap = useTrackTagGenres(album.id, genreMappings);
 
   const { data: albumIdentity, isSuccess: identityLoaded } = useAlbumIdentity(album.id);
+  const { data: lookedUpFacts = NO_LOOKED_UP_FACTS } = useLookedUpFacts({
+    albumId: album.id,
+    serverId: album.server_id,
+  });
   const [mbAutoIdentify, , isMbAutoIdentifyLoaded] = useBoolSetting("mb.auto_identify", true);
 
   const [isTagRefreshing, setIsTagRefreshing] = useState(false);
@@ -278,6 +283,7 @@ export function AlbumDetail({
         album={album}
         coverArtUrl={coverArtUrl}
         albumIdentity={albumIdentity}
+        lookedUpFacts={lookedUpFacts}
         showUnidentified={isMbAutoIdentifyLoaded && mbAutoIdentify && identityLoaded && !autoIdentifyFetching}
         tagsComputedAt={normalizedTags?.computed_at ?? null}
         tagRefresh={{

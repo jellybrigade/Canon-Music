@@ -339,6 +339,7 @@ describe("post-migration schema", () => {
     expect(userTables(db)).toEqual([
       "album_cover_overrides",
       "album_covers",
+      "album_discogs",
       "album_genre_exclusions",
       "album_genres",
       "album_identity",

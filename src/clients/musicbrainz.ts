@@ -321,17 +321,33 @@ interface MbUrlRelationsResponse {
 }
 
 const WIKIDATA_ITEM_URL = /^https?:\/\/www\.wikidata\.org\/wiki\/(Q\d+)$/;
+const DISCOGS_MASTER_URL = /^https?:\/\/www\.discogs\.com\/master\/(\d+)$/;
 
-/** The Wikidata item a release group links to, or null without one. Rejects when MusicBrainz didn't answer. */
-export async function fetchReleaseGroupWikidataId(releaseGroupMbid: string): Promise<string | null> {
+/** The id captured from the release group's first link of `type` that `pattern` reads; rejects when MusicBrainz didn't answer. */
+async function fetchReleaseGroupLinkId(
+  releaseGroupMbid: string,
+  type: string,
+  pattern: RegExp,
+): Promise<string | null> {
   if (!isMbid(releaseGroupMbid)) return null;
   const data = await mbGet<MbUrlRelationsResponse>(`release-group/${releaseGroupMbid}`, { inc: "url-rels" });
   for (const relation of data.relations ?? []) {
-    if (relation.type !== "wikidata") continue;
-    const itemId = WIKIDATA_ITEM_URL.exec(relation.url?.resource ?? "")?.[1];
-    if (itemId) return itemId;
+    if (relation.type !== type) continue;
+    const id = pattern.exec(relation.url?.resource ?? "")?.[1];
+    if (id) return id;
   }
   return null;
+}
+
+/** The Wikidata item a release group links to, or null without one. Rejects when MusicBrainz didn't answer. */
+export function fetchReleaseGroupWikidataId(releaseGroupMbid: string): Promise<string | null> {
+  return fetchReleaseGroupLinkId(releaseGroupMbid, "wikidata", WIKIDATA_ITEM_URL);
+}
+
+/** The Discogs master a release group links to, or null without one. Rejects when MusicBrainz didn't answer. */
+export async function fetchReleaseGroupDiscogsMasterId(releaseGroupMbid: string): Promise<number | null> {
+  const id = await fetchReleaseGroupLinkId(releaseGroupMbid, "discogs", DISCOGS_MASTER_URL);
+  return id === null ? null : Number(id);
 }
 
 interface WikidataSparqlResponse {

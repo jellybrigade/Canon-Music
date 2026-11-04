@@ -45,6 +45,8 @@ export const QK = {
 
   recentlyReleased: (limit: number) => ["recently-released", limit] as const,
   recentlyReleasedAll: () => ["recently-released"] as const,
+  lookedUpFacts: (albumId: string, serverId: string) => ["looked-up-facts", albumId, serverId] as const,
+  lookedUpFactsAll: () => ["looked-up-facts"] as const,
   spotlightGenres: (albumId: string) => ["spotlight-genres", albumId] as const,
   recommendedSpotlight: (albumId: string | null) => ["recommended-spotlight", albumId] as const,
 

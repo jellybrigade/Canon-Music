@@ -946,6 +946,47 @@ export const migrations: Migration[] = [
       ALTER TABLE album_identity ADD COLUMN album_bio_release_group_id TEXT;
     `,
   },
+  {
+    version: 66,
+    sql: `
+      CREATE TABLE album_discogs (
+        album_id TEXT NOT NULL,
+        server_id TEXT NOT NULL,
+        discogs_release_id INTEGER,
+        label TEXT,
+        catalog_number TEXT,
+        country TEXT,
+        styles_json TEXT,
+        genres_json TEXT,
+        looked_up_name TEXT NOT NULL,
+        looked_up_artist TEXT,
+        looked_up_year INTEGER,
+        status TEXT NOT NULL CHECK (status IN ('found', 'none', 'failed')),
+        checked_at INTEGER NOT NULL,
+        PRIMARY KEY (album_id, server_id)
+      );
+    `,
+  },
+  {
+    version: 67,
+    sql: `
+      CREATE TABLE track_tags_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        track_id TEXT NOT NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('genre','mood')),
+        raw_value TEXT NOT NULL,
+        canonical_id TEXT,
+        source TEXT NOT NULL CHECK (source IN ('server','lastfm','lastfm-track','manual','musicbrainz','musicbrainz-folksonomy','discogs')),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(track_id, kind, raw_value, source)
+      );
+      INSERT INTO track_tags_new SELECT * FROM track_tags;
+      DROP TABLE track_tags;
+      ALTER TABLE track_tags_new RENAME TO track_tags;
+      CREATE INDEX IF NOT EXISTS idx_track_tags_canonical ON track_tags(canonical_id);
+      CREATE INDEX IF NOT EXISTS idx_track_tags_track ON track_tags(track_id);
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

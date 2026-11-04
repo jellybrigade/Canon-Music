@@ -15,7 +15,7 @@ export interface TagVocabRow {
   kind: TagKind;
   /** COUNT(DISTINCT album_id). 0 = tag no longer in library (stale). */
   album_count: number;
-  /** Comma-separated tag data sources: file, lastfm, musicbrainz, musicbrainz-folksonomy */
+  /** Comma-separated tag data sources: file, lastfm, musicbrainz, discogs, musicbrainz-folksonomy */
   sources: string | null;
   canonical_id: string | null;
   mapping_source: "auto" | "manual" | null;

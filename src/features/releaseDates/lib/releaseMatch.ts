@@ -96,6 +96,11 @@ export function isSameArtist(local: string, remote: string): boolean {
   return localKey === remoteKey || leadArtist(localKey) === leadArtist(remoteKey);
 }
 
+/** Same title by the strict rules: edition words and punctuation still tell titles apart. */
+export function isSameTitle(local: string, remote: string): boolean {
+  return strictKey(local) === strictKey(remote);
+}
+
 function isSameKind(kind: ReleaseKind, recordType: string): boolean {
   return SOURCE_KINDS[recordType.toLowerCase()] === kind;
 }
@@ -106,7 +111,7 @@ export function isMatchingRelease(
 ): boolean {
   return (
     isSameArtist(album.artist, hit.artistName) &&
-    strictKey(album.name) === strictKey(hit.title) &&
+    isSameTitle(album.name, hit.title) &&
     isSameKind(album.kind, hit.recordType) &&
     (album.trackCount === 0 || Math.abs(album.trackCount - hit.trackCount) <= TRACK_COUNT_TOLERANCE)
   );

@@ -116,7 +116,7 @@ describe("useReleaseDateLookups", () => {
     expect(runReleaseDateLookups).toHaveBeenCalledTimes(2);
   });
 
-  it("refreshes Recently Released only when a pass changed what it shows", async () => {
+  it("refreshes Recently Released and album labels only when a pass changed what they show", async () => {
     const invalidate = vi.spyOn(client, "invalidateQueries");
     vi.mocked(runReleaseDateLookups).mockResolvedValueOnce({ changed: false });
     vi.mocked(runReleaseDateLookups).mockResolvedValueOnce({ changed: true });
@@ -128,7 +128,8 @@ describe("useReleaseDateLookups", () => {
     expect(invalidate).toHaveBeenCalledTimes(0);
 
     rerender({ syncedAt: 2 });
-    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(invalidate).toHaveBeenCalledTimes(2));
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["recently-released"] });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["looked-up-facts"] });
   });
 });

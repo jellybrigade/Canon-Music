@@ -135,6 +135,7 @@ function seedServerRows(d: FakeDatabase, serverId: string): void {
     INSERT INTO scrobble_history (track_id, timestamp) VALUES ('${tr}', 1);
     INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${al}', 'data:x', 1);
     INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${al}', '${serverId}', 'deezer', 'A', 'none', 1);
+    INSERT INTO album_discogs (album_id, server_id, looked_up_name, status, checked_at) VALUES ('${al}', '${serverId}', 'A', 'none', 1);
     INSERT INTO album_identity (album_id) VALUES ('${al}');
     INSERT INTO album_cover_overrides (server_id, album_id, source, full_url, chosen_at) VALUES ('${serverId}', '${al}', 'caa', 'https://x', 1);
     INSERT INTO album_user_genres (album_id, canonical_id, name) VALUES ('${al}', 'rock', 'Rock');
@@ -169,6 +170,7 @@ const OWNED_TABLES = [
   "scrobble_history",
   "album_covers",
   "album_release_lookups",
+  "album_discogs",
   "album_identity",
   "album_cover_overrides",
   "album_user_genres",
@@ -648,6 +650,7 @@ describe("syncLibrary album prune", () => {
       INSERT INTO waveform_cache (track_id, peaks_json, created_at) VALUES ('${SRV}:t3', '[]', 1);
       INSERT INTO album_covers (album_id, data_url, cached_at) VALUES ('${SRV}:al-2', 'data:x', 1);
       INSERT INTO album_release_lookups (album_id, server_id, source, looked_up_name, status, checked_at) VALUES ('${SRV}:al-2', '${SRV}', 'deezer', 'A', 'none', 1);
+      INSERT INTO album_discogs (album_id, server_id, looked_up_name, status, checked_at) VALUES ('${SRV}:al-2', '${SRV}', 'A', 'none', 1);
       INSERT INTO pinned_albums (album_id, server_id, pinned_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_albums (album_id, server_id, opened_at) VALUES ('${SRV}:al-2', '${SRV}', 1);
       INSERT INTO recent_tracks (track_id, server_id, opened_at) VALUES ('${SRV}:t3', '${SRV}', 1);
@@ -666,6 +669,7 @@ describe("syncLibrary album prune", () => {
       ["album_unresolved_genres", "album_id"],
       ["album_covers", "album_id"],
       ["album_release_lookups", "album_id"],
+      ["album_discogs", "album_id"],
       ["pinned_albums", "album_id"],
       ["recent_albums", "album_id"],
     ];

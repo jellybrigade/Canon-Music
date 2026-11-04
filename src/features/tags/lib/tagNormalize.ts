@@ -4,6 +4,7 @@ import type { MbGenre } from "../../../clients/musicbrainz";
 import { getMinFolksonomyCount } from "../../../clients/musicbrainz";
 import { getDb } from "../../../db";
 import { executeBatched } from "../../../lib/dbBatch";
+import { currentLookupSql } from "../../../lib/releaseLookupSql";
 import {
   type CanonTree,
   canonicalKey,
@@ -15,7 +16,35 @@ import {
 import { getManualGenreMappings } from "./manualMappings";
 import { bucketize } from "./tagBuckets";
 
-export type TagSource = "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+export type TagSource =
+  | "file"
+  | "lastfm"
+  | "lastfm-track"
+  | "manual"
+  | "musicbrainz"
+  | "discogs"
+  | "musicbrainz-folksonomy";
+
+const SOURCE_CONFIDENCE: Record<TagSource, number> = {
+  manual: 1.0,
+  file: 1.0,
+  lastfm: 0.8,
+  "lastfm-track": 0.6,
+  musicbrainz: 0.7,
+  discogs: 0.65,
+  "musicbrainz-folksonomy": 0.6,
+};
+
+// Shown genres fill in this order up to the cap; consensus-promoted track genres count as Last.fm.
+const SOURCE_DISPLAY_RANK: Record<TagSource, number> = {
+  manual: 0,
+  file: 1,
+  lastfm: 2,
+  "lastfm-track": 2,
+  musicbrainz: 3,
+  discogs: 4,
+  "musicbrainz-folksonomy": 5,
+};
 
 export async function rebuildTagVocabCache(): Promise<void> {
   const db = await getDb();
@@ -131,8 +160,7 @@ export function resolveGenreTags({ tree, userGenres, entries, manualMap, exclude
 
   for (const entry of entries) {
     const manualId = manualMap.get(canonicalKey(entry.name));
-    const confidence =
-      entry.source === "file" ? 1.0 : entry.source === "lastfm" ? 0.8 : entry.source === "musicbrainz" ? 0.7 : 0.6;
+    const confidence = SOURCE_CONFIDENCE[entry.source];
 
     if (manualId === "__ignored__") continue;
 
@@ -174,12 +202,13 @@ type NormalizeInputRow = {
   lastfm_album_name: string | null;
   combined_genres_json: string | null;
   combined_tags_json: string | null;
+  discogs_styles_json: string | null;
 };
 
-function parseMbGenres(json: string | null): MbGenre[] {
+function parseStoredList<T>(json: string | null): T[] {
   if (json === null) return [];
   try {
-    return JSON.parse(json) as MbGenre[];
+    return JSON.parse(json) as T[];
   } catch {
     return [];
   }
@@ -188,9 +217,11 @@ function parseMbGenres(json: string | null): MbGenre[] {
 async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const db = await getDb();
   const inputRows = await db.select<NormalizeInputRow[]>(
-    `SELECT a.name, a.artist, ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json
+    `SELECT a.name, a.artist, ai.lastfm_artist_name, ai.lastfm_album_name, ai.combined_genres_json, ai.combined_tags_json,
+            d.styles_json AS discogs_styles_json
      FROM albums a
      LEFT JOIN album_identity ai ON ai.album_id = a.id
+     LEFT JOIN album_discogs d ON ${currentLookupSql("d", "a")} AND d.status = 'found'
      WHERE a.id = ?`,
     [albumId],
   );
@@ -234,9 +265,10 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
     lastfmRaw = await readStoredLastfmTags(db, albumId);
   }
 
-  const mbRaw = parseMbGenres(input.combined_genres_json).map((genre) => genre.name);
+  const mbRaw = parseStoredList<MbGenre>(input.combined_genres_json).map((genre) => genre.name);
+  const discogsRaw = parseStoredList<string>(input.discogs_styles_json);
   const minFolksonomy = await getMinFolksonomyCount();
-  const mbFolkRaw = parseMbGenres(input.combined_tags_json)
+  const mbFolkRaw = parseStoredList<MbGenre>(input.combined_tags_json)
     .filter((tag) => tag.count >= minFolksonomy)
     .map((tag) => tag.name);
 
@@ -246,6 +278,7 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
     fileTagRows.length === 0 &&
     lastfmRaw.length === 0 &&
     mbRaw.length === 0 &&
+    discogsRaw.length === 0 &&
     mbFolkRaw.length === 0
   ) {
     try {
@@ -300,6 +333,11 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
     const k = canonicalKey(raw);
     if (!byKey.has(k)) byKey.set(k, { name: raw, source: "musicbrainz" });
   }
+  for (const raw of discogsRaw) {
+    if (skipYearGenres && isYearLikeGenre(raw)) continue;
+    const k = canonicalKey(raw);
+    if (!byKey.has(k)) byKey.set(k, { name: raw, source: "discogs" });
+  }
   for (const raw of mbFolkRaw) {
     if (skipYearGenres && isYearLikeGenre(raw)) continue;
     const k = canonicalKey(raw);
@@ -341,7 +379,7 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
            AND tm.canonical_id NOT IN ('__accepted__', '__ignored__')
          LIMIT 1
        )
-       WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'musicbrainz-folksonomy')
+       WHERE source IN ('lastfm', 'lastfm-track', 'musicbrainz', 'discogs', 'musicbrainz-folksonomy')
          AND canonical_id IS NULL
          AND track_id IN (SELECT id FROM tracks WHERE album_id = ?)`,
       [albumId],
@@ -376,21 +414,10 @@ async function _doNormalizeAlbum(albumId: string): Promise<NormalizedTags> {
   const mappedById = new Map<string, NormalizedTag>(mapped.map((t) => [t.id!, t]));
 
   function fromIds(ids: string[], cap: number): NormalizedTag[] {
-    const manual: NormalizedTag[] = [];
-    const file: NormalizedTag[] = [];
-    const lastfm: NormalizedTag[] = [];
-    const mb: NormalizedTag[] = [];
-    const folk: NormalizedTag[] = [];
-    for (const id of ids) {
-      const tag = mappedById.get(id);
-      if (!tag) continue;
-      if (tag.source === "manual") manual.push(tag);
-      else if (tag.source === "file") file.push(tag);
-      else if (tag.source === "musicbrainz") mb.push(tag);
-      else if (tag.source === "musicbrainz-folksonomy") folk.push(tag);
-      else lastfm.push(tag);
-    }
-    return [...manual, ...file, ...lastfm, ...mb, ...folk].slice(0, cap);
+    return ids
+      .flatMap((id) => mappedById.get(id) ?? [])
+      .sort((left, right) => SOURCE_DISPLAY_RANK[left.source] - SOURCE_DISPLAY_RANK[right.source])
+      .slice(0, cap);
   }
 
   const genreTags = fromIds(buckets.genres, CAPS.genres);

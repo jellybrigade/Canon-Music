@@ -31,6 +31,7 @@ import {
   updateCoverProxyConfig,
 } from "./clients/navidromeUrls";
 import { getDb } from "./db";
+import { useDiscogsLookups } from "./features/albumFacts/hooks/useDiscogsLookups";
 import { loadCoverOverrides } from "./features/covers/albumCoverOverrides";
 import { useFailedLookupAlbumIds } from "./features/enrichment/hooks/useAlbumIdentity";
 import { useMediaSession } from "./features/playback/hooks/useMediaSession";
@@ -167,6 +168,7 @@ export default function App() {
 
   const { syncStatus, syncError, syncProgress, lastSyncedAt, nextRetryAt, runSync } = useLibrarySync(serverWithCred);
   useReleaseDateLookups(lastSyncedAt);
+  useDiscogsLookups(lastSyncedAt);
   useCoverCachePopulator(serverWithCred ?? undefined);
 
   // One signal for "an overlay above the app owns the keyboard", read by the search shortcuts,

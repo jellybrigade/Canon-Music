@@ -5,6 +5,7 @@ import { getDb } from "../db";
 import { UnmatchedSection } from "../features/tags/components/TagDrawer";
 import type { TreeNode } from "../features/tags/lib/canonicalize";
 import { getCanonTree, rawGenreId } from "../features/tags/lib/canonicalize";
+import type { TagSource } from "../features/tags/lib/tagNormalize";
 import { normalizeAlbum } from "../features/tags/lib/tagNormalize";
 import { QK } from "../lib/queryKeys";
 import "./AlbumGenreEditor.css";
@@ -12,7 +13,7 @@ import "./AlbumGenreEditor.css";
 export type DisplayGenre = {
   id: string | null;
   name: string;
-  source?: "file" | "lastfm" | "lastfm-track" | "manual" | "musicbrainz" | "musicbrainz-folksonomy";
+  source?: TagSource;
 };
 
 export type GenreGroups = {
@@ -20,6 +21,7 @@ export type GenreGroups = {
   file: DisplayGenre[];
   lastfm: DisplayGenre[];
   musicbrainz: DisplayGenre[];
+  discogs: DisplayGenre[];
   folksonomy: DisplayGenre[];
   unsourced: DisplayGenre[];
   multiSource: boolean;
@@ -163,6 +165,7 @@ export function AlbumGenreEditor({ albumId, genreGroups, rawSourcesByCanonicalId
         {renderGroup("File", genreGroups.file, false)}
         {renderGroup("Last.fm", genreGroups.lastfm, false)}
         {renderGroup("MusicBrainz", genreGroups.musicbrainz, false)}
+        {renderGroup("Discogs", genreGroups.discogs, false)}
         {renderGroup("Folksonomy", genreGroups.folksonomy, false)}
         {renderGroup(null, genreGroups.unsourced, false)}
 
