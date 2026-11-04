@@ -940,6 +940,12 @@ export const migrations: Migration[] = [
       ALTER TABLE artist_identity ADD COLUMN listenbrainz_listens INTEGER;
     `,
   },
+  {
+    version: 65,
+    sql: `
+      ALTER TABLE album_identity ADD COLUMN album_bio_release_group_id TEXT;
+    `,
+  },
 ];
 
 /** Each statement of a block on its own; a trigger's body holds its own `;`, so it runs to its `END`. */

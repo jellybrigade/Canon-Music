@@ -1,6 +1,7 @@
 import { normalizeForMatch } from "../features/enrichment/lib/fuzzyMatch";
 import { isMbid } from "../lib/mbid";
 import { boundedNativeFetch } from "./boundedFetch";
+import { summaryText, titleFromArticleUrl, type WikipediaSummary } from "./wikipedia";
 
 interface TheAudioDbArtist {
   strArtist?: string;
@@ -10,11 +11,6 @@ interface TheAudioDbArtist {
 
 interface TheAudioDbResponse {
   artists: TheAudioDbArtist[] | null;
-}
-
-interface WikipediaSummary {
-  type?: string;
-  extract?: string;
 }
 
 /** Rejects when TheAudioDB didn't answer, so a missing portrait isn't taken as "there is none". */
@@ -35,11 +31,6 @@ async function searchTheAudioDb(name: string): Promise<TheAudioDbArtist | null> 
       (artist) => typeof artist.strArtist === "string" && normalizeForMatch(artist.strArtist) === wanted,
     ) ?? null
   );
-}
-
-function biographyFrom(summary: WikipediaSummary): string | null {
-  if (summary.type === "disambiguation") return null;
-  return typeof summary.extract === "string" ? summary.extract.trim() || null : null;
 }
 
 export async function fetchTheAudioDbArtist(name: string): Promise<{ bio: string | null; thumbUrl: string | null }> {
@@ -64,7 +55,7 @@ export async function fetchWikipediaBio(name: string): Promise<string | null> {
       },
     );
     if (!res.ok) return null;
-    return biographyFrom((await res.json()) as WikipediaSummary);
+    return summaryText((await res.json()) as WikipediaSummary);
   } catch {
     return null;
   }
@@ -90,16 +81,14 @@ export async function fetchWikipediaBioByMbid(mbid: string): Promise<string | nu
     const data = (await res.json()) as { results?: { bindings?: Array<{ article?: { value: string } }> } };
     const articleUrl = data.results?.bindings?.[0]?.article?.value;
     if (!articleUrl) return null;
-    const wikiTitle = decodeURIComponent(articleUrl.split("/wiki/")[1] ?? "")
-      .replace(/#.*$/, "")
-      .replace(/\?.*$/, "");
+    const wikiTitle = titleFromArticleUrl(articleUrl);
     if (!wikiTitle) return null;
     const summaryRes = await boundedNativeFetch(
       `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`,
       { method: "GET", headers: { "User-Agent": "Canon Music Player" } },
     );
     if (!summaryRes.ok) return null;
-    return biographyFrom((await summaryRes.json()) as WikipediaSummary);
+    return summaryText((await summaryRes.json()) as WikipediaSummary);
   } catch {
     return null;
   }

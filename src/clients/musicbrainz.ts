@@ -1,6 +1,7 @@
 // plugin-http rather than fetch so the User-Agent MB requires can be set. 1100 ms between
 // requests; genres are RG plus the matched release only, not every pressing.
 
+import { isMbid } from "../lib/mbid";
 import { makeRateLimiter } from "../lib/rateLimiter";
 import { boundedNativeFetch } from "./boundedFetch";
 
@@ -313,6 +314,24 @@ export async function lookupArtist(artistMbid: string): Promise<MbArtistDetail> 
     country: data.country ?? null,
     genres: (data.genres ?? []).map((g) => ({ name: g.name, count: g.count })),
   };
+}
+
+interface MbUrlRelationsResponse {
+  relations?: Array<{ type?: string; url?: { resource?: string } }>;
+}
+
+const WIKIDATA_ITEM_URL = /^https?:\/\/www\.wikidata\.org\/wiki\/(Q\d+)$/;
+
+/** The Wikidata item a release group links to, or null without one. Rejects when MusicBrainz didn't answer. */
+export async function fetchReleaseGroupWikidataId(releaseGroupMbid: string): Promise<string | null> {
+  if (!isMbid(releaseGroupMbid)) return null;
+  const data = await mbGet<MbUrlRelationsResponse>(`release-group/${releaseGroupMbid}`, { inc: "url-rels" });
+  for (const relation of data.relations ?? []) {
+    if (relation.type !== "wikidata") continue;
+    const itemId = WIKIDATA_ITEM_URL.exec(relation.url?.resource ?? "")?.[1];
+    if (itemId) return itemId;
+  }
+  return null;
 }
 
 interface WikidataSparqlResponse {
