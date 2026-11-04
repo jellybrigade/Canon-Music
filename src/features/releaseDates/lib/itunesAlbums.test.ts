@@ -10,6 +10,7 @@ const PISS_ALBUM = {
   collectionName: "you made me / skin on linen",
   trackCount: 15,
   releaseDate: "2026-10-30T07:00:00Z",
+  artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/x/098787175363.png/100x100bb.jpg",
 };
 
 describe("parseItunesCollection", () => {
@@ -20,7 +21,15 @@ describe("parseItunesCollection", () => {
       trackCount: 15,
       artistName: "PISS",
       releaseDate: "2026-10-30",
+      artworkUrl: "https://is1-ssl.mzstatic.com/image/thumb/x/098787175363.png/100x100bb.jpg",
     });
+  });
+
+  it("keeps only artwork served over https", () => {
+    expect(parseItunesCollection({ ...PISS_ALBUM, artworkUrl100: "http://img/100x100bb.jpg" })).toMatchObject({
+      artworkUrl: null,
+    });
+    expect(parseItunesCollection({ ...PISS_ALBUM, artworkUrl100: undefined })).toMatchObject({ artworkUrl: null });
   });
 
   it("takes the kind from the title's suffix, then drops it", () => {

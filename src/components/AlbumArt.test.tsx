@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../clients/itunes", () => ({ fetchItunesCoverArt: vi.fn() }));
+vi.mock("../features/covers/fallbackCover", () => ({ fetchFallbackCover: vi.fn() }));
 
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
-import { fetchItunesCoverArt } from "../clients/itunes";
+import { fetchFallbackCover } from "../features/covers/fallbackCover";
 import { AlbumArt } from "./AlbumArt";
 
 function firstImage(container: HTMLElement): HTMLImageElement {
@@ -15,13 +15,13 @@ function firstImage(container: HTMLElement): HTMLImageElement {
 
 afterEach(() => {
   cleanup();
-  vi.mocked(fetchItunesCoverArt).mockReset();
+  vi.mocked(fetchFallbackCover).mockReset();
 });
 
 describe("AlbumArt", () => {
   it("keeps the new album's cover when the old one's fallback answers late", async () => {
     let answer: (url: string | null) => void = () => {};
-    vi.mocked(fetchItunesCoverArt).mockImplementation(
+    vi.mocked(fetchFallbackCover).mockImplementation(
       () =>
         new Promise((resolve) => {
           answer = resolve;
@@ -40,7 +40,7 @@ describe("AlbumArt", () => {
   });
 
   it("shows the fallback for the cover that failed", async () => {
-    vi.mocked(fetchItunesCoverArt).mockResolvedValue("https://itunes/first.jpg");
+    vi.mocked(fetchFallbackCover).mockResolvedValue("https://itunes/first.jpg");
     const { container } = render(<AlbumArt src="cover://a" artist="A" album="First" />);
 
     await act(async () => {

@@ -54,16 +54,31 @@ function searchField(value: string): string {
   return value.replace(/"/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export async function searchDeezerAlbums(artist: string, title: string): Promise<DeezerAlbumHit[]> {
+export interface DeezerAlbumSearchHit extends DeezerAlbumHit {
+  /** Deezer's 1000px cover, https only; shown, never stored (Deezer's terms). */
+  coverUrl: string | null;
+}
+
+export async function searchDeezerAlbums(artist: string, title: string): Promise<DeezerAlbumSearchHit[]> {
   const url = new URL(`${DEEZER_API}/search/album`);
   url.searchParams.set("q", `artist:"${searchField(artist)}" album:"${searchField(title)}"`);
   url.searchParams.set("limit", String(SEARCH_LIMIT));
   return dataOf(await getJson(url.toString())).flatMap((hit) => {
-    const { id, title: hitTitle, record_type: recordType, nb_tracks: trackCount, artist: hitArtist } = hit;
+    const {
+      id,
+      title: hitTitle,
+      record_type: recordType,
+      nb_tracks: trackCount,
+      artist: hitArtist,
+      cover_xl: cover,
+    } = hit;
     if (typeof id !== "number" || typeof hitTitle !== "string" || typeof recordType !== "string") return [];
     if (typeof trackCount !== "number" || !isObject(hitArtist)) return [];
     if (typeof hitArtist.id !== "number" || typeof hitArtist.name !== "string") return [];
-    return [{ id, title: hitTitle, recordType, trackCount, artistId: hitArtist.id, artistName: hitArtist.name }];
+    const coverUrl = typeof cover === "string" && cover.startsWith("https://") ? cover : null;
+    return [
+      { id, title: hitTitle, recordType, trackCount, artistId: hitArtist.id, artistName: hitArtist.name, coverUrl },
+    ];
   });
 }
 

@@ -68,6 +68,7 @@ function answerPissAlbum(): void {
       trackCount: 15,
       artistId: 419317862,
       artistName: "PISS",
+      coverUrl: null,
     },
   ]);
   vi.mocked(fetchDeezerAlbum).mockResolvedValue({
@@ -101,6 +102,7 @@ function answerItunesPiss(): void {
           trackCount: 15,
           artistName: "PISS",
           releaseDate: "2026-10-30",
+          artworkUrl: null,
         },
         {
           title: "time loop at hot slit",
@@ -108,6 +110,7 @@ function answerItunesPiss(): void {
           trackCount: 1,
           artistName: "PISS",
           releaseDate: "2026-09-02",
+          artworkUrl: null,
         },
       ];
     }
@@ -119,6 +122,7 @@ function answerItunesPiss(): void {
           trackCount: 9,
           artistName: "PISS",
           releaseDate: "2023-06-30",
+          artworkUrl: null,
         },
       ];
     }
@@ -129,6 +133,7 @@ function answerItunesPiss(): void {
         trackCount: 15,
         artistName: "P.I.S.S.",
         releaseDate: "2026-01-02",
+        artworkUrl: null,
       },
     ];
   });
@@ -276,6 +281,7 @@ describe("runReleaseDateLookups", () => {
         trackCount: 5,
         artistId: 9,
         artistName: "Miles Davis",
+        coverUrl: null,
       },
     ]);
     vi.mocked(fetchDeezerDiscography).mockResolvedValue([
@@ -331,6 +337,7 @@ describe("runReleaseDateLookups, iTunes fallback", () => {
           trackCount: 15,
           artistId: 419317862,
           artistName: "PISS",
+          coverUrl: null,
         },
       ];
     });

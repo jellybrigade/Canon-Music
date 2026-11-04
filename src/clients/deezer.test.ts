@@ -51,6 +51,7 @@ describe("searchDeezerAlbums", () => {
         trackCount: 15,
         artistId: 419317862,
         artistName: "PISS",
+        coverUrl: "https://cdn-images.dzcdn.net/x.jpg",
       },
     ]);
     const [url] = requestedUrls();
@@ -61,6 +62,21 @@ describe("searchDeezerAlbums", () => {
     vi.mocked(tauriFetch).mockImplementation(async () => jsonResponse(502, {}));
 
     await expect(searchDeezerAlbums("PISS", "x")).rejects.toThrow("502");
+  });
+
+  it("keeps only a cover served over https", async () => {
+    const hit = { id: 1, title: "x", nb_tracks: 1, record_type: "single", artist: { id: 2, name: "PISS" } };
+    vi.mocked(tauriFetch).mockImplementation(async () =>
+      jsonResponse(200, {
+        data: [
+          { ...hit, cover_xl: "http://cdn/x.jpg" },
+          { ...hit, id: 3 },
+        ],
+      }),
+    );
+
+    const hits = await searchDeezerAlbums("PISS", "x");
+    expect(hits.map(({ coverUrl }) => coverUrl)).toEqual([null, null]);
   });
 });
 

@@ -1,60 +1,58 @@
-import { normalizeForMatch, stripTrailingBrackets } from "../features/enrichment/lib/fuzzyMatch";
+import { isSameCoverAlbum } from "../features/covers/lib/coverMatch";
+import type { ItunesAlbum } from "../features/releaseDates/lib/itunesAlbums";
+import { isSameArtist } from "../features/releaseDates/lib/releaseMatch";
 import { cappedSet } from "../lib/boundedCache";
-import { boundedFetch } from "./boundedFetch";
+import { fetchItunesArtistAlbums, searchItunesArtists } from "./itunesCatalog";
 
-const MAX_CACHE_ENTRIES = 2000;
-const SEARCH_LIMIT = 5;
-const cache = new Map<string, string | null>();
+const MAX_CACHED_ARTISTS = 500;
+// Free-text album search misses albums iTunes has (a new release by one of five artists named
+// PISS), so covers come from the catalog of every artist with the same name.
+const catalogs = new Map<string, Promise<Catalog>>();
 
-function setCached(key: string, value: string | null): void {
-  cappedSet(cache, key, value, MAX_CACHE_ENTRIES);
+interface Catalog {
+  albums: ItunesAlbum[];
+  /** Why a same-named artist's catalog couldn't be read; that one may hold the album. */
+  failure: unknown;
 }
 
-function albumKey(title: string): string {
-  const withoutType = title.replace(/\s+-\s+(single|ep)$/i, "");
-  return normalizeForMatch(stripTrailingBrackets(withoutType) ?? withoutType);
+async function readCatalog(artist: string): Promise<Catalog> {
+  const artists = (await searchItunesArtists(artist)).filter(({ name }) => isSameArtist(artist, name));
+  const lists = await Promise.allSettled(artists.map(({ id }) => fetchItunesArtistAlbums(id)));
+  return {
+    albums: lists.flatMap((list) => (list.status === "fulfilled" ? list.value : [])),
+    failure: lists.find((list) => list.status === "rejected")?.reason ?? null,
+  };
 }
 
-// iTunes ranks by search relevance, so its top hit can be another artist or album entirely.
-function isSameAlbum(hit: Record<string, unknown>, artist: string, album: string): boolean {
-  return (
-    typeof hit.artistName === "string" &&
-    typeof hit.collectionName === "string" &&
-    normalizeForMatch(hit.artistName) === normalizeForMatch(artist) &&
-    albumKey(hit.collectionName) === albumKey(album)
+// Only a complete read is kept; a failed or partial one is read again next time.
+function artistCatalog(artist: string): Promise<Catalog> {
+  const key = artist.toLowerCase();
+  const cached = catalogs.get(key);
+  if (cached !== undefined) return cached;
+  const read = readCatalog(artist);
+  cappedSet(catalogs, key, read, MAX_CACHED_ARTISTS);
+  const forget = () => {
+    if (catalogs.get(key) === read) catalogs.delete(key);
+  };
+  read.then(({ failure }) => (failure === null ? undefined : forget()), forget);
+  return read;
+}
+
+/** The artwork of every release by the artist under the album's title; rejects when none was found and iTunes didn't answer in full. */
+async function sameAlbumArtwork(artist: string, album: string): Promise<string[]> {
+  const { albums, failure } = await artistCatalog(artist);
+  const found = albums.flatMap((hit) =>
+    hit.artworkUrl !== null && isSameCoverAlbum(artist, album, hit) ? [hit.artworkUrl] : [],
   );
+  if (found.length === 0 && failure !== null) throw failure;
+  return found;
 }
 
-/** The https artwork of every hit naming the same artist and album, in iTunes' order. */
-async function searchSameAlbumArtwork(artist: string, album: string, limit: number): Promise<string[]> {
-  const term = encodeURIComponent(`${artist} ${album}`);
-  const res = await boundedFetch(
-    `https://itunes.apple.com/search?term=${term}&entity=album&limit=${limit}&media=music`,
-  );
-  if (!res.ok) throw new Error(`iTunes returned ${res.status}`);
-  const data: unknown = await res.json();
-  const results =
-    typeof data === "object" && data !== null && "results" in data && Array.isArray(data.results) ? data.results : [];
-  return results
-    .filter(
-      (result): result is Record<string, unknown> =>
-        typeof result === "object" && result !== null && isSameAlbum(result, artist, album),
-    )
-    .flatMap(({ artworkUrl100: raw }) => (typeof raw === "string" && raw.startsWith("https://") ? [raw] : []));
+/** Resolves null when iTunes answered without a cover; rejects when it didn't answer. */
+export async function fetchItunesCoverArt(artist: string, album: string): Promise<string | null> {
+  const [raw] = await sameAlbumArtwork(artist, album);
+  return raw === undefined ? null : raw.replace("100x100bb", "600x600bb");
 }
-
-/** Resolves null when iTunes answered without a cover; rejects when it didn't answer, so nothing is cached. */
-export async function fetchItunesCoverArt(artist: string | null, album: string | null): Promise<string | null> {
-  if (!artist || !album) return null;
-  const key = `${artist}\x00${album}`;
-  if (cache.has(key)) return cache.get(key) ?? null;
-  const [raw] = await searchSameAlbumArtwork(artist, album, SEARCH_LIMIT);
-  const url = raw === undefined ? null : raw.replace("100x100bb", "600x600bb");
-  setCached(key, url);
-  return url;
-}
-
-const LIST_SEARCH_LIMIT = 10;
 
 export interface ItunesAlbumCover {
   thumbUrl: string;
@@ -66,10 +64,10 @@ function artworkPath(url: string): string {
   return url.replace(/^https:\/\/[^/]+/, "");
 }
 
-/** Every iTunes hit naming the same artist and album (editions included), as cover choices, each image once. */
+/** Every iTunes release naming the same artist and album (editions included), as cover choices, each image once. */
 export async function fetchItunesAlbumCovers(artist: string, album: string): Promise<ItunesAlbumCover[]> {
   const seen = new Set<string>();
-  return (await searchSameAlbumArtwork(artist, album, LIST_SEARCH_LIMIT)).flatMap((raw) => {
+  return (await sameAlbumArtwork(artist, album)).flatMap((raw) => {
     const path = artworkPath(raw);
     if (seen.has(path)) return [];
     seen.add(path);

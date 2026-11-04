@@ -69,6 +69,7 @@ describe("fetchItunesArtistAlbums", () => {
         trackCount: 1,
         artistName: "PISS",
         releaseDate: "2026-09-02",
+        artworkUrl: null,
       },
     ]);
     const [url] = requestedUrls();
